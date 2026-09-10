@@ -35,7 +35,7 @@ test('Becoming details: Fuel and Training screens show then→now→next; Story 
   await settle(page)
   await page.locator('[data-testid="week-card-details"]').click({ timeout: 15_000 })
   await page.waitForResponse(r => r.url().includes('/api/goals') && r.ok(), { timeout: 60_000 })
-  await expect(page.locator('[data-testid="details-screen-mind"]')).toBeVisible()
+  await expect(page.locator('[data-testid="details-screen-story"]')).toBeVisible()
   await page.locator('[data-testid="details-tab-fuel"]').click()
   const fuel = page.locator('[data-testid="details-screen-fuel"]')
   await expect(fuel).toBeVisible()

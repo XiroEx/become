@@ -90,7 +90,8 @@ test('intro plays, lands on the current week; swipe back; pinch out to the line;
   // Details sheet.
   await page.locator('[data-testid="week-card-details"]').click()
   await expect(page.locator('[data-testid="becoming-details"]')).toBeVisible()
-  await expect(page.locator('[data-testid="details-screen-mind"]')).toBeVisible({ timeout: 30_000 })
+  // Story leads: it is the one screen a member always has something on.
+  await expect(page.locator('[data-testid="details-screen-story"]')).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(800)
   await page.screenshot({ path: 'tests/e2e/screenshots/journey-details.png' })
   await page.locator('[data-testid="details-tab-fuel"]').click()

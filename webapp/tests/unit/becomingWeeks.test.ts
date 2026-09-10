@@ -215,3 +215,81 @@ test('applyCredits: a credit for a day outside the existing map creates it', () 
   assert.ok(d.has('2026-08-05'))
   assert.equal(d.get('2026-08-05')!.workouts.length, 1)
 })
+
+/* ── who the story is written for ──────────────────────────────────────── */
+
+test('uses: a pillar is "in use" for RECENT_WEEKS after it was last touched, and mindMode says how', () => {
+  const d = days({
+    '2026-07-20': { workouts: ['A'], foodLogged: true },
+    '2026-07-27': { workouts: ['A'] }, '2026-08-03': { workouts: ['A'] },
+    '2026-08-10': { workouts: ['A'], mood: 4 }, '2026-08-17': { workouts: ['A'] },
+  })
+  const w = buildWeeks({ ...base, days: d })
+  const live = w[w.length - 1]
+  assert.equal(live.uses.training, true)
+  assert.equal(live.uses.fuel, false, 'food is more than RECENT_WEEKS of calendar weeks back')
+  assert.equal(live.uses.mind, true)
+  assert.equal(live.uses.mindMode, 'checkins', 'check-ins only — they have never run a session')
+  // The week food was actually logged still counts it.
+  assert.equal(w[0].uses.fuel, true)
+})
+
+test('uses: one session anywhere in the window makes Mind report sessions, not check-ins', () => {
+  const d = days({ '2026-08-10': { mindSession: true }, '2026-08-17': { mood: 4 } })
+  const w = buildWeeks({ ...base, days: d })
+  assert.equal(w[w.length - 1].uses.mindMode, 'sessions')
+})
+
+test('the live story does not scold a member about a pillar they do not use', () => {
+  // Trains, has never logged food. Two of five workouts in, three to go.
+  const d = days({
+    '2026-08-09': { workouts: ['A'] }, '2026-08-11': { workouts: ['B'] },
+    '2026-08-16': { workouts: ['C'] }, '2026-08-17': { workouts: ['D'] },
+  })
+  const live = buildWeeks({ ...base, weeklyTarget: 5, days: d }).slice(-1)[0]
+  assert.match(live.headline, /2 down, 3 to go/)
+  assert.doesNotMatch(live.sub, /food/i)
+  assert.doesNotMatch(live.sub, /logged/i)
+})
+
+test('a member who DOES log food still gets told the logging has not shown up', () => {
+  const d = days({
+    '2026-08-09': { workouts: ['A'], foodLogged: true }, '2026-08-10': { foodLogged: true },
+    '2026-08-16': { workouts: ['C'] }, '2026-08-17': { workouts: ['D'] },
+  })
+  const live = buildWeeks({ ...base, weeklyTarget: 5, days: d }).slice(-1)[0]
+  assert.match(live.sub, /Nothing logged yet on the food side/)
+})
+
+test('a hit training week reads as a full week, not as a logging failure, for a non-logger', () => {
+  // Week 0 is "where it started" whatever it holds, so the week under test is week 1.
+  const d = days({
+    '2026-08-02': { workouts: ['A'] },
+    '2026-08-09': { workouts: ['A'] }, '2026-08-10': { workouts: ['B'] }, '2026-08-11': { workouts: ['C'] },
+    '2026-08-12': { workouts: ['D'] }, '2026-08-17': { workouts: ['E'] },
+  })
+  const w = buildWeeks({ ...base, weeklyTarget: 4, days: d })
+  assert.equal(w[1].isCurrent, false)
+  assert.match(w[1].headline, /4 of 4\. Week hit\./)
+  assert.equal(w[1].sub, 'A full training week, start to finish.')
+})
+
+test('a blank live week invites only the parts of the app this member uses', () => {
+  // A lifter with an empty current week: the invitation is a workout, nothing else.
+  const d = days({
+    '2026-08-09': { workouts: ['A'] }, '2026-08-11': { workouts: ['B'] },
+    '2026-08-18': { mood: null },
+  })
+  const live = buildWeeks({ ...base, todayKey: '2026-08-18', days: d }).slice(-1)[0]
+  assert.match(live.headline, /Still being written/)
+  assert.match(live.sub, /A workout puts the first real line/)
+  assert.doesNotMatch(live.sub, /a meal/)
+})
+
+test('a brand-new member is still invited to all three — an empty set is not a preference', () => {
+  // Nothing but a weigh-in: no pillar is in use, so the full invitation is right.
+  const d = days({ '2026-08-17': { weight: 205 } })
+  const live = buildWeeks({ ...base, todayKey: '2026-08-18', days: d }).slice(-1)[0]
+  assert.deepEqual(live.uses, { training: false, fuel: false, mind: false, mindMode: null })
+  assert.match(live.sub, /A workout, a meal or a session/)
+})
