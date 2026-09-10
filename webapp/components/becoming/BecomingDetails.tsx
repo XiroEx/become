@@ -4,11 +4,17 @@
 // stage's own language: dark sky, glass cards, the pillar hues. Four screens
 // you swipe or tab between:
 //
-//   Mind      score, identity, chapter then → now → next, the arc, how you've shown up
-//   Fuel      the weight plan then → now → next, pace, adherence, what's next
-//   Training  days/week then → now → next, lifts then → now → target, what's next
 //   Story     week by week — every headline the app has written about you, the
 //             wins you banked, the records you set; tap a week to fly to it
+//   Training  days/week then → now → next, lifts then → now → target, what's next
+//   Fuel      the weight plan then → now → next, pace, adherence, what's next
+//   Mind      score, identity, chapter then → now → next, the arc, how you've shown up
+//
+// Story leads, and it opens there. It is the one screen that is populated for
+// everybody: a member who only lifts has no Mind chapter and no weight plan,
+// and landing them on an empty Mind screen taught them the details sheet was
+// not for them. The rest run in the order the coach ranked them — workouts,
+// nutrition, mindset — the same order lib/becoming/signals uses on the card.
 //
 // Data: the same APIs the old page used (mind progress / wins / state /
 // session, goals + progress) plus the journey weeks handed in by the stage.
@@ -43,10 +49,10 @@ type SheetState =
   | { kind: 'metric' }
   | { kind: 'target'; slug: string; name: string; current: number; target: number; reached: boolean }
 const TABS: Array<{ id: Tab; label: string; Icon: typeof Brain; hue: string }> = [
-  { id: 'mind', label: 'Mind', Icon: Brain, hue: SUBJECT.mind.hex },
-  { id: 'fuel', label: 'Fuel', Icon: UtensilsCrossed, hue: SUBJECT.fuel.hex },
-  { id: 'training', label: 'Training', Icon: Dumbbell, hue: SUBJECT.training.hex },
   { id: 'story', label: 'Story', Icon: BookOpen, hue: '#a78bfa' },
+  { id: 'training', label: 'Training', Icon: Dumbbell, hue: SUBJECT.training.hex },
+  { id: 'fuel', label: 'Fuel', Icon: UtensilsCrossed, hue: SUBJECT.fuel.hex },
+  { id: 'mind', label: 'Mind', Icon: Brain, hue: SUBJECT.mind.hex },
 ]
 
 interface ProgressData { chapter: number; xp: number; xpBank: number; vision: { identityStatement?: string } | null; chapterHistory: { chapter: number; unlockedAt: string }[] }
@@ -159,7 +165,7 @@ export interface BecomingDetailsProps {
   initialTab?: Tab
 }
 
-export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = '', unit = 'lbs', onClose, onJumpToWeek, initialTab = 'mind' }: BecomingDetailsProps) {
+export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = '', unit = 'lbs', onClose, onJumpToWeek, initialTab = 'story' }: BecomingDetailsProps) {
   const [tab, setTab] = useState<Tab>(initialTab)
   const [dir, setDir] = useState(1)
   const [prog, setProg] = useState<ProgressData | null>(null)
