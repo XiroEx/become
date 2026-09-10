@@ -1097,10 +1097,9 @@ export default function LiveWorkoutPage() {
       // moment of save, not the time the request lands.
       const activeSecondsAtSave = activeSecondsBaseline + Math.floor((Date.now() - sessionStartTime) / 1000);
       // Which day the member picked for a workout that crossed midnight (set
-      // by resolveDayChoice). Only ever sent on the completing save — read
-      // once, then cleared, so it can never leak into a later, unrelated save.
+      // by resolveDayChoice). Only ever sent on the completing save. Read here
+      // but NOT cleared here — see the consume below.
       const logDateOverride = isComplete ? logDateOverrideRef.current : null;
-      if (isComplete) logDateOverrideRef.current = null;
       // Quick sessions post a kind:'quick' body (matched server-side by
       // sessionId); program sessions post the program/phase/day body.
       const saveBody = isQuick && quickSessionId
@@ -1159,6 +1158,19 @@ export default function LiveWorkoutPage() {
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
+      // The day choice is consumed only now, once the server has actually
+      // accepted the completing save. Clearing it at request-build time meant a
+      // save that failed left the retry with nothing to send: no performedAt,
+      // so the server dated the log to whenever the retry happened. A session
+      // finished after midnight and assigned to yesterday came back named
+      // "9/9/26 workout" and filed under 9/10 — and the naming prompt, which
+      // stays open on a failed save so it CAN be retried, is the surface that
+      // made that retry easy to hit.
+      //
+      // Holding it cannot leak into a later save: only a completing save reads
+      // it, and any later completion re-opens the day-choice modal (the
+      // workout still belongs to an earlier day), whose answer overwrites this.
+      if (isComplete) logDateOverrideRef.current = null;
       return true;
     } catch (error) {
       console.error("Error saving workout:", error);
