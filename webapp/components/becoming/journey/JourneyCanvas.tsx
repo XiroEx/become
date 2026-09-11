@@ -481,9 +481,11 @@ export default function JourneyCanvas({ data, onClose, onDetails, initialWeekKey
   }, [bounds])
 
   const peaks = useMemo(() => peakIndexes(weeks), [weeks])
-  // Which pillars each card may speak about, and how each number moved. Done
-  // here rather than in the card because it takes the whole journey to answer.
-  const signals = useMemo(() => journeySignals(weeks, data.unit), [weeks, data.unit])
+  // What each card is worth saying, ranked, and how each number moved. Done
+  // here rather than in the card because it takes the whole journey to answer:
+  // "most in 6 weeks" is a question about every week before this one.
+  const direction = data.target?.direction ?? null
+  const signals = useMemo(() => journeySignals(weeks, { unit: data.unit, direction }), [weeks, data.unit, direction])
   const liveActive = useMemo(() => {
     const i = weeks.findIndex(w => w.isCurrent)
     return i >= 0 ? signals[i].active : undefined

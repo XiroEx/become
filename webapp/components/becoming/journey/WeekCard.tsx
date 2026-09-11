@@ -6,10 +6,10 @@
 //
 //   • colour = what the week was ABOUT (training ember, fuel honey, mind
 //     iris, all three verdigris, empty fog); saturation = how consistent
-//   • the metrics block: only the pillars this member actually uses, each
-//     with the number that matters and how it moved against last week
-//     (lib/becoming/signals decides both) — no dots, and no row of zeroes
-//     for a feature they have never opened
+//   • the highlights: the few things this member actually did that week,
+//     ranked — a lead number drawn large and up to two behind it, each with
+//     how it moved against last week (lib/becoming/signals decides all of
+//     it). No fixed rows, so no "0 sessions", and the shape follows the week
 //   • the member's own words (banked wins, identity) set in a serif italic
 //   • the Horizon variant: one step past the live week — where this week is
 //     trending, and who you said you are becoming
@@ -17,9 +17,9 @@
 import { memo } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { ArrowUpRight, ArrowRight, ArrowDownRight, Flag, Brain, UtensilsCrossed, Dumbbell, Sparkles, Trophy, ChevronRight, Compass } from 'lucide-react'
-import type { WeekSnapshot } from '@/lib/becoming/weeks'
-import type { CardPillar, WeekSignals } from '@/lib/becoming/signals'
+import { ArrowUpRight, ArrowRight, ArrowDownRight, Flag, Brain, UtensilsCrossed, Dumbbell, Sparkles, Trophy, ChevronRight, Compass, Scale, BookOpen, Beef, CalendarCheck } from 'lucide-react'
+import type { Fact, WeekSnapshot } from '@/lib/becoming/weeks'
+import type { CardPillar, Highlight, WeekSignals } from '@/lib/becoming/signals'
 import { PILLAR, pillarColor } from '@/lib/pillarColors'
 
 // The pillar palette lives in lib/pillarColors so the journey, the details, the
@@ -31,6 +31,28 @@ const PILLAR_ICON: Record<CardPillar, { Icon: typeof Brain; className: string }>
   training: { Icon: Dumbbell, className: 'text-orange-300' },
   fuel: { Icon: UtensilsCrossed, className: 'text-amber-300' },
   mind: { Icon: Brain, className: 'text-violet-300' },
+}
+
+// A highlight is coloured by its pillar and drawn with the icon of the thing
+// itself — a trophy for a PR, a scale for the weigh-in — so a card that leads
+// with a lift does not look like one that leads with a meal log.
+const TINT: Record<Highlight['pillar'], string> = {
+  training: '#fdba74',
+  fuel: '#fcd34d',
+  mind: '#c4b5fd',
+  all: '#6ee7b7',
+}
+const FACT_ICON: Record<Fact, typeof Brain> = {
+  workouts: Dumbbell,
+  prs: Trophy,
+  logging: UtensilsCrossed,
+  protein: Beef,
+  weight: Scale,
+  sessions: Brain,
+  checkins: Brain,
+  state: Brain,
+  chapter: BookOpen,
+  active: CalendarCheck,
 }
 
 /**
@@ -58,15 +80,49 @@ function Delta({ n }: { n: number | null }) {
   )
 }
 
+/** The one thing this week is most about — drawn large. */
+function LeadHighlight({ h }: { h: Highlight }) {
+  const Icon = FACT_ICON[h.kind]
+  return (
+    <div className="flex items-center gap-3" data-testid={`week-card-hl-${h.kind}`} data-lead="true">
+      <p className="flex shrink-0 items-baseline tabular-nums">
+        <span className="text-[30px] font-black leading-none tracking-tight" style={{ color: h.change && h.value.startsWith('−') ? 'rgba(255,255,255,0.6)' : TINT[h.pillar] }}>{h.value}</span>
+        {h.of && <span className="text-[15px] font-bold text-white/40">{h.of}</span>}
+        {h.unit && <span className="ml-1 text-[13px] font-semibold text-white/55">{h.unit}</span>}
+      </p>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-[12px] font-semibold leading-tight text-white/80">
+          <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: TINT[h.pillar] }} aria-hidden="true" />
+          <span className="truncate">{h.label}</span>
+        </p>
+        {h.flag && <p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: TINT[h.pillar] }}>{h.flag}</p>}
+      </div>
+      <Delta n={h.delta} />
+    </div>
+  )
+}
+
+/** Everything else worth a glance — one line each, no table. */
+function HighlightPill({ h }: { h: Highlight }) {
+  const Icon = FACT_ICON[h.kind]
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-white/[0.07] px-2 py-1 text-[11px] text-white/70" data-testid={`week-card-hl-${h.kind}`}>
+      <Icon className="h-3 w-3 shrink-0" style={{ color: TINT[h.pillar] }} aria-hidden="true" />
+      <span className="shrink-0 font-bold tabular-nums text-white/90">{h.value}{h.of}{h.unit ? ` ${h.unit}` : ''}</span>
+      <span className="truncate">{h.label}{h.flag ? ` · ${h.flag}` : ''}</span>
+      <Delta n={h.delta} />
+    </span>
+  )
+}
+
 const stagger = (i: number) => ({ delay: 0.06 * i, duration: 0.42, ease: [0.16, 1, 0.3, 1] as const })
 
 export interface WeekCardProps {
   week: WeekSnapshot
   /**
-   * Which pillars this member actually uses, what each one did, and the one
-   * invitation worth making. Computed by the canvas because it takes the whole
-   * journey to know: whether Mind belongs on this card is a fact about the
-   * member, not about the week.
+   * What this week is worth saying, ranked, and the one invitation worth
+   * making. Computed by the canvas because it takes the whole journey to know:
+   * whether a count is a record depends on every week before it.
    */
   signals: WeekSignals
   unit: 'lbs' | 'kg'
@@ -107,13 +163,17 @@ function Sparkline({ altitudes, at, color, onClick }: { altitudes: number[]; at:
   )
 }
 
-function WeekCardImpl({ week: w, signals, unit, width, height, focused, landed, compact, exitEdge, totalWeeks, identity, next, onDetails, reduced, isPeak, spark, onSparkline }: WeekCardProps) {
+function WeekCardImpl({ week: w, signals, width, height, focused, landed, compact, exitEdge, totalWeeks, identity, next, onDetails, reduced, isPeak, spark, onSparkline }: WeekCardProps) {
   const subj = PILLAR[w.subject]
   const tone = pillarColor(w.subject, w.score, 62)
   const toneSoft = pillarColor(w.subject, w.score, 60, 0.18)
   const StepIcon = w.step === 'up' ? ArrowUpRight : w.step === 'down' ? ArrowDownRight : w.step === 'start' ? Flag : ArrowRight
   const stepText = w.gap ? 'held' : isPeak ? 'new high' : w.step === 'up' ? 'climbed' : w.step === 'flat' ? 'held' : w.step === 'down' ? 'a dip' : 'start'
-  const wins = w.mind.wins.slice(0, 2)
+  // The live card also carries "what writes this card", so it keeps one of the
+  // member's lines rather than two — the card is a fixed height, and it is the
+  // Details button that falls off the bottom when it overflows.
+  const writes = w.isCurrent && !!next && (signals.active.includes('fuel') || signals.active.includes('training'))
+  const wins = w.mind.wins.slice(0, writes ? 1 : 2)
   const shell = 'relative overflow-hidden rounded-[28px] text-white'
   const shadow = focused ? '0 30px 80px -20px rgba(0,0,0,0.7)' : '0 18px 40px -20px rgba(0,0,0,0.5)'
   const anim = (i: number) => (reduced || compact ? {} : { initial: { opacity: 0, y: 12 }, animate: landed ? { opacity: 1, y: 0 } : { opacity: 0.001, y: 12 }, transition: stagger(i) })
@@ -181,29 +241,20 @@ function WeekCardImpl({ week: w, signals, unit, width, height, focused, landed, 
         <motion.h2 className="mt-4 text-[27px] font-black leading-[1.05] tracking-tight" {...anim(1)}>{w.headline}</motion.h2>
         <motion.p className="mt-2 text-[13px] leading-snug text-white/70" {...anim(2)}>{w.sub}</motion.p>
 
-        {/* What moved — only the pillars this member is actually using */}
-        {!w.gap && signals.rows.length > 0 && (
-          <motion.div className="mt-4 rounded-2xl bg-white/[0.06] p-3" {...anim(3)} data-testid="week-card-metrics">
+        {/* What this week actually had — ranked, never a zero, never the headline again */}
+        {!w.gap && signals.highlights.length > 0 && (
+          <motion.div className="mt-4 rounded-2xl bg-white/[0.06] p-3" {...anim(3)} data-testid="week-card-highlights">
+            <LeadHighlight h={signals.highlights[0]} />
+            {signals.highlights.length > 1 && (
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {signals.highlights.slice(1).map(h => <HighlightPill key={h.kind} h={h} />)}
+              </div>
+            )}
             {signals.hasDeltas && (
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/40">
-                {w.isCurrent ? 'vs the same days last week' : 'vs the week before'}
+              <p className="mt-1.5 text-[10px] leading-none text-white/35">
+                Changes {w.isCurrent ? 'vs the same days last week' : 'vs the week before'}
               </p>
             )}
-            <div className="space-y-2">
-              {signals.rows.map(r => {
-                const { Icon, className } = PILLAR_ICON[r.pillar]
-                return (
-                  <div key={r.pillar} className="flex items-center justify-between gap-2 text-[12px]" data-testid={`week-card-row-${r.pillar}`}>
-                    <span className="flex shrink-0 items-center gap-1.5 text-white/80"><Icon className={`h-3.5 w-3.5 ${className}`} /> {r.label}</span>
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <span className="truncate tabular-nums text-white/85">{r.value}</span>
-                      {r.note && <span className="truncate text-white/45">· {r.note}</span>}
-                      <Delta n={r.delta} />
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
           </motion.div>
         )}
 
@@ -224,15 +275,10 @@ function WeekCardImpl({ week: w, signals, unit, width, height, focused, landed, 
           </motion.div>
         )}
 
-        {/* Evidence / PRs — the member's own words in serif */}
-        {(wins.length > 0 || w.training.prs.length > 0) && (
+        {/* Evidence — the member's own words in serif. A PR is a highlight
+            now (or the headline), so it is not listed a third time here. */}
+        {wins.length > 0 && (
           <motion.div className="mt-3 space-y-1.5" {...anim(5)}>
-            {w.training.prs.slice(0, wins.length ? 1 : 2).map(p => (
-              // The number is an estimated max, not the weight lifted. Naming
-              // the unit at least stops it reading as a rep count or a bare
-              // score; the full explanation lives on the Training screen.
-              <p key={p.name} className="flex items-center gap-1.5 truncate text-[12px] text-white/75"><Trophy className="h-3.5 w-3.5 shrink-0 text-amber-300" />{p.name} · {p.e1RM} {unit}</p>
-            ))}
             {wins.map((win, i) => (
               <p key={i} className="flex items-start gap-1.5 font-serif text-[14px] italic leading-snug text-white/80"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-300" /><span className="line-clamp-2">“{win}”</span></p>
             ))}
@@ -243,7 +289,7 @@ function WeekCardImpl({ week: w, signals, unit, width, height, focused, landed, 
 
         {/* Live week: what writes this card — only for pillars in use, since a
             nutrition target means nothing to someone who does not log food */}
-        {w.isCurrent && next && (signals.active.includes('fuel') || signals.active.includes('training')) && (
+        {writes && next && (
           <motion.div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3" {...anim(6)} data-testid="week-card-writes">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">What writes this card</p>
             {signals.active.includes('fuel') && <p className="mt-1 truncate text-[12px] text-white/85">🍽 {next.nutrition.title}</p>}

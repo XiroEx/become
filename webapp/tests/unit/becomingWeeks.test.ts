@@ -293,3 +293,69 @@ test('a brand-new member is still invited to all three — an empty set is not a
   assert.deepEqual(live.uses, { training: false, fuel: false, mind: false, mindMode: null })
   assert.match(live.sub, /A workout, a meal or a session/)
 })
+
+/* ── the ordinary week is told by what changed ─────────────────────────── */
+// "Kept it moving" over a recital of the counts made most cards read the same.
+// The counts are the card's highlights now, so the line says what MOVED.
+
+test('an ordinary week names the part of the app that picked up, not a list of counts', () => {
+  const d = days({
+    '2026-07-26': { workouts: ['A'], mindSession: true },
+    '2026-08-02': { workouts: ['A'], mindSession: true }, '2026-08-04': { mindSession: true }, '2026-08-06': { mindSession: true },
+    '2026-08-17': { workouts: ['B'] },
+  })
+  const w = buildWeeks({ ...base, days: d })
+  assert.equal(w[1].headline, 'Mind picked up')
+  assert.equal(w[1].sub, 'Up on the week before.')
+  assert.doesNotMatch(w[1].sub, /\d/, 'the numbers are the highlights, not the sentence')
+  assert.deepEqual(w[1].said, [])
+})
+
+test('a lighter week names what eased off — and only a pillar that had something in it', () => {
+  const d = days({
+    '2026-07-26': { workouts: ['A'], foodLogged: true, mindSession: true },
+    '2026-08-02': { workouts: ['A'], foodLogged: true, mindSession: true }, '2026-08-04': { mindSession: true }, '2026-08-05': { mindSession: true },
+    '2026-08-09': { workouts: ['A'], foodLogged: true, mindSession: true },
+    '2026-08-17': { workouts: ['B'] },
+  })
+  const w = buildWeeks({ ...base, days: d })
+  assert.match(w[2].headline, /^A (lighter|quieter) week$/)
+  assert.equal(w[2].sub, 'Fewer Mind sessions than the week before.')
+})
+
+test('a week after a blank one is "back on the board"; an identical week is "holding steady"', () => {
+  const back = buildWeeks({ ...base, days: days({
+    '2026-07-26': { workouts: ['A'] },
+    '2026-08-09': { workouts: ['A'], foodLogged: true }, '2026-08-17': { workouts: ['B'] },
+  }) })
+  assert.equal(back[2].headline, 'Back on the board')
+  assert.equal(back[2].sub, 'After a blank week.')
+
+  const same = { workouts: ['A'], foodLogged: true, mindSession: true }
+  const steady = buildWeeks({ ...base, days: days({
+    '2026-07-26': same, '2026-07-27': { foodLogged: true }, '2026-07-28': { foodLogged: true, mindSession: true },
+    '2026-08-02': same, '2026-08-03': { foodLogged: true }, '2026-08-04': { foodLogged: true, mindSession: true },
+    '2026-08-17': { workouts: ['B'] },
+  }) })
+  assert.equal(steady[1].headline, 'Holding steady')
+  assert.equal(steady[1].sub, 'Level with the week before.')
+})
+
+test('the first week no longer recites its counts either', () => {
+  const w = buildWeeks({ ...base, days: days({ '2026-08-03': { workouts: ['A'], foodLogged: true }, '2026-08-17': { workouts: ['B'] } }) })
+  assert.equal(w[0].headline, 'Where it started')
+  assert.doesNotMatch(w[0].sub, /\d/)
+})
+
+test('the story says which facts it told, so the card can leave them out', () => {
+  const w = buildWeeks({ ...base, days: days({
+    '2026-08-02': { workouts: ['A'] },
+    '2026-08-09': { workouts: ['A'], prs: [{ name: 'Bench', e1RM: 225 }] },
+    '2026-08-16': { workouts: ['A'], foodLogged: true }, '2026-08-17': { workouts: ['B'], foodLogged: true },
+    '2026-08-18': { workouts: ['C'] }, '2026-08-19': { workouts: ['D'] },
+  }), todayKey: '2026-08-19' })
+  assert.equal(w[1].headline, 'New best: Bench'); assert.deepEqual(w[1].said, ['prs'])
+  const live = w[w.length - 1]
+  assert.match(live.headline, /4 of 4\. Week hit/)
+  assert.deepEqual(live.said, ['workouts', 'logging'])
+})

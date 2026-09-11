@@ -1,26 +1,33 @@
 /**
  * What a Becoming card should actually SAY about a week — pure.
  *
- * The card used to print all three pillars, always, as a row of seven Sun→Sat
- * dots plus a terse count. Two things were wrong with that:
+ * The card has been rebuilt twice for the same complaint. First it printed all
+ * three pillars as seven Sun→Sat dots plus a count ("Training 1/5" beside
+ * seven dots). Then the dots went, but it still printed a fixed table of
+ * pillar rows — so a member who did two Mind sessions last week read
+ * "Mind · 0 sessions" this week, and every card had the same shape whatever
+ * the week had been about. Swapping dots for text did not fix that.
  *
- *   • The dots and the count measured different things. "Training 1/5" beside
- *     seven dots reads as "1 of 7"; the 5 is a weekly workout target and the 7
- *     is the calendar. Nobody can hold both at once, so the row said nothing.
- *   • It was the same three rows for everybody. A member who has never opened
- *     Mind was told "0 sessions" every week for the rest of their life, which
- *     is not a fact about them — it is a fact about a feature they declined.
+ * So a card no longer has rows. It has HIGHLIGHTS: the few facts about this
+ * member's week that are worth reading, each one a thing they actually did,
+ * ranked by how much it says —
  *
- * So: no dots, and only the pillars a member is actually using. Each surviving
- * row carries the number that matters AND how it moved against the week
- * before, because the change is the part that is worth reading. A pillar that
- * has gone quiet gets one small invitation instead of a row of zeroes.
+ *   • a record beats a count, and a count that moved beats one that held
+ *   • a zero is never a highlight. Nothing they did not do gets a line; the
+ *     one place a quiet pillar is mentioned is the small invitation on the
+ *     live week
+ *   • nothing the headline already said is said again underneath it
+ *
+ * — so a PR week leads with the lift, a logging streak leads with the streak,
+ * and a week that was only two Mind sessions shows two Mind sessions and
+ * nothing else. The shape follows the week.
  *
  * Everything here is derived from the week snapshots the journey already
  * builds — no new data, no new query.
  */
 
-import type { WeekSnapshot } from '@/lib/becoming/weeks'
+import { shiftDay } from '@/lib/streaks/pillars'
+import type { Fact, WeekSnapshot } from '@/lib/becoming/weeks'
 
 // One definition of "is this member using X", computed once in buildWeeks over
 // the raw week sequence and carried on the snapshot. Recomputing it here would
@@ -32,7 +39,7 @@ export type CardPillar = 'training' | 'fuel' | 'mind'
 
 /**
  * Workouts, then nutrition, then mindset — the order the coach asked for, used
- * on the card and in the Details tabs so the app has one priority, not two.
+ * to break ties on the card and in the Details tabs.
  */
 export const PILLAR_ORDER: CardPillar[] = ['training', 'fuel', 'mind']
 
@@ -51,23 +58,45 @@ export const PILLAR_HREF: Record<CardPillar, string> = {
 
 /**
  * What Mind is reporting for this member. Sessions are the real metric, but a
- * member who only ever taps the daily check-in is still using Mind, and
- * telling them "0 sessions" is the exact complaint this module exists to fix.
+ * member who only ever taps the daily check-in is still using Mind.
  */
 export type MindMode = 'sessions' | 'checkins'
 
-export interface SignalRow {
-  pillar: CardPillar
-  label: string
-  /** The number that matters, already worded. */
+/** At most this many highlights on one card: a lead and two behind it. */
+export const MAX_HIGHLIGHTS = 3
+
+/**
+ * How far back a count has to reach before "most in N weeks" is worth saying.
+ * Beating the last two weeks is ordinary; beating the last four is a change.
+ */
+export const RECORD_MIN_WEEKS = 4
+
+export interface Highlight {
+  kind: Fact
+  pillar: CardPillar | 'all'
+  /** The number (or word) that matters — drawn large. */
   value: string
-  /** One extra fact worth a glance — a PR, a weight move, a mood. */
-  note: string | null
+  /** Denominator, drawn small after the value: "/5", "/7". */
+  of: string | null
+  /** Unit, drawn small after the value: "lbs". */
+  unit: string | null
+  /** What the value is, in words. */
+  label: string
+  /** The reason it earned a place: "best week yet", "target hit", "every day". */
+  flag: string | null
   /**
    * Change against the same stretch of the week before: positive is more.
-   * `null` when there is no earlier week to compare against.
+   * `null` when there is nothing fair to compare against.
    */
   delta: number | null
+  /**
+   * The value IS the change ("+1", "−2"). Used when the headline already
+   * stated the count: repeating "2/5 workouts" under "2 down, 3 to go" says
+   * nothing, but how that moved against last week is still news.
+   */
+  change: boolean
+  /** How much it says. Only used to rank, never shown. */
+  weight: number
 }
 
 export interface Nudge {
@@ -82,21 +111,30 @@ export interface Nudge {
 export interface WeekSignals {
   /** Pillars in use around this week, in PILLAR_ORDER. */
   active: CardPillar[]
-  rows: SignalRow[]
+  /** Ranked, most telling first. Never a zero. */
+  highlights: Highlight[]
   /** At most one, and only on the live week. */
   nudge: Nudge | null
-  /** True when any row has something to compare against. */
+  /** True when a highlight shows a change (a chip, or a change as its value) — the card then names what it is against. */
   hasDeltas: boolean
 }
 
-const STATE_WORD: Record<string, string> = {
-  stressed: 'stressed',
-  distracted: 'distracted',
-  low_energy: 'low energy',
-  locked_in: 'locked in',
+export interface SignalOptions {
+  unit?: 'lbs' | 'kg'
+  /** The member's weight goal, so a scale move can be called the right way. */
+  direction?: 'lose' | 'maintain' | 'gain' | null
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+const STATE_WORD: Record<string, string> = {
+  stressed: 'Stressed',
+  distracted: 'Distracted',
+  low_energy: 'Low energy',
+  locked_in: 'Locked in',
+}
+
+const EMPTY: WeekSignals = { active: [], highlights: [], nudge: null, hasDeltas: false }
+
+const plural = (n: number, word: string) => `${word}${n === 1 ? '' : 's'}`
 
 /**
  * How much of a pillar happened in the first `through` days of a week.
@@ -111,6 +149,11 @@ export function pillarCount(w: WeekSnapshot, pillar: CardPillar, through = 7, mo
   if (pillar === 'training') return days.reduce((n, d) => n + d.workoutCount, 0)
   if (pillar === 'fuel') return days.filter(d => d.food).length
   return days.filter(d => (mode === 'sessions' ? d.mindSession : d.mind)).length
+}
+
+/** Days with anything at all on them — the habit, across the whole app. */
+export function activeDays(w: WeekSnapshot, through = 7): number {
+  return w.days.slice(0, Math.max(0, Math.min(7, through))).filter(d => d.workout || d.food || d.mind).length
 }
 
 /**
@@ -146,69 +189,208 @@ const NUDGE_LAPSED: Record<CardPillar, string> = {
   mind: 'Pick Mind back up',
 }
 
-function trainingRow(w: WeekSnapshot, prev: WeekSnapshot | null, through: number): SignalRow {
-  const now = pillarCount(w, 'training', through)
-  const target = w.training.target && w.training.target > 0 ? w.training.target : null
-  return {
-    pillar: 'training',
-    label: PILLAR_LABEL.training,
-    value: target ? `${now} of ${target} workouts` : plural(now, 'workout'),
-    note: w.training.prCount > 0 ? plural(w.training.prCount, 'PR') : null,
-    delta: prev ? now - pillarCount(prev, 'training', through) : null,
-  }
-}
-
-function fuelRow(w: WeekSnapshot, prev: WeekSnapshot | null, through: number, unit: 'lbs' | 'kg'): SignalRow {
-  const now = pillarCount(w, 'fuel', through)
-  const d = w.nutrition.delta
-  return {
-    pillar: 'fuel',
-    label: PILLAR_LABEL.fuel,
-    value: `${now} of ${through} days`,
-    note: d != null && d !== 0 ? `${d > 0 ? '+' : ''}${d.toFixed(1)} ${unit}` : null,
-    delta: prev ? now - pillarCount(prev, 'fuel', through) : null,
-  }
-}
-
-function mindRow(w: WeekSnapshot, prev: WeekSnapshot | null, through: number, mode: MindMode): SignalRow {
-  const now = pillarCount(w, 'mind', through, mode)
-  return {
-    pillar: 'mind',
-    label: PILLAR_LABEL.mind,
-    value: mode === 'sessions' ? plural(now, 'session') : plural(now, 'check-in'),
-    note: w.mind.dominant ? STATE_WORD[w.mind.dominant] ?? null : null,
-    delta: prev ? now - pillarCount(prev, 'mind', through, mode) : null,
-  }
+/** Whole calendar weeks between two Sunday week keys. */
+function weeksBetween(fromKey: string, toKey: string): number {
+  let n = 0
+  for (let k = fromKey; k < toKey && n < 1000; k = shiftDay(k, 7)) n++
+  return n
 }
 
 /**
- * The rows and the nudge for one week.
+ * Is `n` a record for this member? Measured in CALENDAR weeks from the week
+ * keys, because a collapsed "away" card is several weeks at one index.
  *
- * `weeks` is the whole journey because relevance is a question about the
- * member, not about a single week: whether Mind belongs on this card depends
- * on whether they have been doing Mind lately, which the week itself cannot
- * know.
+ * Earlier weeks are counted whole. On the live week that is still fair: a
+ * partial week that has already passed every full week before it is a record
+ * however the rest of it goes.
  */
-export function weekSignals(weeks: WeekSnapshot[], index: number, unit: 'lbs' | 'kg' = 'lbs'): WeekSignals {
+function recordFlag(weeks: WeekSnapshot[], index: number, n: number, count: (w: WeekSnapshot) => number): string | null {
+  if (n <= 0 || index <= 0) return null
   const w = weeks[index]
-  if (!w) return { active: [], rows: [], nudge: null, hasDeltas: false }
+  for (let i = index - 1; i >= 0; i--) {
+    if (count(weeks[i]) >= n) {
+      const back = weeksBetween(weeks[i].weekKey, w.weekKey)
+      return back >= RECORD_MIN_WEEKS ? `most in ${back} weeks` : null
+    }
+  }
+  // Nothing before it reached this. Only worth saying once there is a history
+  // to beat — "best week yet" in week two is just week two.
+  return weeksBetween(weeks[0].weekKey, w.weekKey) >= RECORD_MIN_WEEKS - 1 ? 'best week yet' : null
+}
+
+/**
+ * A rising count reads as more important than a level one, up to a point, and
+ * a falling one a little less — so a card leads with what went right when
+ * something did, and a drop is still shown, just not first.
+ */
+const rise = (delta: number | null) => (delta == null || delta === 0 ? 0 : delta > 0 ? Math.min(3, delta) * 5 : -5)
+
+function candidates(weeks: WeekSnapshot[], index: number, through: number, opts: Required<SignalOptions>): Highlight[] {
+  const w = weeks[index]
+  const prev = index > 0 ? weeks[index - 1] : null
+  const out: Highlight[] = []
+  const add = (h: Omit<Highlight, 'of' | 'unit' | 'flag' | 'delta' | 'change'> & Partial<Pick<Highlight, 'of' | 'unit' | 'flag' | 'delta'>>) =>
+    out.push({ of: null, unit: null, flag: null, delta: null, change: false, ...h })
+  const moved = (now: number, count: (x: WeekSnapshot) => number) => (prev ? now - count(prev) : null)
+  const unitWord = opts.unit
+
+  // ── Training ──
+  const workouts = pillarCount(w, 'training', through)
+  if (workouts > 0) {
+    const target = w.training.target && w.training.target > 0 ? w.training.target : null
+    const hit = !!target && w.training.workouts >= target
+    const record = recordFlag(weeks, index, workouts, x => pillarCount(x, 'training'))
+    const delta = moved(workouts, x => pillarCount(x, 'training', through))
+    add({
+      kind: 'workouts', pillar: 'training',
+      value: String(workouts), of: target ? `/${target}` : null,
+      label: plural(target ?? workouts, 'workout'),
+      flag: hit ? 'target hit' : record, delta,
+      weight: 50 + (hit ? 25 : 0) + (record ? 20 : 0) + rise(delta),
+    })
+  }
+  const prs = w.training.prs
+  if (w.training.prCount === 1 && prs[0]) {
+    add({ kind: 'prs', pillar: 'training', value: String(prs[0].e1RM), unit: unitWord, label: `${prs[0].name} · new best`, weight: 90 })
+  } else if (w.training.prCount > 1) {
+    const names = prs.slice(0, 2).map(p => p.name).join(', ')
+    add({ kind: 'prs', pillar: 'training', value: String(w.training.prCount), label: `PRs · ${names}${w.training.prCount > 2 ? '…' : ''}`, weight: 95 })
+  }
+
+  // ── Fuel ──
+  const logged = pillarCount(w, 'fuel', through)
+  if (logged > 0) {
+    const everyDay = logged === through && through >= 3
+    const record = recordFlag(weeks, index, logged, x => pillarCount(x, 'fuel'))
+    const delta = moved(logged, x => pillarCount(x, 'fuel', through))
+    add({
+      kind: 'logging', pillar: 'fuel',
+      value: String(logged), of: `/${through}`, label: 'days logged',
+      flag: everyDay ? 'every day' : record, delta,
+      weight: 45 + (everyDay ? 15 : 0) + (record ? 20 : 0) + rise(delta),
+    })
+  }
+  const protein = w.nutrition.proteinDays
+  if (protein > 0 && logged > 0) {
+    add({ kind: 'protein', pillar: 'fuel', value: String(protein), of: `/${w.nutrition.logDays}`, label: 'protein days', weight: protein >= 3 ? 35 : 25 })
+  }
+  const kg = unitWord === 'kg'
+  const wd = w.nutrition.delta
+  if (wd != null && Math.abs(wd) >= (kg ? 0.4 : 1)) {
+    const right = (opts.direction === 'lose' && wd < 0) || (opts.direction === 'gain' && wd > 0)
+    const wrong = (opts.direction === 'lose' && wd > 0) || (opts.direction === 'gain' && wd < 0)
+    add({
+      kind: 'weight', pillar: 'fuel',
+      value: `${wd > 0 ? '+' : '−'}${Math.abs(wd).toFixed(1)}`, unit: unitWord, label: 'on the scale',
+      flag: right ? 'the way you want' : null,
+      weight: right ? 80 : wrong ? 40 : 50,
+    })
+  }
+
+  // ── Mind ──
+  const sessions = pillarCount(w, 'mind', through, 'sessions')
+  if (sessions > 0) {
+    const record = recordFlag(weeks, index, sessions, x => pillarCount(x, 'mind', 7, 'sessions'))
+    const delta = moved(sessions, x => pillarCount(x, 'mind', through, 'sessions'))
+    add({ kind: 'sessions', pillar: 'mind', value: String(sessions), label: `Mind ${plural(sessions, 'session')}`, flag: record, delta, weight: 45 + (record ? 20 : 0) + rise(delta) })
+  } else {
+    // No session this week, but they checked in: that is still them showing
+    // up, and it is counted as what it is rather than as "0 sessions".
+    const checkins = pillarCount(w, 'mind', through, 'checkins')
+    if (checkins > 0) {
+      const record = recordFlag(weeks, index, checkins, x => pillarCount(x, 'mind', 7, 'checkins'))
+      const delta = moved(checkins, x => pillarCount(x, 'mind', through, 'checkins'))
+      add({ kind: 'checkins', pillar: 'mind', value: String(checkins), label: plural(checkins, 'check-in'), flag: record, delta, weight: 30 + (record ? 10 : 0) + rise(delta) })
+    }
+  }
+  if (w.mind.chapterUnlocked && w.mind.chapterUnlocked > 1) {
+    add({ kind: 'chapter', pillar: 'mind', value: `Ch ${w.mind.chapterUnlocked}`, label: 'unlocked', weight: 88 })
+  }
+  if (w.mind.dominant) {
+    add({ kind: 'state', pillar: 'mind', value: STATE_WORD[w.mind.dominant] ?? w.mind.dominant, label: w.isCurrent ? 'so far' : 'most of the week', weight: 20 })
+  }
+
+  // ── The habit, across the app ──
+  // Only when it says something no single pillar did: two pillars on
+  // different days add up to more days than either one alone.
+  const days = activeDays(w, through)
+  const best = Math.max(
+    w.days.slice(0, through).filter(d => d.workout).length,
+    logged,
+    pillarCount(w, 'mind', through, 'checkins'),
+  )
+  if (days > best) {
+    const everyDay = days === through && through >= 3
+    const record = recordFlag(weeks, index, days, x => activeDays(x))
+    const delta = moved(days, x => activeDays(x, through))
+    add({
+      kind: 'active', pillar: 'all',
+      value: String(days), of: `/${through}`, label: 'days active',
+      flag: everyDay ? 'every day' : record, delta,
+      weight: 40 + (everyDay ? 15 : 0) + (record ? 20 : 0) + rise(delta),
+    })
+  }
+  return out
+}
+
+/** The noun a change is counted in, for the facts that can move week to week. */
+const CHANGE_NOUN: Partial<Record<Fact, (n: number) => string>> = {
+  workouts: n => plural(n, 'workout'),
+  logging: n => (n === 1 ? 'day logged' : 'days logged'),
+  sessions: n => `Mind ${plural(n, 'session')}`,
+  checkins: n => plural(n, 'check-in'),
+  active: n => (n === 1 ? 'day active' : 'days active'),
+}
+
+/**
+ * A fact the headline already told. If it moved, what is left to say is HOW
+ * it moved, so it comes back as the change alone; if it did not move, or it is
+ * not the kind of thing that moves (a PR, the scale), it is dropped.
+ */
+function asChange(h: Highlight): Highlight | null {
+  const noun = CHANGE_NOUN[h.kind]
+  if (!noun || h.delta == null || h.delta === 0) return null
+  const d = h.delta
+  return {
+    ...h,
+    value: `${d > 0 ? '+' : '−'}${Math.abs(d)}`, of: null, unit: null,
+    label: `${noun(Math.abs(d))} vs last week`,
+    // "target hit" is in the headline that caused this; a record is not.
+    flag: h.flag === 'target hit' ? null : h.flag,
+    delta: null, change: true,
+    weight: h.weight - 15,
+  }
+}
+
+const KIND_ORDER: Fact[] = ['prs', 'chapter', 'workouts', 'weight', 'logging', 'sessions', 'checkins', 'active', 'protein', 'state']
+
+/**
+ * The highlights and the nudge for one week.
+ *
+ * `weeks` is the whole journey because both halves are questions about the
+ * member rather than the week: whether a count is a record depends on every
+ * week before it, and whether Mind is worth an invitation depends on whether
+ * they have been doing Mind lately.
+ */
+export function weekSignals(weeks: WeekSnapshot[], index: number, options: SignalOptions | 'lbs' | 'kg' = {}): WeekSignals {
+  const opts: Required<SignalOptions> = typeof options === 'string'
+    ? { unit: options, direction: null }
+    : { unit: options.unit ?? 'lbs', direction: options.direction ?? null }
+  const w = weeks[index]
+  if (!w) return EMPTY
   // An "away" card is a collapsed run of empty weeks. It has nothing to report
   // and comparing it to anything is noise.
-  if (w.gap) return { active: [], rows: [], nudge: null, hasDeltas: false }
+  if (w.gap) return EMPTY
 
   const through = w.isCurrent ? Math.max(1, Math.min(7, w.daysElapsed)) : 7
-  // An "away" card sitting behind this one carries the day proofs of an empty
-  // week, so comparing against it reports "you were away, and now you are
-  // back" — which is the change most worth reading.
-  const prev = index > 0 ? weeks[index - 1] : null
-  const mode = mindMode(weeks, index)
-
   const active = PILLAR_ORDER.filter(p => isPillarActive(weeks, index, p))
-  const rows: SignalRow[] = active.map(p => {
-    if (p === 'training') return trainingRow(w, prev, through)
-    if (p === 'fuel') return fuelRow(w, prev, through, unit)
-    return mindRow(w, prev, through, mode ?? 'sessions')
-  })
+
+  const said = new Set<Fact>(w.said ?? [])
+  const highlights = candidates(weeks, index, through, opts)
+    .map(h => (said.has(h.kind) ? asChange(h) : h))
+    .filter((h): h is Highlight => h != null)
+    .sort((a, b) => b.weight - a.weight || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
+    .slice(0, MAX_HIGHLIGHTS)
 
   // One invitation, on the live week only — a card about August cannot be
   // acted on, and three nudges is a nag rather than a suggestion.
@@ -221,10 +403,10 @@ export function weekSignals(weeks: WeekSnapshot[], index: number, unit: 'lbs' | 
     }
   }
 
-  return { active, rows, nudge, hasDeltas: rows.some(r => r.delta != null) }
+  return { active, highlights, nudge, hasDeltas: highlights.some(h => h.change || (h.delta != null && h.delta !== 0)) }
 }
 
 /** Signals for every week in one pass — the canvas renders them all. */
-export function journeySignals(weeks: WeekSnapshot[], unit: 'lbs' | 'kg' = 'lbs'): WeekSignals[] {
-  return weeks.map((_, i) => weekSignals(weeks, i, unit))
+export function journeySignals(weeks: WeekSnapshot[], options: SignalOptions | 'lbs' | 'kg' = {}): WeekSignals[] {
+  return weeks.map((_, i) => weekSignals(weeks, i, options))
 }
