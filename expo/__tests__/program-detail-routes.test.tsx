@@ -312,4 +312,19 @@ describe("WorkoutOverviewRoute", () => {
       );
     });
   });
+
+  it("navigates to live workout when pressing start-live", async () => {
+    mockParams = { id: "prog-1", idx: "0", phase: "0" };
+    const { getByTestId } = render(<WorkoutOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("workout-overview-title").props.children).toBe(
+        "Push A",
+      );
+    });
+
+    fireEvent.press(getByTestId("workout-overview-start-live"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=0",
+    );
+  });
 });

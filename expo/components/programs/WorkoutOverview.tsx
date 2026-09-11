@@ -20,7 +20,7 @@ export interface WorkoutOverviewViewModel {
 
 export interface WorkoutOverviewProps {
   workout: WorkoutOverviewViewModel;
-  onStartLive?: () => void;
+  onStartLive: () => void;
   testID?: string;
 }
 
@@ -51,7 +51,7 @@ export function WorkoutOverview({
           ) : null}
         </Card>
       ))}
-      <Button testID={`${testID}-start-live`} onPress={onStartLive ?? (() => {})}>
+      <Button testID={`${testID}-start-live`} onPress={onStartLive}>
         Start live workout
       </Button>
     </ScrollView>

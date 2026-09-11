@@ -42,6 +42,7 @@ describe("WorkoutOverview", () => {
             { slug: "ohp", name: "Overhead Press", sets: 3, repsLabel: "8-10" },
           ],
         }}
+        onStartLive={() => {}}
       />,
     );
     expect(getByTestId("workout-overview-title").props.children).toBe("Push A");
