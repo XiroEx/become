@@ -90,3 +90,32 @@ export function formatTimecode(seconds: number): string {
   const secs = seconds - mins * 60;
   return `${mins}:${secs.toFixed(1).padStart(4, '0')}`;
 }
+
+/**
+ * Decide whether a change in trim bounds should force the player to a new
+ * timestamp, and where.
+ *
+ * The ordinary rule ("seek only when the playhead has drifted outside the
+ * window") silently does nothing when a drag lands inside the *previous*
+ * window — which a drag does about as often as not. In the admin trim
+ * editor that reads as "the preview doesn't reflect the scrubber": nudge the
+ * end handle earlier while playback happens to already be before the new
+ * end, and nothing visibly happens. This forces a seek on every bounds
+ * change instead, landing on whichever boundary just moved so trimming the
+ * tail is visible too, not just the in-point.
+ *
+ * Returns `null` when neither bound changed — the caller should fall back to
+ * the ordinary in-range check.
+ */
+export function forcedPreviewSeekTarget(
+  prevTrim: { start: number; end: number | null } | null,
+  nextTrim: { start: number; end: number | null }
+): number | null {
+  const startChanged = !prevTrim || prevTrim.start !== nextTrim.start;
+  const endChanged = !prevTrim || prevTrim.end !== nextTrim.end;
+  if (!startChanged && !endChanged) return null;
+  if (endChanged && !startChanged && nextTrim.end !== null) {
+    return Math.max(nextTrim.start, nextTrim.end - 0.4);
+  }
+  return nextTrim.start;
+}
