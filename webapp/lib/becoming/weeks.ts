@@ -106,6 +106,13 @@ export interface DayProof {
   future: boolean
 }
 
+/**
+ * A fact a card can state about a week. The story line and the card's
+ * highlights draw from the same list, so the headline can say which facts it
+ * already told and the card does not print them a second time underneath.
+ */
+export type Fact = 'workouts' | 'prs' | 'logging' | 'protein' | 'weight' | 'sessions' | 'checkins' | 'state' | 'chapter' | 'active'
+
 export interface WeekSnapshot {
   index: number
   weekKey: string
@@ -130,6 +137,8 @@ export interface WeekSnapshot {
   training: { workouts: number; target: number | null; hit: boolean; prs: Array<{ name: string; e1RM: number }>; prCount: number }
   headline: string
   sub: string
+  /** Facts the headline and sub already state — the card leaves them out. */
+  said: Fact[]
   /** Short chips for the overview / graph tooltip. */
   tags: string[]
 }
@@ -255,12 +264,65 @@ function missingWord(uses: PillarUse): string | null {
   return parts.length ? parts.join(' or ') : null
 }
 
-/** The sentence for the week — deterministic from data, never generic when there is something to say. */
+/** What the week before added up to — enough for "more than last week" and nothing else. */
+export interface StoryPrev { training: number; fuel: number; sessions: number }
+
+const PICKED_UP: Record<'training' | 'fuel' | 'mind', string> = {
+  training: 'Training picked up',
+  fuel: 'Logging picked up',
+  mind: 'Mind picked up',
+}
+const FEWER: Record<'training' | 'fuel' | 'mind', string> = {
+  training: 'Fewer workouts',
+  fuel: 'Fewer days logged',
+  mind: 'Fewer Mind sessions',
+}
+
+/**
+ * An ordinary week, told by what CHANGED against the one before — which part
+ * of the app picked up, or which one eased off. This used to be "Kept it
+ * moving" over a recital of the counts, which made most weeks read the same;
+ * the counts are the card's highlights now, directly under this line.
+ *
+ * A drop is only ever named for a pillar that had something in it the week
+ * before, so nobody is told about a feature they were not using.
+ */
+function changeStory(
+  w: { step: WeekSnapshot['step']; training: { workouts: number }; nutrition: { logDays: number }; mind: { sessions: number; dominant: MindState | null } },
+  prev: StoryPrev | null,
+): { headline: string; sub: string; said: Fact[] } {
+  const dom = w.mind.dominant ? `Mostly ${STATE_WORD[w.mind.dominant]}.` : null
+  const said: Fact[] = dom ? ['state'] : []
+  const quiet = w.step === 'down' ? 'A quieter week' : null
+  const sub = (lead: string | null) => [lead, dom].filter(Boolean).join(' ') || 'On the board, and it counts.'
+  if (!prev) return { headline: quiet ?? 'Kept it moving', sub: sub(null), said }
+  const diff = { training: w.training.workouts - prev.training, fuel: w.nutrition.logDays - prev.fuel, mind: w.mind.sessions - prev.sessions }
+  const order = (['training', 'fuel', 'mind'] as const)
+  if (prev.training + prev.fuel + prev.sessions === 0) return { headline: 'Back on the board', sub: sub('After a blank week.'), said }
+  const up = [...order].filter(p => diff[p] > 0).sort((a, b) => diff[b] - diff[a])[0]
+  const down = [...order].filter(p => diff[p] < 0).sort((a, b) => diff[a] - diff[b])[0]
+  // "Mind picked up" / "Up on the week before" says the same thing twice, so a
+  // clean rise lets the mood (when there is one) have the line instead.
+  if (up) return { headline: quiet ?? PICKED_UP[up], sub: sub(down ? `${FEWER[down]} than the week before.` : dom ? null : 'Up on the week before.'), said }
+  if (down) return { headline: quiet ?? 'A lighter week', sub: sub(`${FEWER[down]} than the week before.`), said }
+  return { headline: quiet ?? 'Holding steady', sub: sub('Level with the week before.'), said }
+}
+
+/**
+ * The sentence for the week — deterministic from data, never generic when
+ * there is something to say.
+ *
+ * `said` lists the facts the headline and sub already state. The card's
+ * highlights leave those out, so "New best: Bench" is not followed by a tile
+ * that says Bench again, and a sub never recites counts the tiles are about to
+ * show as numbers.
+ */
 export function storyFor(
-  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags'>,
+  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags' | 'said'>,
   input: Pick<WeekInput, 'weightUnit' | 'direction' | 'targetWeight'>,
   uses: PillarUse = ALL_PILLARS,
-): { headline: string; sub: string; tags: string[] } {
+  prev: StoryPrev | null = null,
+): { headline: string; sub: string; said: Fact[]; tags: string[] } {
   const tags: string[] = []
   const t = w.training, n = w.nutrition, m = w.mind
   const unit = input.weightUnit
@@ -282,69 +344,64 @@ export function storyFor(
   // The live week speaks in the present tense until it settles on Sunday.
   if (w.isCurrent) {
     if (nothingSubstantive) {
-      if (w.daysElapsed <= 1) return { headline: 'A new week of becoming', sub: 'Blank so far. What you do in the next six days is what this card will say.', tags }
+      if (w.daysElapsed <= 1) return { headline: 'A new week of becoming', sub: 'Blank so far. What you do in the next six days is what this card will say.', said: [], tags }
       const checked = m.moodDays ? ` You have checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}.` : ''
-      return { headline: 'Still being written', sub: `Day ${w.daysElapsed} of 7.${checked} ${firstLine(uses)} puts the first real line on this card.`, tags }
+      return { headline: 'Still being written', sub: `Day ${w.daysElapsed} of 7.${checked} ${firstLine(uses)} puts the first real line on this card.`, said: m.moodDays ? ['checkins'] : [], tags }
     }
     return { ...liveStoryFor(w, { delta, scaleMoved, scaleRightWay, scaleWrongWay, unit }, uses), tags }
   }
   if (w.isFirst && !w.isCurrent) {
-    return { headline: 'Where it started', sub: `Your first week. ${t.workouts ? `${t.workouts} workout${t.workouts === 1 ? '' : 's'}` : 'No workouts yet'}${n.logDays ? `, food logged ${n.logDays} day${n.logDays === 1 ? '' : 's'}` : ''}. Everything since is measured from here.`, tags }
+    return { headline: 'Where it started', sub: 'Your first week. Everything since is measured from here.', said: [], tags }
   }
   if (m.chapterUnlocked && m.chapterUnlocked > 1) {
-    return { headline: `Chapter ${m.chapterUnlocked} opened`, sub: `The week your mind work earned the next chapter${t.hit ? ' — and the training week hit its target too' : ''}.`, tags }
+    return { headline: `Chapter ${m.chapterUnlocked} opened`, sub: `The week your mind work earned the next chapter${t.hit ? ' — and the training week hit its target too' : ''}.`, said: ['chapter'], tags }
   }
   if (t.prCount >= 2) {
-    return { headline: `${t.prCount} personal records`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. The strongest week on paper so far.`, tags }
+    return { headline: `${t.prCount} personal records`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. The strongest week on paper so far.`, said: ['prs'], tags }
   }
   if (t.hit && n.logDays >= 5 && m.sessions >= 3) {
-    return { headline: 'The whole system, working', sub: `Training hit ${t.workouts}/${t.target}, food logged ${n.logDays} days, ${m.sessions} mind sessions. This is what a full week looks like.`, tags }
+    return { headline: 'The whole system, working', sub: 'Training, food and mind all showed up. This is what a full week looks like.', said: [], tags }
   }
   if (scaleRightWay) {
-    return { headline: 'The scale moved', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} this week, the way you wanted${t.hit ? ', with the training week hit' : ''}.`, tags }
+    return { headline: 'The scale moved', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} this week, the way you wanted${t.hit ? ', with the training week hit' : ''}.`, said: ['weight'], tags }
   }
   if (t.hit) {
     const behind = n.logDays >= 5 ? `And ${n.logDays} days of food logged behind it.`
       : n.logDays > 0 ? `Food logged ${n.logDays} of 7 — the training carried this one.`
       : uses.fuel ? 'Training carried this week; the logging did not show up.'
       : 'A full training week, start to finish.'
-    return { headline: `${t.workouts} of ${t.target}. Week hit.`, sub: behind, tags }
+    return { headline: `${t.workouts} of ${t.target}. Week hit.`, sub: behind, said: n.logDays > 0 ? ['workouts', 'logging'] : ['workouts'], tags }
   }
   if (t.prCount === 1) {
-    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift moved the week.`, tags }
+    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift moved the week.`, said: ['prs'], tags }
   }
   if (m.sessions >= 4 && t.workouts === 0) {
-    return { headline: 'The mind kept showing up', sub: `${m.sessions} sessions and no training — the body is next.`, tags }
+    return { headline: 'The mind kept showing up', sub: `${m.sessions} sessions and no training — the body is next.`, said: ['sessions'], tags }
   }
   if (n.logDays >= 6 && t.workouts === 0) {
-    return { headline: 'Logged everything, lifted nothing', sub: `${n.logDays} days of food, no workouts. Honest, and it counts.`, tags }
+    return { headline: 'Logged everything, lifted nothing', sub: `${n.logDays} days of food, no workouts. Honest, and it counts.`, said: ['logging'], tags }
   }
   if (scaleWrongWay) {
-    return { headline: 'The scale pushed back', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} — ${n.logDays >= 5 ? 'and you logged, so it is data, not a mystery' : 'with thin logging, hard to say why'}.`, tags }
+    return { headline: 'The scale pushed back', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} — ${n.logDays >= 5 ? 'and you logged, so it is data, not a mystery' : 'with thin logging, hard to say why'}.`, said: ['weight'], tags }
   }
   if (t.workouts > 0 || n.logDays > 0 || m.sessions > 0) {
-    const bits = []
-    if (t.workouts) bits.push(`${t.workouts} workout${t.workouts === 1 ? '' : 's'}${t.target ? ` of ${t.target}` : ''}`)
-    if (n.logDays) bits.push(`${n.logDays} day${n.logDays === 1 ? '' : 's'} logged`)
-    if (m.sessions) bits.push(`${m.sessions} mind session${m.sessions === 1 ? '' : 's'}`)
-    const dom = m.dominant ? ` Mostly ${STATE_WORD[m.dominant]}.` : ''
-    return { headline: w.step === 'down' ? 'A quieter week' : 'Kept it moving', sub: `${bits.join(', ')}.${dom}`, tags }
+    return { ...changeStory(w, prev), tags }
   }
   // Quiet weeks that still left a trace: check-ins, a weigh-in, a banked win.
   if (m.wins.length) {
     const quote = `you wrote it down: “${m.wins[0].slice(0, 80)}${m.wins[0].length > 80 ? '…' : ''}”`
     const missed = missingWord(uses)
-    return { headline: `${m.wins.length === 1 ? 'A win, banked' : `${m.wins.length} wins, banked`}`, sub: missed ? `No ${missed} logged, but ${quote}` : `Nothing else logged, but ${quote}`, tags }
+    return { headline: `${m.wins.length === 1 ? 'A win, banked' : `${m.wins.length} wins, banked`}`, sub: missed ? `No ${missed} logged, but ${quote}` : `Nothing else logged, but ${quote}`, said: [], tags }
   }
   if (m.moodDays) {
     const dom = m.dominant ? `, mostly ${STATE_WORD[m.dominant]}` : ''
     const missed = missingWord(uses)
-    return { headline: `Checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}`, sub: missed ? `No ${missed} logged this week${dom}. Showing up to say how you feel still counts.` : `Showing up to say how you feel still counts${dom}.`, tags }
+    return { headline: `Checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}`, sub: missed ? `No ${missed} logged this week${dom}. Showing up to say how you feel still counts.` : `Showing up to say how you feel still counts${dom}.`, said: m.dominant ? ['checkins', 'state'] : ['checkins'], tags }
   }
   if (n.delta != null) {
-    return { headline: 'Weighed in, that was it', sub: `${n.weightEnd} ${unit} on the scale${n.delta !== 0 ? ` (${n.delta > 0 ? '+' : ''}${n.delta})` : ''}. Nothing else logged. The path holds.`, tags }
+    return { headline: 'Weighed in, that was it', sub: `${n.weightEnd} ${unit} on the scale${n.delta !== 0 ? ` (${n.delta > 0 ? '+' : ''}${n.delta})` : ''}. Nothing else logged. The path holds.`, said: ['weight'], tags }
   }
-  return { headline: 'A week away', sub: 'Nothing logged. The path holds; it just does not climb.', tags }
+  return { headline: 'A week away', sub: 'Nothing logged. The path holds; it just does not climb.', said: [], tags }
 }
 
 /**
@@ -352,58 +409,54 @@ export function storyFor(
  * but "so far" — the card is still being written until Sunday.
  */
 function liveStoryFor(
-  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags'>,
+  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags' | 'said'>,
   x: { delta: number | null; scaleMoved: boolean; scaleRightWay: boolean; scaleWrongWay: boolean; unit: 'lbs' | 'kg' },
   uses: PillarUse = ALL_PILLARS,
-): { headline: string; sub: string } {
+): { headline: string; sub: string; said: Fact[] } {
   const t = w.training, n = w.nutrition, m = w.mind
   const left = 7 - w.daysElapsed
   const daysLeft = left <= 0 ? 'the week seals tonight' : left === 1 ? 'one day left' : `${left} days left`
+  const DaysLeft = daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)
   const need = t.target ? Math.max(0, t.target - t.workouts) : 0
   if (m.chapterUnlocked && m.chapterUnlocked > 1) {
-    return { headline: `Chapter ${m.chapterUnlocked} is open`, sub: `Your mind work just earned the next chapter — and ${daysLeft} to build on it.` }
+    return { headline: `Chapter ${m.chapterUnlocked} is open`, sub: `Your mind work just earned the next chapter — and ${daysLeft} to build on it.`, said: ['chapter'] }
   }
   if (t.prCount >= 2) {
-    return { headline: `${t.prCount} personal records, so far`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. Already the strongest week on paper, and ${daysLeft}.` }
+    return { headline: `${t.prCount} personal records, so far`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. Already the strongest week on paper, and ${daysLeft}.`, said: ['prs'] }
   }
   if (t.hit && n.logDays >= Math.min(5, w.daysElapsed) && m.sessions >= 3) {
-    return { headline: 'The whole system is working', sub: `Training ${t.workouts}/${t.target}, food logged ${n.logDays} of ${w.daysElapsed} days, ${m.sessions} mind sessions. Keep it rolling through Saturday.` }
+    return { headline: 'The whole system is working', sub: 'Training, food and mind are all showing up. Keep it rolling through Saturday.', said: [] }
   }
   if (x.scaleRightWay) {
-    return { headline: 'The scale is moving', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far this week, the way you want${t.hit ? ', with the training week already hit' : ''}.` }
+    return { headline: 'The scale is moving', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far this week, the way you want${t.hit ? ', with the training week already hit' : ''}.`, said: ['weight'] }
   }
   if (t.hit) {
     const behind = n.logDays >= 4 ? `And ${n.logDays} days of food logged behind it.`
       : n.logDays > 0 ? `Food logged ${n.logDays} of ${w.daysElapsed} — the training is carrying it so far.`
       : uses.fuel ? 'Training is carrying it; the logging has not shown up yet.'
       : 'The week is already where you wanted it.'
-    return { headline: `${t.workouts} of ${t.target}. Week hit, ${daysLeft}.`, sub: behind }
+    return { headline: `${t.workouts} of ${t.target}. Week hit, ${daysLeft}.`, sub: behind, said: n.logDays > 0 ? ['workouts', 'logging'] : ['workouts'] }
   }
   if (t.prCount === 1) {
-    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift has moved the week already, and there is ${daysLeft}.` }
+    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift has moved the week already, and there is ${daysLeft}.`, said: ['prs'] }
   }
   if (t.target && t.workouts > 0 && need > 0) {
-    // The food and mind clauses are only for members who use those parts of the
-    // app: "nothing logged yet on the food side" is a shortfall to someone who
-    // logs food and noise to everyone else.
-    const food = n.logDays ? ` Food logged ${n.logDays} of ${w.daysElapsed}.` : uses.fuel ? ' Nothing logged yet on the food side.' : ''
-    const mind = m.sessions ? ` ${m.sessions} mind session${m.sessions === 1 ? '' : 's'}.` : ''
-    return { headline: `${t.workouts} down, ${need} to go`, sub: `${daysLeft} to hit ${t.target}.${food}${mind}` }
+    // "Nothing logged yet on the food side" is a shortfall to someone who logs
+    // food and noise to everyone else, so it is only said to a food logger.
+    // What they DID log is a highlight under this line, not a clause in it.
+    const food = !n.logDays && uses.fuel ? ' Nothing logged yet on the food side.' : ''
+    return { headline: `${t.workouts} down, ${need} to go`, sub: `${daysLeft} to hit ${t.target}.${food}`, said: ['workouts'] }
   }
   if (m.sessions >= 2 && t.workouts === 0) {
-    return { headline: 'The mind is showing up', sub: `${m.sessions} sessions so far and no training yet — the body is next, and there is ${daysLeft}.` }
+    return { headline: 'The mind is showing up', sub: `${m.sessions} sessions so far and no training yet — the body is next, and there is ${daysLeft}.`, said: ['sessions'] }
   }
   if (n.logDays >= 2 && t.workouts === 0) {
-    return { headline: 'Logging every day, lifting nothing yet', sub: `${n.logDays} of ${w.daysElapsed} days of food. Honest, and it counts. ${daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)}.` }
+    return { headline: 'Logging every day, lifting nothing yet', sub: `${n.logDays} of ${w.daysElapsed} days of food. Honest, and it counts. ${DaysLeft}.`, said: ['logging'] }
   }
   if (x.scaleWrongWay) {
-    return { headline: 'The scale is pushing back', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far — ${n.logDays >= 3 ? 'you are logging, so it is data, not a mystery' : 'with thin logging, hard to say why yet'}.` }
+    return { headline: 'The scale is pushing back', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far — ${n.logDays >= 3 ? 'you are logging, so it is data, not a mystery' : 'with thin logging, hard to say why yet'}.`, said: ['weight'] }
   }
-  const bits: string[] = []
-  if (t.workouts) bits.push(`${t.workouts} workout${t.workouts === 1 ? '' : 's'}${t.target ? ` of ${t.target}` : ''}`)
-  if (n.logDays) bits.push(`${n.logDays} day${n.logDays === 1 ? '' : 's'} logged`)
-  if (m.sessions) bits.push(`${m.sessions} mind session${m.sessions === 1 ? '' : 's'}`)
-  return { headline: 'Keeping it moving', sub: `${bits.join(', ')} so far. ${daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)}.` }
+  return { headline: 'Keeping it moving', sub: `${DaysLeft} to add to it.`, said: [] }
 }
 
 export function buildWeeks(input: WeekInput): WeekSnapshot[] {
@@ -515,7 +568,7 @@ export function buildWeeks(input: WeekInput): WeekSnapshot[] {
       },
       training: { workouts, target, hit, prs: prs.slice(0, 5), prCount: prs.length },
     }
-    const story = storyFor(base, input, uses)
+    const story = storyFor(base, input, uses, perWeek.length >= 2 ? perWeek[perWeek.length - 2] : null)
     out.push({ ...base, ...story })
   })
   return collapseGaps(out)
@@ -551,6 +604,7 @@ export function collapseGaps(weeks: WeekSnapshot[]): WeekSnapshot[] {
           subject: 'empty',
           headline: `Away for ${run.length} weeks`,
           sub: 'Nothing logged. The path held its ground and waited.',
+          said: [],
           tags: [`${run.length} weeks`],
           gap: { weeks: run.length, fromKey: first.weekKey, toKey: last.weekKey },
         })
