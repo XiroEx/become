@@ -2,9 +2,10 @@
 //
 // The rendered half of the Becoming card rework. The pure decisions live in
 // lib/becoming/signals (tests/unit/becomingSignals.test.ts); this pins that the
-// card actually draws them — no Sun→Sat dots, no row for a pillar the member
-// does not use, a visible change against last week, and one tappable
-// invitation — and that the details sheet opens on Story.
+// card actually draws them — no Sun→Sat dots, no fixed pillar rows and so no
+// "0 sessions", a lead highlight that changes with the week, a visible change
+// against last week, and one tappable invitation — and that the details sheet
+// opens on Story.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -55,34 +56,81 @@ test('the Sun→Sat dot strip is gone', () => {
   assert.doesNotMatch(html, DOT)
 })
 
-test('a training-only member sees Training and is not told "0 sessions"', () => {
+test('a member who did Mind last week and none this week is not told "0 sessions"', () => {
+  // The report on the card: Mind is still "in use" (last week), so the old
+  // fixed table printed a Mind row with a zero in it.
   const html = card({
-    '2026-08-09': { workouts: ['A'] }, '2026-08-11': { workouts: ['B'] },
+    '2026-08-09': { workouts: ['A'], mindSession: true }, '2026-08-11': { mindSession: true },
     '2026-08-16': { workouts: ['C'] }, '2026-08-17': { workouts: ['D'] },
   })
-  assert.match(html, /week-card-row-training/)
-  assert.doesNotMatch(html, /week-card-row-mind/)
-  assert.doesNotMatch(html, /week-card-row-fuel/)
-  assert.doesNotMatch(html, /sessions/)
-  // The number that matters, in words rather than a bare "2/5".
-  assert.match(html, /2 of 5 workouts/)
+  assert.doesNotMatch(html, /week-card-row-/, 'there are no fixed pillar rows any more')
+  assert.doesNotMatch(html, /\b0 (Mind )?sessions?\b/)
+  assert.doesNotMatch(html, /week-card-hl-sessions/)
 })
 
-test('the change against last week is drawn, and named so the arrow means something', () => {
-  // Last week 1 workout, this week (through Tuesday) 2 → up 1.
+test('the card leads with the week\'s biggest thing, drawn large, and the rest behind it', () => {
+  // Frozen week one: "Where it started", so a PR is the card's to tell.
+  const html = card({
+    '2026-08-09': { workouts: ['A'], prs: [{ name: 'Bench', e1RM: 225 }], foodLogged: true },
+    '2026-08-10': { workouts: ['B'], foodLogged: true },
+    '2026-08-16': { workouts: ['C'] },
+  }, 0)
+  assert.match(html, /data-testid="week-card-highlights"/)
+  assert.match(html, /data-testid="week-card-hl-prs" data-lead="true"/)
+  assert.match(html, /Bench · new best/)
+  assert.match(html, /week-card-hl-workouts/)
+  // The PR is not listed a second time in a trophy line under the highlights.
+  assert.equal(html.match(/Bench/g)?.length, 1)
+})
+
+test('a PR the headline already announced is not drawn again underneath it', () => {
+  const html = card({
+    '2026-08-02': { workouts: ['A'] },
+    '2026-08-09': { workouts: ['A'] }, '2026-08-10': { workouts: ['B'], prs: [{ name: 'Preacher Curl', e1RM: 120 }] },
+    '2026-08-16': { workouts: ['C'] },
+  }, 1)
+  assert.match(html, /New best: Preacher Curl/)
+  assert.doesNotMatch(html, /week-card-hl-prs/)
+  assert.equal(html.match(/Preacher Curl/g)?.length, 1)
+})
+
+test('the change against last week is drawn, and named so it means something', () => {
+  // Last week 1 workout by Tuesday, this week 2 → "+1 workout vs last week",
+  // because the headline ("2 down, 3 to go") already said the 2.
   const html = card({
     '2026-08-09': { workouts: ['A'] },
     '2026-08-16': { workouts: ['B'] }, '2026-08-17': { workouts: ['C'] },
   })
-  assert.match(html, /week-card-delta-up/)
+  assert.match(html, /2 down, 3 to go/)
+  assert.match(html, /\+1/)
+  assert.match(html, /workout vs last week/)
   assert.match(html, /vs the same days last week/)
+})
+
+test('a counted fact that moved carries an arrow chip', () => {
+  const weeks = buildWeeks({
+    days: new Map(Object.entries({
+      '2026-08-09': { ...emptyDay(), mindSession: true },
+      '2026-08-16': { ...emptyDay(), mindSession: true, workouts: ['A'] }, '2026-08-17': { ...emptyDay(), workouts: ['B'] },
+    })),
+    todayKey: '2026-08-18', weeklyTarget: null, logTarget: 5, proteinTarget: 5,
+    targetWeight: null, weightUnit: 'lbs', direction: null, identity: null,
+  })
+  const i = weeks.length - 1
+  const html = renderToStaticMarkup(
+    <WeekCard
+      week={weeks[i]} signals={weekSignals(weeks, i, 'lbs')} unit="lbs" width={330} height={520}
+      focused landed compact={false} exitEdge={null} totalWeeks={weeks.length} identity={null} reduced
+    />,
+  )
+  assert.match(html, /week-card-delta-up/)
+  assert.match(html, /up 2 from last week/)
 })
 
 test('a first week has nothing to compare against, so no chip and no caption', () => {
   const html = card({ '2026-08-16': { workouts: ['A'] }, '2026-08-17': { workouts: ['B'] } })
   assert.doesNotMatch(html, /week-card-delta-/)
   assert.doesNotMatch(html, /vs the same days last week/)
-  assert.match(html, /week-card-row-training/)
 })
 
 test('an unused pillar becomes one small link into the feature, not a row of zeroes', () => {
@@ -102,7 +150,7 @@ test('a member using everything gets no invitation', () => {
   assert.doesNotMatch(html, /week-card-nudge/)
 })
 
-test('an "away" card carries no metrics block at all', () => {
+test('an "away" card carries no highlights at all', () => {
   const weeks = build({ '2026-07-05': { workouts: ['x'] }, '2026-08-17': { foodLogged: true } })
   const gap = weeks.findIndex(w => !!w.gap)
   assert.ok(gap > 0)
@@ -112,7 +160,7 @@ test('an "away" card carries no metrics block at all', () => {
       focused landed compact={false} exitEdge={null} totalWeeks={weeks.length} identity={null} reduced
     />,
   )
-  assert.doesNotMatch(html, /week-card-metrics/)
+  assert.doesNotMatch(html, /week-card-highlights/)
   assert.doesNotMatch(html, /week-card-nudge/)
 })
 
