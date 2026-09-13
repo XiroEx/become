@@ -14,8 +14,14 @@ import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
 import { ensureStripeCustomer } from '@/lib/billing/customer'
 import { readCustomerId, writeCustomerIdIfAbsent } from '@/lib/billing/mongoDeps'
 import { checkoutCancelUrl, checkoutSuccessUrl } from '@/lib/billing/urls'
+import {
+  CHECKOUT_CONSENT_COLLECTION,
+  TERMS_URL_MISSING_LOG,
+  isTermsUrlMissingError,
+  type CheckoutSessionParams,
+} from '@/lib/billing/consentCollection'
 import { reportedGrandfathered } from '@/lib/entitlements'
-import type { IUserSubscription, UserRole } from '@/models/User'
+import type { IUserConsent, IUserSubscription, UserRole } from '@/models/User'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
     const user = await User.findById(auth.userId)
-      .select('email name role tier grandfathered subscription')
+      .select('email name role tier grandfathered subscription consent')
       .lean<{
         email?: string
         name?: string
@@ -69,6 +75,7 @@ export async function POST(request: NextRequest) {
         tier?: string
         grandfathered?: boolean
         subscription?: IUserSubscription
+        consent?: IUserConsent
       } | null>()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -142,15 +149,23 @@ export async function POST(request: NextRequest) {
       writeCustomerIdIfAbsent,
     })
 
-    const session = await stripe.checkout.sessions.create(
-      {
+    // The version of the Terms this member agreed to in the app, on the
+    // session's metadata: a dispute can then cite the exact text. 'none' is
+    // reachable only by calling this route directly — the plan page sits
+    // behind the consent gate — and is worth seeing in the Stripe dashboard.
+    const termsVersion = user.consent?.termsVersion ?? 'none'
+
+    const params: CheckoutSessionParams = {
         mode: 'subscription',
         customer: customerId,
         line_items: [{ price: priceId, quantity: 1 }],
         // Promo codes are created in the Stripe dashboard, never in code.
         allow_promotion_codes: true,
         client_reference_id: auth.userId,
-        metadata: { userId: auth.userId, plan },
+        metadata: { userId: auth.userId, plan, termsVersion },
+        // Stripe's own "I agree to the terms" box, stored on the session.
+        // See lib/billing/consentCollection.ts for why it may be retried off.
+        consent_collection: CHECKOUT_CONSENT_COLLECTION,
         // Copied onto the subscription, so every later subscription event and
         // every invoice snapshot can attribute itself without a customer lookup.
         subscription_data: { metadata: { userId: auth.userId, plan, appChannel } },
@@ -162,15 +177,28 @@ export async function POST(request: NextRequest) {
         // host falls back rather than being reflected.
         success_url: checkoutSuccessUrl(request.headers),
         cancel_url: checkoutCancelUrl(request.headers),
-      },
-      {
-        // A 1-minute bucket collapses a double-click into one session without
-        // pinning the member to a single expired session forever.
-        idempotencyKey: `become:checkout:${auth.userId}:${plan}:${cfg.mode}:${Math.floor(
-          Date.now() / 60_000,
-        )}`,
-      },
-    )
+    }
+
+    // A 1-minute bucket collapses a double-click into one session without
+    // pinning the member to a single expired session forever.
+    const idempotencyKey = `become:checkout:${auth.userId}:${plan}:${cfg.mode}:${Math.floor(
+      Date.now() / 60_000,
+    )}`
+
+    let session: { id: string; url: string | null }
+    try {
+      session = await stripe.checkout.sessions.create(params, { idempotencyKey })
+    } catch (err) {
+      if (!isTermsUrlMissingError(err)) throw err
+      console.error(TERMS_URL_MISSING_LOG)
+      // A different key: Stripe replays an idempotent request's ERROR for the
+      // same key regardless of the new params, so the retry needs its own.
+      const { consent_collection: _dropped, ...withoutConsent } = params
+      void _dropped
+      session = await stripe.checkout.sessions.create(withoutConsent, {
+        idempotencyKey: `${idempotencyKey}:noconsent`,
+      })
+    }
 
     if (!session.url) {
       console.error('[billing] checkout session created without a url')

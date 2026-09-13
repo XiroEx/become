@@ -2,6 +2,7 @@ import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
 import MagicLink, { createMagicLink } from '@/models/MagicLink'
 import { sendVerificationEmail } from '@/lib/email'
+import { LEGAL_VERSION } from '@/lib/legal'
 
 // Per-email throttle window. Blocks email-spam abuse and accidental
 // double-submits without inconveniencing real users — 30s is short enough
@@ -14,7 +15,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { email, name, mode } = body
+    const { email, name, mode, consent } = body
 
     if (!email) {
       return new Response(JSON.stringify({ message: 'Email is required' }), { status: 400 })
@@ -45,6 +46,14 @@ export async function POST(req: Request) {
       if (existingUser) {
         return new Response(JSON.stringify({ message: 'Email already in use. Please sign in instead.' }), { status: 409 })
       }
+      // The sign-up form cannot submit without the tick (the box is
+      // `required`), so a register request arriving without it is a client
+      // that is not the form. Refuse rather than create an account nobody
+      // agreed to. Login mode is untouched: the in-app gate covers a member
+      // who lands there without an account.
+      if (consent !== true) {
+        return new Response(JSON.stringify({ message: 'Please agree to the Terms of Service and Privacy Policy to create an account.' }), { status: 400 })
+      }
     }
 
     // For login mode, we'll create the user if they don't exist (passwordless flow)
@@ -72,7 +81,15 @@ export async function POST(req: Request) {
     }
 
     // Create magic link
-    const magicLink = await createMagicLink(trimmedEmail, mode, name)
+    // The version rides on the link so the agreement lands on the User row at
+    // the instant the row is created (verify-link), stamped with the text that
+    // was actually on the screen when the box was ticked.
+    const magicLink = await createMagicLink(
+      trimmedEmail,
+      mode,
+      name,
+      mode === 'register' && consent === true ? LEGAL_VERSION : undefined,
+    )
 
     // Send verification email
     await sendVerificationEmail(trimmedEmail, magicLink.token, mode, name, origin)

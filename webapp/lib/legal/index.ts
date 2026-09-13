@@ -36,10 +36,40 @@ export const LEGAL_SECONDARY_DOMAIN = 'become.redbtn.io'
 export const LEGAL_GOVERNING_LAW = 'the laws of the State of New York'
 export const LEGAL_VENUE = 'the state and federal courts located in Nassau County, New York'
 
-/** Shown at the top of every legal page, and asserted by the unit test. */
-export const LEGAL_LAST_UPDATED = 'September 9, 2026'
-export const LEGAL_LAST_UPDATED_ISO = '2026-09-09'
-export const LEGAL_VERSION = 'v1.0.0'
+/** Shown at the top of every legal page, and asserted by the unit test.
+ *
+ *  LEGAL_VERSION IS WHAT A MEMBER AGREES TO. `User.consent.termsVersion` stores
+ *  it, and the in-app consent gate (components/ConsentGate.tsx) re-asks every
+ *  member whose stored version differs. So: bump it for a change a member has to
+ *  agree to again (a new obligation, a new price, a new age rule), and leave it
+ *  alone for a typo, or every member is stopped at the door for a comma. */
+export const LEGAL_LAST_UPDATED = 'September 13, 2026'
+export const LEGAL_LAST_UPDATED_ISO = '2026-09-13'
+export const LEGAL_VERSION = 'v1.1.0'
+
+/** The minimum age to hold an account. George's call, 2026-09-13: 13, not 18.
+ *  Under-13s are COPPA territory and are refused outright; 13 to 17 may use
+ *  the Service with a parent or guardian's permission (Terms, section 4). */
+export const LEGAL_MINIMUM_AGE = 13
+
+/**
+ * The ONE sentence a member ticks to agree. It is rendered by the sign-up form
+ * and by the in-app consent gate, and it is what `User.consent` records having
+ * been shown. Age and agreement travel together on purpose: a single tick
+ * gives one timestamp that answers both "did they agree?" and "did they say
+ * they were old enough?", which is the evidence NY GBL 527-a and a chargeback
+ * dispute both ask for.
+ */
+export const CONSENT_STATEMENT = `I am at least ${LEGAL_MINIMUM_AGE} years old, and I agree to the Terms of Service and the Privacy Policy.`
+
+/**
+ * The health disclaimer, short enough for a screen a member is trying to get
+ * past. The full version is section 1 of the Terms and this must never say
+ * more than that does. Shown on the consent gate, at the end of onboarding,
+ * and in Settings, so it exists somewhere other than a page nobody reads.
+ */
+export const HEALTH_DISCLAIMER_SHORT =
+  'Become is a fitness, nutrition and mindset product, not medical care or medical advice. Talk to a physician before starting any exercise or nutrition program, scale the work to your own ability, and stop if something feels wrong.'
 
 /** How long deletion takes once we have confirmed the request. */
 export const LEGAL_DELETION_DAYS = 30
@@ -66,7 +96,11 @@ export const COUNSEL_TODO = '[TODO: confirm with counsel]'
  * the same constant checkout charges against.
  */
 export const RENEWAL_TERMS: readonly string[] = [
-  `Become Plus costs ${PLAN_PRICING.monthly.display} per ${PLAN_PRICING.monthly.per}, or ${PLAN_PRICING.annual.display} per ${PLAN_PRICING.annual.per}, in ${PLAN_PRICING.currency}, plus any tax Stripe collects at checkout.`,
+  // Tax-INCLUSIVE, by decision (George, 2026-09-13): the flat price is the
+  // price, and any sales tax Become owes comes out of it rather than being
+  // added on top at checkout. Stripe prices must therefore be configured as
+  // tax-inclusive; nothing here may say "plus tax".
+  `Become Plus costs ${PLAN_PRICING.monthly.display} per ${PLAN_PRICING.monthly.per}, or ${PLAN_PRICING.annual.display} per ${PLAN_PRICING.annual.per}, in ${PLAN_PRICING.currency}. Any applicable sales tax is included in that price.`,
   'Your plan renews automatically at the end of every billing period. Unless you cancel first, the payment method you gave Stripe is charged the same amount again, for another period of the same length, and this repeats until you cancel.',
   'You can cancel at any time. Open the Plan page in the app, choose Manage billing, and cancel in the Stripe billing portal that opens. You can also email us and we will cancel it for you.',
   'When you cancel, your Plus access stays on until the end of the period you have already paid for, and the plan is not renewed after that. Cancelling does not cut that period short, and it does not by itself produce a refund of that period.',

@@ -1,7 +1,9 @@
 "use client"
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { loginWithPasskey, passkeysSupported } from '@/lib/passkeyClient'
+import { CONSENT_STATEMENT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
 
 interface Props {
   mode: 'login' | 'register'
@@ -11,6 +13,9 @@ export default function AuthForm({ mode }: Props) {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [name, setName] = useState('')
+  // Register mode only. The box is `required`, so the browser blocks submit
+  // until it is ticked; the server refuses a register request without it too.
+  const [consent, setConsent] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -100,7 +105,7 @@ export default function AuthForm({ mode }: Props) {
       const res = await fetch('/api/auth/send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, mode }),
+        body: JSON.stringify({ email, name, mode, ...(mode === 'register' ? { consent } : {}) }),
       })
 
       const data = await res.json()
@@ -187,8 +192,36 @@ export default function AuthForm({ mode }: Props) {
         className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
       />
 
+      {/* The moment of agreement. One tick covers age and terms together —
+          see CONSENT_STATEMENT — and the sentence is the same one the in-app
+          gate shows, so a member is never asked two different questions. The
+          links open in a new tab: navigating away here loses the typed form. */}
+      {mode === 'register' && (
+        <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <input
+            type="checkbox"
+            required
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            data-testid="consent-checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-zinc-300 accent-zinc-900 dark:border-zinc-600 dark:accent-white"
+          />
+          <span>
+            I am at least {LEGAL_MINIMUM_AGE} years old, and I agree to the{' '}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Terms of Service
+            </Link>{' '}
+            and the{' '}
+            <Link href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Privacy Policy
+            </Link>
+            .<span className="sr-only"> {CONSENT_STATEMENT}</span>
+          </span>
+        </label>
+      )}
+
       <button
-        disabled={loading}
+        disabled={loading || (mode === 'register' && !consent)}
         className="cursor-pointer rounded bg-zinc-900 dark:bg-white px-4 py-2 text-white dark:text-zinc-900 font-medium disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? 'Sending...' : 'Continue with email'}

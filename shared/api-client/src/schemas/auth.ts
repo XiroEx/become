@@ -72,6 +72,10 @@ export const SendLinkRequestSchema = z.object({
   email: z.string().email(),
   mode: AuthModeSchema,
   name: z.string().optional(),
+  /** Register mode REQUIRES `true`: the "I am at least 13 and agree to the
+   *  Terms and Privacy Policy" tick. The server refuses a register without it
+   *  (400) and stamps the agreement on the member at creation. */
+  consent: z.boolean().optional(),
 });
 
 /** POST /api/auth/send-link 200 response. */

@@ -10,7 +10,7 @@ import { defaultPaceKg } from '@/lib/goals/pace'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
-import { LEGAL_CONTACT_EMAIL, LEGAL_DELETION_DAYS } from '@/lib/legal'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL, LEGAL_DELETION_DAYS } from '@/lib/legal'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
@@ -87,6 +87,13 @@ type NotificationPrefKey = keyof NotificationPrefs
 interface PreferencesResponse {
   preferences?: Partial<NotificationPrefs>
   notificationsEnabled?: boolean
+  /** Streak / milestone email. Absent = on. */
+  emailEngagement?: boolean
+}
+
+interface ConsentResponse {
+  acceptedVersion?: string | null
+  acceptedAt?: string | null
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
@@ -193,6 +200,11 @@ function SettingsPageInner() {
   // site revoke permission it already granted, so "off" has to live here.
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [disablingNotifications, setDisablingNotifications] = useState(false)
+  // Email is its own switch: it is not push, it is not gated by browser
+  // permission, and it is the one CAN-SPAM requires to be honoured.
+  const [emailEngagement, setEmailEngagement] = useState(true)
+  // What this member agreed to and when, from GET /api/me/consent.
+  const [consent, setConsent] = useState<ConsentResponse | null>(null)
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -287,6 +299,7 @@ function SettingsPageInner() {
       if (!res.ok) return
       const data: PreferencesResponse = await res.json()
       setNotificationsEnabled(data.notificationsEnabled !== false)
+      setEmailEngagement(data.emailEngagement !== false)
       const p = data.preferences ?? {}
       setNotifPrefs({
         mindReminder: p.mindReminder ?? true,
@@ -360,6 +373,44 @@ function SettingsPageInner() {
       if (!res.ok) throw new Error('PATCH failed')
     } catch {
       setNotifPrefs(prev => ({ ...prev, [key]: previous }))
+      showToast('Failed to save preference', 'error')
+    }
+  }
+
+  const fetchConsent = useCallback(async () => {
+    const token = getToken()
+    if (!token) return
+    try {
+      const res = await fetch('/api/me/consent', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return
+      setConsent((await res.json()) as ConsentResponse)
+    } catch {
+      // Informational only; the gate is what enforces it.
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchConsent()
+  }, [fetchConsent])
+
+  const handleEmailToggle = async (value: boolean) => {
+    const previous = emailEngagement
+    setEmailEngagement(value)
+    const token = getToken()
+    if (!token) {
+      setEmailEngagement(previous)
+      showToast('Failed to save preference', 'error')
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ emailEngagement: value }),
+      })
+      if (!res.ok) throw new Error('PATCH failed')
+    } catch {
+      setEmailEngagement(previous)
       showToast('Failed to save preference', 'error')
     }
   }
@@ -1110,6 +1161,41 @@ function SettingsPageInner() {
             )}
           </section>
 
+          {/* Email. Separate from push on purpose: a member with notifications
+              off, or on a browser that never asked, still gets streak mail —
+              and CAN-SPAM needs this switch to exist and to work. Sign-in
+              links are not on it; nobody can opt out of the only way in. */}
+          <section
+            id="email"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          >
+            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Email</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">Streak and milestone emails</p>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  A note when you hit a streak milestone. Sign-in links always arrive.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={emailEngagement}
+                aria-label="Streak and milestone emails"
+                data-testid="email-engagement-toggle"
+                onClick={() => handleEmailToggle(!emailEngagement)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                  emailEngagement ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                    emailEngagement ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+          </section>
+
           {/* Nutrition Planning */}
           <section
             id="nutrition"
@@ -1162,6 +1248,13 @@ function SettingsPageInner() {
               What you agreed to, what we hold, and how to reach a person.
             </p>
             <LegalLinks />
+            {consent?.acceptedAt && consent.acceptedVersion && (
+              <p data-testid="consent-record" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                You agreed to the Terms and Privacy Policy ({consent.acceptedVersion}) on{' '}
+                {new Date(consent.acceptedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}.
+              </p>
+            )}
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{HEALTH_DISCLAIMER_SHORT}</p>
             <p className="mt-4 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
               To delete your account, email{' '}
               <a

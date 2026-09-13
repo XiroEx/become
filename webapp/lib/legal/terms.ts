@@ -19,6 +19,7 @@ import {
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTION,
   LEGAL_GOVERNING_LAW,
+  LEGAL_MINIMUM_AGE,
   LEGAL_PRIMARY_DOMAIN,
   LEGAL_SECONDARY_DOMAIN,
   LEGAL_VENUE,
@@ -101,15 +102,19 @@ export const TERMS: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: 'You must be at least 18 years old to create an account and agree to these Terms for yourself. You must also be legally able to enter into a contract and not barred from using the Service under any applicable law.',
+          text: `You must be at least ${LEGAL_MINIMUM_AGE} years old to create an account. When you create an account, and again whenever these Terms change in a way you need to agree to, you confirm that you are at least ${LEGAL_MINIMUM_AGE}, and we record that confirmation together with the date and the version of the Terms you agreed to.`,
         },
         {
           kind: 'p',
-          text: 'The Service is not directed to children under 13, and we do not knowingly collect personal information from them. If you believe a child under 13 has given us personal information, email us and we will delete it.',
+          text: '**If you are under 18**, you may use the Service only with the permission of a parent or legal guardian, who agrees to these Terms on your behalf and is responsible for your use of the Service, including any purchase. You must also not be barred from using the Service under any applicable law.',
+        },
+        {
+          kind: 'p',
+          text: `The Service is not directed to children under ${LEGAL_MINIMUM_AGE}, and we do not knowingly collect personal information from them. If you believe a child under ${LEGAL_MINIMUM_AGE} has given us personal information, email us and we will delete it.`,
         },
         {
           kind: 'todo',
-          text: 'The minimum age. This draft sets it at 18. Confirm whether Become will instead allow members aged 13 to 17 with verifiable parental or guardian consent, what that consent flow must look like, and how the answer interacts with the App Store and Google Play age ratings and with COPPA.',
+          text: 'Members aged 13 to 17 are admitted on their own say-so plus a parent-or-guardian permission clause. Confirm whether that permission needs to be verified and recorded (for example a guardian email confirmation), whether a minor can validly agree to the subscription terms at all in New York, and what the resulting App Store and Google Play age ratings must be.',
         },
       ],
     },
@@ -224,7 +229,7 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'Payment is handled by **Stripe**. Stripe shows you the exact total, including any tax, before you confirm. Become never receives or stores your card number. You authorise the recurring charge when you complete checkout, and that authorisation continues until you cancel.',
+          text: 'Payment is handled by **Stripe**. The price you see is the price you pay: any applicable sales tax is included in it, and Stripe shows you the total before you confirm. Become never receives or stores your card number. You authorise the recurring charge when you complete checkout, and that authorisation continues until you cancel.',
         },
         {
           kind: 'p',
