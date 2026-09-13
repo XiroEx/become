@@ -100,12 +100,43 @@ export interface IUserSubscription {
   updatedAt?: Date;
 }
 
+/**
+ * The record that a member agreed to the Terms and Privacy Policy and said
+ * they were old enough to. ONE record, overwritten on each re-consent: the
+ * current agreement is the evidence that matters, and the version + timestamp
+ * say which text it was. Absent on every row written before 2026-09-13 —
+ * nobody had agreed to anything — which is exactly what the in-app gate
+ * (components/ConsentGate.tsx) exists to repair.
+ */
+export interface IUserConsent {
+  /** LEGAL_VERSION at the moment of agreement. */
+  termsVersion: string
+  acceptedAt: Date
+  /** LEGAL_MINIMUM_AGE as it stood — the age the member attested to. */
+  minimumAge: number
+  /** Where the tick happened: the sign-up form, the in-app gate, or a Stripe
+   *  checkout (Stripe's own consent_collection, mirrored here on session end). */
+  source: 'signup' | 'gate' | 'checkout'
+}
+
+/** Email categories a member can opt out of. Absent = ON, same convention as
+ *  UserProgress.notificationPrefs. `engagement` is the streak / milestone mail
+ *  (lib/email.ts), the only non-transactional email Become sends; sign-in
+ *  links are transactional and carry no opt-out. Set to false by the
+ *  unsubscribe link in every engagement email (app/api/email/unsubscribe) and
+ *  by the toggle in Settings. */
+export interface IUserEmailPreferences {
+  engagement?: boolean
+}
+
 export interface IUser {
   _id?: string
   email: string
   password: string
   name: string
   role: UserRole
+  consent?: IUserConsent
+  emailPreferences?: IUserEmailPreferences
   /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
    *  billing webhook may write this — never derived at request time, because
    *  that would grandfather members automatically. Readers use
@@ -193,6 +224,17 @@ const UserSubscriptionSchema = new Schema<IUserSubscription>({
   updatedAt: { type: Date },
 }, { _id: false });
 
+const UserConsentSchema = new Schema<IUserConsent>({
+  termsVersion: { type: String, required: true },
+  acceptedAt: { type: Date, required: true },
+  minimumAge: { type: Number, required: true },
+  source: { type: String, enum: ['signup', 'gate', 'checkout'], required: true },
+}, { _id: false });
+
+const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
+  engagement: { type: Boolean },
+}, { _id: false });
+
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
@@ -212,6 +254,8 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
     trim: true,
   },
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
+  consent: { type: UserConsentSchema, default: undefined },
+  emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
   // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
   // offline, by scripts/migrate-tiers.mjs — never automatically at request
   // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
