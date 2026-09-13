@@ -7,6 +7,11 @@ export interface IMagicLink extends Document {
   sessionId: string
   mode: 'login' | 'register'
   name?: string
+  /** Set when the sign-up form's consent box was ticked: the LEGAL_VERSION the
+   *  member agreed to at that moment. Carried on the link so the agreement
+   *  lands on the User row at the instant the row is created (verify-link),
+   *  not on some later screen. Register mode only. */
+  consentTermsVersion?: string
   expiresAt: Date
   used: boolean
   authToken?: string  // JWT stored after verification
@@ -43,6 +48,9 @@ const MagicLinkSchema = new Schema<IMagicLink, MagicLinkModel>({
     type: String,
     trim: true,
   },
+  consentTermsVersion: {
+    type: String,
+  },
   expiresAt: {
     type: Date,
     required: true,
@@ -73,7 +81,12 @@ export function generateSessionId(): string {
 }
 
 // Create a magic link with 15 minute expiration
-export async function createMagicLink(email: string, mode: 'login' | 'register', name?: string): Promise<IMagicLink> {
+export async function createMagicLink(
+  email: string,
+  mode: 'login' | 'register',
+  name?: string,
+  consentTermsVersion?: string,
+): Promise<IMagicLink> {
   const MagicLink = mongoose.models.MagicLink || mongoose.model<IMagicLink, MagicLinkModel>('MagicLink', MagicLinkSchema)
   
   // Invalidate any existing unused tokens for this email
@@ -92,6 +105,7 @@ export async function createMagicLink(email: string, mode: 'login' | 'register',
     sessionId,
     mode,
     name,
+    consentTermsVersion,
     expiresAt,
     used: false,
   })

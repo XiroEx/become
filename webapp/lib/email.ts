@@ -1,7 +1,29 @@
 import nodemailer from 'nodemailer'
 import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
+import { LEGAL_ADDRESS_LINES, LEGAL_CONTACT_EMAIL } from './legal'
+import { unsubscribeUrlFor } from './emailUnsubscribe'
 
 const appName = process.env.NEXT_PUBLIC_APP_NAME || 'BECOME'
+
+/**
+ * The footer every outbound email carries (CAN-SPAM, 16 CFR 316): the
+ * sender's physical postal address on ALL of them, and a working opt-out on
+ * the ones that are not transactional. Sign-in links are transactional — a
+ * member cannot opt out of the only way in — so they get the address alone.
+ * Streak and milestone mail is engagement mail, so it gets both.
+ */
+export function emailFooter(opts: { reason: string; unsubscribeUrl?: string }): string {
+  const address = LEGAL_ADDRESS_LINES.join(', ')
+  const optOut = opts.unsubscribeUrl
+    ? ` <a href="${opts.unsubscribeUrl}" style="color: #71717a; text-decoration: underline;">Unsubscribe</a> from these emails, or change them in Settings.`
+    : ''
+  return `
+          <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0 20px;">
+          <p style="font-size: 12px; color: #a1a1aa; text-align: center; line-height: 1.6; margin: 0;">
+            ${opts.reason}${optOut}<br>
+            ${appName} is sent by ${address}. Questions: <a href="mailto:${LEGAL_CONTACT_EMAIL}" style="color: #71717a;">${LEGAL_CONTACT_EMAIL}</a>
+          </p>`
+}
 
 interface EmailAttachment {
   filename: string
@@ -16,9 +38,12 @@ interface SendEmailOptions {
   html: string
   from?: string
   attachments?: EmailAttachment[]
+  /** Set on engagement mail: adds the RFC 8058 List-Unsubscribe headers so
+   *  Gmail and Apple Mail show their own one-click unsubscribe. */
+  unsubscribeUrl?: string
 }
 
-export async function sendEmail({ to, subject, html, from, attachments }: SendEmailOptions) {
+export async function sendEmail({ to, subject, html, from, attachments, unsubscribeUrl }: SendEmailOptions) {
   const { email } = await getRuntimeConfig()
   const user = requireRuntimeSecret(email.user, 'email.user')
   const pass = requireRuntimeSecret(email.pass, 'email.pass')
@@ -34,6 +59,14 @@ export async function sendEmail({ to, subject, html, from, attachments }: SendEm
     subject,
     html,
     ...(attachments?.length ? { attachments } : {}),
+    ...(unsubscribeUrl
+      ? {
+          headers: {
+            'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        }
+      : {}),
   }
 
   return transporter.sendMail(mailOptions)
@@ -50,9 +83,10 @@ const MILESTONE_LABELS: Record<number, string> = {
   365: '1-Year',
 }
 
-export async function sendStreakMilestoneEmail(email: string, milestone: number, streakDays: number) {
+export async function sendStreakMilestoneEmail(email: string, milestone: number, streakDays: number, userId: string) {
   const label = MILESTONE_LABELS[milestone] || `${milestone}-Day`
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://become.redbtn.io'
+  const unsubscribeUrl = await unsubscribeUrlFor(userId)
 
   const html = `
     <!DOCTYPE html>
@@ -69,7 +103,7 @@ export async function sendStreakMilestoneEmail(email: string, milestone: number,
           <p style="font-size: 16px; color: #52525b; margin-bottom: 8px;">days in a row.</p>
           <p style="font-size: 16px; color: #52525b; margin-bottom: 32px;">You're building something real. Keep showing up — that's what separates the people who change from the ones who wish they had.</p>
           <a href="${appUrl}/dashboard" style="display: inline-block; background: #18181b; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Keep the Streak Going</a>
-          <p style="font-size: 12px; color: #a1a1aa; margin-top: 32px;">You're receiving this because you hit a streak milestone on ${appName}.</p>
+          ${emailFooter({ reason: `You're receiving this because you hit a streak milestone on ${appName}.`, unsubscribeUrl })}
         </div>
       </body>
     </html>
@@ -79,11 +113,13 @@ export async function sendStreakMilestoneEmail(email: string, milestone: number,
     to: email,
     subject: `🔥 ${label} Streak on ${appName}! You're on fire.`,
     html,
+    unsubscribeUrl,
   })
 }
 
-export async function sendStreakAtRiskEmail(email: string, streakDays: number) {
+export async function sendStreakAtRiskEmail(email: string, streakDays: number, userId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://become.redbtn.io'
+  const unsubscribeUrl = await unsubscribeUrlFor(userId)
 
   const html = `
     <!DOCTYPE html>
@@ -98,7 +134,7 @@ export async function sendStreakAtRiskEmail(email: string, streakDays: number) {
           <h2 style="font-size: 24px; font-weight: 700; color: #ef4444; margin-bottom: 8px;">Your ${streakDays}-day streak is at risk</h2>
           <p style="font-size: 16px; color: #52525b; margin-bottom: 32px;">You haven't logged anything today. Log a workout, your weight, your mood — anything counts. Don't let it slip.</p>
           <a href="${appUrl}/dashboard" style="display: inline-block; background: #ef4444; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Protect My Streak</a>
-          <p style="font-size: 12px; color: #a1a1aa; margin-top: 32px;">You're receiving this because you have an active streak on ${appName}.</p>
+          ${emailFooter({ reason: `You're receiving this because you have an active streak on ${appName}.`, unsubscribeUrl })}
         </div>
       </body>
     </html>
@@ -108,6 +144,7 @@ export async function sendStreakAtRiskEmail(email: string, streakDays: number) {
     to: email,
     subject: `⚡ Don't break your ${streakDays}-day streak on ${appName}`,
     html,
+    unsubscribeUrl,
   })
 }
 
@@ -154,6 +191,7 @@ export async function sendVerificationEmail(email: string, token: string, mode: 
             If the button doesn't work, copy and paste this link into your browser:<br>
             <a href="${verifyUrl}" style="color: #71717a; word-break: break-all;">${verifyUrl}</a>
           </p>
+          ${emailFooter({ reason: `You're receiving this because this address was entered on the ${appName} sign-in screen.` })}
         </div>
       </body>
     </html>

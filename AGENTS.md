@@ -518,6 +518,57 @@ Rules that are easy to get wrong:
   that makes a new outcome ride the previous charge, the same leak reversed.
   `tests/unit/allowance/followUpTicket.test.ts` drives the whole chain.
 
+### Consent, age and email opt-out (go-live items 1, 12, 14, 15 — shipped 2026-09-13)
+
+**`User.consent`** is the record that a member agreed to the Terms and Privacy
+Policy and attested to the minimum age: `{ termsVersion, acceptedAt,
+minimumAge, source }`. It is written by exactly three paths and read by one:
+- the sign-up form's required tick → `send-link` stamps `LEGAL_VERSION` on the
+  MagicLink → `verify-link` writes `consent` in the SAME save that creates the
+  row (`source: 'signup'`);
+- `components/ConsentGate.tsx` (mounted in the dashboard layout AND on
+  onboarding) polls `GET /api/me/consent` once per app load and BLOCKS until
+  `POST /api/me/consent { accepted: true }` succeeds (`source: 'gate'`). This is
+  what covers Google, passkey, login-mode signups and every member from before
+  the field existed. It fails OPEN on a network error, like every client lock.
+- `POST /api/billing/checkout` also sends Stripe `consent_collection:
+  { terms_of_service: 'required' }` and puts `termsVersion` in the session
+  metadata. **Stripe refuses that parameter unless a Terms of Service URL is
+  saved in the Dashboard (Settings → Business → Public details) on Become
+  LLC's account.** The route catches that one refusal, logs
+  `TERMS_URL_MISSING_LOG`, and retries once WITHOUT it under a different
+  idempotency key, so a missed dashboard step degrades to "in-app record only"
+  rather than "checkout is a 502". Any other Stripe error still throws.
+
+`LEGAL_VERSION` (`lib/legal/index.ts`) is what "current" means: a stored
+version that differs re-triggers the gate for EVERY member. Bump it for a
+change a member must agree to again, not for a typo.
+
+**Minimum age is 13** (`LEGAL_MINIMUM_AGE`, George 2026-09-13), attested by
+the same tick (`CONSENT_STATEMENT` is the one sentence, shown by the form and
+the gate). Under-18s use the Service with parent/guardian permission (Terms §4).
+`PATCH /api/profile` refuses `profile.age < 13` with `400 age_below_minimum`,
+and the onboarding input carries the same `min`.
+
+**Sales tax is INCLUDED in the flat price** (George 2026-09-13). The Terms and
+`RENEWAL_TERMS` say so; nothing may say "plus tax". The Stripe prices therefore
+have to be configured tax-inclusive (`tax_behavior: inclusive`) on Become LLC's
+account — a dashboard step, not code.
+
+**Email (CAN-SPAM).** `emailFooter()` in `lib/email.ts` puts the postal address
+(`LEGAL_ADDRESS_LINES`) on every outbound email. Engagement mail (streak
+milestone / at-risk) also carries an HMAC unsubscribe link
+(`lib/emailUnsubscribe.ts` → public `GET|POST /api/email/unsubscribe?u=&t=`,
+no session, RFC 8058 `List-Unsubscribe` headers) that sets
+`User.emailPreferences.engagement = false`; `lib/streak.ts` checks that flag at
+send time and Settings → Email toggles it through
+`/api/notifications/preferences` (`emailEngagement`). Sign-in links are
+transactional: address only, no opt-out.
+
+`HEALTH_DISCLAIMER_SHORT` is the in-app medical disclaimer (gate, onboarding
+review step, Settings). It must never claim more than Terms §1 does.
+Tests: `tests/unit/legal/consent.test.tsx`, `tests/unit/email/canSpam.test.ts`.
+
 ### Billing (Stripe)
 
 Every value is **optional**, and the app is fully functional with none of them

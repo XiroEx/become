@@ -21,6 +21,8 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import ConsentGate from '@/components/ConsentGate'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
 import PacePicker from '@/components/goals/PacePicker'
 import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
@@ -545,6 +547,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      {/* A member created by Google or a passkey has no agreement on record
+          yet. Ask here, before a single health field is typed, not after. */}
+      <ConsentGate />
       {/* Progress bar */}
       <div className="fixed top-0 left-0 right-0 z-20 h-1 bg-zinc-200 dark:bg-zinc-800">
         <motion.div
@@ -612,17 +617,28 @@ export default function OnboardingPage() {
                 />
               )}
               {step === 5 && (
-                <Step5Review
-                  profile={profile}
-                  goals={goals}
-                  direction={effectiveDirection}
-                  targets={targets}
-                  rec={rec}
-                  onEdit={goToStep}
-                  enrolled={enrolled}
-                  enrolling={enrolling}
-                  onEnroll={enrolInRecommended}
-                />
+                <>
+                  <Step5Review
+                    profile={profile}
+                    goals={goals}
+                    direction={effectiveDirection}
+                    targets={targets}
+                    rec={rec}
+                    onEdit={goToStep}
+                    enrolled={enrolled}
+                    enrolling={enrolling}
+                    onEnroll={enrolInRecommended}
+                  />
+                  {/* The health disclaimer, at the one moment the member is
+                      about to receive calorie targets and a program. Section 1
+                      of the Terms in one paragraph; never more than it says. */}
+                  <p
+                    data-testid="onboarding-health-disclaimer"
+                    className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                  >
+                    {HEALTH_DISCLAIMER_SHORT}
+                  </p>
+                </>
               )}
             </motion.div>
           </AnimatePresence>
@@ -1172,7 +1188,7 @@ function Step3({
             <input
               type="number"
               inputMode="numeric"
-              min={10}
+              min={LEGAL_MINIMUM_AGE}
               max={100}
               placeholder="e.g. 28"
               data-testid="stat-age"

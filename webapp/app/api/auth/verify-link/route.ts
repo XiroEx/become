@@ -2,6 +2,7 @@ import dbConnect from '@/lib/mongodb'
 import User from '@/models/User'
 import MagicLink, { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
 import { signToken, authCookie } from '@/lib/auth'
+import { LEGAL_MINIMUM_AGE } from '@/lib/legal'
 
 export async function POST(req: Request) {
   try {
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
       }), { status: 400 })
     }
 
-    const { email, mode, name } = magicLink
+    const { email, mode, name, consentTermsVersion } = magicLink
 
     let user = await User.findOne({ email })
 
@@ -39,11 +40,25 @@ export async function POST(req: Request) {
           }), { status: 200 })
         }
 
-        // Create new user
+        // Create new user. The agreement the sign-up form collected is written
+        // in the same save as the row itself, so there is never a member who
+        // exists without the record of what they agreed to. A link minted
+        // without one (an older client) still creates the account; the in-app
+        // gate asks on first open.
         user = new User({
           name: name || email.split('@')[0],
           email,
-          password: 'magic-link-auth-no-password'
+          password: 'magic-link-auth-no-password',
+          ...(consentTermsVersion
+            ? {
+                consent: {
+                  termsVersion: consentTermsVersion,
+                  acceptedAt: new Date(),
+                  minimumAge: LEGAL_MINIMUM_AGE,
+                  source: 'signup',
+                },
+              }
+            : {}),
         })
         await user.save()
       } else {
