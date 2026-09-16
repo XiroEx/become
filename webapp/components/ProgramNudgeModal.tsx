@@ -4,46 +4,25 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Dumbbell, ArrowRight, Compass } from "lucide-react"
 import Link from "next/link"
 import { useLockScroll } from "@/lib/useLockScroll"
+import { offersDontShowAgain } from "@/lib/programNudge"
 
-// ── Backoff helpers (exported so DashboardClient can use them) ─────────────────
+// ── Backoff helpers ────────────────────────────────────────────────────────────
+//
+// The rules themselves live in lib/programNudge so the API route that now owns
+// this state can share them; a route may not import a "use client" module.
+// Re-exported here because DashboardClient and the tests import them by this
+// path.
 
-export const NUDGE_KEY = "become_program_nudge"
-
-export interface NudgeState {
-  dismissCount: number
-  lastDismissedAt: string
-  dontShowAgain?: boolean
-}
-
-// Below this many prior dismissals, the modal offers a permanent opt-out —
-// i.e. it starts appearing on the 3rd showing (after 2 dismissals already
-// happened).
-export const DONT_SHOW_AGAIN_THRESHOLD = 2
-
-export function shouldShowNudge(state: NudgeState | null): boolean {
-  if (!state) return true
-  if (state.dontShowAgain) return false
-  const daysSince =
-    (Date.now() - new Date(state.lastDismissedAt).getTime()) / 86_400_000
-  // 1 day → 2 days → 4 days → 8 days → 16 days (capped)
-  const daysToWait = Math.min(Math.pow(2, state.dismissCount - 1), 16)
-  return daysSince >= daysToWait
-}
-
-export function recordNudgeDismiss(current: NudgeState | null): NudgeState {
-  return {
-    dismissCount: (current?.dismissCount ?? 0) + 1,
-    lastDismissedAt: new Date().toISOString(),
-  }
-}
-
-export function recordNudgeDismissForever(current: NudgeState | null): NudgeState {
-  return {
-    dismissCount: current?.dismissCount ?? 0,
-    lastDismissedAt: new Date().toISOString(),
-    dontShowAgain: true,
-  }
-}
+export {
+  NUDGE_KEY,
+  DONT_SHOW_AGAIN_THRESHOLD,
+  shouldShowNudge,
+  offersDontShowAgain,
+  recordNudgeDismiss,
+  recordNudgeDismissForever,
+  parseLegacyNudgeState,
+} from "@/lib/programNudge"
+export type { NudgeState } from "@/lib/programNudge"
 
 // ── Goal-specific copy ─────────────────────────────────────────────────────────
 
@@ -167,10 +146,11 @@ export default function ProgramNudgeModal({
               You can always start a program later from Workout
             </p>
 
-            {/* Permanent opt-out — only offered once the nudge has already
-                been dismissed a couple of times, so a first-time member
-                isn't invited to suppress something they haven't seen yet. */}
-            {dismissCount >= DONT_SHOW_AGAIN_THRESHOLD && (
+            {/* Permanent opt-out — offered from the SECOND showing onward, so
+                a first-time member isn't invited to suppress something they
+                haven't seen yet but anyone who has already said "not now" can
+                say "not ever". */}
+            {offersDontShowAgain(dismissCount) && (
               <button
                 onClick={onDismissForever}
                 className="mt-3 w-full text-center text-xs font-medium text-zinc-400 underline underline-offset-2 transition-colors hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
