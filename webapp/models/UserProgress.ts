@@ -145,6 +145,16 @@ export interface IUserProgress {
     lastSkippedDate?: Date // Local day on which "Skip for Today" was pressed
     lastShownAt?: Date // Last time the modal was actually put in front of them
   }
+  /**
+   * "Start a program?" modal. Lives here rather than in localStorage because an
+   * installed iOS PWA gets its own storage container and Safari evicts the key
+   * anyway — see lib/programNudge.ts for why that broke the permanent opt-out.
+   */
+  programNudge?: {
+    dismissCount?: number
+    lastDismissedAt?: Date
+    dontShowAgain?: boolean
+  }
   workoutLogs: IWorkoutLog[]
   activePrograms: IActiveProgram[]
   currentProgram?: {
@@ -426,6 +436,11 @@ const UserProgressSchema = new Schema<IUserProgress>({
   checkIn: {
     lastSkippedDate: { type: Date },
     lastShownAt: { type: Date }
+  },
+  programNudge: {
+    dismissCount: { type: Number, default: 0 },
+    lastDismissedAt: { type: Date },
+    dontShowAgain: { type: Boolean }
   },
   workoutLogs: [WorkoutLogSchema],
   activePrograms: { type: [ActiveProgramSchema], default: [] },
