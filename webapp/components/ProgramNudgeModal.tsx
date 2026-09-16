@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { Dumbbell, ArrowRight, Compass } from "lucide-react"
+import { Dumbbell, ArrowRight, Compass, BellOff } from "lucide-react"
 import Link from "next/link"
 import { useLockScroll } from "@/lib/useLockScroll"
 import { offersDontShowAgain } from "@/lib/programNudge"
@@ -16,8 +16,10 @@ import { offersDontShowAgain } from "@/lib/programNudge"
 export {
   NUDGE_KEY,
   DONT_SHOW_AGAIN_THRESHOLD,
+  nudgeShowings,
   shouldShowNudge,
   offersDontShowAgain,
+  recordNudgeShown,
   recordNudgeDismiss,
   recordNudgeDismissForever,
   parseLegacyNudgeState,
@@ -66,7 +68,8 @@ const DEFAULT_COPY = {
 interface Props {
   open: boolean
   fitnessGoal?: FitnessGoal | null
-  dismissCount?: number
+  /** Times this member has already been shown the nudge, NOT counting this one. */
+  priorShowings?: number
   onExplore: () => void  // "Explore first" — dismiss with backoff
   onDismissForever: () => void  // "Don't show this again" — permanent opt-out
 }
@@ -74,7 +77,7 @@ interface Props {
 export default function ProgramNudgeModal({
   open,
   fitnessGoal,
-  dismissCount = 0,
+  priorShowings = 0,
   onExplore,
   onDismissForever,
 }: Props) {
@@ -146,15 +149,18 @@ export default function ProgramNudgeModal({
               You can always start a program later from Workout
             </p>
 
-            {/* Permanent opt-out — offered from the SECOND showing onward, so
-                a first-time member isn't invited to suppress something they
-                haven't seen yet but anyone who has already said "not now" can
-                say "not ever". */}
-            {offersDontShowAgain(dismissCount) && (
+            {/* Permanent opt-out — offered from the SECOND showing onward, so a
+                first-time member isn't invited to suppress something they
+                haven't seen yet but anyone who has seen it once can say "not
+                ever". A real button, the same size as the CTAs above it: it was
+                a line of faint underlined text, which on this sheet reads as a
+                caption rather than the way out the member is looking for. */}
+            {offersDontShowAgain(priorShowings) && (
               <button
                 onClick={onDismissForever}
-                className="mt-3 w-full text-center text-xs font-medium text-zinc-400 underline underline-offset-2 transition-colors hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-400"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
               >
+                <BellOff className="h-4 w-4" />
                 Don’t show this again
               </button>
             )}
