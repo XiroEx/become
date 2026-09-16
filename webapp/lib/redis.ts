@@ -172,6 +172,26 @@ export function tilesCacheKey(userId: string): string {
 /** Short TTL for the dashboard tiles payload. */
 export const TILES_CACHE_TTL_SECONDS = 60
 
+// ---------------------------------------------------------------------------
+// Widget feed cache — see lib/widgets/feed.ts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Versioned per-user, per-offset key. The offset is part of the key because it
+ * decides which local day the snapshot describes, so two clients in different
+ * zones must not share one entry.
+ */
+export function widgetFeedCacheKey(userId: string, tzOffsetMinutes: number | null): string {
+  return `widgets:v1:${userId}:${tzOffsetMinutes ?? 'auto'}`
+}
+
+/**
+ * Short TTL. A home screen with all five widgets on it refreshes them together,
+ * so the common case is a burst of identical requests — this collapses the
+ * burst without making a widget show a number the app disagrees with.
+ */
+export const WIDGET_FEED_CACHE_TTL_SECONDS = 60
+
 /** Explicit invalidation after a write that changes tile inputs. Fail-soft. */
 export async function bustTilesCache(userId: string): Promise<void> {
   await cacheDel(tilesCacheKey(userId))
