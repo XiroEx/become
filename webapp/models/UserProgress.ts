@@ -154,6 +154,14 @@ export interface IUserProgress {
     dismissCount?: number
     lastDismissedAt?: Date
     dontShowAgain?: boolean
+    /**
+     * Times the modal has actually been put on screen. Dismissals alone were
+     * not enough: leaving the modal any way other than its two buttons counted
+     * for nothing, so the member who never tapped either stayed at zero and
+     * was never offered the opt-out.
+     */
+    shownCount?: number
+    lastShownAt?: Date
   }
   workoutLogs: IWorkoutLog[]
   activePrograms: IActiveProgram[]
@@ -440,7 +448,9 @@ const UserProgressSchema = new Schema<IUserProgress>({
   programNudge: {
     dismissCount: { type: Number, default: 0 },
     lastDismissedAt: { type: Date },
-    dontShowAgain: { type: Boolean }
+    dontShowAgain: { type: Boolean },
+    shownCount: { type: Number, default: 0 },
+    lastShownAt: { type: Date }
   },
   workoutLogs: [WorkoutLogSchema],
   activePrograms: { type: [ActiveProgramSchema], default: [] },
