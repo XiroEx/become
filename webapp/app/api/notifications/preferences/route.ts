@@ -23,7 +23,12 @@ export async function GET(request: NextRequest) {
         .lean<{ emailPreferences?: { engagement?: boolean } } | null>(),
     ])
 
-    const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true, goalNudge: true, superStreakAtRisk: true, checkInReminder: true }
+    // Every nudge defaults ON (undefined means "never touched the switch").
+    // `dailyGlance` is the one exception and defaults OFF: it is a standing
+    // daily card rather than a nudge, and it lands in the same morning as the
+    // workout and Mind reminders, so it ships silent until someone asks for it.
+    // See models/UserProgress.ts → notificationPrefs.dailyGlance.
+    const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true, goalNudge: true, superStreakAtRisk: true, checkInReminder: true, dailyGlance: false }
     return NextResponse.json({
       preferences: { ...defaults, ...progress?.notificationPrefs },
       notificationsEnabled: notificationsAreEnabled(progress?.notificationsEnabled),
@@ -45,7 +50,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json()
-    const allowed = ['streakAtRisk', 'workoutReminder', 'mealReminder', 'reEngagement', 'chatMessage', 'mindReminder', 'goalNudge', 'superStreakAtRisk', 'checkInReminder']
+    const allowed = ['streakAtRisk', 'workoutReminder', 'mealReminder', 'reEngagement', 'chatMessage', 'mindReminder', 'goalNudge', 'superStreakAtRisk', 'checkInReminder', 'dailyGlance']
     const updates: Record<string, boolean> = {}
     for (const key of allowed) {
       if (typeof body[key] === 'boolean') updates[`notificationPrefs.${key}`] = body[key]

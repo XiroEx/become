@@ -2,7 +2,8 @@
  * Become PWA service worker.
  *
  * Two responsibilities:
- *   1. Push notifications (push + notificationclick) — UNCHANGED from before.
+ *   1. Push notifications (push + notificationclick), and the app-icon badge
+ *      that rides along on a push carrying `badgeCount`.
  *   2. Conservative runtime caching for instant / offline app-shell loads.
  *
  * ------------------------------------------------------------------------
@@ -52,7 +53,39 @@ const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`
 // Single offline-fallback HTML shell (the last good navigation response).
 const OFFLINE_SHELL_KEY = '__offline_shell__'
 
-/* ----------------------------- push (unchanged) ---------------------------- */
+/* ------------------------------ push + badge -------------------------------- */
+
+/**
+ * Put `count` on the app ICON (the Badging API), or clear it at zero.
+ *
+ * This is how the home-screen badge stays right while the app is CLOSED — the
+ * in-app AppBadgeSync only runs when a tab is open, and a member who has not
+ * opened Become since this morning is exactly the one the number is for. iOS
+ * 16.4+ exposes the Badging API to worker contexts precisely so a push handler
+ * can do this; where it is absent (Android Chromium, most desktops) the guard
+ * below makes it a no-op and the platform's own unread-notification badge does
+ * the job instead.
+ *
+ * MUST mirror applyAppBadge() in lib/widgets/badge.ts — zero CLEARS rather than
+ * calling setAppBadge(0), which would draw a meaningless dot on a finished day.
+ * That module is unit-tested; this file cannot be imported by the test runner,
+ * so the two are kept in sync by hand (same arrangement as lib/swStrategy.ts).
+ */
+function applyBadge(count) {
+  if (typeof count !== 'number' || !isFinite(count)) return Promise.resolve()
+  if (typeof self.navigator === 'undefined') return Promise.resolve()
+  const safe = Math.max(0, Math.floor(count))
+  try {
+    if (safe > 0) {
+      if (typeof self.navigator.setAppBadge !== 'function') return Promise.resolve()
+      return self.navigator.setAppBadge(safe).catch(() => {})
+    }
+    if (typeof self.navigator.clearAppBadge !== 'function') return Promise.resolve()
+    return self.navigator.clearAppBadge().catch(() => {})
+  } catch {
+    return Promise.resolve()
+  }
+}
 
 self.addEventListener('push', (event) => {
   if (!event.data) return
@@ -73,8 +106,15 @@ self.addEventListener('push', (event) => {
     data: { url: payload.url || '/dashboard' },
   }
 
+  // `badgeCount` rides along only on pushes that already know the answer (the
+  // daily glance, which has the whole widget feed in hand). A push WITHOUT it
+  // must leave the badge alone rather than guess: a nudge about one missing
+  // pillar says nothing about the other two.
   event.waitUntil(
-    self.registration.showNotification(payload.title, options)
+    Promise.all([
+      self.registration.showNotification(payload.title, options),
+      applyBadge(payload.badgeCount),
+    ])
   )
 })
 
