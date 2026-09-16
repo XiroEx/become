@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildWeeks, emptyDay, type DayEvents, type WeekSnapshot } from '../../lib/becoming/weeks'
-import { summarizeWeek, nextSteps, previewList, MAX_NEXT_STEPS, STORY_PREVIEW } from '../../lib/becoming/weekSummary'
+import { summarizeWeek, nextSteps, rankSuggestions, previewList, MAX_NEXT_STEPS, MAX_CARD_STEPS, STORY_PREVIEW } from '../../lib/becoming/weekSummary'
 import type { Suggestion } from '../../lib/goals/suggestions'
 
 const TODAY = '2026-08-18' // a Tuesday: week of Aug 16, three days elapsed
@@ -179,6 +179,48 @@ test('a member using nothing yet gets every "set a goal" suggestion — they are
     suggestions: { training: sg('training.set-days', 'info'), fuel: sg('nutrition.set-target', 'info') },
   })
   assert.deepEqual(steps.map(s => s.suggestion.key), ['training.set-days', 'nutrition.set-target'])
+})
+
+/* ── the same ranking, on the week card ───────────────────────────────── */
+
+// The live card carries the recommendations too (it is what someone is looking
+// at when they wonder what to do), so the ranking is one function. If the card
+// and the sheet could rank differently, the card would say one thing and the
+// sheet opened from it another.
+
+test('the card ranks the same way the Story sheet does, from the pillars the journey found active', () => {
+  const steps = rankSuggestions(['training', 'fuel'], {
+    training: sg('training.on-track', 'good'),
+    fuel: sg('nutrition.behind', 'warn'),
+  }, MAX_CARD_STEPS)
+  assert.deepEqual(steps.map(s => s.suggestion.key), ['nutrition.behind', 'training.on-track'])
+})
+
+test('the card takes two — it is a fixed height with the week\'s own numbers already on it', () => {
+  const steps = rankSuggestions(['training', 'fuel', 'mind'], {
+    training: sg('training.week-tight', 'nudge'),
+    fuel: sg('nutrition.log', 'nudge'),
+    mind: sg('mind.stressed', 'nudge'),
+  }, MAX_CARD_STEPS)
+  assert.equal(MAX_CARD_STEPS, 2)
+  assert.deepEqual(steps.map(s => s.suggestion.key), ['training.week-tight', 'nutrition.log'])
+})
+
+test('a pillar outside the pool is never recommended, however urgent it reads', () => {
+  // The card passes the pillars the member is actually using. A warning about
+  // food for someone who has never logged a meal is not a recommendation.
+  const steps = rankSuggestions(['training'], {
+    training: sg('training.on-track', 'good'),
+    fuel: sg('nutrition.behind', 'warn'),
+  }, MAX_CARD_STEPS)
+  assert.deepEqual(steps.map(s => s.suggestion.key), ['training.on-track'])
+})
+
+test('a pillar with nothing to say is dropped rather than drawn empty', () => {
+  const steps = rankSuggestions(['training', 'fuel', 'mind'], { fuel: sg('nutrition.log', 'nudge') }, MAX_CARD_STEPS)
+  assert.deepEqual(steps.map(s => s.pillar), ['fuel'])
+  assert.deepEqual(rankSuggestions(['training', 'fuel'], undefined, MAX_CARD_STEPS), [])
+  assert.deepEqual(rankSuggestions([], { fuel: sg('nutrition.log', 'nudge') }, MAX_CARD_STEPS), [])
 })
 
 /* ── the two histories ────────────────────────────────────────────────── */

@@ -10,7 +10,12 @@
 //     ranked — a lead number drawn large and up to two behind it, each with
 //     how it moved against last week (lib/becoming/signals decides all of
 //     it). No fixed rows, so no "0 sessions", and the shape follows the week
-//   • the member's own words (banked wins, identity) set in a serif italic
+//   • the live card ends on WHAT TO WORK ON: the ranked goal recommendations,
+//     each one tappable. A finished week keeps the member's own words (banked
+//     wins) in serif italic instead — there is nothing to recommend about a
+//     week that is already over, and quoting the evidence wall at someone
+//     mid-week was answering a question they had not asked
+//   • the identity line, set in a serif italic, on every card
 //   • the Horizon variant: one step past the live week — where this week is
 //     trending, and who you said you are becoming
 
@@ -20,6 +25,8 @@ import { motion } from 'framer-motion'
 import { ArrowUpRight, ArrowRight, ArrowDownRight, Flag, Brain, UtensilsCrossed, Dumbbell, Sparkles, Trophy, ChevronRight, Compass, Scale, BookOpen, Beef, CalendarCheck } from 'lucide-react'
 import type { Fact, WeekSnapshot } from '@/lib/becoming/weeks'
 import type { CardPillar, Highlight, WeekSignals } from '@/lib/becoming/signals'
+import { rankSuggestions, MAX_CARD_STEPS, type NextStep } from '@/lib/becoming/weekSummary'
+import type { Suggestion } from '@/lib/goals/suggestions'
 import { PILLAR, pillarColor } from '@/lib/pillarColors'
 
 // The pillar palette lives in lib/pillarColors so the journey, the details, the
@@ -137,7 +144,11 @@ export interface WeekCardProps {
   exitEdge: 'up' | 'right' | 'down' | null
   totalWeeks: number
   identity: string | null
-  next?: { nutrition: { title: string }; training: { title: string } } | null
+  /**
+   * The member's goal suggestions — the card ranks them into the "what to work
+   * on" block. Only the live week gets them: a recommendation is about now.
+   */
+  next?: { nutrition: Suggestion; training: Suggestion } | null
   onDetails?: () => void
   reduced?: boolean
   /** This week set a new high on the path. */
@@ -169,11 +180,18 @@ function WeekCardImpl({ week: w, signals, width, height, focused, landed, compac
   const toneSoft = pillarColor(w.subject, w.score, 60, 0.18)
   const StepIcon = w.step === 'up' ? ArrowUpRight : w.step === 'down' ? ArrowDownRight : w.step === 'start' ? Flag : ArrowRight
   const stepText = w.gap ? 'held' : isPeak ? 'new high' : w.step === 'up' ? 'climbed' : w.step === 'flat' ? 'held' : w.step === 'down' ? 'a dip' : 'start'
-  // The live card also carries "what writes this card", so it keeps one of the
-  // member's lines rather than two — the card is a fixed height, and it is the
-  // Details button that falls off the bottom when it overflows.
-  const writes = w.isCurrent && !!next && (signals.active.includes('fuel') || signals.active.includes('training'))
-  const wins = w.mind.wins.slice(0, writes ? 1 : 2)
+  // What to work on, live card only: the goal suggestions ranked worst-first
+  // and dropped for any pillar this member does not use — telling someone to
+  // hit a protein floor they never set is not a recommendation.
+  //
+  // It takes the space the banked wins used to have, on purpose. A quote from
+  // the evidence wall is the week you already had; the card is asked what to
+  // do about the one you are in. A finished week has no answer to that, so it
+  // keeps the words.
+  const steps: NextStep[] = w.isCurrent && next
+    ? rankSuggestions(signals.active, { fuel: next.nutrition, training: next.training }, MAX_CARD_STEPS)
+    : []
+  const wins = steps.length ? [] : w.mind.wins.slice(0, 2)
   const shell = 'relative overflow-hidden rounded-[28px] text-white'
   const shadow = focused ? '0 30px 80px -20px rgba(0,0,0,0.7)' : '0 18px 40px -20px rgba(0,0,0,0.5)'
   const anim = (i: number) => (reduced || compact ? {} : { initial: { opacity: 0, y: 12 }, animate: landed ? { opacity: 1, y: 0 } : { opacity: 0.001, y: 12 }, transition: stagger(i) })
@@ -287,13 +305,33 @@ function WeekCardImpl({ week: w, signals, width, height, focused, landed, compac
 
         <div className="flex-1" />
 
-        {/* Live week: what writes this card — only for pillars in use, since a
-            nutrition target means nothing to someone who does not log food */}
-        {writes && next && (
-          <motion.div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3" {...anim(6)} data-testid="week-card-writes">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">What writes this card</p>
-            {signals.active.includes('fuel') && <p className="mt-1 truncate text-[12px] text-white/85">🍽 {next.nutrition.title}</p>}
-            {signals.active.includes('training') && <p className="mt-1 truncate text-[12px] text-white/85">🏋️ {next.training.title}</p>}
+        {/* Live week: what to work on to reach the goals — each row goes
+            straight to the screen where the work happens */}
+        {steps.length > 0 && (
+          <motion.div className="mt-2 rounded-2xl border border-white/10 bg-white/[0.04] p-2.5" {...anim(6)} data-testid="week-card-next">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">What to work on</p>
+            <div className="mt-1 space-y-0.5">
+              {steps.map(st => {
+                const { Icon, className } = PILLAR_ICON[st.pillar]
+                return (
+                  <Link
+                    key={st.suggestion.key}
+                    href={st.suggestion.url}
+                    onPointerDown={e => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
+                    data-testid={`week-card-next-${st.pillar}`}
+                    className="pointer-events-auto -mx-1 flex items-start gap-1.5 rounded-lg px-1 py-0.5 transition-colors hover:bg-white/[0.07]"
+                  >
+                    <Icon className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${className}`} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] font-semibold text-white/90">{st.suggestion.title}</span>
+                      <span className="block truncate text-[10px] leading-tight text-white/50">{st.suggestion.sub}</span>
+                    </span>
+                    <ChevronRight className="mt-[3px] h-3 w-3 shrink-0 text-white/30" />
+                  </Link>
+                )
+              })}
+            </div>
           </motion.div>
         )}
         {/* Identity whisper */}
@@ -323,13 +361,16 @@ export default WeekCard
 export function HorizonCard({ width, height, identity, trend, next, active = ['training', 'fuel', 'mind'], focused, landed, reduced }: {
   width: number; height: number; identity: string | null
   trend: 'up' | 'flat' | 'down'
-  next?: { nutrition: { title: string; sub: string }; training: { title: string; sub: string } } | null
+  next?: { nutrition: Suggestion; training: Suggestion } | null
   /** Pillars the member is actually using — the same filter the live card applies. */
   active?: CardPillar[]
   focused: boolean; landed: boolean; reduced?: boolean
 }) {
   const anim = (i: number) => (reduced ? {} : { initial: { opacity: 0, y: 12 }, animate: landed ? { opacity: 1, y: 0 } : { opacity: 0.001, y: 12 }, transition: stagger(i) })
   const trendText = trend === 'up' ? 'Horizon lifting' : trend === 'down' ? 'Horizon eased' : 'Horizon holding'
+  // Same ranking as the live card, so the two cards either side of today never
+  // put a different thing first.
+  const steps = next ? rankSuggestions(active, { fuel: next.nutrition, training: next.training }, MAX_CARD_STEPS) : []
   return (
     <div
       className={`relative overflow-hidden rounded-[28px] border-2 border-dashed text-white ${focused ? 'border-violet-300/60' : 'border-white/25'}`}
@@ -346,11 +387,25 @@ export function HorizonCard({ width, height, identity, trend, next, active = ['t
           {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
         </motion.h2>
         <div className="flex-1" />
-        {next && (active.includes('fuel') || active.includes('training')) && (
+        {steps.length > 0 && (
           <motion.div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3" {...anim(3)} data-testid="horizon-writes">
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">What writes it</p>
-            {active.includes('fuel') && <p className="mt-1 text-[12px] text-white/85">🍽 {next.nutrition.title} <span className="text-white/50">· {next.nutrition.sub}</span></p>}
-            {active.includes('training') && <p className="mt-1 text-[12px] text-white/85">🏋️ {next.training.title} <span className="text-white/50">· {next.training.sub}</span></p>}
+            {steps.map(st => {
+              const { Icon, className } = PILLAR_ICON[st.pillar]
+              return (
+                <Link
+                  key={st.suggestion.key}
+                  href={st.suggestion.url}
+                  onPointerDown={e => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
+                  data-testid={`horizon-next-${st.pillar}`}
+                  className="pointer-events-auto -mx-1 mt-1 flex items-start gap-1.5 rounded-lg px-1 py-0.5 transition-colors hover:bg-white/[0.07]"
+                >
+                  <Icon className={`mt-[3px] h-3.5 w-3.5 shrink-0 ${className}`} aria-hidden="true" />
+                  <span className="min-w-0 flex-1 text-[12px] text-white/85">{st.suggestion.title} <span className="text-white/50">· {st.suggestion.sub}</span></span>
+                </Link>
+              )
+            })}
           </motion.div>
         )}
         <motion.p className="mt-3 text-[11px] text-white/45" {...anim(4)}>Written next Sunday from what you do this week.</motion.p>
