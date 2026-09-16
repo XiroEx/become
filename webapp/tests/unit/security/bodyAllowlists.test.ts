@@ -395,13 +395,35 @@ test('no route under app/api sanitises a body with a deny-list', () => {
   assert.deepEqual(offenders, [], `body deny-list in: ${offenders.join(', ')}`)
 })
 
+// A Mongoose model is PascalCase by convention, and that is load-bearing here:
+// without it the scan also matched `stripe.checkout.sessions.create(params)`,
+// which is an SDK call whose argument is a locally-built object literal, not a
+// request body. Anchoring on the receiver is what keeps this guard about
+// models. See the self-check below — a detector nobody exercises is a detector
+// nobody notices has stopped biting.
+const MODEL_CREATE_FROM_IDENTIFIER = /\b[A-Z][\w$]*\.create\(\s*([a-z][\w$]*)\s*[,)]/g
+
+test('the model-create detector matches a model, and only a model', () => {
+  const fire = (code: string) => code.match(new RegExp(MODEL_CREATE_FROM_IDENTIFIER)) ?? []
+
+  // The shape this guard exists for: a whole body handed to a model.
+  assert.equal(fire('await Food.create(body)').length, 1)
+  assert.equal(fire('await Meal.create(payload, opts)').length, 1)
+  assert.equal(fire('return UserProgress.create(doc)').length, 1)
+
+  // An object literal is explicit, and a third-party SDK is not a model.
+  assert.equal(fire('await UserProgress.create({ userId })').length, 0)
+  assert.equal(fire('await stripe.checkout.sessions.create(params, { idempotencyKey })').length, 0)
+  assert.equal(fire('await stripe.billingPortal.sessions.create(withoutConsent)').length, 0)
+})
+
 test('every model create built from an identifier goes through an allowlist', () => {
   // `Model.create(objectLiteral)` is explicit and fine. `Model.create(thing)`
   // is only fine when `thing` came out of a picker — otherwise it is a whole
   // request body again under a different name.
   const offenders: string[] = []
   walkApi((rel, code) => {
-    const creates = code.match(/\.create\(\s*([a-z][\w$]*)\s*[,)]/g) ?? []
+    const creates = code.match(new RegExp(MODEL_CREATE_FROM_IDENTIFIER)) ?? []
     if (creates.length === 0) return
     if (!/pick[A-Za-z]*Fields\(/.test(code)) offenders.push(`${rel} (${creates.join(' ')})`)
   })

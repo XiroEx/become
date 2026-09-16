@@ -16,10 +16,10 @@ import GoalAchievedModal from '@/components/GoalAchievedModal'
 import type { GoalReached } from '@/lib/goals/reached'
 import ProgramNudgeModal, {
   NUDGE_KEY,
-  type NudgeState,
   shouldShowNudge,
   recordNudgeDismiss,
   recordNudgeDismissForever,
+  parseLegacyNudgeState,
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
@@ -355,17 +355,54 @@ export default function DashboardClient() {
     // queued here — a brand-new member has no program, so this fires on exactly
     // the load where the onboarding tour is also starting, and an ungated open
     // covers the tour the same way the check-in did.
-    function checkProgramNudge(hasProgram: boolean) {
+    //
+    // The dismissal record is the ACCOUNT's, not this browser's. It used to be
+    // read straight out of localStorage, which is why the permanent opt-out
+    // never worked — see lib/programNudge.ts. localStorage is still read once,
+    // to carry a pre-existing record onto the account, and is still the
+    // fallback if the request fails so a network blip cannot start the backoff
+    // over.
+    async function checkProgramNudge(hasProgram: boolean) {
       if (hasProgram) return // already enrolled — never show
+
+      const local = (() => {
+        try {
+          return parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+        } catch {
+          return null
+        }
+      })()
+
       try {
-        const raw = localStorage.getItem(NUDGE_KEY)
-        const state: NudgeState | null = raw ? JSON.parse(raw) : null
-        if (shouldShowNudge(state)) {
+        const token = localStorage.getItem('token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+        const res = await fetch('/api/program-nudge', { headers })
+        if (!res.ok) throw new Error('program nudge status failed')
+        let status = await res.json()
+
+        // First load since this moved server-side: adopt whatever this browser
+        // already knew, so a member who has been dismissing it for weeks keeps
+        // that credit (and an existing "don't show again" is never undone).
+        if (!status.hasServerState && local) {
+          const adopt = await fetch('/api/program-nudge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
+            body: JSON.stringify({ action: 'adopt', ...local }),
+          })
+          if (adopt.ok) status = await adopt.json()
+        }
+
+        if (status.due) {
           setNudgeDue(true)
-          setNudgeDismissCount(state?.dismissCount ?? 0)
+          setNudgeDismissCount(status.dismissCount ?? 0)
         }
       } catch {
-        setNudgeDue(true) // on parse error, just show it
+        // Offline or the route is unhappy — fall back to this browser's copy
+        // rather than either spamming the modal or suppressing it outright.
+        if (shouldShowNudge(local)) {
+          setNudgeDue(true)
+          setNudgeDismissCount(local?.dismissCount ?? 0)
+        }
       }
     }
 
@@ -382,28 +419,46 @@ export default function DashboardClient() {
         fetchMind(),
         fetchGoals(),
       ])
-      checkProgramNudge(!!progressData?.currentProgram)
+      await checkProgramNudge(!!progressData?.currentProgram)
     }
 
     init()
   }, [])
 
+  // Record a dismissal on the ACCOUNT, and mirror it locally so the fallback
+  // path above still throttles the modal if the member is offline.
+  function recordDismissal(action: 'dismiss' | 'dismiss_forever') {
+    try {
+      const current = parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+      const next =
+        action === 'dismiss_forever'
+          ? recordNudgeDismissForever(current)
+          : recordNudgeDismiss(current)
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(next))
+      // The next showing is days away, so this does not need to be awaited —
+      // but it does need to be sent, and a failure must not throw into the
+      // click handler and leave the modal open.
+      const token = localStorage.getItem('token')
+      fetch('/api/program-nudge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      }).catch(() => {})
+    } catch {}
+  }
+
   function handleNudgeDismiss() {
     setShowNudge(false)
-    try {
-      const raw = localStorage.getItem(NUDGE_KEY)
-      const current: NudgeState | null = raw ? JSON.parse(raw) : null
-      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
-    } catch {}
+    setNudgeDismissCount((n) => n + 1)
+    recordDismissal('dismiss')
   }
 
   function handleNudgeDismissForever() {
     setShowNudge(false)
-    try {
-      const raw = localStorage.getItem(NUDGE_KEY)
-      const current: NudgeState | null = raw ? JSON.parse(raw) : null
-      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismissForever(current)))
-    } catch {}
+    recordDismissal('dismiss_forever')
   }
 
   // Hold the daily check-in behind the onboarding tour.
