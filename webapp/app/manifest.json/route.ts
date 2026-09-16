@@ -16,6 +16,51 @@ import { APP_NAME, APP_SHORT_NAME, APP_DESCRIPTION } from '@/lib/appChannel'
 
 const ICON_SIZES = [72, 96, 128, 144, 152, 192, 384, 512]
 
+/**
+ * Home-screen shortcuts — long-press the installed Become icon and jump
+ * straight into one of the four things a member actually opens the app to do.
+ *
+ * This is the only part of "put Become on my home screen" the WEB app can
+ * deliver. True lock-screen / home-screen WIDGETS are an OS surface (iOS
+ * WidgetKit, Android App Widgets) and can only come from the native app in
+ * `expo/`; the data behind them is `GET /api/widgets/summary`, which is
+ * deliberately shaped so every one of these four has a widget to be.
+ *
+ * `url` must stay inside `scope` and must be a real route — a shortcut to a
+ * 404 is invisible until someone taps it. tests/unit/widgets/feed.test.ts
+ * checks each one against the app directory.
+ *
+ * No per-shortcut `icons`: there is no distinct art for these four, and four
+ * copies of the app icon in a launcher menu is worse than the launcher's own
+ * fallback.
+ */
+const SHORTCUTS = [
+  {
+    name: 'Start a workout',
+    short_name: 'Workout',
+    description: "Open today's training session",
+    url: '/dashboard/workout',
+  },
+  {
+    name: 'Log food',
+    short_name: 'Nutrition',
+    description: 'Log a meal and see your macros',
+    url: '/dashboard/nutrition',
+  },
+  {
+    name: "Today's Mind session",
+    short_name: 'Mind',
+    description: 'Open your daily Mind session',
+    url: '/dashboard/mind',
+  },
+  {
+    name: 'Your Becoming',
+    short_name: 'Becoming',
+    description: 'See how far you have come',
+    url: '/dashboard/mind/becoming',
+  },
+]
+
 export function GET() {
   const manifest = {
     name: APP_NAME,
@@ -33,6 +78,7 @@ export function GET() {
       type: 'image/png',
       purpose: 'maskable any',
     })),
+    shortcuts: SHORTCUTS,
     categories: ['fitness', 'health', 'lifestyle'],
     screenshots: [],
     prefer_related_applications: false,

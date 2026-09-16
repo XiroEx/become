@@ -693,6 +693,70 @@ NEXT_PUBLIC_PROFILE_IMAGE # Coach profile picture
 NEXT_PUBLIC_LOGO          # App logo
 ```
 
+## Home-screen widgets
+
+Jon asked for widgets on the phone lock screen and Home Screen: a streak one, a
+nutrition one with macros, a mindset one for the daily session, and a Becoming
+one for progress.
+
+**A widget is an OS surface, and the web app cannot draw one.** iOS widgets are
+a WidgetKit app extension and Android's are App Widgets; a PWA installed to the
+home screen gets an icon, not a widget, on either platform. So the widget
+surface itself can only ship from `expo/`, and `expo/` has no distribution yet
+(`eas.json` still holds `REPLACE_WITH_APPLE_ID` / no Play service-account key),
+which is the real blocker on a member ever seeing one. Nothing in `webapp/` can
+change that.
+
+What `webapp/` owns is the part every widget on every platform reads:
+
+### `GET /api/widgets/summary?tz=`
+
+One authenticated request returning all five widgets — `streak`, `nutrition`,
+`mind`, `becoming`, `training` — because a home screen refreshes its widgets
+together and five endpoints would be five auth round-trips and five copies of
+the same `UserProgress` read, per member, on a background timer.
+
+Two rules hold it together:
+
+- **The renderer has no business logic.** `lib/widgets/feed.ts` is pure and
+  ships `headline` / `headlineUnit` / `caption` as finished strings, plus
+  `progress` and `rings[].pct` as 0..1 fractions. A widget extension cannot
+  reach the database at paint time and must not be deciding what "at risk"
+  means or how to pluralise "day" — a renderer that decides is a renderer that
+  disagrees with the app. Every wording and threshold is pinned in
+  `tests/unit/widgets/feed.test.ts`, including that no branch can emit an empty
+  headline or caption (a blank line on a home screen reads as a broken app and
+  raises no error).
+- **It stays cheap and writes nothing.** `lib/widgets/load.ts` reads today's
+  local day and this week only. `computeJourney` (52 weeks) and
+  `computeGoalProgress` (which `ensureGoals`-upserts) were each a one-line reuse
+  and both are far too heavy to sit behind an OS refresh that runs forever for
+  every member who installs a widget. A 60s Redis entry
+  (`widgetFeedCacheKey`) collapses the five-widgets-at-once burst.
+
+`tz` is **optional here**, unlike every in-app read: a widget extension is not a
+browser and may have no cheap offset to report. When it is absent the member's
+stored IANA `timezone` decides the day, and only then the stored
+`timezoneOffset` — which is a snapshot taken when they last opened the app, so
+for a member who has gone quiet across a daylight-saving change it is an hour
+wrong in exactly the direction that moves the day boundary. One resolved offset
+feeds the day key, the meal-log window and the week boundary, so they cannot
+disagree with each other.
+
+The usual two date species both appear in `load.ts`, one line apart: a
+`Schedule` slot date is a day MARKER read with `slotDateKey`, and
+`workoutLogs.date` is an INSTANT put through the offset. See the day-marker
+section and `tests/unit/dayMarkerConvention.test.ts`.
+
+### Manifest shortcuts
+
+`app/manifest.json/route.ts` also carries `shortcuts` — long-press the installed
+icon to jump to Workout / Nutrition / Mind / Becoming. That is genuinely all the
+home-screen presence a PWA can have (and Chromium-based Android honours it;
+iOS ignores it). Each `url` must be a real page and inside `scope`; a shortcut
+to a 404 is invisible until someone taps it, so the test checks them against the
+app directory.
+
 ## Development
 
 ```bash
