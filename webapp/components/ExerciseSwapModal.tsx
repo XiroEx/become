@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoDisplay, resolveExerciseVideo } from "@/lib/data/exerciseVideos";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
@@ -1146,8 +1146,11 @@ function ExerciseVideoPreview({
   /** The video denormalized onto the exercise — authoritative when present. */
   exerciseVideoUrl?: string | null;
 }) {
-  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const resolved = resolveExerciseVideo(
+    { videoUrl: exerciseVideoUrl },
+    getExerciseVideoDisplay(exerciseName)
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
 
   // Nothing to show. Previously a hash-picked placeholder clip played here, so
   // every swap candidate looked like it had a demo.
@@ -1158,7 +1161,14 @@ function ExerciseVideoPreview({
   if (DIRECT_VIDEO_FILE.test(videoUrl)) {
     return (
       <div className="mb-3">
-        <FramedVideo src={videoUrl} surface="preview" />
+        <FramedVideo
+          src={videoUrl}
+          surface="preview"
+          videoWidth={resolved.videoWidth}
+          videoHeight={resolved.videoHeight}
+          videoFraming={resolved.videoFraming}
+          videoTrim={resolved.videoTrim}
+        />
       </div>
     );
   }

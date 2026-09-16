@@ -4,7 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Dumbbell, X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
+import {
+  getExerciseVideoDisplayAsync,
+  resolveExerciseVideo,
+  type ExerciseVideoDisplay,
+} from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import EquipmentAssumptionRow from "@/components/workout/EquipmentAssumptionRow";
@@ -685,9 +689,11 @@ export default function LiveWorkoutPage() {
               savedWorkout.exercises?.forEach((savedEx, idx) => {
                 if (idx < updatedExercises.length && savedEx.originalExerciseSlug) {
                   // Clear video fields too: the program data still has the
-                  // ORIGINAL exercise's video URL/dimensions, which would
-                  // play the wrong video for the swap. Falling them back to
-                  // undefined makes the resolver look up by the new name.
+                  // ORIGINAL exercise's video URL/dimensions/trim, which would
+                  // play the wrong video for the swap — and clip the right one
+                  // to an in/out window set for different footage. Falling them
+                  // back to undefined makes the resolver look up by the new
+                  // name, trim included.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
@@ -696,6 +702,7 @@ export default function LiveWorkoutPage() {
                     videoWidth: null,
                     videoHeight: null,
                     videoFraming: null,
+                    videoTrim: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -1504,7 +1511,8 @@ export default function LiveWorkoutPage() {
     // Replace the exercise, preserving programming prescription. CRITICAL:
     // clear any video-specific fields from the prior exercise so the video
     // resolver looks up by the NEW exercise name instead of replaying the
-    // stale URL/dimensions/framing of the original.
+    // stale URL/dimensions/framing/trim of the original. An in/out window
+    // belongs to one file; left behind, it clips the replacement's video.
     const updatedExercises = [...exercises];
     updatedExercises[exIdx] = {
       ...oldExercise,
@@ -1519,6 +1527,7 @@ export default function LiveWorkoutPage() {
       videoWidth: null,
       videoHeight: null,
       videoFraming: null,
+      videoTrim: null,
     };
     setExercises(updatedExercises);
 
@@ -1829,24 +1838,42 @@ export default function LiveWorkoutPage() {
     return exerciseData[exIdx]?.every(s => s.completed) ?? false;
   };
 
-  // Get video URL for current exercise
-  // `null` = this exercise has no demo. It used to default to a placeholder
-  // clip, which meant a video an admin had removed was replaced by an
-  // unrelated one rather than by an honest empty state.
-  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  // Get video URL for current exercise.
+  //
+  // The name-keyed legacy row for the current exercise, once resolved. Only
+  // consulted when the exercise carries no video of its own — which is every
+  // swapped-in exercise, since a swap clears the programmed one's video fields
+  // on purpose. `resolveExerciseVideo` decides which row the framing and trim
+  // come from.
+  const [legacyVideo, setLegacyVideo] = useState<ExerciseVideoDisplay | null>(null);
 
   useEffect(() => {
     if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
       const exercise = exercises[currentExerciseIndex];
       if (exercise.videoUrl) {
-        setCurrentVideo(exercise.videoUrl);
-      } else {
-        // Legacy fallback for exercises whose video was never denormalized.
-        setCurrentVideo(null);
-        getExerciseVideoUrlAsync(exercise.name).then(setCurrentVideo);
+        setLegacyVideo(null);
+        return;
       }
+      // Legacy fallback for exercises whose video was never denormalized.
+      // `cancelled` matters now that the lookup carries a trim window: a late
+      // resolve for the previous exercise would otherwise clip the one on
+      // screen to bounds set for another clip.
+      let cancelled = false;
+      setLegacyVideo(null);
+      getExerciseVideoDisplayAsync(exercise.name).then((display) => {
+        if (!cancelled) setLegacyVideo(display);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [exercises, currentExerciseIndex]);
+
+  // `null` = this exercise has no demo. It used to default to a placeholder
+  // clip, which meant a video an admin had removed was replaced by an
+  // unrelated one rather than by an honest empty state.
+  const currentVideoDisplay = resolveExerciseVideo(currentExercise ?? {}, legacyVideo);
+  const currentVideo = currentVideoDisplay.videoUrl;
 
   // Show loading state
   if (loading || !workout || exercises.length === 0 || workoutFlow.length === 0) {
@@ -1905,10 +1932,10 @@ export default function LiveWorkoutPage() {
           <FramedVideo
             src={currentVideo}
             surface="live"
-            videoWidth={currentExercise?.videoWidth}
-            videoHeight={currentExercise?.videoHeight}
-            videoFraming={currentExercise?.videoFraming}
-            videoTrim={currentExercise?.videoTrim}
+            videoWidth={currentVideoDisplay.videoWidth}
+            videoHeight={currentVideoDisplay.videoHeight}
+            videoFraming={currentVideoDisplay.videoFraming}
+            videoTrim={currentVideoDisplay.videoTrim}
             onDimensions={(w, h) => {
               // Back-write dims to the server the first time this video is
               // played by anyone. Fire-and-forget — workout flow keeps moving
