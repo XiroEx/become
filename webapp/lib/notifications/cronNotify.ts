@@ -115,6 +115,18 @@ export function workoutTitleForDay(phases: any[], phaseNum: number, dayLabel: st
   return typeof t === 'string' && t.trim() ? t.trim() : null
 }
 
+/**
+ * The daily glance (lib/widgets/glance.ts) — the lock-screen card, sent before
+ * the morning's nudges rather than among them. It is a summary of the day, so
+ * it is only useful at the start of one, and going first keeps it from reading
+ * as a fourth reminder about things the other pushes already asked for.
+ *
+ * It is also the only notification here that is OFF until a member turns it on,
+ * which is what makes a third possible morning push acceptable: nobody gets it
+ * without asking. See notificationPrefs.dailyGlance in models/UserProgress.ts.
+ */
+export const DAILY_GLANCE_START_HOUR = 6
+export const DAILY_GLANCE_END_HOUR = 9
 export const WORKOUT_REMINDER_START_HOUR = 7
 export const WORKOUT_REMINDER_END_HOUR = 11
 /** Starts an hour after the workout window so the two morning nudges do not

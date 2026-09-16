@@ -748,14 +748,68 @@ The usual two date species both appear in `load.ts`, one line apart: a
 `workoutLogs.date` is an INSTANT put through the offset. See the day-marker
 section and `tests/unit/dayMarkerConvention.test.ts`.
 
-### Manifest shortcuts
+### What the web app CAN put on a phone
 
-`app/manifest.json/route.ts` also carries `shortcuts` — long-press the installed
-icon to jump to Workout / Nutrition / Mind / Becoming. That is genuinely all the
-home-screen presence a PWA can have (and Chromium-based Android honours it;
-iOS ignores it). Each `url` must be a real page and inside `scope`; a shortcut
-to a 404 is invisible until someone taps it, so the test checks them against the
-app directory.
+Three surfaces, and between them they are the whole of a PWA's presence outside
+its own window. All three read the same feed, so none of them can disagree with
+another or with the app.
+
+**1. Manifest shortcuts.** `app/manifest.json/route.ts` carries `shortcuts` —
+long-press the installed icon to jump to Workout / Nutrition / Mind / Becoming.
+Chromium-based Android honours it; **iOS ignores it entirely**. Each `url` must
+be a real page and inside `scope`; a shortcut to a 404 is invisible until
+someone taps it, so the test checks them against the app directory.
+
+**2. The app-icon badge** (`lib/widgets/badge.ts`, `components/AppBadgeSync.tsx`,
+and a hand-mirrored copy in `public/sw.js`). A live number ON the home-screen
+icon: how many of the day's three commitments are still open.
+
+- `WidgetFeed.badgeCount` is the number, so the icon and the widgets are the
+  same data. `badgeCountFor` counts **`training`, `nutrition`, `mind`** only.
+  `streak` is excluded because it is a CONSEQUENCE of those three and would
+  double-count the same day; `becoming` because it is a weekly arc and sits in
+  `todo` from Monday onward, which would pin the badge to at-least-1 on days
+  the member owes nothing. `none` (rest day, Mind cooldown) is not a task and
+  never raises a badge the member has no way to clear.
+- **Zero CLEARS the badge; it never calls `setAppBadge(0)`**, which the spec
+  draws as a dot — a finished day that still looks unread.
+- Platform reality decides where this matters: **iOS/iPadOS 16.4+** supports it
+  for Home Screen web apps once notification permission is granted, and iOS is
+  the platform that ignores shortcuts — so this is Become's whole home-screen
+  presence there. **Android Chromium does not implement the Badging API at
+  all**; Android badges an installed PWA's icon by itself when a notification
+  is unread, which is what the daily glance does for it. Every call
+  feature-detects and swallows `NotAllowedError`: a badge is decoration and may
+  never break a page.
+- Refreshed on app open and on the tab becoming visible, never on a timer, and
+  by `public/sw.js` when a push carries `badgeCount` — which is what keeps it
+  right on a phone that has not opened Become since yesterday. `logout()`
+  clears it, for the same reason it wipes the cached dashboard.
+
+**3. The daily glance** (`lib/widgets/glance.ts`, sent from section 0.5 of
+`app/api/cron/notify`). The lock screen. A web app cannot draw a lock-screen
+widget, but it can put one card there, so this renders the feed as a
+notification: streak, today's session, calories left, Mind session waiting.
+
+- It composes from `WidgetFeed`'s finished strings and reads no model. A glance
+  that re-derived "at risk" or re-formatted a calorie count would drift from
+  the widget beside it.
+- **It is the one notification in the app that is OFF by default**, and the one
+  place `notificationPrefs.<key>` must be read as `=== true` rather than
+  `!== false`. Everything else in that cron fires because something is wrong or
+  owed; this is a standing daily card landing in a morning that already has the
+  workout (7-11) and Mind (8-11) nudges in it. Its window is **6-9 local** and
+  its sweep runs FIRST, so it reads as the day's summary rather than a fourth
+  reminder.
+- It carries `badgeCount` on the push — the only push that does. A nudge about
+  one missing pillar says nothing about the other two, so every other push
+  leaves the badge alone.
+- One per member per LOCAL day, gated on `lastPushSentAt.dailyGlance`, and the
+  whole sweep is wrapped: it is the heaviest section here (one `loadWidgetFeed`
+  per qualifying member) and must not be able to cost anyone a nudge.
+
+What is still native-only: an actual WIDGET, of any size, on either OS. Nothing
+above changes that, and `expo/` still has no distribution.
 
 ## Development
 

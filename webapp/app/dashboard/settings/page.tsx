@@ -80,6 +80,7 @@ interface NotificationPrefs {
   goalNudge: boolean
   superStreakAtRisk: boolean
   checkInReminder: boolean
+  dailyGlance: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
@@ -97,6 +98,9 @@ interface ConsentResponse {
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
+  // First in the list and OFF by default — the one entry here that is not a
+  // nudge. It is the lock-screen card, so it only exists if you ask for it.
+  { key: 'dailyGlance', label: 'Daily glance (lock screen)', sublabel: "One morning card with your streak, calories left and today's session. Off by default." },
   { key: 'checkInReminder', label: 'Daily check-in', sublabel: "Early afternoon nudge to log today's mood + weight if you haven't yet" },
   { key: 'mindReminder', label: 'Daily mindset session', sublabel: 'Morning nudge when your session is ready' },
   { key: 'goalNudge', label: 'Goal nudges', sublabel: 'Behind pace, protein floor missed, tight training week — evenings, at most one a day' },
@@ -188,6 +192,8 @@ function SettingsPageInner() {
     mealReminder: true,
     reEngagement: true,
     chatMessage: true,
+    // Opt-in, unlike every other row. See the preferences route.
+    dailyGlance: false,
   })
   const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [enablingNotifications, setEnablingNotifications] = useState(false)
@@ -311,6 +317,7 @@ function SettingsPageInner() {
         mealReminder: p.mealReminder ?? true,
         reEngagement: p.reEngagement ?? true,
         chatMessage: p.chatMessage ?? true,
+        dailyGlance: p.dailyGlance ?? false,
       })
     } catch {
       // ignore — defaults remain

@@ -20,11 +20,15 @@ const ICON_SIZES = [72, 96, 128, 144, 152, 192, 384, 512]
  * Home-screen shortcuts — long-press the installed Become icon and jump
  * straight into one of the four things a member actually opens the app to do.
  *
- * This is the only part of "put Become on my home screen" the WEB app can
- * deliver. True lock-screen / home-screen WIDGETS are an OS surface (iOS
- * WidgetKit, Android App Widgets) and can only come from the native app in
- * `expo/`; the data behind them is `GET /api/widgets/summary`, which is
- * deliberately shaped so every one of these four has a widget to be.
+ * True lock-screen / home-screen WIDGETS are an OS surface (iOS WidgetKit,
+ * Android App Widgets) and can only come from the native app in `expo/`; the
+ * data behind them is `GET /api/widgets/summary`, which is deliberately shaped
+ * so every one of these four has a widget to be.
+ *
+ * These shortcuts are one of the three things the WEB app can do instead. The
+ * other two are the app-icon badge (lib/widgets/badge.ts) and the daily glance
+ * on the lock screen (lib/widgets/glance.ts) — and they matter more here than
+ * this does, because iOS ignores `shortcuts` entirely.
  *
  * `url` must stay inside `scope` and must be a real route — a shortcut to a
  * 404 is invisible until someone taps it. tests/unit/widgets/feed.test.ts
