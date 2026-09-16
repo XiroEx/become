@@ -88,6 +88,13 @@ const SEVERITY_RANK: Record<Severity, number> = { warn: 0, nudge: 1, info: 2, go
 export const MAX_NEXT_STEPS = 3
 
 /**
+ * At most this many on a week card. The card is a fixed height and already
+ * carries the week's own numbers, so two is what fits without pushing the
+ * Details button off the bottom.
+ */
+export const MAX_CARD_STEPS = 2
+
+/**
  * How many rows of a history Story shows before it asks. Story stacks two of
  * them — every week, and every win — and printing both in full made the screen
  * forty rows long, with the thing you opened it for at the bottom.
@@ -167,19 +174,37 @@ function youFacts(w: WeekSnapshot, streak: number): string[] {
 }
 
 /**
+ * Rank a set of per-pillar suggestions into recommendations: worst first, ties
+ * broken by the order of `pool`, pillars with nothing to say dropped, capped.
+ *
+ * `pool` is the pillars worth considering, and the caller decides it because
+ * the two callers know it differently: the Story sheet reads the week's own
+ * `uses`, the live week card reads the pillars the journey found active around
+ * it. The RANKING is shared so a card and the sheet opened from it can never
+ * recommend different things — and neither can the nudge that arrives tonight,
+ * which is written from the same `lib/goals/suggestions` rules.
+ */
+export function rankSuggestions(
+  pool: CardPillar[],
+  suggestions: Partial<Record<CardPillar, Suggestion | null | undefined>> | undefined,
+  max: number = MAX_NEXT_STEPS,
+): NextStep[] {
+  return pool
+    .map((pillar, i) => ({ pillar, suggestion: suggestions?.[pillar] ?? null, i }))
+    .filter((x): x is { pillar: CardPillar; suggestion: Suggestion; i: number } => !!x.suggestion)
+    .sort((a, b) => (SEVERITY_RANK[a.suggestion.severity] - SEVERITY_RANK[b.suggestion.severity]) || (a.i - b.i))
+    .slice(0, max)
+    .map(({ pillar, suggestion }) => ({ pillar, suggestion }))
+}
+
+/**
  * The recommendations, ranked. Only for pillars this member uses — with one
  * exception: a member using nothing yet is exactly who the "set a target"
  * suggestions are written for, so for them everything is on the table.
  */
 export function nextSteps(input: WeekSummaryInput): NextStep[] {
   const active = PILLAR_ORDER.filter(p => usesPillar(input.week, p))
-  const pool = active.length ? active : PILLAR_ORDER
-  return pool
-    .map((pillar, i) => ({ pillar, suggestion: input.suggestions?.[pillar] ?? null, i }))
-    .filter((x): x is { pillar: CardPillar; suggestion: Suggestion; i: number } => !!x.suggestion)
-    .sort((a, b) => (SEVERITY_RANK[a.suggestion.severity] - SEVERITY_RANK[b.suggestion.severity]) || (a.i - b.i))
-    .map(({ pillar, suggestion }) => ({ pillar, suggestion }))
-    .slice(0, MAX_NEXT_STEPS)
+  return rankSuggestions(active.length ? active : PILLAR_ORDER, input.suggestions)
 }
 
 export function summarizeWeek(input: WeekSummaryInput): WeekSummary {

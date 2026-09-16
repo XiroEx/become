@@ -14,6 +14,7 @@ import WeekCard from '../../components/becoming/journey/WeekCard'
 import BecomingDetails from '../../components/becoming/BecomingDetails'
 import { buildWeeks, emptyDay, type DayEvents } from '../../lib/becoming/weeks'
 import { weekSignals } from '../../lib/becoming/signals'
+import type { Suggestion } from '../../lib/goals/suggestions'
 
 function build(spec: Record<string, Partial<DayEvents>>) {
   const days = new Map<string, DayEvents>()
@@ -164,23 +165,78 @@ test('an "away" card carries no highlights at all', () => {
   assert.doesNotMatch(html, /week-card-nudge/)
 })
 
-test('"what writes this card" drops the suggestion for a pillar they do not use', () => {
-  const next = {
-    nutrition: { title: 'You reached your target', sub: 'hold it' },
-    training: { title: 'Averaging 1.3/wk against 5', sub: 'protect the schedule' },
-  }
-  const weeks = build({
-    '2026-08-09': { workouts: ['A'] }, '2026-08-16': { workouts: ['B'] }, '2026-08-17': { workouts: ['C'] },
-  })
+// The two goal suggestions a live card is handed. Whole objects, because the
+// card ranks them by severity — the shape /api/goals and the nudge cron use.
+const REACHED: Suggestion = { key: 'nutrition.achieved', title: 'You reached your target', sub: 'Hold it for a week, then set the next one.', severity: 'good', url: '/dashboard/nutrition/goals' }
+const CONSISTENCY: Suggestion = { key: 'training.consistency', title: 'Averaging 1.3/wk against 5', sub: 'The target may be too high for this season.', severity: 'nudge', url: '/dashboard/settings?tab=training#weekly-availability' }
+
+function liveCard(spec: Record<string, Partial<DayEvents>>, next: { nutrition: Suggestion; training: Suggestion } | null): string {
+  const weeks = build(spec)
   const i = weeks.length - 1
-  const html = renderToStaticMarkup(
+  return renderToStaticMarkup(
     <WeekCard
       week={weeks[i]} signals={weekSignals(weeks, i, 'lbs')} unit="lbs" width={330} height={520}
       focused landed compact={false} exitEdge={null} totalWeeks={weeks.length} identity={null} next={next} reduced
     />,
   )
+}
+
+test('"what to work on" drops the recommendation for a pillar they do not use', () => {
+  // Trains, never logs food: a nutrition target means nothing to them, so the
+  // card must not recommend one — even though the read exists.
+  const html = liveCard(
+    { '2026-08-09': { workouts: ['A'] }, '2026-08-16': { workouts: ['B'] }, '2026-08-17': { workouts: ['C'] } },
+    { nutrition: REACHED, training: CONSISTENCY },
+  )
   assert.match(html, /Averaging 1.3\/wk against 5/)
   assert.doesNotMatch(html, /You reached your target/)
+})
+
+test('the live card recommends what to work on, worst first, and each one is tappable', () => {
+  const html = liveCard(
+    {
+      '2026-08-09': { workouts: ['A'], foodLogged: true },
+      '2026-08-16': { workouts: ['B'], foodLogged: true },
+      '2026-08-17': { workouts: ['C'], foodLogged: true },
+    },
+    { nutrition: REACHED, training: CONSISTENCY },
+  )
+  assert.match(html, /data-testid="week-card-next"/)
+  assert.match(html, /What to work on/)
+  // The nudge outranks the good news, whatever order they arrived in.
+  const order = [...html.matchAll(/data-testid="week-card-next-(training|fuel)"/g)].map(m => m[1])
+  assert.deepEqual(order, ['training', 'fuel'])
+  // Each row goes to the screen where the work actually happens, and the sub
+  // is on the card — a title alone is not a recommendation.
+  assert.match(html, /href="\/dashboard\/settings\?tab=training#weekly-availability"/)
+  assert.match(html, /href="\/dashboard\/nutrition\/goals"/)
+  assert.match(html, /The target may be too high for this season/)
+})
+
+test('the live card stops quoting the evidence wall once it has something to recommend', () => {
+  const spec = {
+    '2026-08-09': { workouts: ['A'], foodLogged: true },
+    '2026-08-16': { workouts: ['B'], foodLogged: true, wins: ['I trained before work'] },
+    '2026-08-17': { workouts: ['C'], foodLogged: true },
+  }
+  assert.match(liveCard(spec, null), /I trained before work/, 'with nothing to recommend the words still carry the card')
+  assert.doesNotMatch(liveCard(spec, { nutrition: REACHED, training: CONSISTENCY }), /I trained before work/)
+})
+
+test('a finished week keeps its banked words — there is nothing to recommend about a week that is over', () => {
+  const weeks = build({
+    '2026-08-09': { workouts: ['A'], wins: ['I showed up anyway'] },
+    '2026-08-16': { workouts: ['B'] }, '2026-08-17': { workouts: ['C'] },
+  })
+  const html = renderToStaticMarkup(
+    <WeekCard
+      week={weeks[0]} signals={weekSignals(weeks, 0, 'lbs')} unit="lbs" width={330} height={520}
+      focused landed compact={false} exitEdge={null} totalWeeks={weeks.length} identity={null}
+      next={{ nutrition: REACHED, training: CONSISTENCY }} reduced
+    />,
+  )
+  assert.match(html, /I showed up anyway/)
+  assert.doesNotMatch(html, /week-card-next/)
 })
 
 test('the details sheet leads with Story — the one screen everybody has — then training, fuel, mind', () => {
