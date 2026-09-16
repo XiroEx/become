@@ -10,7 +10,7 @@ import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModa
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary from "@/components/WorkoutSummary";
 import ShareButton from "@/components/share/ShareButton";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoDisplay, resolveExerciseVideo } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
@@ -70,11 +70,15 @@ function VideoPlayer({
   videoFraming?: VideoFramingOverride | null;
   videoTrim?: VideoTrimOverride | null;
 }) {
-  // The exercise's own record wins. The name-keyed cache is only consulted for
-  // legacy rows whose video never got denormalized onto the Exercise — going
-  // to it first is what made a video an admin had removed keep playing.
-  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = exerciseThumbnailUrl?.trim() || getExerciseThumbnail(exerciseName);
+  // The exercise's own record wins; the name-keyed cache is only consulted for
+  // legacy rows whose video never got denormalized onto the Exercise. Framing
+  // and trim follow whichever of the two supplied the file — see
+  // resolveExerciseVideo.
+  const resolved = resolveExerciseVideo(
+    { videoUrl: exerciseVideoUrl, thumbnailUrl: exerciseThumbnailUrl, videoWidth, videoHeight, videoFraming, videoTrim },
+    getExerciseVideoDisplay(exerciseName)
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
 
   // No video at all — say so rather than playing an unrelated placeholder clip.
   if (!videoUrl) {
@@ -94,10 +98,10 @@ function VideoPlayer({
       <FramedVideo
         src={videoUrl}
         surface="form"
-        videoWidth={videoWidth}
-        videoHeight={videoHeight}
-        videoFraming={videoFraming}
-        videoTrim={videoTrim}
+        videoWidth={resolved.videoWidth}
+        videoHeight={resolved.videoHeight}
+        videoFraming={resolved.videoFraming}
+        videoTrim={resolved.videoTrim}
         showFullscreenToggle
         onDimensions={(w, h) => {
           // Self-heal: first time a user plays a video with no persisted dims,
@@ -560,7 +564,8 @@ export default function WorkoutFormPage() {
                   // This exercise was swapped — restore the swapped identity.
                   // Clear the video fields so the resolver looks up by the
                   // NEW name, otherwise the original exercise's video would
-                  // keep playing.
+                  // keep playing — and its trim window would clip the
+                  // replacement's video to bounds set for a different file.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
@@ -569,6 +574,7 @@ export default function WorkoutFormPage() {
                     videoWidth: null,
                     videoHeight: null,
                     videoFraming: null,
+                    videoTrim: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -1239,7 +1245,9 @@ export default function WorkoutFormPage() {
     // Replace the exercise in the workout, preserving sets/reps/rest
     // prescription. Clear any video-specific fields from the original so
     // the video lookup resolves by the NEW exercise name on next render
-    // (otherwise the prior exercise's URL/dimensions/framing would play).
+    // (otherwise the prior exercise's URL/dimensions/framing/trim would play).
+    // Trim especially: an in/out window belongs to one file, so leaving it
+    // behind clips the replacement's video to the previous one's bounds.
     const updatedExercises = [...workout.exercises];
     updatedExercises[exerciseIndex] = {
       ...oldExercise,
@@ -1254,6 +1262,7 @@ export default function WorkoutFormPage() {
       videoWidth: null,
       videoHeight: null,
       videoFraming: null,
+      videoTrim: null,
     };
 
     setWorkout({ ...workout, exercises: updatedExercises });

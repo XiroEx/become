@@ -2,8 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExerciseVideoUrlAsync, getExerciseThumbnailAsync } from "@/lib/data/exerciseVideos";
+import {
+  getExerciseVideoDisplayAsync,
+  resolveExerciseVideo,
+  type ExerciseVideoDisplay,
+} from "@/lib/data/exerciseVideos";
 import FramedVideo from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 
 // Match a direct video file URL by extension, with optional query string —
 // works for both local public/ paths AND remote HTTPS URLs (e.g. /api/blob).
@@ -28,6 +34,16 @@ interface Exercise {
   details?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  /**
+   * The rest of the video display record, denormalized onto the exercise by
+   * lib/hydrateExercises.ts. Without these the preview played the raw file:
+   * the admin's in/out points live here, not in the video itself (trimming is
+   * non-destructive — see lib/videoTrim.ts).
+   */
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
   groupId?: string;
   groupType?: ExerciseGroupType;
   groupLabel?: string;
@@ -44,42 +60,68 @@ interface ExerciseAccordionProps {
 type TabType = 'video' | 'instructions' | 'tips';
 
 // Video player component with local video or YouTube embed support
-function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exerciseName: string; directVideoUrl?: string; directThumbnailUrl?: string }) {
-  const [videoUrl, setVideoUrl] = useState<string | null>(directVideoUrl || null);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(directThumbnailUrl || null);
+function VideoPlayer({
+  exerciseName,
+  directVideoUrl,
+  directThumbnailUrl,
+  videoWidth,
+  videoHeight,
+  videoFraming,
+  videoTrim,
+}: {
+  exerciseName: string;
+  directVideoUrl?: string;
+  directThumbnailUrl?: string;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
+}) {
+  // The name-keyed legacy row, once resolved. Only consulted when the exercise
+  // carries no video of its own — `resolveExerciseVideo` enforces that, and
+  // decides which of the two the framing and trim belong to.
+  const [legacy, setLegacy] = useState<ExerciseVideoDisplay | null>(null);
   const [isLoading, setIsLoading] = useState(!directVideoUrl);
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     // Skip fetch if we already have a direct URL
     if (directVideoUrl) {
-      setVideoUrl(directVideoUrl);
-      setThumbnailUrl(directThumbnailUrl || null);
+      setLegacy(null);
       setIsLoading(false);
       return;
     }
 
     let isMounted = true;
-    
+
     async function fetchVideoData() {
-      const [video, thumbnail] = await Promise.all([
-        getExerciseVideoUrlAsync(exerciseName),
-        getExerciseThumbnailAsync(exerciseName),
-      ]);
-      
+      const display = await getExerciseVideoDisplayAsync(exerciseName);
+
       if (isMounted) {
-        setVideoUrl(video);
-        setThumbnailUrl(thumbnail);
+        setLegacy(display);
         setIsLoading(false);
       }
     }
-    
+
     fetchVideoData();
-    
+
     return () => {
       isMounted = false;
     };
-  }, [exerciseName]);
+  }, [exerciseName, directVideoUrl]);
+
+  const resolved = resolveExerciseVideo(
+    {
+      videoUrl: directVideoUrl,
+      thumbnailUrl: directThumbnailUrl,
+      videoWidth,
+      videoHeight,
+      videoFraming,
+      videoTrim,
+    },
+    legacy
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
 
   if (isLoading) {
     return (
@@ -108,6 +150,10 @@ function VideoPlayer({ exerciseName, directVideoUrl, directThumbnailUrl }: { exe
       <FramedVideo
         src={videoUrl}
         surface="form"
+        videoWidth={resolved.videoWidth}
+        videoHeight={resolved.videoHeight}
+        videoFraming={resolved.videoFraming}
+        videoTrim={resolved.videoTrim}
         showFullscreenToggle
       />
     );
@@ -367,7 +413,15 @@ export default function ExerciseAccordion({ exercise, index, isInGroup }: Exerci
                       exit={{ opacity: 0, y: -10 }}
                       transition={{ duration: 0.15 }}
                     >
-                      <VideoPlayer exerciseName={exercise.name} directVideoUrl={exercise.videoUrl} directThumbnailUrl={exercise.thumbnailUrl} />
+                      <VideoPlayer
+                        exerciseName={exercise.name}
+                        directVideoUrl={exercise.videoUrl}
+                        directThumbnailUrl={exercise.thumbnailUrl}
+                        videoWidth={exercise.videoWidth}
+                        videoHeight={exercise.videoHeight}
+                        videoFraming={exercise.videoFraming}
+                        videoTrim={exercise.videoTrim}
+                      />
                     </motion.div>
                   )}
 
