@@ -68,6 +68,11 @@ export interface WidgetFeed {
    */
   refreshAfterSeconds: number
   widgets: BecomeWidget[]
+  /**
+   * What to draw on the app ICON — the number of daily commitments still open.
+   * See `badgeCountFor`. 0 means "clear the badge", never "draw a zero".
+   */
+  badgeCount: number
 }
 
 export interface WidgetFeedInput {
@@ -361,21 +366,52 @@ function buildTraining(input: WidgetFeedInput): BecomeWidget {
 }
 
 /**
+ * The widgets the app-icon badge counts: the three things a member can finish
+ * TODAY. The badge is a single number on a home-screen icon with no room to
+ * explain itself, so it has to mean one plain thing — "you still owe the day
+ * this many" — and every widget that cannot be finished today is excluded.
+ *
+ * `streak` is out because it is a CONSEQUENCE of the other three, not a fourth
+ * task: a member who has logged nothing would see 3 tasks plus a 4th for the
+ * streak those same 3 would save. `becoming` is out because it is a weekly arc
+ * and sits in `todo` from Monday to the session that closes the week, so it
+ * would pin the badge to at-least-1 on days the member genuinely owes nothing.
+ */
+const BADGE_WIDGETS: readonly WidgetKey[] = ['training', 'nutrition', 'mind']
+
+/**
+ * How many daily commitments are still open. 0..3.
+ *
+ * `done` and `none` both count as nothing owed, and the difference matters:
+ * `none` is "no session scheduled" / "the cooldown is running", which is not a
+ * task the member is being asked to do and must not raise a badge they cannot
+ * clear.
+ */
+export function badgeCountFor(widgets: BecomeWidget[]): number {
+  return widgets.filter(
+    (w) => BADGE_WIDGETS.includes(w.key) && (w.state === 'todo' || w.state === 'at-risk'),
+  ).length
+}
+
+/**
  * Build the whole feed. Order is the order a widget gallery lists them in, and
  * it is deliberate: streak and nutrition are the two a member checks without
  * opening anything.
  */
 export function buildWidgetFeed(input: WidgetFeedInput): WidgetFeed {
+  const widgets = [
+    buildStreak(input),
+    buildNutrition(input),
+    buildMind(input),
+    buildBecoming(input),
+    buildTraining(input),
+  ]
+
   return {
     generatedAt: input.now,
     todayKey: input.todayKey,
     refreshAfterSeconds: WIDGET_REFRESH_SECONDS,
-    widgets: [
-      buildStreak(input),
-      buildNutrition(input),
-      buildMind(input),
-      buildBecoming(input),
-      buildTraining(input),
-    ],
+    widgets,
+    badgeCount: badgeCountFor(widgets),
   }
 }

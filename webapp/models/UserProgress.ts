@@ -200,6 +200,16 @@ export interface IUserProgress {
     /** Daily mood + weight check-in — a push so it reaches members who don't
      *  happen to open the app during the window the in-app modal relies on. */
     checkInReminder?: boolean
+    /**
+     * The morning lock-screen glance (lib/widgets/glance.ts).
+     *
+     * OPT-IN, and the ONLY key here that is: every other entry is a nudge that
+     * fires when something is wrong, and undefined reads as ON. This one is a
+     * standing daily card the member asked to see, and it lands in the same
+     * morning as the workout and Mind reminders — so it is sent only on an
+     * explicit `true`. Read it with `=== true`, never `!== false`.
+     */
+    dailyGlance?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
@@ -213,6 +223,7 @@ export interface IUserProgress {
     goalNudgeKey?: string
     goalNudgeKeyAt?: Date
     superStreakAtRisk?: Date
+    dailyGlance?: Date
     checkInReminder?: Date
   }
   // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
@@ -479,6 +490,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     goalNudge: { type: Boolean },
     superStreakAtRisk: { type: Boolean },
     checkInReminder: { type: Boolean },
+    dailyGlance: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
@@ -492,6 +504,7 @@ const UserProgressSchema = new Schema<IUserProgress>({
     goalNudgeKeyAt: { type: Date },
     superStreakAtRisk: { type: Date },
     checkInReminder: { type: Date },
+    dailyGlance: { type: Date },
   },
   timezoneOffset: { type: Number },
   timezone: { type: String },

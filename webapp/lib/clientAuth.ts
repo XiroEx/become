@@ -1,4 +1,5 @@
 import { clearAllCache } from '@/lib/clientCache'
+import { clearAppBadge } from '@/lib/widgets/badge'
 
 // NOTE: the credential-less `register()` / `login()` helpers that used to live
 // here were deleted alongside the retirement of POST /api/auth/register and
@@ -15,4 +16,8 @@ export function logout() {
   localStorage.removeItem('token')
   // Wipe cached dashboard data so the next user on this device can't see it.
   clearAllCache()
+  // Same reason, on the home-screen icon: the badge is a count of ONE member's
+  // unfinished day and must not outlive their session. Fire-and-forget — the
+  // badge is decoration and sign-out must not wait on it, or fail with it.
+  void clearAppBadge()
 }
