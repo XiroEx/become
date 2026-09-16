@@ -4,8 +4,8 @@
 // stage's own language: dark sky, glass cards, the pillar hues. Four screens
 // you swipe or tab between:
 //
-//   Story     week by week — every headline the app has written about you, the
-//             wins you banked, the records you set; tap a week to fly to it
+//   Story     this week in one read — what you trained, logged and banked, and
+//             what to do next — then week by week and the wins behind it
 //   Training  days/week then → now → next, lifts then → now → target, what's next
 //   Fuel      the weight plan then → now → next, pace, adherence, what's next
 //   Mind      score, identity, chapter then → now → next, the arc, how you've shown up
@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Brain, UtensilsCrossed, Dumbbell, BookOpen, Trophy, Sparkles, Lock, ArrowRight, TrendingUp, Check, Minus, Flame, HelpCircle, Info } from 'lucide-react'
+import { X, Brain, UtensilsCrossed, Dumbbell, BookOpen, Trophy, Sparkles, Lock, ArrowRight, TrendingUp, Check, Minus, Flame, HelpCircle, Info, ChevronDown } from 'lucide-react'
 import { CHAPTERS, SYSTEM_INFO, getXpToNextChapter } from '@/lib/mindXP'
 import type { MindState } from '@/lib/mindContent'
 import type { GoalProgress } from '@/lib/goals/progress'
@@ -33,6 +33,7 @@ import WeightChart from '@/components/becoming/WeightChart'
 import StrengthTargetSheet from '@/components/becoming/StrengthTargetSheet'
 import { EST_MAX_LABEL, EST_MAX_LABEL_SHORT } from '@/lib/strength/language'
 import { formatVolume, formatWorkTime } from '@/lib/becoming/weekTraining'
+import { summarizeWeek, previewList, type NextStep, type SummaryPillar } from '@/lib/becoming/weekSummary'
 
 
 type Tab = 'mind' | 'fuel' | 'training' | 'story'
@@ -153,6 +154,45 @@ function Next({ title, sub, url, hue, onClose }: { title: string; sub: string; u
   )
 }
 
+/** The colour each summary row is keyed to. */
+const SUMMARY_HUE: Record<SummaryPillar, string> = {
+  training: SUBJECT.training.hex,
+  fuel: SUBJECT.fuel.hex,
+  mind: SUBJECT.mind.hex,
+  you: '#a78bfa',
+}
+
+/**
+ * The recommendations under the week summary — the same per-pillar rules the
+ * nudge cron sends, so the page and the notification never say different
+ * things. Worst first; `summarizeWeek` has already ranked and capped them.
+ */
+export function StoryNextSteps({ steps, onClose }: { steps: NextStep[]; onClose: () => void }) {
+  if (!steps.length) return null
+  return (
+    <div data-testid="story-next">
+      <Eyebrow>What to do next</Eyebrow>
+      <div className="-mt-1">
+        {steps.map(st => (
+          <Next key={st.suggestion.key} title={st.suggestion.title} sub={st.suggestion.sub} url={st.suggestion.url} hue={SUMMARY_HUE[st.pillar]} onClose={onClose} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MoreButton({ open, label, onClick, testId }: { open: boolean; label: string; onClick: () => void; testId: string }) {
+  return (
+    <button
+      type="button" onClick={onClick} aria-expanded={open} data-testid={testId}
+      className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/[0.06] py-2 text-xs font-semibold text-white/70 ring-1 ring-white/10 transition-colors hover:bg-white/[0.1] hover:text-white"
+    >
+      {open ? 'Show less' : label}
+      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+    </button>
+  )
+}
+
 export interface BecomingDetailsProps {
   weeks?: WeekSnapshot[]
   /** Every weigh-in by local day, for the weight chart. */
@@ -181,6 +221,9 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
   // check, so it leads.
   const [trainView, setTrainView] = useState<TrainView>('week')
   const [sheet, setSheet] = useState<SheetState | null>(null)
+  // Story's two histories, collapsed to a short preview until asked.
+  const [allWeeks, setAllWeeks] = useState(false)
+  const [allWins, setAllWins] = useState(false)
   const tz = new Date().getTimezoneOffset()
 
   useEffect(() => {
@@ -268,6 +311,24 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
   // ── Story derivations ──────────────────────────────────────────────────
   const prTimeline = useMemo(() => weeks.flatMap(w => w.training.prs.map(p => ({ ...p, week: w }))).reverse().slice(0, 12), [weeks])
   const weeksDesc = useMemo(() => [...weeks].reverse(), [weeks])
+  // The live week is always the last one buildWeeks emits — a current week is
+  // never collapsed into an "away" card, however empty it is.
+  const thisWeek = weeks.length ? weeks[weeks.length - 1] : null
+  // Mind has no goal read of its own; the state pattern is its "what next",
+  // and it is deliberately `info` so it can never outrank a real goal signal.
+  const mindStep = useMemo(
+    () => (focus && dominantState ? { key: `mind.${dominantState}`, title: focus.title, sub: focus.sub, severity: 'info' as const, url: '/dashboard/mind' } : null),
+    [focus, dominantState],
+  )
+  const summary = useMemo(
+    () => summarizeWeek({
+      week: thisWeek, unit, loadUnit: tUnit, training: tWeek, streak,
+      suggestions: { training: t?.suggestion, fuel: n?.suggestion, mind: mindStep },
+    }),
+    [thisWeek, unit, tUnit, tWeek, streak, t?.suggestion, n?.suggestion, mindStep],
+  )
+  const weekList = previewList(weeksDesc, allWeeks)
+  const winList = previewList(wins, allWins)
   const hue = TABS.find(x => x.id === tab)!.hue
 
   return (
@@ -557,26 +618,35 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
 
               {tab === 'story' && (
                 <>
-                  <Glass hue="#a78bfa">
-                    <Eyebrow>Evidence wall</Eyebrow>
-                    {wins.length === 0 ? (
-                      <p className="text-sm text-white/60">No wins banked yet. Bank one in a session — the proof that you’re changing builds here.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {wins.slice(0, 20).map((w, i) => (
-                          <motion.div key={w._id ?? i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i * 0.03, 0.3) }} className="flex items-start gap-2.5">
-                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />
-                            <div className="min-w-0 flex-1"><p className="font-serif text-[14px] italic leading-snug text-white/90">“{w.win}”</p><p className="mt-0.5 text-[11px] text-white/45">{relDay(w.date)}</p></div>
-                          </motion.div>
+                  {/* This week, in one read — what you trained, logged and
+                      banked. Story used to open on the evidence wall, which is
+                      history: it never answered what this week adds up to. */}
+                  <Glass hue="#a78bfa" data-testid="story-summary">
+                    <div className="mb-2 flex items-baseline justify-between gap-2">
+                      <Eyebrow>{summary.live ? 'This week' : 'That week'}</Eyebrow>
+                      <span className="shrink-0 text-[11px] text-white/40">{summary.label}</span>
+                    </div>
+                    <p className="text-[15px] font-bold leading-snug text-white">{summary.headline}</p>
+                    <p className="mt-0.5 text-xs leading-snug text-white/60">{summary.sub}</p>
+                    {summary.lines.length > 0 && (
+                      <div className="mt-3 space-y-1.5">
+                        {summary.lines.map(l => (
+                          <div key={l.pillar} data-testid={`story-summary-${l.pillar}`} className="flex items-baseline gap-2.5">
+                            <span className="w-[58px] shrink-0 text-[10px] font-semibold uppercase tracking-widest" style={{ color: `color-mix(in srgb, ${SUMMARY_HUE[l.pillar]} 62%, white)` }}>{l.label}</span>
+                            <span className="min-w-0 flex-1 text-[13px] leading-snug text-white/80">{l.facts.join(' · ')}</span>
+                          </div>
                         ))}
                       </div>
                     )}
                   </Glass>
+
+                  <StoryNextSteps steps={summary.next} onClose={onClose} />
+
                   {weeksDesc.length > 0 && (
                     <Glass>
                       <Eyebrow>Week by week</Eyebrow>
                       <div className="space-y-1">
-                        {weeksDesc.map(w => (
+                        {weekList.shown.map(w => (
                           <button key={w.weekKey} type="button" onClick={() => onJumpToWeek?.(w.index)} data-testid="details-week-row" className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-white/[0.06]">
                             <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ background: weekColor(w.subject, w.score, 60) }} />
                             <div className="min-w-0 flex-1">
@@ -587,8 +657,32 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
                           </button>
                         ))}
                       </div>
+                      {weekList.hidden > 0 && (
+                        <MoreButton open={allWeeks} onClick={() => setAllWeeks(v => !v)} testId="details-weeks-more" label={`Show ${weekList.hidden} more week${weekList.hidden === 1 ? '' : 's'}`} />
+                      )}
                     </Glass>
                   )}
+
+                  <Glass hue="#a78bfa">
+                    <Eyebrow>Evidence wall</Eyebrow>
+                    {wins.length === 0 ? (
+                      <p className="text-sm text-white/60">No wins banked yet. Bank one in a session — the proof that you’re changing builds here.</p>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {winList.shown.map((w, i) => (
+                            <motion.div key={w._id ?? i} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: Math.min(i * 0.03, 0.3) }} className="flex items-start gap-2.5">
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />
+                              <div className="min-w-0 flex-1"><p className="font-serif text-[14px] italic leading-snug text-white/90">“{w.win}”</p><p className="mt-0.5 text-[11px] text-white/45">{relDay(w.date)}</p></div>
+                            </motion.div>
+                          ))}
+                        </div>
+                        {winList.hidden > 0 && (
+                          <MoreButton open={allWins} onClick={() => setAllWins(v => !v)} testId="details-wins-more" label={`Show ${winList.hidden} more win${winList.hidden === 1 ? '' : 's'}`} />
+                        )}
+                      </>
+                    )}
+                  </Glass>
                 </>
               )}
             </div>

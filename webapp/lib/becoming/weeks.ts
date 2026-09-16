@@ -153,7 +153,8 @@ export const SCORE_FLAT = 30
 /** Runs of at least this many empty weeks collapse into one "away" card. */
 export const GAP_MIN_WEEKS = 3
 
-const STATE_WORD: Record<MindState, string> = {
+/** How a mind state reads inside a sentence — "mostly locked in". */
+export const STATE_WORD: Record<MindState, string> = {
   stressed: 'stressed', distracted: 'distracted', low_energy: 'low on energy', locked_in: 'locked in',
 }
 
