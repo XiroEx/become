@@ -185,18 +185,25 @@ test('retired videos are excluded from the legacy name cache', () => {
 
 test('the exercise record is preferred over the name cache at every call site', () => {
   // The name cache is the legacy path. Reaching for it first is what let a
-  // removed video keep playing.
+  // removed video keep playing. The precedence now lives in one place —
+  // `resolveExerciseVideo` — and is asserted behaviourally in
+  // tests/unit/exerciseVideoDisplay.test.ts; what matters here is that every
+  // player goes through it rather than re-deriving the rule.
   const form = readSource('app/dashboard/workout/[programId]/workout/WorkoutFormClient.tsx')
   assert.match(
     form,
-    /exerciseVideoUrl\?\.trim\(\)\s*\|\|\s*getExerciseVideoUrl\(exerciseName\)/,
-    'workout form must prefer the hydrated Exercise.videoUrl'
+    /resolveExerciseVideo\(\s*\{\s*videoUrl: exerciseVideoUrl/,
+    'workout form must resolve through resolveExerciseVideo, passing the hydrated Exercise.videoUrl'
   )
 
   const swap = readSource('components/ExerciseSwapModal.tsx')
-  assert.match(swap, /exerciseVideoUrl\?\.trim\(\)\s*\|\|\s*getExerciseVideoUrl\(exerciseName\)/)
+  assert.match(swap, /resolveExerciseVideo\(\s*\{\s*videoUrl: exerciseVideoUrl/)
+
+  const accordion = readSource('components/ExerciseAccordion.tsx')
+  assert.match(accordion, /resolveExerciseVideo\(/)
 
   const live = readSource('app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx')
+  assert.match(live, /resolveExerciseVideo\(currentExercise \?\? \{\}, legacyVideo\)/)
   assert.ok(
     !/useState<string>\("\/placeholder\.mp4"\)/.test(live),
     'the live view must not default to a placeholder clip'

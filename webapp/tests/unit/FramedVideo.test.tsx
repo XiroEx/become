@@ -44,3 +44,45 @@ test('unsupported src (no direct video extension) renders nothing', () => {
   )
   assert.equal(html, '')
 })
+
+// ─── Trim reaches the element ────────────────────────────────────────────────
+//
+// Trimming is non-destructive: the file is whole and the player seeks/loops
+// within the stored window. The first visible consequence is that native
+// `loop` is turned OFF — a trimmed video is looped by hand from the
+// `timeupdate` handler, because the element would otherwise run to the real
+// end of the file. So the presence of `loop` in the markup is a direct read on
+// whether a trim was honoured, which is what the program preview was missing.
+
+test('an untrimmed video loops natively', () => {
+  const html = renderToStaticMarkup(
+    <FramedVideo src="/videos/leg-press.mp4" surface="form" />,
+  )
+  assert.match(html, /<video[^>]*\bloop\b/)
+})
+
+test('a trimmed video does not loop natively — the window is looped by hand', () => {
+  const html = renderToStaticMarkup(
+    <FramedVideo
+      src="/videos/leg-press.mp4"
+      surface="form"
+      videoTrim={{ start: 10.6, end: 41.1 }}
+    />,
+  )
+  assert.doesNotMatch(html, /<video[^>]*\bloop\b/)
+})
+
+test('a start-only trim still counts as trimmed', () => {
+  const html = renderToStaticMarkup(
+    <FramedVideo src="/videos/leg-press.mp4" surface="form" videoTrim={{ start: 3 }} />,
+  )
+  assert.doesNotMatch(html, /<video[^>]*\bloop\b/)
+})
+
+test('a null trim is the same as no trim', () => {
+  // What a swapped-in exercise passes before its own video resolves.
+  const html = renderToStaticMarkup(
+    <FramedVideo src="/videos/leg-press.mp4" surface="form" videoTrim={null} />,
+  )
+  assert.match(html, /<video[^>]*\bloop\b/)
+})
