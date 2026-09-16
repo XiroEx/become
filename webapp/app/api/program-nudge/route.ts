@@ -8,8 +8,13 @@
  * key. lib/programNudge.ts has the full reasoning; app/api/checkin/route.ts is
  * the same move made earlier for the daily check-in.
  *
- * GET  → { due, dismissCount, dontShowAgain, hasServerState }
- * POST → { action: 'dismiss' | 'dismiss_forever' | 'adopt' }
+ * The check-in also records that it was SHOWN, and this now does too, for the
+ * same reason: a member who leaves a modal without pressing one of its buttons
+ * has still been asked. Counting only dismissals meant the nudge was due on
+ * every dashboard load and never once offered the way out.
+ *
+ * GET  → { due, showings, dismissCount, dontShowAgain, hasServerState }
+ * POST → { action: 'shown' | 'dismiss' | 'dismiss_forever' | 'adopt' }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +23,9 @@ import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
 import {
   NudgeState,
+  nudgeShowings,
   shouldShowNudge,
+  recordNudgeShown,
   recordNudgeDismiss,
   recordNudgeDismissForever,
 } from '@/lib/programNudge'
@@ -27,25 +34,35 @@ type StoredNudge = {
   dismissCount?: number
   lastDismissedAt?: Date
   dontShowAgain?: boolean
+  shownCount?: number
+  lastShownAt?: Date
 }
 
 /** The stored subdocument as the pure helpers want to see it. */
 function toState(stored: StoredNudge | undefined | null): NudgeState | null {
-  if (!stored || !stored.lastDismissedAt) return null
+  if (!stored || !hasServerState(stored)) return null
   return {
     dismissCount: stored.dismissCount ?? 0,
-    lastDismissedAt: new Date(stored.lastDismissedAt).toISOString(),
+    ...(stored.lastDismissedAt
+      ? { lastDismissedAt: new Date(stored.lastDismissedAt).toISOString() }
+      : {}),
+    ...(stored.lastShownAt
+      ? { lastShownAt: new Date(stored.lastShownAt).toISOString() }
+      : {}),
+    ...(stored.shownCount ? { shownCount: stored.shownCount } : {}),
     ...(stored.dontShowAgain ? { dontShowAgain: true as const } : {}),
   }
 }
 
 /**
- * Has this member ever dismissed the nudge on this account? `lastDismissedAt`
- * is the tell — the schema defaults `dismissCount` to 0, so a row that has
- * never been touched still materialises `programNudge` with a count.
+ * Has this member's nudge ever been recorded on this account? A stamp is the
+ * tell — the schema defaults the counts to 0, so a row that has never been
+ * touched still materialises `programNudge` with them.
  */
 function hasServerState(stored: StoredNudge | undefined | null): boolean {
-  return !!stored?.lastDismissedAt || stored?.dontShowAgain === true
+  return (
+    !!stored?.lastDismissedAt || !!stored?.lastShownAt || stored?.dontShowAgain === true
+  )
 }
 
 /**
@@ -63,9 +80,33 @@ function payload(stored: StoredNudge | undefined | null, enrolled: boolean) {
   return {
     // Enrolled members never see it, whatever the dismissal history says.
     due: enrolled ? false : shouldShowNudge(state),
+    // Prior showings — what the modal gates its opt-out on. Read BEFORE this
+    // showing is recorded, so the first sighting reports 0 and the second, 1.
+    showings: nudgeShowings(state),
     dismissCount: stored?.dismissCount ?? 0,
     dontShowAgain: stored?.dontShowAgain === true,
     hasServerState: hasServerState(stored),
+  }
+}
+
+/** Write a state back onto the row, never clearing a stamp we already hold. */
+function applyState(progress: { programNudge?: StoredNudge }, next: NudgeState) {
+  const current = progress.programNudge
+  progress.programNudge = {
+    dismissCount: next.dismissCount,
+    shownCount: Math.max(nudgeShowings(next), current?.shownCount ?? 0),
+    ...(next.lastDismissedAt
+      ? { lastDismissedAt: new Date(next.lastDismissedAt) }
+      : current?.lastDismissedAt
+        ? { lastDismissedAt: current.lastDismissedAt }
+        : {}),
+    ...(next.lastShownAt
+      ? { lastShownAt: new Date(next.lastShownAt) }
+      : current?.lastShownAt
+        ? { lastShownAt: current.lastShownAt }
+        : {}),
+    // Once set, never cleared by a later plain dismissal or showing.
+    dontShowAgain: next.dontShowAgain === true || current?.dontShowAgain === true,
   }
 }
 
@@ -81,11 +122,12 @@ export async function GET(request: NextRequest) {
       .select('programNudge currentProgram')
       .lean()
 
-    // No row at all: a brand-new member, who has no program and has dismissed
+    // No row at all: a brand-new member, who has no program and has been shown
     // nothing. The nudge is genuinely due and the opt-out is not offered yet.
     if (!progress) {
       return NextResponse.json({
         due: true,
+        showings: 0,
         dismissCount: 0,
         dontShowAgain: false,
         hasServerState: false,
@@ -110,11 +152,18 @@ export async function POST(request: NextRequest) {
     const body = (await request.json().catch(() => ({}))) as {
       action?: string
       dismissCount?: number
+      shownCount?: number
       lastDismissedAt?: string
+      lastShownAt?: string
       dontShowAgain?: boolean
     }
     const action = body.action
-    if (action !== 'dismiss' && action !== 'dismiss_forever' && action !== 'adopt') {
+    if (
+      action !== 'shown' &&
+      action !== 'dismiss' &&
+      action !== 'dismiss_forever' &&
+      action !== 'adopt'
+    ) {
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
     }
 
@@ -127,7 +176,9 @@ export async function POST(request: NextRequest) {
     const current = toState(progress.programNudge)
 
     let next: NudgeState
-    if (action === 'dismiss') {
+    if (action === 'shown') {
+      next = recordNudgeShown(current)
+    } else if (action === 'dismiss') {
       next = recordNudgeDismiss(current)
     } else if (action === 'dismiss_forever') {
       next = recordNudgeDismissForever(current)
@@ -142,18 +193,28 @@ export async function POST(request: NextRequest) {
           adopted: false,
         })
       }
-      const count = Number(body.dismissCount)
-      const stamp = body.lastDismissedAt ? new Date(body.lastDismissedAt) : null
+      const clamp = (value: unknown): number => {
+        const n = Number(value)
+        return Number.isFinite(n) ? Math.min(Math.max(Math.trunc(n), 0), 99) : 0
+      }
+      const stamp = (value: unknown): string | undefined => {
+        if (typeof value !== 'string') return undefined
+        const when = new Date(value)
+        return Number.isFinite(when.getTime()) ? when.toISOString() : undefined
+      }
+      const dismissedAt = stamp(body.lastDismissedAt)
+      const shownAt = stamp(body.lastShownAt)
       next = {
-        dismissCount: Number.isFinite(count) ? Math.min(Math.max(Math.trunc(count), 0), 99) : 0,
-        lastDismissedAt: (stamp && Number.isFinite(stamp.getTime())
-          ? stamp
-          : new Date()
-        ).toISOString(),
+        dismissCount: clamp(body.dismissCount),
+        shownCount: Math.max(clamp(body.shownCount), clamp(body.dismissCount)),
+        // Something has to anchor the backoff, so a record with no usable
+        // stamp is treated as having last been seen just now.
+        lastDismissedAt: dismissedAt ?? (shownAt ? undefined : new Date().toISOString()),
+        ...(shownAt ? { lastShownAt: shownAt } : {}),
         ...(body.dontShowAgain === true ? { dontShowAgain: true as const } : {}),
       }
-      // Nothing worth adopting — no dismissals and no opt-out.
-      if (next.dismissCount === 0 && !next.dontShowAgain) {
+      // Nothing worth carrying — never seen it, and no opt-out.
+      if (nudgeShowings(next) === 0 && !next.dontShowAgain) {
         return NextResponse.json({
           ...payload(progress.programNudge, isEnrolled(progress.currentProgram)),
           adopted: false,
@@ -161,12 +222,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    progress.programNudge = {
-      dismissCount: next.dismissCount,
-      lastDismissedAt: new Date(next.lastDismissedAt),
-      // Once set, never cleared by a later plain dismissal.
-      dontShowAgain: next.dontShowAgain === true || progress.programNudge?.dontShowAgain === true,
-    }
+    applyState(progress, next)
     await progress.save()
 
     return NextResponse.json({

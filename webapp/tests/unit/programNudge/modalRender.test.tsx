@@ -1,7 +1,7 @@
 // Run with: npm run test:file tests/unit/programNudge/modalRender.test.tsx
 //
 // The rendered half of the fix. route.test.ts proves the account remembers the
-// dismissal; this proves the modal actually DRAWS the way out once it has one,
+// sighting; this proves the modal actually DRAWS the way out once it has one,
 // because "there should be a don't-show-again button and it should work" is two
 // claims and this is the first of them.
 
@@ -12,12 +12,12 @@ import ProgramNudgeModal from '../../../components/ProgramNudgeModal'
 
 const OPT_OUT = /Don’t show this again/
 
-function sheet(dismissCount: number, open = true): string {
+function sheet(priorShowings: number, open = true): string {
   return renderToStaticMarkup(
     <ProgramNudgeModal
       open={open}
       fitnessGoal="gain_muscle"
-      dismissCount={dismissCount}
+      priorShowings={priorShowings}
       onExplore={() => {}}
       onDismissForever={() => {}}
     />,
@@ -32,17 +32,33 @@ test('first showing: the two CTAs, and no invitation to suppress it', () => {
 })
 
 test('second showing: the opt-out is on screen', () => {
-  // One prior dismissal — the exact state in the bug report, where the modal
+  // One prior sighting — the exact state in the bug report, where the modal
   // came back with no way to stop it.
   const html = sheet(1)
   assert.match(html, OPT_OUT)
   // Still a real button, not a paragraph of text.
-  assert.match(html, /<button[^>]*>[^<]*Don’t show this again/)
+  assert.match(html, /<button[^>]*>(?:(?!<\/button>)[\s\S])*Don’t show this again/)
+})
+
+test('the opt-out is a button, not a footnote', () => {
+  // It shipped as faint underlined 12px text under a caption, which is why the
+  // card is titled "needs a do not show again BUTTON". It has to carry the same
+  // weight as the action above it or it reads as decoration and gets missed.
+  const html = sheet(1)
+  const button = html.match(
+    /<button[^>]*>(?:(?!<\/button>)[\s\S])*Don’t show this again[\s\S]*?<\/button>/,
+  )
+  assert.ok(button, 'the opt-out must render as a <button>')
+  const markup = button[0]
+  assert.match(markup, /\bw-full\b/, 'full width, like the CTAs above it')
+  assert.match(markup, /\brounded-xl\b/, 'a button shape, not a link')
+  assert.match(markup, /\btext-sm\b/, 'the same type size as the other actions')
+  assert.doesNotMatch(markup, /\bunderline\b/, 'a button, not an underlined link')
 })
 
 test('it stays offered on every later showing', () => {
   for (const n of [2, 5, 20]) {
-    assert.match(sheet(n), OPT_OUT, `missing on showing after ${n} dismissals`)
+    assert.match(sheet(n), OPT_OUT, `missing on the showing after ${n} sightings`)
   }
 })
 

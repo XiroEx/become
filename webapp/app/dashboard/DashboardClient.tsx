@@ -16,7 +16,9 @@ import GoalAchievedModal from '@/components/GoalAchievedModal'
 import type { GoalReached } from '@/lib/goals/reached'
 import ProgramNudgeModal, {
   NUDGE_KEY,
+  nudgeShowings,
   shouldShowNudge,
+  recordNudgeShown,
   recordNudgeDismiss,
   recordNudgeDismissForever,
   parseLegacyNudgeState,
@@ -119,9 +121,14 @@ export default function DashboardClient() {
   const [showNudge, setShowNudge] = useState(false)
   // Queued like the check-in — waits its turn behind the onboarding tour.
   const [nudgeDue, setNudgeDue] = useState(false)
-  // How many times the nudge has already been dismissed — drives whether the
-  // "don't show this again" opt-out is offered on this showing.
-  const [nudgeDismissCount, setNudgeDismissCount] = useState(0)
+  // How many times the nudge has already been SHOWN, not counting this one —
+  // drives whether the "don't show this again" opt-out is offered. Showings,
+  // because a member who leaves the modal without pressing either button has
+  // still been asked, and counting only dismissals left them at zero forever.
+  const [nudgeShowingsSoFar, setNudgeShowingsSoFar] = useState(0)
+  // One recorded showing per page load, however many times the effect below
+  // re-runs while the tour settles.
+  const nudgeShowingRecorded = useRef(false)
   const [layout, setLayout] = useState<DashboardTile[] | null>(
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
@@ -394,14 +401,14 @@ export default function DashboardClient() {
 
         if (status.due) {
           setNudgeDue(true)
-          setNudgeDismissCount(status.dismissCount ?? 0)
+          setNudgeShowingsSoFar(status.showings ?? status.dismissCount ?? 0)
         }
       } catch {
         // Offline or the route is unhappy — fall back to this browser's copy
         // rather than either spamming the modal or suppressing it outright.
         if (shouldShowNudge(local)) {
           setNudgeDue(true)
-          setNudgeDismissCount(local?.dismissCount ?? 0)
+          setNudgeShowingsSoFar(nudgeShowings(local))
         }
       }
     }
@@ -425,15 +432,17 @@ export default function DashboardClient() {
     init()
   }, [])
 
-  // Record a dismissal on the ACCOUNT, and mirror it locally so the fallback
-  // path above still throttles the modal if the member is offline.
-  function recordDismissal(action: 'dismiss' | 'dismiss_forever') {
+  // Record a showing or a dismissal on the ACCOUNT, and mirror it locally so
+  // the fallback path above still throttles the modal if the member is offline.
+  function recordNudgeAction(action: 'shown' | 'dismiss' | 'dismiss_forever') {
     try {
       const current = parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
       const next =
         action === 'dismiss_forever'
           ? recordNudgeDismissForever(current)
-          : recordNudgeDismiss(current)
+          : action === 'dismiss'
+            ? recordNudgeDismiss(current)
+            : recordNudgeShown(current)
       localStorage.setItem(NUDGE_KEY, JSON.stringify(next))
       // The next showing is days away, so this does not need to be awaited —
       // but it does need to be sent, and a failure must not throw into the
@@ -452,13 +461,12 @@ export default function DashboardClient() {
 
   function handleNudgeDismiss() {
     setShowNudge(false)
-    setNudgeDismissCount((n) => n + 1)
-    recordDismissal('dismiss')
+    recordNudgeAction('dismiss')
   }
 
   function handleNudgeDismissForever() {
     setShowNudge(false)
-    recordDismissal('dismiss_forever')
+    recordNudgeAction('dismiss_forever')
   }
 
   // Hold the daily check-in behind the onboarding tour.
@@ -512,10 +520,20 @@ export default function DashboardClient() {
   // The program nudge is the other first-run modal that used to open straight
   // over the tour: a brand-new member has no program, so it fires on exactly the
   // load where onboarding is starting.
+  //
+  // Opening it is itself the thing worth recording. Until it was, the only way
+  // to count a sighting was for the member to press one of the two buttons — so
+  // anyone who backgrounded the PWA or reloaded instead stayed at zero
+  // showings, got the modal again on the very next load, and was never offered
+  // the way out. A ref keeps one page load to one recorded showing.
   useEffect(() => {
     if (nudgeDue && !tutorialBusy) {
       setShowNudge(true)
       setNudgeDue(false)
+      if (!nudgeShowingRecorded.current) {
+        nudgeShowingRecorded.current = true
+        recordNudgeAction('shown')
+      }
     }
   }, [nudgeDue, tutorialBusy])
 
@@ -713,7 +731,7 @@ export default function DashboardClient() {
       <ProgramNudgeModal
         open={showNudge}
         fitnessGoal={fitnessGoal ?? null}
-        dismissCount={nudgeDismissCount}
+        priorShowings={nudgeShowingsSoFar}
         onExplore={handleNudgeDismiss}
         onDismissForever={handleNudgeDismissForever}
       />

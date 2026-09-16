@@ -77,7 +77,8 @@ test('second showing offers the opt-out, and taking it is permanent', async () =
   const first = await status()
   assert.equal(first.due, true)
   assert.equal(first.dismissCount, 0)
-  assert.equal(offersDontShowAgain(first.dismissCount), false)
+  assert.equal(first.showings, 0)
+  assert.equal(offersDontShowAgain(first.showings), false)
 
   // "Explore first".
   await act({ action: 'dismiss' })
@@ -93,8 +94,9 @@ test('second showing offers the opt-out, and taking it is permanent', async () =
   const second = await status()
   assert.equal(second.due, true)
   assert.equal(second.dismissCount, 1)
+  assert.equal(second.showings, 1)
   assert.equal(
-    offersDontShowAgain(second.dismissCount),
+    offersDontShowAgain(second.showings),
     true,
     'the second showing must offer "Don’t show this again"',
   )
@@ -188,7 +190,8 @@ test('adopt carries a browser record onto the account, once', async () => {
   assert.equal(adopted.dismissCount, 4)
   assert.equal(adopted.hasServerState, true)
   // Four dismissals already behind them: the opt-out shows on the next sighting.
-  assert.equal(offersDontShowAgain(adopted.dismissCount), true)
+  assert.equal(adopted.showings, 4)
+  assert.equal(offersDontShowAgain(adopted.showings), true)
 
   // A second browser replaying ITS older snapshot must not reset the count.
   const replay = await act({ action: 'adopt', dismissCount: 0, lastDismissedAt: stamp })
@@ -250,5 +253,111 @@ test('the threshold the route reports is the one the modal renders against', asy
   assert.equal(DONT_SHOW_AGAIN_THRESHOLD, 1)
   await act({ action: 'dismiss' })
   const body = await status()
-  assert.equal(offersDontShowAgain(body.dismissCount), true)
+  assert.equal(offersDontShowAgain(body.showings), true)
+})
+
+// ── Being SHOWN is the thing that counts ──────────────────────────────────────
+//
+// The other half of the reported bug, and the one the move to the server did
+// not touch. Only 'dismiss' wrote anything, so a member who left the modal any
+// other way — backgrounded the installed PWA, killed it, reloaded — had no
+// record at all. It was therefore due again on the very next dashboard load,
+// arriving with a count of 0 every single time, so the opt-out it gates on
+// could never be reached however often it popped up.
+
+test('the second SHOWING offers the opt-out even though nothing was ever dismissed', async () => {
+  // First load: due, no way out offered yet.
+  const first = await status()
+  assert.equal(first.due, true)
+  assert.equal(first.showings, 0)
+  assert.equal(offersDontShowAgain(first.showings), false)
+
+  // It goes on screen. The member walks away without pressing anything.
+  await act({ action: 'shown' })
+
+  // It does not come straight back on the next load.
+  assert.equal((await status()).due, false, 'an un-dismissed showing must still start the backoff')
+
+  // A day later it is due again — and THIS time it offers the way out.
+  await UserProgress.updateOne(
+    { userId: USER_ID },
+    { $set: { 'programNudge.lastShownAt': new Date(Date.now() - (DAY + 1000)) } },
+  )
+  const second = await status()
+  assert.equal(second.due, true)
+  assert.equal(second.showings, 1)
+  assert.equal(second.dismissCount, 0, 'nothing was dismissed — the sighting is what counted')
+  assert.equal(
+    offersDontShowAgain(second.showings),
+    true,
+    'the second time it pops up must offer "Don’t show this again"',
+  )
+
+  // And taking it is permanent, dismissal history or not.
+  const after = await act({ action: 'dismiss_forever' })
+  assert.equal(after.dontShowAgain, true)
+  assert.equal(after.due, false)
+})
+
+test('showings accumulate on the account and grow the backoff', async () => {
+  for (const expected of [1, 2, 3]) {
+    const body = await act({ action: 'shown' })
+    assert.equal(body.showings, expected)
+  }
+  // Three sightings → a 4-day wait, measured from the last one.
+  await UserProgress.updateOne(
+    { userId: USER_ID },
+    { $set: { 'programNudge.lastShownAt': new Date(Date.now() - 3 * DAY) } },
+  )
+  assert.equal((await status()).due, false)
+  await UserProgress.updateOne(
+    { userId: USER_ID },
+    { $set: { 'programNudge.lastShownAt': new Date(Date.now() - (4 * DAY + 1000)) } },
+  )
+  assert.equal((await status()).due, true)
+})
+
+test('a dismissal after a showing does not double-count the same sighting', async () => {
+  await act({ action: 'shown' })
+  const dismissed = await act({ action: 'dismiss' })
+  assert.equal(dismissed.dismissCount, 1)
+  assert.equal(dismissed.showings, 1, 'one sighting, however it ended')
+})
+
+test('a dismissal with no recorded showing still counts as one', async () => {
+  // The 'shown' write is fire-and-forget; if it is lost, the button press that
+  // follows must still move the member off zero.
+  const dismissed = await act({ action: 'dismiss' })
+  assert.equal(dismissed.showings, 1)
+})
+
+test('a showing never clears an opt-out already on the account', async () => {
+  await act({ action: 'dismiss_forever' })
+  const body = await act({ action: 'shown' })
+  assert.equal(body.dontShowAgain, true)
+  assert.equal(body.due, false)
+})
+
+test('a member with a current program is not counted as shown', async () => {
+  await UserProgress.create({
+    userId: USER_ID,
+    currentProgram: { programId: 'p1', startDate: new Date(), currentPhase: 1, currentWeek: 1 },
+  })
+  const body = await act({ action: 'shown' })
+  assert.equal(body.due, false, 'enrolment beats the history either way')
+})
+
+test('a legacy row with dismissals but no showings keeps its credit', async () => {
+  // Rows written before showings were counted have dismissCount and nothing
+  // else. Reading `showings` off them must not demote them to zero and start
+  // the nagging over.
+  await act({ action: 'dismiss' })
+  await act({ action: 'dismiss' })
+  await UserProgress.updateOne(
+    { userId: USER_ID },
+    { $unset: { 'programNudge.shownCount': '', 'programNudge.lastShownAt': '' } },
+  )
+  const body = await status()
+  assert.equal(body.showings, 2)
+  assert.equal(offersDontShowAgain(body.showings), true)
 })
