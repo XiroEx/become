@@ -62,11 +62,15 @@ test('every footer carries the postal address; engagement footers carry the opt-
 
 test('the streak emails use the footer with an opt-out; the sign-in email without one', () => {
   const src = read('lib/email.ts')
+  // Sliced on any exported function, async or not: the sign-in email's HTML is
+  // built by a pure `verificationEmailHtml` so the contrast test can render it,
+  // and the send sits next door.
   const fn = (name: string) => {
-    const start = src.indexOf(`export async function ${name}`)
+    const start = src.search(new RegExp(`^export (?:async )?function ${name}\\b`, 'm'))
     assert.ok(start >= 0, `${name} missing`)
-    const next = src.indexOf('export async function', start + 1)
-    return src.slice(start, next === -1 ? undefined : next)
+    const rest = src.slice(start + 1)
+    const next = rest.search(/^export (?:async )?function /m)
+    return next === -1 ? src.slice(start) : src.slice(start, start + 1 + next)
   }
   for (const name of ['sendStreakMilestoneEmail', 'sendStreakAtRiskEmail']) {
     const body = fn(name)
@@ -74,7 +78,7 @@ test('the streak emails use the footer with an opt-out; the sign-in email withou
     assert.match(body, /emailFooter\(\{[\s\S]*?unsubscribeUrl \}\)/, `${name}: footer has no opt-out`)
     assert.match(body, /unsubscribeUrl,\s*\n\s*\}\)/, `${name}: List-Unsubscribe headers not requested`)
   }
-  const verify = fn('sendVerificationEmail')
+  const verify = fn('verificationEmailHtml') + fn('sendVerificationEmail')
   assert.match(verify, /emailFooter\(/, 'sign-in email has no address footer')
   assert.doesNotMatch(verify, /unsubscribeUrl/, 'sign-in email must not offer an opt-out')
 
