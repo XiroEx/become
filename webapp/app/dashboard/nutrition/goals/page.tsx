@@ -19,11 +19,13 @@ import {
   calcTdee,
   calorieAdjustment,
   computeNutritionTargets,
-  splitForPreset,
+  deliveredSplit,
   gramsFromPercent,
   percentFromGrams,
+  splitFromGrams,
   MACRO_PRESET_LABELS,
   type MacroPreset,
+  type MacroSplit,
   type ActivityLevel,
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
@@ -74,11 +76,23 @@ function goalCardAdjustment(type: GoalType, tdee: number | null, paceLbPerWeek?:
  *  different grams than the identical preset picked in the wizard. */
 const MACRO_PRESET_KEYS: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb', 'custom']
 
-function presetLabel(key: MacroPreset, direction: NutritionDirection): string {
+/**
+ * The percentages an option advertises are the percentages the Daily Targets
+ * card below will show once it is picked — never a table lookup.
+ *
+ * This label used to call splitForPreset() with no member context, so "Custom
+ * (from your stats)" read the static RECOMMENDED_SPLITS row and announced
+ * 35/35/30 while the targets it had just written were 29/41/30. The static row
+ * is a fallback for screens that don't have the member's body stats; this
+ * screen does, and every preset it offers resolves through
+ * computeNutritionTargets() anyway. So the caller passes the split those grams
+ * actually work out to (see presetSplits) and this only formats it.
+ */
+function presetLabel(key: MacroPreset, split: MacroSplit | null): string {
   if (key === 'custom') return MACRO_PRESET_LABELS.custom
-  const s = splitForPreset(key, direction)
   const suffix = key === 'recommended' ? ' (from your stats)' : ''
-  return `${MACRO_PRESET_LABELS[key]}${suffix} — ${s.protein}/${s.carbs}/${s.fats}`
+  const name = `${MACRO_PRESET_LABELS[key]}${suffix}`
+  return split ? `${name} — ${split.protein}/${split.carbs}/${split.fats}` : name
 }
 
 export default function NutritionGoalsPage() {
@@ -201,6 +215,35 @@ export default function NutritionGoalsPage() {
       fats: targets.fats,
     }))
   }, [effectiveStats, userFitnessGoals, paceForDirection])
+
+  /**
+   * What each option in the picker will actually deliver, as the percentages
+   * the Daily Targets card renders.
+   *
+   * Runs the same computeNutritionTargets() call applyMacroPreset() makes, with
+   * the same stats, direction, activity and pace, then reads the percentages
+   * back off the grams — so whichever option is selected, its label and the
+   * targets underneath it are the same numbers by construction. It also picks
+   * up anything the pipeline does AFTER the split, like the low-calorie carb
+   * floor, which a percentage table could never know about.
+   *
+   * Falls back to the static table when body stats are too sparse to compute
+   * targets at all: an approximate ratio still describes the choice, and the
+   * targets are empty in that state anyway.
+   */
+  const presetSplits = useMemo(() => {
+    const splits = {} as Record<MacroPreset, MacroSplit | null>
+    for (const key of MACRO_PRESET_KEYS) {
+      splits[key] = deliveredSplit(key, {
+        ...effectiveStats,
+        goals: userFitnessGoals,
+        direction: goals.goalType,
+        activityLevel: goals.activityLevel,
+        paceKgPerWeek: paceForDirection(goals.goalType),
+      })
+    }
+    return splits
+  }, [effectiveStats, userFitnessGoals, goals.goalType, goals.activityLevel, paceForDirection])
 
   useEffect(() => {
     async function fetchData() {
@@ -375,15 +418,9 @@ export default function NutritionGoalsPage() {
     applyTargets(macroPreset, goals.goalType, goals.activityLevel, nextTdee ?? undefined, nextStats)
   }
 
-  const getMacroPercentages = () => {
-    const totalCals = (goals.protein * 4) + (goals.carbs * 4) + (goals.fats * 9)
-    if (totalCals === 0) return { protein: 0, carbs: 0, fats: 0 }
-    return {
-      protein: Math.round((goals.protein * 4 / totalCals) * 100),
-      carbs: Math.round((goals.carbs * 4 / totalCals) * 100),
-      fats: Math.round((goals.fats * 9 / totalCals) * 100)
-    }
-  }
+  // Shared with the picker's labels (see presetSplits) so an option can never
+  // advertise a ratio the card below it then contradicts.
+  const getMacroPercentages = () => splitFromGrams(goals.protein, goals.carbs, goals.fats)
 
   // The %-entry toggle only makes sense once the member is hand-typing
   // numbers (macroPreset 'custom' — labelled "Manual"). Every other preset
@@ -753,7 +790,7 @@ export default function NutritionGoalsPage() {
           className="w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
         >
           {MACRO_PRESET_KEYS.map((key) => (
-            <option key={key} value={key}>{presetLabel(key, goals.goalType)}</option>
+            <option key={key} value={key}>{presetLabel(key, presetSplits[key])}</option>
           ))}
         </select>
       </Card>

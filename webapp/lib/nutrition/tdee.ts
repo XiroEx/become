@@ -517,12 +517,53 @@ export function computeNutritionTargets(input: TargetsInput): NutritionTargets |
   return { tdee, calories, protein, carbs, fats, direction, activityLevel, split }
 }
 
+/**
+ * What a preset will ACTUALLY deliver for this member, as the percentages the
+ * Daily Targets card shows — which is what the picker has to advertise.
+ *
+ * The honest answer is only available on the far side of the pipeline: the
+ * split a preset names is an input, and computeNutritionTargets() rounds it
+ * into grams and can move it afterwards (the low-calorie carb floor). So this
+ * runs the pipeline and reads the percentages back off the grams.
+ *
+ * Returns null for 'custom' — Manual is hand-typed numbers, so there is no
+ * ratio to promise before they are typed. Falls back to the preset's own split
+ * when body stats are too sparse to compute targets at all.
+ */
+export function deliveredSplit(preset: MacroPreset, input: TargetsInput): MacroSplit | null {
+  if (preset === 'custom') return null
+  const targets = computeNutritionTargets({ ...input, macroPreset: preset })
+  if (targets) return splitFromGrams(targets.protein, targets.carbs, targets.fats)
+  const direction = input.direction ?? directionForGoal(input.goals?.[0])
+  return splitForPreset(preset, direction)
+}
+
 /** Grams of a macro that make up `percent`% of a calorie target — the same
  *  math computeNutritionTargets() applies to a preset's split, exposed so the
  *  Manual macro split can accept a typed percentage instead of only grams. */
 export function gramsFromPercent(calories: number, percent: number, kcalPerGram: number): number {
   if (!(calories > 0) || !(kcalPerGram > 0)) return 0
   return Math.round((calories * percent) / 100 / kcalPerGram)
+}
+
+/** The split a set of gram targets ACTUALLY represents — each macro's share of
+ *  the calories those grams add up to.
+ *
+ * This is what the Daily Targets card renders, so it is also what the macro
+ * picker has to advertise. The two used to be worked out in different places
+ * from different inputs: the picker read the static per-direction table while
+ * the targets came from the member's own bodyweight and calories, so "Custom
+ * (from your stats)" promised 35/35/30 above targets that read 29/41/30. One
+ * function now answers "what percentages is this member on", and both the
+ * label and the bar below it call it. */
+export function splitFromGrams(protein: number, carbs: number, fats: number): MacroSplit {
+  const totalCals = protein * 4 + carbs * 4 + fats * 9
+  if (!(totalCals > 0)) return { protein: 0, carbs: 0, fats: 0 }
+  return {
+    protein: Math.round(((protein * 4) / totalCals) * 100),
+    carbs: Math.round(((carbs * 4) / totalCals) * 100),
+    fats: Math.round(((fats * 9) / totalCals) * 100),
+  }
 }
 
 /** Inverse of gramsFromPercent — what share of the calorie target a gram
