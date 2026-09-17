@@ -186,6 +186,7 @@ test.describe('Onboarding audit', () => {
 
     // ── Step 2 — background ─────────────────────────────────────────────
     await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await page.getByTestId('onboarding-name').fill('E2E Tester')
     await page.getByTestId('experience-intermediate').click()
     // Stepper starts at 3 — click up to reach the reference 4 days.
     const days = page.getByTestId('weekly-availability')
@@ -348,6 +349,7 @@ test.describe('Onboarding audit', () => {
     await page.getByTestId('onboarding-next').click()
 
     await expect(page.getByTestId('onboarding-step-counter')).toContainText('Step 2 of 5')
+    await page.getByTestId('onboarding-name').fill('E2E Tester')
     await page.getByTestId('experience-intermediate').click()
     const days = page.getByTestId('weekly-availability')
     await expect(days).toHaveText('3')

@@ -1,10 +1,11 @@
-import { redirect } from 'next/navigation'
+import AuthScreen from '../../components/AuthScreen'
+import { firstQueryValue } from '../../lib/authPageMode'
 
-export default async function RegisterRedirectPage({
+export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>
+  searchParams: Promise<{ next?: string | string[] }>
 }) {
   const { next } = await searchParams
-  redirect(next ? `/login?register&next=${encodeURIComponent(next)}` : '/login?register')
+  return <AuthScreen mode="register" next={firstQueryValue(next)} />
 }

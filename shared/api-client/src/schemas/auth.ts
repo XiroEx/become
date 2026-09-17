@@ -67,10 +67,13 @@ export type MeResponse = z.infer<typeof MeResponseSchema>;
 export const AuthModeSchema = z.enum(['login', 'register']);
 export type AuthMode = z.infer<typeof AuthModeSchema>;
 
-/** POST /api/auth/send-link request body. `name` is required server-side only for register mode. */
+/** POST /api/auth/send-link request body. */
 export const SendLinkRequestSchema = z.object({
   email: z.string().email(),
   mode: AuthModeSchema,
+  /** LEGACY. Sign-up asks for an email and nothing else — the name is collected
+   *  during onboarding — so the server ignores this. Kept optional so an older
+   *  native build that still sends one is not rejected by the schema. */
   name: z.string().optional(),
   /** Register mode REQUIRES `true`: the "I am at least 13 and agree to the
    *  Terms and Privacy Policy" tick. The server refuses a register without it
