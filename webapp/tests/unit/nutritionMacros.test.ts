@@ -10,6 +10,8 @@
 
 import { test, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import {
   calorieAdjustment,
   computeNutritionTargets,
@@ -18,6 +20,8 @@ import {
   recommendPreset,
   gramsFromPercent,
   percentFromGrams,
+  splitFromGrams,
+  deliveredSplit,
   MACRO_PRESET_LABELS,
   type FitnessGoal,
   MACRO_PRESET_SPLITS,
@@ -493,5 +497,150 @@ describe('gramsFromPercent / percentFromGrams', () => {
     assert.equal(gramsFromPercent(2000, 100, 4), 500)
     assert.equal(percentFromGrams(2000, 0, 4), 0)
     assert.equal(percentFromGrams(2000, 500, 4), 100)
+  })
+})
+
+// ── The picker's label vs the targets underneath it ───────────────────────────
+//
+// Reported with two screenshots of the same screen, seconds apart: the Macro
+// Split picker read "Custom (from your stats) — 35/35/30" while the Daily
+// Targets card directly below it read Protein 29% / Carbs 41% / Fats 30%, over
+// 210g / 297g / 96g of a 2894 cal target. Both numbers were "right" — they were
+// simply two different numbers. The label looked up the static per-direction
+// RECOMMENDED_SPLITS row (lose = 35/35/30), which is the fallback for screens
+// that don't know the member's body; the targets came from the member's own
+// bodyweight and calorie target, which is the entire point of the option being
+// called "from your stats".
+//
+// A split a member is told they are on, and is not on, is worse than no number
+// at all: it is what they will plan a day of eating against.
+
+describe('the picker advertises the split the targets actually show', () => {
+  /** The member in the screenshots: ~205 lb, holding, in a deficit. */
+  const SCREENSHOT_MEMBER: TargetsInput = {
+    currentWeightKg: 205 * KG_PER_LB,
+    heightCm: 183,
+    age: 30,
+    biologicalSex: 'male',
+    activityLevel: 'active',
+    direction: 'lose',
+  }
+
+  /** What the Daily Targets card renders, from the grams it is showing. */
+  const asShownOnTargets = (input: TargetsInput, preset: MacroPreset) => {
+    const t = computeNutritionTargets({ ...input, macroPreset: preset })!
+    return splitFromGrams(t.protein, t.carbs, t.fats)
+  }
+
+  it('the reported screen no longer contradicts itself', () => {
+    const advertised = deliveredSplit('recommended', SCREENSHOT_MEMBER)
+    assert.deepEqual(advertised, { protein: 29, carbs: 41, fats: 30 })
+    // ...which is exactly what the card below it shows.
+    assert.deepEqual(advertised, asShownOnTargets(SCREENSHOT_MEMBER, 'recommended'))
+    // And is NOT the static row the label used to read.
+    assert.notDeepEqual(advertised, RECOMMENDED_SPLITS.lose)
+    assert.deepEqual(RECOMMENDED_SPLITS.lose, { protein: 35, carbs: 35, fats: 30 })
+  })
+
+  it('label and targets agree for every preset, direction and body', () => {
+    const BODIES: TargetsInput[] = [
+      SCREENSHOT_MEMBER,
+      ADRIAN,
+      // Small, light, sedentary — the end of the range where the calorie floor
+      // and the carb guard rail bite and a percentage table goes stale.
+      { currentWeightKg: 48, heightCm: 152, age: 62, biologicalSex: 'female', activityLevel: 'sedentary' },
+      // Heavy, very active — the other end.
+      { currentWeightKg: 130, heightCm: 196, age: 24, biologicalSex: 'male', activityLevel: 'very_active' },
+    ]
+    for (const body of BODIES) {
+      for (const direction of DIRECTIONS) {
+        for (const preset of PRESETS) {
+          const input = { ...body, direction }
+          assert.deepEqual(
+            deliveredSplit(preset, input),
+            asShownOnTargets(input, preset),
+            `${preset}/${direction} at ${Math.round(body.currentWeightKg! / KG_PER_LB)}lb`,
+          )
+        }
+      }
+    }
+  })
+
+  it('catches a split the pipeline moves after the preset is applied', () => {
+    // The carb floor rewrites the ratio on a very low target, so even a fixed
+    // preset can deliver something other than the percentages it is named for.
+    // Whatever comes out, the label has to say it.
+    const tiny: TargetsInput = {
+      currentWeightKg: 40,
+      heightCm: 145,
+      age: 70,
+      biologicalSex: 'female',
+      activityLevel: 'sedentary',
+      direction: 'lose',
+    }
+    for (const preset of PRESETS) {
+      const advertised = deliveredSplit(preset, tiny)!
+      assert.deepEqual(advertised, asShownOnTargets(tiny, preset), preset)
+      const total = advertised.protein + advertised.carbs + advertised.fats
+      assert.ok(Math.abs(total - 100) <= 1, `${preset} adds up to ${total}%`)
+    }
+  })
+
+  it('Manual promises nothing, because nothing has been typed yet', () => {
+    assert.equal(deliveredSplit('custom', SCREENSHOT_MEMBER), null)
+  })
+
+  it('falls back to the preset split when the body stats are too sparse', () => {
+    // No weight, so there are no targets to read percentages off. An
+    // approximate ratio still describes the choice; a blank does not.
+    const sparse: TargetsInput = { direction: 'gain' }
+    assert.deepEqual(deliveredSplit('balanced', sparse), MACRO_PRESET_SPLITS.balanced)
+    assert.deepEqual(deliveredSplit('recommended', sparse), RECOMMENDED_SPLITS.gain)
+  })
+})
+
+describe('splitFromGrams — the one definition of "what percentages am I on"', () => {
+  it('reports each macro as its share of the calories the grams add up to', () => {
+    // The exact figures on the reported screen.
+    assert.deepEqual(splitFromGrams(210, 297, 96), { protein: 29, carbs: 41, fats: 30 })
+  })
+
+  it('an even split reads as an even split', () => {
+    // 200g protein and 200g carbs are 800 cal each; so is 88.9g of fat.
+    assert.deepEqual(splitFromGrams(200, 200, 88.888), { protein: 33, carbs: 33, fats: 33 })
+  })
+
+  it('does not divide by zero before anything is set', () => {
+    assert.deepEqual(splitFromGrams(0, 0, 0), { protein: 0, carbs: 0, fats: 0 })
+  })
+})
+
+// The wiring above is only worth anything if the screen actually uses it. This
+// is the structural half (the house pattern — see entitlements/uiSurfaces):
+// the picker's label and the card's percentages must come from the same two
+// functions, because the bug was precisely that they came from different ones.
+describe('the nutrition goals screen is wired to those two functions', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '../../app/dashboard/nutrition/goals/page.tsx'),
+    'utf8',
+  )
+  // Comments explain the old behaviour by name, so they have to come out
+  // before asserting the old behaviour is gone from the code.
+  const page = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+
+  it('every option is labelled from the split it will deliver', () => {
+    assert.match(page, /presetLabel\(key, presetSplits\[key\]\)/)
+    assert.match(page, /deliveredSplit\(key, \{/)
+  })
+
+  it('the Daily Targets percentages come from splitFromGrams', () => {
+    assert.match(page, /splitFromGrams\(goals\.protein, goals\.carbs, goals\.fats\)/)
+  })
+
+  it('does not reach for the static table behind the picker', () => {
+    // splitForPreset() ignores the member's body — deliveredSplit() falls back
+    // to it when there is nothing to personalise from, and that is the only
+    // route to it this screen may have.
+    assert.doesNotMatch(page, /\bsplitForPreset\s*\(/)
   })
 })
