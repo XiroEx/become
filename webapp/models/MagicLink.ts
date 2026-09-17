@@ -6,6 +6,10 @@ export interface IMagicLink extends Document {
   token: string
   sessionId: string
   mode: 'login' | 'register'
+  /** LEGACY, READ-ONLY. Sign-up stopped asking for a name (onboarding does), so
+   *  nothing writes this any more. verify-link still READS it so that a link
+   *  minted by the previous build — they live 15 minutes, so a handful are
+   *  always in flight across a deploy — still lands the name its owner typed. */
   name?: string
   /** Set when the sign-up form's consent box was ticked: the LEGAL_VERSION the
    *  member agreed to at that moment. Carried on the link so the agreement
@@ -84,7 +88,6 @@ export function generateSessionId(): string {
 export async function createMagicLink(
   email: string,
   mode: 'login' | 'register',
-  name?: string,
   consentTermsVersion?: string,
 ): Promise<IMagicLink> {
   const MagicLink = mongoose.models.MagicLink || mongoose.model<IMagicLink, MagicLinkModel>('MagicLink', MagicLinkSchema)
@@ -104,7 +107,6 @@ export async function createMagicLink(
     token,
     sessionId,
     mode,
-    name,
     consentTermsVersion,
     expiresAt,
     used: false,

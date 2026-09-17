@@ -148,11 +148,14 @@ export async function sendStreakAtRiskEmail(email: string, streakDays: number, u
   })
 }
 
-export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', name?: string, baseUrl?: string) {
+// No name: sign-up asks for an email and nothing else, and a sign-in link is
+// sent before we know who is on the other end of the address. "Hi," is the
+// honest greeting for both.
+export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', baseUrl?: string) {
   const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const verifyUrl = `${appUrl}/verify?token=${token}&mode=${mode}`
-  
-  const greeting = name ? `Hi ${name},` : 'Hi,'
+
+  const greeting = 'Hi,'
   const actionText = mode === 'register' ? 'complete your registration' : 'sign in'
   
   const html = `

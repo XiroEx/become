@@ -163,6 +163,27 @@ Passwordless magic link system (see `AUTHENTICATION_SYSTEM_DOCUMENTATION.md` for
 
 **Auth helper:** `verifyAuth()` in `lib/auth.ts` — reads Bearer token from Authorization header, verifies JWT, returns userId + email.
 
+### The two auth routes, and why they are two
+
+`/login` and `/register` are separate PATHNAMES rendering one component
+(`components/AuthScreen.tsx`, copy from `lib/authPageMode.ts`). They used to be
+one route told apart by a bare `?register` query param, and the "Already have an
+account? **Sign in**" toggle at the bottom of the sign-up form was therefore a
+link from `/login?register` to `/login` — a query-only change on the page the
+router was already rendering, which it ignores. The address bar never moved and
+the form never re-rendered: the link did nothing, and read perfectly while doing
+it. Do not merge them back behind a query param.
+`/login?register` still 307s to `/register` for every link outside this repo.
+
+**Sign-up asks for an email and nothing else.** No name box: `send-link` used to
+answer `400 Name is required for registration`, and it no longer does. New
+members get `User.name` = the email's local part (`lib/displayName.ts`, shared
+with the check that recognises it) and **onboarding step 2 collects the real
+one** — the box starts empty when the stored name is that placeholder, and the
+step will not advance until it is filled. `MagicLink.name` survives read-only so
+a link minted by the previous build, all of which live 15 minutes, still lands
+the name its owner typed.
+
 ## API Conventions
 
 - Route handlers in `app/api/` using Next.js App Router (`route.ts` exports)

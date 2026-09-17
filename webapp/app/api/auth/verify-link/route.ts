@@ -3,6 +3,7 @@ import User from '@/models/User'
 import MagicLink, { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
 import { signToken, authCookie } from '@/lib/auth'
 import { LEGAL_MINIMUM_AGE } from '@/lib/legal'
+import { fallbackNameFromEmail } from '@/lib/displayName'
 
 export async function POST(req: Request) {
   try {
@@ -45,8 +46,13 @@ export async function POST(req: Request) {
         // exists without the record of what they agreed to. A link minted
         // without one (an older client) still creates the account; the in-app
         // gate asks on first open.
+        //
+        // `name` is only ever set on a link minted by a build that still had a
+        // name box on the sign-up form. Sign-up asks for an email alone now, so
+        // the placeholder below is what a new member starts with and onboarding
+        // replaces it with a real answer.
         user = new User({
-          name: name || email.split('@')[0],
+          name: name || fallbackNameFromEmail(email),
           email,
           password: 'magic-link-auth-no-password',
           ...(consentTermsVersion
@@ -66,7 +72,7 @@ export async function POST(req: Request) {
         if (!user) {
           // Create user if they don't exist (passwordless signup via login)
           user = await User.create({
-            name: email.split('@')[0],
+            name: fallbackNameFromEmail(email),
             email,
             password: 'magic-link-auth-no-password'
           })

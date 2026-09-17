@@ -1,5 +1,15 @@
 # Authentication System - Complete Technical Documentation
 
+> **OUT OF DATE IN ONE RESPECT — the name.** This document describes a sign-up
+> form that collects a name alongside the email, a `send-link` that refuses a
+> register without one, and a `createMagicLink(email, mode, name?)`. None of
+> that is true any more: sign-up takes an email and nothing else, the name is
+> collected during onboarding (step 2), and `MagicLink.name` is read-only
+> legacy kept so links minted by an older build still resolve. Sign-in and
+> sign-up are also two routes now (`/login` and `/register`), not one route
+> with a `?register` query param. See the "Authentication Flow" section of
+> `AGENTS.md` for the current shape. Everything else here still holds.
+
 ## Table of Contents
 1. [System Overview](#system-overview)
 2. [Authentication Flow](#authentication-flow)
