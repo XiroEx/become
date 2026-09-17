@@ -15,7 +15,7 @@ const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { email, name, mode, consent } = body
+    const { email, mode, consent } = body
 
     if (!email) {
       return new Response(JSON.stringify({ message: 'Email is required' }), { status: 400 })
@@ -40,9 +40,9 @@ export async function POST(req: Request) {
     const existingUser = await User.findOne({ email: trimmedEmail })
 
     if (mode === 'register') {
-      if (!name) {
-        return new Response(JSON.stringify({ message: 'Name is required for registration' }), { status: 400 })
-      }
+      // No name is asked for here any more — onboarding collects it. A client
+      // that still sends one is not refused, it is simply ignored; the name on
+      // the account comes from the member, not from the sign-up payload.
       if (existingUser) {
         return new Response(JSON.stringify({ message: 'Email already in use. Please sign in instead.' }), { status: 409 })
       }
@@ -87,12 +87,11 @@ export async function POST(req: Request) {
     const magicLink = await createMagicLink(
       trimmedEmail,
       mode,
-      name,
       mode === 'register' && consent === true ? LEGAL_VERSION : undefined,
     )
 
     // Send verification email
-    await sendVerificationEmail(trimmedEmail, magicLink.token, mode, name, origin)
+    await sendVerificationEmail(trimmedEmail, magicLink.token, mode, origin)
 
     return new Response(JSON.stringify({ 
       success: true, 

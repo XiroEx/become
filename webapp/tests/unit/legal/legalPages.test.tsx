@@ -109,10 +109,10 @@ test('the landing footer links all three routes', () => {
 })
 
 test('the surfaces that must carry the links actually import them', () => {
-  // The sign-in screen (where agreement happens), the plan page (where money
+  // The auth screen (where agreement happens), the plan page (where money
   // happens), the dashboard home and settings (in-app, for App Store review).
   for (const file of [
-    'app/login/page.tsx',
+    'components/AuthScreen.tsx',
     'app/dashboard/plan/PlanPageClient.tsx',
     'app/dashboard/DashboardClient.tsx',
     'app/dashboard/settings/page.tsx',
@@ -122,11 +122,18 @@ test('the surfaces that must carry the links actually import them', () => {
     assert.match(src, /<LegalLinks/, `${file}: imports LegalLinks but never renders it`)
   }
 
-  // And the sign-in screen names the two documents in the sentence itself,
-  // because that is the screen on which agreement is given.
-  const login = read('app/login/page.tsx')
-  assert.match(login, /href="\/terms"/, 'login does not link the terms')
-  assert.match(login, /href="\/privacy"/, 'login does not link the privacy policy')
+  // Sign-in and sign-up are two routes rendering one screen, so BOTH have to
+  // reach it — a second auth page that drew its own form would carry none of
+  // this.
+  for (const file of ['app/login/page.tsx', 'app/register/page.tsx']) {
+    assert.match(read(file), /<AuthScreen /, `${file}: does not render AuthScreen`)
+  }
+
+  // And that screen names the two documents in the sentence itself, because it
+  // is the screen on which agreement is given.
+  const auth = read('components/AuthScreen.tsx')
+  assert.match(auth, /href="\/terms"/, 'the auth screen does not link the terms')
+  assert.match(auth, /href="\/privacy"/, 'the auth screen does not link the privacy policy')
 })
 
 // ─── Automatic renewal (NY GBL 527-a) ────────────────────────────────────────

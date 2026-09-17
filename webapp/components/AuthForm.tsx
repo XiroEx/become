@@ -12,7 +12,6 @@ interface Props {
 export default function AuthForm({ mode }: Props) {
   const router = useRouter()
   const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
   // Register mode only. The box is `required`, so the browser blocks submit
   // until it is ticked; the server refuses a register request without it too.
   const [consent, setConsent] = useState(false)
@@ -105,7 +104,7 @@ export default function AuthForm({ mode }: Props) {
       const res = await fetch('/api/auth/send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, mode, ...(mode === 'register' ? { consent } : {}) }),
+        body: JSON.stringify({ email, mode, ...(mode === 'register' ? { consent } : {}) }),
       })
 
       const data = await res.json()
@@ -173,16 +172,10 @@ export default function AuthForm({ mode }: Props) {
 
   return (
     <form onSubmit={handleSendLink} className="flex w-full max-w-md flex-col gap-4">
-      {mode === 'register' && (
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Full name"
-          required
-          className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
-        />
-      )}
-
+      {/* Sign-up asks for an email and nothing else. A name typed here is a
+          stranger's demand before the member knows what they are getting;
+          onboarding asks for it a minute later, when it is obvious why we want
+          it. See app/onboarding — step 2. */}
       <input
         value={email}
         onChange={(e) => setEmail(e.target.value)}

@@ -96,7 +96,7 @@ test.describe('New User Journey', () => {
     // ─────────────────────────────────────────────────────────────────────────
 
     console.log('\n=== PHASE 1: Register ===')
-    await page.goto(`${BASE_URL}/login?register`)
+    await page.goto(`${BASE_URL}/register`)
     await page.waitForLoadState('domcontentloaded')
     // Seed localStorage token so client-side API calls (AuthGuard → /api/auth/me) work
     await page.evaluate((t) => localStorage.setItem('token', t), e2eToken)
@@ -104,9 +104,11 @@ test.describe('New User Journey', () => {
 
     await screenshot(page, '01-register-page')
 
-    // Fill in name (register mode shows name field)
-    await page.locator('input[placeholder="Full name"]').fill('E2E Test User')
+    // Sign-up is email-only — the name is asked for during onboarding.
+    await expect(page.locator('input[placeholder="Full name"]')).toHaveCount(0)
     await page.locator('input[placeholder="Email"]').fill(E2E_EMAIL)
+    // The age + terms tick; the button stays disabled without it.
+    await page.getByTestId('consent-checkbox').check()
     await page.locator('button:has-text("Continue with email")').click()
 
     // "Check your email" screen should appear
@@ -149,7 +151,8 @@ test.describe('New User Journey', () => {
     await page.waitForTimeout(400)
     await screenshot(page, '05-onboarding-step2')
 
-    // Step 2 — Experience: click "Intermediate"
+    // Step 2 — Name (the one sign-up no longer asks for) + experience
+    await page.getByTestId('onboarding-name').fill('E2E Test User')
     await page.locator('button:has-text("Intermediate")').click()
     await page.waitForTimeout(200)
     console.log('[phase2] Step 2: experience selected ✓')
