@@ -4,6 +4,7 @@ import connectDB from "@/lib/mongodb";
 import Exercise from "@/models/Exercise";
 import { visibleExerciseFilter } from "@/lib/exerciseVisibility";
 import { nameBoundaryPattern, matchingMuscleGroups, sortByMatchTier } from "@/lib/exerciseSearchRanking";
+import { expandQueryVariants } from "@/lib/exerciseAbbreviations";
 
 // GET /api/exercises/search?q=bench+press&limit=8
 // Text search across exercise name/aliases, plus a body-part fallback via
@@ -40,13 +41,17 @@ export async function GET(req: NextRequest) {
     // boundary (start of string, or right after a space/hyphen/slash) so
     // "back" can't match the "back" hiding inside "Kickback" — see
     // lib/exerciseSearchRanking for the ranking this feeds.
-    const pattern = nameBoundaryPattern(q);
+    // One pattern per query variant: what was typed, plus its gym-shorthand
+    // expansion ("RDL" → "romanian deadlift"). Both have to reach Mongo or
+    // the ranking never sees the row it is supposed to rank — see
+    // lib/exerciseAbbreviations.ts.
+    const patterns = expandQueryVariants(q).map(nameBoundaryPattern);
     const muscleGroups = matchingMuscleGroups(q);
 
-    const or: Record<string, unknown>[] = [
+    const or: Record<string, unknown>[] = patterns.flatMap((pattern) => [
       { name: { $regex: pattern, $options: "i" } },
       { aliases: { $elemMatch: { $regex: pattern, $options: "i" } } },
-    ];
+    ]);
     // "the part of the body that is being done" — an exercise whose name
     // doesn't mention the query at all still surfaces if it trains a muscle
     // the query names (e.g. "back" → a lat pulldown), ranked below every name

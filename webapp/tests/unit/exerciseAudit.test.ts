@@ -179,10 +179,14 @@ test('describeExerciseIssues surfaces the colliding name(s) only when given dupl
 
 test('GET /api/exercises/search escapes user input before building $regex', () => {
   const src = readSource('app/api/exercises/search/route.ts')
-  // Escaping now happens inside nameBoundaryPattern() (lib/exerciseSearchRanking,
+  // Escaping happens inside nameBoundaryPattern() (lib/exerciseSearchRanking,
   // covered by its own "escapes regex metacharacters" test) rather than inline
-  // here, but the route must still route `q` through it before it reaches $regex.
-  assert.match(src, /nameBoundaryPattern\(q\)/)
+  // here, and `q` now reaches it as a list of variants — the literal query plus
+  // its gym-shorthand expansion, "RDL" → "romanian deadlift"
+  // (lib/exerciseAbbreviations). Every one of them is still escaped, and the
+  // raw query never reaches $regex on its own.
+  assert.match(src, /expandQueryVariants\(q\)\.map\(nameBoundaryPattern\)/)
+  assert.doesNotMatch(src, /\$regex:\s*q[,\s}]/, 'the raw query must never reach $regex')
   assert.match(src, /try\s*{/, 'a bad query must not 500 the whole add/swap flow')
 })
 
