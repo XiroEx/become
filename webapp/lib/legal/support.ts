@@ -9,6 +9,7 @@
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
+  LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SUPPORT_RESPONSE,
   RENEWAL_TERMS,
   type LegalDoc,
@@ -76,7 +77,7 @@ export const SUPPORT: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'If you cannot reach the portal for any reason, email us and we will cancel it for you. The full terms, including what happens to refunds, are in the [Terms](/terms).',
+          text: `If you cannot reach the portal for any reason, email us and we will cancel it for you. Your first payment is refundable in full for ${LEGAL_REFUND_WINDOW_DAYS} days: email us within that window and we will refund it and cancel the plan, no reason needed. After that, cancelling stops the next renewal and does not refund the current period. The full terms are in the [Terms](/terms#cancelling).`,
         },
       ],
     },

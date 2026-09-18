@@ -73,6 +73,10 @@ export const HEALTH_DISCLAIMER_SHORT =
 
 /** How long deletion takes once we have confirmed the request. */
 export const LEGAL_DELETION_DAYS = 30
+/** The refund window on a member's FIRST charge (George, 2026-09-18): a full
+ *  refund on request within this many days of the first payment on the
+ *  account. Renewals are not covered — the Terms say so in the same breath. */
+export const LEGAL_REFUND_WINDOW_DAYS = 14
 /** The range support answers in. A range, never a promise of "instantly". */
 export const LEGAL_SUPPORT_RESPONSE = '1 to 3 business days'
 /** Early members holding a permanent complimentary Plus grant. */
