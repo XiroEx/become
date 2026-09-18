@@ -148,6 +148,9 @@ export interface IUser {
   subscription?: IUserSubscription
   /** Legacy member promoted by the offline migration, not by a payment. */
   grandfathered?: boolean
+  /** When scripts/notify-grandfathered.mjs told this member what they hold.
+   *  The script skips anyone who has it, so a rerun cannot email twice. */
+  grandfatheredNotifiedAt?: Date
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
   savedFoods?: ISavedFood[];
@@ -272,6 +275,7 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   tier: { type: String, enum: ['free', 'plus'], default: 'free' },
   subscription: { type: UserSubscriptionSchema, default: undefined },
   grandfathered: { type: Boolean, default: false },
+  grandfatheredNotifiedAt: { type: Date, default: undefined },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
   savedFoods: [SavedFoodSchema],

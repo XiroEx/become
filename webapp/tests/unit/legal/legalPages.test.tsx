@@ -31,6 +31,7 @@ import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_LAST_UPDATED,
   LEGAL_LINKS,
+  LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_VERSION,
   RENEWAL_TERMS,
   counselTodos,
@@ -177,6 +178,25 @@ test('the Terms commit to the same renewal sentences, word for word', () => {
     TERMS.sections.some((s) => s.id === 'plans'),
     'the Terms have no #plans section for the plan page to link to',
   )
+})
+
+// ─── The refund window ───────────────────────────────────────────────────────
+
+test('the first-payment refund window is stated in the Terms and on the support page', () => {
+  // George's decision of 2026-09-18: a full refund on request within
+  // LEGAL_REFUND_WINDOW_DAYS of the FIRST charge, once, never on renewals.
+  const terms = renderToStaticMarkup(<TermsPage />)
+  const support = renderToStaticMarkup(<SupportPage />)
+  assert.ok(
+    has(terms, `Your first payment is refundable in full for ${LEGAL_REFUND_WINDOW_DAYS} days.`),
+    'the Terms do not state the refund window',
+  )
+  assert.ok(has(terms, 'it does not apply to renewals'), 'the Terms do not exclude renewals')
+  assert.ok(
+    has(support, `refundable in full for ${LEGAL_REFUND_WINDOW_DAYS} days`),
+    'the support page does not mention the refund window',
+  )
+  assert.equal(LEGAL_REFUND_WINDOW_DAYS, 14)
 })
 
 // ─── Nothing invented ────────────────────────────────────────────────────────

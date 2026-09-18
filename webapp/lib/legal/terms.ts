@@ -21,6 +21,7 @@ import {
   LEGAL_GOVERNING_LAW,
   LEGAL_MINIMUM_AGE,
   LEGAL_PRIMARY_DOMAIN,
+  LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SECONDARY_DOMAIN,
   LEGAL_VENUE,
   RENEWAL_TERMS,
@@ -264,7 +265,11 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: '**Cancelling part-way through a period does not by itself produce a refund, and we do not automatically refund the unused part of a period you have already paid for.**',
+          text: `**Your first payment is refundable in full for ${LEGAL_REFUND_WINDOW_DAYS} days.** If you start a paid plan and decide within ${LEGAL_REFUND_WINDOW_DAYS} days of the first payment on your account that it is not for you, email ${LEGAL_CONTACT_EMAIL} from the address on your account and we will refund that payment in full and cancel the plan. You do not have to give a reason. This applies once, to the first charge on your account, whether it was for a month or a year; it does not apply to renewals, and it does not apply to a payment taken by an app store (see below).`,
+        },
+        {
+          kind: 'p',
+          text: '**After that window, cancelling part-way through a period does not by itself produce a refund, and we do not automatically refund the unused part of a period you have already paid for.**',
         },
         {
           kind: 'p',
@@ -280,7 +285,7 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'todo',
-          text: 'Whether Become should publish a fixed refund window, for example a full refund on request within a set number of days of a charge, which app stores and card networks effectively expect. Also what this section must say for members with a statutory cooling-off right, including the 14-day right of withdrawal in the EU and UK and its interaction with immediate access to digital content.',
+          text: `The ${LEGAL_REFUND_WINDOW_DAYS}-day first-payment refund is a commercial promise, not a legal one. Confirm what this section must additionally say for members with a statutory cooling-off right, including the 14-day right of withdrawal in the EU and UK, its interaction with immediate access to digital content, and whether that right also has to be honoured on renewals.`,
         },
       ],
     },
