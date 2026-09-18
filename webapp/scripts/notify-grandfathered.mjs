@@ -76,8 +76,11 @@ const mail = {
   from: (payload.email && payload.email.from) || process.env.EMAIL_FROM,
 }
 
+// With --prod the payload's own connection string wins: it is what the live
+// app uses, whereas a PROD_MONGODB_URI in a checkout's .env.local goes stale
+// (this node's did — Atlas "bad auth" on 2026-09-18).
 const URI = PROD
-  ? (process.env.PROD_MONGODB_URI || process.env.MONGODB_URI_PROD || (payload.auth && payload.auth.mongoUri))
+  ? ((payload.auth && payload.auth.mongoUri) || process.env.PROD_MONGODB_URI || process.env.MONGODB_URI_PROD)
   : process.env.MONGODB_URI
 if (!URI) {
   console.error(`Missing ${PROD ? 'PROD_MONGODB_URI' : 'MONGODB_URI'}`)
