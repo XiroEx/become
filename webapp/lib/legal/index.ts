@@ -43,8 +43,8 @@ export const LEGAL_VENUE = 'the state and federal courts located in Nassau Count
  *  member whose stored version differs. So: bump it for a change a member has to
  *  agree to again (a new obligation, a new price, a new age rule), and leave it
  *  alone for a typo, or every member is stopped at the door for a comma. */
-export const LEGAL_LAST_UPDATED = 'September 13, 2026'
-export const LEGAL_LAST_UPDATED_ISO = '2026-09-13'
+export const LEGAL_LAST_UPDATED = 'September 18, 2026'
+export const LEGAL_LAST_UPDATED_ISO = '2026-09-18'
 export const LEGAL_VERSION = 'v1.1.0'
 
 /** The minimum age to hold an account. George's call, 2026-09-13: 13, not 18.
@@ -137,7 +137,7 @@ export interface LegalSection {
 }
 
 export interface LegalDoc {
-  slug: 'terms' | 'privacy' | 'support'
+  slug: 'terms' | 'privacy' | 'health-data' | 'support'
   title: string
   /** One line under the title, in plain language. */
   standfirst: string
@@ -148,6 +148,10 @@ export interface LegalDoc {
 export const LEGAL_LINKS = [
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
+  // Washington RCW 19.373.020 and Nevada SB 370 both require the consumer
+  // health data policy to be a DISTINCT document linked from the home page.
+  // Being in this list is what puts it on the home page (and everywhere else).
+  { href: '/health-data', label: 'Health data' },
   { href: '/support', label: 'Support' },
 ] as const
 

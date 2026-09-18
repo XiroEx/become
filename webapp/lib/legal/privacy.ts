@@ -229,6 +229,10 @@ export const PRIVACY: LegalDoc = {
           kind: 'p',
           text: 'You decide how much to write. You can use Become without injury notes or journal entries, though some features will be less useful. In the EU and UK, where our basis for this category is your explicit consent, you give that consent by choosing to enter the data, and you can withdraw it by deleting the data or your account.',
         },
+        {
+          kind: 'p',
+          text: 'Washington and Nevada treat this category as **consumer health data** and require a separate policy for it. Ours is the [Consumer Health Data Privacy Policy](/health-data). It describes the same practices as this document, in the shape those laws ask for, and it applies to every member wherever they live.',
+        },
       ],
     },
 
