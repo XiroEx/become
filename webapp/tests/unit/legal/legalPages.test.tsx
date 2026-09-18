@@ -24,6 +24,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import TermsPage from '../../../app/terms/page'
 import PrivacyPage from '../../../app/privacy/page'
 import SupportPage from '../../../app/support/page'
+import HealthDataPage from '../../../app/health-data/page'
 import { PlanPricing } from '../../../app/dashboard/plan/PlanPageClient'
 import {
   COUNSEL_TODO,
@@ -38,6 +39,7 @@ import {
 import { TERMS } from '../../../lib/legal/terms'
 import { PRIVACY } from '../../../lib/legal/privacy'
 import { SUPPORT } from '../../../lib/legal/support'
+import { HEALTH_DATA } from '../../../lib/legal/healthData'
 
 const ROOT = path.join(__dirname, '../../..')
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
@@ -58,6 +60,7 @@ const has = (html: string, text: string) => html.includes(esc(text))
 const PAGES = [
   { name: 'terms', href: '/terms', Page: TermsPage, doc: TERMS },
   { name: 'privacy', href: '/privacy', Page: PrivacyPage, doc: PRIVACY },
+  { name: 'health-data', href: '/health-data', Page: HealthDataPage, doc: HEALTH_DATA },
   { name: 'support', href: '/support', Page: SupportPage, doc: SUPPORT },
 ] as const
 
@@ -210,7 +213,7 @@ test('no certification, compliance or security claim Become cannot back', () => 
 })
 
 test('every open question is marked for counsel, and marked the same way', () => {
-  const all = [...counselTodos(TERMS), ...counselTodos(PRIVACY), ...counselTodos(SUPPORT)]
+  const all = [...counselTodos(TERMS), ...counselTodos(PRIVACY), ...counselTodos(HEALTH_DATA), ...counselTodos(SUPPORT)]
   assert.ok(all.length > 0, 'a draft with no open questions has probably invented some answers')
 
   // The marker renders on the page, so an unresolved item cannot ship unseen.
