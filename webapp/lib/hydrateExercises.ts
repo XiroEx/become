@@ -9,6 +9,8 @@
  * This keeps the client layer unchanged — it still reads `exercise.name`.
  */
 import ExerciseModel from '@/models/Exercise';
+import { buildExerciseNameIndex, resolveExerciseSlug, type ExerciseNameIndex } from '@/lib/exerciseNameMatch';
+import { autoCatalogSlug, ensureCatalogExercise } from '@/lib/exerciseAutoCatalog';
 
 interface HydratedExerciseFields {
   name: string;
@@ -35,24 +37,34 @@ interface HydratedExerciseFields {
   };
 }
 
-// Module-level caches (reset per cold start)
+// Module-level caches (reset per cold start). The two are built together and
+// cleared together: a name index that outlives its slug map is how a freshly
+// created exercise stays invisible to the request that created it.
 let slugCache: Map<string, HydratedExerciseFields> | null = null;
-let nameToSlugCache: Map<string, string> | null = null;
+let nameIndexCache: ExerciseNameIndex | null = null;
+
+interface Catalog {
+  slugs: Map<string, HydratedExerciseFields>;
+  names: ExerciseNameIndex;
+}
 
 /**
- * Build (or return cached) slug → { name, category, videoUrl, thumbnailUrl } map.
- * Also builds a lowercase name/alias → slug reverse map for legacy exercises.
+ * Build (or return cached) the slug → { name, category, videoUrl, … } map and
+ * the name/alias → slug index (lib/exerciseNameMatch.ts) that resolves the
+ * shorthand a coach actually writes.
  */
-async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
-  if (slugCache) return slugCache;
+async function loadCatalog(): Promise<Catalog> {
+  if (slugCache && nameIndexCache) return { slugs: slugCache, names: nameIndexCache };
 
+  // Sorted so the index is built in a fixed order — two exercises sharing a
+  // name must resolve to the same one on every cold start, not whichever the
+  // cursor happened to hand over first.
   const exercises = await ExerciseModel.find(
     {},
-    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, equipment: 1, laterality: 1, movementPatterns: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1, videoTrim: 1, _id: 0 }
-  ).lean();
+    { slug: 1, name: 1, aliases: 1, category: 1, trackingType: 1, videoUrl: 1, thumbnailUrl: 1, primaryMuscles: 1, difficulty: 1, equipment: 1, laterality: 1, movementPatterns: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1, videoTrim: 1, isCustom: 1, isUniversal: 1, _id: 0 }
+  ).sort({ slug: 1 }).lean();
 
   slugCache = new Map();
-  nameToSlugCache = new Map();
   for (const ex of exercises) {
     slugCache.set(ex.slug, {
       name: ex.name,
@@ -70,20 +82,23 @@ async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
       videoFraming: ex.videoFraming ?? undefined,
       videoTrim: ex.videoTrim ?? undefined,
     });
-    nameToSlugCache.set(ex.name.toLowerCase(), ex.slug);
-    for (const alias of ex.aliases || []) {
-      nameToSlugCache.set(alias.toLowerCase(), ex.slug);
-    }
   }
 
-  return slugCache;
+  nameIndexCache = buildExerciseNameIndex(exercises);
+
+  return { slugs: slugCache, names: nameIndexCache };
+}
+
+async function getSlugMap(): Promise<Map<string, HydratedExerciseFields>> {
+  return (await loadCatalog()).slugs;
 }
 
 /**
- * Invalidate the slug cache (call after seeding / modifying exercises).
+ * Invalidate the catalog caches (call after seeding / modifying exercises).
  */
 export function invalidateExerciseCache() {
   slugCache = null;
+  nameIndexCache = null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,14 +110,16 @@ type AnyExercise = Record<string, any>;
  */
 function hydrateExercise(
   exercise: AnyExercise,
-  map: Map<string, HydratedExerciseFields>
+  map: Map<string, HydratedExerciseFields>,
+  names: ExerciseNameIndex
 ): AnyExercise {
   let slug = exercise.exerciseSlug;
 
   // Legacy exercises: no slug, only name — resolve slug via reverse lookup
-  if (!slug && exercise.name && nameToSlugCache) {
-    slug = nameToSlugCache.get(exercise.name.toLowerCase());
-    if (slug) {
+  if (!slug && exercise.name) {
+    const resolved = resolveExerciseSlug(exercise.name, names);
+    if (resolved) {
+      slug = resolved;
       exercise = { ...exercise, exerciseSlug: slug };
     }
   }
@@ -114,7 +131,19 @@ function hydrateExercise(
   const overrideName: string | undefined = exercise.name;
   const overrideCategory: string | undefined = exercise.category;
 
-  const info = map.get(slug);
+  let info = map.get(slug);
+
+  // A slug no exercise owns — a program saved before lib/exerciseAutoCatalog
+  // existed minted one per unrecognised name. If the entry's own name
+  // resolves, show that exercise's video and classification rather than an
+  // empty card. scripts/repair-program-exercises.mjs rewrites the stored slug
+  // for good; this is what keeps the app honest in the meantime, and for any
+  // row an admin later deletes out from under a program.
+  if (!info && exercise.name) {
+    const resolved = resolveExerciseSlug(exercise.name, names);
+    if (resolved) info = map.get(resolved);
+  }
+
   if (!info) {
     // Protocol entries (__protocol__*) or unknown slugs — derive name from slug
     const derivedName = slug
@@ -155,7 +184,7 @@ function hydrateExercise(
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function hydrateProgram<T extends Record<string, any>>(program: T): Promise<T> {
-  const map = await getSlugMap();
+  const { slugs: map, names } = await loadCatalog();
 
   if (!program.phases) return program;
 
@@ -166,7 +195,7 @@ export async function hydrateProgram<T extends Record<string, any>>(program: T):
     for (const workout of phase.workouts as any[]) {
       if (!workout.exercises) continue;
       workout.exercises = workout.exercises.map((ex: AnyExercise) =>
-        hydrateExercise(ex, map)
+        hydrateExercise(ex, map, names)
       );
     }
   }
@@ -179,7 +208,7 @@ export async function hydrateProgram<T extends Record<string, any>>(program: T):
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function hydratePrograms<T extends Record<string, any>>(programs: T[]): Promise<T[]> {
-  const map = await getSlugMap();
+  const { slugs: map, names } = await loadCatalog();
 
   for (const program of programs) {
     if (!program.phases) continue;
@@ -190,7 +219,7 @@ export async function hydratePrograms<T extends Record<string, any>>(programs: T
       for (const workout of phase.workouts as any[]) {
         if (!workout.exercises) continue;
         workout.exercises = workout.exercises.map((ex: AnyExercise) =>
-          hydrateExercise(ex, map)
+          hydrateExercise(ex, map, names)
         );
       }
     }
@@ -204,13 +233,13 @@ export async function hydratePrograms<T extends Record<string, any>>(programs: T
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function hydrateWorkout<T extends Record<string, any>>(workout: T): Promise<T> {
-  const map = await getSlugMap();
+  const { slugs: map, names } = await loadCatalog();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = workout as any;
   if (w.exercises) {
     w.exercises = (w.exercises as AnyExercise[]).map((ex) =>
-      hydrateExercise(ex, map)
+      hydrateExercise(ex, map, names)
     );
   }
 
@@ -218,60 +247,37 @@ export async function hydrateWorkout<T extends Record<string, any>>(workout: T):
 }
 
 /**
- * Convert exercise `name` to `exerciseSlug` for saving.
- * Used in the POST /api/programs handler.
- * Builds a reverse map: lowercase name / alias → slug.
- */
-let reverseMap: Map<string, string> | null = null;
-
-async function getReverseMap(): Promise<Map<string, string>> {
-  if (reverseMap) return reverseMap;
-
-  const exercises = await ExerciseModel.find({}, { slug: 1, name: 1, aliases: 1, _id: 0 }).lean();
-
-  reverseMap = new Map();
-  for (const ex of exercises) {
-    reverseMap.set(ex.name.toLowerCase(), ex.slug);
-    for (const alias of ex.aliases || []) {
-      reverseMap.set(alias.toLowerCase(), ex.slug);
-    }
-  }
-
-  return reverseMap;
-}
-
-/**
  * Given a list of free-text exercise names, returns the lowercased/trimmed
- * subset that matches a real Exercise document by name or alias. Used to flag
- * "new" exercises in an imported program before the user saves it.
+ * subset that matches a real Exercise document. Used to flag "new" exercises
+ * in an imported program before the user saves it — so it has to agree with
+ * dehydrateProgram below about what counts as known, or the review step
+ * promises a new exercise and the save resolves it to an existing one.
  */
-export async function matchExerciseNames(names: string[]): Promise<Set<string>> {
-  const map = await getReverseMap()
+export async function matchExerciseNames(rawNames: string[]): Promise<Set<string>> {
+  const { names } = await loadCatalog()
   const known = new Set<string>()
-  for (const raw of names) {
+  for (const raw of rawNames) {
     const name = raw.trim().toLowerCase()
-    if (name && map.has(name)) known.add(name)
+    if (name && resolveExerciseSlug(raw, names)) known.add(name)
   }
   return known
 }
 
 /**
- * Slugify a string (fallback for exercises not found in the DB).
- */
-function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-/**
  * Convert a program's exercises from `{ name, type }` to `{ exerciseSlug }` for DB storage.
- * Called before saving a new program via POST.
+ * Called before saving a program via POST/PUT.
+ *
+ * An exercise name that resolves to nothing used to be slugified and stored
+ * anyway, which left the program pointing at a document that was never
+ * created — no video, no admin row, no report. It is now MINTED instead
+ * (lib/exerciseAutoCatalog.ts), so "every exercise a program names exists in
+ * the catalog" holds from the save onwards rather than being something a
+ * script has to keep re-establishing.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function dehydrateProgram(program: Record<string, any>): Promise<Record<string, any>> {
-  const map = await getReverseMap();
+  const { names } = await loadCatalog();
+  let minted = false;
 
   if (!program.phases) return program;
 
@@ -281,14 +287,20 @@ export async function dehydrateProgram(program: Record<string, any>): Promise<Re
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const workout of phase.workouts as any[]) {
       if (!workout.exercises) continue;
-      workout.exercises = workout.exercises.map((ex: AnyExercise) => {
-        // Determine the slug: prefer the existing one, then a name match in the
-        // canonical DB, then a slugified version of the name.
+      const dehydrated: AnyExercise[] = [];
+      for (const ex of workout.exercises as AnyExercise[]) {
+        // Determine the slug: prefer the existing one, then a catalog match on
+        // the name ("DB Hammer Curl" is the catalog's "Hammer Curl"), and only
+        // then a new slug — which comes with a new catalog row to match.
         const name: string = ex.name || '';
-        const slug: string =
-          ex.exerciseSlug
-          || map.get(name.toLowerCase())
-          || slugify(name);
+        let slug: string = ex.exerciseSlug || resolveExerciseSlug(name, names) || '';
+        if (!slug && name) {
+          slug = autoCatalogSlug(name);
+          if (slug) {
+            await ensureCatalogExercise(name, slug);
+            minted = true;
+          }
+        }
 
         // Build clean exercise entry. Always persist `name` and `category` so
         // admin renames + type switches survive across hydrate cycles. The
@@ -314,10 +326,16 @@ export async function dehydrateProgram(program: Record<string, any>): Promise<Re
         if (ex.groupRest != null) result.groupRest = ex.groupRest;
         if (ex.groupRounds != null) result.groupRounds = ex.groupRounds;
 
-        return result;
-      });
+        dehydrated.push(result);
+      }
+      workout.exercises = dehydrated;
     }
   }
+
+  // The rows just minted have to be visible to the hydrate that follows this
+  // save in the same request, or the response comes back with the empty cards
+  // this whole path exists to stop.
+  if (minted) invalidateExerciseCache();
 
   return program;
 }

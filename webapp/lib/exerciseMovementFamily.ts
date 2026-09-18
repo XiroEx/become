@@ -199,11 +199,13 @@ function singularize(token: string): string {
 
 /**
  * Lowercase, split on anything that isn't a letter or digit, drop noise,
- * fold plurals. Hyphens and slashes are separators, not characters:
+ * fold plurals. Exported because lib/exerciseNameMatch.ts has to tokenize
+ * exercise names the SAME way this module does — two tokenizers would let a
+ * name resolve to one exercise here and a different one there. Hyphens and slashes are separators, not characters:
  * "Close-Grip", "Push-Up" and "Pull/Chin Up" all have to tokenize the same
  * way as their spaced spellings.
  */
-function tokenize(name: string): string[] {
+export function tokenizeExerciseName(name: string): string[] {
   return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
@@ -230,6 +232,21 @@ function stripQualifierPhrases(tokens: string[]): string[] {
 }
 
 /**
+ * Equipment / grip / stance / angle / laterality / tempo qualifiers removed
+ * from an already-tokenized name. Exported for lib/exerciseNameMatch.ts,
+ * which uses it as its last-resort resolution key — but only where the key
+ * is unique in the catalog, since stripping is lossy by design ("Dumbbell
+ * Bench Press" and "Barbell Bench Press" both reduce to "bench press").
+ */
+export function stripExerciseQualifiers(tokens: string[]): string[] {
+  const stripped = stripQualifierPhrases(tokens)
+  const kept = stripped.filter((t) => !QUALIFIER_TOKENS.has(t))
+  // If stripping removed everything, back off to the un-stripped tokens
+  // rather than returning nothing: "Machine Fly" must not become ''.
+  return kept.length > 0 ? kept : stripped
+}
+
+/**
  * The movement family an exercise name belongs to: the name with equipment,
  * grip, stance, angle, laterality and tempo qualifiers removed, then run
  * through the synonym table.
@@ -239,12 +256,7 @@ function stripQualifierPhrases(tokens: string[]): string[] {
  * see sharesMovementFamily.
  */
 export function movementFamilyKey(name: string): string {
-  const stripped = stripQualifierPhrases(tokenize(name))
-  const kept = stripped.filter((t) => !QUALIFIER_TOKENS.has(t))
-  // If stripping removed everything, back off to the un-stripped tokens
-  // rather than returning nothing: "Machine Fly" must not become ''.
-  const tokens = kept.length > 0 ? kept : stripped
-  const phrase = tokens.join(' ')
+  const phrase = stripExerciseQualifiers(tokenizeExerciseName(name)).join(' ')
   if (!phrase) return ''
   return FAMILY_SYNONYMS[phrase] ?? phrase
 }

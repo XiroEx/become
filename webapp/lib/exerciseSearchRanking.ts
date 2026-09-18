@@ -13,9 +13,16 @@
 //
 // Fix: a match only counts if `q` lines up with the START of a word (or is
 // the whole word/name), and name beats alias beats a body-part-only hit.
+//
+// Later, on the "Exercise do not exist in our data base" card: "if I type in
+// RDL I should get that or it should know that I'm talking about Romanian
+// deadlift." So the query is also tried in its expanded form
+// (lib/exerciseAbbreviations.ts), one whole tier block below the literal one
+// — an inference never outranks the letters the member actually typed.
 
 import { escapeRegExp } from '@/lib/exerciseAudit'
 import { VALID_CUSTOM_MUSCLES } from '@/lib/customExerciseFields'
+import { expandQueryVariants } from '@/lib/exerciseAbbreviations'
 
 export interface RankableExercise {
   name: string
@@ -33,8 +40,18 @@ export const MATCH_TIER = {
   ALIAS_EXACT: 3,
   ALIAS_PREFIX: 4,
   ALIAS_WORD: 5,
-  BODY_PART: 6,
+  BODY_PART: 12,
 } as const
+
+/**
+ * Added to every tier reached through an EXPANDED query rather than the
+ * letters the member actually typed ("RDL" → "romanian deadlift"). Six is
+ * exactly the width of the literal block, so the whole expanded block sits
+ * below every literal name/alias match and above a body-part-only hit:
+ * what they typed wins, what we inferred they meant comes next, and "this
+ * exercise happens to train that muscle" is still last.
+ */
+export const SYNONYM_TIER_OFFSET = 6
 
 /**
  * Regex *string* (not a compiled RegExp) matching `q` at the start of `value`
@@ -79,21 +96,48 @@ export function matchingMuscleGroups(q: string): string[] {
   return VALID_CUSTOM_MUSCLES.filter(m => muscleMatches(m, query))
 }
 
+/** Best (lowest) tier `ex` reaches against one already-normalized query
+ *  string, ignoring body parts. `offset` is 0 for the literal query and
+ *  SYNONYM_TIER_OFFSET for an expansion of it. */
+function tierForVariant(ex: RankableExercise, query: string, offset: number): number | null {
+  const boundary = new RegExp(nameBoundaryPattern(query), 'i')
+
+  let best = stringTier(
+    ex.name, query, boundary,
+    MATCH_TIER.NAME_EXACT + offset, MATCH_TIER.NAME_PREFIX + offset, MATCH_TIER.NAME_WORD + offset,
+  )
+
+  for (const alias of ex.aliases ?? []) {
+    const t = stringTier(
+      alias, query, boundary,
+      MATCH_TIER.ALIAS_EXACT + offset, MATCH_TIER.ALIAS_PREFIX + offset, MATCH_TIER.ALIAS_WORD + offset,
+    )
+    if (t !== null && (best === null || t < best)) best = t
+  }
+
+  return best
+}
+
 /** Best (lowest) match tier for `ex` against `q`, or `null` if it doesn't
- *  match at all. `q` must already be trimmed. */
+ *  match at all. `q` must already be trimmed.
+ *
+ *  `q` is tried literally and then as its shorthand expansion — typing "RDL"
+ *  has to find "Romanian Deadlift" whether or not anybody remembered to add
+ *  "RDL" as an alias (lib/exerciseAbbreviations.ts). */
 export function matchExerciseTier(ex: RankableExercise, q: string): number | null {
   const query = q.trim().toLowerCase()
   if (!query) return null
-  const boundary = new RegExp(nameBoundaryPattern(query), 'i')
 
-  let best = stringTier(ex.name, query, boundary, MATCH_TIER.NAME_EXACT, MATCH_TIER.NAME_PREFIX, MATCH_TIER.NAME_WORD)
-
-  for (const alias of ex.aliases ?? []) {
-    const t = stringTier(alias, query, boundary, MATCH_TIER.ALIAS_EXACT, MATCH_TIER.ALIAS_PREFIX, MATCH_TIER.ALIAS_WORD)
+  let best: number | null = null
+  const variants = expandQueryVariants(query)
+  for (let i = 0; i < variants.length; i++) {
+    const t = tierForVariant(ex, variants[i], i === 0 ? 0 : SYNONYM_TIER_OFFSET)
     if (t !== null && (best === null || t < best)) best = t
   }
 
   if (best === null) {
+    // Body parts are matched on the literal query only: muscle groups are
+    // anatomy, not shorthand, so expanding first could only add noise.
     const bodyPartHit = [...(ex.primaryMuscles ?? []), ...(ex.secondaryMuscles ?? [])]
       .some(m => muscleMatches(m, query))
     if (bodyPartHit) best = MATCH_TIER.BODY_PART

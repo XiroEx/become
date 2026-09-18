@@ -12,6 +12,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   MATCH_TIER,
+  SYNONYM_TIER_OFFSET,
   matchExerciseTier,
   matchingMuscleGroups,
   nameBoundaryPattern,
@@ -126,4 +127,52 @@ test('nameBoundaryPattern escapes regex metacharacters in the query', () => {
   const re = new RegExp(nameBoundaryPattern('curl ('), 'i')
   assert.doesNotThrow(() => re.test('Curl (EZ Bar)'))
   assert.ok(re.test('Curl (EZ Bar)'))
+})
+
+// ─── shorthand: "if I type in RDL I should get that" ──────────────────────
+//
+// Second card comment: "Some exercises already exist but are for different
+// names. There needs to be some type of fitness intelligence. For example if
+// I type in RDL I should get that or it should know that I'm talking about
+// Romanian deadlift."
+
+test('RDL finds the Romanian Deadlift even with no RDL alias on it', () => {
+  const rdl: RankableExercise = { name: 'Romanian Deadlift', primaryMuscles: ['hamstrings'] }
+  assert.equal(matchExerciseTier(rdl, 'RDL'), MATCH_TIER.NAME_EXACT + SYNONYM_TIER_OFFSET)
+})
+
+test('an RDL alias still beats the expansion — what was typed wins', () => {
+  const aliased: RankableExercise = { name: 'Romanian Deadlift', aliases: ['RDL'] }
+  assert.equal(matchExerciseTier(aliased, 'rdl'), MATCH_TIER.ALIAS_EXACT)
+})
+
+test('"DB curl" reaches the Dumbbell Curl', () => {
+  const curl: RankableExercise = { name: 'Dumbbell Curl', primaryMuscles: ['biceps'] }
+  assert.equal(matchExerciseTier(curl, 'db curl'), MATCH_TIER.NAME_EXACT + SYNONYM_TIER_OFFSET)
+})
+
+test('OHP reaches the Overhead Press', () => {
+  const ohp: RankableExercise = { name: 'Overhead Press', aliases: ['Shoulder Press'] }
+  assert.equal(matchExerciseTier(ohp, 'ohp'), MATCH_TIER.NAME_EXACT + SYNONYM_TIER_OFFSET)
+})
+
+test('a literal match, however weak, outranks every expanded one', () => {
+  const literal: RankableExercise = { name: 'DB Complex (5 Rounds)' }      // "db" is a word here
+  const expanded: RankableExercise = { name: 'Dumbbell Curl' }             // only reachable via "db" → "dumbbell"
+  assert.deepEqual(sortByMatchTier([expanded, literal], 'db').map(e => e.name), [
+    'DB Complex (5 Rounds)',
+    'Dumbbell Curl',
+  ])
+})
+
+test('an expanded match still outranks a body-part-only hit', () => {
+  const expanded: RankableExercise = { name: 'Romanian Deadlift' }
+  const bodyPart: RankableExercise = { name: 'Leg Curl', primaryMuscles: ['hamstrings'] }
+  assert.ok(MATCH_TIER.NAME_EXACT + SYNONYM_TIER_OFFSET < MATCH_TIER.BODY_PART)
+  assert.deepEqual(sortByMatchTier([bodyPart, expanded], 'rdl').map(e => e.name), ['Romanian Deadlift'])
+})
+
+test('expanding never invents a match for an unrelated exercise', () => {
+  const twist: RankableExercise = { name: 'Russian Twist', primaryMuscles: ['obliques'] }
+  assert.equal(matchExerciseTier(twist, 'rdl'), null)
 })
