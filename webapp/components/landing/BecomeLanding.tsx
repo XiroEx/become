@@ -1077,6 +1077,7 @@ export default function BecomeLanding() {
               <Link href="/information">Info</Link>
               <Link href="/terms">Terms</Link>
               <Link href="/privacy">Privacy</Link>
+              <Link href="/health-data">Health data</Link>
               <Link href="/support">Support</Link>
             </div>
           </div>
