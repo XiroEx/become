@@ -6,9 +6,19 @@
 // delt machine — and the screen never said which the app had chosen, nor
 // offered the machine or cable way of doing the same movement.
 //
-// These pin the two halves of the answer: the rule that decides when the app
-// is guessing (lib/workout/equipmentVariant.ts), and the wiring that makes the
-// guess visible and one-tap correctable where the member actually is.
+// These pin the rule that decides when the app is guessing
+// (lib/workout/equipmentVariant.ts) and the wiring that makes the guess
+// visible where the member actually is.
+//
+// The follow-up card removed the second half of that answer — the row of
+// "same movement, other equipment" chips that sat beside the disclosure:
+// "I do not like all of those tabs on the live screen. For example I am doing
+// a goblet squats why am I getting machine, barbell or any of the names. It
+// should just be a dumbbell... I think u should have tabs that are appropriate
+// for that particular exercise only when your adding a new workout." The
+// disclosure stays (it is what keeps "Weight per DB" from being a mystery);
+// the chips are gone from the live screen and equipment choice lives where an
+// exercise is picked.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,7 +26,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   equipmentAssumption,
-  equipmentVariantsOf,
   implementLabel,
   loadStyleOf,
   nameStatesLoadStyle,
@@ -154,65 +163,15 @@ test('implementLabel is what a list shows next to a name', () => {
   assert.equal(implementLabel(['incline_bench']), null)
 })
 
-// ─── "The same movement, other equipment" ───────────────────────────────────
+// ─── The card: a goblet squat is a dumbbell, and that is all the screen says ──
 
-const REAR_DELT_SOURCE = { slug: 'rear-delt-fly', name: 'Rear Delt Fly', equipment: ['dumbbell'] }
-
-// Shaped like what /api/exercises/variations returns, source-first.
-const REAR_DELT_VARIATIONS = [
-  { slug: 'rear-delt-fly', name: 'Rear Delt Fly', equipment: ['dumbbell'] },
-  { slug: 'rear-delt-fly-machine', name: 'Rear Delt Fly Machine', equipment: ['rear_delt_machine'] },
-  { slug: 'face-pull', name: 'Face Pull', equipment: ['cable'] },
-]
-
-test('the machine version of the same movement is offered', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, REAR_DELT_VARIATIONS)
-  assert.deepEqual(variants.map((v) => v.slug), ['rear-delt-fly-machine'])
-})
-
-test('the source exercise is never offered as a way to change equipment', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, REAR_DELT_VARIATIONS)
-  assert.equal(variants.some((v) => v.slug === 'rear-delt-fly'), false)
-})
-
-test('a different exercise for the same muscle is NOT an equipment variant', () => {
-  // Face Pull is a good rear-delt movement and a fine SWAP. It is not "this
-  // movement on other equipment", and the row promises the latter.
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, REAR_DELT_VARIATIONS)
-  assert.equal(variants.some((v) => v.slug === 'face-pull'), false)
-})
-
-test('a sibling on the same implement changes nothing and is dropped', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, [
-    { slug: 'incline-rear-delt-fly', name: 'Incline Rear Delt Fly', equipment: ['dumbbell', 'incline_bench'] },
-  ])
-  assert.deepEqual(variants, [])
-})
-
-test('a candidate whose equipment says nothing loadable is dropped', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, [
-    { slug: 'prone-rear-delt-fly', name: 'Prone Rear Delt Fly', equipment: ['exercise_mat'] },
-  ])
-  assert.deepEqual(variants, [])
-})
-
-test('duplicate slugs collapse', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, [
-    { slug: 'rear-delt-fly-machine', name: 'Rear Delt Fly Machine', equipment: ['rear_delt_machine'] },
-    { slug: 'rear-delt-fly-machine', name: 'Rear Delt Fly Machine', equipment: ['rear_delt_machine'] },
-  ])
-  assert.equal(variants.length, 1)
-})
-
-test('a cable version of the same movement is offered alongside the machine', () => {
-  const variants = equipmentVariantsOf(REAR_DELT_SOURCE, [
-    ...REAR_DELT_VARIATIONS,
-    { slug: 'cable-rear-delt-fly', name: 'Cable Rear Delt Fly', equipment: ['cable'] },
-  ])
-  assert.deepEqual(
-    variants.map((v) => v.slug).sort(),
-    ['cable-rear-delt-fly', 'rear-delt-fly-machine'],
-  )
+test('Goblet Squat is understood as a dumbbell movement', () => {
+  const a = equipmentAssumption({ name: 'Goblet Squat', equipment: ['dumbbell'] })
+  assert.equal(a.style, 'dumbbell')
+  assert.equal(a.label, 'Dumbbell')
+  // The name does not contain "dumbbell", so the screen still says which
+  // implement the weight fields are being read as — one chip, no alternatives.
+  assert.equal(a.assumed, true)
 })
 
 // ─── The invariant, against the real catalog ────────────────────────────────
@@ -265,39 +224,42 @@ test('the variations API carries what an in-place swap needs', () => {
   assert.match(src, /movementPatterns: \(ex\.movementPatterns \?\? \[\]\)/)
 })
 
-test('the live workout renders the assumption row and swaps for THIS session only', () => {
+test('the live workout discloses the implement and offers no equipment tabs', () => {
   const src = readSource('app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx')
   assert.match(src, /import EquipmentAssumptionRow from "@\/components\/workout\/EquipmentAssumptionRow"/)
   assert.match(src, /<EquipmentAssumptionRow/)
-  assert.match(src, /slug=\{currentExercise\?\.exerciseSlug\}/)
+  assert.match(src, /name=\{currentExercise\?\.name\}/)
   assert.match(src, /equipment=\{currentExercise\?\.equipment\}/)
-  // Session scope: switching to the machine today is not a statement about
-  // every future workout, which is what 'program' would write.
-  assert.match(src, /onPick=\{\(variation\) => handleSwapExercise\(variation, "session"\)\}/)
+  // The card: no "switch to the barbell / the machine" chips under a live set.
+  const row = src.slice(src.indexOf('<EquipmentAssumptionRow'))
+  const tag = row.slice(0, row.indexOf('/>') + 2)
+  assert.doesNotMatch(tag, /onPick=/, 'the live row must not offer an equipment switch')
+  assert.doesNotMatch(tag, /canSwitch=/)
+  assert.doesNotMatch(tag, /slug=/, 'nothing is fetched for the disclosure')
 })
 
-test('the one-tap switch is withheld once sets are logged, but the disclosure is not', () => {
-  // A swap resets that exercise's logged sets. That is a fair price for a
-  // deliberate trip through the Swap modal and a bad one for a mis-tapped chip.
-  const row = readSource('components/workout/EquipmentAssumptionRow.tsx')
-  assert.match(row, /if \(!slug \|\| !assumption\.assumed \|\| !canSwitch\) return/)
-  // The chip's own render is gated on the assumption ONLY — never on canSwitch.
-  assert.match(row, /if \(!assumption\.assumed \|\| !assumption\.label\) return null/)
-
-  const live = readSource('app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx')
-  assert.match(
-    live,
-    /canSwitch=\{!\(exerciseData\[currentExerciseIndex\] \?\? \[\]\)\.some\(\(set\) => set\.completed\)\}/,
-  )
-})
-
-test('the assumption row renders nothing when the name already states the equipment', () => {
+test('the assumption row is a disclosure, not a picker', () => {
   const src = readSource('components/workout/EquipmentAssumptionRow.tsx')
+  // One chip, gated on the assumption alone.
   assert.match(src, /if \(!assumption\.assumed \|\| !assumption\.label\) return null/)
-  // And it never fetches for an exercise it would not render for.
-  assert.match(src, /if \(!slug \|\| !assumption\.assumed \|\| !canSwitch\) return/)
-  // A failed fetch must leave the chip standing, not blow up the live screen.
-  assert.match(src, /\.catch\(\(\) => \{/)
+  assert.match(src, /Logging as \{assumption\.label\}/)
+  // No variations request, no other-equipment chips, no props that imply one.
+  assert.doesNotMatch(src, /fetch\(/, 'the row renders off metadata the caller already has')
+  assert.doesNotMatch(src, /\/api\/exercises\/variations/)
+  assert.doesNotMatch(src, /\bonPick\b/)
+  assert.doesNotMatch(src, /\bcanSwitch\b/)
+})
+
+test('changing equipment still has a home — swap, and the add/builder pickers', () => {
+  // Removing the live chips must not strand the member: the Swap Exercise
+  // modal is on the same screen, and "Add an exercise" keeps the variation
+  // picker, which is the "adding a new workout" surface the card names.
+  const live = readSource('app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx')
+  assert.match(live, /<ExerciseSwapModal/)
+  assert.match(live, /Swap Exercise/)
+
+  const addSheet = readSource('components/workout/AddExerciseSheet.tsx')
+  assert.match(addSheet, /<ExerciseVariationPicker/)
 })
 
 test('the quick-session builder shows which implement each result is', () => {

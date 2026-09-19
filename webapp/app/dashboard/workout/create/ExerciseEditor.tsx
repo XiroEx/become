@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Exercise, ExerciseType } from "@/lib/data/programs";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import ExerciseVariationPicker, { type ExerciseVariation } from "@/components/ExerciseVariationPicker";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
 
 interface DbExerciseSuggestion {
   slug: string;
@@ -107,8 +108,10 @@ export default function ExerciseEditor({
         ]);
         const dbData = dbRes.ok ? await dbRes.json() : { exercises: [] };
         const customData = customRes.ok ? await customRes.json() : { exercises: [] };
+        // Shorthand-aware like the catalog half of this list: typing "RDL"
+        // has to reach your own "Romanian Deadlift" as well.
         const customMatches = (customData.exercises || []).filter((e: DbExerciseSuggestion) =>
-          e.name.toLowerCase().includes(q.toLowerCase())
+          matchesExerciseQuery(e, q)
         ).map((e: DbExerciseSuggestion) => ({ ...e, isCustom: true }));
         const combined: DbExerciseSuggestion[] = [
           ...customMatches,

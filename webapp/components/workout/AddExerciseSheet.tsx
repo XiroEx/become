@@ -22,6 +22,7 @@ import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
 import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
+import { matchesExerciseQuery } from '@/lib/exerciseSearchRanking'
 import UpgradeSheet from '@/components/UpgradeSheet'
 import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
@@ -261,7 +262,9 @@ export default function AddExerciseSheet({
   if (!open) return null
 
   const q = query.trim().toLowerCase()
-  const customMatches = q.length >= 2 ? customs.filter(c => c.name.toLowerCase().includes(q)) : []
+  // Same match rule as the catalog search this list sits next to, shorthand
+  // included — "RDL" has to find your own "Romanian Deadlift" too.
+  const customMatches = q.length >= 2 ? customs.filter(c => matchesExerciseQuery(c, q)) : []
   // Tag the merged rows so the list can mark which ones are yours. The catalog
   // search endpoint excludes customs by design, so `isCustom` has to be
   // attached here rather than coming off the wire.

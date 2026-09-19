@@ -11,16 +11,23 @@
 // machine, "= 95 lbs total" is not merely unhelpful, it is a wrong number.
 //
 // The catalog's equipment is a reasonable DEFAULT and should stay one. What was
-// missing is that the default was invisible and uncorrectable in the moment. So:
+// missing is that the default was invisible in the moment. So: say what is
+// being assumed, but only when the name does not already say it. "Dumbbell
+// Bench Press" needs no chip; "Rear Delt Fly" does.
 //
-//   1. Say what is being assumed, but only when the name does not already say
-//      it. "Dumbbell Bench Press" needs no chip; "Rear Delt Fly" does.
-//   2. Offer the same movement's other-equipment siblings right there, so one
-//      tap moves you onto Rear Delt Fly Machine and every metric follows.
+// ── What used to be here, and why it is not ────────────────────────────────
+// This module also built the "same movement, other equipment" list that the
+// live screen rendered as one-tap chips beside the disclosure. The follow-up
+// card killed that row: "I do not like all of those tabs on the live screen.
+// For example I am doing a goblet squats why am I getting machine, barbell or
+// any of the names." The sibling rule is muscle + movement-head-noun based
+// (lib/exerciseMovementFamily.ts), so a Goblet Squat — dumbbell by definition —
+// drew Barbell Back Squat, Front Squat, Hack Squat, Belt Squat and Bodyweight
+// Squat. Equipment choice belongs where an exercise is picked (the variation
+// picker in "Add an exercise" and the builders) or in the Swap Exercise modal,
+// not under the set you are in the middle of.
 //
 // Pure module — no React, no mongoose, no fetch. Safe on both sides.
-
-import { sharesMovementFamily } from '../exerciseMovementFamily'
 
 /**
  * The implement class that actually changes how a set is logged or loaded.
@@ -204,47 +211,4 @@ export function equipmentAssumption(exercise: EquipmentAssumptionInput | null | 
     label: loadStyleLabel(style),
     assumed: style !== 'bodyweight' && stated !== style,
   }
-}
-
-export interface EquipmentVariantCandidate {
-  slug: string
-  name: string
-  equipment?: string[]
-}
-
-/**
- * Keep only the candidates that are THIS movement done on other equipment.
- *
- * `/api/exercises/variations` is already narrowed to the same body region and
- * a shared primary muscle, which is what makes a name-family check safe on top
- * of it (see lib/exerciseMovementFamily.ts). Both guards are needed here:
- *
- *   - Without the family check, Rear Delt Fly's variations include Face Pull —
- *     a fine rear-delt exercise, but offering it under "same movement, other
- *     equipment" is a different promise than the one being made.
- *   - Without the differing-style check, the list would offer swaps that
- *     change nothing about how the set is logged.
- *
- * The source exercise itself is excluded by slug: the variations endpoint
- * always returns it first, and "switch to what you are already doing" is not
- * an option.
- */
-export function equipmentVariantsOf<T extends EquipmentVariantCandidate>(
-  source: { slug?: string; name?: string; equipment?: string[] },
-  candidates: T[],
-): T[] {
-  const sourceStyle = loadStyleOf(source.equipment)
-  const sourceName = source.name ?? ''
-  if (!sourceName) return []
-
-  const seen = new Set<string>()
-  return candidates.filter((candidate) => {
-    if (!candidate?.slug || candidate.slug === source.slug) return false
-    if (seen.has(candidate.slug)) return false
-    const style = loadStyleOf(candidate.equipment)
-    if (!style || style === sourceStyle) return false
-    if (!sharesMovementFamily(sourceName, candidate.name ?? '')) return false
-    seen.add(candidate.slug)
-    return true
-  })
 }

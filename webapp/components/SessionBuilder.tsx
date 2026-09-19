@@ -20,6 +20,7 @@ import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import { implementLabel } from "@/lib/workout/equipmentVariant";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
 import UpgradeSheet from "@/components/UpgradeSheet";
 import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
@@ -375,7 +376,9 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
 
   // Search shows catalog matches + your matching customs (deduped by slug).
   const q = query.trim().toLowerCase();
-  const customMatches = q.length >= 2 ? customs.filter((c) => c.name.toLowerCase().includes(q)) : [];
+  // Shorthand-aware, like the catalog search these rows are merged with:
+  // "RDL" finds your own "Romanian Deadlift" — see lib/exerciseAbbreviations.
+  const customMatches = q.length >= 2 ? customs.filter((c) => matchesExerciseQuery(c, q)) : [];
   // `isCustom` is attached here, not read off the wire: /api/exercises/search
   // deliberately excludes customs (they are fetched separately above), so this
   // merge is the only place that knows which rows are the user's own.
