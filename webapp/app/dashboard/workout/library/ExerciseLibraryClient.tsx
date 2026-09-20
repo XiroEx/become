@@ -13,6 +13,7 @@ import VideoTrimEditor from "@/components/admin/VideoTrimEditor";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
 import { inferCustomExerciseMuscleGroup, inferCustomExerciseCategory } from "@/lib/customExerciseFields";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { CUSTOM_TAG } from "@/lib/customExerciseTags";
@@ -376,9 +377,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   };
 
   const filteredExercises = exercises
+    // Name, alias, muscle — and the gym shorthand the catalog search already
+    // understands, so "RDL" finds a Romanian Deadlift here too.
     .filter(e => !search.trim() || (
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.primaryMuscles.some(m => m.toLowerCase().includes(search.toLowerCase())) ||
+      matchesExerciseQuery(e, search) ||
       e.category.toLowerCase().includes(search.toLowerCase())
     ))
     .filter(e => !bodyPartFilter || inferCustomExerciseMuscleGroup(e.primaryMuscles) === bodyPartFilter)
