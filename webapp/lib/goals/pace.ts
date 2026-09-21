@@ -22,6 +22,19 @@ export const HOLD_BAND_KG = 0.9 // ≈ 2 lb
 /** How far behind the plan reads as "behind" rather than noise. */
 export const PACE_TOLERANCE_KG = 0.45 // ≈ 1 lb
 
+/**
+ * How far PAST the finish band a weigh-in has to land before a goal that was
+ * already marked achieved counts as drifted back out of it.
+ *
+ * Reaching the target used to be a one-way door: the first week inside the
+ * band flipped the goal to 'achieved' and nothing ever flipped it back, so a
+ * member who hit 205 and then logged 209 still read "Reached ✓" everywhere.
+ * The gap between the band and this line is hysteresis — without it a scale
+ * wobbling either side of the band edge would flip the goal open and shut day
+ * to day, which is its own kind of wrong.
+ */
+export const REOPEN_MARGIN_KG = 0.45 // ≈ 1 lb, so ≈ 3 lb outside a 2 lb band
+
 export function defaultPaceKg(direction: Direction | null | undefined): number {
   if (direction === 'lose') return 1 * KG_PER_LB
   if (direction === 'gain') return 0.5 * KG_PER_LB
@@ -139,6 +152,47 @@ export function paceRead(input: PaceInput): PaceRead {
 /** Reached: inside the finish band (weight goal) or inside the hold band (maintain). */
 export function isAchieved(latestKg: number, targetKg: number, bandKg = HOLD_BAND_KG): boolean {
   return Math.abs(latestKg - targetKg) <= bandKg
+}
+
+/**
+ * The opposite door: a weigh-in far enough OUTSIDE the band that an achieved
+ * goal should re-open. Deliberately not `!isAchieved()` — see REOPEN_MARGIN_KG.
+ */
+export function hasDriftedOut(latestKg: number, targetKg: number, bandKg = HOLD_BAND_KG): boolean {
+  return Math.abs(latestKg - targetKg) > bandKg + REOPEN_MARGIN_KG
+}
+
+/**
+ * The week-long confirmation that turns a weigh-in inside the band into an
+ * achieved goal: every weigh-in in the last 7 days inside the band, and at
+ * least two of them, so one fluke reading can't retire a goal early.
+ */
+export function holdConfirmed(
+  series: Array<{ kg: number; date: Date }>,
+  targetKg: number,
+  bandKg: number,
+  now: Date,
+): boolean {
+  const weekAgo = new Date(now.getTime() - WEEK_MS)
+  const recent = series.filter(p => p.date >= weekAgo)
+  return recent.length >= 2 && recent.every(p => isAchieved(p.kg, targetKg, bandKg))
+}
+
+/**
+ * Has the hold been broken since the goal was marked achieved? Judged over
+ * every weigh-in logged AFTER `achievedAt`, not just the most recent one: a
+ * member who logs 209 and then 206 against a 205 target is not holding their
+ * goal, and reading only the last number would call it held. `achievedAt` of
+ * null means "judge the whole series" (a legacy goal with no stamp).
+ */
+export function driftedSinceAchieved(
+  series: Array<{ kg: number; date: Date }>,
+  targetKg: number,
+  bandKg: number,
+  achievedAt: Date | null,
+): boolean {
+  const since = achievedAt ? achievedAt.getTime() : -Infinity
+  return series.some(p => p.date.getTime() > since && hasDriftedOut(p.kg, targetKg, bandKg))
 }
 
 export function kgToUnit(kg: number, unit: 'lbs' | 'kg'): number {
