@@ -11,17 +11,25 @@
 // (lib/goals/pace.ts): the week-long hold that CONFIRMS a goal, and the drift
 // that RE-OPENS one, with hysteresis between them so an edge-of-band scale
 // can't flap it. lib/goals/ensure.ts is the (DB-bound) caller of both.
+//
+// Both rules are judged in whole calendar days, because a weigh-in ROW is a
+// day-keyed marker while the stamps it is compared against are instants — the
+// "day-keyed rows vs instant stamps" block below is the half of the report
+// that survived the first fix: a member west of UTC weighing in of an evening
+// had the very next morning's 209 sort BEFORE their own achievement.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   KG_PER_LB,
   HOLD_BAND_KG,
+  HOLD_WINDOW_DAYS,
   REOPEN_MARGIN_KG,
   driftedSinceAchieved,
   hasDriftedOut,
   holdConfirmed,
   isAchieved,
+  utcDayIndex,
 } from '../../lib/goals/pace'
 import { readReached } from '../../lib/goals/status'
 
@@ -106,6 +114,75 @@ test("the reported goal does not immediately re-achieve: the 209 is still inside
 test('a clean week after the drift earns the goal back', () => {
   const series = [lb(209, 20), lb(206, 5), lb(205, 2)]
   assert.equal(holdConfirmed(series, TARGET, HOLD_BAND_KG, NOW), true)
+})
+
+// ── day-keyed rows vs instant stamps ─────────────────────────────────────────
+//
+// A weigh-in row is NOT an instant. /api/weight writes
+// `utcMidnightDateKey(localToday)`, so the row sits at 00:00Z of the member's
+// LOCAL calendar day and denotes a day (lib/dayWindow.ts documents the
+// convention, and documents the day-shift that follows from reading one back
+// as an instant). `achievedAt` and `now` are instants — whenever ensureGoals
+// happened to run. For a member west of UTC logging in the evening the two
+// land on DIFFERENT UTC days, and comparing them directly is what these cover.
+
+/** A weigh-in row exactly as /api/weight writes it: 00:00Z of a local day. */
+const row = (weight: number, dayKey: string) => ({ kg: weight * LB, date: new Date(`${dayKey}T00:00:00.000Z`) })
+/** 8:05pm on 2026-09-08 for a member at UTC−5 — the evening the hold confirmed. */
+const EVENING_STAMP = new Date('2026-09-09T01:05:00.000Z')
+
+test('the stamp and the weigh-in that earned it can land on different UTC days', () => {
+  // The premise of everything below: this is why the comparison is day-wise.
+  assert.equal(utcDayIndex(new Date('2026-09-08T00:00:00.000Z')), utcDayIndex(new Date('2026-09-08T23:59:59.000Z')))
+  assert.ok(
+    new Date('2026-09-09T00:00:00.000Z').getTime() < EVENING_STAMP.getTime(),
+    'the NEXT local day\'s row sorts before an evening stamp when compared as instants',
+  )
+  assert.equal(utcDayIndex(new Date('2026-09-09T00:00:00.000Z')), utcDayIndex(EVENING_STAMP), 'but it is the same UTC day')
+})
+
+test('a 209 the morning after the confirmation re-opens the goal', () => {
+  // The reported failure, in real rows: hold confirmed Monday evening, 209 on
+  // Tuesday. Compared as instants Tuesday's row is "before" the stamp and this
+  // weigh-in disappears from the check for good — "it still says reached".
+  const series = [row(205, '2026-09-07'), row(205, '2026-09-08'), row(209, '2026-09-09')]
+  assert.equal(driftedSinceAchieved(series, TARGET, HOLD_BAND_KG, EVENING_STAMP), true)
+})
+
+test('weigh-ins from calendar days before the confirmation are still history', () => {
+  // The climb down, and the member's own confirming weigh-in. Neither re-opens.
+  const series = [row(230, '2026-08-01'), row(212, '2026-08-20'), row(205, '2026-09-08')]
+  assert.equal(driftedSinceAchieved(series, TARGET, HOLD_BAND_KG, EVENING_STAMP), false)
+})
+
+test('the hold window is seven whole days, not seven times twenty-four hours', () => {
+  // Same member, same 8pm habit: `now` is on the next UTC day, so a rolling
+  // instant window cuts their week down to six local days and drops the older
+  // weigh-in — one reading where there were two, and a goal that never confirms.
+  const now = new Date('2026-09-21T01:00:00.000Z') // 8pm on 2026-09-20 at UTC−5
+  const series = [row(206, '2026-09-14'), row(205, '2026-09-20')]
+  assert.ok(series[0].date.getTime() < now.getTime() - HOLD_WINDOW_DAYS * 86_400_000, 'outside a rolling 7×24h window')
+  assert.equal(holdConfirmed(series, TARGET, HOLD_BAND_KG, now), true, 'inside the last seven calendar days')
+})
+
+test('a miss inside that window still blocks the confirmation', () => {
+  // The wider window is not a rubber stamp — it only stops the week being cut short.
+  const now = new Date('2026-09-21T01:00:00.000Z')
+  assert.equal(holdConfirmed([row(209, '2026-09-14'), row(205, '2026-09-20')], TARGET, HOLD_BAND_KG, now), false)
+  assert.equal(holdConfirmed([row(206, '2026-09-06'), row(205, '2026-09-20')], TARGET, HOLD_BAND_KG, now), false, 'and the week still ends')
+})
+
+test('the report end to end, in the rows the app actually writes', () => {
+  // "I reached the goal weight which was 205 about 2 weeks ago… about a week
+  // ago I tracked a weight of 209 and 206 and it still says reached."
+  const achievedAt = new Date('2026-09-08T01:30:00.000Z') // 8:30pm on 2026-09-07, UTC−5
+  const now = new Date('2026-09-22T14:00:00.000Z')
+  const series = [
+    row(212, '2026-08-10'), row(208, '2026-08-24'), row(206, '2026-09-06'),
+    row(205, '2026-09-07'), row(209, '2026-09-14'), row(206, '2026-09-15'),
+  ]
+  assert.equal(driftedSinceAchieved(series, TARGET, HOLD_BAND_KG, achievedAt), true, 'the goal re-opens')
+  assert.equal(holdConfirmed(series, TARGET, HOLD_BAND_KG, now), false, 'and does not confirm itself again on the same data')
 })
 
 // ── what the badge is allowed to say ─────────────────────────────────────────
