@@ -15,6 +15,14 @@
 //     → the same goal re-opens as 'active'. Achieving is not a one-way door:
 //     the app describes where the member IS, so 205 two weeks ago and 209
 //     since is a goal to work on again, not a goal still reached.
+//
+// Both of those last two rules are judged in whole CALENDAR DAYS. Weigh-in rows
+// are day-keyed — /api/weight writes utcMidnightDateKey(localToday) — while the
+// `achievedAt` stamp and `now` passed in here are instants, so comparing them
+// directly is the day-shift lib/dayWindow.ts warns about: for a member west of
+// UTC weighing in of an evening, the stamp lands on the NEXT UTC day and the
+// following morning's 209 sorts before its own achievement. See utcDayIndex in
+// lib/goals/pace.ts.
 //   • profile.weeklyAvailability set, no active training goal → create one with
 //     a PR snapshot as the strength baseline; days/week changes update in place.
 
