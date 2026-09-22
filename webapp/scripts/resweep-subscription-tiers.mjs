@@ -21,35 +21,39 @@
  *     missed permanently (endpoint disabled, secret rotated, an event Stripe
  *     gave up retrying) nothing ever closes it.
  *
- * This is the sweep for both. It is the ONLY thing here that recomputes a tier
- * off the clock, and it does it by calling the real `deriveTier` — never a copy
- * of its rules, which is the whole reason the script is loaded through tsx.
+ * THIS IS THE HAND-RUN DOOR ONTO THE SCHEDULED SWEEP, not a second copy of it.
+ * The rules, the selector and the guarded write all live in
+ * `lib/billing/tierResweep.ts`, which `app/api/cron/resweep-tiers` also calls —
+ * so the thing that runs every six hours and the thing an operator runs at 2am
+ * cannot disagree about what a lapsed subscription means. That module calls the
+ * real `deriveTier`, never a copy of its rules, which is the whole reason this
+ * script is loaded through tsx.
+ *
+ * THE SCHEDULE lives in `.github/workflows/resweep-subscription-tiers.yml`
+ * (every 6 hours, production only, one place). You do not need to run this to
+ * keep tiers correct; run it when you want to SEE the state, or to close
+ * something out immediately rather than within the next few hours.
  *
  * WHAT IT WILL NOT DO
  *
  * It writes `tier` and nothing else. Stripe's state is Stripe's: `status`,
  * `currentPeriodEnd` and the ids are left exactly as the webhook left them. It
  * cannot revoke `grandfathered` or demote an admin either, because deriveTier
- * pins both to Plus and the script only ever writes what deriveTier returns.
+ * pins both to Plus and the sweep only ever writes what deriveTier returns.
  *
  * IDEMPOTENT, twice over: a row whose stored tier already equals the derived one
  * is never written, and the write re-asserts BOTH the candidate selector and the
  * tier that was read — so a webhook landing between the read and the write wins,
- * and a second run matches nothing.
- *
- * NOT WIRED TO ANYTHING. No cron, no route, no automation. Run it by hand, or
- * let the platform schedule it later; it is safe at any cadence, and safe to run
- * twice in a row. The dashboard tiles cache is not busted here and does not need
- * to be — it carries a 60-second TTL (lib/redis.ts).
+ * and a second run matches nothing. A run that changes nothing writes nothing.
  *
  *   DRY RUN:  npx tsx scripts/resweep-subscription-tiers.mjs
  *   APPLY:    npx tsx scripts/resweep-subscription-tiers.mjs --apply
  *   PROD:     npx tsx scripts/resweep-subscription-tiers.mjs --prod --apply
  *
- * tsx, not node: it imports ../lib/subscription.ts directly so the sweep and the
- * webhook can never disagree about what a tier means. That module has no runtime
- * imports of its own (both of its imports are `import type`), so nothing else is
- * dragged in.
+ * tsx, not node: it imports ../lib/billing/tierResweep.ts directly so the sweep
+ * and the webhook can never disagree about what a tier means. Everything that
+ * module imports at runtime is lib/subscription.ts, whose own imports are all
+ * `import type`, so nothing else is dragged in.
  *
  * Reads MONGODB_URI (or PROD_MONGODB_URI / MONGODB_URI_PROD with --prod) from
  * the environment, falling back to webapp/.env.local. No connection string is
@@ -70,7 +74,7 @@ const dotenv = require('dotenv')
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
-const { deriveTier, SUBSCRIPTION_GRACE_MS } = await import('../lib/subscription.ts')
+const { runTierResweep, resweepSelector } = await import('../lib/billing/tierResweep.ts')
 
 const APPLY = process.argv.includes('--apply')
 const PROD = process.argv.includes('--prod')
@@ -107,25 +111,6 @@ if (!PROD && (remote.length > 0 || hosts.length === 0)) {
 }
 
 const now = new Date()
-const graceCutoff = new Date(now.getTime() - SUBSCRIPTION_GRACE_MS)
-
-// Candidates. Both clauses mirror a deriveTier branch exactly; the derivation
-// itself still runs per row, so a mismatch here can only ever cost a read.
-//
-//  1. canceled and the paid period is over (or was never recorded).
-//  2. active/trialing whose period end is past the grace — the missed-webhook case.
-const CANCELED_LAPSED = {
-  'subscription.status': 'canceled',
-  $or: [
-    { 'subscription.currentPeriodEnd': { $lt: now } },
-    { 'subscription.currentPeriodEnd': null },
-  ],
-}
-const ACTIVE_STALE = {
-  'subscription.status': { $in: ['active', 'trialing'] },
-  'subscription.currentPeriodEnd': { $lt: graceCutoff },
-}
-const SELECTOR = { $or: [CANCELED_LAPSED, ACTIVE_STALE] }
 
 await mongoose.connect(URI, { serverSelectionTimeoutMS: 15000 })
 const db = mongoose.connection.db
@@ -140,84 +125,57 @@ if (!names.includes('users')) {
 
 const users = db.collection('users')
 
-const [total, withSub, plus, grandfathered, candidates] = await Promise.all([
+const [total, withSub, plus, grandfathered] = await Promise.all([
   users.countDocuments({}),
   users.countDocuments({ 'subscription.status': { $exists: true, $ne: 'none' } }),
   users.countDocuments({ tier: 'plus' }),
   users.countDocuments({ grandfathered: true }),
-  users.countDocuments(SELECTOR),
 ])
 
-console.log(`\n${PROD ? 'PROD' : 'DEV'} — users (as of ${now.toISOString()})`)
+// One call, the same one the scheduled route makes. `apply: false` computes the
+// plan and writes nothing, which is what makes the dry run the default here.
+const result = await runTierResweep({ users, now, apply: APPLY, maxReportedChanges: 25 })
+
+console.log(`\n${PROD ? 'PROD' : 'DEV'} — users (as of ${result.ranAt})`)
 console.log(`  total ..................... ${total}`)
 console.log(`  with a subscription ....... ${withSub}`)
 console.log(`  tier 'plus' ............... ${plus}`)
 console.log(`  grandfathered ............. ${grandfathered}   (deriveTier pins these to plus)`)
-console.log(`  → expired billing rows .... ${candidates}`)
-
-const plan = []
-const agreed = []
-
-const cursor = users.find(SELECTOR, {
-  projection: { tier: 1, role: 1, grandfathered: 1, subscription: 1 },
-})
-for await (const doc of cursor) {
-  const want = deriveTier({
-    subscription: doc.subscription ?? null,
-    grandfathered: doc.grandfathered === true,
-    role: doc.role,
-    now,
-  })
-  const have = doc.tier ?? null
-  const row = {
-    _id: doc._id,
-    have,
-    want,
-    status: doc.subscription?.status ?? 'none',
-    periodEnd: doc.subscription?.currentPeriodEnd ?? null,
-  }
-  if (want === have) agreed.push(row)
-  else plan.push(row)
-}
+console.log(`  → expired billing rows .... ${result.candidates}`)
 
 console.log(`\n  of those:`)
-console.log(`    already correct ......... ${agreed.length}   (left alone)`)
-console.log(`    to re-derive ............ ${plan.length}`)
+console.log(`    already correct ......... ${result.alreadyCorrect}   (left alone)`)
+console.log(`    to re-derive ............ ${result.planned}`)
 
-const downgrades = plan.filter((p) => p.want === 'free')
-const upgrades = plan.filter((p) => p.want === 'plus')
-if (plan.length > 0) {
-  console.log(`      → free ................ ${downgrades.length}`)
-  console.log(`      → plus ................ ${upgrades.length}`)
+if (result.planned > 0) {
+  console.log(`      → free ................ ${result.downgrades}`)
+  console.log(`      → plus ................ ${result.upgrades}`)
   console.log('\n  rows (ids only — never emails):')
-  for (const p of plan.slice(0, 25)) {
-    const end = p.periodEnd ? new Date(p.periodEnd).toISOString() : '(none)'
-    console.log(`    ${p._id}  ${p.status}  periodEnd=${end}  ${p.have ?? '(absent)'} → ${p.want}`)
+  for (const change of result.changes) {
+    const end = change.periodEnd ?? '(none)'
+    console.log(
+      `    ${change.userId}  ${change.status}  periodEnd=${end}  ${change.from ?? '(absent)'} → ${change.to}`,
+    )
   }
-  if (plan.length > 25) console.log(`    … and ${plan.length - 25} more`)
+  const hidden = result.planned - result.changes.length
+  if (hidden > 0) console.log(`    … and ${hidden} more`)
 }
 
-if (APPLY && plan.length > 0) {
-  const ops = plan.map((p) => ({
-    updateOne: {
-      // Re-assert everything the decision rested on: still a candidate, and the
-      // tier still the one that was read. A webhook that landed in between wins.
-      filter: {
-        _id: p._id,
-        $and: [SELECTOR, p.have === null ? { tier: null } : { tier: p.have }],
-      },
-      update: { $set: { tier: p.want, updatedAt: new Date() } },
-    },
-  }))
-  const r = await users.bulkWrite(ops, { ordered: false })
-  console.log(`\nAPPLIED — matched ${r.matchedCount}, modified ${r.modifiedCount}`)
-  if (r.modifiedCount < plan.length) {
+if (result.wrote) {
+  console.log(`\nAPPLIED — matched ${result.matched}, modified ${result.modified}`)
+  if (result.modified < result.planned) {
     console.log(
-      `  ${plan.length - r.modifiedCount} row(s) changed underneath the read and were left alone.`,
+      `  ${result.planned - result.modified} row(s) changed underneath the read and were left alone.`,
     )
   }
 } else {
   console.log(`\n${APPLY ? 'APPLIED — nothing to do' : '(dry-run) — pass --apply to write'}`)
+}
+
+// The selector is printed on request so an operator can check the candidate set
+// by hand in mongosh against the exact filter the sweep used.
+if (process.argv.includes('--show-selector')) {
+  console.log(`\nselector: ${JSON.stringify(resweepSelector(now))}`)
 }
 
 await mongoose.disconnect()

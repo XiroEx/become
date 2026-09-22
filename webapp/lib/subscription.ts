@@ -33,9 +33,14 @@ export interface DeriveTierInput {
  * LAST event Stripe will ever send for it, so nothing re-runs this and the
  * member holds Plus indefinitely, unpaid.
  *
- * `scripts/resweep-subscription-tiers.mjs` is that missing writer: idempotent,
- * dry-run by default, calls THIS function rather than restating its rules. It is
- * deliberately not scheduled — run it by hand, or schedule it from the platform.
+ * `lib/billing/tierResweep.ts` is that missing writer: idempotent, calls THIS
+ * function rather than restating its rules, and writes only the rows whose
+ * stored tier disagrees with it. It runs unattended every six hours through
+ * `app/api/cron/resweep-tiers` (scheduled from
+ * `.github/workflows/resweep-subscription-tiers.yml`, production only — beta
+ * shares the same database), and by hand through
+ * `scripts/resweep-subscription-tiers.mjs`, which is the same engine with a CLI
+ * on it.
  */
 export function deriveTier(input: DeriveTierInput): Tier {
   const now = (input.now ?? new Date()).getTime()

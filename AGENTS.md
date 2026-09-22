@@ -705,6 +705,65 @@ also needs a configuration saved in the dashboard** or
 `billingPortal.sessions.create` fails — mapped to `503
 billing_portal_not_configured` so it does not read as a code bug.
 
+#### The resweep — the writer that is a clock, not an event
+
+Every other writer of `tier` is a webhook handler, and **two of `deriveTier`'s
+branches change their answer with TIME and emit no event when they do**: a
+`canceled` subscription whose paid period simply ends (Stripe's last word was
+`customer.subscription.deleted`) and an `active`/`trialing` one past
+`SUBSCRIPTION_GRACE_MS`, which is the permanently-missed webhook. Until
+something re-derives those rows, a cancelled member keeps Plus after the period
+they paid for — forever, unpaid.
+
+`lib/billing/tierResweep.ts` is that writer, and it is ONE engine with two
+doors: `app/api/cron/resweep-tiers` (scheduled) and
+`scripts/resweep-subscription-tiers.mjs` (by hand, dry-run by default). Neither
+door restates a rule — the selector and the call to the real `deriveTier` live
+in the engine, so the unattended sweep and the 2am manual one cannot disagree
+about what a lapsed subscription means.
+
+**The schedule is `.github/workflows/resweep-subscription-tiers.yml`, and it is
+the only one.** Every 6 hours, `POST https://become.redbtn.io/api/cron/resweep-tiers`
+with `x-cron-secret`, from the repo secret `BECOME_CRON_SECRET` (the same value
+as redsecrets `admin.cronSecret`, which the notify cron uses). Four facts about
+it that are not obvious:
+
+- **Production only, on purpose.** Beta and production are two workspaces over
+  one database and the sweep reads STORED subscription state, so a test-mode
+  cancellation made on beta is expired by the production run. A beta schedule
+  would be a second runner over the same rows. If a RedRun workspace schedule is
+  ever added for this, DELETE the workflow in the same change.
+- **GitHub runs `schedule:` only from the default branch**, so the job starts
+  when the workflow reaches `main`, not `beta` — and a copy on a feature branch
+  is inert. GitHub also disables schedules in a repo with 60 days of no
+  activity.
+- **Every 6 hours, not daily.** Scheduled runs are delayed under load and
+  dropped at peak; a once-daily job that skips a run is already outside "loses
+  Plus within a day of the period ending". Extra runs are free — see the next
+  point.
+- **A run that changes nothing writes nothing.** No user write (a row whose
+  stored tier already equals the derived one is never touched) and no record
+  row: `models/TierResweepRun.ts` is a CHANGE log, not a heartbeat, because
+  otherwise it would grow forever to say that nothing happened.
+
+Which means "did it run?" and "what did it change?" are answered in different
+places, and both are free:
+
+- **Did it run** — the workflow's run history, where each run writes a summary
+  table of the response (and a red X if the endpoint did not answer 200), plus
+  the `[resweep] …` line the route logs on the RedRun container.
+- **What it changed** — **Admin → Subscription sweep** on `/dashboard/admin`
+  (`GET /api/admin/billing/resweep`): the recent runs that moved somebody, by
+  user id, plus how many expired rows are waiting right now through the sweep's
+  own selector. Empty is the healthy state and the card says so.
+
+Ids, never emails: this output gets pasted into chat.
+
+Tests: `tests/unit/billing/tierResweep.test.ts` (the sweep, against a fake
+collection that throws on an unexpected write) and
+`tests/unit/billing/resweepSchedule.test.ts` (one schedule, often enough,
+production only, secret checked before the sweep, no record on a no-op).
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"
