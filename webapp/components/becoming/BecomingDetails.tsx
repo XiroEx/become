@@ -28,6 +28,7 @@ import type { MindState } from '@/lib/mindContent'
 import type { GoalProgress } from '@/lib/goals/progress'
 import type { WeekSnapshot } from '@/lib/becoming/weeks'
 import { fmtUnit } from '@/lib/goals/pace'
+import { readReached } from '@/lib/goals/status'
 import { PILLAR as SUBJECT, pillarColor as weekColor, STREAK_INK } from '@/lib/pillarColors'
 import WeightChart from '@/components/becoming/WeightChart'
 import StrengthTargetSheet from '@/components/becoming/StrengthTargetSheet'
@@ -455,7 +456,8 @@ export default function BecomingDetails({ weeks = [], weighIns = [], todayKey = 
                     <div className="mb-2 flex items-center justify-between">
                       <Eyebrow>Weight plan</Eyebrow>
                       {n?.pace && n.status === 'active' && n.pace.status !== 'done' && <span className={`text-xs font-semibold ${n.pace.status === 'behind' ? 'text-amber-300' : 'text-emerald-400'}`}>{n.pace.status === 'behind' ? `${fmtUnit(n.pace.behindByKg, unit)} behind pace` : n.pace.status === 'ahead' ? `${fmtUnit(n.pace.aheadByKg, unit)} ahead` : n.pace.status === 'on' ? 'On pace' : ''}</span>}
-                      {(n?.status === 'achieved' || n?.pace?.status === 'done') && <span className="text-xs font-semibold text-emerald-400">Reached ✓</span>}
+                      {readReached(n?.status, n?.pace?.status) === 'reached' && <span className="text-xs font-semibold text-emerald-400">Reached ✓</span>}
+                      {readReached(n?.status, n?.pace?.status) === 'at-goal' && <span className="text-xs font-semibold text-emerald-400">At goal · hold a week</span>}
                     </div>
                     {!goals ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.06]" /> : n && n.target.weight ? (
                       <>

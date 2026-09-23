@@ -146,6 +146,22 @@ export function matchExerciseTier(ex: RankableExercise, q: string): number | nul
   return best
 }
 
+/**
+ * Does this exercise match what the member typed — gym shorthand included?
+ *
+ * The same rule `sortByMatchTier` ranks with, exposed for the lists that are
+ * filtered IN THE BROWSER off an already-fetched array rather than by
+ * GET /api/exercises/search: your own custom exercises in the add/quick-session
+ * sheets, and the Exercise Library page. Those each did a bare
+ * `name.toLowerCase().includes(q)`, so the catalog search understood "RDL" and
+ * "DB Curl" while the list sitting next to it did not — which is the comment on
+ * the card ("an RDL is a Romanian deadlift so there needs to be some type of
+ * fitness knowledge when searching"). One rule, every exercise search box.
+ */
+export function matchesExerciseQuery(ex: RankableExercise, q: string): boolean {
+  return matchExerciseTier(ex, q) !== null
+}
+
 /** Drops non-matches, ranks the rest by tier, breaks ties alphabetically. */
 export function sortByMatchTier<T extends RankableExercise>(exercises: T[], q: string): T[] {
   return exercises

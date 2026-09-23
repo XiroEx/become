@@ -2353,17 +2353,17 @@ export default function LiveWorkoutPage() {
                   </button>
                 )}
               </div>
-              {/* What implement is this being logged as, and the same movement
-                  on other equipment — see components/workout/EquipmentAssumptionRow.
-                  Session scope only: switching to the machine for today's rear
-                  delt fly is not a statement about every future workout. */}
+              {/* What implement this is being logged as, when the name does not
+                  say so — see components/workout/EquipmentAssumptionRow. A
+                  disclosure, not a picker: the other-equipment chips that used
+                  to sit here offered a goblet squat on a barbell and a hack
+                  squat machine mid-set. Changing the exercise lives in "Swap
+                  Exercise" above, and picking a variation lives where an
+                  exercise is added. */}
               <EquipmentAssumptionRow
                 dark
-                slug={currentExercise?.exerciseSlug}
                 name={currentExercise?.name}
                 equipment={currentExercise?.equipment}
-                canSwitch={!(exerciseData[currentExerciseIndex] ?? []).some((set) => set.completed)}
-                onPick={(variation) => handleSwapExercise(variation, "session")}
               />
               {/* Tip / cue */}
               {currentExercise?.tip && (

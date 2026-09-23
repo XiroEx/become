@@ -10,7 +10,19 @@
 //   • target weight changed → the old goal is 'replaced' (final numbers kept),
 //     a new one starts from today's weight; pace and adherence carry over.
 //   • inside the finish band for the whole of the last 7 days (≥2 weigh-ins)
-//     → 'achieved'. It stays achieved until the target changes.
+//     → 'achieved'.
+//   • a weigh-in logged after that which lands clearly back outside the band
+//     → the same goal re-opens as 'active'. Achieving is not a one-way door:
+//     the app describes where the member IS, so 205 two weeks ago and 209
+//     since is a goal to work on again, not a goal still reached.
+//
+// Both of those last two rules are judged in whole CALENDAR DAYS. Weigh-in rows
+// are day-keyed — /api/weight writes utcMidnightDateKey(localToday) — while the
+// `achievedAt` stamp and `now` passed in here are instants, so comparing them
+// directly is the day-shift lib/dayWindow.ts warns about: for a member west of
+// UTC weighing in of an evening, the stamp lands on the NEXT UTC day and the
+// following morning's 209 sorts before its own achievement. See utcDayIndex in
+// lib/goals/pace.ts.
 //   • profile.weeklyAvailability set, no active training goal → create one with
 //     a PR snapshot as the strength baseline; days/week changes update in place.
 
@@ -19,7 +31,7 @@ import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 import Goal, { type IGoal, type GoalDirection } from '@/models/Goal'
 import { directionForGoal } from '@/lib/nutrition/tdee'
-import { defaultPaceKg, directionFromWeights, HOLD_BAND_KG, isAchieved, unitToKg } from '@/lib/goals/pace'
+import { defaultPaceKg, directionFromWeights, driftedSinceAchieved, holdConfirmed, HOLD_BAND_KG, unitToKg } from '@/lib/goals/pace'
 import { topLifts, type PRSnapshot } from '@/lib/goals/training'
 
 export interface WeightPoint { kg: number; date: Date }
@@ -117,11 +129,31 @@ export async function ensureGoals(userId: string, now = new Date()): Promise<Ens
       nutrition = { ...nutrition, target: { ...nutrition.target, direction }, kind: direction === 'maintain' ? 'maintain' : 'weight' } as IGoal
     }
 
+    // Drifted back out? 'achieved' is a statement about where the member is,
+    // not a trophy they keep. It used to be a one-way flip — hold the band for
+    // a week and every surface read "Reached ✓" from then on, through the 209s
+    // and 206s that came after. A weigh-in logged SINCE the achievement that
+    // sits clearly outside the band (band + REOPEN_MARGIN_KG, so a scale
+    // wobbling on the edge doesn't flap it) re-opens that same goal: the plan,
+    // its baseline and its pace carry on from where they were, and the pace
+    // read goes back to telling the truth about the gap. `reachedTargetAt` is
+    // cleared with it, so crossing the line again congratulates again.
+    if (nutrition == null && nutritionAchieved && nutritionAchieved.kind === 'weight' && !targetChanged(nutritionAchieved)) {
+      const band = nutritionAchieved.target?.bandKg ?? HOLD_BAND_KG
+      const stamp = nutritionAchieved.achievedAt ? new Date(nutritionAchieved.achievedAt) : null
+      if (driftedSinceAchieved(series, targetKg, band, stamp)) {
+        await Goal.updateOne(
+          { _id: nutritionAchieved._id },
+          { $set: { status: 'active' }, $unset: { achievedAt: '', final: '', reachedTargetAt: '' } },
+        )
+        nutrition = { ...nutritionAchieved, status: 'active', achievedAt: undefined, final: undefined, reachedTargetAt: undefined } as IGoal
+        nutritionAchieved = null
+      }
+    }
+
     // Achieved? Every weigh-in in the last 7 days inside the band, at least two of them.
     if (nutrition && latestKg != null && nutrition.kind === 'weight') {
-      const weekAgo = new Date(now.getTime() - 7 * 86_400_000)
-      const recent = series.filter(p => p.date >= weekAgo)
-      if (recent.length >= 2 && recent.every(p => isAchieved(p.kg, targetKg, nutrition!.target?.bandKg ?? HOLD_BAND_KG))) {
+      if (holdConfirmed(series, targetKg, nutrition.target?.bandKg ?? HOLD_BAND_KG, now)) {
         await Goal.updateOne({ _id: nutrition._id }, { $set: { status: 'achieved', achievedAt: now, final: { weightKg: latestKg, date: now } } })
         nutritionAchieved = { ...nutrition, status: 'achieved', achievedAt: now } as IGoal
         nutrition = null
