@@ -34,6 +34,11 @@
               "scheme": "https",
               "host": "become.redbtn.io",
               "pathPrefix": "/verify"
+            },
+            {
+              "scheme": "https",
+              "host": "become.redbtn.io",
+              "pathPrefix": "/account/restore"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]

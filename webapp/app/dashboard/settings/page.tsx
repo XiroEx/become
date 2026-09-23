@@ -10,7 +10,9 @@ import { defaultPaceKg } from '@/lib/goals/pace'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
-import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL, LEGAL_DELETION_DAYS } from '@/lib/legal'
+import DangerZone from '@/components/settings/DangerZone'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL } from '@/lib/legal'
+import { ACCOUNT_DELETION_GRACE_DAYS } from '@/lib/accountDeletion'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
@@ -1241,9 +1243,8 @@ function SettingsPageInner() {
 
           {/* Legal & support. Settings is where a member looks for these, and
               where an App Store reviewer looks for the account-deletion path.
-              The deletion copy states the process that EXISTS: an email. There
-              is no member-facing deletion route in the app yet, so describing a
-              button here would be the one claim on this screen that is false. */}
+              The deletion path itself is the Danger zone below, rendered
+              OUTSIDE this tab so it is two taps from Settings on any tab. */}
           <section
             id="legal"
             className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
@@ -1263,19 +1264,34 @@ function SettingsPageInner() {
             )}
             <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{HEALTH_DISCLAIMER_SHORT}</p>
             <p className="mt-4 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              To delete your account, email{' '}
+              To delete your account, use{' '}
+              <a
+                href="#danger-zone"
+                className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white"
+              >
+                Delete account
+              </a>{' '}
+              in the Danger zone at the bottom of this screen. You have{' '}
+              {ACCOUNT_DELETION_GRACE_DAYS} days to change your mind. If you would rather we did it
+              for you, email{' '}
               <a
                 href={`mailto:${LEGAL_CONTACT_EMAIL}`}
                 className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white"
               >
                 {LEGAL_CONTACT_EMAIL}
               </a>{' '}
-              from this address and we will confirm and delete within {LEGAL_DELETION_DAYS} days.
-              Cancel any paid plan first, or ask us to cancel it in the same message.
+              from this address.
             </p>
           </section>
         </>
       )}
+
+      {/* ── Danger zone ─────────────────────────────────────────────────────────
+          OUTSIDE the tab switcher on purpose. An App Store reviewer opens
+          Settings and scrolls; asking them to guess which of three tabs hides
+          "Delete account" is how a build gets rejected under 5.1.1(v). Here it
+          is two taps from Settings whichever tab is showing. */}
+      <DangerZone />
 
       <Toast toast={toast} />
     </PageTransition>

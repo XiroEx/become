@@ -9,9 +9,15 @@ import {
   type LogWeightResponse,
   type WeightPostRequest,
 } from "@become/api-client";
+// The IMPERATIVE router, not `useRouter()`. This screen is rendered directly
+// by two existing tests that mount it outside a Router provider, and a hook
+// would throw there; the singleton is only touched inside a callback that a
+// successful deletion reaches, so it stays inert in those tests.
+import { router } from "expo-router";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
+import { DangerZone } from "@/components/settings/DangerZone";
 import { createHealthOptInStore } from "@/lib/health/opt-in";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -26,8 +32,13 @@ interface ProfilePatchInput {
 
 /**
  * Profile → settings: edit name (GET/PATCH /api/profile), log weight or skip
- * (GET skip-state + POST /api/weight), and the Apple Health / Health Connect
- * opt-in toggle.
+ * (GET skip-state + POST /api/weight), the Apple Health / Health Connect
+ * opt-in toggle, and the DANGER ZONE.
+ *
+ * The danger zone is last on the screen and is not behind anything: this is
+ * the Settings screen an App Store reviewer opens looking for account deletion
+ * (guideline 5.1.1(v)), and from here it is two taps — "Delete account", then
+ * "Delete my account" in the dialog. See components/settings/DangerZone.tsx.
  */
 export default function HealthSettingsRoute() {
   const { token } = useAuth();
@@ -213,6 +224,19 @@ export default function HealthSettingsRoute() {
             accessibilityLabel="Sync from Health"
           />
         </View>
+
+        <DangerZone
+          jwt={token}
+          onDeleted={() => {
+            // The JWT is already gone from SecureStore by the time this runs
+            // (requestAccountDeletion clears it), so the device is signed out
+            // whether or not this navigation happens — which is why it is
+            // allowed to wait a beat and let the confirmation, with the date
+            // and the undo link, actually be read. Replace, not push: there
+            // must be no back gesture into a signed-out dashboard.
+            setTimeout(() => router.replace("/login"), 4000);
+          }}
+        />
       </ScrollView>
     </SafeAreaView>
   );

@@ -1069,8 +1069,11 @@ export default function BecomeLanding() {
             <p>Training · Nutrition · Mind — one app.</p>
             {/* The legal row is not optional decoration: an App Store review
                 and CalOPPA both look for a privacy link reachable from the
-                home page without signing in. Kept in the same row as the rest
-                so it wraps rather than growing a second footer on a phone. */}
+                home page without signing in, and Google Play's Data safety
+                form asks for a public deletion-request URL — which is why
+                /delete-account is in this row and not only inside the app.
+                Kept in the same row as the rest so it wraps rather than
+                growing a second footer on a phone. */}
             <div className={styles.footerLinks}>
               <Link href="/login">Sign in</Link>
               <Link href="/register">Register</Link>
@@ -1079,6 +1082,7 @@ export default function BecomeLanding() {
               <Link href="/privacy">Privacy</Link>
               <Link href="/health-data">Health data</Link>
               <Link href="/support">Support</Link>
+              <Link href="/delete-account">Delete account</Link>
             </div>
           </div>
         </div>

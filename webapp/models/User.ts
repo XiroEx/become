@@ -129,6 +129,28 @@ export interface IUserEmailPreferences {
   engagement?: boolean
 }
 
+/**
+ * A pending "delete my account", and the window in which it can be undone.
+ *
+ * PRESENT = DELETION REQUESTED. Absent (the normal state) means nothing is
+ * pending, so no existing row needs a migration and no read path has to know
+ * about this field to keep working.
+ *
+ * The request is a SOFT delete on purpose — one mis-tap would otherwise destroy
+ * a training history nobody can rebuild. Push subscriptions are dropped at
+ * REQUEST time (not at purge time), because "stop contacting me" is the part of
+ * the request that must not wait seven days. `lib/accountDeletion.ts` carries
+ * the rest of the argument; `app/api/cron/purge-deletions` does the sweep.
+ */
+export interface IUserDeletion {
+  requestedAt: Date
+  /** requestedAt + ACCOUNT_DELETION_GRACE_DAYS. Stored, not recomputed, so
+   *  changing the constant never moves a window a member was already told. */
+  scheduledPurgeAt: Date
+  /** Which client asked — the trail an App Store reviewer's request leaves. */
+  source: 'web' | 'ios' | 'android'
+}
+
 export interface IUser {
   _id?: string
   email: string
@@ -137,6 +159,8 @@ export interface IUser {
   role: UserRole
   consent?: IUserConsent
   emailPreferences?: IUserEmailPreferences
+  /** Present only while a deletion is pending. See IUserDeletion. */
+  deletion?: IUserDeletion
   /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
    *  billing webhook may write this — never derived at request time, because
    *  that would grandfather members automatically. Readers use
@@ -238,6 +262,12 @@ const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
   engagement: { type: Boolean },
 }, { _id: false });
 
+const UserDeletionSchema = new Schema<IUserDeletion>({
+  requestedAt: { type: Date, required: true },
+  scheduledPurgeAt: { type: Date, required: true },
+  source: { type: String, enum: ['web', 'ios', 'android'], required: true },
+}, { _id: false });
+
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
@@ -259,6 +289,10 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
   consent: { type: UserConsentSchema, default: undefined },
   emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
+  // `default: undefined`, like `consent` above: an EMPTY subdocument would
+  // otherwise be written on every user and "is a deletion pending?" would stop
+  // being answerable by the presence of the field.
+  deletion: { type: UserDeletionSchema, default: undefined },
   // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
   // offline, by scripts/migrate-tiers.mjs — never automatically at request
   // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
@@ -342,6 +376,15 @@ UserSchema.index(
 
 // Admin/ops: "who is on what".
 UserSchema.index({ tier: 1, grandfathered: 1 })
+
+// The deletion sweep's only query: "whose grace window has closed?". PARTIAL,
+// so it indexes the handful of rows with a deletion pending instead of every
+// member — and, unlike a sparse index, it cannot be widened later by a write
+// that sets the field to null.
+UserSchema.index(
+  { 'deletion.scheduledPurgeAt': 1 },
+  { partialFilterExpression: { 'deletion.scheduledPurgeAt': { $type: 'date' } } }
+)
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

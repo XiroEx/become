@@ -43,8 +43,13 @@ export const LEGAL_VENUE = 'the state and federal courts located in Nassau Count
  *  member whose stored version differs. So: bump it for a change a member has to
  *  agree to again (a new obligation, a new price, a new age rule), and leave it
  *  alone for a typo, or every member is stopped at the door for a comma. */
-export const LEGAL_LAST_UPDATED = 'September 18, 2026'
-export const LEGAL_LAST_UPDATED_ISO = '2026-09-18'
+export const LEGAL_LAST_UPDATED = 'September 23, 2026'
+export const LEGAL_LAST_UPDATED_ISO = '2026-09-23'
+// NOT bumped for the account-deletion rewrite of Privacy §13 (2026-09-23). The
+// change gives a member a right they can now exercise themselves; it imposes no
+// new obligation on them, so re-asking 60-odd people to tick a box for it would
+// be a gate with nothing behind it. The DATE moved, which is what section 18
+// promises. Bump the VERSION for a new obligation, a new price or a new age rule.
 export const LEGAL_VERSION = 'v1.1.0'
 
 /** The minimum age to hold an account. George's call, 2026-09-13: 13, not 18.
@@ -71,8 +76,19 @@ export const CONSENT_STATEMENT = `I am at least ${LEGAL_MINIMUM_AGE} years old, 
 export const HEALTH_DISCLAIMER_SHORT =
   'Become is a fitness, nutrition and mindset product, not medical care or medical advice. Talk to a physician before starting any exercise or nutrition program, scale the work to your own ability, and stop if something feels wrong.'
 
-/** How long deletion takes once we have confirmed the request. */
+/** The outer bound we commit to for FINISHING a deletion, counted from the
+ *  request. Not the same number as the undo window — see
+ *  ACCOUNT_DELETION_GRACE_DAYS in lib/accountDeletion.ts, which is how long the
+ *  data stays recoverable. Both are real and they answer different questions:
+ *  this one is the promise in the Privacy Policy, that one is the safety net. */
 export const LEGAL_DELETION_DAYS = 30
+
+/** The PUBLIC page where deletion can be requested — no account needed to read
+ *  it. This is the URL Google Play's Data safety form asks for, and it is
+ *  linked from the landing footer, the Privacy Policy and Support. Kept here
+ *  rather than only in lib/accountDeletion.ts so the legal copy and the app
+ *  cannot end up naming two different paths. */
+export const LEGAL_DELETION_REQUEST_PATH = '/delete-account'
 /** The refund window on a member's FIRST charge (George, 2026-09-18): a full
  *  refund on request within this many days of the first payment on the
  *  account. Renewals are not covered — the Terms say so in the same breath. */
@@ -141,7 +157,7 @@ export interface LegalSection {
 }
 
 export interface LegalDoc {
-  slug: 'terms' | 'privacy' | 'health-data' | 'support'
+  slug: 'terms' | 'privacy' | 'health-data' | 'support' | 'delete-account'
   title: string
   /** One line under the title, in plain language. */
   standfirst: string

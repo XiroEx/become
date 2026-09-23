@@ -10,20 +10,24 @@
 //   • Health-adjacent data is called what it is, and the "not a HIPAA covered
 //     entity" point is stated plainly rather than left for a member to assume
 //     either way.
-//   • The deletion section describes the process that EXISTS TODAY, which is an
-//     email to support, because there is no member-facing deletion route in the
-//     app yet. Describing a button that is not there would be the one lie in
-//     this document that Apple would actually test.
+//   • The deletion section describes the process that EXISTS TODAY, and every
+//     number in it comes from the constant the CODE uses — the undo window from
+//     lib/accountDeletion.ts, the deadline from LEGAL_DELETION_DAYS, the public
+//     path from LEGAL_DELETION_REQUEST_PATH. Section 13 is the one Apple
+//     actually tests, so it may not describe a button that is not there, and it
+//     may not omit one that is.
 
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
+  LEGAL_DELETION_REQUEST_PATH,
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTION,
   LEGAL_PRIMARY_DOMAIN,
   LEGAL_SECONDARY_DOMAIN,
   type LegalDoc,
 } from '@/lib/legal'
+import { ACCOUNT_DELETION_GRACE_DAYS } from '@/lib/accountDeletion'
 
 export const PRIVACY: LegalDoc = {
   slug: 'privacy',
@@ -413,21 +417,28 @@ export const PRIVACY: LegalDoc = {
         {
           kind: 'callout',
           tone: 'info',
-          title: 'How deletion works today',
+          title: 'Delete it yourself, in two taps',
           items: [
-            '**Become does not yet have a "delete my account" button in the app.** We are telling you that rather than describing one that is not there.',
-            `Today the process is: email ${LEGAL_CONTACT_EMAIL} from the address on your account and ask us to delete it. We will confirm it is you, confirm you want it, and then delete within ${LEGAL_DELETION_DAYS} days.`,
+            'Open **Settings** in the app, scroll to **Danger zone**, and choose **Delete account**. Confirm, and it is done. The path is identical on the web, on iOS and on Android, and you never have to ask us.',
+            `We also keep a public page at [${LEGAL_DELETION_REQUEST_PATH}](${LEGAL_DELETION_REQUEST_PATH}) that describes the same process, and you can still email ${LEGAL_CONTACT_EMAIL} from the address on your account if you cannot get into the app at all.`,
             'Cancel your paid plan first, or ask us to cancel it as part of the same request, so a renewal is not charged while the deletion is in progress.',
-            'In-app deletion is being built. When it ships, this section will be updated to describe it.',
           ],
         },
-        { kind: 'p', text: 'Deletion covers your account record and the data attached to it: your profile and body stats, injury notes, training logs and schedules, nutrition logs and custom foods, meals and recipes, mind and mood data and journal entries, uploaded photos, push subscriptions, and posts you authored in groups and events.' },
+        {
+          kind: 'p',
+          text: `**The moment you confirm**, three things happen: you are signed out on that device, every push notification registration on your account is deleted — the one in your browser and the ones on your phones — and your data is scheduled for permanent erasure in ${ACCOUNT_DELETION_GRACE_DAYS} days.`,
+        },
+        {
+          kind: 'p',
+          text: `Those ${ACCOUNT_DELETION_GRACE_DAYS} days exist so that a mis-tap is not final. We email the address on your account a link that cancels the deletion; open it in the app or in any browser, signed in or not, and your account and all of your data come back untouched — notifications excepted, which stay off until you switch them on again. Signing back in and choosing **Keep my account** in Settings does the same. After that the data is gone and cannot be recovered, and in every case the whole request finishes well inside ${LEGAL_DELETION_DAYS} days.`,
+        },
+        { kind: 'p', text: 'Deletion covers your account record and the data attached to it: your profile and body stats, injury notes, training logs and schedules, nutrition logs and custom foods, meals and recipes, mind and mood data and journal entries, sleep and check-in history, uploaded photos, chat messages, push subscriptions, and things you shared from the app.' },
         { kind: 'p', text: 'Some things do not simply disappear, and you should know which:' },
         {
           kind: 'ul',
           items: [
             'Billing records that Stripe and we are required to keep for tax and accounting.',
-            'Entries in the shared food catalogue that other members’ logs already reference. Those are separated from you rather than deleted, so that other people’s history does not break.',
+            'Entries in the shared food and exercise catalogue, and programs other members are enrolled in, that other people’s history already references. Those are separated from you — your identifier is removed — rather than deleted, so that other people’s history does not break.',
             'Copies in routine backups, until those backups age out on their normal schedule.',
             'Anything we are required to keep to comply with a legal obligation or to defend a legal claim.',
           ],

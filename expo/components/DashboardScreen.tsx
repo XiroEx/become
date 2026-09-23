@@ -22,6 +22,8 @@ export interface DashboardScreenProps {
   freezeAvailable?: boolean;
   todayWorkout: TodayWorkoutSummary | null;
   onStartWorkout?: () => void;
+  /** Opens the Settings screen — where the account-deletion danger zone is. */
+  onOpenSettings?: () => void;
   onSubmitCheckIn: (payload: CheckInPayload) => Promise<void> | void;
   submittingCheckIn?: boolean;
   /** Controls modal externally for testability. Defaults to internal state. */
@@ -42,6 +44,7 @@ export function DashboardScreen({
   freezeAvailable = false,
   todayWorkout,
   onStartWorkout,
+  onOpenSettings,
   onSubmitCheckIn,
   submittingCheckIn = false,
   checkInOpen,
@@ -117,16 +120,40 @@ export function DashboardScreen({
             <Text className="text-destructive text-sm">{errorText}</Text>
           </View>
         ) : null}
-        <View>
-          <Text
-            testID="dashboard-greeting"
-            className="text-foreground text-2xl font-bold"
+        {/* Greeting and the way into Settings, on one row.
+            The Settings entry is not decoration: `(tabs)/profile` is a hidden
+            route with no tab of its own, so without a control here the Settings
+            screen — and therefore the account-deletion path an App Store
+            reviewer is sent to find — is not reachable at all from a store
+            build. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <View style={{ flexShrink: 1 }}>
+            <Text
+              testID="dashboard-greeting"
+              className="text-foreground text-2xl font-bold"
+            >
+              {userName ? `Hey, ${userName}` : "Welcome"}
+            </Text>
+            <Text className="text-muted-foreground text-sm">
+              Here&apos;s your day
+            </Text>
+          </View>
+          <Button
+            testID="dashboard-open-settings"
+            variant="ghost"
+            size="sm"
+            onPress={onOpenSettings ?? (() => {})}
+            accessibilityLabel="Settings"
           >
-            {userName ? `Hey, ${userName}` : "Welcome"}
-          </Text>
-          <Text className="text-muted-foreground text-sm">
-            Here&apos;s your day
-          </Text>
+            Settings
+          </Button>
         </View>
 
         <StreakBanner

@@ -622,6 +622,56 @@ Items marked `[CONFIRM AT SIGN-OFF: Cn]` are open questions only a person with a
 provider console, a contract or physical access can answer; Appendix A lists all
 of them. **They are not claims.** Do not cite a marked line as settled fact.
 
+### Account deletion (store readiness, GDPR Art. 17, CCPA)
+
+**A member deletes their own account. Nobody has to email support, and no agent
+may reintroduce a screen that says otherwise.** Apple checks guideline 5.1.1(v)
+by hand — sign in, open Settings, find "Delete account" without leaving the app
+— and Google Play's Data safety form asks for a public web URL where the same
+thing can be requested.
+
+The whole surface, and there is one of each:
+
+| Thing | Where |
+|---|---|
+| The in-app control | `components/settings/DangerZone.tsx`, rendered by `app/dashboard/settings/page.tsx` **outside the tab switcher**, and by `expo/app/(tabs)/profile/health.tsx` |
+| The route | `app/api/me/account` — `DELETE` requests, `POST {intent:'cancel'}` cancels, `GET` reports |
+| The undo link | `app/api/me/account/restore` (public, HMAC-authenticated) and the page at `/account/restore` |
+| The public request URL | `/delete-account`, copy in `lib/legal/deleteAccount.ts`, linked from the landing footer |
+| The sweep | `app/api/cron/purge-deletions` + `.github/workflows/purge-deleted-accounts.yml` |
+| What is erased | `lib/accountPurge.ts` — a declarative plan, not hand-written deletes |
+
+Five things that are load-bearing and easy to break:
+
+1. **Two taps from Settings, and the danger zone is not behind a tab.** On the
+   web it sits at the top level of the settings page, next to the toast, so a
+   reviewer landing on the Profile tab still sees it.
+2. **Push subscriptions are dropped at REQUEST time, not at purge time.** Web
+   endpoints and native Expo tokens share one collection
+   (`models/PushSubscription.ts`), so one `deleteMany` by `userId` silences every
+   device. `UserProgress.notificationsEnabled` is set false in the same breath so
+   a background resync cannot mint a replacement.
+3. **The device signs itself out.** A JWT cannot be revoked server-side, so the
+   client dropping it IS the sign-out — `logout()` on the web,
+   `secureTokenStore.clear()` in the app.
+4. **Seven days recoverable, thirty days to finish.** `ACCOUNT_DELETION_GRACE_DAYS`
+   (`lib/accountDeletion.ts`) is the undo window; `LEGAL_DELETION_DAYS`
+   (`lib/legal`) is the promise in the Privacy Policy. They are different numbers
+   answering different questions — do not collapse them.
+5. **`lib/accountDeletion.ts` imports no Node built-ins.** It is in the browser
+   bundle and in the Expo app. The HMAC lives in `lib/accountRestoreToken.ts`,
+   which is server-only.
+
+The undo link is bound to `deletion.requestedAt`, so cancelling (or re-requesting)
+invalidates every link already sent. The API's `GET` on the restore route
+redirects rather than restoring: mail scanners fetch every URL in a message
+before a human sees it, and a mutating GET would cancel deletions members meant.
+
+Tests: `tests/unit/account/deletion.test.ts` (token, window, purge plan),
+`tests/unit/account/deletionRoutes.test.ts` (real DB), and
+`tests/unit/account/storeReadiness.test.tsx`, which reaches into `../expo`
+because `.github/workflows/ci.yml` runs the webapp suite and nothing else.
+
 ### Billing (Stripe)
 
 Every value is **optional**, and the app is fully functional with none of them

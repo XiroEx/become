@@ -13,8 +13,8 @@
 //      plan page, next to the button that asks for consent, and is the SAME
 //      wording the Terms commit to;
 //   4. nothing claims a certification Become does not hold;
-//   5. the account-deletion copy still matches reality — that there is no
-//      in-app delete button — for as long as that stays true.
+//   5. the account-deletion copy still matches reality — that there IS an
+//      in-app delete button, and where it is.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -25,10 +25,12 @@ import TermsPage from '../../../app/terms/page'
 import PrivacyPage from '../../../app/privacy/page'
 import SupportPage from '../../../app/support/page'
 import HealthDataPage from '../../../app/health-data/page'
+import DeleteAccountPage from '../../../app/delete-account/page'
 import { PlanPricing } from '../../../app/dashboard/plan/PlanPageClient'
 import {
   COUNSEL_TODO,
   LEGAL_CONTACT_EMAIL,
+  LEGAL_DELETION_REQUEST_PATH,
   LEGAL_LAST_UPDATED,
   LEGAL_LINKS,
   LEGAL_REFUND_WINDOW_DAYS,
@@ -37,10 +39,12 @@ import {
   counselTodos,
   renewalLine,
 } from '../../../lib/legal'
+import { ACCOUNT_DELETION_GRACE_DAYS } from '../../../lib/accountDeletion'
 import { TERMS } from '../../../lib/legal/terms'
 import { PRIVACY } from '../../../lib/legal/privacy'
 import { SUPPORT } from '../../../lib/legal/support'
 import { HEALTH_DATA } from '../../../lib/legal/healthData'
+import { DELETE_ACCOUNT } from '../../../lib/legal/deleteAccount'
 
 const ROOT = path.join(__dirname, '../../..')
 const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
@@ -250,24 +254,91 @@ test('every open question is marked for counsel, and marked the same way', () =>
 // ─── The deletion copy matches reality ───────────────────────────────────────
 
 test('the privacy policy describes account deletion as it actually works', () => {
-  // There is no member-facing deletion route: app/api/admin/users/[id] is
-  // admin-only. While that is true, the policy must say so rather than describe
-  // a button. When in-app deletion ships, this test fails and both the route
-  // list and the copy get updated together — which is the point.
-  const memberFacingDelete = fs.existsSync(
-    path.join(ROOT, 'app/api/me/account/route.ts'),
+  // The member-facing route. This assertion used to run the other way round —
+  // it FAILED if the route appeared, so that the copy and the code could never
+  // ship apart. It still does that job, in the direction that is now true: if
+  // the route is ever removed, the policy stops being able to promise a button.
+  assert.ok(
+    fs.existsSync(path.join(ROOT, 'app/api/me/account/route.ts')),
+    'the Privacy Policy describes an in-app delete button; the route behind it is gone',
   )
+  assert.ok(
+    fs.existsSync(path.join(ROOT, 'app/api/me/account/restore/route.ts')),
+    'the policy promises an undo link; the route behind it is gone',
+  )
+
   const html = renderToStaticMarkup(<PrivacyPage />)
 
-  if (memberFacingDelete) {
-    assert.fail(
-      'a member-facing account-deletion route now exists: update the Privacy Policy (section 13), the Support page and the settings copy to describe it, then update this test',
-    )
+  // It names the path a member (and a reviewer) has to walk.
+  assert.ok(has(html, 'Danger zone'), 'the policy does not say where the button is')
+  assert.ok(has(html, 'Delete account'), 'the policy does not name the control')
+  // And the two facts an authority would check: what stops immediately, and
+  // how long the data survives.
+  assert.ok(
+    has(html, `scheduled for permanent erasure in ${ACCOUNT_DELETION_GRACE_DAYS} days`),
+    'the policy does not state the undo window',
+  )
+  assert.ok(
+    has(html, 'every push notification registration on your account is deleted'),
+    'the policy does not say that notifications stop at request time',
+  )
+  // The old claim must be gone, not merely contradicted somewhere else.
+  assert.equal(
+    has(html, 'Become does not yet have a'),
+    false,
+    'the policy still says there is no in-app delete button',
+  )
+  assert.ok(has(html, LEGAL_CONTACT_EMAIL), 'no address for somebody locked out of the app')
+})
+
+// ─── Store readiness: the two URLs the stores ask for ────────────────────────
+
+test('the public deletion-request page renders signed out, for Play Data safety', () => {
+  // Google Play's Data safety form asks for "a web link where users can request
+  // deletion of their account and data", and a reviewer opens it cold: no
+  // session, no app installed, and — because this renders to static markup
+  // here — no client JavaScript.
+  const html = renderToStaticMarkup(<DeleteAccountPage />)
+
+  assert.ok(html.includes(`>${esc(DELETE_ACCOUNT.title)}</h1>`), 'no title')
+  assert.ok(has(html, 'Danger zone'), 'it does not say where the in-app button is')
+  assert.ok(has(html, 'Delete account'), 'it does not name the in-app control')
+  assert.ok(has(html, LEGAL_CONTACT_EMAIL), 'no address for somebody locked out')
+  assert.ok(has(html, 'Privacy Policy'), 'it does not link the privacy policy')
+
+  // Every section reaches the page with an anchor, like the other legal pages.
+  for (const section of DELETE_ACCOUNT.sections) {
+    assert.ok(html.includes(`id="${section.id}"`), `section ${section.id} missing`)
   }
 
+  // And it claims nothing Become cannot back, held to the same list as the rest.
+  for (const re of [/HIPAA[- ](compliant|certified)/i, /\bguaranteed\b|money[- ]back/i, /lorem ipsum/i]) {
+    assert.doesNotMatch(html, re)
+  }
+})
+
+test('the landing footer carries the public deletion URL', () => {
+  // Being in the footer is what makes it reachable from the home page without
+  // signing in, which is the form the Play reviewer fills the URL into.
+  const src = read('components/landing/BecomeLanding.tsx')
+  const footer = /<footer className={styles\.footer}>[\s\S]*?<\/footer>/.exec(src)
+  assert.ok(footer, 'the landing page has no footer any more')
   assert.ok(
-    has(html, 'Become does not yet have a'),
-    'the policy must admit there is no in-app delete button while there is none',
+    footer[0].includes(`href="${LEGAL_DELETION_REQUEST_PATH}"`),
+    'the footer does not link the public deletion page',
   )
-  assert.ok(has(html, LEGAL_CONTACT_EMAIL), 'no address to send a deletion request to')
+})
+
+test('the support page sends members to the in-app control, not only to an inbox', () => {
+  const html = renderToStaticMarkup(<SupportPage />)
+  assert.ok(has(html, 'Danger zone'), 'support does not name the in-app path')
+  assert.ok(
+    has(html, LEGAL_DELETION_REQUEST_PATH) || html.includes(`href="${LEGAL_DELETION_REQUEST_PATH}"`),
+    'support does not link the public deletion page',
+  )
+  assert.equal(
+    has(html, 'There is no delete button in the app yet'),
+    false,
+    'support still claims there is no in-app delete button',
+  )
 })

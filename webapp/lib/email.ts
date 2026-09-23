@@ -293,6 +293,107 @@ export function verificationEmailHtml({ verifyUrl, mode }: { verifyUrl: string; 
   })
 }
 
+/**
+ * The "you asked us to delete your account" email, as HTML.
+ *
+ * TRANSACTIONAL, so it carries the postal address and NO unsubscribe link: a
+ * member cannot opt out of being told their account is about to be erased, and
+ * CAN-SPAM does not ask them to. It is also the ONLY thing standing between a
+ * mis-tap and an unrecoverable deletion, so the undo link is the button and the
+ * raw URL is printed underneath it — this link is opened on a phone, in a mail
+ * app, where "copy and paste this" is sometimes the only thing that works.
+ *
+ * Pure and exported so the copy and the link can be asserted without SMTP.
+ */
+export function accountDeletionEmailHtml({
+  restoreUrl,
+  scheduledPurgeAt,
+  graceDays,
+}: {
+  restoreUrl: string
+  scheduledPurgeAt: Date
+  graceDays: number
+}): string {
+  const when = scheduledPurgeAt.toUTCString()
+  return emailShell({
+    title: `Your ${appName} account is scheduled for deletion`,
+    content: `
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">Hi,</p>
+
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">
+            You asked us to delete your ${appName} account. We have signed you out everywhere,
+            stopped every notification, and scheduled your data for permanent deletion on
+            <strong>${when}</strong> — ${graceDays} days from now.
+          </p>
+
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">
+            <strong>Changed your mind?</strong> Use the button below any time before then and your
+            account and all of your data come back untouched. After that date it cannot be undone.
+          </p>
+
+          <div style="text-align: center; margin: 32px 0;">
+            <a class="b-button" href="${restoreUrl}" style="display: inline-block; background-color: ${EMAIL_LIGHT.buttonSurface}; color: ${EMAIL_LIGHT.buttonInk}; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Keep My Account</a>
+          </div>
+
+          <p class="b-muted" style="font-size: 14px; color: ${EMAIL_LIGHT.muted}; margin: 32px 0 0;">
+            If you did not ask for this, use the button above straight away and then reply to this
+            email so we can look into it.
+          </p>
+
+          <hr class="b-rule" style="border: none; border-top: 1px solid ${EMAIL_LIGHT.border}; margin: 32px 0;">
+
+          <p class="b-muted" style="font-size: 12px; color: ${EMAIL_LIGHT.muted}; text-align: center; margin: 0;">
+            If the button doesn't work, copy and paste this link into your browser:<br>
+            <a class="b-muted-link" href="${restoreUrl}" style="color: ${EMAIL_LIGHT.mutedLink}; word-break: break-all;">${restoreUrl}</a>
+          </p>
+          ${emailFooter({ reason: `You're receiving this because a deletion was requested for this ${appName} account.` })}`,
+  })
+}
+
+export async function sendAccountDeletionEmail(
+  email: string,
+  opts: { restoreUrl: string; scheduledPurgeAt: Date; graceDays: number },
+) {
+  await sendEmail({
+    to: email,
+    subject: `Your ${appName} account will be deleted in ${opts.graceDays} days`,
+    html: accountDeletionEmailHtml(opts),
+  })
+}
+
+/** Sent when the undo link is used. Transactional, and deliberately short. */
+export function accountRestoredEmailHtml(): string {
+  return emailShell({
+    title: `Your ${appName} account was restored`,
+    content: `
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">Hi,</p>
+
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">
+            The deletion of your ${appName} account has been cancelled and nothing was removed.
+            Sign in as usual — your training, nutrition and mind history are all where you left them.
+          </p>
+
+          <p class="b-muted" style="font-size: 14px; color: ${EMAIL_LIGHT.muted}; margin: 0 0 24px;">
+            One thing did change: notifications were switched off the moment the deletion was
+            requested, and they stay off until you turn them back on in Settings. We would rather
+            leave them off than start pushing to a phone you thought you had said goodbye to.
+          </p>
+
+          <p class="b-muted" style="font-size: 14px; color: ${EMAIL_LIGHT.muted}; margin: 32px 0 0;">
+            If it was not you who cancelled it, reply to this email and we will look into it.
+          </p>
+          ${emailFooter({ reason: `You're receiving this because a pending deletion of this ${appName} account was cancelled.` })}`,
+  })
+}
+
+export async function sendAccountRestoredEmail(email: string) {
+  await sendEmail({
+    to: email,
+    subject: `Your ${appName} account was restored`,
+    html: accountRestoredEmailHtml(),
+  })
+}
+
 export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', baseUrl?: string) {
   const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const verifyUrl = `${appUrl}/verify?token=${token}&mode=${mode}`

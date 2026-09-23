@@ -1,0 +1,138 @@
+name: Purge deleted accounts
+
+# THE schedule for the account-deletion sweep. There is exactly one, and this
+# is it.
+#
+# A member's "delete my account" is recorded immediately and their push
+# subscriptions are dropped immediately; the DATA is erased once the seven-day
+# undo window has closed (webapp/lib/accountDeletion.ts explains why there is a
+# window). Nothing in the app is watching a clock, so without this the window
+# never closes and a deletion never finishes — which would turn a promise made
+# to a member, to Apple and to a supervisory authority into a lie that looks
+# fine from the outside.
+#
+# WHY HERE, AND WHY ONLY HERE
+#
+# Production (become.redbtn.io, `main`) and beta (become-beta.redbtn.io, `beta`)
+# are two RedRun workspaces over ONE MongoDB, so a second schedule on beta would
+# be a second runner over the same rows. This names the PRODUCTION host
+# explicitly and is the only schedule for it in the repo. If a RedRun workspace
+# schedule is ever added for this, DELETE THIS FILE in the same change.
+#
+# GitHub only runs `schedule:` from the repository's DEFAULT branch, so a copy
+# of this file on `beta` is inert until it reaches `main`. Two consequences:
+# the schedule starts when this merges to `main`, and GitHub disables scheduled
+# workflows in a repository with 60 days of no activity.
+#
+# CADENCE: daily. The window is measured in days, so a sweep an hour late is
+# immaterial; a sweep that never runs is the only failure that matters. The
+# minute is deliberately not :00 — GitHub queues every cron in the world at the
+# top of the hour.
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'List what is due and erase nothing'
+        type: boolean
+        default: false
+
+# Never two at once: two sweeps over the same due row would both start erasing
+# the same collections. The sweep is idempotent, so that is wasteful rather
+# than harmful, but there is no reason to find out.
+concurrency:
+  group: purge-deleted-accounts
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Call the production purge sweep
+        env:
+          # Same value as redsecrets `admin.cronSecret` (the CRON_SECRET the
+          # notify cron uses), set as the repository secret BECOME_CRON_SECRET.
+          CRON_SECRET: ${{ secrets.BECOME_CRON_SECRET }}
+          # Interpolated into env, never into the shell line — an input is
+          # attacker-controllable text and must not be pasted into `run:`.
+          DRY_RUN: ${{ inputs.dryRun }}
+          BASE_URL: https://become.redbtn.io
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::BECOME_CRON_SECRET is missing — the purge cannot authenticate"
+            exit 1
+          fi
+
+          URL="${BASE_URL}/api/cron/purge-deletions"
+          if [ "${DRY_RUN}" = "true" ]; then
+            URL="${URL}?dryRun=1"
+          fi
+
+          # The secret travels in a header, so it is never in a URL that could
+          # end up in an access log.
+          code=$(curl -sS --max-time 600 \
+            -o response.json -w '%{http_code}' \
+            -X POST "${URL}" \
+            -H "x-cron-secret: ${CRON_SECRET}")
+
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::purge endpoint answered HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Report what it erased
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ ! -s response.json ]; then
+            {
+              echo "### Account deletion sweep"
+              echo
+              echo "No response body — the call failed before the endpoint answered."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Account deletion sweep"
+            echo
+
+            ran_at=$(jq -r '.ranAt // "unknown"' response.json)
+            due=$(jq -r '.due // 0' response.json)
+            purged=$(jq -r '.purged // 0' response.json)
+            failed=$(jq -r '.failed // 0' response.json)
+            docs=$(jq -r '.documentsDeleted // 0' response.json)
+            detached=$(jq -r '.documentsDetached // 0' response.json)
+
+            echo "| ran at | due | accounts purged | failed | documents deleted | documents detached |"
+            echo "|---|---|---|---|---|---|"
+            echo "| ${ran_at} | ${due} | ${purged} | ${failed} | ${docs} | ${detached} |"
+            echo
+
+            if [ "${due}" = "0" ]; then
+              echo "Nothing was due. That is the normal day."
+            fi
+
+            if [ "${failed}" != "0" ]; then
+              echo "Accounts whose purge did not complete (ids only — never emails):"
+              echo
+              jq -r '.failures[]? | "- `\(.userId)` — \(.collections | join(", "))"' response.json
+              echo
+              echo "::warning::${failed} account(s) failed to purge; the next run will retry them"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$(jq -r '.failed // 0' response.json)" != "0" ]; then
+            exit 1
+          fi

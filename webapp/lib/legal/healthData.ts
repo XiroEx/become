@@ -223,7 +223,11 @@ export const HEALTH_DATA: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: `Email ${LEGAL_CONTACT_EMAIL} from the address on your account and say what you want. Emailing from the account address is how we verify it is you; we will not ask for identity documents unless there is no other way to be sure. An authorised agent may make a request for you if they can show they are authorised, and we will confirm it with you directly.`,
+          text: '**Deletion you can do yourself, right now.** Open **Settings** in the app, scroll to **Danger zone**, and choose **Delete account** — that deletes your account and the consumer health data attached to it, and it is the same two taps on the web, on iOS and on Android. The [deletion page](/delete-account) describes exactly what happens.',
+        },
+        {
+          kind: 'p',
+          text: `For anything else — confirming, accessing, withdrawing a consent, or deleting when you cannot get into the app — email ${LEGAL_CONTACT_EMAIL} from the address on your account and say what you want. Emailing from the account address is how we verify it is you; we will not ask for identity documents unless there is no other way to be sure. An authorised agent may make a request for you if they can show they are authorised, and we will confirm it with you directly.`,
         },
         {
           kind: 'p',

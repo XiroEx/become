@@ -4,16 +4,19 @@
 // be a real page a human can act on, not a link to a contact form that does not
 // exist. Everything on it is something Become can actually do today: one email
 // address, a response range rather than a promise, the real cancellation path,
-// and the real (email-based) account deletion path.
+// and the real account deletion path — which is now the in-app Danger zone,
+// with the email route kept for somebody locked out of their own account.
 
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
+  LEGAL_DELETION_REQUEST_PATH,
   LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SUPPORT_RESPONSE,
   RENEWAL_TERMS,
   type LegalDoc,
 } from '@/lib/legal'
+import { ACCOUNT_DELETION_GRACE_DAYS } from '@/lib/accountDeletion'
 
 export const SUPPORT: LegalDoc = {
   slug: 'support',
@@ -119,7 +122,15 @@ export const SUPPORT: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: `There is no delete button in the app yet. Email ${LEGAL_CONTACT_EMAIL} from the address on your account, ask us to delete it, and we will confirm and then delete within ${LEGAL_DELETION_DAYS} days. Cancel any paid plan first, or ask us to cancel it in the same message. What deletion covers, and the few things that survive it, is set out in the [Privacy Policy](/privacy).`,
+          text: `Open **Settings** in the app, scroll to **Danger zone**, and choose **Delete account**. Two taps, the same on the web, on iOS and on Android, and you never have to ask us. Cancel any paid plan first, or ask us to cancel it, so a renewal is not charged while the deletion is in progress.`,
+        },
+        {
+          kind: 'p',
+          text: `You are signed out straight away and every notification stops immediately; your data is then held for ${ACCOUNT_DELETION_GRACE_DAYS} days and erased after that. We email you a link that cancels it — open it in the app or in any browser — so a mis-tap is never final. The full picture is on the [deletion page](${LEGAL_DELETION_REQUEST_PATH}), and what survives deletion is in the [Privacy Policy](/privacy#deletion).`,
+        },
+        {
+          kind: 'p',
+          text: `If you cannot get into the app at all, email ${LEGAL_CONTACT_EMAIL} from the address on your account with "Delete my account" in the subject. We will confirm it is you and finish within ${LEGAL_DELETION_DAYS} days.`,
         },
       ],
     },

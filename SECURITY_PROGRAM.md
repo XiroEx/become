@@ -307,7 +307,7 @@ cryptographically erased or destroyed, and the disposal is recorded by the Coord
 |---|---|---|
 | Magic-link tokens and session ids | 15 minutes | Deleted automatically by the MongoDB TTL index — disposal implemented as a property of the collection, not as a chore |
 | AI run state | About an hour | Redis expiry |
-| Account, health, training, nutrition and community data | While the account exists | Deleted on request within 30 days (Privacy Policy §13). There is no in-app delete button yet (G8); today it is a request to `info@becomeurbest.com` from the account address, and the Coordinator runs the deletion across the app database, the auth database and object storage |
+| Account, health, training, nutrition and community data | While the account exists | Deleted on request within 30 days (Privacy Policy §13). The member asks for it themselves, from any client: **Settings → Danger zone → Delete account**, or the public page at `/delete-account`. Every push registration is dropped at request time; the data is held recoverable for 7 days behind an emailed undo link and then erased by the scheduled sweep (`webapp/app/api/cron/purge-deletions`, `webapp/lib/accountPurge.ts`). A request to `info@becomeurbest.com` from the account address remains the path for a member locked out of the app, and the Coordinator still runs that one across the app database, the auth database and object storage |
 | Uploaded images and video | While the account exists, or until the member deletes the item | Deleted from object storage as part of the same deletion |
 | Legacy password hashes | Retained today, needed by nothing | Should be dropped (G11) |
 | Billing records | As long as tax and accounting law requires | Stripe keeps its own records; Become keeps the minimum metadata |
@@ -406,7 +406,7 @@ Written down because an undocumented gap is an unmanaged one. Owner "Coordinator
 | G5 | No periodic access review and no written record of who holds admin on each provider account and in the app | R8 | Coordinator | At sign-off, then quarterly |
 | G6 | No audit trail of administrative access to member data | R8 | Coordinator | 2027-01-31 |
 | G7 | Sessions last 30 days and slide on use, with no way to revoke a single session or device | R11 | Coordinator | 2027-01-31 |
-| G8 | Processor terms unconfirmed (C7), and no in-app account deletion — deletion is a manual request handled within 30 days | R10 | Business owner | 2026-12-31 |
+| G8 | Processor terms unconfirmed (C7). ~~No in-app account deletion~~ — CLOSED: Settings → Danger zone → Delete account requests erasure from any client, push registrations are dropped at request time, and `app/api/cron/purge-deletions` erases the data after a 7-day undo window | R10 | Business owner | 2026-12-31 |
 | G9 | No training record beyond the sign-off table in section 13 | R12 | Business owner | At sign-off |
 | G10 | No automated secret scanning on the repository, after a credential was committed once already | R2 | Coordinator | 2026-11-30 |
 | G11 | Legacy bcrypt password hashes retained although nothing reads them | R1 | Coordinator | 2026-12-31 |

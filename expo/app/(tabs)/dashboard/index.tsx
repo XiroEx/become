@@ -1,4 +1,8 @@
 import { useCallback, useState } from "react";
+// The IMPERATIVE router, not `useRouter()`: this route is mounted directly by
+// __tests__/dashboard.test.tsx, outside any Router provider, where a hook would
+// throw. The singleton is only touched from a press handler.
+import { router } from "expo-router";
 import {
   MeResponseSchema,
   StreakResponseSchema,
@@ -131,6 +135,10 @@ export default function DashboardRoute() {
       streakDays={streak.data?.streakDays ?? 0}
       freezeAvailable={(streak.data?.streakFreezes ?? 0) > 0}
       todayWorkout={todayWorkout}
+      // The only way into Settings from a store build, and therefore the only
+      // way to the account-deletion danger zone: `(tabs)/profile` is a hidden
+      // route with no tab of its own.
+      onOpenSettings={() => router.push("/(tabs)/profile/health")}
       loading={initialLoading}
       errorText={errorText}
       refreshing={refreshing}
