@@ -590,6 +590,38 @@ transactional: address only, no opt-out.
 review step, Settings). It must never claim more than Terms §1 does.
 Tests: `tests/unit/legal/consent.test.tsx`, `tests/unit/email/canSpam.test.ts`.
 
+### Information security program (go-live item 17)
+
+**`SECURITY_PROGRAM.md` at the repo root is the written information security
+program** New York's SHIELD Act (GBL § 899-bb(2)(b)) requires of a business
+holding a New York resident's private information. It names the responsible
+person (**George Anthony**, Security Coordinator; Jon Don as business/data
+owner), inventories every system member data lives on, carries the risk
+register, the administrative/technical/physical safeguards clause by clause, the
+breach-notification playbook for § 899-aa, and a numbered list of the gaps that
+are not closed yet.
+
+Four rules about it:
+
+- **One copy, in git.** No PDF, no second copy in a drive folder. Approval is
+  recorded by editing the `Approval status` line and the sign-off table in a
+  commit — the commit is the signature.
+- **It is the INTERNAL side of the same facts `/privacy` and `/health-data`
+  state publicly.** A processor added to one must be added to the other, and
+  nothing in the program may contradict what a member has been told.
+- **Touch the infrastructure, re-read section 4.** A new data store, a new
+  provider, a change to auth, hosting or the secret store is a review trigger
+  (section 13), not a note for next year. The same applies to closing one of the
+  numbered gaps: close it in the table, with a date.
+- `tests/unit/legal/securityProgram.test.ts` fails the build if the program
+  loses a statutory sub-clause, the named owner, a system from the inventory, its
+  dates, or ever carries something credential-shaped — the "never write a
+  credential into a file" rule, enforced.
+
+Items marked `[CONFIRM AT SIGN-OFF: Cn]` are open questions only a person with a
+provider console, a contract or physical access can answer; Appendix A lists all
+of them. **They are not claims.** Do not cite a marked line as settled fact.
+
 ### Billing (Stripe)
 
 Every value is **optional**, and the app is fully functional with none of them
@@ -946,6 +978,7 @@ Rules:
 | `webapp/lib/hydrateExercises.ts` | How exercise slugs become full objects |
 | `webapp/app/api/programs/route.ts` | Program list/create pattern (representative of all API routes) |
 | `webapp/components/AuthGuard.tsx` | How protected routes work |
+| `SECURITY_PROGRAM.md` | The written information security program (SHIELD Act): who owns security, where member data lives, what is safeguarded and what is not yet |
 | `webapp/app/dashboard/workout/[programId]/workout/live/page.tsx` | Live workout tracking (most complex UI) |
 
 ## What's Missing / Incomplete
