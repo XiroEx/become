@@ -119,6 +119,36 @@ export interface IUserConsent {
   source: 'signup' | 'gate' | 'checkout'
 }
 
+/**
+ * The record of whether this member lets Become send what they submit to the
+ * third-party AI provider (App Store Guideline 5.1.2(i)).
+ *
+ * SEPARATE FROM `consent` ON PURPOSE. That one is "I am old enough and I agree
+ * to the Terms", which every member must give to hold an account at all. This
+ * one is a permission that may be REFUSED and may be WITHDRAWN, and the app
+ * keeps working either way — so it carries its own version, its own timestamp
+ * and its own answer.
+ *
+ * A REFUSAL IS A RECORD, NOT AN ABSENCE. `granted: false` with a `decidedAt`
+ * means "asked, said no": the ask is not repeated on every app open, and the
+ * member can turn it on later in Settings. Absent means never asked.
+ */
+export interface IUserAiConsent {
+  /** AI_CONSENT_VERSION at the moment of the decision. */
+  version: string
+  /** The answer. False is a decision, not a missing one. */
+  granted: boolean
+  /** When the answer was given (grant or refusal). */
+  decidedAt: Date
+  /** When a previously granted permission was withdrawn, if it was. Kept
+   *  alongside `granted: false` because "they allowed it until this date" is
+   *  the fact that matters afterwards. */
+  revokedAt?: Date
+  /** Where the answer came from: the consent gate, the sheet raised when an AI
+   *  surface was refused, or the Settings toggle. */
+  source: 'gate' | 'prompt' | 'settings'
+}
+
 /** Email categories a member can opt out of. Absent = ON, same convention as
  *  UserProgress.notificationPrefs. `engagement` is the streak / milestone mail
  *  (lib/email.ts), the only non-transactional email Become sends; sign-in
@@ -136,6 +166,9 @@ export interface IUser {
   name: string
   role: UserRole
   consent?: IUserConsent
+  /** Explicit permission to share inputs with the third-party AI. Absent =
+   *  never asked = nothing may be sent. See lib/aiConsent.ts. */
+  aiConsent?: IUserAiConsent
   emailPreferences?: IUserEmailPreferences
   /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
    *  billing webhook may write this — never derived at request time, because
@@ -234,6 +267,14 @@ const UserConsentSchema = new Schema<IUserConsent>({
   source: { type: String, enum: ['signup', 'gate', 'checkout'], required: true },
 }, { _id: false });
 
+const UserAiConsentSchema = new Schema<IUserAiConsent>({
+  version: { type: String, required: true },
+  granted: { type: Boolean, required: true },
+  decidedAt: { type: Date, required: true },
+  revokedAt: { type: Date, default: undefined },
+  source: { type: String, enum: ['gate', 'prompt', 'settings'], required: true },
+}, { _id: false });
+
 const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
   engagement: { type: Boolean },
 }, { _id: false });
@@ -258,6 +299,9 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   },
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
   consent: { type: UserConsentSchema, default: undefined },
+  // Absent is the SAFE state and the default: no record, no permission, and
+  // lib/aiConsent.ts#aiConsentGranted answers false, so nothing is dispatched.
+  aiConsent: { type: UserAiConsentSchema, default: undefined },
   emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
   // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
   // offline, by scripts/migrate-tiers.mjs — never automatically at request

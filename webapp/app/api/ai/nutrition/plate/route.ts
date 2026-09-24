@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun } from '@/lib/ai/routeHelpers'
 import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -28,6 +29,14 @@ export async function POST(request: NextRequest) {
   // Optional user note/description sent WITH the photo (e.g. "these are 6 carnitas
   // tacos") — the plate prompt is instructed to trust explicit counts/ingredients.
   const note = typeof body.note === 'string' ? body.note.slice(0, 500) : ''
+
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
 
   // Charged AFTER validation (a missing image must not cost a scan) and BEFORE
   // the trigger (the allowance gates the dispatch, it does not merely count

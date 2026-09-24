@@ -2,7 +2,9 @@
 
 // The in-app consent gate: the record that a member agreed to the Terms and
 // Privacy Policy, and said they were old enough, for every member who has no
-// such record — which on 2026-09-13 was every member.
+// such record — which on 2026-09-13 was every member. It also carries the
+// second, separate ask: whether Become may send what they submit to its AI
+// provider (App Store Guideline 5.1.2(i)).
 //
 // WHY A GATE AND NOT A BANNER. Two things need a timestamp against a version:
 // the NY GBL 527-a consent evidence the plan page's renewal disclosure relies
@@ -15,12 +17,22 @@
 // path that could not collect the tick (Google, passkey, a login-mode magic
 // link for an unknown address), and everyone after a version bump that needs
 // re-agreement. A sign-up through the form has the record already and never
-// sees this.
+// sees this — unless the AI question is still open, which is its own version
+// and its own answer.
+//
+// THE AI TICK IS NOT A CONDITION OF ENTRY. The button does not wait for it,
+// leaving it unticked records a refusal, and the member gets into the app
+// either way. What it is NOT is skippable: a member who answers nothing is
+// asked again next load, because an unanswered question is not a refusal and
+// silence must never be read as permission. Closing the sheet is not an option
+// the sheet offers — answering it is, in either direction.
 //
 // FAILS OPEN. A network blip, a 500, a missing token: no sheet. The server
 // holds the truth and asks again next open; a member locked out of the app by
 // a flaky connection would be a worse outcome than a day's delay in evidence.
-// Same rule as every client-side lock in this app.
+// Same rule as every client-side lock in this app. Note the asymmetry with the
+// SERVER gate in lib/aiConsent.ts, which fails CLOSED: not showing the ask
+// costs a day, wrongly answering it for somebody costs their data.
 //
 // Mounted in the dashboard layout (persists across dashboard navigation, so
 // one request per app load) and on the onboarding page, so a brand-new
@@ -34,15 +46,19 @@ import { ConsentSheet } from './ConsentSheet'
 interface ConsentStatusBody {
   termsVersion?: string
   current?: boolean
+  ai?: { granted?: boolean; decided?: boolean }
 }
 
-/** Module-level: once agreed (or confirmed current) in this tab, never asked
+/** Module-level: once every open question is answered in this tab, never asked
  *  again for the life of the bundle, whichever mount point asks. */
 let settledCurrent = false
 
 export default function ConsentGate() {
   const [open, setOpen] = useState(false)
+  const [needsTerms, setNeedsTerms] = useState(false)
+  const [needsAi, setNeedsAi] = useState(false)
   const [checked, setChecked] = useState(false)
+  const [aiChecked, setAiChecked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useLockScroll(open)
@@ -58,11 +74,18 @@ export default function ConsentGate() {
         if (!res.ok || cancelled) return
         const body = (await res.json().catch(() => null)) as ConsentStatusBody | null
         if (cancelled || !body) return
-        if (body.current === true) {
+        const termsOpen = body.current === false
+        // `decided` is the question, not `granted`: a member who said no has
+        // answered, and re-asking every app open would be nagging them into a
+        // yes. They can change their mind in Settings.
+        const aiOpen = body.ai?.decided === false
+        if (!termsOpen && !aiOpen) {
           settledCurrent = true
           return
         }
-        if (body.current === false) setOpen(true)
+        setNeedsTerms(termsOpen)
+        setNeedsAi(aiOpen)
+        setOpen(true)
       } catch {
         // Fail open — see the header comment.
       }
@@ -73,16 +96,27 @@ export default function ConsentGate() {
   }, [])
 
   const agree = useCallback(async () => {
-    if (!checked || busy) return
+    if ((needsTerms && !checked) || busy) return
     setBusy(true)
     setError(null)
     try {
       const token = getToken()
-      const res = await fetch('/api/me/consent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` },
-        body: JSON.stringify({ accepted: true }),
-      })
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token ?? ''}` }
+      // One request either way. The terms endpoint carries both answers when
+      // both were asked; when only the AI question was open, the terms record
+      // is already current and must not be re-stamped with today's date — the
+      // date it was actually given is the evidence.
+      const res = needsTerms
+        ? await fetch('/api/me/consent', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(needsAi ? { accepted: true, ai: aiChecked } : { accepted: true }),
+          })
+        : await fetch('/api/me/ai-consent', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ accepted: aiChecked, source: 'gate' }),
+          })
       if (!res.ok) throw new Error(`status ${res.status}`)
       settledCurrent = true
       setOpen(false)
@@ -91,8 +125,20 @@ export default function ConsentGate() {
     } finally {
       setBusy(false)
     }
-  }, [checked, busy])
+  }, [checked, aiChecked, busy, needsTerms, needsAi])
 
   if (!open) return null
-  return <ConsentSheet checked={checked} onCheckedChange={setChecked} onAgree={agree} busy={busy} error={error} />
+  return (
+    <ConsentSheet
+      checked={checked}
+      onCheckedChange={setChecked}
+      onAgree={agree}
+      busy={busy}
+      error={error}
+      showTerms={needsTerms}
+      showAi={needsAi}
+      aiChecked={aiChecked}
+      onAiCheckedChange={setAiChecked}
+    />
+  )
 }

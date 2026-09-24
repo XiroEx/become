@@ -17,6 +17,7 @@
 // durable backbone.
 
 import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
+import { aiConsentRefusalFrom, requestAiConsent } from '@/lib/aiConsentClient'
 
 export type RunStatus = 'pending' | 'done' | 'error'
 
@@ -184,6 +185,35 @@ class RunStore {
     }
 
     const now = Date.now()
+
+    // Refused because this member has not agreed to their data being sent to
+    // the AI provider (lib/aiConsent.ts). Checked BEFORE the entitlement gate:
+    // the two are different 403s and only one of them is about money, so a
+    // permission refusal must never raise the upgrade sheet.
+    //
+    // The ask is raised here, once, for every AI surface in the app — but only
+    // for a run the MEMBER asked for. A `silent` run is background work they
+    // never requested (Mind pre-composition on app open, MindJourney's
+    // suggestions effect); throwing a consent sheet over the screen because a
+    // warmer fired would be an interruption out of nowhere, and the sheet the
+    // consent gate already shows on app load covers that member anyway. A
+    // background run simply falls back, which is what it does for every other
+    // refusal too.
+    //
+    // The record is terminal and `silent` so the global "generating…"
+    // indicator never flashes for something that never ran.
+    const consent = aiConsentRefusalFrom(httpStatus, started)
+    if (consent) {
+      if (!opts.silent) requestAiConsent(consent)
+      const id = `imm_${now}_consent`
+      this.runs.set(id, {
+        runId: id, endpoint, kind: opts.kind, label: opts.label,
+        status: 'error', error: 'ai_consent', httpStatus,
+        startedAt: now, updatedAt: now, meta: opts.meta, silent: true,
+      })
+      this.emit()
+      return id
+    }
 
     // Refused by a gate → a terminal record carrying the payload, marked
     // `silent` so the global "generating…" indicator never flashes for
