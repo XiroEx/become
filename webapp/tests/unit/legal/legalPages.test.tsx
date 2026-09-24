@@ -13,8 +13,9 @@
 //      plan page, next to the button that asks for consent, and is the SAME
 //      wording the Terms commit to;
 //   4. nothing claims a certification Become does not hold;
-//   5. the account-deletion copy still matches reality — that there is no
-//      in-app delete button — for as long as that stays true.
+//   5. the account-deletion copy still matches reality — in-app deletion has
+//      shipped, so every page that mentions it must describe the button rather
+//      than the email that used to be the only route.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -250,24 +251,48 @@ test('every open question is marked for counsel, and marked the same way', () =>
 // ─── The deletion copy matches reality ───────────────────────────────────────
 
 test('the privacy policy describes account deletion as it actually works', () => {
-  // There is no member-facing deletion route: app/api/admin/users/[id] is
-  // admin-only. While that is true, the policy must say so rather than describe
-  // a button. When in-app deletion ships, this test fails and both the route
-  // list and the copy get updated together — which is the point.
-  const memberFacingDelete = fs.existsSync(
-    path.join(ROOT, 'app/api/me/account/route.ts'),
+  // This test used to assert the OPPOSITE: that the policy admitted there was
+  // no in-app delete button, for as long as that was true. In-app deletion has
+  // now shipped (app/api/me/account), so the assertion turns around — the
+  // policy must describe the button, and it must not describe an email as the
+  // only way. Apple checks section 13 against the app by hand.
+  const memberFacingDelete = fs.existsSync(path.join(ROOT, 'app/api/me/account/route.ts'))
+  assert.ok(
+    memberFacingDelete,
+    'the member-facing deletion route has gone: either restore it, or put the "there is no delete button" copy back in section 13 and reverse this test',
   )
+
   const html = renderToStaticMarkup(<PrivacyPage />)
 
-  if (memberFacingDelete) {
-    assert.fail(
-      'a member-facing account-deletion route now exists: update the Privacy Policy (section 13), the Support page and the settings copy to describe it, then update this test',
-    )
-  }
-
   assert.ok(
-    has(html, 'Become does not yet have a'),
-    'the policy must admit there is no in-app delete button while there is none',
+    !has(html, 'Become does not yet have a'),
+    'the policy still says there is no in-app delete button, and there is one',
   )
-  assert.ok(has(html, LEGAL_CONTACT_EMAIL), 'no address to send a deletion request to')
+  assert.ok(has(html, 'Settings'), 'the policy must say where the delete button is')
+  assert.ok(has(html, 'Delete account'), 'the policy must name the control')
+  // The email path is the fallback for someone who cannot sign in, and it has
+  // to stay: deletion may not depend on being able to get back in.
+  assert.ok(has(html, LEGAL_CONTACT_EMAIL), 'no address for a member who cannot sign in')
+
+  // The support page and the settings screen say the same thing, so a member
+  // cannot read two different processes in two places.
+  const support = renderToStaticMarkup(<SupportPage />)
+  assert.ok(has(support, 'Settings'), 'the support page still describes the old process')
+  const settings = read('app/dashboard/settings/page.tsx')
+  assert.match(settings, /<DangerZone \/>/, 'the settings screen has no delete control')
+})
+
+test('the public deletion page is a real page and is linked without a session', () => {
+  // Google Play's Data safety form asks for a URL where deletion can be
+  // requested, and it is opened signed out by someone who has not installed
+  // the app. `/delete-account` is that URL; LEGAL_LINKS is what puts it in the
+  // landing footer and on every legal page.
+  assert.ok(
+    fs.existsSync(path.join(ROOT, 'app/delete-account/page.tsx')),
+    'the Play Data safety deletion URL has no page behind it',
+  )
+  assert.ok(
+    LEGAL_LINKS.some((l) => l.href === '/delete-account'),
+    '/delete-account must be in LEGAL_LINKS, or it appears on no public surface',
+  )
 })

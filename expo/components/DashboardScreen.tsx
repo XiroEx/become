@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
+import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Settings } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StreakBanner } from "@/components/StreakBanner";
@@ -34,6 +35,13 @@ export interface DashboardScreenProps {
   /** Pull-to-refresh wiring. */
   refreshing?: boolean;
   onRefresh?: () => void;
+  /**
+   * Opens the settings screen. THE ONLY ENTRY POINT TO IT in a store build:
+   * settings is a hidden route in the (tabs) tree with no tab of its own, so
+   * without this button the screen — and with it the account-deletion path
+   * both app stores require — is unreachable by a member or a reviewer.
+   */
+  onOpenSettings?: () => void;
 }
 
 export function DashboardScreen({
@@ -50,6 +58,7 @@ export function DashboardScreen({
   errorText,
   refreshing = false,
   onRefresh,
+  onOpenSettings,
 }: DashboardScreenProps) {
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
@@ -117,16 +126,36 @@ export function DashboardScreen({
             <Text className="text-destructive text-sm">{errorText}</Text>
           </View>
         ) : null}
-        <View>
-          <Text
-            testID="dashboard-greeting"
-            className="text-foreground text-2xl font-bold"
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ flexShrink: 1 }}>
+            <Text
+              testID="dashboard-greeting"
+              className="text-foreground text-2xl font-bold"
+            >
+              {userName ? `Hey, ${userName}` : "Welcome"}
+            </Text>
+            <Text className="text-muted-foreground text-sm">
+              Here&apos;s your day
+            </Text>
+          </View>
+          {/* The way into Settings — and therefore the way to Delete account,
+              which both stores check is reachable from inside the app. */}
+          <Pressable
+            testID="dashboard-open-settings"
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            onPress={onOpenSettings}
+            disabled={!onOpenSettings}
+            className="rounded-xl border border-border p-2"
           >
-            {userName ? `Hey, ${userName}` : "Welcome"}
-          </Text>
-          <Text className="text-muted-foreground text-sm">
-            Here&apos;s your day
-          </Text>
+            <Settings color="#a1a1aa" size={20} strokeWidth={1.5} />
+          </Pressable>
         </View>
 
         <StreakBanner

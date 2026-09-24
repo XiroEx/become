@@ -149,6 +149,26 @@ export interface IUserAiConsent {
   source: 'gate' | 'prompt' | 'settings'
 }
 
+/**
+ * A pending account-deletion request (lib/accountDeletion.ts).
+ *
+ * PRESENT MEANS PENDING. There is no `status` field and no `cancelled` flag:
+ * cancelling unsets the whole sub-document, which is also what invalidates
+ * every restore link minted for it (they are signed over `requestedAt` — see
+ * lib/accountRestoreToken.ts). A boolean would have left a cancelled request's
+ * link working.
+ *
+ * `purgeAfter` is STORED rather than derived from `requestedAt` at read time,
+ * so changing the restore window never moves a date a member was already told.
+ */
+export interface IUserDeletion {
+  requestedAt: Date
+  /** The instant the irreversible purge becomes due. */
+  purgeAfter: Date
+  /** Which surface the request came from — web, or one of the store builds. */
+  requestedFrom: 'web' | 'ios' | 'android' | 'unknown'
+}
+
 /** Email categories a member can opt out of. Absent = ON, same convention as
  *  UserProgress.notificationPrefs. `engagement` is the streak / milestone mail
  *  (lib/email.ts), the only non-transactional email Become sends; sign-in
@@ -170,6 +190,9 @@ export interface IUser {
    *  never asked = nothing may be sent. See lib/aiConsent.ts. */
   aiConsent?: IUserAiConsent
   emailPreferences?: IUserEmailPreferences
+  /** Set when the member asks for their account to be deleted; unset when they
+   *  restore it. Absent is the normal state. See lib/accountDeletion.ts. */
+  deletion?: IUserDeletion
   /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
    *  billing webhook may write this — never derived at request time, because
    *  that would grandfather members automatically. Readers use
@@ -279,6 +302,12 @@ const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
   engagement: { type: Boolean },
 }, { _id: false });
 
+const UserDeletionSchema = new Schema<IUserDeletion>({
+  requestedAt: { type: Date, required: true },
+  purgeAfter: { type: Date, required: true },
+  requestedFrom: { type: String, enum: ['web', 'ios', 'android', 'unknown'], default: 'unknown' },
+}, { _id: false });
+
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
@@ -303,6 +332,10 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   // lib/aiConsent.ts#aiConsentGranted answers false, so nothing is dispatched.
   aiConsent: { type: UserAiConsentSchema, default: undefined },
   emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
+  // Absent = no deletion pending, which is the state every row is in until a
+  // member asks. Never defaulted to an object: `deletion.requestedAt` being
+  // present is the whole predicate the purge selector runs on.
+  deletion: { type: UserDeletionSchema, default: undefined },
   // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
   // offline, by scripts/migrate-tiers.mjs — never automatically at request
   // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
@@ -386,6 +419,15 @@ UserSchema.index(
 
 // Admin/ops: "who is on what".
 UserSchema.index({ tier: 1, grandfathered: 1 })
+
+// The daily purge sweep (app/api/cron/purge-deletions) selects on this and on
+// nothing else. PARTIAL, because the field is absent on essentially every row:
+// a plain index would carry an entry per member to serve a query that matches
+// a handful a week.
+UserSchema.index(
+  { 'deletion.purgeAfter': 1 },
+  { partialFilterExpression: { 'deletion.purgeAfter': { $type: 'date' } } }
+)
 
 // Hash password before saving
 UserSchema.pre('save', async function() {

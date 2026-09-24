@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { useRouter } from "expo-router";
 import {
   MeResponseSchema,
   StreakResponseSchema,
@@ -29,6 +30,7 @@ import { useMutation } from "@/lib/hooks/useMutation";
  */
 export default function DashboardRoute() {
   const { token } = useAuth();
+  const router = useRouter();
   const ready = !!token;
   const fetchOpts = {
     baseUrl: WEBAPP_BASE_URL,
@@ -137,6 +139,12 @@ export default function DashboardRoute() {
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
+      // Settings lives at a hidden route in the (tabs) tree, so this gear is
+      // the only way a member — or an App Store reviewer looking for "Delete
+      // account" — can get to it.
+      onOpenSettings={() => {
+        router.push("/(tabs)/profile/health");
+      }}
     />
   );
 }

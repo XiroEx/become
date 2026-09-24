@@ -4,8 +4,10 @@
 // be a real page a human can act on, not a link to a contact form that does not
 // exist. Everything on it is something Become can actually do today: one email
 // address, a response range rather than a promise, the real cancellation path,
-// and the real (email-based) account deletion path.
+// and the real account deletion path — which is now a button in Settings, with
+// the email address as the fallback for someone who cannot sign in.
 
+import { RESTORE_WINDOW_DAYS } from '@/lib/accountDeletion'
 import {
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
@@ -119,7 +121,11 @@ export const SUPPORT: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: `There is no delete button in the app yet. Email ${LEGAL_CONTACT_EMAIL} from the address on your account, ask us to delete it, and we will confirm and then delete within ${LEGAL_DELETION_DAYS} days. Cancel any paid plan first, or ask us to cancel it in the same message. What deletion covers, and the few things that survive it, is set out in the [Privacy Policy](/privacy).`,
+          text: `Do it yourself: **Settings → Delete account**, in the app or on the web. We email you a link that undoes it for ${RESTORE_WINDOW_DAYS} days, and after that everything is permanently deleted — always within the ${LEGAL_DELETION_DAYS} days the [Privacy Policy](/privacy) commits to. The public [Delete account](/delete-account) page explains it without a login.`,
+        },
+        {
+          kind: 'p',
+          text: `If you cannot sign in, email ${LEGAL_CONTACT_EMAIL} from the address on your account and ask us to delete it. Cancel any paid plan first, or ask us to cancel it in the same message. What deletion covers, and the few things that survive it, is set out in section 13 of the [Privacy Policy](/privacy).`,
         },
       ],
     },

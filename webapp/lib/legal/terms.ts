@@ -300,7 +300,7 @@ export const TERMS: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: 'You can stop using the Service at any time, and you can ask us to delete your account. How to do that, and what deletion covers, is in the [Privacy Policy](/privacy).',
+          text: 'You can stop using the Service at any time, and you can delete your account yourself from Settings — in the app or on the web. How that works, and what deletion covers, is in section 13 of the [Privacy Policy](/privacy) and on the [Delete account](/delete-account) page.',
         },
         {
           kind: 'p',
