@@ -16,6 +16,8 @@
 //     this document that Apple would actually test.
 
 import {
+  AI_CONSENT_SENDS,
+  AI_PROVIDER,
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
   LEGAL_ENTITY,
@@ -43,6 +45,7 @@ export const PRIVACY: LegalDoc = {
             'Become collects what it needs to coach you: your email address, your body stats, what you train, what you eat, how you feel, and photos you take of your meals.',
             'We do not sell your personal information, we do not share it for advertising, and there are no third-party ad trackers in the app.',
             'A small number of named service providers process data for us. They are listed in section 8, and there are five of them.',
+            'One of them is an AI provider, Google Gemini. We ask for your permission before anything you submit is sent to it, we do not send anything until you give it, and you can withdraw it in Settings. Section 7 says exactly what is sent.',
             'We never see your card number. Stripe handles payment.',
             'You can ask for a copy of your data, ask us to correct it, or ask us to delete your account. Section 12 says how, and section 13 is honest about the fact that deletion is an email today rather than a button in the app.',
           ],
@@ -113,6 +116,11 @@ export const PRIVACY: LegalDoc = {
                 'Your browser push subscription (an endpoint and keys, if you turn notifications on), your time zone offset, your device and browser type, and your in-app settings.',
             },
             {
+              term: 'Native push token',
+              detail:
+                'If you use the Become app from the App Store or Google Play and allow notifications, we store the **push token** your device issues — an Expo push token, which is the address Apple’s and Google’s push services use to reach that one installation. It identifies the installation, not you, and we hold it only to send the notifications you turned on. Turning notifications off in Settings or in the operating system, or deleting your account, removes it.',
+            },
+            {
               term: 'Usage and diagnostic data',
               detail:
                 'Which features you use, how much of an AI allowance you have used, error and diagnostic logs, and the IP address and timestamps recorded in server logs.',
@@ -140,7 +148,7 @@ export const PRIVACY: LegalDoc = {
           kind: 'ul',
           items: [
             'From you, when you sign up, fill in your profile, log a workout or a meal, write a journal entry, or take a photo.',
-            'From your device, for your time zone offset and, if you turn them on, push notifications.',
+            'From your device, for your time zone offset and, if you turn them on, push notifications: a browser push subscription in the web app, or a native push token issued by your operating system in the App Store or Google Play app.',
             'From Google, if you choose to sign in with Google: your email address, your name, your profile picture and a Google account identifier.',
             'From Stripe, for the outcome of a payment and the state of your subscription.',
           ],
@@ -172,7 +180,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'To produce AI estimates and generated sessions',
               detail:
-                'Only on the input you submit for that request. Basis: performance of our contract.',
+                'Only on the input you submit for that request, and only once you have given the separate AI permission described in section 7. Basis: your consent, which you can withdraw in Settings at any time, and performance of our contract for the feature itself.',
             },
             {
               term: 'To take payment and manage subscriptions',
@@ -238,11 +246,28 @@ export const PRIVACY: LegalDoc = {
 
     {
       id: 'ai',
-      heading: '7. AI processing',
+      heading: '7. AI processing, and the permission you give for it',
       blocks: [
         {
+          kind: 'callout',
+          tone: 'warning',
+          title: 'Nothing goes to the AI until you say it can',
+          items: [
+            `Become asks you, separately from the Terms, before anything you submit is sent to **${AI_PROVIDER}**. Until you agree, no meal photo, no description, no workout input, no injury note, no Mind session input and no message you write to the coach leaves Become for the AI provider.`,
+            'The request is refused rather than sent, and the feature falls back to its non-AI version. That is enforced on the server, on every AI route, and it is checked for each request rather than cached.',
+            'You can withdraw the permission at any time in **Settings → AI features**. Withdrawing stops the next request; it cannot recall a request already answered.',
+            'Saying no is a complete answer. Become still logs your food, builds your sessions and runs your Mind work from its own non-AI versions.',
+          ],
+        },
+        {
           kind: 'p',
-          text: 'When you scan a meal, generate a workout or run a mindset session, the input for that request is sent to **Google Gemini**, which Become reaches through the redbtn platform it runs on. Only what the request needs is sent: for a meal scan, the photo or description and the context needed to interpret it.',
+          text: `With your permission, and only then: when you scan a meal, generate a workout or run a mindset session, the input for that request is sent to **${AI_PROVIDER}**, which Become reaches through the redbtn platform it runs on. Only what the request needs is sent: for a meal scan, the photo or description and the context needed to interpret it.`,
+        },
+        { kind: 'p', text: 'What that covers, in full:' },
+        { kind: 'ul', items: [...AI_CONSENT_SENDS] },
+        {
+          kind: 'p',
+          text: 'We record that you gave the permission, which version of this disclosure you gave it against, and when — the same way we record your agreement to the Terms. A withdrawal is recorded with its own date.',
         },
         {
           kind: 'p',
@@ -283,7 +308,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'Google Gemini, reached through the redbtn platform',
               detail:
-                'AI estimation of meals, workout generation and mindset composition, on the input for each request. See section 7.',
+                'AI estimation of meals, workout generation and mindset composition, on the input for each request — **and only for members who have given the separate AI permission in section 7**. Nothing is sent for a member who has not, or who has withdrawn it.',
             },
             {
               term: 'MinIO object storage (S3-compatible)',

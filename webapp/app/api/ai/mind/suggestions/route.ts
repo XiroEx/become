@@ -10,6 +10,7 @@ import mongoose from 'mongoose'
 import { requireAiUser, triggerOwnedRun, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
 import { requireSpendCap } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 import { PROTOCOL_CATALOG } from '@/lib/mind/suggestedProtocols'
 import dbConnect from '@/lib/mongodb'
 import MindJournal from '@/models/MindJournal'
@@ -30,6 +31,14 @@ export async function POST(request: NextRequest) {
 
   const ctx = (body.context && typeof body.context === 'object' ? body.context : {}) as Record<string, unknown>
   const unlocked = Array.isArray(ctx.unlockedSystems) ? (ctx.unlockedSystems as string[]) : null
+
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
 
   // components/mind/MindJourney.tsx fires this from an EFFECT whenever the
   // post-session view renders without a fresh cache — braked only by a 12h

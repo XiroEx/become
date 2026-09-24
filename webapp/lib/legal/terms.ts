@@ -211,6 +211,10 @@ export const TERMS: LegalDoc = {
           kind: 'p',
           text: 'AI features depend on third-party providers, and they can be unavailable, slow, rate-limited or capped by your plan. Where an AI feature is unavailable, Become falls back to a non-AI version of the same job wherever it can.',
         },
+        {
+          kind: 'p',
+          text: 'Using an AI feature means sending what you submit for it to a third-party AI provider. **We ask for your permission separately before anything is sent, and nothing is sent until you give it.** You can withdraw that permission at any time in Settings, and the AI features then stop sending and fall back. Section 7 of the [Privacy Policy](/privacy) lists exactly what is sent and to whom.',
+        },
       ],
     },
 
@@ -407,15 +411,70 @@ export const TERMS: LegalDoc = {
 
     {
       id: 'app-stores',
-      heading: '17. App stores',
+      heading: '17. App stores, and Apple’s required licence terms',
       blocks: [
         {
           kind: 'p',
           text: 'Become is a web app you can install to your home screen. If you install it from an app store instead, that store’s own terms also apply to you, the store is not a party to these Terms, and the store is not responsible for the Service, for support or for any claim about it.',
         },
         {
+          kind: 'p',
+          text: `**The rest of this section applies only if you obtained Become from the Apple App Store.** Apple requires every app publisher to include the terms below (Schedule 1 of the Apple Developer Program Licence Agreement, the minimum terms for a Licensed Application End User Licence Agreement). Where they conflict with anything else in these Terms, these terms win for the App Store version, and “Licensed Application” means the Become app you downloaded. ${LEGAL_ENTITY} is the “Application Provider”.`,
+        },
+        {
+          kind: 'dl',
+          items: [
+            {
+              term: 'Acknowledgement',
+              detail: `These Terms are concluded between you and ${LEGAL_ENTITY} only, and not with Apple. ${LEGAL_ENTITY}, not Apple, is solely responsible for the Licensed Application and its content. These Terms do not provide for usage rules for the Licensed Application that conflict with the App Store Terms of Service as of the date you entered into them, and ${LEGAL_ENTITY} acknowledges that it has had the opportunity to review those rules.`,
+            },
+            {
+              term: 'Scope of licence',
+              detail:
+                'The licence granted to you for the Licensed Application is a non-transferable licence to use it on any Apple-branded products that you own or control, and as permitted by the Usage Rules in the Apple Media Services Terms and Conditions, except that it may also be accessed by other accounts associated with you through Family Sharing or volume purchasing.',
+            },
+            {
+              term: 'Maintenance and support',
+              detail: `${LEGAL_ENTITY} is solely responsible for providing any maintenance and support services for the Licensed Application, as specified in these Terms or as required by applicable law. You and ${LEGAL_ENTITY} acknowledge that **Apple has no obligation whatsoever to furnish any maintenance and support services** for the Licensed Application. Our support commitment is on the [Support](/support) page.`,
+            },
+            {
+              term: 'Warranty',
+              detail: `${LEGAL_ENTITY} is solely responsible for any product warranties, whether express or implied by law, to the extent they are not effectively disclaimed. In the event of any failure of the Licensed Application to conform to any applicable warranty, you may notify Apple, and Apple will refund the purchase price of the Licensed Application to you; to the maximum extent permitted by applicable law, **Apple will have no other warranty obligation whatsoever** with respect to the Licensed Application. Any other claims, losses, liabilities, damages, costs or expenses attributable to any failure to conform to any warranty are ${LEGAL_ENTITY}’s sole responsibility.`,
+            },
+            {
+              term: 'Product claims',
+              detail: `${LEGAL_ENTITY}, and not Apple, is responsible for addressing any claims by you or any third party relating to the Licensed Application or your possession and use of it, including: (a) product liability claims; (b) any claim that the Licensed Application fails to conform to any applicable legal or regulatory requirement; and (c) claims arising under consumer protection, privacy or similar legislation, including in connection with the Licensed Application’s use of the HealthKit and HomeKit frameworks. These Terms do not limit ${LEGAL_ENTITY}’s liability to you beyond what is permitted by applicable law.`,
+            },
+            {
+              term: 'Intellectual property rights',
+              detail: `In the event of any third-party claim that the Licensed Application or your possession and use of it infringes that third party’s intellectual property rights, ${LEGAL_ENTITY}, and not Apple, will be solely responsible for the investigation, defence, settlement and discharge of that claim.`,
+            },
+            {
+              term: 'Legal compliance',
+              detail:
+                'You represent and warrant that you are not located in a country that is subject to a U.S. Government embargo, or that has been designated by the U.S. Government as a “terrorist supporting” country, and that you are not listed on any U.S. Government list of prohibited or restricted parties.',
+            },
+            {
+              term: 'Developer name and address',
+              detail: `Questions, complaints or claims about the Licensed Application should be directed to ${LEGAL_ENTITY}, 516 Cambridge Ave, Westbury, NY 11590, United States, ${LEGAL_CONTACT_EMAIL}.`,
+            },
+            {
+              term: 'Third-party terms of agreement',
+              detail:
+                'You must comply with any applicable third-party terms of agreement when using the Licensed Application — for example, your wireless data service agreement.',
+            },
+            {
+              term: 'Third-party beneficiary',
+              detail:
+                'You and ' +
+                LEGAL_ENTITY +
+                ' acknowledge and agree that **Apple, and Apple’s subsidiaries, are third-party beneficiaries of these Terms**, and that, upon your acceptance of these Terms, Apple will have the right (and will be deemed to have accepted the right) to enforce these Terms against you as a third-party beneficiary of them.',
+            },
+          ],
+        },
+        {
           kind: 'todo',
-          text: 'The additional end-user licence terms Apple requires app publishers to include, in Schedule 1 of the Apple Developer Program Licence Agreement (the minimum terms for a Licensed Application End User Licence Agreement), and the equivalent Google Play requirements, once Become ships through either store.',
+          text: 'The equivalent Google Play requirements (the Play Developer Distribution Agreement and the User Data policy), once Become ships through that store; and whether the Apple terms above should be published as a standalone EULA document in App Store Connect rather than, or as well as, a section of these Terms.',
         },
       ],
     },

@@ -8,6 +8,7 @@ import TutorialRoot from '../../components/tutorial/TutorialRoot'
 import PushSubscriptionSync from '../../components/PushSubscriptionSync'
 import AppBadgeSync from '../../components/AppBadgeSync'
 import ConsentGate from '../../components/ConsentGate'
+import AiConsentPrompt from '../../components/AiConsentPrompt'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +27,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           Policy and attested to the minimum age. Here, not on the home page,
           so it covers every protected route and runs once per app load. */}
       <ConsentGate />
+      {/* Raises the AI permission ask when a dispatch was refused for want of
+          it — the one listener for the event lib/ai/runStore.ts fires. Here so
+          every AI surface, including the background ones, is covered. */}
+      <AiConsentPrompt />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"

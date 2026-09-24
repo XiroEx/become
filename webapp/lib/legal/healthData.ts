@@ -18,6 +18,7 @@
 // drift apart.
 
 import {
+  AI_PROVIDER,
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
   LEGAL_ENTITY,
@@ -118,7 +119,7 @@ export const HEALTH_DATA: LegalDoc = {
           items: [
             'From you, when you fill in your profile, log a workout, a meal, your weight, your mood or your sleep, write a journal entry, or scan a meal photo. This is the source of almost all of it.',
             'From the app itself, when it derives a target or an estimate from what you entered (the inferences in section 2).',
-            'From your device, for your time zone offset and, if you turn them on, push notifications. Neither is health data on its own.',
+            'From your device, for your time zone offset and, if you turn them on, push notifications — a browser push subscription in the web app, or a native push token issued by Apple’s or Google’s push service in the App Store or Google Play app. None of that is health data on its own; it is listed so the picture is complete, and section 3 of the [Privacy Policy](/privacy) describes it in full.',
             'Not from Google or Stripe. Signing in with Google gives us your email address, name and profile picture; Stripe gives us the state of a payment. Neither passes us any health data.',
           ],
         },
@@ -136,6 +137,16 @@ export const HEALTH_DATA: LegalDoc = {
         {
           kind: 'p',
           text: 'We do not collect or use consumer health data for any purpose that is not described in section 2 without first asking for your separate, affirmative consent. Agreeing to the Terms, dismissing a notice, or continuing to use the app does not count as that consent, and we will not treat it as such.',
+        },
+        {
+          kind: 'callout',
+          tone: 'warning',
+          title: 'Sharing with the AI provider is a separate, affirmative consent',
+          items: [
+            `Some of what you enter is shared with an AI provider, **${AI_PROVIDER}**, when you use an AI feature — a meal photo or description, the inputs behind a generated workout (which can include your injury notes), the inputs for a Mind session, and what you write to the coach.`,
+            'We ask for that permission on its own, with its own tick and its own record, and **we share nothing until you give it**. It is not bundled into the Terms, it is not implied by using the app, and it is refused on the server for every request from a member who has not given it.',
+            'You can withdraw it at any time in **Settings → AI features**, which stops the next request. Section 5 lists the provider, and section 7 of the [Privacy Policy](/privacy) says exactly what is sent.',
+          ],
         },
         {
           kind: 'p',
@@ -168,7 +179,7 @@ export const HEALTH_DATA: LegalDoc = {
             {
               term: 'Google Gemini (Google LLC) — AI processing',
               detail:
-                'Receives only the input for each request that needs an AI estimate, as described in section 7 of the [Privacy Policy](/privacy), and returns the estimate. Contact: [policies.google.com/privacy](https://policies.google.com/privacy).',
+                'Receives only the input for each request that needs an AI estimate, as described in section 7 of the [Privacy Policy](/privacy), and returns the estimate. **Only for members who have given the separate AI consent in section 4** — nothing is sent for anyone who has not, or who has withdrawn it. Contact: [policies.google.com/privacy](https://policies.google.com/privacy).',
             },
             {
               term: 'Stripe, Inc. — payments',
@@ -205,7 +216,7 @@ export const HEALTH_DATA: LegalDoc = {
           kind: 'ul',
           items: [
             '**To confirm** whether we are collecting, sharing or selling consumer health data about you, and **to access** it, including a list of every third party and affiliate we have shared it with and how to contact them (section 5 is that list).',
-            '**To withdraw consent** to our collection or sharing of consumer health data. Because we collect it only to provide what you asked for, withdrawing consent for a category means deleting that data or the feature that uses it; for everything, it means deleting your account.',
+            '**To withdraw consent** to our collection or sharing of consumer health data. Sharing with the AI provider has its own switch: **Settings → AI features**, which takes effect on the next request. Otherwise, because we collect it only to provide what you asked for, withdrawing consent for a category means deleting that data or the feature that uses it; for everything, it means deleting your account.',
             `**To have it deleted**, including from our service providers. We delete within ${LEGAL_DELETION_DAYS} days of confirming your request, instruct each provider in section 5 to delete what it holds for us, and tell you when it is done. Copies in routine backups are removed when those backups age out on their normal schedule, within the six months the Washington law allows for archived or backup systems.`,
             '**Not to be discriminated against** for exercising any of these rights. We will never treat you worse, charge you more or give you less because you asked.',
           ],
