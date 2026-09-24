@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -29,6 +30,14 @@ export async function POST(request: NextRequest) {
   if (!description.trim() && !correction.trim()) {
     return NextResponse.json({ error: 'Provide a description or a correction' }, { status: 400 })
   }
+
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
 
   // Same daily allowance as the photo path — this is the same outcome by a
   // different door. A CORRECTION carries the ticket the estimate handed back

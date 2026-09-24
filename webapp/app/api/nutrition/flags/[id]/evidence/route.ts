@@ -16,6 +16,7 @@ import {
 import { escalateFlagToHuman } from '@/lib/nutrition/escalateFlag'
 import { verifyFood } from '@/lib/nutrition/verifyFood'
 import { requireSpendCap } from '@/lib/ai/allowance'
+import { aiConsentAllows } from '@/lib/aiConsent'
 import mongoose from 'mongoose'
 
 /** More than this on one report is someone testing the upload, not evidence. */
@@ -273,11 +274,16 @@ export async function POST(
     // ── 7. Dispatch on a reduced budget ─────────────────────────────────────
     // Best effort and deliberately not awaited: the member should not sit on a
     // spinner through a vision read and a review.
+    // Same rule as the first report: the reporter's photo and note reach the AI
+    // provider only with their explicit consent (App Store 5.1.2(i)). Without
+    // it the re-review runs on the catalogue row alone — weaker, and honest
+    // about why — and the photos they sent stay in Become for the human
+    // escalation path, which is not a third party.
+    const mayShareOwnContent = await aiConsentAllows(auth.userId)
     verifyFood(String(flag.foodId), {
       budget: verificationBudgetFor(rounds),
-      userPhotoUrl: merged[0],
       reportedKinds: flag.kinds ?? (flag.kind ? [flag.kind] : []),
-      reportedNote: flag.note,
+      ...(mayShareOwnContent ? { userPhotoUrl: merged[0], reportedNote: flag.note } : {}),
     }).catch(err => {
       console.error('[flag evidence] re-review failed:', err)
     })

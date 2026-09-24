@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText, userGrounding } from '@/lib/ai/routeHelpers'
 import { assembleMindHistory } from '@/lib/ai/mindHistory'
 import { requireAiFeature, requireSpendCap } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
   const system = asText(body.system, 60)
   const topic = asText(body.topic, 200)
   if (!system.trim()) return NextResponse.json({ error: 'Missing system' }, { status: 400 })
+
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
 
   // Vision is a Plus feature, and THIS is one of the doors into it. The gate
   // used to sit only on /api/mind/vision, so a free member whose entitlements

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
@@ -10,7 +11,14 @@ import { defaultPaceKg } from '@/lib/goals/pace'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
-import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL, LEGAL_DELETION_DAYS } from '@/lib/legal'
+import {
+  AI_CONSENT_SENDS,
+  AI_PROVIDER,
+  AI_PROVIDER_ROUTE,
+  HEALTH_DISCLAIMER_SHORT,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_DELETION_DAYS,
+} from '@/lib/legal'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
@@ -95,6 +103,13 @@ interface PreferencesResponse {
 interface ConsentResponse {
   acceptedVersion?: string | null
   acceptedAt?: string | null
+  /** The separate AI-sharing permission — lib/aiConsent.ts#AiConsentStatus. */
+  ai?: {
+    granted?: boolean
+    decided?: boolean
+    decidedAt?: string | null
+    revokedAt?: string | null
+  }
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
@@ -211,6 +226,9 @@ function SettingsPageInner() {
   const [emailEngagement, setEmailEngagement] = useState(true)
   // What this member agreed to and when, from GET /api/me/consent.
   const [consent, setConsent] = useState<ConsentResponse | null>(null)
+  // The separate AI permission. Its own switch because it is its own consent:
+  // it can be refused, it can be withdrawn, and the app works either way.
+  const [aiShareAllowed, setAiShareAllowed] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -390,11 +408,49 @@ function SettingsPageInner() {
     try {
       const res = await fetch('/api/me/consent', { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) return
-      setConsent((await res.json()) as ConsentResponse)
+      const data = (await res.json()) as ConsentResponse
+      setConsent(data)
+      setAiShareAllowed(data.ai?.granted === true)
     } catch {
       // Informational only; the gate is what enforces it.
     }
   }, [])
+
+  // The AI permission, on and off. ON posts the grant; OFF is a DELETE, the
+  // withdrawal — and it takes effect on the very next AI request, because the
+  // server gate reads the record per request rather than caching it.
+  //
+  // Optimistic, then reverted on failure: a switch that silently stayed on
+  // after a member turned it off would be the worst possible bug on this
+  // particular control.
+  const handleAiConsentToggle = async (value: boolean) => {
+    const previous = aiShareAllowed
+    setAiShareAllowed(value)
+    const token = getToken()
+    if (!token) {
+      setAiShareAllowed(previous)
+      showToast('Failed to save preference', 'error')
+      return
+    }
+    try {
+      const res = value
+        ? await fetch('/api/me/ai-consent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ accepted: true, source: 'settings' }),
+          })
+        : await fetch('/api/me/ai-consent', {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+      if (!res.ok) throw new Error('save failed')
+      showToast(value ? 'AI features are on' : 'AI sharing is off', 'success')
+      fetchConsent()
+    } catch {
+      setAiShareAllowed(previous)
+      showToast('Failed to save preference', 'error')
+    }
+  }
 
   useEffect(() => {
     fetchConsent()
@@ -1201,6 +1257,68 @@ function SettingsPageInner() {
                 />
               </button>
             </div>
+          </section>
+
+          {/* AI features. The switch behind App Store Guideline 5.1.2(i): a
+              member's data reaches the AI provider only while this is on, and
+              turning it off is a withdrawal that takes effect on the next
+              request. It sits next to Email rather than inside Legal because a
+              member looking to turn something OFF looks among the switches. */}
+          <section
+            id="ai"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          >
+            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">AI features</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                  Share my inputs with {AI_PROVIDER}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Off means nothing you enter is sent to the AI, and AI features fall back to their non-AI versions.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={aiShareAllowed}
+                aria-label={`Share my inputs with ${AI_PROVIDER}`}
+                data-testid="ai-consent-toggle"
+                onClick={() => handleAiConsentToggle(!aiShareAllowed)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                  aiShareAllowed ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                    aiShareAllowed ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              What gets sent, when it is on, through {AI_PROVIDER_ROUTE}:
+            </p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              {AI_CONSENT_SENDS.map(item => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {consent?.ai?.decidedAt && (
+              <p data-testid="ai-consent-record" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                {consent.ai.granted
+                  ? 'You allowed this on '
+                  : 'You turned this off on '}
+                {new Date(consent.ai.revokedAt ?? consent.ai.decidedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                .
+              </p>
+            )}
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              Section 7 of the{' '}
+              <Link href="/privacy#ai" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+                Privacy Policy
+              </Link>{' '}
+              describes this in full.
+            </p>
           </section>
 
           {/* Nutrition Planning */}

@@ -7,6 +7,7 @@ import FoodFlag from '@/models/FoodFlag'
 import User from '@/models/User'
 import { decideFlag, ownFlagPhotoUrl, CLAIM_TTL_MS, type FlagContext } from '@/lib/nutrition/flagPolicy'
 import { requireSpendCap } from '@/lib/ai/allowance'
+import { aiConsentAllows } from '@/lib/aiConsent'
 
 /** More than this on one report is someone testing the upload, not evidence. */
 const MAX_PHOTOS = 6
@@ -217,11 +218,23 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     // verifyFood never throws and always releases the claim, so a failure here
     // cannot wedge the food — and the claim TTL covers the process dying
     // mid-run, which is a failure mode we have watched happen elsewhere.
+    // The reporter's PHOTO and NOTE are theirs, and verifyFood reads the photo
+    // with a vision call to the AI provider. Without this member's explicit AI
+    // consent neither travels (App Store 5.1.2(i)); the verification still runs
+    // on the catalogue row — name, brand, barcode, the numbers on the label —
+    // which is a shared food entry and nobody's personal data. Refusing the
+    // whole report instead would take food reporting away from a member who
+    // simply declined the AI, which the guideline does not ask for.
+    const mayShareOwnContent = await aiConsentAllows(auth.userId!)
     void verifyFood(id, {
       userClaim: body?.claimedValues,
-      userPhotoUrl: photoUrl,
       reportedKinds: kinds,
-      reportedNote: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
+      ...(mayShareOwnContent
+        ? {
+            userPhotoUrl: photoUrl,
+            reportedNote: typeof body?.note === 'string' ? body.note.slice(0, 1000) : undefined,
+          }
+        : {}),
     }).catch((err) => console.error('verifyFood dispatch failed:', err))
 
     return NextResponse.json({

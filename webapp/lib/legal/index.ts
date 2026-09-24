@@ -43,9 +43,9 @@ export const LEGAL_VENUE = 'the state and federal courts located in Nassau Count
  *  member whose stored version differs. So: bump it for a change a member has to
  *  agree to again (a new obligation, a new price, a new age rule), and leave it
  *  alone for a typo, or every member is stopped at the door for a comma. */
-export const LEGAL_LAST_UPDATED = 'September 18, 2026'
-export const LEGAL_LAST_UPDATED_ISO = '2026-09-18'
-export const LEGAL_VERSION = 'v1.1.0'
+export const LEGAL_LAST_UPDATED = 'September 24, 2026'
+export const LEGAL_LAST_UPDATED_ISO = '2026-09-24'
+export const LEGAL_VERSION = 'v1.2.0'
 
 /** The minimum age to hold an account. George's call, 2026-09-13: 13, not 18.
  *  Under-13s are COPPA territory and are refused outright; 13 to 17 may use
@@ -61,6 +61,68 @@ export const LEGAL_MINIMUM_AGE = 13
  * dispute both ask for.
  */
 export const CONSENT_STATEMENT = `I am at least ${LEGAL_MINIMUM_AGE} years old, and I agree to the Terms of Service and the Privacy Policy.`
+
+// ─── AI, and the permission to send anything to it ───────────────────────────
+
+/**
+ * WHO THE THIRD-PARTY AI ACTUALLY IS. Named, not described as "our AI
+ * partner": App Store Review Guideline 5.1.2(i) asks for the disclosure to say
+ * where the data goes, and a member cannot check a company they were never
+ * told the name of. Both names belong in the sentence — Google LLC runs the
+ * model, REDBTN LLC's platform is the route it travels.
+ */
+export const AI_PROVIDER = 'Google Gemini'
+export const AI_PROVIDER_ROUTE = 'the redbtn platform'
+
+/**
+ * AI consent is versioned SEPARATELY from LEGAL_VERSION.
+ *
+ * They answer different questions and move for different reasons: the Terms
+ * version re-asks everybody for a new clause anywhere in two long documents,
+ * while this one re-asks only about what leaves the app and only when THAT
+ * changes — a new provider, a new category of input, a new purpose. Bumping
+ * one must never silently re-ask the other, because a member who is re-asked
+ * for AI permission and declines loses a feature they were using.
+ */
+export const AI_CONSENT_VERSION = 'v1.0.0'
+
+/**
+ * The ONE sentence a member ticks to let their data reach the model. Separate
+ * tick, separate record, separate version: Guideline 5.1.2(i) wants EXPLICIT
+ * permission, and a tick that also carries the Terms and an age attestation is
+ * not explicit permission for anything in particular.
+ *
+ * It is opt-IN. Unticked is a valid answer, it is recorded as one, and the app
+ * keeps working without AI — every AI surface in Become degrades to a
+ * deterministic version of the same job.
+ */
+export const AI_CONSENT_STATEMENT = `I agree that Become may send what I submit to an AI feature to ${AI_PROVIDER}, through ${AI_PROVIDER_ROUTE}, so it can answer. I can withdraw this in Settings at any time.`
+
+/** Exactly what leaves the app, itemised. Shown beside the tick, because "your
+ *  data" is not a disclosure and a member should not have to infer that a
+ *  photo of their dinner is included. Mirrors section 7 of the Privacy Policy
+ *  and section 5 of the Consumer Health Data Privacy Policy. */
+export const AI_CONSENT_SENDS: readonly string[] = [
+  'Meal photos and the descriptions you type with them, when you scan or describe a meal.',
+  'The inputs behind a generated workout or program, which can include your injury notes.',
+  'The inputs for a Mind session, and what you write to the coach in chat.',
+  'A short summary of your profile and progress, assembled by Become, so the answer fits you.',
+] as const
+
+/** What saying no costs, stated at the point of asking rather than discovered
+ *  later. Nothing here may promise more than the fallbacks actually deliver. */
+export const AI_CONSENT_DECLINE_NOTE =
+  'Say no and nothing you enter is sent to the AI. Become still logs your food, builds your sessions and runs your Mind work from its own non-AI versions, which are less tailored.'
+
+/** The canonical refusal a server route returns when a member has not agreed.
+ *  Deliberately NOT the entitlement 403 shape (`feature` + `requiresTier`), so
+ *  lib/entitlementsClient.ts#gateFrom cannot parse it into an upgrade sheet:
+ *  this is not something money fixes. */
+export const AI_CONSENT_REASON = 'ai_consent_required'
+
+/** What the member is told when a route refuses for want of consent. */
+export const AI_CONSENT_REFUSAL_MESSAGE =
+  'Become needs your permission before sending anything to its AI provider.'
 
 /**
  * The health disclaimer, short enough for a screen a member is trying to get

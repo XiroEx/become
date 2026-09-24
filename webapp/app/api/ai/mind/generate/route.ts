@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
 import { requireAiFeature, requireSpendCap } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -32,6 +33,14 @@ export async function POST(request: NextRequest) {
 
   const kind = String(body.kind ?? 'identity')
   if (!ALLOWED.has(kind)) return NextResponse.json({ error: 'Unknown kind' }, { status: 400 })
+
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
 
   // Writing someone's vision for them is the Vision feature, whichever door it
   // is asked through — see /api/ai/mind/flow.
