@@ -203,7 +203,7 @@ export interface LegalSection {
 }
 
 export interface LegalDoc {
-  slug: 'terms' | 'privacy' | 'health-data' | 'support'
+  slug: 'terms' | 'privacy' | 'health-data' | 'support' | 'delete-account'
   title: string
   /** One line under the title, in plain language. */
   standfirst: string
@@ -219,6 +219,12 @@ export const LEGAL_LINKS = [
   // Being in this list is what puts it on the home page (and everywhere else).
   { href: '/health-data', label: 'Health data' },
   { href: '/support', label: 'Support' },
+  // Google Play's Data safety form asks for a PUBLIC URL where account
+  // deletion can be requested, and it is checked signed out by someone who has
+  // not installed the app. Being in this list is what puts it in the landing
+  // footer and on every legal page — i.e. what makes it findable without a
+  // session. See lib/legal/deleteAccount.ts.
+  { href: '/delete-account', label: 'Delete account' },
 ] as const
 
 /** Pull every unresolved item out of a document, for the test and for review. */

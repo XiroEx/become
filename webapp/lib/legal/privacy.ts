@@ -10,11 +10,13 @@
 //   • Health-adjacent data is called what it is, and the "not a HIPAA covered
 //     entity" point is stated plainly rather than left for a member to assume
 //     either way.
-//   • The deletion section describes the process that EXISTS TODAY, which is an
-//     email to support, because there is no member-facing deletion route in the
-//     app yet. Describing a button that is not there would be the one lie in
-//     this document that Apple would actually test.
+//   • The deletion section describes the process that EXISTS: Settings →
+//     Delete account, on the web and in both store builds, with a 7-day window
+//     to undo it and a purge after that (lib/accountDeletion.ts). Apple tests
+//     this section by hand against the app, so every sentence in it has to be
+//     something a reviewer can reproduce.
 
+import { RESTORE_WINDOW_DAYS } from '@/lib/accountDeletion'
 import {
   AI_CONSENT_SENDS,
   AI_PROVIDER,
@@ -47,7 +49,7 @@ export const PRIVACY: LegalDoc = {
             'A small number of named service providers process data for us. They are listed in section 8, and there are five of them.',
             'One of them is an AI provider, Google Gemini. We ask for your permission before anything you submit is sent to it, we do not send anything until you give it, and you can withdraw it in Settings. Section 7 says exactly what is sent.',
             'We never see your card number. Stripe handles payment.',
-            'You can ask for a copy of your data, ask us to correct it, or ask us to delete your account. Section 12 says how, and section 13 is honest about the fact that deletion is an email today rather than a button in the app.',
+            'You can ask for a copy of your data, ask us to correct it, or delete your account yourself from Settings — in the app or on the web. Section 12 covers the rest of your rights and section 13 covers deletion.',
           ],
         },
       ],
@@ -363,7 +365,7 @@ export const PRIVACY: LegalDoc = {
           kind: 'ul',
           items: [
             'Account, training, nutrition and mind data: kept while your account exists, so your history stays useful to you.',
-            `After a deletion request: removed within ${LEGAL_DELETION_DAYS} days of us confirming it, except for copies sitting in routine backups until those backups age out on their normal schedule.`,
+            `After a deletion request: your account is scheduled for deletion immediately, you have ${RESTORE_WINDOW_DAYS} days to undo it, and everything is then removed — always within the ${LEGAL_DELETION_DAYS} days we commit to, except for copies sitting in routine backups until those backups age out on their normal schedule.`,
             'Sign-in links: deleted automatically 15 minutes after they are created, whether or not they were used.',
             'Payment records: Stripe keeps its own transaction records for its legal and tax obligations, and we keep the minimum billing metadata we need for accounting.',
             'Server logs: kept only as long as they are useful for diagnosing problems and spotting abuse.',
@@ -438,21 +440,22 @@ export const PRIVACY: LegalDoc = {
         {
           kind: 'callout',
           tone: 'info',
-          title: 'How deletion works today',
+          title: 'How deletion works',
           items: [
-            '**Become does not yet have a "delete my account" button in the app.** We are telling you that rather than describing one that is not there.',
-            `Today the process is: email ${LEGAL_CONTACT_EMAIL} from the address on your account and ask us to delete it. We will confirm it is you, confirm you want it, and then delete within ${LEGAL_DELETION_DAYS} days.`,
-            'Cancel your paid plan first, or ask us to cancel it as part of the same request, so a renewal is not charged while the deletion is in progress.',
-            'In-app deletion is being built. When it ships, this section will be updated to describe it.',
+            '**You can delete your account yourself, from inside the app.** Open **Settings**, scroll to **Delete account**, and confirm. It is two taps, on the web and in the App Store and Google Play builds alike.',
+            'Confirming signs you out on that device and stops notifications to every device straight away.',
+            `We email you a link that undoes it. You have **${RESTORE_WINDOW_DAYS} days** to change your mind; after that the account and the data attached to it are permanently deleted, which is well inside the ${LEGAL_DELETION_DAYS} days we commit to.`,
+            `If you cannot sign in, email ${LEGAL_CONTACT_EMAIL} from the address on your account and ask us to delete it. The public page at [become.redbtn.io/delete-account](/delete-account) says the same thing without a login.`,
+            'Cancel your paid plan first, or ask us to cancel it as part of the same request, so a renewal is not charged while the deletion is in progress. Deleting your account does not by itself refund a payment.',
           ],
         },
-        { kind: 'p', text: 'Deletion covers your account record and the data attached to it: your profile and body stats, injury notes, training logs and schedules, nutrition logs and custom foods, meals and recipes, mind and mood data and journal entries, uploaded photos, push subscriptions, and posts you authored in groups and events.' },
+        { kind: 'p', text: 'Deletion covers your account record and the data attached to it: your profile and body stats, injury notes, training logs and schedules, nutrition logs and custom foods, meals and recipes, mind and mood data and journal entries, uploaded photos, push subscriptions (web push endpoints and the push token your phone issued to the app), and posts you authored in groups and events.' },
         { kind: 'p', text: 'Some things do not simply disappear, and you should know which:' },
         {
           kind: 'ul',
           items: [
             'Billing records that Stripe and we are required to keep for tax and accounting.',
-            'Entries in the shared food catalogue that other members’ logs already reference. Those are separated from you rather than deleted, so that other people’s history does not break.',
+            'Entries in the shared food and exercise catalogues that other members’ logs already reference. Those are separated from you rather than deleted, so that other people’s history does not break.',
             'Copies in routine backups, until those backups age out on their normal schedule.',
             'Anything we are required to keep to comply with a legal obligation or to defend a legal claim.',
           ],

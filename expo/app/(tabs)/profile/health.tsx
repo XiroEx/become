@@ -9,9 +9,11 @@ import {
   type LogWeightResponse,
   type WeightPostRequest,
 } from "@become/api-client";
+import { useRouter } from "expo-router";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
+import { DangerZone } from "@/components/settings/DangerZone";
 import { createHealthOptInStore } from "@/lib/health/opt-in";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -25,12 +27,19 @@ interface ProfilePatchInput {
 }
 
 /**
- * Profile → settings: edit name (GET/PATCH /api/profile), log weight or skip
- * (GET skip-state + POST /api/weight), and the Apple Health / Health Connect
- * opt-in toggle.
+ * SETTINGS. Edit name (GET/PATCH /api/profile), log weight or skip (GET
+ * skip-state + POST /api/weight), the Apple Health / Health Connect opt-in
+ * toggle — and the danger zone at the bottom, which is the account-deletion
+ * path both stores require to be reachable from inside the app.
+ *
+ * It is reached from the gear on the dashboard (app/(tabs)/dashboard). Before
+ * that entry point existed this screen was in the route tree and unreachable
+ * in a store build, which made "deletion is two taps from Settings" untrue for
+ * want of a button.
  */
 export default function HealthSettingsRoute() {
   const { token } = useAuth();
+  const router = useRouter();
   const [enabled, setEnabled] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [store] = useState(() => createHealthOptInStore());
@@ -130,7 +139,7 @@ export default function HealthSettingsRoute() {
       testID="health-settings-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text className="text-foreground text-2xl font-bold">Profile</Text>
+        <Text className="text-foreground text-2xl font-bold">Settings</Text>
 
         <View style={{ gap: 8 }}>
           <Input
@@ -211,6 +220,20 @@ export default function HealthSettingsRoute() {
             }}
             disabled={loading}
             accessibilityLabel="Sync from Health"
+          />
+        </View>
+
+        {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE. This screen is the app's
+            Settings, so this is where an App Store reviewer looks for account
+            deletion (Guideline 5.1.1(v)) — and from here it is two taps:
+            "Delete account", then "Yes, delete my account". It is NOT behind a
+            sub-screen or a tab for exactly that reason. */}
+        <View className="border-t border-border" style={{ marginTop: 8, paddingTop: 16 }}>
+          <DangerZone
+            token={token}
+            onDeleted={() => {
+              router.replace("/login");
+            }}
           />
         </View>
       </ScrollView>

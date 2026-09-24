@@ -41,6 +41,26 @@ describe("Android config — app.json", () => {
     expect(parsed.expo.android?.adaptiveIcon?.backgroundColor).toBe("#0a0a0a");
   });
 
+  // The account-deletion restore link arrives by email and may open anywhere.
+  // Android claims paths one at a time, so /account/restore needs a filter of
+  // its own or the link always lands in a browser — which still works, but the
+  // app has a screen for it and should get it.
+  it("declares an /account/restore app-link intent filter with autoVerify=true", () => {
+    const filters = parsed.expo.android?.intentFilters ?? [];
+    const restoreFilter = filters.find((f) =>
+      f.data?.some(
+        (d) =>
+          d.host === "become.redbtn.io" && d.pathPrefix === "/account/restore",
+      ),
+    );
+    expect(restoreFilter).toBeDefined();
+    expect(restoreFilter?.autoVerify).toBe(true);
+    expect(restoreFilter?.action).toBe("VIEW");
+    expect(restoreFilter?.category).toEqual(
+      expect.arrayContaining(["BROWSABLE", "DEFAULT"]),
+    );
+  });
+
   it("declares a /verify app-link intent filter with autoVerify=true", () => {
     const filters = parsed.expo.android?.intentFilters ?? [];
     const verifyFilter = filters.find((f) =>
