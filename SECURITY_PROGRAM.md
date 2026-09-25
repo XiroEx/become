@@ -307,7 +307,7 @@ cryptographically erased or destroyed, and the disposal is recorded by the Coord
 |---|---|---|
 | Magic-link tokens and session ids | 15 minutes | Deleted automatically by the MongoDB TTL index — disposal implemented as a property of the collection, not as a chore |
 | AI run state | About an hour | Redis expiry |
-| Account, health, training, nutrition and community data | While the account exists | Deleted on request within 30 days (Privacy Policy §13). There is no in-app delete button yet (G8); today it is a request to `info@becomeurbest.com` from the account address, and the Coordinator runs the deletion across the app database, the auth database and object storage |
+| Account, health, training, nutrition and community data | While the account exists | Deleted on request within 30 days (Privacy Policy §13). **Self-service: Settings → Delete account**, on the web and in both store builds (`webapp/app/api/me/account`). The request is a soft delete with a 7-day window to undo it; `webapp/app/api/cron/purge-deletions` then runs the declarative plan in `webapp/lib/accountPurge.ts` across the app database, and push registrations are dropped at request time. A member who cannot sign in still emails `info@becomeurbest.com` from the account address, and the Coordinator runs the same purge plus the auth database and object storage |
 | Uploaded images and video | While the account exists, or until the member deletes the item | Deleted from object storage as part of the same deletion |
 | Legacy password hashes | Retained today, needed by nothing | Should be dropped (G11) |
 | Billing records | As long as tax and accounting law requires | Stripe keeps its own records; Become keeps the minimum metadata |
@@ -406,12 +406,13 @@ Written down because an undocumented gap is an unmanaged one. Owner "Coordinator
 | G5 | No periodic access review and no written record of who holds admin on each provider account and in the app | R8 | Coordinator | At sign-off, then quarterly |
 | G6 | No audit trail of administrative access to member data | R8 | Coordinator | 2027-01-31 |
 | G7 | Sessions last 30 days and slide on use, with no way to revoke a single session or device | R11 | Coordinator | 2027-01-31 |
-| G8 | Processor terms unconfirmed (C7), and no in-app account deletion — deletion is a manual request handled within 30 days | R10 | Business owner | 2026-12-31 |
+| G8 | Processor terms unconfirmed (C7). *(In-app account deletion: CLOSED 2026-09-24 — Settings → Delete account on the web and in both store builds, 7-day undo, then the purge in `webapp/lib/accountPurge.ts`; object storage and the auth database are still cleared by the Coordinator, tracked as G14)* | R10 | Business owner | 2026-12-31 |
 | G9 | No training record beyond the sign-off table in section 13 | R12 | Business owner | At sign-off |
 | G10 | No automated secret scanning on the repository, after a credential was committed once already | R2 | Coordinator | 2026-11-30 |
 | G11 | Legacy bcrypt password hashes retained although nothing reads them | R1 | Coordinator | 2026-12-31 |
 | G12 | No external vulnerability scan or penetration test, and no rehearsal of section 11 | R1, R3 | Coordinator | 2027-03-31 |
 | G13 | Sent transactional email accumulates in the Gmail mailbox with no retention limit | R1 | Business owner | 2026-12-31 |
+| G14 | The automated account purge covers the app database only. Objects in S3-compatible storage and the member's identity in the redauth auth store are still removed by the Coordinator by hand after the purge runs | R10 | Coordinator | 2026-12-31 |
 
 ## 13. Review, revision and approval
 

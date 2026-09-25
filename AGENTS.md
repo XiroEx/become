@@ -590,6 +590,73 @@ transactional: address only, no opt-out.
 review step, Settings). It must never claim more than Terms §1 does.
 Tests: `tests/unit/legal/consent.test.tsx`, `tests/unit/email/canSpam.test.ts`.
 
+### Account deletion (store readiness, shipped 2026-09-24)
+
+**Settings → Delete account → confirm**, on the web and in both store builds.
+Apple checks this BY HAND (Review Guideline 5.1.1(v)): a reviewer signs in and
+looks for it without leaving the app. Google Play's Data safety form asks the
+same question from the outside and is answered by the PUBLIC
+`/delete-account` page, which renders signed out and is in `LEGAL_LINKS` — that
+list is what puts it in the landing footer and on every legal page.
+
+**A request is a SOFT delete with a fixed 7-day reversal window**
+(`RESTORE_WINDOW_DAYS`, `lib/accountDeletion.ts`). The window is what actually
+happens; `LEGAL_DELETION_DAYS` (30) is what the Privacy Policy promises, and
+the first must always be smaller than the second or §13 becomes a false
+statement. `deletion.purgeAfter` is STORED, not derived on read, so changing
+the window never moves a date a member was already given.
+
+Five things about it that are load-bearing:
+
+- **Push registrations are dropped at REQUEST time, not at purge time.** A
+  member who has asked to be deleted must stop hearing from us that minute, and
+  `models/PushSubscription.ts` holds both species — a web push endpoint and a
+  native Expo token — so one `deleteMany` covers the web app and both store
+  builds. `notificationsEnabled` is latched false in the same breath, or the
+  background resync in `/api/notifications/subscribe` puts one back.
+- **The restore link's HMAC IS the credential, and it is signed over
+  `deletion.requestedAt`** (`lib/accountRestoreToken.ts`). There is no session
+  to present, by construction. Binding it to the timestamp is what makes it
+  expire with no TTL: cancel, or request again, and every link minted for the
+  old request is dead. The link points at the PAGE; the API route's `GET`
+  redirects rather than mutating, because mail scanners fetch every URL in an
+  email before a person sees it, and a GET that cancelled a deletion would let
+  a corporate mail filter undo it silently.
+- **`lib/accountPurge.ts` is a declarative plan, not a function full of
+  deletes**: `delete` for the member's own rows, `detach` for shared catalogue
+  rows other members' logs reference (that is what the Privacy Policy means by
+  "separated from you rather than deleted"), `pull` for an id inside somebody
+  else's array, plus cascades for images keyed by their parent row.
+  `tests/unit/account/deletion.test.ts` walks `models/` and fails the build
+  when a model is neither purged nor in `PURGE_EXEMPT` with a reason — a
+  collection added next month cannot quietly start surviving deletion.
+- **The User row is deleted LAST, and only when every step answered.** A
+  half-purged member whose user row is gone is a member whose data is
+  unreachable and undeleted; leaving the row means the next sweep retries them.
+- **One schedule, production only**:
+  `.github/workflows/purge-deleted-accounts.yml` POSTs
+  `/api/cron/purge-deletions` daily with `x-cron-secret`. Beta and production
+  are two workspaces over one database, so a second schedule would be a second
+  runner deleting the same rows. The route's `GET` is a dry run by
+  construction — only a POST may delete a person.
+
+Native specifics: the settings screen is `expo/app/(tabs)/profile/health.tsx`,
+a hidden route in the `(tabs)` tree, so **the gear on the dashboard is the only
+way in** — without it the screen (and the deletion path) is unreachable in a
+store build while still compiling. Android claims `/account/restore` with its
+own `autoVerify` intent filter; iOS gets it from `applinks:become.redbtn.io`.
+The confirmation phrase and the window are duplicated in
+`expo/lib/account/deleteAccount.ts` because the webapp is zod-free and does not
+import `@become/api-client`; `tests/unit/account/storeReadiness.test.tsx`
+compares the two files so they cannot drift (a mismatch would 400 every native
+deletion and nothing in either build would say so).
+
+Tests: `tests/unit/account/deletion.test.ts` (window, MAC, purge plan),
+`deletionRoutes.test.ts` (confirmation, the non-mutating GET, the cron secret),
+`storeReadiness.test.tsx` (reachability on all three surfaces, including the
+Expo sources — nothing runs the Expo suite in CI, so that file is the only gate
+the native half has), and `expo/__tests__/deleteAccount.test.tsx`.
+
 ### Information security program (go-live item 17)
 
 **`SECURITY_PROGRAM.md` at the repo root is the written information security

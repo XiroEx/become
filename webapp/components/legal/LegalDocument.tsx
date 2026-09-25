@@ -159,7 +159,16 @@ function Block({ block }: { block: LegalBlock }) {
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 
-export default function LegalDocument({ doc }: { doc: LegalDoc }) {
+export default function LegalDocument({
+  doc,
+  notice,
+}: {
+  doc: LegalDoc
+  /** An optional banner under the header — used by /delete-account to confirm
+   *  a request that has just been made. Server-rendered like everything else
+   *  here; no state, no client bundle. */
+  notice?: ReactNode
+}) {
   return (
     <div
       className="min-h-dvh bg-zinc-50 dark:bg-zinc-950"
@@ -195,6 +204,8 @@ export default function LegalDocument({ doc }: { doc: LegalDoc }) {
             Version {LEGAL_VERSION}
           </p>
         </header>
+
+        {notice ? <div className="mt-5">{notice}</div> : null}
 
         {/* Contents. Long documents need a way in, and on a phone this is the
             only one that works without a sticky sidebar. */}

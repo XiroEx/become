@@ -13,9 +13,31 @@
 export interface AuditableExercise {
   slug: string;
   name: string;
+  aliases?: string[];
   videoUrl?: string | null;
   instructions?: string[];
   primaryMuscles?: string[];
+}
+
+/**
+ * Row filter for the audit tabs, which page in memory rather than through
+ * Mongo and so cannot reuse the `$or` on the main list query.
+ *
+ * Aliases count. The name a member sees on an exercise card is the program's
+ * wording, and the catalog's own name is often a different one — "Leg Curl
+ * Machine" on the card, "Seated Leg Curl" in the portal, the first an alias
+ * of the second. Searching the No Video queue for the name on the card has to
+ * find the row that queue exists to get a video onto.
+ */
+export function matchesAuditSearch(
+  ex: Pick<AuditableExercise, 'slug' | 'name' | 'aliases'>,
+  query: string
+): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (ex.name?.toLowerCase().includes(q)) return true;
+  if (ex.slug?.toLowerCase().includes(q)) return true;
+  return (ex.aliases ?? []).some((alias) => typeof alias === 'string' && alias.toLowerCase().includes(q));
 }
 
 /**

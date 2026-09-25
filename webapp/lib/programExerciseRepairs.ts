@@ -183,7 +183,9 @@ const SLED_PUSH: ProgramExerciseCreate = {
 }
 
 /**
- * One entry per dangling reference found in production on 2026-09-18.
+ * One entry per dangling reference found in production on 2026-09-18, plus
+ * the ones a later card named (`leg-curl-machine`, 2026-09-25 — a reference
+ * with no `name` on it, which the first sweep could only match by name).
  *
  * Where a program entry offers a choice ("Chest Press Machine or DB Flat
  * Press", "Row (Seated Cable Row / Dual-Cable Row / Chest-Supported T-Bar)")
@@ -229,6 +231,7 @@ export const PROGRAM_EXERCISE_REPAIRS: ProgramExerciseRepair[] = [
   { slug: 'finisher-kb-farmer-s-carry-or-sled-push', label: "Finisher: KB Farmer's Carry or Sled Push", relinkTo: 'farmer-carry' },
   { slug: 'leg-press-feet-slightly-high', label: 'Leg Press (Feet Slightly High)', relinkTo: 'leg-press' },
   { slug: 'hamstring-curl-machine', label: 'Hamstring Curl Machine', relinkTo: 'seated-leg-curl', note: 'The catalog entry that already carries the alias "Leg Curl Machine".' },
+  { slug: 'leg-curl-machine', label: 'Leg Curl Machine', relinkTo: 'seated-leg-curl', note: 'Card: "Leg curl machine is not in our data base please fix so I can upload the video." The same machine as hamstring-curl-machine above, written the other way round, and the same target: Seated Leg Curl already carries "Leg Curl Machine" as an alias. The reference carries no name of its own — the slug text is the whole label, which is why it was not on the 2026-09-18 sweep: that sweep only name-matched references that had a name.' },
   { slug: 'long-rope-triceps-pulldown-arm-pump', label: 'Long Rope Triceps Pulldown (Arm Pump)', relinkTo: 'cable-tricep-pushdown' },
   { slug: 'cable-or-ez-bar-curl-arm-pump', label: 'Cable or EZ-Bar Curl (Arm Pump)', relinkTo: 'cable-curl' },
 ]

@@ -293,6 +293,77 @@ export function verificationEmailHtml({ verifyUrl, mode }: { verifyUrl: string; 
   })
 }
 
+/**
+ * The "we have your deletion request" email, as HTML. Pure and exported for
+ * the same reason the sign-in one is: the tests render the real thing.
+ *
+ * IT IS TRANSACTIONAL, so it carries the postal address and no unsubscribe —
+ * a member cannot opt out of the only notice that their account is going away,
+ * and the link in it is the only way back.
+ *
+ * The link points at the /account/restore PAGE, never at the API route. A mail
+ * scanner fetches every URL in a message; a GET that cancelled the deletion
+ * would mean a corporate mail filter could quietly undo it before the member
+ * had read the email.
+ */
+export function accountDeletionEmailHtml({
+  restoreUrl,
+  restorableUntil,
+  restoreWindowDays,
+}: {
+  restoreUrl: string
+  /** Already formatted for a human — the server owns the wording. */
+  restorableUntil: string
+  restoreWindowDays: number
+}): string {
+  return emailShell({
+    title: `Your ${appName} account is scheduled for deletion`,
+    content: `
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">Hi,</p>
+
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">
+            We received a request to delete your ${appName} account. You have been signed out everywhere, and notifications to your devices have stopped.
+          </p>
+
+          <p class="b-ink" style="font-size: 16px; color: ${EMAIL_LIGHT.ink}; margin: 0 0 24px;">
+            Your account and the data attached to it will be permanently deleted on <strong>${restorableUntil}</strong>. Until then — ${restoreWindowDays} days — you can undo it:
+          </p>
+
+          <div style="text-align: center; margin: 32px 0;">
+            <a class="b-button" href="${restoreUrl}" style="display: inline-block; background-color: ${EMAIL_LIGHT.buttonSurface}; color: ${EMAIL_LIGHT.buttonInk}; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">Restore my account</a>
+          </div>
+
+          <p class="b-muted" style="font-size: 14px; color: ${EMAIL_LIGHT.muted}; margin: 32px 0 0;">
+            If you meant to delete it, do nothing. After that date the deletion cannot be undone by us or by you.
+          </p>
+
+          <hr class="b-rule" style="border: none; border-top: 1px solid ${EMAIL_LIGHT.border}; margin: 32px 0;">
+
+          <p class="b-muted" style="font-size: 12px; color: ${EMAIL_LIGHT.muted}; text-align: center; margin: 0;">
+            If the button doesn't work, copy and paste this link into your browser:<br>
+            <a class="b-muted-link" href="${restoreUrl}" style="color: ${EMAIL_LIGHT.mutedLink}; word-break: break-all;">${restoreUrl}</a>
+          </p>
+          ${emailFooter({ reason: `You're receiving this because a deletion request was made for this ${appName} account.` })}`,
+  })
+}
+
+export async function sendAccountDeletionEmail(opts: {
+  to: string
+  restoreUrl: string
+  restorableUntil: string
+  restoreWindowDays: number
+}) {
+  await sendEmail({
+    to: opts.to,
+    subject: `Your ${appName} account is scheduled for deletion`,
+    html: accountDeletionEmailHtml({
+      restoreUrl: opts.restoreUrl,
+      restorableUntil: opts.restorableUntil,
+      restoreWindowDays: opts.restoreWindowDays,
+    }),
+  })
+}
+
 export async function sendVerificationEmail(email: string, token: string, mode: 'login' | 'register', baseUrl?: string) {
   const appUrl = baseUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const verifyUrl = `${appUrl}/verify?token=${token}&mode=${mode}`

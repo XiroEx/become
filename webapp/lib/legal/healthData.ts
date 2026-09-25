@@ -17,6 +17,7 @@
 // overlap they are kept word-for-word or reference each other, so they cannot
 // drift apart.
 
+import { RESTORE_WINDOW_DAYS } from '@/lib/accountDeletion'
 import {
   AI_PROVIDER,
   LEGAL_CONTACT_EMAIL,
@@ -217,13 +218,13 @@ export const HEALTH_DATA: LegalDoc = {
           items: [
             '**To confirm** whether we are collecting, sharing or selling consumer health data about you, and **to access** it, including a list of every third party and affiliate we have shared it with and how to contact them (section 5 is that list).',
             '**To withdraw consent** to our collection or sharing of consumer health data. Sharing with the AI provider has its own switch: **Settings → AI features**, which takes effect on the next request. Otherwise, because we collect it only to provide what you asked for, withdrawing consent for a category means deleting that data or the feature that uses it; for everything, it means deleting your account.',
-            `**To have it deleted**, including from our service providers. We delete within ${LEGAL_DELETION_DAYS} days of confirming your request, instruct each provider in section 5 to delete what it holds for us, and tell you when it is done. Copies in routine backups are removed when those backups age out on their normal schedule, within the six months the Washington law allows for archived or backup systems.`,
+            `**To have it deleted**, including from our service providers. The fastest route is **Settings → Delete account**, in the app or on the web: it schedules the deletion immediately, gives you ${RESTORE_WINDOW_DAYS} days to undo it, and removes everything after that — always within ${LEGAL_DELETION_DAYS} days of your request. We instruct each provider in section 5 to delete what it holds for us. Copies in routine backups are removed when those backups age out on their normal schedule, within the six months the Washington law allows for archived or backup systems.`,
             '**Not to be discriminated against** for exercising any of these rights. We will never treat you worse, charge you more or give you less because you asked.',
           ],
         },
         {
           kind: 'p',
-          text: 'Deletion has a few limits, which are the same ones the [Privacy Policy](/privacy) states in section 13: billing records we are required to keep, entries in the shared food catalogue that other members’ logs already reference (those are separated from you rather than deleted), and anything we must keep to meet a legal obligation or defend a legal claim.',
+          text: 'Deletion has a few limits, which are the same ones the [Privacy Policy](/privacy) states in section 13: billing records we are required to keep, entries in the shared food and exercise catalogues that other members’ logs already reference (those are separated from you rather than deleted), and anything we must keep to meet a legal obligation or defend a legal claim.',
         },
       ],
     },

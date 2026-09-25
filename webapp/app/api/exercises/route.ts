@@ -5,7 +5,7 @@ import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
-import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, type AuditableExercise } from '@/lib/exerciseAudit';
+import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
 
 interface AuditRow extends AuditableExercise {
   category?: string;
@@ -50,18 +50,17 @@ export async function GET(request: NextRequest) {
       // hundred rows, not millions.
       const all = await Exercise.find(
         visibleExerciseFilter(auth.userId),
-        { slug: 1, name: 1, category: 1, movementPatterns: 1, bodyRegion: 1, videoUrl: 1, instructions: 1, primaryMuscles: 1 }
+        { slug: 1, name: 1, aliases: 1, category: 1, movementPatterns: 1, bodyRegion: 1, videoUrl: 1, instructions: 1, primaryMuscles: 1 }
       ).lean<AuditRow[]>();
 
       const flaggedSlugs = issue === 'duplicate'
         ? findDuplicateSlugs(all)
         : new Set(all.filter(issue === 'noVideo' ? isMissingVideo : isBrokenExercise).map((e) => e.slug));
 
-      const qLower = q.toLowerCase();
       const flagged = all
         .filter((e) => {
           if (!flaggedSlugs.has(e.slug)) return false;
-          if (q && !e.name.toLowerCase().includes(qLower) && !e.slug.toLowerCase().includes(qLower)) return false;
+          if (!matchesAuditSearch(e, q)) return false;
           if (category && e.category !== category) return false;
           if (movement && !(e.movementPatterns ?? []).includes(movement)) return false;
           if (bodyRegion && e.bodyRegion !== bodyRegion) return false;
