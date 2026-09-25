@@ -11,6 +11,11 @@ interface ExerciseListItem {
   _id?: string
   slug: string
   name: string
+  /** The other names this exercise answers to. Shown on the row because the
+   *  name a member sees on a program card is often one of these and not the
+   *  catalog's own — "Leg Curl Machine" is Seated Leg Curl. Without them the
+   *  search finds the row and the admin still can't tell it is the right one. */
+  aliases?: string[]
   category: string
   mechanics?: string
   primaryMuscles?: string[]
@@ -414,6 +419,11 @@ export default function AdminExercisesPage() {
                     ? ` · ${ex.equipment.join(', ')}`
                     : ''}
                 </p>
+                {ex.aliases && ex.aliases.length > 0 && (
+                  <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                    also: {ex.aliases.join(', ')}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 {issues.length > 0 && (

@@ -10,7 +10,8 @@
  */
 import ExerciseModel from '@/models/Exercise';
 import { buildExerciseNameIndex, resolveExerciseSlug, type ExerciseNameIndex } from '@/lib/exerciseNameMatch';
-import { autoCatalogSlug, ensureCatalogExercise } from '@/lib/exerciseAutoCatalog';
+import { autoCatalogSlug, ensureCatalogExercise, exerciseNameFromSlug } from '@/lib/exerciseAutoCatalog';
+import { repairFor } from '@/lib/programExerciseRepairs';
 
 interface HydratedExerciseFields {
   name: string;
@@ -134,22 +135,48 @@ function hydrateExercise(
   let info = map.get(slug);
 
   // A slug no exercise owns — a program saved before lib/exerciseAutoCatalog
-  // existed minted one per unrecognised name. If the entry's own name
-  // resolves, show that exercise's video and classification rather than an
-  // empty card. scripts/repair-program-exercises.mjs rewrites the stored slug
-  // for good; this is what keeps the app honest in the meantime, and for any
-  // row an admin later deletes out from under a program.
+  // existed minted one per unrecognised name. Rather than an empty card, find
+  // the exercise it names and show that row's video and classification.
+  // scripts/repair-program-exercises.ts rewrites the stored slug for good;
+  // these three fallbacks are what keep the app honest in the meantime, and
+  // for any row an admin later deletes out from under a program.
+  //
+  // First the reviewed decision, where one was written down for this slug
+  // (lib/programExerciseRepairs.ts): a human's read of the program the
+  // reference came from — "an unqualified Squat on a gym day is the back
+  // squat" — which should not be overruled by a resolver guessing from the
+  // same string.
+  if (!info) {
+    const relinkTo = repairFor(slug)?.relinkTo;
+    if (relinkTo) info = map.get(relinkTo);
+  }
+
+  // Then the entry's own name, which is the coach's wording for it.
   if (!info && exercise.name) {
     const resolved = resolveExerciseSlug(exercise.name, names);
     if (resolved) info = map.get(resolved);
   }
 
+  // And last, for the entries that have no name to try: the slug IS the
+  // name, with the spaces taken out. Card: "Leg curl machine is not in
+  // our data base please fix so I can upload the video" — the program entry
+  // behind that card is `{ exerciseSlug: 'leg-curl-machine' }` with no name,
+  // so the resolution above had nothing to work with and the card rendered
+  // straight off the slug text: no video, no muscles, and nothing in the
+  // admin portal called that. Read the slug back into "Leg Curl Machine" and
+  // it resolves to Seated Leg Curl, which carries that exact alias — so the
+  // video the coach uploads there is the video the member sees here.
+  //
+  // Protocol slugs are excluded: `__protocol__amrap-10` is a routing marker,
+  // not an exercise name, and has no catalog row by design.
+  if (!info && !slug.startsWith('__protocol__')) {
+    const resolved = resolveExerciseSlug(exerciseNameFromSlug(slug), names);
+    if (resolved) info = map.get(resolved);
+  }
+
   if (!info) {
     // Protocol entries (__protocol__*) or unknown slugs — derive name from slug
-    const derivedName = slug
-      .replace(/^__protocol__/, '')
-      .replace(/-/g, ' ')
-      .replace(/\b\w/g, (c: string) => c.toUpperCase());
+    const derivedName = exerciseNameFromSlug(slug);
 
     return {
       ...exercise,
