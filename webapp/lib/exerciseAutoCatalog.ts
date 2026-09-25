@@ -36,6 +36,27 @@ export function autoCatalogSlug(name: string): string {
     .replace(/^-|-$/g, '')
 }
 
+/**
+ * The name a slug stands for — `autoCatalogSlug` read backwards.
+ *
+ * A program entry that carries no `name` of its own has exactly one piece of
+ * evidence about what it is: the slug, which is a name with the spaces taken
+ * out. "leg-curl-machine" is the Leg Curl Machine, and that is the name the
+ * app already puts on the card when the slug owns no catalog row — so it is
+ * also the name to resolve WITH, and the name to mint UNDER, rather than the
+ * raw slug string.
+ *
+ * The `__protocol__` marker is stripped the same way hydrateExercise always
+ * stripped it: it is a routing prefix, not part of the name.
+ */
+export function exerciseNameFromSlug(slug: string): string {
+  return slug
+    .replace(/^__protocol__/, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c: string) => c.toUpperCase())
+}
+
 /** The document body for a newly minted catalog row. Pure, so the shape is
  *  testable without a database. */
 export function buildAutoCatalogExercise(name: string, slug: string) {

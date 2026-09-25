@@ -51,7 +51,7 @@ import Exercise from '../models/Exercise'
 import Program from '../models/Program'
 import UserProgress from '../models/UserProgress'
 import { buildExerciseNameIndex, matchExerciseName } from '../lib/exerciseNameMatch'
-import { AUTO_CATALOG_TAG, buildAutoCatalogExercise } from '../lib/exerciseAutoCatalog'
+import { AUTO_CATALOG_TAG, buildAutoCatalogExercise, exerciseNameFromSlug } from '../lib/exerciseAutoCatalog'
 import { repairFor } from '../lib/programExerciseRepairs'
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
@@ -164,17 +164,28 @@ async function main() {
     }
 
     const repair = repairFor(ref.slug)
-    const label = ref.name || repair?.label || ref.slug
+    // A reference with no `name` still names itself: the slug is the name
+    // with the spaces taken out, so read it back rather than falling through
+    // to a mint called "leg-curl-machine". This is the hole the "Leg curl
+    // machine is not in our data base" card fell through — the first sweep
+    // matched on `ref.name` only, so a nameless reference was never even
+    // offered to the resolver.
+    const slugLabel = exerciseNameFromSlug(ref.slug)
+    const label = ref.name || repair?.label || slugLabel
     let decision: Decision
     if (repair?.relinkTo) {
       decision = { kind: 'relink', to: repair.relinkTo, source: 'repair table', note: repair.note }
     } else if (repair?.create) {
       decision = { kind: 'create', source: 'repair table', note: repair.note }
     } else {
-      const matched = ref.name ? matchExerciseName(ref.name, index) : null
+      const matched = matchExerciseName(ref.name || slugLabel, index)
       decision = matched
-        ? { kind: 'relink', to: matched.slug, source: `name match (${matched.via})` }
-        : { kind: 'create', source: 'minted from the name' }
+        ? {
+            kind: 'relink',
+            to: matched.slug,
+            source: `name match (${matched.via})${ref.name ? '' : ', read off the slug'}`,
+          }
+        : { kind: 'create', source: ref.name ? 'minted from the name' : 'minted from the slug' }
     }
 
     planned.set(ref.slug, { slug: ref.slug, label, programs: [ref.program], count: 1, decision })
