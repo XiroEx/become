@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProgramDetailResponseSchema } from "@become/api-client";
@@ -10,6 +10,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { toWorkoutOverview } from "@/lib/programs/programDetail";
 
 export default function WorkoutOverviewRoute() {
+  const router = useRouter();
   const params = useLocalSearchParams<{
     id?: string;
     idx?: string;
@@ -60,7 +61,14 @@ export default function WorkoutOverviewRoute() {
       style={{ flex: 1, backgroundColor: "#0a0a0a" }}
       testID="programming-workout-route"
     >
-      <WorkoutOverview workout={workout} />
+      <WorkoutOverview
+        workout={workout}
+        onStartLive={() =>
+          router.push(
+            `/(tabs)/programming/${id}/workout/${idx}/live?phase=${resolvedPhase}`,
+          )
+        }
+      />
     </SafeAreaView>
   );
 }
