@@ -795,7 +795,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section className="mb-6 border-b border-zinc-200 pb-6 dark:border-zinc-800 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 sm:pb-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
       <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+      {/* Explicit grid-cols-1 below `sm` — without it there's no defined
+          track below that breakpoint, so an unshrinkable child (e.g. a
+          `truncate`d row, which is nowrap under the hood) blows the single
+          auto column out past the viewport and the whole page scrolls
+          horizontally. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>
     </section>
   )
 }
