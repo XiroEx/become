@@ -7,9 +7,9 @@
 //
 // Three things about it are deliberate:
 //
-//   • IT RENDERS OUTSIDE THE SETTINGS TAB SWITCHER. Behind a tab it is one tap
-//     further and, worse, invisible to a reviewer who never guesses which of
-//     three tabs hides it. `tests/unit/account/storeReadiness.test.tsx` pins
+//   • IT RENDERS ONLY IN THE "SETTINGS" TAB. It lives inside the settings tab
+//     (and not on profile or training tabs) so it does not clutter adjacent
+//     preference screens. `tests/unit/account/storeReadiness.test.tsx` pins
 //     that placement.
 //   • The confirmation is a second, destructive button — not a typed phrase.
 //     The same component ships to a phone keyboard in the native builds
