@@ -13,8 +13,8 @@
 //
 // So this file asserts REACHABILITY and WIRING, across both codebases:
 //
-//   1. the web settings screen renders the danger zone OUTSIDE its tab
-//      switcher, so it is visible whichever tab is open;
+//   1. the web settings screen renders the danger zone only inside the
+//      settings tab, so it does not appear across all settings tabs;
 //   2. the native settings screen renders one too, and the dashboard has the
 //      entry point that makes that screen reachable at all;
 //   3. requesting deletion drops every push registration and signs the device
@@ -46,12 +46,13 @@ const readRepo = (rel: string) => fs.readFileSync(path.join(REPO, rel), 'utf8')
 
 // ─── 1. The web settings screen ──────────────────────────────────────────────
 
-/** The extent of every `{activeTab === '…' && ( … )}` block, by paren depth. */
-function tabBlockRanges(src: string): [number, number][] {
-  const ranges: [number, number][] = []
-  const opener = /\{activeTab === '[a-z]+' && \(/g
+/** The extent and tab name of every `{activeTab === '…' && ( … )}` block, by paren depth. */
+function tabBlocks(src: string): { tab: string; start: number; end: number }[] {
+  const blocks: { tab: string; start: number; end: number }[] = []
+  const opener = /\{activeTab === '([a-z]+)' && \(/g
   let match: RegExpExecArray | null
   while ((match = opener.exec(src)) !== null) {
+    const tab = match[1]
     let depth = 0
     let i = match.index + match[0].length - 1 // the '(' itself
     for (; i < src.length; i++) {
@@ -61,24 +62,32 @@ function tabBlockRanges(src: string): [number, number][] {
         if (depth === 0) break
       }
     }
-    ranges.push([match.index, i])
+    blocks.push({ tab, start: match.index, end: i })
   }
-  return ranges
+  return blocks
 }
 
-test('the web danger zone renders outside the settings tab switcher', () => {
+test('the web danger zone renders only inside the settings tab', () => {
   const src = read('app/dashboard/settings/page.tsx')
 
   assert.match(src, /import DangerZone from '@\/components\/settings\/DangerZone'/, 'not imported')
   const at = src.indexOf('<DangerZone />')
   assert.ok(at > -1, 'the settings page does not render <DangerZone />')
 
-  const ranges = tabBlockRanges(src)
-  assert.ok(ranges.length >= 3, 'the tab blocks could not be located — has the page been restructured?')
-  for (const [start, end] of ranges) {
+  const blocks = tabBlocks(src)
+  assert.ok(blocks.length >= 3, 'the tab blocks could not be located — has the page been restructured?')
+
+  const settingsBlock = blocks.find((b) => b.tab === 'settings')
+  assert.ok(settingsBlock, 'the settings tab block could not be found')
+  assert.ok(
+    at >= settingsBlock.start && at <= settingsBlock.end,
+    'the danger zone must be inside the settings tab',
+  )
+
+  for (const block of blocks.filter((b) => b.tab !== 'settings')) {
     assert.ok(
-      at < start || at > end,
-      'the danger zone is inside a tab: a reviewer who opens Settings must SEE "Delete account" without guessing which tab hides it',
+      at < block.start || at > block.end,
+      `the danger zone must not be inside the ${block.tab} tab`,
     )
   }
 })

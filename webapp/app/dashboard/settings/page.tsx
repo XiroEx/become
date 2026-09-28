@@ -1360,8 +1360,7 @@ function SettingsPageInner() {
 
           {/* Legal & support. Settings is where a member looks for these, and
               where an App Store reviewer looks for the account-deletion path —
-              which now lives in its own section, rendered below OUTSIDE this
-              tab so it is visible whichever tab is open. */}
+              which lives in its own section rendered below in this tab. */}
           <section
             id="legal"
             className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
@@ -1393,15 +1392,11 @@ function SettingsPageInner() {
               and we will cancel it for you.
             </p>
           </section>
+
+          {/* Delete account surface — only appears in the "settings" tab */}
+          <DangerZone />
         </>
       )}
-
-      {/* OUTSIDE THE TAB SWITCHER, ON PURPOSE. A reviewer (and a member) opens
-          Settings and must see "Delete account" without guessing which of three
-          tabs it is hiding behind — that is the whole of Guideline 5.1.1(v),
-          and it is what makes deletion two taps from here in the iOS and
-          Android builds as well as on the web. */}
-      <DangerZone />
 
       <Toast toast={toast} />
     </PageTransition>
