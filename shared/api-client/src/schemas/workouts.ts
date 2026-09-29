@@ -77,6 +77,13 @@ export const WorkoutSaveRequestSchema = z
     duration: z.number().optional(),
     activeSeconds: z.number().optional(),
     notes: z.string().optional(),
+    // Client-generated id for ONE attempt at this program day, sent on every
+    // save of it — the program-workout analogue of a quick session's
+    // `sessionId`. The server matches it BEFORE its date windows, so a save
+    // replayed from the offline queue (including after local midnight, where
+    // no window matches any more) updates the same log instead of logging a
+    // second completed workout and running the completion side effects twice.
+    attemptId: z.string().optional(),
   })
   .passthrough();
 

@@ -252,6 +252,37 @@ because DST moves it. That list drifts the moment a new route reads `tz`, so
 fails when a family is missing from it. `admin` is the one deliberate exemption
 (coach-only; native never calls it).
 
+### A write can carry the day it was made on (`date` + `loggedAt`)
+
+`tz` alone dates a write from the SERVER'S clock, which is wrong for anything
+that did not reach the server the moment it happened. A weigh-in made offline at
+11:50pm and replayed by the native queue at 12:05am landed on the next day — and
+because the day-keyed routes hold exactly one entry per local day, the replay did
+not duplicate, it filed the value on the wrong day and could overwrite a newer
+one.
+
+`POST /api/weight` and `POST /api/mood` therefore accept two optional fields
+(`resolveEntryDay` in `webapp/lib/dayWindow.ts` is the whole decision):
+
+- **`date`** — a `YYYY-MM-DD` LOCAL day key, keyed with `utcMidnightDateKey`.
+  Refused with 400, never silently filed under today: a malformed key, a key
+  that is not a real calendar day, a day in the FUTURE of the caller's own
+  local today, and one older than `BACKDATE_WINDOW_DAYS` (7 — the offline
+  queue; a caller may widen it, which is how Health imports will reach back
+  further).
+- **`loggedAt`** — an ISO instant, stored on the entry, that orders two
+  deliveries of the SAME day against each other. The newer one wins
+  (`isStaleReplay`), so a queue draining out of order cannot overwrite a newer
+  value; the loser is answered `200 { applied: false }` because there is
+  nothing to retry. A future `loggedAt` is clamped to now, and a row without
+  one (every row written before this) loses to any incoming write, which is the
+  last-write-wins behaviour every client had.
+
+**A request that sends neither behaves exactly as it did before.** A back-dated
+entry deliberately does NOT touch the streak (`recordStreakActivity` only ever
+credits the day it runs on), the weight prompt/skip state, or
+`profile.currentWeightKg` when a later weigh-in already exists.
+
 ## Frontend Patterns
 
 - **AuthGuard** component wraps protected routes

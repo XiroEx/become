@@ -60,6 +60,19 @@ interface WorkoutSaveRequest {
    * the log's date.
    */
   performedAt?: string
+  /**
+   * Client-generated id for ONE attempt at this program day, sent on EVERY
+   * save of that attempt — the program-workout analogue of a quick session's
+   * `sessionId`. It is what makes a save safe to replay: an offline queue (or
+   * a slow retry) can send the same completing save again hours later, after
+   * local midnight, and the route recognises it instead of inserting a second
+   * completed log and running the completion side effects twice.
+   *
+   * Optional: a client that sends none falls through to exactly the window
+   * rules that have always applied. An `Idempotency-Key` header is honoured as
+   * an equivalent, for queues that key writes at the transport level.
+   */
+  attemptId?: string
 }
 
 interface QuickSessionSaveRequest {
@@ -114,6 +127,23 @@ function resolvePerformedAt(performedAt: string | undefined, _tzOffset: number):
   if (d.getTime() < now.getTime() - YEAR) return now   // absurdly old → now
   if (d.getTime() > now.getTime() + YEAR) return now   // absurdly far ahead → now
   return d
+}
+
+/**
+ * The attempt id this program save carries, or null when it carries none.
+ *
+ * Read from the body (`attemptId`) first, then from an `Idempotency-Key`
+ * header so a queue that keys its writes at the transport level works without
+ * rewriting the body it stored. Trimmed and length-capped; anything that is
+ * not a usable string reads as ABSENT, which leaves the save on the
+ * pre-existing open-log / local-day window rules and changes nothing.
+ */
+function readAttemptId(body: { attemptId?: unknown }, request: NextRequest): string | null {
+  const fromBody = typeof body?.attemptId === 'string' ? body.attemptId : ''
+  const raw = fromBody.trim() ? fromBody : (request.headers.get('Idempotency-Key') ?? '')
+  const id = typeof raw === 'string' ? raw.trim() : ''
+  if (!id || id.length > 128) return null
+  return id
 }
 
 // GET: Fetch today's workout progress for a program
@@ -419,12 +449,17 @@ export async function POST(request: NextRequest) {
     // one — autosaves never do, so they never disturb the log's date.
     const explicitLogDate = body.performedAt ? resolvePerformedAt(body.performedAt, tzOffset) : null
 
+    // The client's id for THIS attempt at this program day (see attemptId on
+    // WorkoutSaveRequest). Null when the client sends none.
+    const attemptId = readAttemptId(body, request)
+
     // Create workout log entry
     const workoutLog = {
       date: explicitLogDate ?? new Date(),
       programId,
       phase,
       day,
+      ...(attemptId && { attemptId }),
       ...(scheduledDate && { scheduledDate: new Date(scheduledDate) }),
       completed,
       duration,
@@ -434,6 +469,71 @@ export async function POST(request: NextRequest) {
       exercises
     }
 
+    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean; attemptId?: string }> }
+
+    let wasAlreadyComplete = false
+    // Did this save land on the log its OWN attemptId already wrote? Then it
+    // is a replay (or simply a later save) of an attempt the server has
+    // already recorded, and none of the window rules below may run — they are
+    // what inserted the duplicate.
+    let matchedAttempt = false
+
+    // ── 1. The attempt's own log, matched by the client's attemptId ────────
+    // Checked BEFORE the window rules and deliberately with NO date bound:
+    // that is the whole point. A completing save replayed from an offline
+    // queue (or a slow retry) after local midnight is neither inside the
+    // rolling open-log window — the log it wrote is completed — nor dated
+    // "today" any more, so the route found neither and inserted a SECOND
+    // completed log, running the completion side effects a second time: the
+    // program's completed count and day advance again, and another schedule
+    // slot with the same day label is marked completed.
+    //
+    // Replaying a save must be a no-op beyond rewriting the same log with the
+    // same content, so this update is content-only: it never touches
+    // programId/phase/day, and `wasAlreadyComplete` (read from the BEFORE
+    // document, the same trick the window path uses) is what keeps the
+    // completion side effects to exactly once per attempt.
+    if (attemptId) {
+      const attemptDocBefore = await UserProgress.findOneAndUpdate(
+        {
+          userId: payload.userId,
+          workoutLogs: { $elemMatch: { programId, attemptId } }
+        },
+        {
+          $set: {
+            'workoutLogs.$[elem].exercises': exercises,
+            'workoutLogs.$[elem].completed': completed,
+            'workoutLogs.$[elem].duration': duration,
+            ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
+            ...(explicitLogDate && { 'workoutLogs.$[elem].date': explicitLogDate }),
+            updatedAt: new Date()
+          }
+        },
+        {
+          // A replayed AUTOSAVE must never un-complete a finished log, so an
+          // incomplete save only rewrites an element that is still open. The
+          // window path below gets that rule for free by matching
+          // completed:false; here it has to be said out loud.
+          arrayFilters: [{
+            'elem.programId': programId,
+            'elem.attemptId': attemptId,
+            ...(completed ? {} : { 'elem.completed': false })
+          }],
+          returnDocument: 'before',
+          lean: true
+        }
+      ) as ProgressDoc | null
+
+      if (attemptDocBefore) {
+        matchedAttempt = true
+        const prior = attemptDocBefore.workoutLogs?.find(
+          (log) => log.programId === programId && log.attemptId === attemptId
+        )
+        wasAlreadyComplete = prior?.completed === true
+      }
+    }
+
+    // ── 2. Otherwise, the window rules, exactly as they always were ────────
     // Prefer the OPEN log for this exact program/day within the same rolling
     // in-progress window GET/in-progress uses (IN_PROGRESS_WINDOW_MS) —
     // regardless of which calendar day it carries. A log opened right before
@@ -447,8 +547,7 @@ export async function POST(request: NextRequest) {
     // separate stale-workout prompt (staleIncomplete, further below in GET),
     // which asks the member to explicitly resolve it first.
     const openLogCutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
-    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean }> }
-    const docBefore = await UserProgress.findOneAndUpdate(
+    const docBefore = matchedAttempt ? null : await UserProgress.findOneAndUpdate(
       {
         userId: payload.userId,
         workoutLogs: { $elemMatch: { programId, day, completed: false, date: { $gte: openLogCutoff } } }
@@ -460,6 +559,11 @@ export async function POST(request: NextRequest) {
           'workoutLogs.$[elem].duration': duration,
           ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
           ...(explicitLogDate && { 'workoutLogs.$[elem].date': explicitLogDate }),
+          // Adopt the id of the attempt now continuing this log, so every
+          // later save of it (and every replay of those) matches by id above
+          // instead of depending on the windows. Covers a log opened by a
+          // client that sent none — a queued write from an older build, say.
+          ...(attemptId && { 'workoutLogs.$[elem].attemptId': attemptId }),
           updatedAt: new Date()
         }
       },
@@ -470,9 +574,7 @@ export async function POST(request: NextRequest) {
       }
     ) as ProgressDoc | null
 
-    let wasAlreadyComplete = false
-
-    if (!docBefore) {
+    if (!matchedAttempt && !docBefore) {
       // No recent OPEN log for this program/day. Either today already has a
       // COMPLETED entry (a retried save — don't double the completion side
       // effects below) or there is truly nothing yet (a fresh start).
@@ -491,11 +593,17 @@ export async function POST(request: NextRequest) {
       if (todayLog) {
         wasAlreadyComplete = todayLog.completed === true
       } else {
-        // Insert only if still absent (guards against concurrent double-tap)
+        // Insert only if still absent (guards against concurrent double-tap).
+        // With an attemptId the guard covers that too, so two replays landing
+        // at once can never both insert: the first wins, the second matches
+        // it by id on its next attempt-check — or fails this filter outright.
         await UserProgress.updateOne(
           {
             userId: payload.userId,
-            workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } }
+            $and: [
+              { workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } } },
+              ...(attemptId ? [{ workoutLogs: { $not: { $elemMatch: { programId, attemptId } } } }] : [])
+            ]
           },
           {
             $push: { workoutLogs: workoutLog },

@@ -25,6 +25,7 @@ import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
+import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
 import { trackColumnSpans, colSpan } from "@/lib/workout/trackColumns";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
@@ -836,6 +837,11 @@ export default function WorkoutFormPage() {
           day: workout.day,
           exercises,
           completed: isComplete,
+          // This attempt's id, on every save of it (see the live view): it is
+          // what lets the server recognise a retried or queued save as a
+          // REPLAY rather than a second workout. Shared with the live view
+          // through storage, so flipping Track↔Live stays one attempt.
+          attemptId: workoutAttemptId(programId, workout.day),
           tz: new Date().getTimezoneOffset(),
           ...(scheduledDate && { scheduledDate }),
           ...(workoutNotes.trim() && { notes: workoutNotes.trim() })
@@ -847,6 +853,9 @@ export default function WorkoutFormPage() {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // The workout is done — the next one on this day label is a new
+        // attempt and must mint its own id.
+        clearWorkoutAttemptId(programId, workout.day);
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
