@@ -11,10 +11,24 @@ import {
   readTzOffset,
   readTzOffsetFromBody,
   localDateKey,
+  dateKey,
   utcMidnightDateKey,
   isEntryOnDay,
   daysSinceEntry,
+  resolveEntryDay,
+  isStaleReplay,
 } from '@/lib/dayWindow'
+
+/**
+ * Is `entryKey` (YYYY-MM-DD) the newest weigh-in day in the history? A
+ * back-dated entry — last Tuesday's weight, delivered by the offline queue —
+ * must not overwrite the profile's canonical weight or fire the goal-reached
+ * check when a later weigh-in already exists. Entries are day markers, so they
+ * are read at offset 0.
+ */
+function isNewestWeighIn(history: { date: Date }[] | undefined, entryKey: string): boolean {
+  return !(history ?? []).some(e => dateKey(new Date(e.date), 0) > entryKey)
+}
 
 // Check if weight should be prompted and return skip info
 export async function GET(request: NextRequest) {
@@ -156,17 +170,34 @@ export async function POST(request: NextRequest) {
     const todayKey = localDateKey(null, tzOffset)
     const today = utcMidnightDateKey(todayKey)
 
+    // Which local day this weigh-in belongs to. Without `date` on the body
+    // that is today in the caller's offset — exactly what every client gets
+    // now. With one, the client is telling us the day it was MADE on, which is
+    // how a write queued offline before midnight and delivered after it still
+    // lands on the day the member weighed themselves.
+    const entryDay = resolveEntryDay(body, tzOffset)
+    if (!entryDay.ok) {
+      return NextResponse.json({ error: entryDay.error }, { status: 400 })
+    }
+    const { dayKey: entryKey, date: entryDate, loggedAt, backdated } = entryDay
+
     // Find or create user progress
     let progress = await UserProgress.findOne({ userId: authResult.userId })
+
+    // Did this request actually change the day's entry? A replay carrying an
+    // older `loggedAt` than the value already stored does not.
+    let applied = true
 
     if (!progress) {
       // Create new progress record
       progress = await UserProgress.create({
         userId: authResult.userId,
-        weightHistory: weight ? [{ date: today, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) }] : [],
+        weightHistory: weight ? [{ date: entryDate, loggedAt, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) }] : [],
         weightSkipTracking: {
-          lastPromptDate: today,
-          lastWeightDate: weight ? today : undefined,
+          // The prompt is a TODAY event: a back-dated entry says nothing about
+          // whether the member has been asked, or has skipped, today.
+          lastPromptDate: backdated ? undefined : today,
+          lastWeightDate: weight ? entryDate : undefined,
           consecutiveSkips: skip ? 1 : 0
         }
       })
@@ -193,31 +224,52 @@ export async function POST(request: NextRequest) {
       } else if (weight) {
         // User logged weight
 
-        // Check if there's already a weight entry for today. Matched by calendar
-        // day — the local-instant window never matched the day-keyed row, so a
-        // member west of UTC appended a new row on every save instead of
-        // updating the day's entry.
+        // Check if there's already an entry for the day this weigh-in belongs
+        // to. Matched by calendar day — the local-instant window never matched
+        // the day-keyed row, so a member west of UTC appended a new row on
+        // every save instead of updating the day's entry.
         const existingIndex = progress.weightHistory?.findIndex((entry: { date: Date }) =>
-          isEntryOnDay(entry.date, todayKey, tzOffset)
+          isEntryOnDay(entry.date, entryKey, tzOffset)
         ) ?? -1
 
         if (existingIndex >= 0) {
-          progress.weightHistory[existingIndex].weight = weight
-          progress.weightHistory[existingIndex].unit = unit
-          if (bodyFat != null) progress.weightHistory[existingIndex].bodyFat = bodyFat
+          // The same day can arrive twice — once from the device that was
+          // online, once from an offline queue draining later. The later
+          // DELIVERY is not necessarily the later WEIGH-IN, so the newer
+          // `loggedAt` wins and the stale replay is accepted but ignored.
+          if (isStaleReplay(progress.weightHistory[existingIndex].loggedAt, loggedAt)) {
+            applied = false
+          } else {
+            progress.weightHistory[existingIndex].weight = weight
+            progress.weightHistory[existingIndex].unit = unit
+            progress.weightHistory[existingIndex].loggedAt = loggedAt
+            if (bodyFat != null) progress.weightHistory[existingIndex].bodyFat = bodyFat
+          }
         } else {
           if (!progress.weightHistory) progress.weightHistory = []
-          progress.weightHistory.push({ date: today, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) })
+          progress.weightHistory.push({ date: entryDate, loggedAt, weight, unit, ...(bodyFat != null ? { bodyFat } : {}) })
         }
 
-        // Reset skip tracking
-        progress.weightSkipTracking.consecutiveSkips = 0
-        progress.weightSkipTracking.lastPromptDate = today
-        progress.weightSkipTracking.lastWeightDate = today
+        // Reset skip tracking. Only a weigh-in for TODAY says the member is not
+        // skipping today; a back-dated one leaves the prompt state alone.
+        if (applied) {
+          if (!backdated) {
+            progress.weightSkipTracking.consecutiveSkips = 0
+            progress.weightSkipTracking.lastPromptDate = today
+          }
+          if (isNewestWeighIn(progress.weightHistory, entryKey)) {
+            progress.weightSkipTracking.lastWeightDate = entryDate
+          }
+        }
       }
 
       await progress.save()
     }
+
+    // Only the newest weigh-in speaks for the member's CURRENT weight, so a
+    // back-dated entry that an even later one already supersedes changes
+    // nothing below it.
+    const isCurrent = applied && isNewestWeighIn(progress.weightHistory, entryKey)
 
     // Keep the profile's canonical kg weight in step with the log.
     //
@@ -225,15 +277,20 @@ export async function POST(request: NextRequest) {
     // used to be written once during onboarding and never again, so a member who
     // dropped 15 lb was still being fed the macros for their starting weight —
     // the app quietly stopped matching the person using it.
-    if (!skip && weight) {
+    if (!skip && weight && isCurrent) {
       await User.findByIdAndUpdate(authResult.userId, {
         $set: { 'profile.currentWeightKg': toKg(weight, unit) },
       }).catch(() => null)
     }
 
-    // Record streak activity when weight is actually logged (not skipped)
+    // Record streak activity when weight is actually logged (not skipped).
+    //
+    // A BACK-DATED entry does not touch the streak: recordStreakActivity only
+    // ever credits the day it runs on, so replaying last Tuesday's weigh-in
+    // would hand the member a streak day for today they did not earn. Past
+    // streak days are left exactly as they were — the deliberate default.
     let streakResult = null
-    if (!skip && weight) {
+    if (!skip && weight && !backdated) {
       streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
     }
 
@@ -242,7 +299,7 @@ export async function POST(request: NextRequest) {
     // the moment it happens rather than whenever the member next opens a page
     // that computes goal progress.
     let goalReached = null
-    if (!skip && weight) {
+    if (!skip && weight && isCurrent) {
       goalReached = await checkGoalReached(authResult.userId!, toKg(weight, unit), unit).catch(() => null)
     }
 
@@ -251,6 +308,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      date: entryKey,
+      // False only when a stale replay lost to a newer value for the same day.
+      // The request still succeeded — there is nothing for the client to retry.
+      applied,
       ...(streakResult && {
         streak: {
           streakDays: streakResult.streakDays,
