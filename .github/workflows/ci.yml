@@ -77,6 +77,18 @@ jobs:
         working-directory: shared/api-client
         run: npm ci
 
+      # The shared client is what the NATIVE app sends, and nothing ran its own
+      # suite — a person remembering to, again. It needs no database and no
+      # network, and it is the only place the `tz` wire format (minutes west of
+      # UTC, never an IANA zone) is pinned from the sending side.
+      - name: Shared api-client typecheck
+        working-directory: shared/api-client
+        run: npm run typecheck
+
+      - name: Shared api-client tests
+        working-directory: shared/api-client
+        run: npm test
+
       # Typecheck and tests are reported separately so a failure names itself.
       - name: Typecheck
         run: npx tsc --noEmit
