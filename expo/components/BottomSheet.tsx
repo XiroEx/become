@@ -1,4 +1,5 @@
-import { Modal as RNModal, View, Pressable, Text } from "react-native";
+import { Modal as RNModal, View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 
 export interface BottomSheetProps {

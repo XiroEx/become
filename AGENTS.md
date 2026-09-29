@@ -1054,6 +1054,50 @@ Two store-readiness facts that landed with the tab bar:
   deleting the literals — not by deleting the pin. Test:
   `expo/__tests__/darkModePin.test.tsx`.
 
+#### The web's typeface, on the phone (NP-160)
+
+The web has set **Geist** and **Geist Mono** since the first commit
+(`webapp/app/layout.tsx` → `next/font/google`, fed to Tailwind's `--font-sans` /
+`--font-mono` in `globals.css`). Native loaded no font at all, so every screen
+drew in San Francisco or Roboto and the two clients read differently side by
+side. Four facts, each of them a bug that would otherwise ship:
+
+- **Eight files live in the repo**, not on a CDN: `expo/assets/fonts/` holds
+  Geist and Geist Mono at 400/500/600/700 (Google Fonts' latin subset — the same
+  files the web serves — under the SIL Open Font License, `OFL.txt` beside
+  them). `expo-font` registers them from the bundle, so the app works offline
+  and in Expo Go.
+- **`fontFamily` names a FACE, not a family plus a weight.** A browser
+  synthesises every weight from one variable file; React Native cannot — an
+  unavailable `fontWeight` is ignored on iOS (a runtime-registered font is a
+  family of one) and faked on Android. `expo/lib/theme/fonts.ts` maps
+  family × weight → face, so `font-mono font-bold` resolves to exactly one file.
+  CSS cannot express that pairing, which is why it is resolved in JS and applied
+  INLINE — NativeWind sorts inline above className (`specificityCompare` in
+  react-native-css-interop), so it outranks `tailwind.config.js`'s `font-sans` /
+  `font-mono` instead of fighting them.
+- **React Native has no cascade, so the app owns its Text.** A `<Text>` with no
+  `fontFamily` is the system font whatever the Tailwind theme says. Every screen
+  and component imports `Text` from `expo/components/Text.tsx`, and ESLint's
+  `no-restricted-imports` fails the build on `import { Text } from
+  "react-native"` under `app/` or `components/`. `components/Input.tsx` does the
+  same by hand for the app's one `TextInput`.
+- **The launch screen is held until the faces are registered.**
+  `holdSplashForFonts()` runs at MODULE LOAD in `expo/app/_layout.tsx` (an
+  effect is one frame too late — the same reason `pinDarkMode()` is there), the
+  layout renders `null` until `useGeistFonts()` says ready, and the hook hides
+  the splash. React Native does not re-render a `<Text>` when a font arrives, so
+  a frame painted early keeps the system font for the life of that screen. A
+  load FAILURE also counts as ready: the system font is ugly, a splash that
+  never lifts is a dead app.
+
+Test: `expo/__tests__/geistFont.test.tsx` parses the `.ttf` headers (weight and
+name table, so a 404 saved as `.ttf` cannot pass), walks `app/` and
+`components/` for a stray `react-native` Text import, drives the splash gate
+through loading / loaded / failed, and reads `webapp/` so the web changing
+typeface fails the native suite. `expo/__mocks__/expo-font.js` answers "loaded"
+everywhere else, so no other suite has to await a font.
+
 ### CI runs three packages, not one
 
 `.github/workflows/ci.yml` has three jobs, because the repo is three packages

@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Pressable, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { ExternalLink } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";

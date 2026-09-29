@@ -1,6 +1,8 @@
-import { View, Text, TextInput } from "react-native";
+import { View, TextInput } from "react-native";
+import { Text } from "@/components/Text";
 import type { TextInputProps } from "react-native";
 import { resolveToken } from "@/lib/theme/tokens";
+import { geistFontFamily } from "@/lib/theme/fonts";
 
 export interface InputProps extends Omit<TextInputProps, "style"> {
   label?: string;
@@ -17,6 +19,11 @@ export function Input({
 }: InputProps) {
   const labelId = testID ? `${testID}-label` : undefined;
   const errorId = testID ? `${testID}-error` : undefined;
+  // The field itself is the one TextInput in the app, and a TextInput is not a
+  // Text: `components/Text.tsx` never sees it, so it carries the family here.
+  const inputClassName = `bg-card border rounded-xl px-3 py-2.5 text-foreground ${
+    error ? "border-destructive" : "border-border"
+  }`;
   return (
     <View testID={testID ? `${testID}-container` : undefined}>
       {label ? (
@@ -31,9 +38,8 @@ export function Input({
         testID={testID}
         accessibilityLabel={accessibilityLabel ?? label}
         placeholderTextColor={resolveToken("muted-foreground", "dark")}
-        className={`bg-card border rounded-xl px-3 py-2.5 text-foreground ${
-          error ? "border-destructive" : "border-border"
-        }`}
+        className={inputClassName}
+        style={{ fontFamily: geistFontFamily(inputClassName) }}
         {...inputProps}
       />
       {error ? (

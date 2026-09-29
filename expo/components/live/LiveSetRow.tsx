@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Check } from "lucide-react-native";
 import { Input } from "@/components/Input";
 import { resolveToken } from "@/lib/theme/tokens";

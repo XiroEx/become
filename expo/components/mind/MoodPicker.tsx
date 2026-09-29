@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 
 export type MoodValue = 1 | 2 | 3 | 4 | 5;
 

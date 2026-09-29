@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { ScrollView, View, Text } from "react-native";
+import { ScrollView, View } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProgressMoodResponseSchema } from "@become/api-client";
 import { MoodPicker, type MoodValue } from "@/components/mind/MoodPicker";

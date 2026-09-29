@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 
 /**
  * THE BANNER. Presentational: it knows whether the device is online and

@@ -1,4 +1,5 @@
-import { View, Text, ScrollView } from "react-native";
+import { View, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 

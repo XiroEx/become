@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";

@@ -30,6 +30,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
     <View>
       <Text
         className="text-foreground text-2xl font-bold"
+        style={
+          [
+            {
+              "fontFamily": "Geist-Bold",
+            },
+            undefined,
+          ]
+        }
       >
         Become — Stories
       </Text>
@@ -40,18 +48,42 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-default-title"
         >
           Card
         </Text>
         <Text
           className="text-muted-foreground text-sm mb-2"
+          style={
+            [
+              {
+                "fontFamily": "Geist-Regular",
+              },
+              undefined,
+            ]
+          }
           testID="card-default-subtitle"
         >
           Surface for grouped content
         </Text>
         <Text
           className="text-foreground"
+          style={
+            [
+              {
+                "fontFamily": "Geist-Regular",
+              },
+              undefined,
+            ]
+          }
         >
           Default card content goes here.
         </Text>
@@ -63,6 +95,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-buttons-title"
         >
           Buttons
@@ -110,6 +150,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-primary-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Primary
             </Text>
@@ -150,6 +198,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Secondary
             </Text>
@@ -190,6 +246,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-destructive-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Destructive
             </Text>
@@ -230,6 +294,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Ghost
             </Text>
@@ -313,6 +385,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-primary-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Disabled
             </Text>
@@ -326,6 +406,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-inputs-title"
         >
           Input
@@ -335,6 +423,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
         >
           <Text
             className="text-foreground text-sm font-medium mb-1"
+            style={
+              [
+                {
+                  "fontFamily": "Geist-Medium",
+                },
+                undefined,
+              ]
+            }
             testID="input-name-label"
           >
             Display name
@@ -345,6 +441,11 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onChangeText={[Function]}
             placeholder="Jon"
             placeholderTextColor="rgb(161 161 170)"
+            style={
+              {
+                "fontFamily": "Geist-Regular",
+              }
+            }
             testID="input-name"
             value=""
           />
@@ -361,6 +462,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
         >
           <Text
             className="text-foreground text-sm font-medium mb-1"
+            style={
+              [
+                {
+                  "fontFamily": "Geist-Medium",
+                },
+                undefined,
+              ]
+            }
             testID="input-error-label"
           >
             Email
@@ -370,11 +479,24 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-destructive"
             editable={false}
             placeholderTextColor="rgb(161 161 170)"
+            style={
+              {
+                "fontFamily": "Geist-Regular",
+              }
+            }
             testID="input-error"
             value="not-an-email"
           />
           <Text
             className="text-destructive text-xs mt-1"
+            style={
+              [
+                {
+                  "fontFamily": "Geist-Regular",
+                },
+                undefined,
+              ]
+            }
             testID="input-error-error"
           >
             Enter a valid email
@@ -388,6 +510,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-toggle-title"
         >
           Toggle
@@ -440,6 +570,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-badges-title"
         >
           Badges
@@ -460,6 +598,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="text-xs font-medium text-foreground"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-Medium",
+                  },
+                  undefined,
+                ]
+              }
               testID="badge-default-text"
             >
               Default
@@ -472,6 +618,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="text-xs font-medium text-primary-foreground"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-Medium",
+                  },
+                  undefined,
+                ]
+              }
               testID="badge-primary-text"
             >
               Primary
@@ -484,6 +638,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="text-xs font-medium text-foreground"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-Medium",
+                  },
+                  undefined,
+                ]
+              }
               testID="badge-muted-text"
             >
               Muted
@@ -496,6 +658,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="text-xs font-medium text-destructive-foreground"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-Medium",
+                  },
+                  undefined,
+                ]
+              }
               testID="badge-destructive-text"
             >
               Destructive
@@ -508,6 +678,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="text-xs font-medium text-accent-foreground"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-Medium",
+                  },
+                  undefined,
+                ]
+              }
               testID="badge-accent-text"
             >
               Accent
@@ -522,6 +700,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
       >
         <Text
           className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
           testID="card-overlays-title"
         >
           Overlays
@@ -569,6 +755,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-primary-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Open modal
             </Text>
@@ -609,6 +803,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             <Text
               className="font-semibold text-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  undefined,
+                ]
+              }
             >
               Open bottom sheet
             </Text>
