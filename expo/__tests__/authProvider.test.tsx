@@ -265,7 +265,7 @@ describe("AuthProvider — signing in", () => {
       await result.current.logout();
     });
 
-    const logoutCall = fetchImpl.mock.calls.find(([url]) =>
+    const logoutCall = (fetchImpl.mock.calls as unknown as [string, RequestInit?][]).find(([url]) =>
       String(url).includes("/api/auth/logout"),
     ) as unknown as [string, RequestInit] | undefined;
     expect(logoutCall).toBeDefined();
@@ -316,7 +316,7 @@ describe("AuthProvider — signing in", () => {
 
     expect(result.current.status).toBe("signed-out");
     expect(
-      fetchImpl.mock.calls.filter(([url]) => String(url).includes("/api/auth/logout")),
+      (fetchImpl.mock.calls as unknown as [string, RequestInit?][]).filter(([url]) => String(url).includes("/api/auth/logout")),
     ).toHaveLength(0);
   });
 });
