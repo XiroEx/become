@@ -114,6 +114,11 @@ export function LiveWorkoutClient({
   // compose instead of clobbering each other (the closure `grid` would be stale
   // for the second edit).
   const gridRef = useRef<LiveGrid>(grid);
+  // Deliberate render-phase mirror: the ref is a write-only latest-value cache
+  // that nothing in this render reads, so it cannot desync the UI. SDK 57 ships
+  // eslint-plugin-react-hooks 6, which promoted `react-hooks/refs` to an error;
+  // the rule cannot see that distinction.
+  // eslint-disable-next-line react-hooks/refs
   gridRef.current = grid;
   const [round, setRound] = useState<number>(1);
   const totalRounds = workout.groupRounds ?? 1;

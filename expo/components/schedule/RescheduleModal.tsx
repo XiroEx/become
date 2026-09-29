@@ -25,9 +25,15 @@ export function RescheduleModal({
   const [date, setDate] = useState<string>(slot?.date ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  // Re-seed the form when the caller swaps the slot being rescheduled. This is
+  // an identity-change-driven reset, which is the one case the rule is not
+  // aimed at; SDK 57's eslint-plugin-react-hooks 6 reports it as an error
+  // regardless.
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     setDate(slot?.date ?? "");
     setError(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [slot]);
 
   return (
