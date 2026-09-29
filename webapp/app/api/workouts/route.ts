@@ -9,6 +9,7 @@ import { calculateNextDay } from '@/lib/workout/dayOrder'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
 import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, readZoneFromBody, localDateKey, localDayWindowForKey, dateKey, IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
+import { slotDateKey } from '@/lib/notifications/cronNotify'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
@@ -572,14 +573,23 @@ export async function POST(request: NextRequest) {
             // catch up); it must never steal credit from the day you actually
             // trained. Note the entry points don't all send `scheduledDate`, so
             // this ordering — not `exact` — is what has to be correct.
+            //
+            // A slot's `date` is a day MARKER at 00:00Z, so it is read with
+            // slotDateKey (the UTC date part) and NOT through the member's
+            // offset: `dateKey(new Date(w.date), tzOffset)` turned today's
+            // marker into YESTERDAY for everyone west of UTC, which dropped
+            // today's slot into `overdue` behind an older one — the same bug,
+            // back again, for exactly the members it always hits. The
+            // `completedAt` read in the guard above is an INSTANT and keeps
+            // the offset.
             const todaySlot = candidates.find(
-              (w) => dateKey(new Date(w.date), tzOffset) === todayKey
+              (w) => slotDateKey(w.date) === todayKey
             )
             const overdue = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) < todayKey)
+              .filter((w) => slotDateKey(w.date) < todayKey)
               .sort(byDateAsc)
             const upcoming = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
+              .filter((w) => slotDateKey(w.date) > todayKey)
               .sort(byDateAsc)
             const match = exact ?? todaySlot ?? overdue[0] ?? upcoming[0]
 
