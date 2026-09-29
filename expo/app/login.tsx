@@ -14,6 +14,7 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createPoller } from "@/lib/auth/polling";
+import { signOutMessage } from "@/lib/auth/AuthProvider";
 import { useAuth } from "@/lib/auth/useAuth";
 
 /** Default poll cadence for the magic-link fallback (mirrors the webapp). */
@@ -90,6 +91,17 @@ export default function LoginScreen({
       }));
 
   const handleAuthed = onAuthed ?? auth.setToken;
+
+  // Why the member is looking at this screen. After a 401 it says the session
+  // ended instead of leaving them to guess why they were thrown out.
+  const sessionMessage = signOutMessage(auth.signedOutReason ?? null);
+
+  // Already signed in — a saved session restored while this screen was the
+  // route (a deep link, a back stack) must not strand them on sign-in.
+  const isAuthed = auth.isAuthed;
+  useEffect(() => {
+    if (isAuthed) router.replace("/(tabs)/dashboard");
+  }, [isAuthed, router]);
 
   // Keep the latest poller dependencies in a ref so the polling effect can stay
   // keyed only on [submitted, sessionId] without tearing down/recreating the
@@ -184,6 +196,14 @@ export default function LoginScreen({
           <Text className="text-muted-foreground text-base mb-6">
             Sign in with a magic link
           </Text>
+          {sessionMessage ? (
+            <Text
+              testID="login-session-ended"
+              className="text-destructive text-center mb-4"
+            >
+              {sessionMessage}
+            </Text>
+          ) : null}
           {submitted ? (
             <View testID="login-submitted" style={{ width: "100%" }}>
               <Text className="text-foreground text-center mb-2">

@@ -8,19 +8,20 @@ import type { MealEntry } from "@/lib/nutrition/daySelector";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { localDateKey, withTz } from "@/lib/nutrition/localDay";
 import { toMealEntries } from "@/lib/nutrition/mealLog";
 import { useFoodLog } from "@/lib/nutrition/useFoodLog";
 
 export default function DayLogRoute() {
   const params = useLocalSearchParams<{ date?: string }>();
+  // Falling back to the UTC day showed a New York member tomorrow's (empty)
+  // log from 7pm on.
   const date =
-    typeof params.date === "string"
-      ? params.date
-      : new Date().toISOString().slice(0, 10);
+    typeof params.date === "string" ? params.date : localDateKey();
   const { token } = useAuth();
 
   const { data, refetch } = useFetch(
-    `/api/nutrition/log?date=${date}`,
+    withTz(`/api/nutrition/log?date=${date}`),
     MealLogResponseSchema,
     {
       baseUrl: WEBAPP_BASE_URL,

@@ -11,16 +11,23 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockSetToken = jest.fn(async () => {});
+// Mutable so a test can put the screen in the state the provider would: a
+// session that just ended, or one that is still good.
+let mockAuth: Record<string, unknown> = {};
+const baseAuth = () => ({
+  user: null,
+  token: null,
+  status: "signed-out",
+  loading: false,
+  isAuthed: false,
+  signedOutReason: null,
+  setToken: mockSetToken,
+  refresh: jest.fn(),
+  signOut: jest.fn(),
+  logout: jest.fn(),
+});
 jest.mock("@/lib/auth/useAuth", () => ({
-  useAuth: () => ({
-    user: null,
-    token: null,
-    loading: false,
-    isAuthed: false,
-    setToken: mockSetToken,
-    refresh: jest.fn(),
-    logout: jest.fn(),
-  }),
+  useAuth: () => mockAuth,
 }));
 
 // Mock only apiFetch from the shared client; keep ApiError + schemas real so
@@ -48,6 +55,35 @@ describe("LoginScreen", () => {
     mockSetToken.mockReset();
     mockSetToken.mockResolvedValue(undefined);
     mockApiFetch.mockReset();
+    mockAuth = baseAuth();
+  });
+
+  it("says the session ended when that is why they are here", async () => {
+    mockAuth = { ...baseAuth(), signedOutReason: "unauthorized" };
+    const { getByTestId } = render(<LoginScreen />);
+    expect(getByTestId("login-session-ended")).toHaveTextContent(
+      "Your session ended. Please sign in again.",
+    );
+  });
+
+  it("says nothing to someone who was never signed in", () => {
+    const { queryByTestId } = render(<LoginScreen />);
+    expect(queryByTestId("login-session-ended")).toBeNull();
+  });
+
+  it("says nothing when the member signed out on purpose", () => {
+    // signOut("member") leaves no reason — there is nothing to explain.
+    mockAuth = { ...baseAuth(), signedOutReason: null };
+    const { queryByTestId } = render(<LoginScreen />);
+    expect(queryByTestId("login-session-ended")).toBeNull();
+  });
+
+  it("sends an already-signed-in member into the app", async () => {
+    mockAuth = { ...baseAuth(), status: "signed-in", isAuthed: true, token: "jwt" };
+    render(<LoginScreen />);
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard"),
+    );
   });
 
   it("POSTs /api/auth/send-link with the right payload + baseUrl", async () => {
