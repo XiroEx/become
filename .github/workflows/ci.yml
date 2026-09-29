@@ -224,6 +224,16 @@ jobs:
       - name: Expo dependency check
         run: npx expo install --check
 
+      # The only step here that actually BUILDS the app, and the reason it
+      # exists: tsc reaches `@become/api-client` through tsconfig `paths` and
+      # Jest through `moduleNameMapper`, so both were green while Metro — which
+      # uses neither — could not resolve it at all and no build of any kind
+      # could be produced. An export walks the whole module graph, so an import
+      # Metro cannot resolve fails this step (and therefore the job: no
+      # `continue-on-error` here either). Runs last because it is the slowest.
+      - name: Bundle (iOS export)
+        run: npx expo export --platform ios --output-dir "$RUNNER_TEMP/bundle"
+
   # The wire contract the native app sends. `verify` installs this package (the
   # webapp's tsconfig reaches into it) and runs its suite from webapp's job;
   # this job runs it on its OWN lockfile, which is the thing that actually
