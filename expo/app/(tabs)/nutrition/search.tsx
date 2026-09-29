@@ -7,7 +7,11 @@ import { FoodSearchInput } from "@/components/nutrition/FoodSearchInput";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
-import { toFoodSearchResults } from "@/lib/nutrition/foodSearch";
+import {
+  findFoodSearchRow,
+  foodDetailHref,
+  toFoodSearchResults,
+} from "@/lib/nutrition/foodSearch";
 
 export default function NutritionSearchRoute() {
   const router = useRouter();
@@ -44,7 +48,12 @@ export default function NutritionSearchRoute() {
           <FoodSearchInput
             results={results}
             onSearch={setQuery}
-            onPickResult={(r) => router.push(`/(tabs)/nutrition/food/${r.id}`)}
+            onPickResult={(r) =>
+              // The row travels with the tap: a USDA/OpenFoodFacts hit has no
+              // Food document yet, and this cached row is what the detail
+              // screen re-imports with when the source import can't answer.
+              router.push(foodDetailHref(r.id, findFoodSearchRow(data, r.id)))
+            }
           />
         </View>
       </KeyboardAvoidingView>

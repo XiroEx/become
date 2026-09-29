@@ -44,6 +44,38 @@ describe("toMealEntries", () => {
     expect(entries[1]!.fat).toBe(8);
   });
 
+  it("multiplies the per-serving block by servings, as the server totals it", () => {
+    const entries = toMealEntries(
+      {
+        meals: [
+          {
+            mealType: "snack",
+            foods: [
+              {
+                id: "bar",
+                name: "Protein Bar",
+                // One bar's macros; two bars eaten.
+                servings: 2,
+                nutrition: { calories: 210, protein: 20, carbs: 24, fats: 7 },
+              },
+              {
+                id: "bag",
+                name: "Crisps",
+                // Per-100g block, 38 g bag.
+                servings: 0.38,
+                nutrition: { calories: 530, protein: 6, carbs: 50, fats: 34 },
+              },
+            ],
+          },
+        ],
+      },
+      "2026-06-01",
+    );
+    expect(entries[0]!.kcal).toBe(420);
+    expect(entries[0]!.protein).toBe(40);
+    expect(entries[1]!.kcal).toBeCloseTo(201.4, 5);
+  });
+
   it("narrows an unknown mealType to 'snack' and tolerates empty input", () => {
     const entries = toMealEntries(
       {
