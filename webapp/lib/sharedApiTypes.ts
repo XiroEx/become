@@ -12,12 +12,25 @@ import { z } from 'zod'
 
 // ── auth ────────────────────────────────────────────────────────────────────
 
+/** The profile the server actually stores: the allow-list in
+ *  app/api/profile/route.ts, key for key. Mirrors
+ *  shared/api-client/src/schemas/account.ts. */
 export const UserProfileSchema = z
   .object({
-    goal: z.string().optional(),
-    trainingExperience: z.string().optional(),
-    primaryFocus: z.string().optional(),
-    birthYear: z.number().int().optional(),
+    fitnessGoal: z.string().optional(),
+    fitnessGoals: z.array(z.string()).optional(),
+    nutritionDirection: z.string().optional(),
+    experienceLevel: z.string().optional(),
+    age: z.number().optional(),
+    biologicalSex: z.string().optional(),
+    heightCm: z.number().optional(),
+    currentWeightKg: z.number().optional(),
+    targetWeightKg: z.number().optional(),
+    equipmentAccess: z.array(z.string()).optional(),
+    injuryNotes: z.string().optional(),
+    weeklyAvailability: z.number().optional(),
+    weightUnit: z.string().optional(),
+    planPromoteMode: z.string().optional(),
   })
   .passthrough()
 
