@@ -648,8 +648,11 @@ test('PostMessageResponseSchema: rejects an unwrapped (bare) message', () => {
 });
 
 
+// The profile contract itself lives in tests/accountSchemas.test.ts, next to
+// the rest of the account area. `fitnessGoal` is the server's key — `goal` was
+// the May one, and PATCH /api/profile drops it.
 test('ProfileResponseSchema: parses GET/PATCH profile shape', () => {
-  const r = ProfileResponseSchema.safeParse({ profile: { goal: 'strength' }, name: 'Jon', onboardingCompleted: true, email: 'jon@example.com' });
+  const r = ProfileResponseSchema.safeParse({ profile: { fitnessGoal: 'gain_muscle' }, name: 'Jon', onboardingCompleted: true, email: 'jon@example.com' });
   assert.equal(r.success, true);
   assert.equal(ProfileResponseSchema.safeParse({ profile: null, name: null }).success, true);
 });

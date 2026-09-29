@@ -114,7 +114,9 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
       }
     }
     if (!response.ok) {
-      throw new ApiError(response.status, body);
+      // `Retry-After` travels with the error because a 429 is the one refusal
+      // that can say WHEN — see classifyApiError's `rate-limited`.
+      throw new ApiError(response.status, body, undefined, retryAfterOf(response));
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
@@ -124,6 +126,18 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
   }
 
   return { call, raw };
+}
+
+/**
+ * The `Retry-After` header, or null. Defensive about `headers` because a test
+ * double is a plain object cast to `Response` and does not always have one.
+ */
+function retryAfterOf(response: Response): string | null {
+  try {
+    return response.headers?.get('Retry-After') ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function apiFetch<T>(

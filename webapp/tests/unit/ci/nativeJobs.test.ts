@@ -127,6 +127,42 @@ test('the expo job typechecks, lints, tests and checks dependency versions', () 
   assert.match(job, /run: npx expo install --check/)
 })
 
+// ── …and it bundles, which is the only step that builds the app ──────────────
+
+test('the expo job exports an iOS bundle, so an unresolvable import fails CI', () => {
+  // tsc resolves `@become/api-client` through tsconfig `paths` and Jest through
+  // `moduleNameMapper`; Metro uses neither. Both were green for weeks while the
+  // bundler could not resolve the package at all and no store build could be
+  // produced. Only an export walks the real module graph.
+  const job = executable(JOBS['expo'])
+  assert.match(
+    job,
+    /run: npx expo export --platform ios --output-dir/,
+    'the expo job must export a bundle — nothing else in it builds the app',
+  )
+})
+
+test('the native app links the shared client as a dependency, not only as a tsconfig path', () => {
+  // The path mapping and the Jest mapper keep tsc and Jest green on their own.
+  // The `file:` link is what puts the package in node_modules, which is the
+  // only route Metro has to it.
+  const expo = readJson('expo/package.json')
+  assert.equal(
+    expo.dependencies?.['@become/api-client'],
+    'file:../shared/api-client',
+    'expo/package.json must link the shared client for Metro to resolve it',
+  )
+
+  // `npm ci` refuses to run when the lockfile does not describe package.json,
+  // which would take the whole expo job down before it reached the bundle step.
+  const lock = JSON.parse(
+    fs.readFileSync(path.join(REPO, 'expo/package-lock.json'), 'utf8'),
+  ) as { packages?: Record<string, { link?: boolean; resolved?: string }> }
+  const linked = lock.packages?.['node_modules/@become/api-client']
+  assert.ok(linked?.link, 'expo/package-lock.json must carry the @become/api-client link')
+  assert.equal(linked?.resolved, '../shared/api-client')
+})
+
 test('the shared-api-client job runs its own tests and typecheck on its own lockfile', () => {
   const job = executable(JOBS['shared-api-client'])
   assert.match(job, /working-directory: shared\/api-client/)
