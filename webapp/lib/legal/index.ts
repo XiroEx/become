@@ -147,6 +147,37 @@ export const LEGAL_COMPLIMENTARY_PLUS_COUNT = 64
 /** The literal marker. Anything a lawyer must decide carries exactly this. */
 export const COUNSEL_TODO = '[TODO: confirm with counsel]'
 
+// ─── Managing a subscription ─────────────────────────────────────────────────
+
+/**
+ * THE NAME OF THE BUTTON, and there is only one of it.
+ *
+ * The Terms (section 9 and section 10), the support page and the renewal
+ * disclosure under the buy button all tell a member to "choose Manage billing".
+ * For a year that instruction pointed at nothing: the only caller of
+ * `POST /api/billing/portal` was the upgrade sheet's "Update payment method",
+ * which appears solely after checkout refuses a member whose card already
+ * failed. An active subscriber had no way into the portal at all, and New York
+ * GBL 527-a expects cancelling to be as easy as subscribing.
+ *
+ * So the label is a constant, interpolated into the legal prose AND rendered by
+ * the button, and `tests/unit/billing/manageBilling.test.tsx` reads both sides.
+ * Rename it here and the documents rename with it; rename it anywhere else and
+ * the test fails, which is the point — a member following the Terms has to find
+ * a control with exactly this name on it.
+ */
+export const MANAGE_BILLING_LABEL = 'Manage billing'
+
+/** What the Stripe portal lets them do, in the order the support page lists it.
+ *  A sentence fragment on purpose: both surfaces wrap it in their own sentence,
+ *  so the three verbs cannot drift apart. */
+export const MANAGE_BILLING_PORTAL_DOES =
+  'update your payment method, see and download your invoices, and cancel'
+
+/** The line under the button, and the second sentence of the support answer.
+ *  One string, so the app cannot promise more than the support page does. */
+export const MANAGE_BILLING_PORTAL_NOTE = `That opens the Stripe billing portal, where you can ${MANAGE_BILLING_PORTAL_DOES}.`
+
 // ─── Automatic renewal (New York GBL 527-a) ──────────────────────────────────
 
 /**
@@ -168,14 +199,14 @@ export const RENEWAL_TERMS: readonly string[] = [
   // tax-inclusive; nothing here may say "plus tax".
   `Become Plus costs ${PLAN_PRICING.monthly.display} per ${PLAN_PRICING.monthly.per}, or ${PLAN_PRICING.annual.display} per ${PLAN_PRICING.annual.per}, in ${PLAN_PRICING.currency}. Any applicable sales tax is included in that price.`,
   'Your plan renews automatically at the end of every billing period. Unless you cancel first, the payment method you gave Stripe is charged the same amount again, for another period of the same length, and this repeats until you cancel.',
-  'You can cancel at any time. Open the Plan page in the app, choose Manage billing, and cancel in the Stripe billing portal that opens. You can also email us and we will cancel it for you.',
+  `You can cancel at any time. Open the Plan page in the app, choose ${MANAGE_BILLING_LABEL}, and cancel in the Stripe billing portal that opens. You can also email us and we will cancel it for you.`,
   'When you cancel, your Plus access stays on until the end of the period you have already paid for, and the plan is not renewed after that. Cancelling does not cut that period short, and it does not by itself produce a refund of that period.',
 ]
 
 /** The short version, for the one surface that asks for consent. */
 export function renewalLine(plan: 'monthly' | 'annual'): string {
   const p = PLAN_PRICING[plan]
-  return `Renews automatically at ${p.display} every ${p.per} until you cancel. Cancel any time under Manage billing; your access runs to the end of the period you paid for.`
+  return `Renews automatically at ${p.display} every ${p.per} until you cancel. Cancel any time under ${MANAGE_BILLING_LABEL}; your access runs to the end of the period you paid for.`
 }
 
 // ─── Document shape ──────────────────────────────────────────────────────────

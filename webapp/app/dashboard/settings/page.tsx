@@ -12,6 +12,9 @@ import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
 import DangerZone from '@/components/settings/DangerZone'
+// Renders NOTHING unless Stripe is holding a subscription for this member, so
+// free members, grandfathered members and admins see no change at all.
+import BillingSection from '@/components/billing/BillingSection'
 import {
   AI_CONSENT_SENDS,
   AI_PROVIDER,
@@ -1357,6 +1360,12 @@ function SettingsPageInner() {
           </section>
 
           <SaveButton />
+
+          {/* Billing. Above the legal block on purpose: the sentence down there
+              tells a member to cancel a paid plan before deleting the account,
+              and this is the button that does it. Self-contained — it draws
+              nothing for a member with no subscription. */}
+          <BillingSection />
 
           {/* Legal & support. Settings is where a member looks for these, and
               where an App Store reviewer looks for the account-deletion path —

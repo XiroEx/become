@@ -24,6 +24,7 @@ import {
   LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SECONDARY_DOMAIN,
   LEGAL_VENUE,
+  MANAGE_BILLING_LABEL,
   RENEWAL_TERMS,
   type LegalDoc,
 } from '@/lib/legal'
@@ -238,7 +239,7 @@ export const TERMS: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'If a renewal payment fails, Stripe may retry it. If it keeps failing, your account may lose Plus and return to the free plan after a short grace period. You can fix the payment method at any time under Manage billing.',
+          text: `If a renewal payment fails, Stripe may retry it. If it keeps failing, your account may lose Plus and return to the free plan after a short grace period. You can fix the payment method at any time under ${MANAGE_BILLING_LABEL}.`,
         },
         {
           kind: 'p',
@@ -265,7 +266,7 @@ export const TERMS: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: 'To cancel, open the Plan page in the app, choose Manage billing, and cancel in the Stripe billing portal. You can also email us and we will do it for you. Cancelling takes effect at the end of the period you have already paid for; your Plus access continues until then and the plan is not renewed afterwards.',
+          text: `To cancel, open the Plan page in the app, choose ${MANAGE_BILLING_LABEL}, and cancel in the Stripe billing portal. You can also email us and we will do it for you. Cancelling takes effect at the end of the period you have already paid for; your Plus access continues until then and the plan is not renewed afterwards.`,
         },
         {
           kind: 'p',
