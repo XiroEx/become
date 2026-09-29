@@ -75,6 +75,30 @@ export function readTzOffsetFromBody(body: unknown): number {
 }
 
 /**
+ * Read `tz` from a JSON body, falling back to a numeric `tzOffset`. Clamped to
+ * ±14h, 0 (= UTC) when neither is a finite number.
+ *
+ * `tz` is the only spelling this app sends and the only one a new client may
+ * use — see readTzOffsetFromBody. The fallback exists for one narrow reason:
+ * a client still running an OLD BUNDLE that spells it `tzOffset`, whose
+ * request would otherwise be silently dated at UTC. PUT /api/mind/session is
+ * the case that made it matter — `MindJourney.begin` sent `tzOffset`, the
+ * route read `tz`, and the session a member began at 9pm in New York was
+ * stamped with tomorrow's UTC day, so the very next GET called it `new_day`
+ * and threw it away.
+ *
+ * Use this ONLY where an old bundle is genuinely in the field. Everywhere else
+ * `readTzOffsetFromBody` is the contract: one spelling, documented in AGENTS.md.
+ */
+export function readTzOffsetFromBodyCompat(body: unknown): number {
+  if (!body || typeof body !== 'object') return 0
+  const rec = body as Record<string, unknown>
+  const raw = typeof rec.tz === 'number' && Number.isFinite(rec.tz) ? rec.tz : rec.tzOffset
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, raw))
+}
+
+/**
  * Read `tz` from a JSON body, returning `null` when it is ABSENT or not a
  * finite number (rather than defaulting to 0 = UTC). Use this — never
  * `readTzOffsetFromBody` — when the value is going to be PERSISTED as the

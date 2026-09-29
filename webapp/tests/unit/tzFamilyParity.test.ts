@@ -29,6 +29,9 @@ import { DATE_SCOPED_FAMILIES } from '../../../shared/api-client/src/tz'
 const TZ_READERS = [
   'readTzOffset',
   'readTzOffsetFromBody',
+  // `tz`, or the legacy `tzOffset` an old bundle may still be sending. A route
+  // using only this one reads `tz` just the same, so it belongs on the list.
+  'readTzOffsetFromBodyCompat',
   'readOptionalTzOffsetFromBody',
 ] as const
 
