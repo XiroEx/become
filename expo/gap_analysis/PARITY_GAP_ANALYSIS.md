@@ -328,7 +328,7 @@ Status words: **Parity** (native matches the web), **Partial** (some of it exist
 
 | Web surface | Web reference | Native today | Status | Tickets |
 |---|---|---|---|---|
-| Home Screen and Lock Screen widgets | `webapp/app/api/widgets/summary/route.ts`, `webapp/lib/widgets/feed.ts` | Nothing. The feed is ready; nothing native exists. | Missing | NP-180, NP-181, NP-182, NP-198 |
+| Home Screen and Lock Screen widgets | `webapp/app/api/widgets/summary/route.ts`, `webapp/lib/widgets/feed.ts` | `expo/lib/widgets/`, `expo/app.json`: Android App Widgets ship (streak, nutrition, Mind, Becoming) with the widgets-token hand-off, the signed-out prompt and taps through the one resolver (NP-198). iOS has no extension yet; neither platform has been seen on a device — `expo/` has no distribution. | Partial | NP-180, NP-181, NP-182 |
 | Apple Health and Health Connect | n/a | `expo/lib/health/`, `expo/app/(tabs)/profile/health.tsx`: Adapter shells with no module; the toggle overwrites the token. | Partial | NP-183, NP-184, NP-185, NP-186, NP-199 |
 | Biometric unlock | n/a | `expo/lib/auth/biometrics.ts`, `expo/lib/auth/coldOpenRedirect.tsx`: Flow written, stub capability. | Partial | NP-187 |
 | Live Activity and ongoing workout notification | n/a | `expo/components/live/RestTimerBar.tsx` | Missing | NP-188, NP-200 |
@@ -443,7 +443,7 @@ Tier 3 means the surface stays on the web and native shows at most a link. Admin
 | Lock-screen rest alert, haptics, keep-awake and a back guard in the live workout | Nothing; the rest timer stops in the background | NP-082 | v1 (wave 2) |
 | Native camera and speech: barcode, plate photo, the Mind mirror and speak scenes | Nothing | NP-059, NP-088, NP-099, NP-100 | v1 (waves 1 and 2) |
 | Over-the-air updates and a server-controlled minimum version | Channels named in `expo/eas.json`, no `expo-updates` | NP-040, NP-041 | v1 (wave 1) |
-| Home Screen and Lock Screen widgets (streak, nutrition, Mind, Becoming) | The feed is ready (`GET /api/widgets/summary`); no extension | NP-180, NP-181, NP-182; Android NP-198 | Wave 5 (both platforms) |
+| Home Screen and Lock Screen widgets (streak, nutrition, Mind, Becoming) | Android App Widgets ship (NP-198); iOS has no extension | NP-180, NP-181, NP-182 | Wave 5 (both platforms) |
 | Apple Health weight and workouts | Adapter shells with no native module | NP-183, NP-184, NP-189, NP-185, NP-186; Health Connect NP-199 | Wave 5 (both platforms) |
 | Live Activity for the rest timer | Nothing | NP-188; Android ongoing notification NP-200 | Wave 5 (both platforms) |
 | Face ID and fingerprint unlock | Flow written against a stub | NP-187 | Wave 5 |
