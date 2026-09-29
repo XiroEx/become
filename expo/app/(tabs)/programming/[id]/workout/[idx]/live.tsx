@@ -22,7 +22,10 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toWorkoutOverview } from "@/lib/programs/programDetail";
-import { buildWorkoutSaveRequest } from "@/lib/live/workoutSave";
+import {
+  buildWorkoutSaveRequest,
+  newWorkoutAttemptId,
+} from "@/lib/live/workoutSave";
 import {
   createLiveWorkoutCache,
   liveCacheKey,
@@ -169,6 +172,11 @@ export default function LiveWorkoutRoute({
   );
   const [finishing, setFinishing] = useState(false);
   const [prs, setPrs] = useState<NewPR[]>([]);
+  // One id for this attempt at the workout, minted when the screen mounts and
+  // kept for as long as it is open, so a retried Finish (or a save the offline
+  // queue flushes later, after local midnight) is recognised by the server as
+  // the SAME attempt instead of being logged a second time.
+  const [attemptId] = useState(newWorkoutAttemptId);
 
   const onFinish = useCallback(
     (grid: LiveGrid) => {
@@ -180,6 +188,7 @@ export default function LiveWorkoutRoute({
         exercises: workout.exercises,
         grid,
         completed: true,
+        attemptId,
       });
       setFinishing(true);
       void saveMutation
@@ -193,7 +202,7 @@ export default function LiveWorkoutRoute({
         })
         .finally(() => setFinishing(false));
     },
-    [workout, id, resolvedPhase, dayLabel, saveMutation, cache, cacheKey],
+    [workout, id, resolvedPhase, dayLabel, attemptId, saveMutation, cache, cacheKey],
   );
 
   if (!valid) {
