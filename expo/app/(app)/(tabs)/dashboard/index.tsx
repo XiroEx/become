@@ -21,6 +21,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
+import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 
 /**
  * Dashboard route — wires the first post-login screen to real data. Fetches the
@@ -68,6 +69,33 @@ export default function DashboardRoute() {
           exerciseCount: workout.data.workout.exercises.length,
         }
       : null;
+
+  // WHERE "Start workout" GOES.
+  //
+  // The web's Continue link is
+  // `/dashboard/workout/[programId]/workout?day=<day label>` — the session is
+  // addressed by the DAY LABEL current-workout answers with. The native routes
+  // address a workout by its index inside the phase, so the label is mapped to
+  // an index exactly as the calendar's slots are, and `phase` (1-based on the
+  // wire) becomes the 0-based `?phase=` the workout routes read. NP-078 is
+  // what teaches the native routes about day labels; until then this mapping
+  // is the one both screens use, so they cannot disagree.
+  const currentDayLabel = workout.data?.day ?? workout.data?.workout?.day;
+  const workoutPhaseIndex = Math.max(0, (workout.data?.phase ?? 1) - 1);
+  const workoutIndex = workoutIndexFromDayLabel(currentDayLabel);
+
+  const onStartWorkout = useCallback(() => {
+    // No active program → no workout to open. The button is only rendered
+    // alongside a `todayWorkout`, which needs both.
+    if (!programId) return;
+    router.push(
+      `/(tabs)/programming/${programId}/workout/${workoutIndex}?phase=${workoutPhaseIndex}`,
+    );
+  }, [router, programId, workoutIndex, workoutPhaseIndex]);
+
+  const onOpenCalendar = useCallback(() => {
+    router.push("/(tabs)/calendar");
+  }, [router]);
 
   const initialLoading =
     ready && (me.loading || streak.loading || active.loading) && !me.data;
@@ -133,6 +161,8 @@ export default function DashboardRoute() {
       streakDays={streak.data?.streakDays ?? 0}
       freezeAvailable={(streak.data?.streakFreezes ?? 0) > 0}
       todayWorkout={todayWorkout}
+      onStartWorkout={onStartWorkout}
+      onOpenCalendar={onOpenCalendar}
       loading={initialLoading}
       errorText={errorText}
       refreshing={refreshing}

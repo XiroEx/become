@@ -312,4 +312,40 @@ describe("WorkoutOverviewRoute", () => {
       );
     });
   });
+
+  // THE BUTTON THAT DID NOTHING: WorkoutOverview shipped with
+  // `onPress={onStartLive ?? (() => {})}` and this route rendered it without
+  // one, so the only control on the screen was inert. The prop is required
+  // now, and it opens the live screen for the SAME program, phase and index.
+  it("Start live workout opens the live screen for this program, phase and index", async () => {
+    mockParams = { id: "prog-1", idx: "1", phase: "0" };
+    const { getByTestId } = render(<WorkoutOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("workout-overview-title").props.children).toBe(
+        "Pull A",
+      );
+    });
+
+    fireEvent.press(getByTestId("workout-overview-start-live"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/1/live?phase=0",
+    );
+  });
+
+  it("carries a non-zero phase through to the live screen", async () => {
+    mockParams = { id: "prog-1", idx: "0", phase: "1" };
+    const { getByTestId } = render(<WorkoutOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("workout-overview-title").props.children).toBe(
+        "Push B",
+      );
+    });
+
+    fireEvent.press(getByTestId("workout-overview-start-live"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=1",
+    );
+  });
 });
