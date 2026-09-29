@@ -78,7 +78,6 @@ export default function LiveWorkoutRoute({
     let cancelled = false;
     void cache.load(cacheKey).then((snap) => {
       if (!cancelled && snap) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setRestoredGrid(snap as LiveGrid);
       }
     });

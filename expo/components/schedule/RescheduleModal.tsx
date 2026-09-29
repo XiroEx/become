@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Modal, View, Text } from "react-native";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -14,7 +14,17 @@ export interface RescheduleModalProps {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Move a scheduled workout to a new YYYY-MM-DD date. */
+/**
+ * Move a scheduled workout to a new YYYY-MM-DD date.
+ *
+ * The form seeds from `slot` on mount and is NEVER re-seeded by an effect. The
+ * caller gives this element a `key` derived from the slot
+ * (`app/(tabs)/calendar/index.tsx`), so swapping the slot remounts the modal and
+ * `useState` picks up the new date. Resetting in an effect instead — which is
+ * what `react-hooks/set-state-in-effect` reports — renders one frame of the
+ * previous slot's date before correcting itself, and races anything the member
+ * has already typed.
+ */
 export function RescheduleModal({
   visible,
   slot,
@@ -24,17 +34,6 @@ export function RescheduleModal({
 }: RescheduleModalProps) {
   const [date, setDate] = useState<string>(slot?.date ?? "");
   const [error, setError] = useState<string | null>(null);
-
-  // Re-seed the form when the caller swaps the slot being rescheduled. This is
-  // an identity-change-driven reset, which is the one case the rule is not
-  // aimed at; SDK 57's eslint-plugin-react-hooks 6 reports it as an error
-  // regardless.
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setDate(slot?.date ?? "");
-    setError(null);
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, [slot]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>

@@ -689,8 +689,30 @@ deletion and nothing in either build would say so).
 Tests: `tests/unit/account/deletion.test.ts` (window, MAC, purge plan),
 `deletionRoutes.test.ts` (confirmation, the non-mutating GET, the cron secret),
 `storeReadiness.test.tsx` (reachability on all three surfaces, including the
-Expo sources — nothing runs the Expo suite in CI, so that file is the only gate
-the native half has), and `expo/__tests__/deleteAccount.test.tsx`.
+Expo sources, which it reads as text — it is the only check that can see both
+codebases at once), and `expo/__tests__/deleteAccount.test.tsx`.
+
+### CI runs three packages, not one
+
+`.github/workflows/ci.yml` has three jobs, because the repo is three packages
+with three lockfiles:
+
+| Job | Package | Runs |
+|---|---|---|
+| `verify` | `webapp/` | typecheck, unit tests (real Mongo service), production build |
+| `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check` |
+| `shared-api-client` | `shared/api-client/` | `npm test`, `tsc --noEmit` |
+
+`expo` and `shared-api-client` run only when `expo/`, `shared/` or `ci.yml`
+itself changed, and they are gated by the `changes` job's `if:` rather than a
+workflow-level `paths:` filter **on purpose**: a filtered-out workflow never
+reports, and a REQUIRED check that never reports blocks the merge forever. A job
+skipped by `if:` reports as skipped, which branch protection accepts. Neither
+native job writes an `.npmrc`: `expo/` and `shared/api-client/` have no
+`@redbtn/*` dependency, so the public registry is enough —
+`webapp/tests/unit/ci/nativeJobs.test.ts` fails if one ever lands there, and it
+lives in the webapp suite because that is the job that always runs, so deleting
+the native jobs cannot go unnoticed.
 
 ### Information security program (go-live item 17)
 

@@ -152,7 +152,6 @@ export default function LoginScreen({
           return "stop";
         }
         if (result.status === "expired") {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
           setError("That link expired. Please request a new one.");
           setSubmitted(false);
           setSessionId(null);

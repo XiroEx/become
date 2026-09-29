@@ -14,6 +14,7 @@ import { toScheduledSlots } from "@/lib/schedule/scheduleSlots";
 import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
 import {
   slotForDate,
+  slotKey,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
 
@@ -120,7 +121,14 @@ export default function CalendarIndexRoute() {
           />
         </View>
       </ScrollView>
+      {/*
+        Keyed on the slot: the modal seeds its date field from `slot` with
+        useState and has no re-seeding effect, so a different slot has to be a
+        different element for the form to show that slot's date. Drop the key
+        and rescheduling a second workout opens the first one's date.
+      */}
       <RescheduleModal
+        key={rescheduleSlot ? slotKey(rescheduleSlot) : "no-slot"}
         visible={rescheduleSlot !== null}
         slot={rescheduleSlot}
         onConfirm={onConfirmReschedule}

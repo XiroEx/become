@@ -2,6 +2,7 @@ import { View, Text, Pressable } from "react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import {
+  slotKey,
   sortSlotsByDate,
   type ScheduledSlot,
   type SlotStatus,
@@ -43,7 +44,7 @@ export function ScheduledList({
     <View testID={testID} style={{ gap: 8 }}>
       {sorted.map((slot) => (
         <Pressable
-          key={`${slot.date}-${slot.programId}-${slot.phaseIndex}-${slot.workoutIndex}`}
+          key={slotKey(slot)}
           testID={`${testID}-item-${slot.date}-${slot.workoutIndex}`}
           onPress={() => onSelectSlot?.(slot)}
           accessibilityRole="button"

@@ -114,12 +114,16 @@ export function LiveWorkoutClient({
   // compose instead of clobbering each other (the closure `grid` would be stale
   // for the second edit).
   const gridRef = useRef<LiveGrid>(grid);
-  // Deliberate render-phase mirror: the ref is a write-only latest-value cache
-  // that nothing in this render reads, so it cannot desync the UI. SDK 57 ships
-  // eslint-plugin-react-hooks 6, which promoted `react-hooks/refs` to an error;
-  // the rule cannot see that distinction.
-  // eslint-disable-next-line react-hooks/refs
-  gridRef.current = grid;
+  // The mirror is maintained AFTER commit, never during render: writing a ref
+  // while rendering is what `react-hooks/refs` reports, and under a re-render
+  // that React throws away it leaves the ref holding a grid the UI never
+  // showed. Every edit below assigns `gridRef.current` itself before calling
+  // setGrid, so two edits inside one render cycle still compose; this effect
+  // only has to cover the grid changes that do not come from an edit (mount and
+  // the re-seed below).
+  useEffect(() => {
+    gridRef.current = grid;
+  }, [grid]);
   const [round, setRound] = useState<number>(1);
   const totalRounds = workout.groupRounds ?? 1;
 

@@ -1,5 +1,6 @@
 import {
   slotForDate,
+  slotKey,
   statusForDate,
   sortSlotsByDate,
   upcomingSlots,
@@ -30,6 +31,35 @@ describe("slotForDate / statusForDate", () => {
   it("statusForDate returns the slot's status", () => {
     expect(statusForDate(slots, "2026-05-27")).toBe("scheduled");
     expect(statusForDate(slots, "2026-05-25")).toBe("missed");
+  });
+});
+
+// The key is what resets RescheduleModal's form (it has no re-seeding effect),
+// so two different slots must never produce the same one.
+describe("slotKey", () => {
+  it("is stable for the same slot", () => {
+    expect(slotKey(slots[0]!)).toBe(slotKey({ ...slots[0]! }));
+  });
+
+  it("changes with the date, the program, the phase and the workout", () => {
+    const base = slots[0]!;
+    const keys = new Set([
+      slotKey(base),
+      slotKey({ ...base, date: "2026-06-01" }),
+      slotKey({ ...base, programId: "p2" }),
+      slotKey({ ...base, phaseIndex: 1 }),
+      slotKey({ ...base, workoutIndex: 1 }),
+    ]);
+    expect(keys.size).toBe(5);
+  });
+
+  it("does not change with the status — the same workout is the same slot", () => {
+    const base = slots[0]!;
+    expect(slotKey({ ...base, status: "completed" })).toBe(slotKey(base));
+  });
+
+  it("gives every slot in a schedule its own key", () => {
+    expect(new Set(slots.map(slotKey)).size).toBe(slots.length);
   });
 });
 

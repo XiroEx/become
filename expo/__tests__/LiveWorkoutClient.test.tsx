@@ -262,6 +262,39 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     expect(lastGrid.run[0].distance).toBe(1500);
   });
 
+  // The component keeps a ref mirror of the grid so that two edits landing in
+  // one render cycle compose instead of clobbering each other. The mirror is
+  // written by the edit handler and re-synced in an effect — never during
+  // render, which is what react-hooks/refs reports. These two are the
+  // behaviour that would break if the mirror ever went stale.
+  it("composes consecutive edits across exercises instead of clobbering them", () => {
+    const onGridChange = jest.fn();
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
+    );
+    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
+    fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "12");
+    const lastGrid = onGridChange.mock.calls.at(-1)![0];
+    expect(lastGrid.plank[0].durationSec).toBe(45);
+    expect(lastGrid.run[0].durationSec).toBe(600);
+    expect(lastGrid.pushup[0].reps).toBe(12);
+  });
+
+  it("finishes with the latest grid, including the edit just made", () => {
+    const onFinish = jest.fn();
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={trackedWorkout} onFinish={onFinish} />,
+    );
+    fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "30");
+    fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "8");
+    fireEvent.press(getByTestId("live-workout-finish"));
+    expect(onFinish).toHaveBeenCalledTimes(1);
+    const finished = onFinish.mock.calls[0]![0];
+    expect(finished.plank[0].durationSec).toBe(30);
+    expect(finished.pushup[0].reps).toBe(8);
+  });
+
   it("rehydrates logged duration/distance from a restored grid across remount", () => {
     // Simulate the SecureStore cache returning a prior snapshot on re-entry.
     const restoredGrid = {

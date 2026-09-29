@@ -181,11 +181,11 @@ describe("LiveWorkoutRoute", () => {
         phase?: number;
         day?: string;
         completed?: boolean;
-        exercises?: Array<{
+        exercises?: {
           name?: string;
           exerciseSlug?: string;
-          sets?: Array<{ setNumber?: number; weight?: number; completed?: boolean }>;
-        }>;
+          sets?: { setNumber?: number; weight?: number; completed?: boolean }[];
+        }[];
       };
     };
     expect(opts.method).toBe("POST");

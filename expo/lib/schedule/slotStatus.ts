@@ -14,6 +14,19 @@ export interface ScheduledSlot {
 }
 
 /**
+ * Stable identity for a slot: one program's one workout on one date.
+ *
+ * Used as a React `key`, including by the caller of `RescheduleModal`, where a
+ * change of key is what resets the form — that component deliberately has no
+ * re-seeding effect (see `components/schedule/RescheduleModal.tsx`). Keep the
+ * four fields: two programs can schedule the same date, and a program can
+ * schedule two workouts on one date.
+ */
+export function slotKey(slot: ScheduledSlot): string {
+  return `${slot.date}-${slot.programId}-${slot.phaseIndex}-${slot.workoutIndex}`;
+}
+
+/**
  * Look up the slot for a given date. Returns null if none scheduled.
  * If there are multiple slots on a single date (e.g. two-a-days), the first
  * one wins (the webapp ordering is consistent so this matches behavior).

@@ -118,3 +118,80 @@ describe("CalendarIndexRoute", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
+
+// The reschedule form seeds from the slot with useState and has no re-seeding
+// effect (react-hooks/set-state-in-effect). The route therefore has to key the
+// modal on the slot, and only a route-level test can see that it does: the
+// modal keeps its state across a close/reopen otherwise, and the member is
+// shown the wrong workout's date to move.
+describe("CalendarIndexRoute — reschedule modal is keyed on the slot", () => {
+  const dateA = new Date(today.getTime() + 2 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const dateB = new Date(today.getTime() + 4 * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue({
+      schedules: [
+        {
+          programId: "prog-1",
+          scheduledWorkouts: [
+            {
+              date: `${dateA}T00:00:00.000Z`,
+              dayLabel: "Day 1",
+              status: "scheduled",
+              phase: 1,
+            },
+            {
+              date: `${dateB}T00:00:00.000Z`,
+              dayLabel: "Day 2",
+              status: "scheduled",
+              phase: 1,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("opens each slot's own date, not the first one it was opened with", async () => {
+    const { getByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId(`scheduled-list-reschedule-${dateA}-0`)).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    expect(getByTestId("reschedule-modal-date").props.value).toBe(dateA);
+
+    // Type something, back out, then reschedule the OTHER workout.
+    fireEvent.changeText(getByTestId("reschedule-modal-date"), "2026-01-01");
+    fireEvent.press(getByTestId("reschedule-modal-close"));
+    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateB}-1`));
+
+    expect(getByTestId("reschedule-modal-date").props.value).toBe(dateB);
+  });
+
+  it("confirms with the slot that was opened second", async () => {
+    const { getByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId(`scheduled-list-reschedule-${dateB}-1`)).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    fireEvent.press(getByTestId("reschedule-modal-close"));
+    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateB}-1`));
+    fireEvent.press(getByTestId("reschedule-modal-confirm"));
+
+    const patches = mockApiFetch.mock.calls.filter(
+      (c) => (c[2] as { method?: string } | undefined)?.method === "PATCH",
+    );
+    expect(patches).toHaveLength(1);
+    expect((patches[0]![2] as { body?: Record<string, unknown> }).body).toEqual(
+      expect.objectContaining({ workoutDate: dateB, newDate: dateB }),
+    );
+  });
+});

@@ -1,7 +1,7 @@
 import type { ScheduleApiResponse } from "@become/api-client";
 import type { ScheduledSlot, SlotStatus } from "@/lib/schedule/slotStatus";
 
-const SLOT_STATUSES: ReadonlyArray<SlotStatus> = [
+const SLOT_STATUSES: readonly SlotStatus[] = [
   "scheduled",
   "completed",
   "missed",
