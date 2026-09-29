@@ -20,7 +20,13 @@ export interface WorkoutOverviewViewModel {
 
 export interface WorkoutOverviewProps {
   workout: WorkoutOverviewViewModel;
-  onStartLive?: () => void;
+  /**
+   * Opens the live workout. REQUIRED, and deliberately not defaulted: it
+   * shipped as `onStartLive ?? (() => {})` and the route that renders this
+   * screen never passed one, so the only button on the screen did nothing.
+   * A required prop is what makes `tsc` fail the next time one is forgotten.
+   */
+  onStartLive: () => void;
   testID?: string;
 }
 
@@ -51,7 +57,7 @@ export function WorkoutOverview({
           ) : null}
         </Card>
       ))}
-      <Button testID={`${testID}-start-live`} onPress={onStartLive ?? (() => {})}>
+      <Button testID={`${testID}-start-live`} onPress={onStartLive}>
         Start live workout
       </Button>
     </ScrollView>
