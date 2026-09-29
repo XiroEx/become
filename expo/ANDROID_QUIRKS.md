@@ -75,9 +75,24 @@ skipping the disambiguation chooser.
 
 ## Adaptive icon
 
-`android.adaptiveIcon` is wired in `app.json` with `foregroundImage` +
-`backgroundColor: "#0a0a0a"` (matching the dark theme). The icon file lives
-under `assets/icon.png` (placeholder).
+`android.adaptiveIcon` is wired in `app.json` with
+`foregroundImage: "./assets/adaptive-icon.png"` + `backgroundColor: "#0a0a0a"`
+(the app's own background, so the launcher tile is the same dark as the first
+screen).
+
+The foreground is its OWN file, not the store icon: the store icon is opaque
+edge to edge, and every launcher mask (circle, squircle, teardrop, rounded
+square) would crop a filled tile into a shape with no margin. The foreground is
+the mark on transparency, occupying the centre 50% of a 1024 px canvas — inside
+the ~66% safe zone every mask keeps.
+
+The same applies to the splash: Android 12+ masks the splash icon to a circle,
+so `assets/splash-icon.png` is the mark on transparency too, not the lockup.
+
+All three assets are written by `scripts/generate-app-assets.mjs` from
+`webapp/public/logo.png`, which is also what the PWA installs with — so the
+phone icon and the browser icon are the same mark. Re-run it (and only it) when
+the real store icon lands.
 
 ## Verified by
 

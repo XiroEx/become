@@ -41,9 +41,12 @@ describe("Android config — app.json", () => {
     expect(parsed.expo.android?.package).toBe("io.redbtn.become");
   });
 
+  // Its own file, not the store icon: the store icon is opaque and square, so
+  // the launcher mask would crop a filled tile. The foreground is the mark on
+  // transparency, inside the centre 66% every mask keeps.
   it("configures adaptiveIcon with foregroundImage + dark background", () => {
     expect(parsed.expo.android?.adaptiveIcon?.foregroundImage).toBe(
-      "./assets/icon.png",
+      "./assets/adaptive-icon.png",
     );
     expect(parsed.expo.android?.adaptiveIcon?.backgroundColor).toBe("#0a0a0a");
   });
