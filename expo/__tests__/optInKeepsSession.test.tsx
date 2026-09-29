@@ -32,9 +32,11 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn() };
 });
 
+import type { ReactNode } from "react";
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import * as SecureStore from "expo-secure-store";
 import { apiFetch } from "@become/api-client";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { createBiometricsOptInStore } from "@/lib/auth/biometrics";
 import {
   biometricsOptInSecureStore,
@@ -47,8 +49,17 @@ import { createHealthOptInStore } from "@/lib/health/opt-in";
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 const fake = SecureStore as unknown as { __reset: () => void };
 
-const JWT = "header.payload.signature";
+/** A real JWT shape: the session is only trusted if its own `exp` is ahead. */
+const JWT = `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(
+  JSON.stringify({ userId: "u1", exp: Math.floor(Date.now() / 1000) + 3600 }),
+  "utf8",
+).toString("base64url")}.signature`;
 const USER = { _id: "u1", email: "jon@example.com" };
+
+/** The session now lives in one provider, so the hook is read through it. */
+function withProvider({ children }: { children: ReactNode }) {
+  return <AuthProvider>{children}</AuthProvider>;
+}
 
 beforeEach(() => {
   fake.__reset();
@@ -70,7 +81,7 @@ describe("an opt-in toggle never signs the member out", () => {
     await sessionStore.set(JWT);
     const optIn = make();
 
-    const { result } = renderHook(() => useAuth());
+    const { result } = renderHook(() => useAuth(), { wrapper: withProvider });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -105,8 +116,8 @@ describe("an opt-in toggle never signs the member out", () => {
     );
     await createHealthOptInStore(healthOptInSecureStore).setOptedIn(false);
 
-    // Fresh hook = fresh launch: it hydrates from SecureStore on mount.
-    const { result } = renderHook(() => useAuth());
+    // Fresh provider = fresh launch: it hydrates from SecureStore on mount.
+    const { result } = renderHook(() => useAuth(), { wrapper: withProvider });
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
