@@ -4,6 +4,7 @@ import { Text } from "@/components/Text";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5;
 
@@ -76,6 +77,10 @@ export function CheckInModal({
       </Text>
       <View
         testID={`${testID}-mood-row`}
+        // Five options, one answer: a radio group, so VoiceOver says "1 of 5"
+        // and which one is chosen instead of reading five unrelated buttons.
+        accessibilityRole="radiogroup"
+        accessibilityLabel="How are you feeling today?"
         style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 16 }}
       >
         {([1, 2, 3, 4, 5] as MoodLevel[]).map((level) => (
@@ -83,15 +88,15 @@ export function CheckInModal({
             key={level}
             testID={`${testID}-mood-${level}`}
             onPress={() => setMood(level)}
-            accessibilityRole="button"
+            accessibilityRole="radio"
             accessibilityLabel={`Mood ${level}: ${MOOD_LABELS[level]}`}
-            accessibilityState={{ selected: mood === level }}
+            accessibilityState={{ checked: mood === level, selected: mood === level }}
             className={`px-2 py-2 rounded-xl items-center justify-center border ${
               mood === level
                 ? "border-primary bg-primary/10"
                 : "border-border bg-card"
             }`}
-            style={{ flex: 1, marginHorizontal: 2 }}
+            style={[minTouchTarget, { flex: 1, marginHorizontal: 2 }]}
           >
             <Text
               className={mood === level ? "text-primary font-semibold" : "text-foreground"}
@@ -115,6 +120,8 @@ export function CheckInModal({
       {error ? (
         <Text
           testID={`${testID}-error`}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
           className="text-destructive text-xs mt-2"
         >
           {error}

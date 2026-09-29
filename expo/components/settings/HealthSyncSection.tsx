@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Toggle } from "@/components/Toggle";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { healthOptInSecureStore } from "@/lib/auth/secureStoreToken";
 import { isHealthSyncEnabled } from "@/lib/health/enabled";
 import {
@@ -111,7 +112,10 @@ function HealthSyncSectionBody({
 
   return (
     <View testID="health-sync-section" style={{ gap: 8 }}>
-      <Text className="text-foreground text-2xl font-bold mt-2">
+      <Text
+        accessibilityRole="header"
+        className="text-foreground text-2xl font-bold mt-2"
+      >
         Health sync
       </Text>
       <Text className="text-muted-foreground text-sm">
@@ -129,7 +133,12 @@ function HealthSyncSectionBody({
         }}
         className="bg-card border border-border"
       >
-        <Text className="text-foreground">Sync from Health</Text>
+        {/* The row's label wraps instead of shoving the switch off the edge at
+            the largest Dynamic Type size — a Text in a flex row has
+            flexShrink: 0 by default. */}
+        <Text style={WRAPPABLE_TEXT} className="text-foreground">
+          Sync from Health
+        </Text>
         <Toggle
           testID="health-toggle"
           value={enabled}

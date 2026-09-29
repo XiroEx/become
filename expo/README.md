@@ -236,6 +236,45 @@ parses the `.ttf` headers, walks `app/` and `components/` for a stray
 `react-native` Text import, drives the splash gate through both states, and
 reads `webapp/` to check the web still uses Geist.
 
+## Accessibility baseline (NP-124)
+
+Full detail — including the device QA checklist — is in
+[`ACCESSIBILITY.md`](./ACCESSIBILITY.md). The four rules, and where each lives:
+
+- **Every interactive element has a role and a label.** The label may be the
+  words inside the control, but `components/Button.tsx` computes it
+  (`accessibleName`) because `loading` replaces the label with a spinner and a
+  spinner has no name. `Toggle`'s `accessibilityLabel` is a REQUIRED prop: a
+  switch has no words of its own, and a type error is the only check that catches
+  the next one that forgets. A group that reads as one fact (the streak banner,
+  today's workout) is ONE element with a composed label; decoration (the sheet's
+  grab bar, the modal backdrop) is hidden rather than described.
+- **44 × 44 points, minimum** — `lib/a11y/touchTarget.ts`. `minTouchTarget`
+  grows the view where growing is invisible; `hitSlopToMinTarget(w, h)` grows
+  only the touchable area where the size IS the design (the 48 × 28 switch
+  track). The settings gear was a 36-point target until this card.
+- **Dynamic Type is never capped** — `lib/a11y/dynamicType.ts`. Nothing sets
+  `allowFontScaling={false}`; what breaks at the largest size is layout, and it
+  breaks because **React Native's `flexShrink` is 0 where CSS's is 1** — a
+  `<Text>` in a flex ROW keeps its intrinsic width and runs off the end instead
+  of wrapping. So text in a row gets `WRAPPABLE_TEXT`, and rows of controls get
+  `flex: 1` wrappers. (The tab bar's labels do not scale, by react-navigation's
+  design: it uses iOS's Large Content Viewer instead.)
+- **Reduce Motion is honoured** — `lib/a11y/reducedMotion.ts`. React Native
+  applies none of it: `Modal.animationType` animates and every Reanimated
+  `withTiming` runs whatever the setting says. The rule that travels: a file
+  importing `moti` or `react-native-reanimated` must also reach for
+  `useReducedMotion`, and `__tests__/reducedMotion.test.tsx` sweeps the sources
+  for the first one that does not.
+
+Tests: `__tests__/accessibility.test.tsx` renders the v1 screens (sign-in,
+consent, onboarding, Home, Settings — the plan page has no native screen until
+NP-053) and walks the rendered tree the way a screen reader does, driving sign-in
+→ Home **using only queries by role and accessible name**;
+`__tests__/reducedMotion.test.tsx` drives the hook through the system setting
+and both overlays with it. Neither can lay text out, which is why the device pass
+in `ACCESSIBILITY.md` exists.
+
 ## File layout
 
 ```
@@ -259,6 +298,11 @@ expo/
 │       │                 #   tab buttons of their own
 │       └── admin/        # Read-only native admin shells — also __DEV__ only
 ├── lib/
+│   ├── a11y/
+│   │   ├── announce.ts       # announce() — VoiceOver is told what replaced what
+│   │   ├── dynamicType.ts    # The largest scales + WRAPPABLE_TEXT (flexShrink: 1)
+│   │   ├── reducedMotion.ts  # useReducedMotion() / modalAnimation() / motionDuration()
+│   │   └── touchTarget.ts    # 44 points: minTouchTarget + hitSlopToMinTarget()
 │   ├── dev/
 │   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
 │   ├── navigation/
@@ -316,6 +360,20 @@ See the plan doc for full sequencing.
   cascade, so a bare `<Text>` is the system font no matter what the Tailwind
   theme says. ESLint fails the build on it; see [Typography](#typography--geist-the-webs-typeface-np-160).
 - **`strokeWidth={1.5}` on every lucide icon** — RN default is 2 and looks bolder than the webapp.
+- **A new touchable needs a role, a label and 44 points** — the role and the
+  label because that is all VoiceOver has to go on, and the 44 from
+  `lib/a11y/touchTarget.ts` because NativeWind padding around a small icon is
+  not a hit target. `__tests__/accessibility.test.tsx` walks the v1 screens for
+  both and sweeps every `.tsx` under `app/` and `components/` so no file holds
+  more touchables than roles. See [Accessibility
+  baseline](#accessibility-baseline-np-124).
+- **Never `allowFontScaling={false}`, and never a fixed height around text** —
+  Dynamic Type goes to 3.12× on iOS. A `<Text>` inside a flex row also needs
+  `WRAPPABLE_TEXT`: React Native's `flexShrink` is 0, so it would run off the end
+  of the screen rather than wrap.
+- **Anything that animates asks `useReducedMotion()` first** — moti and
+  Reanimated do not consult the system setting, and the suite fails the build on
+  a file that imports either without it.
 - **No black-translucent statusBarStyle** — per [[feedback_black_translucent]] memory.
 - **Tailwind v3, not v4** — NativeWind 4 doesn't support v4 yet.
 - **`lucide-react-native` is mapped to its CJS build in the Jest config** — the

@@ -55,7 +55,12 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
       mode: "login" | "register",
     ) => Promise<{ token: string }>;
     const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
-    expect(getByTestId("verify-spinner")).toBeTruthy();
+    // NP-124: the spinner is hidden from assistive technology (an unlabelled
+    // ActivityIndicator announces nothing; the text beside it says everything),
+    // so the query has to ask for hidden elements to see it at all.
+    expect(
+      getByTestId("verify-spinner", { includeHiddenElements: true }),
+    ).toBeTruthy();
     expect(getByTestId("verify-working-text")).toBeTruthy();
   });
 

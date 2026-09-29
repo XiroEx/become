@@ -132,6 +132,36 @@ by default on the Stack navigator. We don't override `gestureEnabled` anywhere
 that would break it. Modal screens (e.g. the daily check-in modal) use
 `presentation: "modal"` so the swipe-down dismiss gesture works.
 
+## Accessibility (VoiceOver, Dynamic Type, 44 points, Reduce Motion)
+
+The baseline and the device checklist live in `ACCESSIBILITY.md` (NP-124). The
+iOS-specific decisions:
+
+- **`accessibilityLiveRegion` does nothing on iOS.** It is a TalkBack prop. A
+  state change that replaces content — sign-in's "Check your inbox", onboarding's
+  step change — is spoken by `lib/a11y/announce.ts`
+  (`AccessibilityInfo.announceForAccessibility`, which is
+  `UIAccessibility.post(.announcement)`), and the live region is set as well for
+  Android. Both, always: neither one covers both platforms.
+- **A modal is confined with `accessibilityViewIsModal`, and escaped with
+  `onAccessibilityEscape`.** `components/Modal.tsx`'s backdrop used to be a
+  full-screen `accessibilityRole="button"` labelled "Close modal", which VoiceOver
+  reached BEFORE anything inside the dialog. It is now hidden from assistive
+  technology (`accessible={false}`, `importantForAccessibility="no"`) and still
+  tappable for a sighted member; the two-finger scrub is the dismissal, which is
+  the platform gesture and arrives as `onAccessibilityEscape` on the card.
+- **44 × 44 points is Apple's minimum, and padding is not a target.**
+  `lib/a11y/touchTarget.ts`. The settings gear was 36 points (a 20-point icon in
+  `p-2`) and the switch 28 tall.
+- **Dynamic Type reaches 3.12× (AX5: 53pt body against 17pt).** Nothing in the
+  app sets `allowFontScaling={false}`; the tab bar's labels are the one exception
+  and they are react-navigation's, which turns scaling off on iOS 13+ on purpose
+  and relies on the Large Content Viewer (`BottomTabItem`:
+  `allowFontScaling = SUPPORTS_LARGE_CONTENT_VIEWER ? false : undefined`).
+- **Reduce Motion is a read, not a guess.** `Modal.animationType` animates
+  whatever Settings says, so `lib/a11y/reducedMotion.ts` turns the fade and the
+  slide into a cut and follows `reduceMotionChanged` live.
+
 ## Haptic feedback
 
 Tier-1 haptics are deferred to the dev build (`expo-haptics` isn't bundled in
@@ -166,3 +196,10 @@ See P6 for the parse/verify flow.
   `SafeAreaView`
 - `__tests__/iosKeyboardAvoiding.test.ts` — every input-bearing screen file
   references `KeyboardAvoidingView`
+- `__tests__/accessibility.test.tsx` — the v1 screens are rendered and walked the
+  way a screen reader walks them: a role and a name on everything interactive,
+  44 × 44 in numbers, sign-in → Home driven by role and name alone, and nothing
+  built to clip at the largest Dynamic Type size
+- `__tests__/reducedMotion.test.tsx` — the hook follows the system setting, both
+  overlays honour it, and a file that imports moti or Reanimated without it fails
+  the build
