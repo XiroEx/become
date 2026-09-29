@@ -16,7 +16,7 @@
 //
 // It works identically whether the link opens in a browser or inside a store
 // build: the native app's /account/restore screen posts the same body to the
-// same route (expo/app/account/restore.tsx).
+// same route (expo/app/(auth)/account/restore.tsx).
 
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'

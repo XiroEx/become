@@ -150,8 +150,19 @@ The same triplets are exported from `lib/theme/tokens.ts` as a typed map, for RN
 ```
 expo/
 ├── app/                  # Expo Router file-system routes (mirrors webapp/app)
-│   ├── _layout.tsx       # Root layout: GestureHandlerRootView + SafeAreaProvider
-│   └── index.tsx         # Home / theme-probe screen
+│   ├── _layout.tsx       # Root: GestureHandlerRootView, SafeAreaProvider,
+│   │                     #   AuthProvider, the cold-open unlock, and a Stack
+│   │                     #   over index / (auth) / (app) / onboarding
+│   ├── +native-intent.tsx# Every incoming link passes through here first
+│   ├── index.tsx         # The launch redirect (sign-in, onboarding or Home)
+│   ├── onboarding.tsx    # Signed-in, but OUTSIDE (app): the gate points here
+│   ├── (auth)/           # No session required: login, verify, account/restore
+│   └── (app)/            # AuthGuard → ConsentGate → OnboardingGuard
+│       ├── (tabs)/       # Five tabs; calendar + profile hidden (href: null)
+│       │   └── <tab>/    # each with its own _layout.tsx Stack, so detail
+│       │                 #   screens PUSH inside the tab instead of becoming
+│       │                 #   tab buttons of their own
+│       └── admin/        # Read-only native admin shells
 ├── lib/
 │   └── theme/
 │       └── tokens.ts     # Typed RGB-triplet map (light + dark)
@@ -198,3 +209,11 @@ See the plan doc for full sequencing.
   `expo-router/testing-library`. Every other suite renders a screen in
   isolation, so only this one loads the module graph that a device loads at
   launch. If a dependency set cannot boot, this is the test that says so.
+- **The navigation shell is tested by RENDERING it, not by reading a config
+  array** — `__tests__/navigation-shell.test.tsx` (the tab bar and the
+  per-tab stacks) and `__tests__/launch-and-links.test.tsx` (where a launch
+  and a cold-start link land) build their route map from the real `app/`
+  directory via `test-support/appRoutes.tsx`. A screen file added tomorrow is
+  in the render tomorrow: that is how a tab bar with twenty buttons went
+  unnoticed while a five-entry `TAB_ROUTES` array was asserted to be five
+  entries long.
