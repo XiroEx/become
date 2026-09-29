@@ -983,6 +983,43 @@ Every field resolves through `optional()`, **never `required()`**. One
 `AuthGuard` still renders the page — the app looks fine and every list is empty.
 `tests/unit/billing/billingConfig.test.ts` exists to catch exactly that.
 
+#### Where Stripe returns a buyer (and why the app gets different pages)
+
+`lib/billing/urls.ts` builds the three return URLs. The ORIGIN comes from an
+allow-list checked against `Origin`, then `Referer`, then the forwarded/host
+headers, falling back to `NEXT_PUBLIC_APP_URL` — never a reflected one, because
+these strings are redirect targets handed to Stripe. The PATH now depends on an
+optional `returnTo` in the body of `POST /api/billing/checkout` and
+`POST /api/billing/portal`:
+
+| `returnTo` | success | cancel | portal |
+|---|---|---|---|
+| absent / `'web'` (unchanged) | `/dashboard/plan?checkout=success&session_id={CHECKOUT_SESSION_ID}` | `/dashboard/plan?checkout=cancelled` | `/dashboard/plan?portal=return` |
+| `'app'` | `/billing/return?session_id={CHECKOUT_SESSION_ID}` | `/billing/cancelled` | `/billing/portal-return` |
+
+An unknown value is `400 invalid_return_to`, not a silent fall back: a typo'd
+`'App'` would strand a native buyer on a sign-in screen and say nothing.
+`returnTo` is also part of the checkout idempotency key, because Stripe replays
+the FIRST session for a repeated key and ignores the new params.
+
+**Why the app needs public pages.** A native request carries no `Origin` and no
+`Referer`, so the Host decides and Stripe drops the buyer into **Safari** — a
+browser that has never held that member's session (`auth_token` is a cookie the
+app does not share). `middleware.ts` guards `/dashboard/*`, so the plan page sent
+them to `/login` seconds after their card was charged. The three pages under
+`app/billing/` render signed out, state what happened, show **no account data**
+and **activate nothing** — the app reads
+`GET /api/billing/status?session_id=` for itself, signed in (NP-054).
+
+The "Return to Become" button is `become://?billing=…` and deliberately not a
+link to one of our own hosts: **iOS keeps a tap on a same-domain link inside
+Safari**, so a universal link there would only load another web page. It targets
+the app's ROOT with the outcome as params because `expo/app/` has no billing
+route yet and an unmatched deep link opens the app on a not-found screen. A
+second, quieter link offers `/dashboard/plan` for a member without the app.
+`{CHECKOUT_SESSION_ID}` is still concatenated, never encoded. Tests:
+`tests/unit/billing/billingAppReturn.test.ts` and `billingReturnPages.test.tsx`.
+
 #### The mode fence (read before touching `lib/billing/`)
 
 Production and beta are two workspaces on **one MongoDB**. If prod runs live and

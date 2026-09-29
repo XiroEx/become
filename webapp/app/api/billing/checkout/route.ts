@@ -13,7 +13,7 @@ import {
 import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
 import { ensureStripeCustomer } from '@/lib/billing/customer'
 import { readCustomerId, writeCustomerIdIfAbsent } from '@/lib/billing/mongoDeps'
-import { checkoutCancelUrl, checkoutSuccessUrl } from '@/lib/billing/urls'
+import { checkoutCancelUrl, checkoutSuccessUrl, parseReturnTarget } from '@/lib/billing/urls'
 import {
   CHECKOUT_CONSENT_COLLECTION,
   TERMS_URL_MISSING_LOG,
@@ -29,15 +29,22 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/billing/checkout — start a Stripe Checkout session.
  *
- * Body: `{ plan?: 'monthly' | 'annual' }`. The plan is OPTIONAL and defaults to
- * monthly, because the shipped UpgradeSheet posts `{ feature, tier }` with no
- * plan at all — a required field here would 400 the only caller in the app. An
- * explicitly wrong value is still a 400; a missing one is not.
+ * Body: `{ plan?: 'monthly' | 'annual', returnTo?: 'web' | 'app' }`. The plan is
+ * OPTIONAL and defaults to monthly, because the shipped UpgradeSheet posts
+ * `{ feature, tier }` with no plan at all — a required field here would 400 the
+ * only caller in the app. An explicitly wrong value is still a 400; a missing
+ * one is not.
+ *
+ * `returnTo` is the NATIVE app's flag and defaults to 'web', so every browser
+ * caller keeps returning to /dashboard/plan exactly as before. 'app' swaps the
+ * success and cancel URLs for the PUBLIC pages, because Stripe returns a native
+ * buyer to Safari — a browser with no session, where middleware.ts would bounce
+ * them to /login seconds after paying. See lib/billing/urls.ts.
  *
  * Every refusal is a distinct status the client already distinguishes:
- *   401 unauthenticated · 400 invalid_plan · 503 billing_not_configured
- *   409 already_subscribed · 409 fix_payment_method · 409 already_plus
- *   502 checkout_failed
+ *   401 unauthenticated · 400 invalid_plan · 400 invalid_return_to
+ *   503 billing_not_configured · 409 already_subscribed · 409 fix_payment_method
+ *   409 already_plus · 502 checkout_failed
  *
  * The three 409s are all "you cannot buy this", for three different reasons,
  * and each one is a bill somebody would otherwise pay twice. All three are
@@ -57,6 +64,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_plan' }, { status: 400 })
     }
     const plan: BillingPlan = isPlan(rawPlan) ? rawPlan : 'monthly'
+
+    // Absent is 'web'. An unknown value is a 400 rather than a quiet fall back,
+    // because a typo'd 'App' would return a native buyer to /dashboard/plan in
+    // Safari — the exact bug the public pages exist to fix — and say nothing.
+    const returnTo = parseReturnTarget((body as { returnTo?: unknown } | null)?.returnTo)
+    if (!returnTo) {
+      return NextResponse.json({ error: 'invalid_return_to' }, { status: 400 })
+    }
 
     const cfg = await getBillingConfig()
     const priceId = priceIdForPlan(cfg, plan)
@@ -162,7 +177,9 @@ export async function POST(request: NextRequest) {
         // Promo codes are created in the Stripe dashboard, never in code.
         allow_promotion_codes: true,
         client_reference_id: auth.userId,
-        metadata: { userId: auth.userId, plan, termsVersion },
+        // `returnTo` rides along so a support question — "did this purchase come
+        // from the app?" — is answerable from the Stripe dashboard alone.
+        metadata: { userId: auth.userId, plan, termsVersion, returnTo },
         // Stripe's own "I agree to the terms" box, stored on the session.
         // See lib/billing/consentCollection.ts for why it may be retried off.
         consent_collection: CHECKOUT_CONSENT_COLLECTION,
@@ -174,14 +191,21 @@ export async function POST(request: NextRequest) {
         // becomeurbest.com buyer to NEXT_PUBLIC_APP_URL lands them signed out
         // and middleware.ts bounces them to /login moments after being charged.
         // The headers are validated against an allow-list inside; an unknown
-        // host falls back rather than being reflected.
-        success_url: checkoutSuccessUrl(request.headers),
-        cancel_url: checkoutCancelUrl(request.headers),
+        // host falls back rather than being reflected. `returnTo` picks the PATH
+        // on that origin: /dashboard/plan for a browser, the public pages for the
+        // app, which lands in Safari with no session.
+        success_url: checkoutSuccessUrl(request.headers, returnTo),
+        cancel_url: checkoutCancelUrl(request.headers, returnTo),
     }
 
     // A 1-minute bucket collapses a double-click into one session without
     // pinning the member to a single expired session forever.
-    const idempotencyKey = `become:checkout:${auth.userId}:${plan}:${cfg.mode}:${Math.floor(
+    //
+    // `returnTo` is part of the key because Stripe replays the FIRST session for
+    // a repeated key and ignores the new params: without it, a member who
+    // abandoned the app's checkout and bought on the web within the same minute
+    // would be handed the session whose return URLs point at the public pages.
+    const idempotencyKey = `become:checkout:${auth.userId}:${plan}:${cfg.mode}:${returnTo}:${Math.floor(
       Date.now() / 60_000,
     )}`
 
