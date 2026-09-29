@@ -18,6 +18,19 @@ export interface IWeightEntry {
    *  what they were using at the time. */
   unit?: 'lbs' | 'kg'
   bodyFat?: number // percentage
+  /**
+   * Where this weigh-in came from. Absent means what it has always meant: the
+   * member typed it into Become. `'healthkit'` / `'health-connect'` mean it was
+   * IMPORTED from a Health sample, which is not a member action — see
+   * lib/healthImport.ts (no streak day, no answer to the weight prompt).
+   */
+  source?: 'healthkit' | 'health-connect'
+  /**
+   * The imported sample's own id. Health re-offers the same rows on every sync,
+   * so this is the only thing that says "this is that one again" — a repeat is
+   * ignored rather than re-writing the day (findEntryByExternalId).
+   */
+  externalId?: string
 }
 
 export interface IMoodEntry {
@@ -322,7 +335,11 @@ const WeightEntrySchema = new Schema<IWeightEntry>({
   loggedAt: { type: Date },
   weight: { type: Number, required: true },
   unit: { type: String, enum: ['lbs', 'kg'] },
-  bodyFat: { type: Number }
+  bodyFat: { type: Number },
+  // Health-import provenance. Not indexed: weightHistory is an embedded array
+  // read as a whole, so the de-duplication scan happens on the loaded document.
+  source: { type: String, enum: ['healthkit', 'health-connect'] },
+  externalId: { type: String }
 }, { _id: false })
 
 const MoodEntrySchema = new Schema<IMoodEntry>({
