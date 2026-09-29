@@ -21,6 +21,7 @@ import { localDateKey } from "@/lib/nutrition/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
+import { getOfflineWrites } from "@/lib/offline/writes";
 
 interface ProfilePatchInput {
   name?: string;
@@ -85,44 +86,62 @@ export default function HealthSettingsRoute() {
     fetchOpts,
   );
 
-  const weightMutation = useMutation<WeightPostRequest, LogWeightResponse>(
+  // THE SKIP ONLY. A skip is a TODAY event — it answers today's prompt and
+  // moves the skip counter (`webapp/app/api/weight/route.ts`) — so it is never
+  // queued and never back-dated: a skip replayed onto yesterday would answer a
+  // prompt that is long gone. The weigh-in itself goes through the offline
+  // queue below.
+  const skipMutation = useMutation<WeightPostRequest, LogWeightResponse>(
     "/api/weight",
     LogWeightResponseSchema,
     {
       method: "POST",
       baseUrl: WEBAPP_BASE_URL,
       getToken: () => token ?? undefined,
-      onSuccess: (_result, input) => {
-        // Re-pull the skip-tracking state so the summary reflects the new log/skip.
+      onSuccess: () => {
+        // Re-pull the skip-tracking state so the summary reflects the skip.
         void weightCheck.refetch();
-        // BECOME → HEALTH. A skip is not a weigh-in, so only a value is
-        // mirrored; and nothing is mirrored unless the member left the write
-        // direction on when the app opened (lib/health/sync.ts).
-        if (!input.skip && input.weight != null) {
-          void mirrorWeighInToHealth({
-            valueLbs: input.weight,
-            atISO: new Date().toISOString(),
-            clientId: weighInClientId(localDateKey()),
-          });
-        }
       },
     },
   );
   const [weightText, setWeightText] = useState<string>("");
+  const [savingWeight, setSavingWeight] = useState<boolean>(false);
+  const [weightQueued, setWeightQueued] = useState<boolean>(false);
 
   const onSaveName = useCallback(() => {
     void profileMutation.mutate({ name: name.trim() });
   }, [profileMutation, name]);
 
-  const onLogWeight = useCallback(() => {
+  const refetchWeightCheck = weightCheck.refetch;
+  const onLogWeight = useCallback(async () => {
     const parsed = Number(weightText);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
-    void weightMutation.mutate({ weight: parsed });
-  }, [weightMutation, weightText]);
+    setSavingWeight(true);
+    try {
+      const status = await getOfflineWrites().logWeight(parsed);
+      setWeightQueued(status === "queued");
+      // BECOME → HEALTH. Mirrors the weigh-in (sent or queued; a skip never
+      // gets here) into Apple Health / Health Connect, and does nothing unless
+      // the member left the write direction on when the app opened
+      // (lib/health/sync.ts). Never awaited and never throws.
+      void mirrorWeighInToHealth({
+        valueLbs: parsed,
+        atISO: new Date().toISOString(),
+        clientId: weighInClientId(localDateKey()),
+      });
+      if (status === "sent") await refetchWeightCheck();
+    } catch {
+      // A refusal. The queue keeps a missing connection; there is nothing to
+      // retry here, and the inline state below says nothing new happened.
+      setWeightQueued(false);
+    } finally {
+      setSavingWeight(false);
+    }
+  }, [refetchWeightCheck, weightText]);
 
   const onSkipWeight = useCallback(() => {
-    void weightMutation.mutate({ weight: null, skip: true });
-  }, [weightMutation]);
+    void skipMutation.mutate({ weight: null, skip: true });
+  }, [skipMutation]);
 
   const lastWeight = weightCheck.data?.lastWeight;
   const daysSince = weightCheck.data?.daysSinceLastEntry;
@@ -187,8 +206,10 @@ export default function HealthSettingsRoute() {
             <View style={{ flex: 1 }}>
               <Button
                 testID="weight-log"
-                onPress={onLogWeight}
-                disabled={weightMutation.loading}
+                onPress={() => {
+                  void onLogWeight();
+                }}
+                disabled={savingWeight}
               >
                 Log weight
               </Button>
@@ -198,12 +219,20 @@ export default function HealthSettingsRoute() {
                 testID="weight-skip"
                 variant="secondary"
                 onPress={onSkipWeight}
-                disabled={weightMutation.loading}
+                disabled={skipMutation.loading}
               >
                 Skip today
               </Button>
             </View>
           </View>
+          {weightQueued ? (
+            <Text
+              testID="weight-queued-note"
+              className="text-muted-foreground text-xs"
+            >
+              Saved on this device — it will sync when you&apos;re back online.
+            </Text>
+          ) : null}
         </View>
 
         {/* Health sync: on for Health Connect (NP-199), still hidden on iOS

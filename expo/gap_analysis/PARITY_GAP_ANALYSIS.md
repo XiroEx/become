@@ -332,7 +332,7 @@ Status words: **Parity** (native matches the web), **Partial** (some of it exist
 | Apple Health and Health Connect | n/a | `expo/lib/health/`, `expo/app/(tabs)/profile/health.tsx`: Adapter shells with no module; the toggle overwrites the token. | Partial | NP-183, NP-184, NP-185, NP-186, NP-199 |
 | Biometric unlock | n/a | `expo/lib/auth/biometrics.ts`, `expo/lib/auth/coldOpenRedirect.tsx`: Flow written, stub capability. | Partial | NP-187 |
 | Live Activity and ongoing workout notification | n/a | `expo/components/live/RestTimerBar.tsx` | Missing | NP-188, NP-200 |
-| Offline cache and write queue | `webapp/lib/clientCache.ts` | `expo/lib/query/`: Queue written, never mounted; weight and mood writes are dated by the server's clock, so a replay after midnight lands on the wrong day. | Partial | NP-036, NP-189, NP-190, NP-191 |
+| Offline cache and write queue | `webapp/lib/clientCache.ts` | `expo/lib/offline/`: the queue is mounted for weight and mood, each write carrying the local day it was made on, with a connectivity banner and a sign-out teardown (NP-190). The live workout's own saves are still unqueued (NP-191). | Partial | NP-036, NP-189, NP-190, NP-191 |
 
 ### Release
 
@@ -447,7 +447,7 @@ Tier 3 means the surface stays on the web and native shows at most a link. Admin
 | Apple Health weight and workouts | Adapter shells with no native module | NP-183, NP-184, NP-189, NP-185, NP-186; Health Connect NP-199 | Wave 5 (both platforms) |
 | Live Activity for the rest timer | Nothing | NP-188; Android ongoing notification NP-200 | Wave 5 (both platforms) |
 | Face ID and fingerprint unlock | Flow written against a stub | NP-187 | Wave 5 |
-| Offline queues for workouts, weight and mood | Queue code written, never mounted | NP-190, NP-191 (reads come from NP-036 in v1) | Wave 5 |
+| Offline queues for workouts, weight and mood | Weight and mood mounted with a connectivity banner (NP-190); workouts still unqueued | NP-190, NP-191 (reads come from NP-036 in v1) | Wave 5 |
 | Native share sheet | Nothing | NP-165, NP-179 | Wave 4 |
 
 ## 9. Waves and the store-v1 critical path
