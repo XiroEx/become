@@ -13,6 +13,7 @@ import {
   type TokenStore,
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
+import { TimezoneReporter } from "@/components/TimezoneReporter";
 
 // Placeholder in-memory stores — swapped for the real SecureStore-backed
 // stores when full auth wiring lands. P17 ships the cold-open scaffolding;
@@ -45,6 +46,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <ColdOpenGate />
+        {/* Records the member's timezone on launch and on the first foreground
+            of a new local day. The notify cron skips a member with none
+            stored, and a workout save used to be the only thing that wrote
+            one. */}
+        <TimezoneReporter />
         <Stack
           screenOptions={{
             headerShown: false,

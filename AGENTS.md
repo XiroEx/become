@@ -215,9 +215,28 @@ Rules, all four load-bearing:
   PERSISTS a reported offset as the member's zone, and a fabricated 0 marks them
   UTC, which fires their morning push at ~3am local. Omit it instead: route
   code gates on `readOptionalTzOffsetFromBody(body) !== null`.
+  `POST /api/me/timezone` goes one further and refuses a bare `0` with no
+  `tzZone` outright (`resolveTimezoneReport`), because it is the route members
+  with NOTHING stored are onboarded through: a wrong 0 there is not a
+  correction, it is the 3am push. Real UTC sends a zone beside it and is kept.
 - **Windowed allowances never key on the request's `tz`** — they key on the
   STORED zone (`webapp/lib/allowances.ts`), so moving your clock cannot open a
   fresh daily bucket.
+
+### Where the stored zone comes from
+
+`UserProgress.timezoneOffset` / `timezone` is what the notify cron places a
+member's local hour with, and every sweep SKIPS a member who has neither. It
+used to be written by `POST /api/workouts` and nothing else, so a member who
+only logged food or only ran Mind sessions got no reminders at all and had
+their windowed AI allowances bucketed on UTC.
+
+`POST /api/me/timezone { tz, tzZone }` is now the main writer: both apps call
+it when the app opens, at most once per LOCAL day — web from
+`components/TimezoneSync.tsx` (mounted in the dashboard layout), native from
+`expo/components/TimezoneReporter.tsx` (launch + the first foreground of a new
+local day, gated in process memory). A failed report never stamps the day, so
+the next open retries.
 
 Exactly one route forgives another spelling, and only for bundles already in
 the field: `PUT /api/mind/session` reads `tz` and falls back to a numeric

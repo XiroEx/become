@@ -31,6 +31,7 @@ import {
   dateKey,
 } from '../../lib/dayWindow'
 import { localHourForUser } from '../../lib/notifications/cronNotify'
+import { resolveTimezoneReport } from '../../lib/captureUserTimezone'
 
 /** 9pm on 2026-07-15 in New York — EDT, so 240 minutes west of UTC. */
 const NINE_PM_NEW_YORK = new Date('2026-07-16T01:00:00Z')
@@ -182,6 +183,32 @@ test('a native workout save reports the zone, so reminders fire at the local hou
   assert.equal(localHourForUser(at8amUtc, reported ?? undefined, readZoneFromBody(body)), 4)
   // An unzoned member is treated as UTC: the "morning" push at 4am local.
   assert.equal(localHourForUser(at8amUtc, 0), 8)
+})
+
+test('an app open reports the zone even for a member who never saves a workout', () => {
+  // POST /api/me/timezone is what both apps call when they open. Before it
+  // existed, a workout save was the ONLY thing that recorded a zone — and the
+  // notify cron skips a member who has none, so a member who logs food and
+  // nothing else received no reminders at all.
+  const offset = inZone(ZONE, () => currentTzOffsetMinutes(NINE_PM_NEW_YORK))
+  // The native caller sends an EMPTY body and lets the shared client fill it.
+  const body = mergeTzIntoBody({}, offset, ZONE)
+  assert.deepEqual(body, { tz: 240, tzZone: ZONE })
+
+  const report = resolveTimezoneReport(body, NINE_PM_NEW_YORK)
+  assert.equal(report.ok, true)
+  assert.deepEqual(report.ok && report.captured, { timezoneOffset: 240, timezone: ZONE })
+
+  // Which is what puts the daily check-in reminder in their early afternoon
+  // rather than in the cron's UTC one: 16:00Z is 12:00 in New York.
+  const noonLocal = new Date('2026-07-15T16:00:00Z')
+  const captured = report.ok ? report.captured : null
+  assert.equal(localHourForUser(noonLocal, captured?.timezoneOffset, captured?.timezone), 12)
+  assert.equal(
+    localHourForUser(noonLocal, undefined),
+    null,
+    'with nothing stored the cron skips them entirely — the bug this closes',
+  )
 })
 
 test('a native write never sends tz=0 as a stand-in for unknown', () => {

@@ -226,9 +226,13 @@ export interface IUserProgress {
     dailyGlance?: Date
     checkInReminder?: Date
   }
-  // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
-  // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
-  // requests so the cron can send notifications at a reasonable LOCAL hour.
+  // Client-reported Date.getTimezoneOffset() in minutes — positive when local
+  // is BEHIND UTC (e.g. 300 for EST). Written by POST /api/me/timezone (both
+  // apps, on app open, at most once per local day) and by POST /api/workouts
+  // when a save carries a `tz`, so the cron can send notifications at a
+  // reasonable LOCAL hour. Validated on the way in by lib/captureUserTimezone.ts
+  // — never a stand-in, because a member stored as UTC gets their morning push
+  // in the small hours.
   timezoneOffset?: number
   /**
    * IANA zone, e.g. "America/New_York". Preferred over timezoneOffset because a
