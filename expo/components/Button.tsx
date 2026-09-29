@@ -2,6 +2,12 @@ import { Pressable, ActivityIndicator, View } from "react-native";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import { resolveToken } from "@/lib/theme/tokens";
+import {
+  MIN_TOUCH_TARGET,
+  hitSlopToMinTarget,
+  minTouchTarget,
+} from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 
 export type ButtonVariant = "primary" | "secondary" | "destructive" | "ghost";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -13,7 +19,15 @@ export interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   children?: ReactNode;
+  /**
+   * Overrides the accessible name. Omitted, the name is the label TEXT — see
+   * `accessibleName` below, which is why it is computed rather than left to
+   * React Native: while `loading` the label is replaced by a spinner, and a
+   * button whose only child is an ActivityIndicator has no name at all.
+   */
   accessibilityLabel?: string;
+  /** Spoken after the name, for a button whose effect the name cannot carry. */
+  accessibilityHint?: string;
   testID?: string;
 }
 
@@ -43,6 +57,27 @@ const SIZE_TEXT_CLASSES: Record<ButtonSize, string> = {
   lg: "text-lg",
 };
 
+/**
+ * The accessible name, from the children when the caller did not give one.
+ * Strings and numbers only: a button whose label is an element gets its name
+ * from that element, the way React Native reads a `<Text>` child.
+ */
+export function accessibleName(
+  children: ReactNode,
+  accessibilityLabel?: string,
+): string | undefined {
+  if (accessibilityLabel) return accessibilityLabel;
+  const parts: string[] = [];
+  const walk = (node: ReactNode): void => {
+    if (typeof node === "string") parts.push(node);
+    else if (typeof node === "number") parts.push(String(node));
+    else if (Array.isArray(node)) node.forEach(walk);
+  };
+  walk(children);
+  const name = parts.join(" ").trim();
+  return name.length > 0 ? name : undefined;
+}
+
 export function Button({
   onPress,
   variant = "primary",
@@ -51,6 +86,7 @@ export function Button({
   loading = false,
   children,
   accessibilityLabel,
+  accessibilityHint,
   testID,
 }: ButtonProps) {
   const isInactive = disabled || loading;
@@ -59,6 +95,11 @@ export function Button({
   const sizeClass = SIZE_CLASSES[size];
   const sizeTextClass = SIZE_TEXT_CLASSES[size];
 
+  // 44 x 44, two ways. `md` and `lg` GROW to it — they are already close, so
+  // nothing moves. `sm` is small on purpose (the rest timer's three buttons sit
+  // in one bar), so it keeps its size and takes the slop instead.
+  const isSmall = size === "sm";
+
   return (
     <Pressable
       testID={testID}
@@ -66,7 +107,10 @@ export function Button({
       disabled={isInactive}
       accessibilityRole="button"
       accessibilityState={{ disabled: isInactive, busy: loading }}
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={accessibleName(children, accessibilityLabel)}
+      accessibilityHint={accessibilityHint}
+      hitSlop={isSmall ? hitSlopToMinTarget(MIN_TOUCH_TARGET, 32) : undefined}
+      style={isSmall ? undefined : minTouchTarget}
       className={`rounded-xl items-center justify-center flex-row ${variantClass} ${sizeClass} ${isInactive ? "opacity-50" : ""}`}
     >
       {loading ? (
@@ -82,7 +126,13 @@ export function Button({
           />
         </View>
       ) : (
-        <Text className={`font-semibold ${variantTextClass} ${sizeTextClass}`}>
+        // WRAPPABLE_TEXT, or the label runs off the end of the button at the
+        // largest Dynamic Type size: this is a flex ROW, and a Text in a row
+        // does not shrink unless it is told to.
+        <Text
+          style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+          className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
+        >
           {children}
         </Text>
       )}

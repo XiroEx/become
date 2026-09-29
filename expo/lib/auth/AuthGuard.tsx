@@ -35,6 +35,13 @@ export function AuthGuard({
     return (
       <View
         testID={testID ? `${testID}-loading` : "authguard-loading"}
+        // The whole screen is a spinner, so it is ONE thing to a screen reader
+        // and it says what it is: an unlabelled ActivityIndicator is silence,
+        // and this is the screen between tapping the magic link and Home.
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading"
+        accessibilityLiveRegion="polite"
         style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
       >
         <ActivityIndicator

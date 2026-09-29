@@ -150,6 +150,28 @@ adapter), `lib/health/sync.ts` (both directions, one server route),
 `components/health/HealthSyncBridge.tsx` (the launch import),
 `components/settings/HealthSyncSection.tsx` (the switches in Settings).
 
+## Accessibility (TalkBack, font size, Remove animations)
+
+The baseline and the device checklist live in `ACCESSIBILITY.md` (NP-124). The
+Android-specific parts:
+
+- **`accessibilityLiveRegion` is the Android half of an announcement**, and
+  `AccessibilityInfo.announceForAccessibility` is the iOS half. Every state
+  change that replaces content sets both — the prop is ignored on iOS and the
+  announcement API is the only thing VoiceOver hears.
+- **`importantForAccessibility="no"` vs `"no-hide-descendants"`.** The modal
+  backdrop is `"no"`: it is the PARENT of the dialog, so hiding its descendants
+  would hide the dialog with it. The sheet's grab bar, which has no descendants
+  worth reading, is `"no-hide-descendants"`.
+- **Material's minimum is 48 dp against Apple's 44 pt**, and the app holds 44 as
+  one number (`lib/a11y/touchTarget.ts`) because the slop is symmetric and a
+  44-point view with 8 points of slop clears 48 dp on every density we ship. The
+  device pass checks it by thumb, not by arithmetic.
+- **Android's effective font scale reaches ~2.0** (Font size at maximum plus
+  Display size at maximum), which is inside the 3.12× the suite renders at.
+- **"Remove animations"** is the same `AccessibilityInfo.isReduceMotionEnabled`
+  the iOS switch feeds, so `lib/a11y/reducedMotion.ts` covers both.
+
 ## Verified by
 
 - `__tests__/androidHealthConnect.test.ts` — the module, the plugin, minSdk 26,
@@ -159,6 +181,9 @@ adapter), `lib/health/sync.ts` (both directions, one server route),
   guard, zone offsets, and asking only for missing permissions
 - `__tests__/healthSwitches.test.ts` — the switches and "next launch"
 - `__tests__/healthSync.test.ts` — both directions over `POST /api/weight`
+- `__tests__/accessibility.test.tsx` / `__tests__/reducedMotion.test.tsx` — the
+  roles, names, targets, Dynamic Type constructions and the Reduce Motion rule
+  (both platforms; see `ACCESSIBILITY.md`)
 - `__tests__/androidConfig.test.ts` — app.json invariants (edge-to-edge,
   package, intentFilters, adaptiveIcon)
 - `__tests__/androidBackHandler.test.tsx` — useAndroidBackHandler subscribes

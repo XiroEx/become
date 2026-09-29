@@ -15,6 +15,7 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createPoller } from "@/lib/auth/polling";
+import { announce } from "@/lib/a11y/announce";
 import { signOutMessage } from "@/lib/auth/AuthProvider";
 import { useAuth } from "@/lib/auth/useAuth";
 
@@ -139,6 +140,10 @@ export default function LoginScreen({
       const resp = await sendLink(email.trim().toLowerCase());
       setSessionId(resp.sessionId);
       setSubmitted(true);
+      // The form is REPLACED by "Check your inbox", and a replacement is
+      // silence to VoiceOver: focus stays on a button that no longer exists, so
+      // without this the member has no way to know the link was sent.
+      announce(`Check your inbox. We sent a sign-in link to ${email.trim()}.`);
     } catch (err) {
       setError(extractErrorMessage(err));
     } finally {
@@ -193,21 +198,35 @@ export default function LoginScreen({
         testID="login-screen-kav"
       >
         <View className="flex-1 items-center justify-center px-6">
-          <Text className="text-foreground text-3xl font-bold mb-2">Become</Text>
+          <Text
+            accessibilityRole="header"
+            className="text-foreground text-3xl font-bold mb-2"
+          >
+            Become
+          </Text>
           <Text className="text-muted-foreground text-base mb-6">
             Sign in with a magic link
           </Text>
           {sessionMessage ? (
             <Text
               testID="login-session-ended"
+              accessibilityRole="alert"
+              accessibilityLiveRegion="assertive"
               className="text-destructive text-center mb-4"
             >
               {sessionMessage}
             </Text>
           ) : null}
           {submitted ? (
-            <View testID="login-submitted" style={{ width: "100%" }}>
-              <Text className="text-foreground text-center mb-2">
+            <View
+              testID="login-submitted"
+              accessibilityLiveRegion="polite"
+              style={{ width: "100%" }}
+            >
+              <Text
+                accessibilityRole="header"
+                className="text-foreground text-center mb-2"
+              >
                 Check your inbox
               </Text>
               <Text className="text-muted-foreground text-center text-sm">
