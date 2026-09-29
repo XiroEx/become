@@ -20,6 +20,7 @@
  */
 
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { isBecomeWebHost } from "@/lib/navigation/webPathToRoute";
 
 /**
  * What the server requires in the body before it will schedule a deletion.
@@ -157,15 +158,16 @@ export interface RestoreDeepLink {
   token: string;
 }
 
-const ALLOWED_HOSTS = new Set(["become.redbtn.io", "becomeurbest.com", "www.becomeurbest.com"]);
-
 /**
  * Pure parser for the restore link, in both shapes it can arrive in:
  *   - `https://become.redbtn.io/account/restore?u=…&t=…` (universal / app link)
  *   - `become://account/restore?u=…&t=…` (custom scheme)
  *
  * Returns null for anything else, so a link from another host can never be
- * turned into a request against our API.
+ * turned into a request against our API. The host list is the resolver's
+ * (`lib/navigation/webPathToRoute.ts`): one answer to "is this one of ours", so
+ * a link on the second domain cannot be accepted by one parser and refused by
+ * another.
  */
 export function parseRestoreDeepLink(rawUrl: string): RestoreDeepLink | null {
   if (!rawUrl || typeof rawUrl !== "string") return null;
@@ -181,7 +183,7 @@ export function parseRestoreDeepLink(rawUrl: string): RestoreDeepLink | null {
     const path = `${parsed.hostname}${parsed.pathname}`.replace(/\/$/, "");
     if (path !== "account/restore") return null;
   } else if (scheme === "https") {
-    if (!ALLOWED_HOSTS.has(parsed.hostname)) return null;
+    if (!isBecomeWebHost(parsed.hostname)) return null;
     if (parsed.pathname.replace(/\/$/, "") !== "/account/restore") return null;
   } else {
     return null;
