@@ -513,6 +513,40 @@ Five pieces, and nothing else should exist:
 | `components/TierGate.tsx` | Wraps a whole surface a free member may see but not use (Vision). |
 | `app/dashboard/plan` | The PROACTIVE one: the whole plan, side by side, and the only place prices are shown. |
 
+#### The NATIVE side of the same three refusals (NP-010)
+
+The native app has no `gateFrom`, no `aiConsentRefusalFrom` and no spend-cap
+branch of its own, and must never grow one:
+`shared/api-client/src/errors.ts#classifyApiError(err)` is the single classifier
+for both apps and returns exactly one of `session-expired` (401), `plan-gate`
+(403 parsed *exactly* as `gateFrom` parses it), `ai-consent` (403 with
+`reason: 'ai_consent_required'`), `forbidden` (any other 403), `rate-limited`
+(429, with `Retry-After` when the response carried one), `conflict` (409, with
+its `error` code), `client` (any other 4xx), `server` (5xx), `offline` (fetch
+threw) and `invalid-response` (the schema rejected the body). It replaced
+`mapStatusToErrorKind`, which filed every 403 under `auth` next to 401 — which
+on this API signs a member out for a plan gate or an AI-consent refusal.
+
+`expo/lib/errors/useApiErrorHandler.tsx` is the one place a class becomes an
+action: `session-expired` → sign-out (NP-002) **once per session**, however many
+requests were in flight; `plan-gate` → the upgrade sheet (NP-052);
+`ai-consent` → the consent sheet (NP-046). Everything else comes back to the
+caller with the server's wording verbatim and no sheet. The three answers are
+props on `ApiErrorHandlerProvider` (mounted in `expo/app/_layout.tsx`) rather
+than imports, so the hook cannot pull a sheet into every screen that makes a
+request, and `routeApiError` is the same decision for code that is not a
+component (the AI run client, the offline replay).
+
+The three rules that travel with it, all asserted in
+`shared/api-client/tests/classifyApiError.test.ts` (against the bodies the web
+routes actually send) and `expo/__tests__/useApiErrorHandler.test.tsx`: only a
+403 carrying BOTH `feature` and `requiresTier` opens the upgrade sheet; the
+server's `error` text is rendered verbatim; a 429 is never an upsell.
+`shared/api-client/tests/webParity.test.ts` reads `webapp/lib/legal`,
+`entitlementsClient.ts` and `lib/ai/allowance.ts` as text and fails if the
+reason code, the gate's two required fields or the 429 ever drift from the copy
+the shared client carries.
+
 #### The plan page (`app/dashboard/plan`)
 
 The sheet answers "why was I stopped?"; this answers "what is this and what
@@ -756,7 +790,7 @@ with three lockfiles:
 | Job | Package | Runs |
 |---|---|---|
 | `verify` | `webapp/` | typecheck, unit tests (real Mongo service), production build |
-| `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check` |
+| `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check`, `expo export --platform ios` |
 | `shared-api-client` | `shared/api-client/` | `npm test`, `tsc --noEmit` |
 
 `expo` and `shared-api-client` run only when `expo/`, `shared/` or `ci.yml`
@@ -769,6 +803,18 @@ native job writes an `.npmrc`: `expo/` and `shared/api-client/` have no
 `webapp/tests/unit/ci/nativeJobs.test.ts` fails if one ever lands there, and it
 lives in the webapp suite because that is the job that always runs, so deleting
 the native jobs cannot go unnoticed.
+
+**The `expo` job's last step is the only one that BUILDS the app.**
+`npx expo export --platform ios` exists because tsc reaches
+`@become/api-client` through `tsconfig.json` `paths` and Jest through
+`moduleNameMapper`, and **Metro reads neither**: both were green for weeks while
+the bundler could not resolve the shared client at all and no store build of any
+kind could be produced. Metro's only route to it is the `file:` link in
+`expo/package.json` plus `watchFolders` / `nodeModulesPaths` / `blockList` in
+`expo/metro.config.js` — the three of them are explained in `expo/README.md`
+("The shared API client") and asserted by `expo/__tests__/metroConfig.test.ts`.
+`shared/api-client` stays a plain sibling package: the webapp keeps importing it
+through its own tsconfig path exactly as before.
 
 ### Information security program (go-live item 17)
 

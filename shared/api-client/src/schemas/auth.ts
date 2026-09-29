@@ -1,13 +1,8 @@
 import { z } from 'zod';
-
-export const UserProfileSchema = z
-  .object({
-    goal: z.string().optional(),
-    trainingExperience: z.string().optional(),
-    primaryFocus: z.string().optional(),
-    birthYear: z.number().int().optional(),
-  })
-  .passthrough();
+// The profile shape lives with the account routes that own it
+// (schemas/account.ts) — it is the server's allow-list, not an auth concern.
+// Imported rather than re-exported so `src/index.ts` exports it exactly once.
+import { UserProfileSchema } from './account';
 
 /** Billing state, as GET /api/auth/me projects it. Deliberately partial: the
  *  route selects only the three fields a client renders. */
@@ -38,23 +33,18 @@ export const UserSchema = z
   })
   .passthrough();
 
-export const MeResponseSchema = z.object({
-  user: UserSchema,
-  token: z.string().optional(),
-});
-
-// GET /api/profile + PATCH /api/profile both return this shape. Mirrors
-// webapp/app/api/profile/route.ts.
-export const ProfileResponseSchema = z
+// Passthrough on the envelope too: the route may grow a sibling of `token`
+// (it already grew `tier`/`grandfathered` inside `user`), and a store build
+// that is months old must keep whatever it is sent rather than drop it.
+export const MeResponseSchema = z
   .object({
-    profile: UserProfileSchema.nullish(),
-    onboardingCompleted: z.boolean().optional(),
-    name: z.string().nullable().optional(),
-    email: z.string().optional(),
+    user: UserSchema,
+    token: z.string().optional(),
   })
   .passthrough();
 
-export type ProfileResponse = z.infer<typeof ProfileResponseSchema>;
+// GET /api/profile + PATCH /api/profile live in schemas/account.ts
+// (ProfileResponseSchema), next to the allow-list they answer with.
 
 export type User = z.infer<typeof UserSchema>;
 export type MeResponse = z.infer<typeof MeResponseSchema>;

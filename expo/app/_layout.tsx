@@ -15,6 +15,7 @@ import {
   sessionStore,
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
+import { ApiErrorHandlerProvider } from "@/lib/errors";
 
 /**
  * The cold-open verdict, on the REAL stores.
@@ -73,14 +74,25 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="light" />
           <ColdOpenGate />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: "#0a0a0a" },
-            }}
-          >
-            <Stack.Screen name="index" />
-          </Stack>
+          {/*
+            THE mount point for refusal handling: every screen below reaches it
+            with useApiErrorHandler(). The three answers arrive with the cards
+            that build them — sign-out (NP-002), the upgrade sheet (NP-052) and
+            the consent sheet (NP-046) — and `session` is the JWT, which is what
+            arms "sign out once per session". Until then a refused request comes
+            back to the screen it came from, with the server's wording and no
+            sheet, which is already the correct behaviour for every other class.
+          */}
+          <ApiErrorHandlerProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: "#0a0a0a" },
+              }}
+            >
+              <Stack.Screen name="index" />
+            </Stack>
+          </ApiErrorHandlerProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
