@@ -549,6 +549,39 @@ nothing is a blank screen); it returns a neutral card that names no tier, no cap
 and no amount, and `uiSurfaces.test.tsx` pins that branch for what it must NOT
 contain.
 
+#### "Manage billing" — the way OUT, and where it lives
+
+The Terms (sections 9 and 10), the support page and the renewal line under the
+buy button all tell a member to **choose Manage billing**. For a long while that
+control did not exist: the only caller of `POST /api/billing/portal` was the
+upgrade sheet's "Update payment method", which appears solely after checkout
+refuses someone whose card has ALREADY failed. An active subscriber saw "You're
+on Plus" and a date and would have had to email to cancel — the thing New York
+GBL 527-a is written to stop.
+
+Four rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
+
+- **The label is `MANAGE_BILLING_LABEL` in `lib/legal`**, interpolated into the
+  Terms, the support page and `renewalLine()` AND rendered by the button. Never
+  type the words out; the test fails if any of those surfaces stops matching.
+- **Visibility is `hasManageableBilling(snapshot.subscription)`** in
+  `lib/entitlementsClient.ts` — whether STRIPE holds a subscription, never the
+  tier. Grandfathered members and admins are Plus with no customer and see
+  nothing (the portal would answer `409 no_customer`); `past_due` derives to
+  free and still sees it, because their card is the problem. `status: 'none'` is
+  the row every member gets the moment they open checkout, so it does not count.
+- **Two mount points, one rule.** `CurrentPlan` on the plan page (the card is
+  all a subscriber sees there — the pricing block is hidden for Plus) and
+  `components/billing/BillingSection.tsx` in Settings, which renders nothing for
+  anyone without a subscription. The button itself
+  (`components/billing/ManageBillingButton.tsx`) is pure and takes the portal
+  state as a prop, because a control only reachable through an effect is one no
+  test in this repo can see.
+- **One way to open it**: `openBillingPortal()` in `lib/billingPortal.ts`. Every
+  failure — 503 (no portal configuration in the Stripe dashboard), 409, 502, a
+  dropped connection — collapses to "didn't open, try again", never to "you have
+  no subscription".
+
 Rules that are easy to get wrong:
 - **Read `canCreate`, never `allowed`.** `allowed` is true for a capped free
   member on purpose (that is what lets them edit and delete their own rows), so
