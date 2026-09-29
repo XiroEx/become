@@ -1,4 +1,5 @@
-import { Pressable, Text, ActivityIndicator, View } from "react-native";
+import { Pressable, ActivityIndicator, View } from "react-native";
+import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import { resolveToken } from "@/lib/theme/tokens";
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Modal, View, Text } from "react-native";
+import { Modal, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import type { ScheduledSlot } from "@/lib/schedule/slotStatus";

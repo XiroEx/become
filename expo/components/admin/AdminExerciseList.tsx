@@ -1,4 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { ExternalLink } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { resolveToken } from "@/lib/theme/tokens";

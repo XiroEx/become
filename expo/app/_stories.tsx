@@ -1,4 +1,5 @@
-import { View, ScrollView, Text } from "react-native";
+import { View, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge } from "@/components/Badge";

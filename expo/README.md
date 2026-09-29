@@ -160,6 +160,49 @@ text — `--foreground: 24 24 27`, near-black — on those near-black surfaces.
 NP-123 builds the real light theme, and it starts by deleting the literals, not
 by deleting the pin. Asserted by `__tests__/darkModePin.test.tsx`.
 
+## Typography — Geist, the web's typeface (NP-160)
+
+The web has set **Geist** and **Geist Mono** since the first commit
+(`webapp/app/layout.tsx` loads them from `next/font/google` and
+`webapp/app/globals.css` feeds them to Tailwind's `--font-sans` / `--font-mono`).
+Native loaded no font at all, so every screen drew in San Francisco or Roboto.
+Four facts hold this up, and each one is a bug that would otherwise ship:
+
+- **Eight files, in the repo.** `assets/fonts/` carries Geist and Geist Mono at
+  400/500/600/700 — Google Fonts' latin subset, the same files the web serves,
+  SIL Open Font License 1.1 (`assets/fonts/OFL.txt`). `expo-font` registers them
+  from the bundle; nothing is fetched at runtime, so the app works offline and
+  in Expo Go.
+- **One face per weight, because `fontFamily` names a FACE.** A browser
+  synthesises weights from one variable file; React Native cannot. A
+  `fontWeight` the named face does not have is ignored on iOS (a
+  runtime-registered font is a family of one) or faked on Android. So
+  `lib/theme/fonts.ts` maps family × weight → face, and `font-mono font-bold`
+  resolves to exactly one file: `GeistMono-Bold`. CSS cannot express that — it
+  is two properties — which is why the resolution is in JS.
+- **The app owns its Text.** React Native has no cascade: a `<Text>` with no
+  `fontFamily` is the system font, whatever `tailwind.config.js` says. Every
+  screen and component imports `Text` from `components/Text.tsx`, which resolves
+  the face from the className (or the inline style) and applies it INLINE —
+  NativeWind's highest-precedence source, so it outranks the `font-sans` /
+  `font-mono` families rather than fighting them. ESLint's
+  `no-restricted-imports` fails the build on `import { Text } from
+  "react-native"` anywhere under `app/` or `components/`. `components/Input.tsx`
+  does the same by hand for the app's one `TextInput`.
+- **The launch screen is held until the faces are registered.**
+  `holdSplashForFonts()` runs at MODULE LOAD in `app/_layout.tsx` (an effect is
+  one frame too late), the layout renders `null` until `useGeistFonts()` reports
+  ready, and that hook hides the splash. React Native does not re-render a
+  `<Text>` when a font arrives, so anything painted early keeps the system font
+  for the life of the screen. A load FAILURE also counts as ready: the system
+  font is ugly, a splash that never lifts is a dead app.
+
+`__mocks__/expo-font.js` answers "loaded" for every other suite, so they render
+the layout without awaiting a font. Test: `__tests__/geistFont.test.tsx` — it
+parses the `.ttf` headers, walks `app/` and `components/` for a stray
+`react-native` Text import, drives the splash gate through both states, and
+reads `webapp/` to check the web still uses Geist.
+
 ## File layout
 
 ```
@@ -189,12 +232,19 @@ expo/
 │   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
 │   └── theme/
 │       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
+│       ├── fonts.ts          # The Geist faces + family × weight → one face
+│       ├── loadFonts.ts      # useGeistFonts() / holdSplashForFonts()
 │       └── tokens.ts         # Typed RGB-triplet map (light + dark)
+├── components/
+│   └── Text.tsx          # THE app's Text — React Native's, with Geist on it
 ├── __tests__/            # Jest + RTL tests
-├── __mocks__/            # cssStub.js — resolves the `global.css` side-effect import under Jest
+├── __mocks__/            # cssStub.js (the `global.css` side-effect import),
+│                         # expo-font.js + expo-splash-screen.js (fonts are
+│                         # already loaded for every suite but geistFont's)
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
-│                         # (Android foreground), splash-icon.png —
-│                         # all three written by scripts/generate-app-assets.mjs
+│   │                     # (Android foreground), splash-icon.png —
+│   │                     # all three written by scripts/generate-app-assets.mjs
+│   └── fonts/            # Geist + Geist Mono at 400/500/600/700, and the OFL
 ├── scripts/              # Build-time Node scripts (asset generation)
 ├── global.css            # Tailwind directives + CSS variable tokens
 ├── tailwind.config.js    # NativeWind 4 + Tailwind v3 config
@@ -221,6 +271,10 @@ See the plan doc for full sequencing.
 ## Gotchas (per skill)
 
 - **`darkMode: "class"` mandatory** — without it, NativeWind crashes at runtime when the theme changes.
+- **Never `import { Text } from "react-native"`** — import it from
+  `@/components/Text`, which carries the Geist face. React Native has no
+  cascade, so a bare `<Text>` is the system font no matter what the Tailwind
+  theme says. ESLint fails the build on it; see [Typography](#typography--geist-the-webs-typeface-np-160).
 - **`strokeWidth={1.5}` on every lucide icon** — RN default is 2 and looks bolder than the webapp.
 - **No black-translucent statusBarStyle** — per [[feedback_black_translucent]] memory.
 - **Tailwind v3, not v4** — NativeWind 4 doesn't support v4 yet.

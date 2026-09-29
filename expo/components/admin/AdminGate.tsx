@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 
 export interface AdminGateProps {
   role: string | null | undefined;

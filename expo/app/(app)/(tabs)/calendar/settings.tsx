@@ -3,8 +3,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
 } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScheduleApiResponseSchema } from "@become/api-client";
 import { ScheduleSettingsForm } from "@/components/schedule/ScheduleSettingsForm";

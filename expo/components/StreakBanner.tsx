@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
 import { resolveToken } from "@/lib/theme/tokens";
 
