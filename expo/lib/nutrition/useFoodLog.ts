@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { watchUnauthorized } from "@/lib/auth/unauthorized";
 import { tzBodyFields, withTz } from "@/lib/nutrition/localDay";
 
 const OkSchema = z.object({}).passthrough();
@@ -63,23 +64,29 @@ export function useFoodLog(options: UseFoodLogOptions) {
       baseUrl: WEBAPP_BASE_URL,
       getToken: () => getTokenRef.current(),
     };
+    // These two call apiFetch directly rather than through useMutation, so
+    // they report their own failures to the one 401 handler.
     return {
       addToLog: (input: AddToLogInput) =>
-        apiFetch("/api/nutrition/log", OkSchema, {
-          method: "POST",
-          // The POST reads its offset from the BODY (readTzOffsetFromBody).
-          body: { ...input, ...tzBodyFields() },
-          ...base,
-        }),
+        watchUnauthorized(
+          apiFetch("/api/nutrition/log", OkSchema, {
+            method: "POST",
+            // The POST reads its offset from the BODY (readTzOffsetFromBody).
+            body: { ...input, ...tzBodyFields() },
+            ...base,
+          }),
+        ),
       removeFromLog: (input: { foodEntryId: string; date: string }) =>
-        apiFetch(
-          withTz(
-            `/api/nutrition/log?foodEntryId=${encodeURIComponent(
-              input.foodEntryId,
-            )}&date=${encodeURIComponent(input.date)}`,
+        watchUnauthorized(
+          apiFetch(
+            withTz(
+              `/api/nutrition/log?foodEntryId=${encodeURIComponent(
+                input.foodEntryId,
+              )}&date=${encodeURIComponent(input.date)}`,
+            ),
+            OkSchema,
+            { method: "DELETE", ...base },
           ),
-          OkSchema,
-          { method: "DELETE", ...base },
         ),
     };
   }, []);

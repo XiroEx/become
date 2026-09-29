@@ -157,7 +157,10 @@ expo/
 │       └── tokens.ts     # Typed RGB-triplet map (light + dark)
 ├── __tests__/            # Jest + RTL tests
 ├── __mocks__/            # cssStub.js — resolves the `global.css` side-effect import under Jest
-├── assets/               # Icons, splash, etc. (populated as needed)
+├── assets/               # icon.png (store, opaque), adaptive-icon.png
+│                         # (Android foreground), splash-icon.png —
+│                         # all three written by scripts/generate-app-assets.mjs
+├── scripts/              # Build-time Node scripts (asset generation)
 ├── global.css            # Tailwind directives + CSS variable tokens
 ├── tailwind.config.js    # NativeWind 4 + Tailwind v3 config
 ├── babel.config.js       # babel-preset-expo + nativewind/babel + reanimated/plugin
