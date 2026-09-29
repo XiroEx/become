@@ -32,7 +32,7 @@ The Android hardware back press is captured by `useAndroidBackHandler`
 only-after-confirmation state install the hook with `enabled={hasInProgressWork}`
 + an `onBack` that shows the confirm dialog. Examples:
 
-- **Live workout** (`app/(tabs)/programming/[id]/workout/[idx]/live.tsx`) —
+- **Live workout** (`app/(app)/(tabs)/programming/[id]/workout/[idx]/live.tsx`) —
   intercepts back when one or more sets are completed but the workout isn't
   marked finished.
 - **Recipe create** (web-only via Tier-3 deep-link, so no native handler) —

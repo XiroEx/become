@@ -1,6 +1,6 @@
 import "../global.css";
-import { useCallback, useEffect, useRef } from "react";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { useCallback } from "react";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -17,45 +17,50 @@ import {
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
+import { pinDarkMode } from "@/lib/theme/colorScheme";
 
 /**
- * The cold-open verdict, on the REAL stores.
+ * ONE THEME, AND IT IS DARK — set before the first render, not in an effect.
  *
- * It used to run against two `createMemoryTokenStore()` placeholders, which
- * are empty in a freshly launched process by definition — so every launch
- * decided "login" and replaced the route, however good the saved session was.
- * `sessionStore` is the JWT (`become.session`) and `biometricsOptInSecureStore`
- * is the unlock opt-in (`become.optin.biometrics`); they are different keys on
- * purpose, because a failed unlock clears the first one.
+ * NativeWind follows the system colour scheme unless told otherwise, while 39
+ * files in this app hard-code `#0a0a0a` in a plain RN style. A phone in light
+ * mode drew near-black light-mode text on those near-black surfaces. Pinned
+ * here (see `lib/theme/colorScheme.ts`) and in `app.json`'s
+ * `userInterfaceStyle`, until NP-123 builds a real light theme.
  */
-function ColdOpenGate() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const { signOut } = useAuth();
+pinDarkMode();
 
-  // Read at verdict time, not at mount time: the flow is asynchronous and the
-  // router may have moved on (a magic link, a push tap) while it ran.
-  const pathnameRef = useRef(pathname);
-  useEffect(() => {
-    pathnameRef.current = pathname;
-  }, [pathname]);
+/**
+ * THE COLD-OPEN UNLOCK — and nothing else.
+ *
+ * It runs the biometric flow on the REAL stores (`sessionStore` is the JWT at
+ * `become.session`, `biometricsOptInSecureStore` is the unlock opt-in at
+ * `become.optin.biometrics`; a failed unlock clears the first and not the
+ * second, which is why they are different keys).
+ *
+ * WHAT IT NO LONGER DOES IS NAVIGATE. It used to `router.replace` the verdict
+ * — `/login` or the dashboard — guarded only by "is the current pathname
+ * still `/`". The flow is asynchronous, so a cold start on `/verify?token=…`
+ * or `/account/restore?u=…&t=…` raced it and lost: the link screen mounted,
+ * the verdict landed, and sign-in replaced it with the token already spent.
+ *
+ * The launch destination is now decided by `app/index.tsx`, which the router
+ * only ever mounts when the app was opened on `/`. A launch from a link never
+ * renders it, so a link can no longer be overruled. All that is left here is
+ * the consequence of a FAILED unlock: the flow has already dropped the JWT,
+ * so the session object has to be told, and `index.tsx` then sends the member
+ * to sign-in with "Become stayed locked."
+ */
+function ColdOpenUnlock() {
+  const { signOut } = useAuth();
 
   const onResolve = useCallback(
     (verdict: ColdOpenResult) => {
-      // Only the scaffold entry route is ours to replace. A cold start that
-      // arrived on /verify?token=… must keep the link it was opened with.
-      if (pathnameRef.current !== "/") return;
-      if (verdict.kind === "login") {
-        // A failed unlock has already dropped the JWT, so the session object
-        // has to be told; every other "login" verdict is simply nobody
-        // signed in, and signOut is a no-op there.
-        if (verdict.reason === "biometric-fail") void signOut("biometric-fail");
-        router.replace("/login");
-        return;
+      if (verdict.kind === "login" && verdict.reason === "biometric-fail") {
+        void signOut("biometric-fail");
       }
-      router.replace("/(tabs)/dashboard");
     },
-    [router, signOut],
+    [signOut],
   );
 
   useColdOpenRedirect({
@@ -67,6 +72,16 @@ function ColdOpenGate() {
   return null;
 }
 
+/**
+ * The root. Three children, and the whole navigation shell hangs off them:
+ *
+ *   index    — the launch redirect, mounted only on a launch with no link
+ *   (auth)   — sign-in, verify, restore: no session required, none assumed
+ *   (app)    — everything behind AuthGuard → consent → OnboardingGuard
+ *
+ * plus `/onboarding`, which is signed-in but must not sit inside `(app)` or
+ * the onboarding gate would redirect to a route behind itself.
+ */
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -74,7 +89,7 @@ export default function RootLayout() {
         {/* One session for the whole app, above every route. */}
         <AuthProvider>
           <StatusBar style="light" />
-          <ColdOpenGate />
+          <ColdOpenUnlock />
           {/* Records the member's timezone on launch and on the first foreground
               of a new local day. The notify cron skips a member with none
               stored, and a workout save used to be the only thing that wrote
@@ -97,6 +112,9 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="index" />
+              <Stack.Screen name="(auth)" />
+              <Stack.Screen name="(app)" />
+              <Stack.Screen name="onboarding" />
             </Stack>
           </ApiErrorHandlerProvider>
         </AuthProvider>

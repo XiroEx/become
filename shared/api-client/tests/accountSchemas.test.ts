@@ -41,6 +41,7 @@ import {
   BillingPlansResponseSchema,
   CheckoutRequestSchema,
   CheckoutResponseSchema,
+  PortalRequestSchema,
   PortalResponseSchema,
   BILLING_REFUSAL_CODES,
   BillingRefusalSchema,
@@ -674,6 +675,22 @@ test('CheckoutRequestSchema: plan is optional, a wrong one is refused', () => {
   assert.equal(CheckoutRequestSchema.safeParse({ plan: 'lifetime' }).success, false);
 });
 
+test('CheckoutRequestSchema / PortalRequestSchema: returnTo is optional, and only web|app', () => {
+  // Absent means 'web' server-side, which is what every browser caller sends:
+  // the web flow must be untouched by the native one existing.
+  assert.equal(CheckoutRequestSchema.safeParse({ plan: 'monthly' }).success, true);
+  assert.equal(CheckoutRequestSchema.safeParse({ plan: 'monthly', returnTo: 'app' }).success, true);
+  assert.equal(CheckoutRequestSchema.safeParse({ returnTo: 'web' }).success, true);
+  // An unknown target is a 400 'invalid_return_to' on the server, not a silent
+  // fall back — returning a native buyer to /dashboard/plan strands them in
+  // Safari on a sign-in screen moments after paying.
+  assert.equal(CheckoutRequestSchema.safeParse({ returnTo: 'native' }).success, false);
+
+  assert.equal(PortalRequestSchema.safeParse({}).success, true);
+  assert.equal(PortalRequestSchema.safeParse({ returnTo: 'app' }).success, true);
+  assert.equal(PortalRequestSchema.safeParse({ returnTo: 'App' }).success, false);
+});
+
 test('CheckoutResponseSchema / PortalResponseSchema: parse the Stripe links', () => {
   const checkout = CheckoutResponseSchema.safeParse(CHECKOUT_BODY);
   assert.equal(checkout.success, true);
@@ -683,7 +700,7 @@ test('CheckoutResponseSchema / PortalResponseSchema: parse the Stripe links', ()
 });
 
 test('BillingRefusalSchema: parses every refusal these routes can answer with', () => {
-  assert.equal(BILLING_REFUSAL_CODES.length, 9);
+  assert.equal(BILLING_REFUSAL_CODES.length, 10);
   for (const code of BILLING_REFUSAL_CODES) {
     assert.equal(BillingRefusalSchema.safeParse({ error: code }).success, true);
     assert.equal(isBillingRefusalCode(code), true);

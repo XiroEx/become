@@ -44,7 +44,7 @@ import {
   CheckSessionResponseSchema,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import LoginScreen, { extractErrorMessage } from "../app/login";
+import LoginScreen, { extractErrorMessage } from "../app/(auth)/login";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

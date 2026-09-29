@@ -126,6 +126,7 @@ this document and to `/privacy`.
 | Credential material: passkey (WebAuthn) public-key credentials and challenges, Google OAuth bindings, redAuth identities | **MongoDB Atlas** — separate auth database `become_auth`, managed by `@redbtn/redauth` | MongoDB, Inc. | Kept in its own database because redAuth's `users` collection would otherwise collide with Become's (`webapp/lib/redauth.ts`) |
 | Legacy password hashes | **MongoDB Atlas** — `users.password` | MongoDB, Inc. | bcrypt, cost 10, from the pre-magic-link era. The password sign-in endpoints are retired and answer `410` (`webapp/lib/legacyAuthGone.ts`). Nothing reads the field; see gap G11 |
 | Sign-in tokens: magic-link token (32 random bytes, hex) and session id | **MongoDB Atlas** — `magiclinks` | MongoDB, Inc. | 15-minute lifetime, single use (marked consumed on verification), earlier unused links for the same address invalidated on each new request, and the row deleted by a TTL index (`webapp/models/MagicLink.ts`) |
+| Session hand-off codes: the SHA-256 of a 32-random-byte code, the member id, and the one allow-listed path it may land on | **MongoDB Atlas** — `handoffcodes` | MongoDB, Inc. | 60-second lifetime, single use (claimed atomically), the code itself never stored, redirect targets fixed by an allow-list, and the row deleted by a TTL index (`webapp/models/HandoffCode.ts`, `webapp/lib/authHandoff.ts`). Purged with the account |
 | Health and training data: profile (age, biological sex, height, current and target weight, experience, equipment, **injury notes**), workout logs, weight and mood history, streaks, sleep, journal and mindset sessions, nutrition and meal logs | **MongoDB Atlas** — `jondonfitdb` | MongoDB, Inc. | Consumer health data. Treated as private information throughout this program |
 | Community and sharing: group membership, shared sessions, chat messages | **MongoDB Atlas** — `jondonfitdb` | MongoDB, Inc. | Member-directed disclosure inside the app |
 | Billing metadata: Stripe customer id (live and test), subscription id, price id, plan, period dates, payment-failure timestamps, tier | **MongoDB Atlas** — `users.subscription` | MongoDB, Inc. | No card number, no CVC, no bank detail is ever received or stored |
@@ -216,6 +217,12 @@ provider, an incident, or a new data category is a trigger, not a note for next 
   cookie, `Secure` in production, and also accepted as a bearer token for the native client.
   Non-session tokens carry a `scope` claim and are **default-denied**: a scoped token is rejected by
   every route that did not name that exact scope.
+- **Hand-off to the web, from the native app.** A Tier-3 web screen opened from the app is reached
+  through a one-time code (`POST /api/auth/handoff` → `GET /auth/handoff?code=`), never by putting a
+  session token in a link: 32 random bytes, stored only as a SHA-256, 60-second lifetime, claimed
+  atomically so it works exactly once, bound to one member, and able to redirect only to a path on a
+  fixed allow-list. The session it produces is minted from the user row at redemption, so a role
+  change or a deleted account is honoured.
 - **Authorisation is server-side, always.** Middleware only checks that a cookie is present; every
   route re-verifies. Admin is confirmed by reading the user row, never from a token claim. Binary
   objects are authorised from the object key, with an unrecognised prefix treated as owner-scoped.

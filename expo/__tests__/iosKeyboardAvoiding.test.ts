@@ -5,11 +5,11 @@ import * as path from "path";
 // directly) must wrap its content in a KeyboardAvoidingView so the iOS
 // keyboard doesn't cover the field.
 const INPUT_SCREENS = [
-  "app/login.tsx",
-  "app/(tabs)/chat/[id].tsx",
-  "app/(tabs)/nutrition/search.tsx",
-  "app/(tabs)/nutrition/food/[id].tsx",
-  "app/(tabs)/calendar/settings.tsx",
+  "app/(auth)/login.tsx",
+  "app/(app)/(tabs)/chat/[id].tsx",
+  "app/(app)/(tabs)/nutrition/search.tsx",
+  "app/(app)/(tabs)/nutrition/food/[id].tsx",
+  "app/(app)/(tabs)/calendar/settings.tsx",
 ];
 
 describe("iOS keyboard-avoiding pass", () => {

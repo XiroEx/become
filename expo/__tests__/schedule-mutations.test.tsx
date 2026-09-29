@@ -26,8 +26,8 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import CalendarIndexRoute from "../app/(tabs)/calendar/index";
-import CalendarSettingsRoute from "../app/(tabs)/calendar/settings";
+import CalendarIndexRoute from "../app/(app)/(tabs)/calendar/index";
+import CalendarSettingsRoute from "../app/(app)/(tabs)/calendar/settings";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

@@ -6,7 +6,7 @@
 //     /account/restore (expo/app.json), so the installed app opens it; without
 //     the app, or from a desktop, this page is what loads.
 //   • iOS — `applinks:become.redbtn.io` in the associated domains covers every
-//     path, so the same link opens expo/app/account/restore.tsx when the app is
+//     path, so the same link opens expo/app/(auth)/account/restore.tsx when the app is
 //     installed. Mail on the Mac opens this page instead.
 // Both paths end up calling the SAME public route (POST /api/me/account/restore)
 // with the same `u` + `t`, so the two surfaces cannot drift.

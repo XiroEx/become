@@ -23,7 +23,7 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
   };
 });
 
-import HealthSettingsRoute from "../app/(tabs)/profile/health";
+import HealthSettingsRoute from "../app/(app)/(tabs)/profile/health";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
 import { HEALTH_SYNC_ENABLED } from "@/lib/health/enabled";

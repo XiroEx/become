@@ -184,6 +184,47 @@ step will not advance until it is filled. `MagicLink.name` survives read-only so
 a link minted by the previous build, all of which live 15 minutes, still lands
 the name its owner typed.
 
+### Opening the web signed in (the one-time hand-off)
+
+A web-only screen opened from the native app used to land the member on
+`/login`: `middleware.ts` gates `/dashboard/*` on the `auth_token` cookie and
+the in-app browser has none. `POST /api/auth/handoff { path }` (session
+required) answers a random CODE — 32 bytes, stored only as a SHA-256, alive for
+60 seconds, bound to the member and to ONE target path — and
+`GET /auth/handoff?code=` spends it, sets the cookie and hands the browser to
+`/auth/finish?next=<path>#<jwt>`, which puts the same JWT where the web app
+keeps it (localStorage, `token`) and routes on. **The token travels in the
+FRAGMENT**, never the query string, which is the shape the Google return already
+uses (`app/auth/callback/google/route.ts`).
+
+Four rules, and they all live in `webapp/lib/authHandoff.ts`:
+
+- **Single use** — one atomic `findOneAndUpdate` filtered on `usedAt: null`
+  (`models/HandoffCode.ts`). Read-then-write would hand two browsers a session.
+- **Sixty seconds, decided in code.** The TTL index is housekeeping only; mongod
+  sweeps about once a minute, which would keep a dead code alive.
+- **One member.** The session is minted from the User ROW at redemption, so a
+  demotion, or an account that has gone, is honoured.
+- **Allow-listed targets only** — `HANDOFF_ALLOWED_PATHS`, checked when the code
+  is minted AND again when it is spent, so shrinking the list takes effect for
+  codes already in flight. Every refusal redirects to `/login?error=handoff`,
+  identically, so "no such code" cannot be told from "already spent".
+
+Native side: **`expo/lib/web/openWebSignedIn.ts` is the one helper.** It takes a
+PATH (never a URL), prefixes `WEBAPP_BASE_URL`, fetches a code and opens the
+in-app browser; on a network error, a refusal, or no session it opens the plain
+URL — exactly today's signed-out behaviour, because a Tier-3 button that does
+nothing is worse than one that asks you to sign in. The three hand-built link
+helpers (`lib/programs/browserLauncher.ts`, `lib/nutrition/recipeLinks.ts`,
+`lib/admin/adminLinks.ts`) move onto it as their own tickets land — two of them
+still point at pages that do not exist.
+
+Tests: `webapp/tests/unit/auth/handoff.test.ts` (the rules, both routes'
+refusals, and every allow-listed target resolved against a real page under
+`app/`), `handoffCode.test.ts` (single use, the race, expiry — real Mongo),
+`handoffRoundTrip.test.ts` (mint → redeem → replay, end to end) and
+`expo/__tests__/openWebSignedIn.test.ts`.
+
 ## API Conventions
 
 - Route handlers in `app/api/` using Next.js App Router (`route.ts` exports)
@@ -829,9 +870,9 @@ Five things about it that are load-bearing:
   runner deleting the same rows. The route's `GET` is a dry run by
   construction — only a POST may delete a person.
 
-Native specifics: the settings screen is `expo/app/(tabs)/profile/health.tsx`,
-a hidden route in the `(tabs)` tree, so **the gear on the dashboard is the only
-way in** — without it the screen (and the deletion path) is unreachable in a
+Native specifics: the settings screen is
+`expo/app/(app)/(tabs)/profile/health.tsx`, a hidden route (`href: null`) in
+the `(tabs)` tree, so **the gear on the dashboard is the only way in** — without it the screen (and the deletion path) is unreachable in a
 store build while still compiling. Android claims `/account/restore` with its
 own `autoVerify` intent filter; iOS gets it from `applinks:become.redbtn.io`.
 The confirmation phrase and the window are duplicated in
@@ -845,6 +886,102 @@ Tests: `tests/unit/account/deletion.test.ts` (window, MAC, purge plan),
 `storeReadiness.test.tsx` (reachability on all three surfaces, including the
 Expo sources, which it reads as text — it is the only check that can see both
 codebases at once), and `expo/__tests__/deleteAccount.test.tsx`.
+
+### The native navigation shell (NP-003)
+
+`expo/app/` is three things and a redirect:
+
+| Path | What it is |
+|---|---|
+| `app/index.tsx` | The launch decision: spinner → `/login`, `/onboarding` or Home |
+| `app/(auth)/` | `login`, `verify`, `account/restore` — **no session required** |
+| `app/(app)/` | AuthGuard → ConsentGate → OnboardingGuard, then the Stack |
+| `app/onboarding.tsx` | Signed-in, but deliberately OUTSIDE `(app)` |
+
+Four rules, each of them a bug that shipped:
+
+- **A group is invisible in a URL.** `/login`, `/verify` and `/account/restore`
+  are unchanged, which is what `app.json`'s associated domains and Android
+  intent filters claim, and `/(tabs)/…` hrefs still resolve inside `(app)`.
+- **Nothing above a route may replace it.** The cold-open gate in
+  `app/_layout.tsx` used to `router.replace` its verdict on every launch, and a
+  cold start on `/verify?token=…` lost the race: the token was spent and
+  sign-in was on screen. The gate now only signs out after a failed unlock;
+  the destination is decided by `app/index.tsx`, which exists only on a launch
+  with no link. `app/+native-intent.tsx` is where a link may be rewritten
+  (a pass-through until NP-034's web-path resolver).
+- **Every folder under `(tabs)` needs its own `_layout.tsx`.** Without one,
+  expo-router flattens the folder into the TAB navigator: the bar shipped with
+  20 buttons, including `programming/[id]/workout/[idx]/live`, and `profile`
+  matched no route at all so Settings was a tab. One Stack per tab
+  (`components/navigation/TabStack.tsx`) makes each folder one screen and every
+  detail a push, with the iOS back swipe.
+- **Onboarding is gated on `onboardingCompleted === false`, strictly**
+  (`expo/lib/auth/onboardingGate.ts`, mirroring
+  `webapp/components/AuthGuard.tsx`). Legacy rows have no flag and must not be
+  gated. And `/onboarding` cannot live inside `(app)`, or the gate would
+  redirect to a route behind itself.
+
+Tests: `expo/__tests__/navigation-shell.test.tsx` (the bar and the per-tab
+stacks) and `expo/__tests__/launch-and-links.test.tsx` (launch destinations and
+cold-start links) render the REAL layouts over the real `app/` directory via
+`expo/test-support/appRoutes.tsx`, so a screen file added tomorrow is in the
+render tomorrow. The array-shaped `TabLayout.test.tsx` they replace was green
+throughout the 20-slot bar.
+
+#### The tab bar is the web's tab bar (NP-013)
+
+`webapp/components/BottomNav.tsx` is the source of truth for tab ORDER, LABELS
+and ICONS, and native now matches it: **Workout, Mind, Home, Nutrition** —
+lucide `ClipboardList`, `Brain`, `Home`, `UtensilsCrossed`, with Home in the
+middle where the thumb is. Native used to ship its own set (Home, Programs,
+Mind, Nutrition, Chat), so the two clients disagreed about what the app is
+called in four places out of five.
+
+Community is absent because the web hides it too
+(`webapp/components/FeatureGuard.tsx` answers "Coming soon" to everyone but an
+admin). The rule that travels: **tab order and names follow the web's
+BottomNav, minus Community while it is hidden.**
+
+Two things that look like mistakes and are not:
+
+- **The `programming` folder is the Workout tab.** Only the label changed; the
+  folder keeps its name because renaming it breaks every
+  `/(tabs)/programming/…` href in the app, and the screen behind it stays
+  today's programs list until NP-071 ports the web's workout home.
+- **`chat` is still in the `(tabs)` tree**, as a hidden tab (`href: null`). It
+  is NP-032 that removes those routes, behind
+  `EXPO_PUBLIC_COMMUNITY_ENABLED`; there is deliberately no second flag in the
+  tab bar.
+
+#### `_` is not a private prefix in expo-router, and dark is pinned
+
+Two store-readiness facts that landed with the tab bar:
+
+- **expo-router ignores exactly `+api`, `+html` and `+native-intent`**
+  (`getIgnoreList`, `expo-router/build/getRoutesCore.js`). A leading underscore
+  is a Next.js habit that buys nothing, so `expo/app/_stories.tsx` — the
+  component gallery — shipped as a LIVE route at `become://_stories`, and the
+  two read-only admin lists under `expo/app/(app)/admin/` were behind a
+  client-side role check, which is a blocked screen and not an absent one. All
+  three are now wrapped in `devOnlyRoute()`
+  (`expo/lib/dev/devOnlyRoute.tsx`): the screen in a development build, a
+  `Redirect` to Home in anything else. NP-122 deletes the admin code and adds an
+  admin-only link to the web. Tests: `expo/__tests__/dev-only-routes.test.tsx`
+  opens all three URLs with `__DEV__` flipped both ways.
+- **v1 is dark-only, and the pin is two lines in two files.** NativeWind
+  follows the SYSTEM colour scheme unless told otherwise, while 39 files
+  hard-code `#0a0a0a` in a plain RN `style` (a SafeAreaView or a StatusBar
+  cannot read a Tailwind class) — so a phone in light mode drew light-mode text
+  (`--foreground: 24 24 27`, near-black) on those near-black surfaces.
+  `pinDarkMode()` (`expo/lib/theme/colorScheme.ts`) calls
+  `colorScheme.set("dark")` and is invoked at MODULE LOAD in
+  `expo/app/_layout.tsx`, not in an effect, so there is no frame in the
+  system's theme; `expo/app.json` sets `userInterfaceStyle: "dark"` so the OS
+  agrees about keyboards, share sheets and the launch screen; the status bar
+  stays `style="light"`. NP-123 builds the real light theme, and it starts by
+  deleting the literals — not by deleting the pin. Test:
+  `expo/__tests__/darkModePin.test.tsx`.
 
 ### CI runs three packages, not one
 
@@ -940,6 +1077,43 @@ Every field resolves through `optional()`, **never `required()`**. One
 `getRuntimeConfig()` throwing, which 401s every authenticated route while
 `AuthGuard` still renders the page — the app looks fine and every list is empty.
 `tests/unit/billing/billingConfig.test.ts` exists to catch exactly that.
+
+#### Where Stripe returns a buyer (and why the app gets different pages)
+
+`lib/billing/urls.ts` builds the three return URLs. The ORIGIN comes from an
+allow-list checked against `Origin`, then `Referer`, then the forwarded/host
+headers, falling back to `NEXT_PUBLIC_APP_URL` — never a reflected one, because
+these strings are redirect targets handed to Stripe. The PATH now depends on an
+optional `returnTo` in the body of `POST /api/billing/checkout` and
+`POST /api/billing/portal`:
+
+| `returnTo` | success | cancel | portal |
+|---|---|---|---|
+| absent / `'web'` (unchanged) | `/dashboard/plan?checkout=success&session_id={CHECKOUT_SESSION_ID}` | `/dashboard/plan?checkout=cancelled` | `/dashboard/plan?portal=return` |
+| `'app'` | `/billing/return?session_id={CHECKOUT_SESSION_ID}` | `/billing/cancelled` | `/billing/portal-return` |
+
+An unknown value is `400 invalid_return_to`, not a silent fall back: a typo'd
+`'App'` would strand a native buyer on a sign-in screen and say nothing.
+`returnTo` is also part of the checkout idempotency key, because Stripe replays
+the FIRST session for a repeated key and ignores the new params.
+
+**Why the app needs public pages.** A native request carries no `Origin` and no
+`Referer`, so the Host decides and Stripe drops the buyer into **Safari** — a
+browser that has never held that member's session (`auth_token` is a cookie the
+app does not share). `middleware.ts` guards `/dashboard/*`, so the plan page sent
+them to `/login` seconds after their card was charged. The three pages under
+`app/billing/` render signed out, state what happened, show **no account data**
+and **activate nothing** — the app reads
+`GET /api/billing/status?session_id=` for itself, signed in (NP-054).
+
+The "Return to Become" button is `become://?billing=…` and deliberately not a
+link to one of our own hosts: **iOS keeps a tap on a same-domain link inside
+Safari**, so a universal link there would only load another web page. It targets
+the app's ROOT with the outcome as params because `expo/app/` has no billing
+route yet and an unmatched deep link opens the app on a not-found screen. A
+second, quieter link offers `/dashboard/plan` for a member without the app.
+`{CHECKOUT_SESSION_ID}` is still concatenated, never encoded. Tests:
+`tests/unit/billing/billingAppReturn.test.ts` and `billingReturnPages.test.tsx`.
 
 #### The mode fence (read before touching `lib/billing/`)
 

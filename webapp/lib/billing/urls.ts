@@ -18,6 +18,48 @@
 export const BILLING_RETURN_PATH = '/dashboard/plan'
 
 /**
+ * Where a purchase STARTED IN THE NATIVE APP comes back to: public pages,
+ * outside `/dashboard`.
+ *
+ * A native request carries no `Origin` and no `Referer`, so the Host decides the
+ * return origin and the buyer lands in Safari — a browser that has never held
+ * this member's session, because `auth_token` is a cookie on a browser the app
+ * does not share. `middleware.ts` guards `/dashboard/*`, so the plan page bounces
+ * them to `/login` seconds after their card was charged.
+ *
+ * These three paths render signed out, say what happened and offer a way back
+ * into the app. They are NOT a second activation path: the app asks
+ * `GET /api/billing/status?session_id=` for itself, signed in.
+ */
+export const APP_BILLING_RETURN_PATHS = {
+  success: '/billing/return',
+  cancelled: '/billing/cancelled',
+  portalReturn: '/billing/portal-return',
+} as const
+
+/**
+ * Who Stripe is returning — the browser the member is signed in on ('web', the
+ * behaviour every caller had before) or the native app ('app').
+ */
+export type BillingReturnTarget = 'web' | 'app'
+
+/**
+ * Read the optional `returnTo` off a request body.
+ *
+ * Absent, null or empty is 'web', because that is what every shipped caller
+ * sends and the card's one hard rule is that those are untouched. An unknown
+ * value is `undefined` — i.e. a 400 — and not a silent fall back to 'web': a
+ * typo'd `returnTo: 'App'` would otherwise return a native buyer to
+ * `/dashboard/plan` in Safari, which is exactly the bug these pages exist to
+ * fix, with nothing anywhere to say so.
+ */
+export function parseReturnTarget(value: unknown): BillingReturnTarget | undefined {
+  if (value === undefined || value === null || value === '') return 'web'
+  if (value === 'web' || value === 'app') return value
+  return undefined
+}
+
+/**
  * The origins a member may be RETURNED to after Stripe.
  *
  * The app is served on more than one host. `become.redbtn.io` and
@@ -137,14 +179,40 @@ export function resolveReturnOrigin(headers?: HeaderReader | null): string {
   return appBaseUrl()
 }
 
-export function checkoutSuccessUrl(headers?: HeaderReader | null): string {
-  return `${resolveReturnOrigin(headers)}${BILLING_RETURN_PATH}?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+/**
+ * The three builders below take the target LAST and default it to 'web', so
+ * every existing call site keeps its exact behaviour: same path, same query,
+ * same origin allow-list. 'app' changes the PATH only — the origin is resolved
+ * by the same rules, because a public page is still only served on hosts we own.
+ */
+
+export function checkoutSuccessUrl(
+  headers?: HeaderReader | null,
+  returnTo: BillingReturnTarget = 'web',
+): string {
+  const origin = resolveReturnOrigin(headers)
+  // Still concatenated, never URLSearchParams: `{CHECKOUT_SESSION_ID}` is a
+  // Stripe TEMPLATE token and percent-encoded braces are never substituted.
+  if (returnTo === 'app') {
+    return `${origin}${APP_BILLING_RETURN_PATHS.success}?session_id={CHECKOUT_SESSION_ID}`
+  }
+  return `${origin}${BILLING_RETURN_PATH}?checkout=success&session_id={CHECKOUT_SESSION_ID}`
 }
 
-export function checkoutCancelUrl(headers?: HeaderReader | null): string {
-  return `${resolveReturnOrigin(headers)}${BILLING_RETURN_PATH}?checkout=cancelled`
+export function checkoutCancelUrl(
+  headers?: HeaderReader | null,
+  returnTo: BillingReturnTarget = 'web',
+): string {
+  const origin = resolveReturnOrigin(headers)
+  if (returnTo === 'app') return `${origin}${APP_BILLING_RETURN_PATHS.cancelled}`
+  return `${origin}${BILLING_RETURN_PATH}?checkout=cancelled`
 }
 
-export function portalReturnUrl(headers?: HeaderReader | null): string {
-  return `${resolveReturnOrigin(headers)}${BILLING_RETURN_PATH}?portal=return`
+export function portalReturnUrl(
+  headers?: HeaderReader | null,
+  returnTo: BillingReturnTarget = 'web',
+): string {
+  const origin = resolveReturnOrigin(headers)
+  if (returnTo === 'app') return `${origin}${APP_BILLING_RETURN_PATHS.portalReturn}`
+  return `${origin}${BILLING_RETURN_PATH}?portal=return`
 }

@@ -8,6 +8,7 @@ import {
 } from "@/components/admin/AdminFoodList";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 import { useFetch } from "@/lib/hooks/useFetch";
 
 function narrowSource(s?: string): AdminFoodRow["source"] {
@@ -18,8 +19,13 @@ function narrowSource(s?: string): AdminFoodRow["source"] {
  * Read-only native admin food list. Gated on user.role === 'admin' and fed by
  * GET /api/admin/foods. Edit routes back to the webapp via AdminFoodList's
  * Edit-in-browser deep link.
+ *
+ * Not in v1: admins work on the web (Tier 3), nothing in the app links here,
+ * and the edit link leaves for the browser anyway. `devOnlyRoute` sends
+ * `become://admin/foods` to Home outside a development build; NP-122 deletes
+ * the screen and adds an admin-only link to the web.
  */
-export default function AdminFoodsRoute() {
+export function AdminFoodsScreen() {
   const { user, token } = useAuth();
   const role = user?.role ?? null;
   const isAdmin = role === "admin";
@@ -53,3 +59,5 @@ export default function AdminFoodsRoute() {
     </SafeAreaView>
   );
 }
+
+export default devOnlyRoute(AdminFoodsScreen);
