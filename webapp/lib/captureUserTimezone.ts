@@ -1,4 +1,5 @@
 import UserProgress from '@/models/UserProgress'
+import { readZoneFromBody } from '@/lib/dayWindow'
 
 /**
  * ─── Recording the member's timezone, safely ─────────────────────────────────
@@ -8,6 +9,12 @@ import UserProgress from '@/models/UserProgress'
  *   • the LOCAL hour the notification cron treats as "morning", and
  *   • the local day/week BUCKET every windowed allowance is charged in
  *     (lib/allowances.ts#windowTzOffset reads exactly this field).
+ *
+ * It is written by POST /api/me/timezone (every app open, at most once a local
+ * day) and by POST /api/workouts (a save that happens to carry a `tz`). The
+ * first exists because the second was the ONLY writer: a member who logs food
+ * or runs Mind sessions but never saves a workout had no stored zone at all,
+ * which the notify cron skips outright — so they got no reminders, ever.
  *
  * The second one makes it a paywall input written by the client. A direct `tz`
  * on an AI call is already ignored for that reason, but POST /api/workouts
@@ -166,16 +173,42 @@ export function captureUserTimezone(
   ianaZone?: string,
   deps: { write?: TimezoneWriter; now?: Date } = {}
 ): void {
-  if (!userId || !Number.isFinite(tzOffsetMinutes)) return
+  void captureUserTimezoneNow(userId, tzOffsetMinutes, ianaZone, deps)
+}
+
+/**
+ * What became of one report. `skipped` is a success — this process already
+ * stored that exact value for this member — while `missing` and `failed` are
+ * the two ways a write can fail to land, both of which clear the cache so the
+ * next request tries again.
+ */
+export type TimezoneCaptureOutcome = 'written' | 'skipped' | 'refused' | 'missing' | 'failed'
+
+/**
+ * The awaited half of captureUserTimezone, for the one caller whose ENTIRE job
+ * is this write: POST /api/me/timezone. A fire-and-forget beside a workout save
+ * is right (the save must not fail with it); a route that does nothing else
+ * would be answering "stored" before knowing, which is a lie the client then
+ * caches for the rest of the local day.
+ *
+ * Never throws — the outcome is the return value.
+ */
+export async function captureUserTimezoneNow(
+  userId: string,
+  tzOffsetMinutes: number,
+  ianaZone?: string,
+  deps: { write?: TimezoneWriter; now?: Date } = {}
+): Promise<TimezoneCaptureOutcome> {
+  if (!userId || !Number.isFinite(tzOffsetMinutes)) return 'refused'
 
   const patch = resolveCapturedTimezone(tzOffsetMinutes, ianaZone, deps.now ?? new Date())
-  if (!patch) return
+  if (!patch) return 'refused'
 
   // A zone name is worth writing even when the offset has not moved, so the
   // cache key carries both. Otherwise the first member to be seen before this
   // feature existed would keep their offset and never gain a zone.
   const key = `${patch.timezoneOffset}|${patch.timezone ?? ''}`
-  if (recentlyCaptured.get(userId) === key) return
+  if (recentlyCaptured.get(userId) === key) return 'skipped'
 
   recentlyCaptured.set(userId, key)
   // Trim so it doesn't grow unbounded across many users. The entries are cheap
@@ -184,16 +217,70 @@ export function captureUserTimezone(
   if (recentlyCaptured.size > 5000) recentlyCaptured.clear()
 
   const write = deps.write ?? mongoWriter
-  void write(userId, patch)
-    .then((res) => {
-      // A write that landed nowhere must NOT be remembered as done — that is
-      // how the first report used to be lost for an hour rather than for one
-      // request.
-      if (res !== 'written') recentlyCaptured.delete(userId)
-    })
-    .catch(() => {
+  try {
+    const res = await write(userId, patch)
+    // A write that landed nowhere must NOT be remembered as done — that is
+    // how the first report used to be lost for an hour rather than for one
+    // request.
+    if (res !== 'written') {
       recentlyCaptured.delete(userId)
-    })
+      return 'missing'
+    }
+    return 'written'
+  } catch {
+    recentlyCaptured.delete(userId)
+    return 'failed'
+  }
+}
+
+/**
+ * ─── What a `{ tz, tzZone }` REPORT is allowed to mean ───────────────────────
+ *
+ * The body of POST /api/me/timezone, judged before anything is written. Pure,
+ * so the whole rule is one testable function.
+ *
+ * Three refusals, and each one is a real request some client has sent:
+ *
+ *   • `tz_required` — no `tz` at all, or one that is not a finite number (the
+ *     shared client's old `tz=America/New_York` form is the famous case). A
+ *     missing value must never be read as 0: that marks the member UTC and
+ *     fires their morning push at ~3am local.
+ *   • `tz_unusable` — a number that cannot describe a real place (outside
+ *     UTC+14…UTC-12, or not a whole quarter hour). NOT clamped into
+ *     range: `readOptionalTzOffsetFromBody` would turn -5000 into -840, which
+ *     is a perfectly real offset (Kiritimati) that the member never reported.
+ *   • `tz_stand_in` — a bare `0` with no zone to corroborate it. UTC is a real
+ *     place, but "0" is also what a client fabricates when it does not know,
+ *     and this route exists for members with NOTHING stored — so a wrong 0 is
+ *     not a correction, it is the 3am push. A genuine UTC member's app sends
+ *     `tzZone` ('Europe/London', 'UTC', 'Atlantic/Reykjavik', …) beside it and
+ *     is accepted; POST /api/workouts, where the value rides a real save, is
+ *     unchanged and still takes a bare 0.
+ *
+ * A verifiable IANA zone outranks the number beside it in every branch —
+ * resolveCapturedTimezone() asks Intl what the zone is actually on right now.
+ */
+export type TimezoneReportRefusal = 'tz_required' | 'tz_unusable' | 'tz_stand_in'
+
+export type TimezoneReport =
+  | { ok: true; captured: CapturedTimezone }
+  | { ok: false; reason: TimezoneReportRefusal }
+
+export function resolveTimezoneReport(body: unknown, now: Date = new Date()): TimezoneReport {
+  const raw = (body && typeof body === 'object')
+    ? (body as Record<string, unknown>).tz
+    : undefined
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return { ok: false, reason: 'tz_required' }
+  }
+
+  const captured = resolveCapturedTimezone(raw, readZoneFromBody(body), now)
+  if (!captured) return { ok: false, reason: 'tz_unusable' }
+  if (captured.timezoneOffset === 0 && !captured.timezone) {
+    return { ok: false, reason: 'tz_stand_in' }
+  }
+
+  return { ok: true, captured }
 }
 
 /** @internal Tests only — the cache would otherwise leak between cases. */

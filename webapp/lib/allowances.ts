@@ -174,10 +174,14 @@ const TZ_TTL_MS = 60_000
  * The offset a windowed bucket is keyed on, read from the member's own record.
  *
  * Deliberately NOT taken from the request. `UserProgress.timezoneOffset` is
- * populated opportunistically by lib/captureUserTimezone.ts from genuinely
- * reported offsets on other routes, so by the time someone reaches an AI
- * feature it is almost always set. Missing reads as 0 (UTC), which is what
- * every other reader in the app defaults to.
+ * written by lib/captureUserTimezone.ts from genuinely reported offsets:
+ * POST /api/me/timezone, which both apps call when the app opens (at most once
+ * per local day), and POST /api/workouts when a save carries a `tz`. The first
+ * is why this is now set for essentially everyone — it used to be populated
+ * opportunistically on workout saves alone, so a member who only logged food
+ * reached an AI feature with nothing stored and was bucketed on UTC. Still
+ * missing reads as 0 (UTC), which is what every other reader in the app
+ * defaults to.
  *
  * Memoised for 60s because it is stable and stale-safe — the cost of being one
  * minute behind a member who just crossed a timezone is that their boundary
@@ -395,9 +399,10 @@ export interface Bucket {
  * ONE WINDOW PER ELAPSED WINDOW, however the member's clock moves.
  *
  * windowTzOffset() deliberately ignores a request's `tz`, but the offset it
- * reads is itself client-written (POST /api/workouts → lib/captureUserTimezone),
- * and the offset picks the local DATE the bucket is keyed on. Legitimate
- * offsets span 26 hours, so a member sitting on a spent allowance could report
+ * reads is itself client-written (POST /api/me/timezone and POST /api/workouts
+ * → lib/captureUserTimezone), and the offset picks the local DATE the bucket is
+ * keyed on. Legitimate offsets span 26 hours, so a member on a spent allowance
+ * could report
  * a zone far enough east to land on tomorrow's date and mint a second window —
  * proven live, repeatable, and immune to validating the offset (every value
  * used was a real one).

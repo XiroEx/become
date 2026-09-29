@@ -7,6 +7,7 @@ import MindSessionWarmer from '../../components/mind/MindSessionWarmer'
 import TutorialRoot from '../../components/tutorial/TutorialRoot'
 import PushSubscriptionSync from '../../components/PushSubscriptionSync'
 import AppBadgeSync from '../../components/AppBadgeSync'
+import TimezoneSync from '../../components/TimezoneSync'
 import ConsentGate from '../../components/ConsentGate'
 import AiConsentPrompt from '../../components/AiConsentPrompt'
 
@@ -23,6 +24,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Background: keep the count on the installed app's home-screen icon in
           step with what the member still owes today. */}
       <AppBadgeSync />
+      {/* Background: record the member's timezone when the app opens (at most
+          once per local day). Until this existed only a workout save stored
+          one, and the notify cron skips a member who has none — so a member
+          who only logs food got no reminders at all. */}
+      <TimezoneSync />
       {/* Blocks until the member has agreed to the CURRENT Terms and Privacy
           Policy and attested to the minimum age. Here, not on the home page,
           so it covers every protected route and runs once per app load. */}
