@@ -1,15 +1,15 @@
 /* eslint-disable import/first */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 
-// Force the opt-in store to use an in-memory inner so the route doesn't touch
-// expo-secure-store at jest time. We mock the module by replacing
-// secureTokenStore with an in-memory equivalent.
+// The settings screen renders the danger zone, which reaches for the session
+// store on confirm. Swap it for an in-memory equivalent so jest never touches
+// expo-secure-store.
 jest.mock("@/lib/auth/secureStoreToken", () => {
   const actual = jest.requireActual("@/lib/auth/secureStoreToken");
   let value: string | null = null;
   return {
     ...actual,
-    secureTokenStore: {
+    sessionStore: {
       async get() {
         return value;
       },
@@ -24,25 +24,47 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
 });
 
 import HealthSettingsRoute from "../app/(tabs)/profile/health";
+import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
+import { HEALTH_SYNC_ENABLED } from "@/lib/health/enabled";
+import { createMemoryHealthOptInStore } from "@/lib/health/opt-in";
 
+/**
+ * The Health sync section is OFF until NP-185 installs a real HealthKit /
+ * Health Connect module. Until then the toggle synced nothing — and, before
+ * this ticket, signed the member out by writing its flag over the session key.
+ */
 describe("HealthSettingsRoute", () => {
-  it("mounts and renders the toggle row", async () => {
+  it("mounts", async () => {
     const { getByTestId } = render(<HealthSettingsRoute />);
     expect(getByTestId("health-settings-route")).toBeTruthy();
     await waitFor(() => {
-      expect(getByTestId("health-toggle")).toBeTruthy();
+      expect(getByTestId("danger-zone")).toBeTruthy();
     });
   });
 
-  it("toggle flips between off and on when pressed", async () => {
-    const { getByTestId } = render(<HealthSettingsRoute />);
-    const toggle = await waitFor(() => getByTestId("health-toggle"));
-    expect(toggle.props.accessibilityState?.checked).toBe(false);
-    fireEvent.press(toggle);
+  it("does not show the Health sync section or its toggle (NP-185)", async () => {
+    const { queryByTestId, queryByText } = render(<HealthSettingsRoute />);
     await waitFor(() => {
-      expect(getByTestId("health-toggle").props.accessibilityState?.checked).toBe(
-        true,
-      );
+      expect(queryByTestId("danger-zone")).toBeTruthy();
     });
+    expect(queryByTestId("health-sync-section")).toBeNull();
+    expect(queryByTestId("health-toggle-row")).toBeNull();
+    expect(queryByTestId("health-toggle")).toBeNull();
+    expect(queryByText("Health sync")).toBeNull();
+    expect(queryByText("Sync from Health")).toBeNull();
+  });
+});
+
+describe("HealthSyncSection", () => {
+  it("is gated off", () => {
+    expect(HEALTH_SYNC_ENABLED).toBe(false);
+  });
+
+  it("renders nothing while the gate is off, even with a store injected", () => {
+    const { queryByTestId } = render(
+      <HealthSyncSection store={createMemoryHealthOptInStore(true)} />,
+    );
+    expect(queryByTestId("health-sync-section")).toBeNull();
+    expect(queryByTestId("health-toggle")).toBeNull();
   });
 });
