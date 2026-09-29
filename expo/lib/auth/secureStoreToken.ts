@@ -23,6 +23,14 @@ export const SECURE_STORE_KEYS = {
   session: "become.session",
   /** "Sync from Health" opt-in — `"yes"` when on, absent when off. */
   healthOptIn: "become.optin.health",
+  /**
+   * "Read from Health" — the Health → Become direction. Its own key, not a
+   * field inside the opt-in, because each DIRECTION is its own answer: a member
+   * may want their scale's weigh-ins imported and nothing written back.
+   */
+  healthSyncRead: "become.sync.health.read",
+  /** "Write to Health" — the Become → Health direction. */
+  healthSyncWrite: "become.sync.health.write",
   /** Biometric-unlock opt-in — `"yes"` when on, absent when off. */
   biometricsOptIn: "become.optin.biometrics",
 } as const;
@@ -71,6 +79,16 @@ export const sessionStore: TokenStore = createSecureStore(
 /** The Health opt-in flag, on `become.optin.health`. */
 export const healthOptInSecureStore: TokenStore = createSecureStore(
   SECURE_STORE_KEYS.healthOptIn,
+);
+
+/** The Health → Become direction switch, on `become.sync.health.read`. */
+export const healthSyncReadSecureStore: TokenStore = createSecureStore(
+  SECURE_STORE_KEYS.healthSyncRead,
+);
+
+/** The Become → Health direction switch, on `become.sync.health.write`. */
+export const healthSyncWriteSecureStore: TokenStore = createSecureStore(
+  SECURE_STORE_KEYS.healthSyncWrite,
 );
 
 /** The biometrics opt-in flag, on `become.optin.biometrics`. */

@@ -40,11 +40,14 @@ import {
   biometricsOptInSecureStore,
   createSecureStore,
   healthOptInSecureStore,
+  healthSyncReadSecureStore,
+  healthSyncWriteSecureStore,
   sessionStore,
 } from "@/lib/auth/secureStoreToken";
 import * as secureStoreModule from "@/lib/auth/secureStoreToken";
 import { createBiometricsOptInStore } from "@/lib/auth/biometrics";
 import { createHealthOptInStore } from "@/lib/health/opt-in";
+import { createHealthSwitchStore } from "@/lib/health/switches";
 
 const fake = SecureStore as unknown as {
   __reset: () => void;
@@ -62,6 +65,8 @@ describe("SECURE_STORE_KEYS", () => {
     expect(SECURE_STORE_KEYS).toEqual({
       session: "become.session",
       healthOptIn: "become.optin.health",
+      healthSyncRead: "become.sync.health.read",
+      healthSyncWrite: "become.sync.health.write",
       biometricsOptIn: "become.optin.biometrics",
     });
     const values = Object.values(SECURE_STORE_KEYS);
@@ -77,12 +82,16 @@ describe("SECURE_STORE_KEYS", () => {
   it("writes each purpose to its own key and nowhere else", async () => {
     await sessionStore.set(JWT);
     await healthOptInSecureStore.set("yes");
+    await healthSyncReadSecureStore.set("yes");
+    await healthSyncWriteSecureStore.set("yes");
     await biometricsOptInSecureStore.set("yes");
 
     expect(fake.__keys()).toEqual([
       "become.optin.biometrics",
       "become.optin.health",
       "become.session",
+      "become.sync.health.read",
+      "become.sync.health.write",
     ]);
     expect(await SecureStore.getItemAsync("become.session")).toBe(JWT);
     expect(await SecureStore.getItemAsync("become.optin.health")).toBe("yes");
@@ -127,6 +136,27 @@ describe("toggling an opt-in leaves the session token untouched", () => {
 
     await biometrics.setOptedIn(false);
     expect(await biometrics.isOptedIn()).toBe(false);
+    expect(await sessionStore.get()).toBe(JWT);
+  });
+
+  // The direction switches (NP-199) are two more flags with the same shape, so
+  // they are the same hazard: three health keys, none of them the session.
+  it("health: the direction switches touch neither the opt-in nor the session", async () => {
+    await sessionStore.set(JWT);
+    const health = createHealthOptInStore(healthOptInSecureStore);
+    await health.setOptedIn(true);
+    const switches = createHealthSwitchStore({
+      read: healthSyncReadSecureStore,
+      write: healthSyncWriteSecureStore,
+    });
+
+    await switches.set("read", true);
+    await switches.set("write", true);
+    await switches.set("read", false);
+
+    expect(await switches.get("read")).toBe(false);
+    expect(await switches.get("write")).toBe(true);
+    expect(await health.isOptedIn()).toBe(true);
     expect(await sessionStore.get()).toBe(JWT);
   });
 
