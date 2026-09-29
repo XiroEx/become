@@ -1,5 +1,6 @@
 import "../global.css";
 import { useCallback } from "react";
+import { View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
+import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 import { pinDarkMode } from "@/lib/theme/colorScheme";
 import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
@@ -125,17 +127,28 @@ export default function RootLayout() {
             sheet, which is already the correct behaviour for every other class.
           */}
           <ApiErrorHandlerProvider>
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: { backgroundColor: "#0a0a0a" },
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(app)" />
-              <Stack.Screen name="onboarding" />
-            </Stack>
+            {/*
+              ABOVE EVERY ROUTE, and above the Stack rather than inside it: the
+              connection can go while any screen is open, and the writes it
+              queues (weight and mood, each keeping the day it was logged on)
+              are replayed by a reconnect that may land minutes later, with a
+              different screen — or none — mounted. It is also where a
+              sign-out clears the queue. See components/offline/.
+            */}
+            <View style={{ flex: 1 }}>
+              <ConnectivityBanner />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: "#0a0a0a" },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(app)" />
+                <Stack.Screen name="onboarding" />
+              </Stack>
+            </View>
           </ApiErrorHandlerProvider>
         </AuthProvider>
       </SafeAreaProvider>
