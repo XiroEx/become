@@ -450,6 +450,67 @@ export function CurrentPlan({ snapshot, portalState, onOpenPortal }: CurrentPlan
   )
 }
 
+// ─── The page with the switch off ────────────────────────────────────────────
+
+export interface UnenforcedPlanProps {
+  snapshot: EntitlementsSnapshot
+  portalState: PortalState
+  onOpenPortal: () => void
+}
+
+/**
+ * The whole of this page while ENTITLEMENTS_ENFORCED is off — and the one thing
+ * that has to survive the switch.
+ *
+ * "Renders nothing" for a ROUTE means "presents no plan", not "paints a blank
+ * screen", so this names no tier, no cap and no amount. That half is pinned by
+ * tests/unit/entitlements/uiSurfaces.test.tsx and is unchanged.
+ *
+ * BILLING IS NOT TIER, and this is where that was lost. The kill-switch governs
+ * whether TIER is enforced, not whether money is real — lib/billing/apply.ts
+ * applies webhooks regardless of it, on purpose — so a member can hold a live
+ * Stripe subscription while the switch is off. Returning early from the whole
+ * page therefore took "Manage billing" away from the only member who cannot be
+ * asked to wait for a flag: the one Stripe is charging. And the switch defaults
+ * to OFF, so that was the state the app was actually deployed in: the Terms
+ * (sections 9 and 10), the support page and the renewal line all said "open the
+ * Plan page, choose Manage billing", and the Plan page rendered this card and
+ * stopped. Settings never had the bug — components/billing/BillingSection.tsx
+ * deliberately ignores the switch for exactly this reason — but the Plan page is
+ * the one the documents name.
+ *
+ * Visibility is hasManageableBilling(), the same single rule the enforced card
+ * and Settings use, so grandfathered members and admins — Plus with no Stripe
+ * customer — still get nothing here.
+ */
+export function UnenforcedPlan({ snapshot, portalState, onOpenPortal }: UnenforcedPlanProps) {
+  return (
+    <Card>
+      <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
+        Everything is open on your account
+      </h2>
+      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        Nothing in Become is limited for you right now, and there is nothing to buy.
+      </p>
+      <Link
+        href="/dashboard"
+        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400"
+      >
+        Back to your dashboard
+        <ArrowRight className="h-4 w-4" />
+      </Link>
+      {hasManageableBilling(snapshot.subscription) && (
+        <ManageBillingButton
+          state={portalState}
+          onOpenPortal={onOpenPortal}
+          showNote
+          className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800"
+        />
+      )}
+    </Card>
+  )
+}
+
 // ─── Just paid ───────────────────────────────────────────────────────────────
 
 /** Where the member is in the moments after Stripe sends them back. */
@@ -684,25 +745,16 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
   // THE KILL-SWITCH. With ENTITLEMENTS_ENFORCED off there are no tiers to
   // compare and nothing is capped, so the page must not name one, price one or
   // draw the table. Same contract as PlanCard, PlanRow and TierGate.
+  //
+  // It is NOT a bail for BILLING. UnenforcedPlan still carries the way into the
+  // Stripe portal for a member who holds a subscription, because the switch
+  // governs tier and not money — see the comment on that component, which is
+  // where this page's half of the bug was.
   if (data.enforced === false) {
     return (
       <PageTransition className="space-y-5 pb-10">
         {header}
-        <Card>
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-            Everything is open on your account
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Nothing in Become is limited for you right now, and there is nothing to buy.
-          </p>
-          <Link
-            href="/dashboard"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-purple-600 hover:text-purple-700 dark:text-purple-400"
-          >
-            Back to your dashboard
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Card>
+        <UnenforcedPlan snapshot={data} portalState={portalState} onOpenPortal={openPortal} />
       </PageTransition>
     )
   }

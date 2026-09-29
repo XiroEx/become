@@ -546,8 +546,11 @@ place in the app where "your card failed" stops meaning "not for sale".
 
 With enforcement off the page does not `return null` (a route that renders
 nothing is a blank screen); it returns a neutral card that names no tier, no cap
-and no amount, and `uiSurfaces.test.tsx` pins that branch for what it must NOT
-contain.
+and no amount — `UnenforcedPlan`, exported from `PlanPageClient.tsx` so it can be
+rendered in a test — and `uiSurfaces.test.tsx` pins it for what it must NOT
+contain. **It still carries "Manage billing" for a member who holds a
+subscription**; see the next section for why that is not an exception to the
+launch-day contract.
 
 #### "Manage billing" — the way OUT, and where it lives
 
@@ -559,7 +562,7 @@ refuses someone whose card has ALREADY failed. An active subscriber saw "You're
 on Plus" and a date and would have had to email to cancel — the thing New York
 GBL 527-a is written to stop.
 
-Four rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
+Five rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
 
 - **The label is `MANAGE_BILLING_LABEL` in `lib/legal`**, interpolated into the
   Terms, the support page and `renewalLine()` AND rendered by the button. Never
@@ -577,6 +580,18 @@ Four rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
   (`components/billing/ManageBillingButton.tsx`) is pure and takes the portal
   state as a prop, because a control only reachable through an effect is one no
   test in this repo can see.
+- **BILLING IS NOT A TIER SURFACE, so it does NOT bail on `enforced === false`.**
+  The kill-switch governs whether TIER is enforced, not whether money is real —
+  `lib/billing/apply.ts` applies webhooks regardless of it — so a member can hold
+  a live subscription while the switch is off, and the switch is off by default.
+  The first version of this fix put the button only in `CurrentPlan`, which sits
+  *after* the plan page's `enforced === false` return: on a real deploy the
+  button was on no screen at all, which is exactly what got reported. `Settings`
+  never had it (`BillingSection` ignores the switch on purpose) and
+  `UnenforcedPlan` now does too. A billing exit names no tier, no cap and no
+  price, so nothing about the dark launch changes; the member it can appear for
+  is one Stripe is charging, and that member must always be able to cancel.
+  `manageBilling.test.tsx` asserts the whole thing in BOTH switch states.
 - **One way to open it**: `openBillingPortal()` in `lib/billingPortal.ts`. Every
   failure — 503 (no portal configuration in the Stripe dashboard), 409, 502, a
   dropped connection — collapses to "didn't open, try again", never to "you have
@@ -588,7 +603,8 @@ Rules that are easy to get wrong:
   a create button wired to `allowed` is silently ungated.
 - **Every tier surface must bail on `enforced === false`.** That single check is
   what makes the whole epic ship dark, and it is asserted in
-  `tests/unit/entitlements/uiSurfaces.test.tsx`.
+  `tests/unit/entitlements/uiSurfaces.test.tsx`. A BILLING control is not a tier
+  surface — see "Manage billing" above — and must survive the switch.
 - `gateFrom` only accepts a 403 carrying BOTH `feature` and `requiresTier`, so
   an ownership or role 403 still falls through to the caller's normal error.
 - UI locks are explanatory. The client fails OPEN (network blip → no lock); the
