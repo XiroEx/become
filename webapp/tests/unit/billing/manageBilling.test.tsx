@@ -36,7 +36,7 @@ import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import TermsPage from '../../../app/terms/page'
 import SupportPage from '../../../app/support/page'
-import { CurrentPlan } from '../../../app/dashboard/plan/PlanPageClient'
+import { CurrentPlan, UnenforcedPlan } from '../../../app/dashboard/plan/PlanPageClient'
 import ManageBillingButton from '../../../components/billing/ManageBillingButton'
 import { BILLING_PORTAL_PATH } from '../../../lib/billingPortal'
 import {
@@ -98,6 +98,29 @@ const planCard = (data: EntitlementsSnapshot) =>
     <CurrentPlan snapshot={data} portalState="idle" onOpenPortal={() => {}} />,
   )
 
+/**
+ * EVERYTHING the plan page shows this member, in whichever of its two states
+ * they land in.
+ *
+ * The page has exactly two, and the branch between them is ENTITLEMENTS_ENFORCED
+ * — `UnenforcedPlan` when the switch is off, `CurrentPlan` (plus a comparison
+ * table and, for a free member, prices) when it is on. Both are ALL a subscriber
+ * sees: the pricing block is hidden for anyone who already holds Plus.
+ *
+ * The unenforced half is not a hypothetical. The switch defaults to OFF and is
+ * off in production, while billing runs regardless of it
+ * (lib/billing/apply.ts) — so that card is the screen a first subscriber
+ * actually lands on, and for its first release it returned early with no way
+ * into the portal at all while the Terms said otherwise. This mirrors the page's
+ * own branch; the source scan below is what keeps the mirror honest.
+ */
+const planScreen = (data: EntitlementsSnapshot) =>
+  data.enforced === false
+    ? renderToStaticMarkup(
+        <UnenforcedPlan snapshot={data} portalState="idle" onOpenPortal={() => {}} />,
+      )
+    : planCard(data)
+
 // ─── Who has billing to manage ───────────────────────────────────────────────
 
 test('every subscription the portal can act on counts as manageable', () => {
@@ -147,41 +170,73 @@ test('nobody without a subscription is offered a portal', () => {
 // ─── The Plan page ───────────────────────────────────────────────────────────
 
 test('a subscriber is never shown their plan without a way out of it', () => {
-  // THE REGRESSION TEST for the bug itself: CurrentPlan is the only thing an
-  // active subscriber sees on the plan page (the pricing block is hidden for
-  // anyone who already holds Plus), so if the portal is not in this markup it
-  // is nowhere on that screen.
-  for (const status of ['active', 'trialing', 'past_due']) {
-    const html = planCard(snapshot({ subscription: sub({ status }) }))
-    assert.ok(has(html, MANAGE_BILLING_LABEL), `${status}: no way into the billing portal`)
-    assert.match(html, /<button/, `${status}: the label must be on something pressable`)
+  // THE REGRESSION TEST for the bug itself: whichever state the page is in is
+  // the only thing an active subscriber sees on it (the pricing block is hidden
+  // for anyone who already holds Plus), so if the portal is not in that markup
+  // it is nowhere on that screen.
+  //
+  // Asserted in BOTH switch states, because the first release of this fix only
+  // held in one of them: `enforced: true`. With the switch off — its default,
+  // and how the app is deployed — the page returned its neutral card and the
+  // button was on no screen at all, which is the report this run came from.
+  for (const enforced of [true, false]) {
+    const where = `enforced=${enforced}`
+    for (const status of ['active', 'trialing', 'past_due']) {
+      const html = planScreen(snapshot({ enforced, subscription: sub({ status }) }))
+      assert.ok(
+        has(html, MANAGE_BILLING_LABEL),
+        `${where} ${status}: no way into the billing portal`,
+      )
+      assert.match(html, /<button/, `${where} ${status}: the label must be on something pressable`)
+    }
+
+    const cancelled = planScreen(
+      snapshot({ enforced, subscription: sub({ status: 'canceled', currentPeriodEnd: future }) }),
+    )
+    assert.ok(
+      has(cancelled, MANAGE_BILLING_LABEL),
+      `${where} cancelled-but-still-running: no portal`,
+    )
+
+    // ...and it says what pressing it does, in the support page's own words.
+    const active = planScreen(snapshot({ enforced, subscription: sub({}) }))
+    assert.ok(has(active, MANAGE_BILLING_PORTAL_NOTE), `${where}: the button explains nothing`)
   }
-
-  const cancelled = planCard(
-    snapshot({ subscription: sub({ status: 'canceled', currentPeriodEnd: future }) }),
-  )
-  assert.ok(has(cancelled, MANAGE_BILLING_LABEL), 'cancelled-but-still-running: no portal')
-
-  // ...and it says what pressing it does, in the support page's own words.
-  const active = planCard(snapshot({ subscription: sub({}) }))
-  assert.ok(has(active, MANAGE_BILLING_PORTAL_NOTE), 'the button explains nothing')
 })
 
 test('grandfathered members and admins are shown no billing controls', () => {
   // Neither has a Stripe customer, so the portal would answer 409 no_customer.
-  const grandfathered = planCard(snapshot({ grandfathered: true, subscription: null }))
-  assert.ok(has(grandfathered, 'Thanks for being here early'), 'wrong card rendered')
-  assert.ok(!has(grandfathered, MANAGE_BILLING_LABEL), 'grandfathered member offered a portal')
+  // Both switch states again: the unenforced card must not turn into a second
+  // place that offers a portal to somebody Stripe has never heard of.
+  for (const enforced of [true, false]) {
+    const where = `enforced=${enforced}`
 
-  const admin = planCard(snapshot({ role: 'admin', subscription: null }))
-  assert.ok(!has(admin, MANAGE_BILLING_LABEL), 'admin offered a portal')
+    const grandfathered = planScreen(snapshot({ enforced, grandfathered: true, subscription: null }))
+    assert.ok(
+      !has(grandfathered, MANAGE_BILLING_LABEL),
+      `${where}: grandfathered member offered a portal`,
+    )
 
-  const free = planCard(snapshot({ tier: 'free', subscription: null }))
-  assert.ok(!has(free, MANAGE_BILLING_LABEL), 'free member offered a portal')
+    const admin = planScreen(snapshot({ enforced, role: 'admin', subscription: null }))
+    assert.ok(!has(admin, MANAGE_BILLING_LABEL), `${where}: admin offered a portal`)
 
-  // And a member who merely OPENED checkout once is not a subscriber either.
-  const opened = planCard(snapshot({ tier: 'free', subscription: sub({ status: 'none' }) }))
-  assert.ok(!has(opened, MANAGE_BILLING_LABEL), 'a bare customer id is not a subscription')
+    const free = planScreen(snapshot({ enforced, tier: 'free', subscription: null }))
+    assert.ok(!has(free, MANAGE_BILLING_LABEL), `${where}: free member offered a portal`)
+
+    // And a member who merely OPENED checkout once is not a subscriber either.
+    const opened = planScreen(
+      snapshot({ enforced, tier: 'free', subscription: sub({ status: 'none' }) }),
+    )
+    assert.ok(
+      !has(opened, MANAGE_BILLING_LABEL),
+      `${where}: a bare customer id is not a subscription`,
+    )
+  }
+
+  // The enforced card still explains WHY a grandfathered member is on Plus, and
+  // does it without offering them billing they do not have.
+  const card = planCard(snapshot({ grandfathered: true, subscription: null }))
+  assert.ok(has(card, 'Thanks for being here early'), 'wrong card rendered')
 })
 
 test('the plan page owns the request the button fires', () => {
@@ -190,6 +245,42 @@ test('the plan page owns the request the button fires', () => {
   assert.match(src, /<CurrentPlan[\s\S]{0,120}onOpenPortal=\{openPortal\}/, 'CurrentPlan is not wired to the portal')
   assert.match(src, /openBillingPortal\(portalPath\)/, 'the page must open the portal through the shared helper')
   assert.match(src, /setPortalState\('failed'\)/, 'a portal that does not open must say so')
+})
+
+test('the kill-switch branch of the plan page is wired to the portal too', () => {
+  // The render tests above take the page's branch on trust, because the page
+  // itself cannot be rendered here (it reads a hook and useSearchParams). THIS
+  // is what makes them worth something: the unenforced return must go through
+  // the component they render, with the same handler.
+  //
+  // A plain early return with a card and no billing exit is not a style choice,
+  // it is the bug: ENTITLEMENTS_ENFORCED is off by default and off in
+  // production, and lib/billing/apply.ts runs regardless of it — the switch
+  // governs tier, never money.
+  const src = read('app/dashboard/plan/PlanPageClient.tsx')
+  assert.match(src, /export function UnenforcedPlan/, 'the unenforced card must be renderable')
+
+  const at = src.indexOf('if (data.enforced === false)')
+  assert.ok(at > 0, 'the kill-switch branch must exist')
+  const branch = src.slice(at, src.indexOf('const isPlus', at))
+  assert.match(
+    branch,
+    /<UnenforcedPlan[\s\S]{0,200}onOpenPortal=\{openPortal\}/,
+    'the unenforced plan page has no way into the billing portal',
+  )
+  assert.doesNotMatch(
+    branch,
+    /<Card>/,
+    'the unenforced card is UnenforcedPlan; inlining it again drops the billing exit',
+  )
+
+  // And it decides with the one shared rule, not a second copy of it.
+  const component = src.slice(src.indexOf('export function UnenforcedPlan'))
+  assert.match(
+    component.slice(0, component.indexOf('\n}\n') + 3),
+    /hasManageableBilling\(snapshot\.subscription\)/,
+    'the unenforced card must use the shared visibility rule',
+  )
 })
 
 // ─── Settings ────────────────────────────────────────────────────────────────

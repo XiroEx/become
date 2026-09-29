@@ -26,6 +26,7 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
+import { trackColumnSpans, colSpan } from "@/lib/workout/trackColumns";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
@@ -1622,6 +1623,9 @@ export default function WorkoutFormPage() {
                             const isNone = tracking === "none"
                             const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
                             const isFloorsInput = isFloorsExercise(exercise.name)
+                            // Box widths, shared with the set rows below so the
+                            // labels stay over the boxes they name.
+                            const cols = trackColumnSpans(tracking)
                             const bellInfo = getBellWeightInfo(exercise)
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
@@ -1682,14 +1686,14 @@ export default function WorkoutFormPage() {
                                 })()}
                                 {/* Column headers */}
                                 <div className="mt-2 grid grid-cols-12 items-center gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                                  <div className="col-span-2">{setUnitLabel(tracking, 1)}</div>
+                                  <div className={colSpan(cols.set)}>{setUnitLabel(tracking, 1)}</div>
                                   {showWeight && (
-                                    <div className="col-span-3">
+                                    <div className={colSpan(cols.weight)}>
                                       {bellInfo.style === 'dumbbell' ? 'Wt/DB' : bellInfo.style === 'kettlebell' ? 'Wt/KB' : 'Weight'}
                                     </div>
                                   )}
                                   {!isNone && (
-                                    <div className={`${showWeight ? "col-span-3" : "col-span-6"} flex items-center gap-1`}>
+                                    <div className={`${colSpan(cols.main)} flex items-center gap-1`}>
                                       {isTimeBased ? durationUnit.charAt(0).toUpperCase() + durationUnit.slice(1) : "Reps"}
                                       {isTimeBased && (
                                         <button
@@ -1709,10 +1713,10 @@ export default function WorkoutFormPage() {
                                     </div>
                                   )}
                                   {tracking === "time_distance" && (
-                                    <div className="col-span-2">{isFloorsInput ? "Floors" : "Dist (m)"}</div>
+                                    <div className={colSpan(cols.distance)}>{isFloorsInput ? "Floors" : "Dist (m)"}</div>
                                   )}
-                                  {showSpeed && <div className="col-span-2">mph</div>}
-                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
+                                  {showSpeed && <div className={colSpan(cols.speed)}>mph</div>}
+                                  <div className={`${colSpan(cols.done)} text-center`}>Done</div>
                                 </div>
                               </div>
                             )
@@ -1727,6 +1731,7 @@ export default function WorkoutFormPage() {
                             const isNone = tracking === "none"
                             const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
                             const isFloorsInput = isFloorsExercise(exercise.name)
+                            const cols = trackColumnSpans(tracking)
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
                               : (exercise.reps?.split("-")[0] || "0")
@@ -1744,14 +1749,14 @@ export default function WorkoutFormPage() {
                                         : "bg-white dark:bg-zinc-800"
                                     }`}
                                   >
-                                    <div className="col-span-2">
+                                    <div className={colSpan(cols.set)}>
                                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
                                         {setIndex + 1}
                                       </span>
                                     </div>
                                     {/* Weight input — only for reps_weight */}
                                     {showWeight && (
-                                      <div className="col-span-3">
+                                      <div className={colSpan(cols.weight)}>
                                         <input
                                           type="number"
                                           inputMode="decimal"
@@ -1769,7 +1774,7 @@ export default function WorkoutFormPage() {
                                         would eat a trailing decimal point as it's
                                         typed. */}
                                     {!isNone && (
-                                      <div className={showWeight ? "col-span-3" : "col-span-6"}>
+                                      <div className={colSpan(cols.main)}>
                                         {isTimeBased ? (
                                           <input
                                             key={`duration-${exerciseIndex}-${setIndex}-${durationUnit}`}
@@ -1795,7 +1800,7 @@ export default function WorkoutFormPage() {
                                     {/* Distance input — time_distance only. Stairmaster-style
                                         exercises measure floors climbed, not meters. */}
                                     {tracking === "time_distance" && (
-                                      <div className="col-span-2">
+                                      <div className={colSpan(cols.distance)}>
                                         <input
                                           type="number"
                                           inputMode={isFloorsInput ? "numeric" : "decimal"}
@@ -1811,7 +1816,7 @@ export default function WorkoutFormPage() {
                                         this one did not, so flipping views threw
                                         the number away. */}
                                     {showSpeed && (
-                                      <div className="col-span-2">
+                                      <div className={colSpan(cols.speed)}>
                                         <input
                                           type="number"
                                           inputMode="decimal"
@@ -1824,7 +1829,7 @@ export default function WorkoutFormPage() {
                                       </div>
                                     )}
                                     {/* Actions */}
-                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
+                                    <div className={`${colSpan(cols.done)} flex justify-center gap-1`}>
                                       {!set.completed && !set.weight && !set.reps && !isNone && showWeight && (
                                         <button
                                           onClick={() => openSkipModal(exerciseIndex, setIndex)}

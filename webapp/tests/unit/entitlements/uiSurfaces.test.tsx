@@ -22,6 +22,7 @@ import UpgradeSheet, {
   checkoutRefusalState,
   dismissLabel,
 } from '../../../components/UpgradeSheet'
+import { UnenforcedPlan } from '../../../app/dashboard/plan/PlanPageClient'
 import {
   allowanceLine,
   featureHeadline,
@@ -432,6 +433,32 @@ test('the plan page presents no tiers at all while enforcement is off', () => {
   // ...and the bail happens BEFORE any of that is rendered, not around it.
   assert.ok(at < src.indexOf('<PlanComparison'), 'the bail must precede the comparison')
   assert.ok(at < src.indexOf('<PlanPricing'), 'the bail must precede the prices')
+
+  // The card that branch returns is its own pure component now, so what it
+  // actually SAYS is asserted on the markup rather than on the source of the
+  // line that mounts it. It was extracted so that the one thing which must
+  // survive the switch — the way into the Stripe billing portal for a member
+  // Stripe is charging, see tests/unit/billing/manageBilling.test.tsx — can be
+  // rendered in a test. Billing is not a tier surface: it names no tier, no cap
+  // and no amount, which is exactly what is checked here.
+  const card = renderToStaticMarkup(
+    <UnenforcedPlan
+      snapshot={{
+        role: 'user',
+        tier: 'plus',
+        enforced: false,
+        grandfathered: false,
+        subscription: { status: 'active', currentPeriodEnd: null, cancelAtPeriodEnd: false },
+        checkoutAvailable: true,
+        features: {},
+      }}
+      portalState="idle"
+      onOpenPortal={() => {}}
+    />,
+  )
+  assert.doesNotMatch(card, /\$\d/, 'no price on the unenforced card')
+  assert.doesNotMatch(card, /\bPlus\b/, 'the tier must not be named on the unenforced card')
+  assert.doesNotMatch(card, /\bfree plan\b|\bupgrade\b/i, 'and nothing is being sold')
 })
 
 test('the plan entry points link to the page rather than raising a sheet', () => {

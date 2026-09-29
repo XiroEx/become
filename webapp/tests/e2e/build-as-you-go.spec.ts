@@ -602,7 +602,7 @@ test('a cardio exercise keeps time, distance and speed inside a circuit', async 
 
 /**
  * The live view types cardio into the same two boxes as reps and weight (the
- * labels above them say Duration and Distance). It has to LOG them as duration
+ * labels above them say Time and Distance). It has to LOG them as duration
  * and distance, or a treadmill posts 1600 lbs and a plank posts 45 reps —
  * which is what history, the PR engine and the track view then read.
  */
@@ -632,8 +632,11 @@ test('cardio logged in the live view lands in duration, distance and speed', asy
   await expect(page.getByText('Stair Climber').first()).toBeVisible({ timeout: 30_000 })
 
   const live = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
-  console.log('LIVE CARDIO asks for:', ['Duration', 'Distance', 'Speed'].filter(l => live.includes(l)).join(', '))
-  expect(live).toContain('Duration (sec)')
+  console.log('LIVE CARDIO asks for:', ['Time', 'Distance', 'Speed'].filter(l => live.includes(l)).join(', '))
+  // "Time", not "Duration": the long label plus its unit toggle would not fit
+  // a third of a phone's width, wrapped, and dropped the time box half a row
+  // below distance and speed.
+  expect(live).toContain('Time (sec)')
   expect(live).toContain('Distance (m)')
   expect(live).toContain('Speed (mph)')
 

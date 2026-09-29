@@ -2466,18 +2466,28 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div data-tour="live-inputs" className="relative flex gap-3 mb-6">
+                  {/* Every label row here is exactly h-5 tall, and that is
+                      load-bearing. The time column carries a unit toggle
+                      beside its label; that pair does not fit a third of a
+                      phone's width once cardio also asks for distance and
+                      speed, so the label wrapped onto a second line and shoved
+                      the time box half a row below the two next to it. A fixed
+                      label-row height keeps every input on the same line
+                      whatever its label does — and the label itself is short
+                      enough ("Time", not "Duration") that it no longer wants
+                      to wrap in the first place. */}
+                  <div data-tour="live-inputs" className="relative flex items-start gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
-                        <div className="mb-1 flex items-center justify-between">
-                          <label className="text-xs text-white/60">
+                        <div className="mb-1 flex h-5 items-center justify-between gap-1 overflow-hidden">
+                          <label className="min-w-0 truncate text-xs text-white/60">
                             {bellWeightLabel(bellStyle)}
                           </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
                             Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
-                            <span className="text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
+                            <span className="shrink-0 text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
                           )}
                         </div>
                         <input
@@ -2499,7 +2509,7 @@ export default function LiveWorkoutPage() {
                     {/* Reps input — for reps_weight, reps_bodyweight, reps_only */}
                     {showRepsInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Reps</label>
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">Reps</label>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -2513,16 +2523,23 @@ export default function LiveWorkoutPage() {
                     {/* Duration input — for time, time_distance, intervals */}
                     {showTimeInput && (
                       <div className="flex-1">
-                        <div className="mb-1 flex items-center justify-between gap-1">
-                          <label className="block text-xs text-white/60">
-                            {isIntervalExercise ? `Duration (${durationUnit}) — optional` : `Duration (${durationUnit})`}
+                        <div className="mb-1 flex h-5 items-center justify-between gap-1 overflow-hidden">
+                          {/* "Time", not "Duration", and no "— optional"
+                              tacked on: this label sits beside the unit
+                              toggle in a third of a phone's width when the
+                              exercise also tracks distance and speed. That an
+                              interval's time is optional is said by the hint
+                              under the row, which shows exactly while nothing
+                              has been typed. */}
+                          <label className="min-w-0 truncate text-xs text-white/60">
+                            {`Time (${durationUnit})`}
                           </label>
                           <button
                             type="button"
                             onClick={() => setDurationUnit((u) => (u === "sec" ? "min" : "sec"))}
                             className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/70 hover:bg-white/20"
                           >
-                            {durationUnit === "sec" ? "Use min" : "Use sec"}
+                            {durationUnit === "sec" ? "min" : "sec"}
                           </button>
                         </div>
                         <input
@@ -2547,7 +2564,7 @@ export default function LiveWorkoutPage() {
                         exercises measure floors climbed, not meters. */}
                     {tracking === "time_distance" && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">
                           {isFloorsInput ? "Floors" : "Distance (m)"}
                         </label>
                         <input
@@ -2563,7 +2580,7 @@ export default function LiveWorkoutPage() {
                     {/* Speed input — time_distance and intervals */}
                     {showSpeedInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Speed (mph)</label>
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">Speed (mph)</label>
                         <input
                           type="number"
                           inputMode="decimal"
