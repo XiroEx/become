@@ -309,8 +309,8 @@ one.
   Refused with 400, never silently filed under today: a malformed key, a key
   that is not a real calendar day, a day in the FUTURE of the caller's own
   local today, and one older than `BACKDATE_WINDOW_DAYS` (7 — the offline
-  queue; a caller may widen it, which is how Health imports will reach back
-  further).
+  queue; a caller may widen it, which is how Health imports reach back
+  further — see below).
 - **`loggedAt`** — an ISO instant, stored on the entry, that orders two
   deliveries of the SAME day against each other. The newer one wins
   (`isStaleReplay`), so a queue draining out of order cannot overwrite a newer
@@ -323,6 +323,39 @@ one.
 entry deliberately does NOT touch the streak (`recordStreakActivity` only ever
 credits the day it runs on), the weight prompt/skip state, or
 `profile.currentWeightKg` when a later weigh-in already exists.
+
+### A weigh-in that came from Apple Health / Health Connect (`source` + `externalId`)
+
+`POST /api/weight` also accepts, on top of `date` + `loggedAt`
+(`webapp/lib/healthImport.ts` is the whole decision, `readHealthImport` the
+reader):
+
+- **`source`** — `'healthkit' | 'health-connect'`. Anything else is a 400; a
+  request with no `source` is the ordinary member-typed write and is unchanged.
+- **`externalId`** — the SAMPLE's own id. Health re-offers the same rows on
+  every sync, so this is the only thing that can say "this is that one again".
+  An id with no `source` is a 400: it de-duplicates against nothing.
+
+Both are stored on the `weightHistory` entry, and four rules follow from them:
+
+1. **The day comes from the sample, never from the import.** An import with no
+   `date` is a 400 rather than being filed under the day the sync happened to
+   run — that is the bug, and a wrong day looks exactly like a right one.
+2. **A repeat of the same `externalId` is ignored.** Answered
+   `200 { applied: false, duplicate: true }`: the row is not rewritten, so a
+   value the member has since corrected by hand survives every later sync. The
+   match is on the id alone, not the day.
+3. **An import reaches back `HEALTH_IMPORT_BACKDATE_WINDOW_DAYS` (90)**, not the
+   offline queue's 7 — a first sync carries months of real weigh-ins off a smart
+   scale. Older than that is still a 400.
+4. **An import is not member activity.** No streak day, even for a sample dated
+   today (the streak records showing up in Become, and a scale syncing in the
+   background is not that), and it does not answer the weight prompt
+   (`lastPromptDate` is left alone). It IS real data, so `lastWeightDate`,
+   `profile.currentWeightKg` and the goal-reached check still follow the newest
+   weigh-in.
+
+An import must carry a weight: `skip` with a `source` is a 400.
 
 ## Frontend Patterns
 
