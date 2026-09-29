@@ -9,6 +9,11 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "jsx": "react-jsx",
+    // TypeScript 6 (the version Expo SDK 57 expects) no longer pulls every
+    // `@types/*` package in `node_modules` into the global scope, so the
+    // ambient `describe`/`it`/`expect` and the Node built-ins the tests read
+    // `app.json` with have to be named explicitly.
+    "types": ["jest", "node"],
     "paths": {
       "@/*": ["./*"],
       "@become/api-client": ["../shared/api-client/src/index"],

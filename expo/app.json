@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "scheme": "become",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.redbtn.become",
@@ -14,9 +13,6 @@
     },
     "androidStatusBar": {
       "translucent": true,
-      "barStyle": "light-content"
-    },
-    "androidNavigationBar": {
       "barStyle": "light-content"
     },
     "android": {

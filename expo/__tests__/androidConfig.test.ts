@@ -25,9 +25,16 @@ describe("Android config — app.json", () => {
     expect(parsed.expo.androidStatusBar?.translucent).toBe(true);
   });
 
-  it("uses light-content barStyle on both system bars", () => {
+  it("uses light-content barStyle on the status bar", () => {
     expect(parsed.expo.androidStatusBar?.barStyle).toBe("light-content");
-    expect(parsed.expo.androidNavigationBar?.barStyle).toBe("light-content");
+  });
+
+  // Expo SDK 57's config schema rejects `androidNavigationBar` — Android is
+  // edge-to-edge by default now and the nav bar style comes from the
+  // `StatusBar`/`SystemBars` API at runtime, not from app.json. Keeping the key
+  // fails `npx expo-doctor`'s schema check, so assert it stays gone.
+  it("does not declare the removed androidNavigationBar key", () => {
+    expect(parsed.expo.androidNavigationBar).toBeUndefined();
   });
 
   it("declares android.package = io.redbtn.become", () => {
