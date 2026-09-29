@@ -9,8 +9,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toPhaseOutline } from "@/lib/programs/programDetail";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function PhaseRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; phase?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -32,7 +34,7 @@ export default function PhaseRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Invalid phase</Text>
@@ -53,7 +55,7 @@ export default function PhaseRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-phase-route"
     >
       <PhaseScreen

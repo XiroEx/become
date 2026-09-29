@@ -9,6 +9,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { getOfflineWrites } from "@/lib/offline/writes";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * Mind / mood screen. Logs today's mood and shows the recent mood-history strip
@@ -22,6 +23,7 @@ import { getOfflineWrites } from "@/lib/offline/writes";
  * felt.
  */
 export default function MindRoute() {
+  const { colors } = useThemeTokens();
   const { token } = useAuth();
   const [selected, setSelected] = useState<MoodValue | null>(null);
   const [saving, setSaving] = useState(false);
@@ -64,7 +66,7 @@ export default function MindRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="mind-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>

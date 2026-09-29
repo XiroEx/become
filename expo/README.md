@@ -145,20 +145,33 @@ The same triplets are exported from `lib/theme/tokens.ts` as a typed map, for RN
 
 `darkMode: "class"` is set in `tailwind.config.js` — non-negotiable for NativeWind's runtime `colorScheme.set()`.
 
-### v1 is dark-only, and the pin is deliberate
+### Light and dark both ship, and the system picks (NP-123)
 
-`lib/theme/colorScheme.ts` exports `pinDarkMode()`, which `app/_layout.tsx`
-calls **at module load** — before the first render, so there is no frame in the
-system's theme. `app.json` sets `userInterfaceStyle: "dark"` so the OS agrees
-about keyboards, share sheets and the launch screen, and the status bar stays
-`style="light"` because the surface is dark.
+`lib/theme/colorScheme.ts` exports `followSystemColorScheme()`, which
+`app/_layout.tsx` calls **at module load** — before the first render, so there is
+no frame in the wrong theme. `app.json` sets `userInterfaceStyle: "automatic"` so
+the OS agrees about the surfaces the app does not draw (keyboards, share sheets,
+the launch screen, which has a light variant and a dark one), and the status bar
+style is derived from the theme rather than pinned to `light`.
 
-Why: NativeWind follows the system colour scheme unless told otherwise, while 39
-files hard-code `#0a0a0a` in a plain RN `style` (a SafeAreaView or a StatusBar
-cannot read a Tailwind class). A phone in light mode therefore drew light-mode
-text — `--foreground: 24 24 27`, near-black — on those near-black surfaces.
-NP-123 builds the real light theme, and it starts by deleting the literals, not
-by deleting the pin. Asserted by `__tests__/darkModePin.test.tsx`.
+**Every colour comes from a class or from `useThemeTokens()`.** The hook reads
+NativeWind's colour scheme — the same signal `bg-background` resolves against —
+so a class and a plain RN `style` on one screen can never disagree, and a live
+flip of the system setting re-renders both. It gives you `colors` (every token as
+`rgb(r g b)`), `tint()` for the translucent banner surfaces, `scrim` for a modal
+backdrop, and `statusBarStyle`. `useThemedWindowBackground()` (root layout only)
+repaints the window itself through `expo-system-ui`, because `app.json` can only
+hold one colour for it.
+
+This replaced NP-013's dark pin, which existed only because 43 `#0a0a0a`
+literals sat in plain RN styles while the classes beside them followed the
+system: a phone in light mode drew light-mode text (`--foreground: 24 24 27`,
+near-black) on those near-black surfaces. **A hex colour is now a lint error and
+a test failure** in `app/`, `components/` and `lib/` — `eslint.config.mjs`
+(`no-restricted-syntax`) and `__tests__/noHexColorLiterals.test.ts`.
+`__tests__/themeFollowsSystem.test.tsx` covers the rest: the live flip, the
+window, the status bar, the navigators, the two launch screens, and the contrast
+of every text/surface pair in both modes.
 
 ## Offline: the banner, and the writes that keep their day
 
@@ -318,10 +331,11 @@ expo/
 │   │   └── writes.ts         # The mounted weight/mood queue (see Offline, below)
 │   ├── query/                # offlineQueue.ts — dedup + backoff + snapshot
 │   └── theme/
-│       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
+│       ├── colorScheme.ts    # followSystemColorScheme() — the system decides
 │       ├── fonts.ts          # The Geist faces + family × weight → one face
 │       ├── loadFonts.ts      # useGeistFonts() / holdSplashForFonts()
-│       └── tokens.ts         # Typed RGB-triplet map (light + dark)
+│       ├── tokens.ts         # Typed RGB-triplet map (light + dark) + tint/scrim
+│       └── useThemeTokens.ts # THE hook: colours for everything Tailwind can't reach
 ├── components/
 │   └── Text.tsx          # THE app's Text — React Native's, with Geist on it
 ├── __tests__/            # Jest + RTL tests

@@ -11,6 +11,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * Read-only native admin exercise list. Gated on user.role === 'admin'. There
@@ -22,6 +23,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
  * build; NP-122 deletes the screen and adds an admin-only link to the web.
  */
 export function AdminExercisesScreen() {
+  const { colors } = useThemeTokens();
   const { user, token } = useAuth();
   const role = user?.role ?? null;
   const isAdmin = role === "admin";
@@ -42,7 +44,7 @@ export function AdminExercisesScreen() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="admin-exercises-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>

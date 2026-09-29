@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "@/components/Button";
 import { restoreAccount } from "@/lib/account/deleteAccount";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * THE RESTORE LINK, WHEN IT OPENS IN THE APP.
@@ -28,6 +29,7 @@ import { restoreAccount } from "@/lib/account/deleteAccount";
  * member presses a button — because mail scanners open links before people do.
  */
 export default function RestoreAccountRoute() {
+  const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ u?: string | string[]; t?: string | string[] }>();
   const router = useRouter();
   const [state, setState] = useState<"idle" | "working" | "done" | "failed">("idle");
@@ -46,7 +48,7 @@ export default function RestoreAccountRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="restore-account-route"
     >
       <View style={{ padding: 16, gap: 12 }}>

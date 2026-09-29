@@ -12,7 +12,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
   }
   style={
     {
-      "backgroundColor": "#0a0a0a",
+      "backgroundColor": "rgb(10 10 10)",
       "flex": 1,
     }
   }

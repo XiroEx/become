@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface StreakBannerProps {
   streakDays: number;
@@ -44,6 +44,7 @@ export function StreakBanner({
   freezeAvailable = false,
   testID = "streak-banner",
 }: StreakBannerProps) {
+  const { colors } = useThemeTokens();
   const isActive = streakDays > 0;
   return (
     <View
@@ -56,7 +57,7 @@ export function StreakBanner({
       className="bg-card border border-border rounded-2xl p-4 flex-row items-center"
     >
       <Flame
-        color={isActive ? resolveToken("primary", "dark") : resolveToken("muted-foreground", "dark")}
+        color={isActive ? colors.primary : colors["muted-foreground"]}
         size={28}
         strokeWidth={1.5}
       />
@@ -77,7 +78,7 @@ export function StreakBanner({
       {freezeAvailable ? (
         <View testID={`${testID}-freeze`} className="ml-2">
           <Snowflake
-            color={resolveToken("accent", "dark")}
+            color={colors.accent}
             size={20}
             strokeWidth={1.5}
           />

@@ -29,8 +29,15 @@ const config = JSON.parse(raw) as {
   };
 };
 
-/** The app's first paint: `app/_layout.tsx`'s Stack contentStyle. */
+/**
+ * The app's first paint in DARK, which is also the pre-JS window colour and the
+ * icon plate. NP-123 made the theme follow the system, so the launch screen now
+ * has two of these — `expo/__tests__/themeFollowsSystem.test.tsx` owns the pair
+ * and the light mark's ink. This file keeps the dark side honest.
+ */
 const FIRST_PAINT = "#0a0a0a";
+/** zinc-50: `lightTokens.background`, and the light launch screen. */
+const FIRST_PAINT_LIGHT = "#fafafa";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
@@ -138,12 +145,21 @@ describe("the Android adaptive icon", () => {
 });
 
 describe("the splash screen", () => {
-  it("uses a dedicated image that exists and carries alpha", () => {
+  it.each(["splash-icon.png", "splash-icon-light.png"])(
+    "%s is a dedicated 1024px image that carries alpha",
+    (file) => {
+      const header = readPngHeader(path.join(EXPO_DIR, "assets", file));
+      expect([header.width, header.height]).toEqual([1024, 1024]);
+      expect(hasAlpha(header)).toBe(true);
+    },
+  );
+
+  it("names the light mark at the top level and the dark one under `dark`", () => {
     const props = splashProps();
-    expect(props.image).toBe("./assets/splash-icon.png");
-    const header = readPngHeader(path.join(EXPO_DIR, "assets", "splash-icon.png"));
-    expect([header.width, header.height]).toEqual([1024, 1024]);
-    expect(hasAlpha(header)).toBe(true);
+    expect(props.image).toBe("./assets/splash-icon-light.png");
+    expect((props.dark as { image?: string }).image).toBe(
+      "./assets/splash-icon.png",
+    );
   });
 
   it("scales the mark rather than stretching it edge to edge", () => {
@@ -157,24 +173,26 @@ describe("the splash screen", () => {
 // colours disagrees, because whatever is painted between the launch screen and
 // the first screen is whichever one the system reaches for.
 describe("no white flash between the launch screen and the first screen", () => {
-  it("the splash background is the app's first paint", () => {
-    expect(splashProps().backgroundColor).toBe(FIRST_PAINT);
+  // NP-123: there are two first paints now, one per scheme, and the launch
+  // screen has to match the one the system asked for. A single splash colour is
+  // the white flash (or the black one) for half the members.
+  it("the light splash is the light theme's first paint", () => {
+    expect(splashProps().backgroundColor).toBe(FIRST_PAINT_LIGHT);
   });
 
-  // NP-013 pinned `userInterfaceStyle` to `dark`, so the system can no longer
-  // reach for the default WHITE launch screen. The `dark` block stays anyway:
-  // it costs nothing, it is the same colour and image, and it is what keeps
-  // this true if the pin is ever lifted (NP-123's light theme).
-  it("the dark-mode splash is the same colour, and the style is pinned dark", () => {
-    expect(config.expo.userInterfaceStyle).toBe("dark");
+  it("the dark splash is the dark theme's first paint, and the OS decides which", () => {
+    expect(config.expo.userInterfaceStyle).toBe("automatic");
     const dark = splashProps().dark as
       | { backgroundColor?: string; image?: string }
       | undefined;
     expect(dark?.backgroundColor).toBe(FIRST_PAINT);
-    expect(dark?.image).toBe(splashProps().image);
+    expect(dark?.image).not.toBe(splashProps().image);
   });
 
-  it("the root view background is the same colour", () => {
+  it("the root view background is the dark first paint, before JS exists", () => {
+    // One static value for a window with two colours; `expo-system-ui` repaints
+    // it from the theme while the splash is still up (see
+    // `useThemedWindowBackground`, asserted in themeFollowsSystem.test.tsx).
     expect(config.expo.backgroundColor).toBe(FIRST_PAINT);
   });
 
@@ -185,10 +203,14 @@ describe("no white flash between the launch screen and the first screen", () => 
     expect(pkg.dependencies?.["expo-system-ui"]).toBeDefined();
   });
 
-  it("and it is the colour the first screen actually paints", () => {
+  it("and the first screen paints whichever one the theme resolves to", () => {
+    // It used to be the literal `#0a0a0a` here. A literal has one value, and
+    // that is the whole of NP-123: the Stack's surface is the token, which is
+    // `#0a0a0a` in dark and `#fafafa` in light.
     const layout = fs.readFileSync(LAYOUT, "utf8");
     expect(layout).toMatch(
-      new RegExp(`contentStyle:\\s*\\{\\s*backgroundColor:\\s*"${FIRST_PAINT}"`),
+      /contentStyle:\s*\{\s*backgroundColor:\s*colors\.background\s*\}/,
     );
+    expect(layout).toContain("useThemeTokens()");
   });
 });

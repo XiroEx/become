@@ -16,6 +16,7 @@ import { detectBellStyle } from "@/lib/live/bellStyle";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -108,6 +109,7 @@ export function LiveWorkoutClient({
   restTimerClearInterval,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
+  const { colors } = useThemeTokens();
   const [grid, setGrid] = useState<LiveGrid>(() =>
     initialGrid(workout.exercises, restoredGrid),
   );
@@ -149,7 +151,7 @@ export function LiveWorkoutClient({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>

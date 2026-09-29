@@ -11,6 +11,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { AuthGuard } from "@/lib/auth/AuthGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useMutation } from "@/lib/hooks/useMutation";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 interface ProfilePatchInput {
   profile: OnboardingProfile;
@@ -30,6 +31,7 @@ interface ProfilePatchInput {
  * AuthGuard, on its own, without the onboarding gate.
  */
 export default function OnboardingRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token, refresh, isAuthed, loading } = useAuth();
 
@@ -74,7 +76,7 @@ export default function OnboardingRoute() {
     >
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
         testID="onboarding-route"
       >
         <OnboardingFlow onComplete={onComplete} submitting={submitting} />

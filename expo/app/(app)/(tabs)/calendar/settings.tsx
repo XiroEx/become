@@ -13,8 +13,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function CalendarSettingsRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const today = new Date().toISOString().slice(0, 10);
@@ -55,7 +57,7 @@ export default function CalendarSettingsRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="calendar-settings-route"
     >
       <KeyboardAvoidingView

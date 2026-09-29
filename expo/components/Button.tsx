@@ -1,7 +1,7 @@
 import { Pressable, ActivityIndicator, View } from "react-native";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   MIN_TOUCH_TARGET,
   hitSlopToMinTarget,
@@ -89,6 +89,7 @@ export function Button({
   accessibilityHint,
   testID,
 }: ButtonProps) {
+  const { colors } = useThemeTokens();
   const isInactive = disabled || loading;
   const variantClass = VARIANT_CLASSES[variant];
   const variantTextClass = VARIANT_TEXT_CLASSES[variant];
@@ -117,12 +118,11 @@ export function Button({
         <View testID={testID ? `${testID}-spinner` : undefined}>
           <ActivityIndicator
             size="small"
-            color={resolveToken(
+            color={
               variant === "primary" || variant === "destructive"
-                ? "primary-foreground"
-                : "foreground",
-              "dark",
-            )}
+                ? colors["primary-foreground"]
+                : colors.foreground
+            }
           />
         </View>
       ) : (

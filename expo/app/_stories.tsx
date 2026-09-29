@@ -10,6 +10,7 @@ import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Toggle } from "@/components/Toggle";
 import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * The component gallery. `_stories` is not a private filename to expo-router —
@@ -18,6 +19,7 @@ import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
  * to Home in anything but a development build.
  */
 export function StoriesGallery() {
+  const { colors } = useThemeTokens();
   const [text, setText] = useState("");
   const [toggleOn, setToggleOn] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -26,7 +28,7 @@ export function StoriesGallery() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="stories-screen"
     >
       <ScrollView

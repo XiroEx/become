@@ -11,6 +11,7 @@ import {
   type CheckInPayload,
 } from "@/components/CheckInModal";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface TodayWorkoutSummary {
   programName: string;
@@ -85,6 +86,7 @@ export function DashboardScreen({
   onRefresh,
   onOpenSettings,
 }: DashboardScreenProps) {
+  const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
   const open = isControlled ? checkInOpen : internalOpen;
@@ -97,7 +99,7 @@ export function DashboardScreen({
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
         testID="dashboard-screen"
       >
         <View
@@ -116,7 +118,7 @@ export function DashboardScreen({
               style={{
                 height: i === 0 ? 32 : 96,
                 borderRadius: 12,
-                backgroundColor: "#1a1a1a",
+                backgroundColor: colors.muted,
               }}
             />
           ))}
@@ -128,7 +130,7 @@ export function DashboardScreen({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="dashboard-screen"
     >
       <ScrollView
@@ -151,7 +153,7 @@ export function DashboardScreen({
             style={{
               padding: 12,
               borderRadius: 12,
-              backgroundColor: "#3a1212",
+              backgroundColor: tint("destructive", 0.18),
             }}
           >
             <Text accessibilityRole="alert" className="text-destructive text-sm">
@@ -191,7 +193,7 @@ export function DashboardScreen({
             style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
             className="rounded-xl border border-border p-2"
           >
-            <Settings color="#a1a1aa" size={20} strokeWidth={1.5} />
+            <Settings color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
           </Pressable>
         </View>
 

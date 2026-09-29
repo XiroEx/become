@@ -20,19 +20,26 @@ import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { WidgetsBridge } from "@/components/widgets/WidgetsBridge";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
-import { pinDarkMode } from "@/lib/theme/colorScheme";
+import { followSystemColorScheme } from "@/lib/theme/colorScheme";
+import {
+  useThemeTokens,
+  useThemedWindowBackground,
+} from "@/lib/theme/useThemeTokens";
 import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
 
 /**
- * ONE THEME, AND IT IS DARK — set before the first render, not in an effect.
+ * TWO THEMES, AND THE SYSTEM PICKS — set before the first render, not in an
+ * effect (NP-123).
  *
- * NativeWind follows the system colour scheme unless told otherwise, while 39
- * files in this app hard-code `#0a0a0a` in a plain RN style. A phone in light
- * mode drew near-black light-mode text on those near-black surfaces. Pinned
- * here (see `lib/theme/colorScheme.ts`) and in `app.json`'s
- * `userInterfaceStyle`, until NP-123 builds a real light theme.
+ * The web follows `prefers-color-scheme` (`webapp/app/layout.tsx`), and native
+ * now does the same: NativeWind's colour scheme is the system's, every colour
+ * comes from a class or from `useThemeTokens()`, and `app.json` says
+ * `userInterfaceStyle: "automatic"` so the OS agrees about the surfaces the app
+ * does not draw. This replaces NP-013's dark pin, which existed only because 43
+ * `#0a0a0a` literals sat in plain RN styles, in 33 files, while the classes
+ * around them followed the system.
  */
-pinDarkMode();
+followSystemColorScheme();
 
 /**
  * ONE TYPEFACE, AND IT IS THE WEB'S — held before the first render, not in an
@@ -100,6 +107,10 @@ function ColdOpenUnlock() {
  */
 export default function RootLayout() {
   const { fontsReady } = useGeistFonts();
+  const { colors, statusBarStyle } = useThemeTokens();
+  // The window behind every screen, repainted from the theme while the splash is
+  // still up and again on every live flip of the system setting.
+  useThemedWindowBackground();
 
   // Nothing at all until Geist is in memory. The launch screen is still up
   // (`holdSplashForFonts()` above), so this is not a blank frame — it is the
@@ -111,7 +122,10 @@ export default function RootLayout() {
       <SafeAreaProvider>
         {/* One session for the whole app, above every route. */}
         <AuthProvider>
-          <StatusBar style="light" />
+          {/* `style` names the CONTENT: light glyphs on a dark surface, dark
+              glyphs on a light one. Derived from the theme, so it flips with the
+              system setting instead of leaving white-on-white icons (NP-123). */}
+          <StatusBar style={statusBarStyle} />
           <ColdOpenUnlock />
           {/* Records the member's timezone on launch and on the first foreground
               of a new local day. The notify cron skips a member with none
@@ -148,7 +162,7 @@ export default function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
-                  contentStyle: { backgroundColor: "#0a0a0a" },
+                  contentStyle: { backgroundColor: colors.background },
                 }}
               >
                 <Stack.Screen name="index" />

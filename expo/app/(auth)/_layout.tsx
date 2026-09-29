@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * THE UNGUARDED GROUP: sign-in, the magic-link verifier, and account restore.
@@ -13,11 +14,13 @@ import { Stack } from "expo-router";
  * the Android intent filters in `app.json` claim.
  */
 export default function AuthGroupLayout() {
+  const { colors } = useThemeTokens();
+
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: "#0a0a0a" },
+        contentStyle: { backgroundColor: colors.background },
       }}
     />
   );

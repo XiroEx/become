@@ -12,8 +12,10 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { localDateKey, withTz } from "@/lib/nutrition/localDay";
 import { toMealEntries } from "@/lib/nutrition/mealLog";
 import { useFoodLog } from "@/lib/nutrition/useFoodLog";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function DayLogRoute() {
+  const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ date?: string }>();
   // Falling back to the UTC day showed a New York member tomorrow's (empty)
   // log from 7pm on.
@@ -50,7 +52,7 @@ export default function DayLogRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-log-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>

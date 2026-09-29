@@ -13,7 +13,7 @@ import { GEIST_FONTS } from "./fonts";
  * several — of San Francisco / Roboto, and then nothing changes it back.
  *
  * So the launch screen is held (`holdSplashForFonts()`, called at MODULE LOAD
- * in `app/_layout.tsx`, next to `pinDarkMode()` — an effect runs after the
+ * in `app/_layout.tsx`, next to `followSystemColorScheme()` — an effect runs after the
  * first paint, which is exactly the frame this is about), the root layout
  * renders nothing until `useGeistFonts()` says ready, and hiding the splash is
  * that hook's job. The first frame a member sees is already Geist.

@@ -13,6 +13,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toConversations } from "@/lib/chat/chatApi";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const UNREAD_POLL_MS = 30_000;
 
@@ -28,6 +29,7 @@ export default function ChatIndexRoute({
   setIntervalImpl,
   clearIntervalImpl,
 }: ChatIndexRouteProps = {}) {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -62,7 +64,7 @@ export default function ChatIndexRoute({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="chat-index-route"
     >
       <View style={{ padding: 16 }}>

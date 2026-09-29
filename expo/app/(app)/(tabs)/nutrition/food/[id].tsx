@@ -29,6 +29,7 @@ import {
 } from "@/lib/nutrition/foodImport";
 import { localDateKey } from "@/lib/nutrition/localDay";
 import { useFoodLog } from "@/lib/nutrition/useFoodLog";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const EMPTY_PICKER_FOOD = {
   kcalPer100g: 0,
@@ -38,6 +39,7 @@ const EMPTY_PICKER_FOOD = {
 };
 
 export default function FoodDetailRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; row?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -147,7 +149,7 @@ export default function FoodDetailRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Missing food id</Text>
@@ -159,7 +161,7 @@ export default function FoodDetailRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-food-route"
     >
       <KeyboardAvoidingView
