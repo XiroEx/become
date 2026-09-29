@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { z } from "zod";
 import { apiFetch, ApiError, SchemaValidationError } from "@become/api-client";
+import { reportRequestError } from "@/lib/auth/unauthorized";
 
 export interface UseFetchOptions {
   baseUrl?: string;
@@ -58,6 +59,9 @@ export function useFetch<T>(
       setData(result);
       setError(null);
     } catch (err) {
+      // Report BEFORE the mounted/abort guards: a 401 is the session ending
+      // and it ends the session whether or not this screen is still watching.
+      reportRequestError(err);
       if (!mountedRef.current || controller.signal.aborted) return;
       if (err instanceof ApiError || err instanceof SchemaValidationError) {
         setError(err);
