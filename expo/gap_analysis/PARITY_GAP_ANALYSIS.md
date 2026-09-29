@@ -577,8 +577,8 @@ The chain runs through the foundation into the Mind session player, the hardest 
 20. Is AI label-photo lookup (`POST /api/ai/nutrition/product`, never surfaced on the web) wanted anywhere? (Jon)
 21. Session revocation: the store deletion feature (6aa2e122) is marked done with session revocation ticked, but `verifyAuth` (`webapp/lib/auth.ts:132-165`) never reads the user row, so a token on a second device keeps working through the 7-day grace and a signed-out token for its 30 days. Add a stored token version (NP-180 needs one for the widgets token anyway), or record that clients signing themselves out is enough? (George)
 22. NP-029 closes the `POST /api/share` hole going forward. Should George run a read-only query for existing public snapshots of custom programs made by someone other than the owner? (George)
-23. The store epic's route paragraph and its order of work still describe the iOS wrapper; update them to name the native app as the iOS build, and archive store stories 6ab02897 and 6ab02891 (see their story updates). (George)
-24. A leaner v1 if the date matters more than parity: v1 is 119 tickets and about 187 engineer-days. The first candidates to move after the store release are the P2 v1 tickets (NP-070, NP-111, NP-112, NP-113, NP-114, NP-115). (George, Jon)
+23. Done 9/29: the store epic's route paragraph and order of work now name the native app for both stores, store stories 6ab02897 and 6ab02891 are archived, and the TWA feature and its stories carry a superseded note.
+24. A leaner v1 if the date matters more than parity: v1 is 122 tickets and about 192 engineer-days. The first candidates to move after the store release are the P2 v1 tickets (NP-070, NP-111, NP-112, NP-113, NP-114, NP-115). (George, Jon)
 
 ## 12. Keeping this document current
 
