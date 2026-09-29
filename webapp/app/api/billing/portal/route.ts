@@ -7,7 +7,7 @@ import {
   isPortalConfigurationError,
 } from '@/lib/billing/stripeClient'
 import { readCustomerId } from '@/lib/billing/mongoDeps'
-import { portalReturnUrl } from '@/lib/billing/urls'
+import { parseReturnTarget, portalReturnUrl } from '@/lib/billing/urls'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,12 +20,27 @@ export const dynamic = 'force-dynamic'
  * only surface that handles proration, tax and dunning correctly, and a
  * hand-rolled cancel button is how an app ends up with a subscription Stripe
  * still bills and a database row that says cancelled.
+ *
+ * Body: `{ returnTo?: 'web' | 'app' }`, and it is OPTIONAL — `openBillingPortal`
+ * posts no body at all, which parses as 'web' and returns to /dashboard/plan
+ * exactly as before. 'app' returns to the PUBLIC page instead, because the
+ * portal opens in Safari for a native member and no session lives there.
  */
 export async function POST(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
     if (!auth.success || !auth.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Every shipped caller sends nothing, so an absent or unparseable body is
+    // 'web' and not an error. An unknown value IS an error, for the same reason
+    // it is in checkout: silently returning a native member to /dashboard/plan
+    // strands them on a sign-in screen.
+    const body: unknown = await request.json().catch(() => ({}))
+    const returnTo = parseReturnTarget((body as { returnTo?: unknown } | null)?.returnTo)
+    if (!returnTo) {
+      return NextResponse.json({ error: 'invalid_return_to' }, { status: 400 })
     }
 
     const cfg = await getBillingConfig()
@@ -41,8 +56,9 @@ export async function POST(request: NextRequest) {
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
       // Same origin rule as checkout: send them back to the host they are
-      // actually signed in on, validated against the allow-list.
-      return_url: portalReturnUrl(request.headers),
+      // actually signed in on, validated against the allow-list — and the same
+      // target rule, so a native member returns to the public page.
+      return_url: portalReturnUrl(request.headers, returnTo),
     })
 
     return NextResponse.json({ url: session.url })

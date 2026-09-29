@@ -34,7 +34,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import VerifyRoute, { VerifyScreen } from "../app/verify";
+import VerifyRoute, { VerifyScreen } from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

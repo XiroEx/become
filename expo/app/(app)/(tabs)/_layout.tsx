@@ -32,15 +32,30 @@ const ICON_BY_ROUTE: Record<
   chat: MessageCircle,
 };
 
+/**
+ * THE TAB BAR — five buttons, and nothing else.
+ *
+ * Every direct child of this folder is a screen of the TAB navigator, listed
+ * here or not: a folder without its own `_layout.tsx` is flattened, so
+ * `programming/[id]/workout/[idx]/live` used to be a tab button and the bar
+ * carried twenty of them. Each tab now owns a Stack
+ * (`components/navigation/TabStack.tsx`), which makes each folder exactly ONE
+ * screen here and turns every detail route into a push inside its tab.
+ *
+ * `headerShown: false` for the same reason the stacks set it: the screens draw
+ * their own headers inside a SafeAreaView.
+ *
+ * `__tests__/tab-bar.test.tsx` renders this layout over the REAL app directory
+ * and fails if the bar ever grows a sixth button.
+ */
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
+        headerShown: false,
         tabBarActiveTintColor: resolveToken("primary", "dark"),
         tabBarInactiveTintColor: resolveToken("muted-foreground", "dark"),
         tabBarStyle: { backgroundColor: "#0a0a0a", borderTopColor: "#27272a" },
-        headerStyle: { backgroundColor: "#0a0a0a" },
-        headerTitleStyle: { color: "#ffffff" },
       }}
     >
       {TAB_ROUTES.map(({ name, title }) => {

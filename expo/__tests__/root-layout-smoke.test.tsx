@@ -13,10 +13,15 @@
 // So: render the REAL root layout through the real router, with stub screens in
 // place of the app's routes. If the dependency set cannot boot, this fails.
 //
-// It also pins the launch decision: the cold-open gate reads the REAL secure
+// It also pins the launch decision: the session is read from the REAL secure
 // store (a fake Keychain, below), so a saved session lands in the app and an
 // empty one lands on sign-in. Against the in-memory placeholder stores the
 // second case was the only case.
+//
+// NP-003 moved WHO decides. The root layout no longer replaces the route —
+// it could only ever do that by overruling the screen a link opened — so the
+// real `app/index.tsx` is mounted here as the entry route and makes the call.
+// `__tests__/launch-and-links.test.tsx` covers the link cases.
 
 jest.mock("expo-secure-store", () => {
   const mem = new Map<string, string>();
@@ -51,9 +56,11 @@ jest.mock("@become/api-client", () => {
 });
 
 import { Text } from "react-native";
+import { Slot } from "expo-router";
 import { renderRouter, screen } from "expo-router/testing-library";
 import * as SecureStore from "expo-secure-store";
 import RootLayout from "../app/_layout";
+import LaunchRoute from "../app/index";
 /* eslint-enable import/first */
 
 const fake = SecureStore as unknown as { __reset: () => void };
@@ -68,11 +75,16 @@ function StubScreen({ label }: { label: string }) {
   return <Text testID={`stub-${label}`}>{label}</Text>;
 }
 
+// The shape of the real tree — the two groups and the onboarding route the
+// root layout names — with stubs where the screens would be.
 const ROUTES = {
   _layout: RootLayout,
-  index: () => <StubScreen label="index" />,
-  login: () => <StubScreen label="login" />,
-  "(tabs)/dashboard/index": () => <StubScreen label="dashboard" />,
+  index: LaunchRoute,
+  "(auth)/_layout": () => <Slot />,
+  "(auth)/login": () => <StubScreen label="login" />,
+  "(app)/_layout": () => <Slot />,
+  "(app)/(tabs)/dashboard/index": () => <StubScreen label="dashboard" />,
+  onboarding: () => <StubScreen label="onboarding" />,
 };
 
 beforeEach(() => {
@@ -83,16 +95,16 @@ describe("app/_layout.tsx (real root layout)", () => {
   it("mounts through renderRouter without throwing", async () => {
     renderRouter(ROUTES, { initialUrl: "/" });
 
-    // The layout rendered and handed off to a child route.
-    expect(await screen.findByTestId("stub-index")).toBeTruthy();
+    // The layout rendered and handed off to a child route — the entry route
+    // decides where to go, and with no stored session that is sign-in.
+    expect(await screen.findByTestId("stub-login")).toBeTruthy();
   });
 
-  it("drives the cold-open redirect to /login when no token is stored", async () => {
+  it("sends a launch with no stored token to /login", async () => {
     renderRouter(ROUTES, { initialUrl: "/" });
 
-    // ColdOpenGate lives inside the root layout: with nothing in the secure
-    // store it resolves to "login" and replaces the route. That only happens
-    // if the layout actually mounted.
+    // Nothing in the secure store, so `app/index.tsx` redirects. That only
+    // happens if the layout (and the AuthProvider inside it) actually mounted.
     expect(await screen.findByTestId("stub-login")).toBeTruthy();
   });
 

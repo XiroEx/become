@@ -33,9 +33,9 @@ import {
   toProgramDetailViewModel,
   toWorkoutOverview,
 } from "@/lib/programs/programDetail";
-import ProgramDetailRoute from "../app/(tabs)/programming/[id]/index";
-import PhaseRoute from "../app/(tabs)/programming/[id]/phase/[phase]";
-import WorkoutOverviewRoute from "../app/(tabs)/programming/[id]/workout/[idx]/index";
+import ProgramDetailRoute from "../app/(app)/(tabs)/programming/[id]/index";
+import PhaseRoute from "../app/(app)/(tabs)/programming/[id]/phase/[phase]";
+import WorkoutOverviewRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/index";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

@@ -76,7 +76,7 @@ each later feature brings its own with its code.
 Every top-level screen wraps its content in `SafeAreaView` from
 `react-native-safe-area-context` with `edges={["top","bottom"]}`. This handles
 both the notch + the home-bar overlap on modern iPhones. Layout files
-(`app/_layout.tsx`, `app/(tabs)/_layout.tsx`) wrap the entire tree in a
+(`app/_layout.tsx`, `app/(app)/(tabs)/_layout.tsx`) wrap the entire tree in a
 `SafeAreaProvider` so per-screen `SafeAreaView` invocations have insets to
 read from.
 
@@ -91,11 +91,11 @@ Every screen that contains a `TextInput` wraps its content in
 On Android we leave the default (windowSoftInputMode handles it). Affected
 screens:
 
-- `app/login.tsx`
-- `app/(tabs)/chat/[id].tsx`
-- `app/(tabs)/nutrition/search.tsx`
-- `app/(tabs)/nutrition/food/[id].tsx`
-- `app/(tabs)/calendar/settings.tsx`
+- `app/(auth)/login.tsx`
+- `app/(app)/(tabs)/chat/[id].tsx`
+- `app/(app)/(tabs)/nutrition/search.tsx`
+- `app/(app)/(tabs)/nutrition/food/[id].tsx`
+- `app/(app)/(tabs)/calendar/settings.tsx`
 
 The `Input` component itself is a thin wrapper around the platform `TextInput`
 — it does NOT manage keyboard avoidance because the surrounding screen knows

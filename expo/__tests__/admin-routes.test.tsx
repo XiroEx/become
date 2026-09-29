@@ -22,8 +22,8 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import AdminExercisesRoute from "../app/admin/exercises/index";
-import AdminFoodsRoute from "../app/admin/foods/index";
+import AdminExercisesRoute from "../app/(app)/admin/exercises/index";
+import AdminFoodsRoute from "../app/(app)/admin/foods/index";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

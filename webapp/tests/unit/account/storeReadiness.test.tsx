@@ -116,8 +116,15 @@ test('the web danger zone is two taps and signs the device out on success', () =
 
 // ─── 2. + 3. The store builds ────────────────────────────────────────────────
 
+// NP-003 rebuilt the native shell: every signed-in route moved into the
+// guarded `(app)` group and every tab got a Stack of its own, so the paths
+// below gained an `(app)/` segment. The STRINGS these assertions look for are
+// deliberately unchanged — `name="profile" options={{ href: null }}` and the
+// `/(tabs)/profile/health` href still say what they said, because a group is
+// invisible in a URL and the settings screen is still a hidden tab reached
+// only from the dashboard gear.
 test('the native settings screen renders the danger zone', () => {
-  const screen = readRepo('expo/app/(tabs)/profile/health.tsx')
+  const screen = readRepo('expo/app/(app)/(tabs)/profile/health.tsx')
   assert.match(screen, /import \{ DangerZone \} from "@\/components\/settings\/DangerZone"/, 'not imported')
   assert.match(screen, /<DangerZone/, 'imported but never rendered')
   assert.match(screen, /onDeleted=\{/, 'nothing happens after the account is deleted')
@@ -127,14 +134,14 @@ test('the native settings screen is REACHABLE — the dashboard has the entry po
   // Settings is a hidden route in the (tabs) tree (`href: null`), so without a
   // button it exists in the router and nowhere else: "Delete account is two
   // taps from Settings" is false if Settings cannot be opened at all.
-  const layout = readRepo('expo/app/(tabs)/_layout.tsx')
+  const layout = readRepo('expo/app/(app)/(tabs)/_layout.tsx')
   assert.match(layout, /name="profile" options=\{\{ href: null \}\}/, 'the profile route is no longer hidden — re-check this assertion')
 
   const dashboardScreen = readRepo('expo/components/DashboardScreen.tsx')
   assert.match(dashboardScreen, /testID="dashboard-open-settings"/, 'no settings control on the dashboard')
   assert.match(dashboardScreen, /accessibilityLabel="Settings"/, 'the settings control has no label')
 
-  const dashboardRoute = readRepo('expo/app/(tabs)/dashboard/index.tsx')
+  const dashboardRoute = readRepo('expo/app/(app)/(tabs)/dashboard/index.tsx')
   assert.match(dashboardRoute, /onOpenSettings=\{/, 'the dashboard never wires the settings control')
   assert.match(dashboardRoute, /\/\(tabs\)\/profile\/health/, 'the settings control does not open settings')
 })
@@ -215,7 +222,11 @@ test('the restore link is claimed by both store builds', () => {
 
 test('both restore surfaces post to the same public route, and neither acts on load', () => {
   const web = read('app/account/restore/RestoreClient.tsx')
-  const native = readRepo('expo/app/account/restore.tsx')
+  // In the `(auth)` group since NP-003 — unguarded on purpose: requesting
+  // deletion signs every device out, so the restore link must open with no
+  // session. The URL is unchanged (`/account/restore`), which is what the
+  // AASA and the Android intent filter claim.
+  const native = readRepo('expo/app/(auth)/account/restore.tsx')
 
   assert.match(web, /'\/api\/me\/account\/restore'/, 'the web page posts somewhere else')
   assert.match(readRepo('expo/lib/account/deleteAccount.ts'), /\/api\/me\/account\/restore/, 'the app posts somewhere else')
