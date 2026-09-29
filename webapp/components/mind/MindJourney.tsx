@@ -278,7 +278,11 @@ export default function MindJourney() {
       fetch('/api/mind/session', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ seed, plan: planToStore, tzOffset: new Date().getTimezoneOffset() }),
+        // `tz`, not `tzOffset`: the route (and every other date-scoped route)
+        // reads `tz`. Sending the other spelling dated the stored session with
+        // the UTC day, and the next GET dropped it as a new day — an evening
+        // session in New York never survived the walk away.
+        body: JSON.stringify({ seed, plan: planToStore, tz: new Date().getTimezoneOffset() }),
       }).catch(() => {})
     }
   }, [resumable, aiPlan, plan])

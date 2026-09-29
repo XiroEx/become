@@ -12,7 +12,7 @@ import MindProgress from '@/models/MindProgress'
 import UserProgress from '@/models/UserProgress'
 import MealLog from '@/models/MealLog'
 import { staleReason, type ActiveSessionStamp } from '@/lib/mind/activeSession'
-import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
+import { readTzOffset, readTzOffsetFromBody, readTzOffsetFromBodyCompat, localDateKey } from '@/lib/dayWindow'
 import {
   getLevelProgress, chapterFromSessions, sessionsIntoChapter,
   mainSessionAvailable, MAIN_SESSION_COOLDOWN_MS, CHAPTERS, getUnlockedSystems,
@@ -364,7 +364,13 @@ export async function PUT(request: NextRequest) {
     const locked = await mindSessionGate(auth.userId)
     if (locked) return locked
 
-    const dateKey = localDateKey(null, readTzOffsetFromBody(body))
+    // The member's LOCAL day, computed exactly as GET computes it — the two
+    // keys are compared on the next load and any disagreement reads as
+    // `new_day`, which throws the session away. `tz` is the contract; the
+    // `tzOffset` fallback covers a browser still running the bundle that
+    // spelled it that way, whose session would otherwise be stamped with the
+    // UTC day and lost from 8pm in New York.
+    const dateKey = localDateKey(null, readTzOffsetFromBodyCompat(body))
     const now = await activityNow(auth.userId)
 
     await MindProgress.updateOne(

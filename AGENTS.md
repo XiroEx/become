@@ -219,6 +219,13 @@ Rules, all four load-bearing:
   STORED zone (`webapp/lib/allowances.ts`), so moving your clock cannot open a
   fresh daily bucket.
 
+Exactly one route forgives another spelling, and only for bundles already in
+the field: `PUT /api/mind/session` reads `tz` and falls back to a numeric
+`tzOffset` (`readTzOffsetFromBodyCompat`). `MindJourney.begin` sent `tzOffset`
+from 2026-08-12 until NP-031, so the session a member began at 9pm in New York
+was stamped with tomorrow's UTC day and the next `GET /api/mind/session?tz=`
+dropped it as `new_day` — reopening the tab lost the session. Send `tz`.
+
 The native/shared side is `shared/api-client/src/tz.ts`: `DATE_SCOPED_FAMILIES`
 lists every family that reads `tz`, and the offset is recomputed per request
 because DST moves it. That list drifts the moment a new route reads `tz`, so
