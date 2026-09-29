@@ -16,6 +16,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** Local YYYY-MM-DD for the start-date mutation default. */
 function todayIso(): string {
@@ -23,6 +24,7 @@ function todayIso(): string {
 }
 
 export default function ProgramDetailRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -104,7 +106,7 @@ export default function ProgramDetailRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Missing program id</Text>
@@ -120,7 +122,7 @@ export default function ProgramDetailRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-detail-route"
     >
       {error ? (

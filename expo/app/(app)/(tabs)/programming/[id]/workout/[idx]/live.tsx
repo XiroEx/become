@@ -34,6 +34,7 @@ import {
   type LiveWorkoutSnapshot,
 } from "@/lib/live/liveWorkoutCache";
 import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -48,6 +49,7 @@ export interface LiveWorkoutRouteProps {
 export default function LiveWorkoutRoute({
   cacheStore,
 }: LiveWorkoutRouteProps = {}) {
+  const { colors, tint } = useThemeTokens();
   const params = useLocalSearchParams<{
     id?: string;
     idx?: string;
@@ -235,7 +237,7 @@ export default function LiveWorkoutRoute({
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Invalid workout</Text>
@@ -251,13 +253,16 @@ export default function LiveWorkoutRoute({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#0a0a0a" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       {prs.length > 0 ? (
         <View
           testID="live-pr-banner"
-          style={{ padding: 12, backgroundColor: "#1c2b14" }}
+          style={{ padding: 12, backgroundColor: tint("success", 0.18) }}
         >
-          <Text className="text-primary font-semibold">
+          {/* `text-foreground`, not `text-primary`: brand red on the light
+              mode's pale green wash is 3:1 and fails AA — the 🎉 does the
+              celebrating (NP-123). */}
+          <Text className="text-foreground font-semibold">
             🎉 New PR{prs.length === 1 ? "" : "s"}!
           </Text>
           {prs.map((pr) => (

@@ -5,7 +5,7 @@ import {
   Home,
   UtensilsCrossed,
 } from "lucide-react-native";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface TabRouteConfig {
   /** The folder under `(tabs)` this button opens. */
@@ -69,13 +69,21 @@ const ICON_BY_ROUTE: Record<TabRouteConfig["name"], typeof Home> = {
  * a fifth button or reorders the four.
  */
 export default function TabsLayout() {
+  // The bar is a native navigator surface, so none of it can be a class: the
+  // four colours come from the theme and re-render when the system flips
+  // (NP-123).
+  const { colors } = useThemeTokens();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: resolveToken("primary", "dark"),
-        tabBarInactiveTintColor: resolveToken("muted-foreground", "dark"),
-        tabBarStyle: { backgroundColor: "#0a0a0a", borderTopColor: "#27272a" },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors["muted-foreground"],
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+        },
       }}
     >
       {TAB_ROUTES.map(({ name, title }) => {

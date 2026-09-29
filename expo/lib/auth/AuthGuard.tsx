@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { Text } from "@/components/Text";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface AuthGuardProps {
   isAuthed: boolean;
@@ -25,6 +25,7 @@ export function AuthGuard({
   fallback,
   testID,
 }: AuthGuardProps) {
+  const { colors } = useThemeTokens();
   useEffect(() => {
     if (!loading && !isAuthed) {
       onUnauthed();
@@ -46,7 +47,7 @@ export function AuthGuard({
       >
         <ActivityIndicator
           size="large"
-          color={resolveToken("primary", "dark")}
+          color={colors.primary}
         />
         <Text className="text-muted-foreground mt-2">Loading…</Text>
       </View>

@@ -10,8 +10,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toRecipeSummaries } from "@/lib/nutrition/recipes";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function RecipesIndexRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -30,7 +32,7 @@ export default function RecipesIndexRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="recipes-index-route"
     >
       <View style={{ padding: 16, gap: 12 }}>

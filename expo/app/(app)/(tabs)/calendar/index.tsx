@@ -18,6 +18,7 @@ import {
   slotKey,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * Calendar lives under (tabs) but is not exposed in the tab bar — it's
@@ -26,6 +27,7 @@ import {
  * corresponding workout.
  */
 export default function CalendarIndexRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -89,7 +91,7 @@ export default function CalendarIndexRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="calendar-index-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>

@@ -1,7 +1,7 @@
 import { View, TextInput } from "react-native";
 import { Text } from "@/components/Text";
 import type { TextInputProps } from "react-native";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { geistFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
@@ -19,6 +19,7 @@ export function Input({
   accessibilityHint,
   ...inputProps
 }: InputProps) {
+  const { colors } = useThemeTokens();
   const labelId = testID ? `${testID}-label` : undefined;
   const errorId = testID ? `${testID}-error` : undefined;
   // The field itself is the one TextInput in the app, and a TextInput is not a
@@ -49,7 +50,7 @@ export function Input({
         testID={testID}
         accessibilityLabel={accessibilityLabel ?? label}
         accessibilityHint={hint}
-        placeholderTextColor={resolveToken("muted-foreground", "dark")}
+        placeholderTextColor={colors["muted-foreground"]}
         className={inputClassName}
         // 44 points tall, the same minimum every other control in the app
         // holds: the padding alone leaves it a few points short.

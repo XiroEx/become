@@ -15,8 +15,17 @@
  *     the widget, the app-icon badge and the daily glance cannot disagree.
  *  2. **The colours are the app's tokens.** Taken from `darkTokens`
  *     (`lib/theme/tokens.ts`) at module load, not typed out again, so the tile
- *     moves with the theme. v1 is dark-pinned, so one palette is the honest
- *     amount of palette.
+ *     moves with the theme.
+ *
+ *     ONE palette, and it is the dark one, even though the app itself follows
+ *     the system now (NP-123). A widget is not a screen: this tree is turned
+ *     into `RemoteViews` by a headless task and then owned by the launcher's
+ *     process, so there is nothing mounted to re-render when the member flips
+ *     the system setting — a light tile would keep drawing until the next
+ *     30-minute refresh, and a phone on auto would have tiles from whichever
+ *     scheme was live when the task last ran. Dark on the launcher's own
+ *     wallpaper is the one that is always legible. The palette is `darkTokens`
+ *     rather than a literal so it still cannot drift from the app's.
  *  3. **The typeface is Geist.** The app owns its Text for exactly this reason
  *     (NP-160) and a widget is no different: `app.json` hands the three faces
  *     below to the config plugin, which copies them into the Android assets

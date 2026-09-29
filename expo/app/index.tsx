@@ -1,7 +1,7 @@
 import { ActivityIndicator, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Redirect } from "expo-router";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
 import { needsOnboarding } from "@/lib/auth/onboardingGate";
 
@@ -36,19 +36,20 @@ import { needsOnboarding } from "@/lib/auth/onboardingGate";
  * on, which is why this file does not try to pre-empt it.
  */
 export default function LaunchRoute() {
+  const { colors } = useThemeTokens();
   const { status, user } = useAuth();
 
   if (status === "loading") {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
         testID="launch-screen"
       >
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator
             size="large"
-            color={resolveToken("primary", "dark")}
+            color={colors.primary}
             testID="launch-spinner"
           />
         </View>

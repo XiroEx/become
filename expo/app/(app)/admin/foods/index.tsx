@@ -11,6 +11,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 function narrowSource(s?: string): AdminFoodRow["source"] {
   return s === "usda" || s === "off" ? s : "custom";
@@ -27,6 +28,7 @@ function narrowSource(s?: string): AdminFoodRow["source"] {
  * the screen and adds an admin-only link to the web.
  */
 export function AdminFoodsScreen() {
+  const { colors } = useThemeTokens();
   const { user, token } = useAuth();
   const role = user?.role ?? null;
   const isAdmin = role === "admin";
@@ -48,7 +50,7 @@ export function AdminFoodsScreen() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="admin-foods-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>

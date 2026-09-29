@@ -9,12 +9,14 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toProgramSummary } from "@/lib/programs/programSummary";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * Browse-all programs route — GET /api/programs returns the hydrated catalog as
  * a bare array, mapped to ProgramSummary for the presentational list.
  */
 export default function ProgrammingIndexRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -37,7 +39,7 @@ export default function ProgrammingIndexRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-index-route"
     >
       <View style={{ padding: 16 }}>
@@ -69,7 +71,7 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/programming/search")}
               className="rounded-xl border border-border p-2"
             >
-              <Search color="#a1a1aa" size={20} strokeWidth={1.5} />
+              <Search color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
             </Pressable>
             <Pressable
               testID="programming-open-saved"
@@ -78,7 +80,7 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/programming/saved")}
               className="rounded-xl border border-border p-2"
             >
-              <Heart color="#a1a1aa" size={20} strokeWidth={1.5} />
+              <Heart color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
             </Pressable>
             <Pressable
               testID="programming-open-calendar"
@@ -87,7 +89,7 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/calendar")}
               className="rounded-xl border border-border p-2"
             >
-              <CalendarDays color="#a1a1aa" size={20} strokeWidth={1.5} />
+              <CalendarDays color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
             </Pressable>
           </View>
         </View>
@@ -100,7 +102,7 @@ export default function ProgrammingIndexRoute() {
             {[0, 1, 2].map((i) => (
               <View
                 key={i}
-                style={{ height: 72, borderRadius: 12, backgroundColor: "#1a1a1a" }}
+                style={{ height: 72, borderRadius: 12, backgroundColor: colors.muted }}
               />
             ))}
           </View>

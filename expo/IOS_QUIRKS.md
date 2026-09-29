@@ -16,20 +16,27 @@ the other two. Run it after replacing the source artwork:
 node scripts/generate-app-assets.mjs
 ```
 
-The launch screen is `expo-splash-screen` with
-`image: "./assets/splash-icon.png"`, `imageWidth: 200`, `resizeMode: "contain"`
-and `backgroundColor: "#0a0a0a"` — plus a `dark` block with the **same** colour
-and image. `userInterfaceStyle` is now pinned to `dark` (see "Status bar"
-below), so the system cannot reach for the default white launch screen; the
-`dark` block stays because it costs nothing and is what keeps this true if the
-pin is ever lifted.
+The launch screen is `expo-splash-screen`, and since NP-123 it is **two launch
+screens**: the top-level props are the LIGHT one
+(`image: "./assets/splash-icon-light.png"`, `backgroundColor: "#fafafa"`) and the
+`dark` block is the dark one (`splash-icon.png`, `#0a0a0a`), with
+`imageWidth: 200` and `resizeMode: "contain"` shared. `userInterfaceStyle` is
+`automatic` (see "Status bar" below), so the system picks — which is the point,
+and also why the two assets differ in more than background: the mark is white in
+one and zinc-900 in the other, because a white mark on `#fafafa` is an empty
+launch screen.
 
-`#0a0a0a` is not a decoration, it is the whole trick: it is the app's first
-paint (`app/_layout.tsx`'s Stack `contentStyle`), the root view background
-(`expo.backgroundColor`, which is why `expo-system-ui` is a dependency — on iOS
-that key does nothing without it) and the adaptive-icon background. Launch
-screen, window and first screen are one colour, so there is nothing to flash
-between them. `__tests__/appAssets.test.ts` asserts all four agree.
+The colour is not a decoration, it is the whole trick: launch screen, window and
+first screen have to agree, or whatever the system reaches for between them is
+the flash. Since NP-123 they agree PER SCHEME: the first paint is
+`app/_layout.tsx`'s Stack `contentStyle`, which is `colors.background` (`#0a0a0a`
+dark / `#fafafa` light); the window is `expo.backgroundColor` — one static value,
+so it stays the dark one, and `useThemedWindowBackground()` repaints it through
+`expo-system-ui` (which is why that package is a dependency — on iOS the
+`backgroundColor` key does nothing without it) before the splash lifts; the
+adaptive-icon plate stays dark because a launcher tile is artwork, not a UI
+surface. `__tests__/appAssets.test.ts` and
+`__tests__/themeFollowsSystem.test.tsx` assert the chain in both modes.
 
 ## Export compliance
 
@@ -112,18 +119,33 @@ need to render light to stay visible.
 **Never** use `style="black-translucent"` — per the `feedback_black_translucent`
 project memory, that style produces an unfixable bottom gap on iOS. The
 runtime test in `__tests__/iosConfig.test.ts` asserts the layout's StatusBar
-prop is one of `'light' | 'dark' | 'auto'` and never `'black-translucent'`.
+prop is never `'black-translucent'` — and, since NP-123, that it is not a literal
+at all: it is `statusBarStyle` from `useThemeTokens()`, which is light content on
+the dark surface and dark content on the light one.
 
-`app.json`'s `userInterfaceStyle` is **`dark`**, not `automatic` (NP-013).
-`automatic` handed the app whatever the phone was set to, and NativeWind
-followed it — while 39 files hard-code `#0a0a0a` in a plain RN `style`, because
-a SafeAreaView or a StatusBar cannot read a Tailwind class. A phone in light
-mode therefore drew light-mode text (`--foreground: 24 24 27`, near-black) on
-those near-black surfaces. v1 ships one theme: `lib/theme/colorScheme.ts`'s
-`pinDarkMode()` runs at module load in `app/_layout.tsx` and `app.json` says
-`dark` so the OS agrees about keyboards, share sheets and the launch screen.
-`__tests__/darkModePin.test.tsx` asserts all of it. NP-123 is where a real
-light theme lands, and it starts by deleting the literals.
+`app.json`'s `userInterfaceStyle` is **`automatic`** (NP-123). It was `dark`
+(NP-013) for one reason: 43 `#0a0a0a` literals sat in plain RN styles — a
+SafeAreaView, a Stack's `contentStyle`, the tab bar — while the classes beside
+them followed the system, so a phone in light mode drew light-mode text
+(`--foreground: 24 24 27`, near-black) on those near-black surfaces. The literals
+are gone: every colour is a class or comes from `useThemeTokens()`, and a hex is
+now a lint error. `automatic` is what makes the OS surfaces the app does not draw
+— keyboards, share sheets, the launch screen — match the app again.
+
+Two iOS specifics that come with it:
+
+- **The launch screen has two variants.** `expo-splash-screen`'s top-level props
+  are the LIGHT one (`#fafafa` with `splash-icon-light.png`, the mark in
+  zinc-900) and the `dark` block is `#0a0a0a` with the white mark. A white mark
+  on `#fafafa` is an empty launch screen, which is why there are two assets and
+  `scripts/generate-app-assets.mjs` paints the ink per asset.
+- **`expo.backgroundColor` can only be one colour**, and it is applied before JS
+  exists, so it stays the dark `#0a0a0a`. `useThemedWindowBackground()` in the
+  root layout repaints the window through `expo-system-ui` while the splash is
+  still up, and again on every live flip.
+
+`__tests__/themeFollowsSystem.test.tsx` asserts all of it (it replaced
+`darkModePin.test.tsx`).
 
 ## Swipe-back
 

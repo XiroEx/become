@@ -3,7 +3,7 @@ import { Text } from "@/components/Text";
 import { ExternalLink } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   defaultBrowserLauncher,
   openProgramEditInBrowser,
@@ -64,6 +64,7 @@ export function ProgramDetail({
   browserLauncher = defaultBrowserLauncher,
   testID = "program-detail",
 }: ProgramDetailProps) {
+  const { colors } = useThemeTokens();
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} testID={testID}>
       <View>
@@ -152,7 +153,7 @@ export function ProgramDetail({
         className="flex-row items-center justify-center gap-2 py-3 mt-4 border border-border rounded-xl"
       >
         <ExternalLink
-          color={resolveToken("muted-foreground", "dark")}
+          color={colors["muted-foreground"]}
           size={16}
           strokeWidth={1.5}
         />

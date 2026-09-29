@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import { Stack } from "expo-router";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * THE STACK EVERY TAB OWNS.
@@ -22,13 +23,26 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
   // The iOS back swipe. On by default in a native stack — pinned here so a
   // future screenOptions edit has to say out loud that it is turning it off.
   gestureEnabled: true,
-  contentStyle: { backgroundColor: "#0a0a0a" },
 };
 
 /**
  * The body of every `(tabs)/<tab>/_layout.tsx`. They differ in nothing, and a
  * copy in each of seven files is seven chances to drift.
+ *
+ * `contentStyle` is added HERE rather than in the constant above: the colour
+ * comes from the theme (NP-123), so it is a hook call and cannot live in a
+ * module-level object. The navigator paints it during a push, which is the one
+ * frame a screen's own SafeAreaView does not cover.
  */
 export function TabStack() {
-  return <Stack screenOptions={TAB_STACK_SCREEN_OPTIONS} />;
+  const { colors } = useThemeTokens();
+
+  return (
+    <Stack
+      screenOptions={{
+        ...TAB_STACK_SCREEN_OPTIONS,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    />
+  );
 }

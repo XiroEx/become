@@ -2,7 +2,7 @@ import { View, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { Heart } from "lucide-react-native";
 import { Card } from "@/components/Card";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { ProgramSummary } from "./ProgramsList";
 
 export interface SavedProgramsProps {
@@ -18,6 +18,7 @@ export function SavedPrograms({
   onToggleSave,
   testID = "saved-programs",
 }: SavedProgramsProps) {
+  const { colors } = useThemeTokens();
   if (programs.length === 0) {
     return (
       <View testID={`${testID}-empty`} style={{ padding: 16 }}>
@@ -49,8 +50,8 @@ export function SavedPrograms({
             className="p-3"
           >
             <Heart
-              color={resolveToken("primary", "dark")}
-              fill={resolveToken("primary", "dark")}
+              color={colors.primary}
+              fill={colors.primary}
               size={20}
               strokeWidth={1.5}
             />

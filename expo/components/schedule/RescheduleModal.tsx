@@ -4,6 +4,7 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import type { ScheduledSlot } from "@/lib/schedule/slotStatus";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface RescheduleModalProps {
   visible: boolean;
@@ -33,6 +34,9 @@ export function RescheduleModal({
   onClose,
   testID = "reschedule-modal",
 }: RescheduleModalProps) {
+  // `card`, not `background`: a sheet is elevated, and in light mode a #fafafa
+  // sheet on a #fafafa page has no edge (NP-123).
+  const { colors, scrim } = useThemeTokens();
   const [date, setDate] = useState<string>(slot?.date ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -40,11 +44,11 @@ export function RescheduleModal({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View
         testID={testID}
-        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "#0008" }}
+        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: scrim }}
       >
         <View
           style={{
-            backgroundColor: "#0a0a0a",
+            backgroundColor: colors.card,
             padding: 16,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

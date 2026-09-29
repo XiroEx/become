@@ -22,6 +22,7 @@ import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { getOfflineWrites } from "@/lib/offline/writes";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 interface ProfilePatchInput {
   name?: string;
@@ -46,6 +47,7 @@ interface ProfilePatchInput {
  * want of a button.
  */
 export default function HealthSettingsRoute() {
+  const { colors } = useThemeTokens();
   const { token } = useAuth();
   const router = useRouter();
 
@@ -149,7 +151,7 @@ export default function HealthSettingsRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="health-settings-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
