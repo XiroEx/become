@@ -154,8 +154,8 @@ test('the native delete flow confirms, posts the same body, and clears the sessi
 })
 
 test('the two codebases agree on the confirmation phrase and the window', () => {
-  // Deliberate duplication: the webapp is zod-free and does not import
-  // @become/api-client (see lib/dashboardLayout/types.ts), so the constants
+  // Deliberate duplication: the webapp does not import @become/api-client —
+  // the Docker build context is webapp/ (see lib/sharedApiTypes.ts) — so the constants
   // exist twice and this is what stops them drifting. A mismatch would make
   // every native deletion a 400 — and nothing in either build would say so.
   const client = readRepo('expo/lib/account/deleteAccount.ts')

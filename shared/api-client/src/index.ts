@@ -19,3 +19,15 @@ export * from './schemas/exercises';
 export * from './schemas/nutrition';
 export * from './schemas/chat';
 export * from './schemas/admin';
+
+// `./errors` and `./schemas/consent` both name the AI-consent shapes: the
+// classifier's hand-written interfaces (what `aiConsentRefusalFrom` RETURNS)
+// and the zod-inferred contract types. Two `export *` carrying one name is
+// TS2308 — "Module './errors' has already exported a member named
+// 'AiConsentStatus'" — which failed `tsc --noEmit` for this package AND for the
+// webapp, whose tsconfig compiles `../shared/api-client/src/**/*.ts`.
+//
+// The classifier's versions win the bare name, so the functions that return
+// them keep a name to be called by; the schema side stays reachable exactly the
+// way every other contract type is, as `z.infer<typeof AiConsentStatusSchema>`.
+export type { AiConsentStatus, AiConsentRefusal } from './errors';
