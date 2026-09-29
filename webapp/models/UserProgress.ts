@@ -3,6 +3,14 @@ import type { IExercisePR, IPRDimension } from '@/lib/exercisePRs'
 
 export interface IWeightEntry {
   date: Date
+  /**
+   * When the member actually made this entry (an INSTANT — `date` is the
+   * 00:00Z marker for the local DAY it belongs to). Written since back-dated
+   * writes existed; absent on older rows, which any replay may overwrite.
+   * Used to keep the newer value when the same day is delivered twice — see
+   * isStaleReplay in lib/dayWindow.ts.
+   */
+  loggedAt?: Date
   /** Raw number the member typed, in `unit`. */
   weight: number
   /** The unit `weight` was entered in. Absent on entries logged before this
@@ -14,6 +22,8 @@ export interface IWeightEntry {
 
 export interface IMoodEntry {
   date: Date
+  /** When the member actually made this entry — see IWeightEntry.loggedAt. */
+  loggedAt?: Date
   mood: 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 }
 
@@ -301,6 +311,7 @@ export interface IDashboardTile {
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   weight: { type: Number, required: true },
   unit: { type: String, enum: ['lbs', 'kg'] },
   bodyFat: { type: Number }
@@ -308,6 +319,7 @@ const WeightEntrySchema = new Schema<IWeightEntry>({
 
 const MoodEntrySchema = new Schema<IMoodEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   mood: { type: Number, required: true, min: 1, max: 5 }
 }, { _id: false })
 

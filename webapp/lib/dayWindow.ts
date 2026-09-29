@@ -195,6 +195,123 @@ export function utcMidnightDateKey(dateKey: string): Date {
 }
 
 /**
+ * How far back a day-keyed write may be BACK-DATED by default.
+ *
+ * Sized for the native offline queue: a member logs a weigh-in on a plane, the
+ * queue holds it until the phone reconnects, and the replay must land on the
+ * day it was made on rather than the day it was delivered. A week is the
+ * outer edge of "this is the same trip"; anything older is a data import, not
+ * a delayed write, and those routes pass their own `maxBackdateDays` (see
+ * NP-184 for Health imports).
+ */
+export const BACKDATE_WINDOW_DAYS = 7
+
+export type ResolvedEntryDay =
+  | {
+      ok: true
+      /** The LOCAL day (YYYY-MM-DD) the entry belongs to. */
+      dayKey: string
+      /** `dayKey` as the 00:00Z day marker rows are stored under. */
+      date: Date
+      /** When the member actually made the entry (an INSTANT). */
+      loggedAt: Date
+      /** True when `dayKey` is earlier than the caller's local today. */
+      backdated: boolean
+    }
+  | { ok: false; error: string }
+
+/**
+ * Which local day a write belongs to, from an optional `date` (YYYY-MM-DD) and
+ * `loggedAt` (ISO instant) on the request body.
+ *
+ * Without `date` this is exactly today in the caller's offset — the behaviour
+ * every existing client gets, unchanged. With one, the client is telling us the
+ * day it was made on, which is the only way an offline replay sent after
+ * midnight can land on the day before it.
+ *
+ * Refused, all with a 400 rather than a silent fallback to today (a write
+ * quietly filed on the wrong day is the bug this exists to stop):
+ *   - a malformed key, or one that is not a real calendar day (2026-02-31)
+ *   - a day in the FUTURE of the caller's own today
+ *   - a day older than `maxBackdateDays` before it
+ *
+ * `loggedAt` orders replays of the SAME day against each other (see
+ * isStaleReplay). It defaults to now, and a value in the future is clamped to
+ * now: a client whose clock runs fast must not be able to pin a day's value
+ * against every later write.
+ */
+export function resolveEntryDay(
+  body: unknown,
+  tzOffsetMinutes: number,
+  opts: { now?: Date; maxBackdateDays?: number } = {}
+): ResolvedEntryDay {
+  const now = opts.now ?? new Date()
+  const maxBackdateDays = opts.maxBackdateDays ?? BACKDATE_WINDOW_DAYS
+  const rec = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+
+  let loggedAt = now
+  const rawLoggedAt = rec.loggedAt
+  if (rawLoggedAt != null && rawLoggedAt !== '') {
+    if (typeof rawLoggedAt !== 'string' && typeof rawLoggedAt !== 'number') {
+      return { ok: false, error: 'Invalid loggedAt' }
+    }
+    const at = new Date(rawLoggedAt)
+    if (Number.isNaN(at.getTime())) return { ok: false, error: 'Invalid loggedAt' }
+    loggedAt = at.getTime() > now.getTime() ? now : at
+  }
+
+  const todayKey = localDateKey(null, tzOffsetMinutes, now)
+  const rawDate = rec.date
+
+  if (rawDate == null || rawDate === '') {
+    return { ok: true, dayKey: todayKey, date: utcMidnightDateKey(todayKey), loggedAt, backdated: false }
+  }
+
+  if (typeof rawDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    return { ok: false, error: 'Invalid date: expected YYYY-MM-DD' }
+  }
+
+  const marker = utcMidnightDateKey(rawDate)
+  // `Date.UTC(2026, 1, 31)` happily rolls over into March, so a well-formed key
+  // is not yet a real day. Round-tripping it is what says so.
+  if (Number.isNaN(marker.getTime()) || dateKey(marker, 0) !== rawDate) {
+    return { ok: false, error: 'Invalid date: not a calendar day' }
+  }
+
+  const daysBack = Math.round(
+    (utcMidnightDateKey(todayKey).getTime() - marker.getTime()) / 86_400_000
+  )
+  if (daysBack < 0) {
+    return { ok: false, error: 'date is in the future' }
+  }
+  if (daysBack > maxBackdateDays) {
+    return { ok: false, error: `date is more than ${maxBackdateDays} days old` }
+  }
+
+  return { ok: true, dayKey: rawDate, date: marker, loggedAt, backdated: daysBack > 0 }
+}
+
+/**
+ * Is an incoming write for a day OLDER than the one already stored for it?
+ *
+ * The offline queue can deliver the same day twice — once from the phone that
+ * was offline, once from the device that was online — and the last delivery is
+ * not necessarily the last thing the member did. Rows written before entries
+ * carried a `loggedAt` (and requests that send none, which are stamped `now`)
+ * lose to the incoming write, which is the last-write-wins behaviour every
+ * client has today.
+ */
+export function isStaleReplay(
+  storedLoggedAt: Date | string | null | undefined,
+  incomingLoggedAt: Date
+): boolean {
+  if (!storedLoggedAt) return false
+  const stored = new Date(storedLoggedAt)
+  if (Number.isNaN(stored.getTime())) return false
+  return stored.getTime() > incomingLoggedAt.getTime()
+}
+
+/**
  * Which calendar day a DAY-KEYED row belongs to.
  *
  * Mood entries, weight entries and weightSkipTracking dates are WRITTEN with
