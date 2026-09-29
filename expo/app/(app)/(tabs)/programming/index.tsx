@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CalendarDays, Heart, Search } from "lucide-react-native";
 import { ProgramListResponseSchema } from "@become/api-client";

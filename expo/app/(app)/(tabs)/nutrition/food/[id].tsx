@@ -4,9 +4,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Text,
   View,
 } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FoodDetailResponseSchema } from "@become/api-client";
 import type { FoodDetailFood } from "@become/api-client";

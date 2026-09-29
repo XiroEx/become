@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProgramDetailResponseSchema } from "@become/api-client";
 import { WorkoutOverview } from "@/components/programs/WorkoutOverview";

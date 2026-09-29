@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScheduleApiResponseSchema } from "@become/api-client";
 import { Button } from "@/components/Button";

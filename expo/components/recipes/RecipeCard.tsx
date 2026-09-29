@@ -1,4 +1,5 @@
-import { Pressable, Text, View, Image } from "react-native";
+import { Pressable, View, Image } from "react-native";
+import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 
 export interface RecipeSummary {
