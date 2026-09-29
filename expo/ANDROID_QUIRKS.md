@@ -12,15 +12,18 @@ polish pass can find + revisit.
 "androidStatusBar": {
   "translucent": true,
   "barStyle": "light-content"
-},
-"androidNavigationBar": {
-  "barStyle": "light-content"
 }
 ```
 
 This lets content render under the status bar + nav bar; the per-screen
 `SafeAreaView` from `react-native-safe-area-context` adds the insets so
 content doesn't actually overlap the system chrome.
+
+There used to be an `androidNavigationBar: { barStyle: "light-content" }` block
+next to it. Expo SDK 57 removed that key from the config schema — Android is
+edge-to-edge by default and the nav-bar style is a runtime concern now — and
+`npx expo-doctor`'s schema check fails while it is present, so it is gone.
+`__tests__/androidConfig.test.ts` asserts it stays gone.
 
 ## Hardware back button
 
