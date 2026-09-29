@@ -70,10 +70,32 @@ export const BillingStatusResponseSchema = z
   })
   .passthrough();
 
+/**
+ * Who Stripe returns the buyer to.
+ *
+ * 'web' (the default, and what every browser caller sends by sending nothing)
+ * returns to /dashboard/plan. 'app' returns to the PUBLIC pages outside
+ * /dashboard — /billing/return, /billing/cancelled, /billing/portal-return —
+ * because a native checkout opens in Safari, which holds no session: the
+ * dashboard would bounce the buyer to /login seconds after they paid. Those
+ * pages activate nothing; the app reads GET /api/billing/status?session_id=
+ * for itself, signed in.
+ */
+export const BillingReturnTargetSchema = z.enum(['web', 'app']);
+
 /** POST /api/billing/checkout body. `plan` is OPTIONAL and defaults to monthly
- *  server-side; an explicitly wrong value is a 400 'invalid_plan'. */
+ *  server-side; an explicitly wrong value is a 400 'invalid_plan'. `returnTo` is
+ *  OPTIONAL and defaults to 'web'; an unknown value is a 400
+ *  'invalid_return_to'. */
 export const CheckoutRequestSchema = z.object({
   plan: BillingPlanSchema.optional(),
+  returnTo: BillingReturnTargetSchema.optional(),
+});
+
+/** POST /api/billing/portal body. Entirely optional — the web sends no body at
+ *  all — and `returnTo` obeys the same rule as checkout's. */
+export const PortalRequestSchema = z.object({
+  returnTo: BillingReturnTargetSchema.optional(),
 });
 
 /** POST /api/billing/checkout 200 — open `url`, which is Stripe's. */
@@ -97,6 +119,8 @@ export const PortalResponseSchema = z
  * Every refusal these three routes can answer with, as a code:
  *
  *   invalid_plan                   400  checkout, an unknown `plan`
+ *   invalid_return_to              400  checkout/portal, an unknown `returnTo`
+ *                                       (absent is 'web', which is not an error)
  *   billing_not_configured         503  checkout/portal, no key or no price
  *   already_subscribed             409  checkout, active/trialing in this mode
  *   fix_payment_method             409  checkout, mid-dunning — carries
@@ -112,6 +136,7 @@ export const PortalResponseSchema = z
  */
 export const BILLING_REFUSAL_CODES = [
   'invalid_plan',
+  'invalid_return_to',
   'billing_not_configured',
   'already_subscribed',
   'fix_payment_method',
@@ -148,6 +173,8 @@ export const BillingRefusalSchema = z
 
 export type BillingMode = z.infer<typeof BillingModeSchema>;
 export type BillingPlan = z.infer<typeof BillingPlanSchema>;
+export type BillingReturnTarget = z.infer<typeof BillingReturnTargetSchema>;
+export type PortalRequest = z.infer<typeof PortalRequestSchema>;
 export type BillingSubscription = z.infer<typeof BillingSubscriptionSchema>;
 export type BillingStatusResponse = z.infer<typeof BillingStatusResponseSchema>;
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
