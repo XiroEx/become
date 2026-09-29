@@ -196,6 +196,14 @@ jobs:
           cache: npm
           cache-dependency-path: expo/package-lock.json
 
+      # tsc follows expo's `@become/api-client` path mapping into
+      # ../shared/api-client/src, which imports `zod` from ITS OWN node_modules.
+      # Without this install the typecheck fails with "Cannot find module 'zod'"
+      # on a clean runner (a dev box that once installed shared/ hides it).
+      - name: Install shared/api-client
+        working-directory: shared/api-client
+        run: npm ci
+
       - run: npm ci
 
       # Each step is named so a failure names itself, and each one fails the job:
