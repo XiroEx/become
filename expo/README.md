@@ -48,7 +48,9 @@ Rules this directory lives by, so it does not drift back:
 - **`zod` is pinned exactly (`4.4.3`) to match `../shared/api-client`.** The two
   packages have separate `node_modules`; when their `zod` copies differ the
   inferred schema types stop unifying and `npx tsc --noEmit` fails with hundreds
-  of errors that have nothing to do with the code.
+  of errors that have nothing to do with the code. The BUNDLE always contains
+  exactly one copy of `zod` — this app's — see [The shared API
+  client](#the-shared-api-client).
 - **There is no Expo web target.** The web client is the Next.js app in
   `../webapp`, so `react-native-web` and the `web` script are gone. `react-dom`
   stays as a direct dependency because `expo-router`'s own dependencies
@@ -58,6 +60,54 @@ Rules this directory lives by, so it does not drift back:
 TypeScript is on the 6.0 line because that is what SDK 57 expects. TS 6 no
 longer injects every `@types/*` package into the global scope, which is why
 `tsconfig.json` names `"types": ["jest", "node"]` explicitly.
+
+## The shared API client
+
+The wire contract lives at `../shared/api-client` (`@become/api-client`) and is
+imported by most screens. Three separate mechanisms reach it, and they are not
+interchangeable:
+
+| Tool | How it finds the package |
+|---|---|
+| `tsc` | `paths` in `tsconfig.json` → `../shared/api-client/src/index` |
+| Jest | `moduleNameMapper` in `package.json` |
+| **Metro** | `node_modules/@become/api-client`, and nothing else |
+
+For a long time only the first two existed. The typecheck and the suite were
+green while **Metro could not resolve the package at all**, so `npx expo export`
+— and therefore every EAS build — failed on the first screen that imports it.
+Three things fix that, and all three have to stay:
+
+1. **`"@become/api-client": "file:../shared/api-client"` in `package.json`.**
+   The repository root is not an npm workspace, so this `file:` link is what
+   puts the package (as a symlink) in `node_modules`. Run `npm install` in this
+   directory after changing it so `package-lock.json` keeps the link entry —
+   `npm ci` refuses to run when the two disagree.
+2. **`watchFolders` includes `../shared`** (`metro.config.js`). The link points
+   out of the project root, and Metro serves the project root plus
+   `watchFolders` and nothing else.
+3. **`resolver.nodeModulesPaths` is this app's `node_modules`, and
+   `shared/**/node_modules` is on the `blockList`** (`metro.config.js`). The
+   shared sources import `zod` and Metro resolves it from THEIR location on
+   disk: with neither setting the lookup walks out of the repository and the
+   export fails on `zod`; with only the first, a machine that has installed
+   `shared/api-client`'s own dependencies (CI does, because tsc needs its `zod`)
+   bundles a second copy of `zod`. Together they leave exactly one.
+
+A consequence worth knowing: **a runtime dependency added to
+`shared/api-client` must also be declared here**, or the bundle fails to resolve
+it. That is deliberate — the app declares everything it ships.
+
+`.github/workflows/ci.yml`'s `expo` job runs
+`npx expo export --platform ios` for exactly this reason: it is the only step
+that builds the app, and nothing else in the job can see a Metro resolution
+failure.
+
+**EAS builds get `../shared` for free.** `eas build` archives from the ROOT of
+the git repository (this project is a subdirectory of it, and `shared/` is
+tracked and not ignored — there is no `.easignore`), then installs and builds
+in `expo/`. The `file:` link therefore resolves on the builder exactly as it
+does here.
 
 ## Scripts
 
@@ -111,7 +161,7 @@ expo/
 ├── global.css            # Tailwind directives + CSS variable tokens
 ├── tailwind.config.js    # NativeWind 4 + Tailwind v3 config
 ├── babel.config.js       # babel-preset-expo + nativewind/babel + reanimated/plugin
-├── metro.config.js       # withNativeWind wrapper
+├── metro.config.js       # withNativeWind + the ../shared resolution (see above)
 ├── app.json              # Expo config (scheme: become, bundle: io.redbtn.become)
 ├── eslint.config.mjs     # eslint-config-expo flat
 ├── tsconfig.json         # strict, extends expo/tsconfig.base

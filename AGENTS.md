@@ -790,7 +790,7 @@ with three lockfiles:
 | Job | Package | Runs |
 |---|---|---|
 | `verify` | `webapp/` | typecheck, unit tests (real Mongo service), production build |
-| `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check` |
+| `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check`, `expo export --platform ios` |
 | `shared-api-client` | `shared/api-client/` | `npm test`, `tsc --noEmit` |
 
 `expo` and `shared-api-client` run only when `expo/`, `shared/` or `ci.yml`
@@ -803,6 +803,18 @@ native job writes an `.npmrc`: `expo/` and `shared/api-client/` have no
 `webapp/tests/unit/ci/nativeJobs.test.ts` fails if one ever lands there, and it
 lives in the webapp suite because that is the job that always runs, so deleting
 the native jobs cannot go unnoticed.
+
+**The `expo` job's last step is the only one that BUILDS the app.**
+`npx expo export --platform ios` exists because tsc reaches
+`@become/api-client` through `tsconfig.json` `paths` and Jest through
+`moduleNameMapper`, and **Metro reads neither**: both were green for weeks while
+the bundler could not resolve the shared client at all and no store build of any
+kind could be produced. Metro's only route to it is the `file:` link in
+`expo/package.json` plus `watchFolders` / `nodeModulesPaths` / `blockList` in
+`expo/metro.config.js` — the three of them are explained in `expo/README.md`
+("The shared API client") and asserted by `expo/__tests__/metroConfig.test.ts`.
+`shared/api-client` stays a plain sibling package: the webapp keeps importing it
+through its own tsconfig path exactly as before.
 
 ### Information security program (go-live item 17)
 

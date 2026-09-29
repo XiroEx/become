@@ -46,6 +46,15 @@ eas build --platform all --profile production
 # This kicks the build off in EAS cloud. Output: signed .ipa + .aab artifacts.
 ```
 
+**The build needs `../shared`, and it gets it.** `@become/api-client` is linked
+into `node_modules` from outside this directory
+(`"@become/api-client": "file:../shared/api-client"`), so a build that uploaded
+only `expo/` could not install, let alone bundle. `eas build` archives from the
+ROOT of the git repository and builds in the project subdirectory, and
+`shared/` is tracked git content with no `.easignore` excluding it — so it
+travels with every build. Keep it that way: an `.easignore` added later must
+not exclude `shared/`.
+
 ## Submitting
 
 ```bash
