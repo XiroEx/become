@@ -18,6 +18,7 @@ import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 import { pinDarkMode } from "@/lib/theme/colorScheme";
+import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
 
 /**
  * ONE THEME, AND IT IS DARK — set before the first render, not in an effect.
@@ -29,6 +30,18 @@ import { pinDarkMode } from "@/lib/theme/colorScheme";
  * `userInterfaceStyle`, until NP-123 builds a real light theme.
  */
 pinDarkMode();
+
+/**
+ * ONE TYPEFACE, AND IT IS THE WEB'S — held before the first render, not in an
+ * effect.
+ *
+ * The launch screen stays up until the eight Geist faces are registered
+ * (`lib/theme/loadFonts.ts`). React Native does not re-render a `<Text>` when
+ * a font arrives, so anything painted before they land keeps the system font
+ * for the life of the screen — a frame of San Francisco / Roboto that never
+ * goes away. Hiding it again is `useGeistFonts()`'s job, below.
+ */
+holdSplashForFonts();
 
 /**
  * THE COLD-OPEN UNLOCK — and nothing else.
@@ -83,6 +96,13 @@ function ColdOpenUnlock() {
  * the onboarding gate would redirect to a route behind itself.
  */
 export default function RootLayout() {
+  const { fontsReady } = useGeistFonts();
+
+  // Nothing at all until Geist is in memory. The launch screen is still up
+  // (`holdSplashForFonts()` above), so this is not a blank frame — it is the
+  // splash, held for the few milliseconds the faces take to register.
+  if (!fontsReady) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>

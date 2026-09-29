@@ -8,8 +8,8 @@ import { getRuntimeConfig } from './runtimeConfig'
  * sessions are. A token WITH a scope is accepted ONLY by routes that named
  * that exact scope in `allowScopes`.
  */
-export type TokenScope = 'ai-tools'
-export const TOKEN_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
+export type TokenScope = 'ai-tools' | 'widgets'
+export const TOKEN_SCOPES: readonly TokenScope[] = ['ai-tools', 'widgets'] as const
 
 /**
  * The opt-in a Become read endpoint passes to `verifyAuth` when the become-ai
@@ -23,12 +23,32 @@ export const TOKEN_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
  */
 export const AI_TOOL_SCOPES: readonly TokenScope[] = ['ai-tools'] as const
 
+/**
+ * The opt-in `GET /api/widgets/summary` passes to `verifyAuth`, and the ONLY
+ * route that may pass it. A widgets token is held by an OS widget extension
+ * running outside the app — it reads the feed and nothing else, so every other
+ * route (including `/api/auth/me`, which would otherwise roll it into a 30-day
+ * session) keeps refusing it by default-deny.
+ *
+ * Unlike `ai-tools`, this token is LONG-LIVED, so being stateless is not good
+ * enough on its own: the summary route also checks the `widgetTokenVersion`
+ * claim against the one stored on the user. See lib/widgets/token.ts.
+ */
+export const WIDGET_SCOPES: readonly TokenScope[] = ['widgets'] as const
+
 export interface JWTPayload {
   userId: string
   email: string
   role?: string
   /** Present ONLY on restricted, short-lived tokens (see lib/ai/routeHelpers.mintToolToken). */
   scope?: TokenScope
+  /**
+   * Present ONLY on `widgets`-scoped tokens: `User.widgetTokenVersion` as it
+   * stood when the token was minted. A widgets token lives for months, so this
+   * is its revocation handle — signing out or requesting deletion bumps the
+   * stored number and every token minted before it stops being accepted.
+   */
+  widgetTokenVersion?: number
 }
 
 export interface AuthResult {
@@ -38,6 +58,8 @@ export interface AuthResult {
   role?: string
   /** undefined = full session. */
   scope?: TokenScope
+  /** Only meaningful when `scope === 'widgets'`. See JWTPayload. */
+  widgetTokenVersion?: number
   error?: string
 }
 
@@ -65,8 +87,9 @@ export async function signToken(payload: JWTPayload): Promise<string> {
   const { auth } = await getRuntimeConfig()
   // Full sessions are NEVER scoped. Picking claims explicitly stops a scoped
   // payload from being laundered into a 30-day session by the sliding refresh
-  // in /api/auth/me. (Behaviour-identical for today's callers: JSON.stringify
-  // already dropped `role: undefined`.)
+  // in /api/auth/me — and stops `widgetTokenVersion` riding along, which would
+  // make a session look like a revocable widgets token. (Behaviour-identical
+  // for today's callers: JSON.stringify already dropped `role: undefined`.)
   const claims = {
     userId: payload.userId,
     email: payload.email,
@@ -158,6 +181,7 @@ export async function verifyAuth(
       email: payload.email,
       role: payload.role,
       scope: payload.scope,
+      widgetTokenVersion: payload.widgetTokenVersion,
     }
   } catch {
     return { success: false, error: 'Invalid token' }

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Text, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MealLogResponseSchema } from "@become/api-client";
 import { DayTotals } from "@/components/nutrition/DayTotals";

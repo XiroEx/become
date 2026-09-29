@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 import { Toggle } from "@/components/Toggle";
 import { healthOptInSecureStore } from "@/lib/auth/secureStoreToken";
 import { HEALTH_SYNC_ENABLED } from "@/lib/health/enabled";

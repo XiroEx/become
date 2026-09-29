@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, ActivityIndicator } from "react-native";
+import { Text } from "@/components/Text";
 import { resolveToken } from "@/lib/theme/tokens";
 
 export interface AuthGuardProps {

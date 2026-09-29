@@ -1,4 +1,5 @@
-import { Text, ScrollView } from "react-native";
+import { ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AdminFoodsResponseSchema } from "@become/api-client";
 import { AdminGate } from "@/components/admin/AdminGate";

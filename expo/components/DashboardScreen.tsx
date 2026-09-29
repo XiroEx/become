@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, ScrollView, RefreshControl, Pressable } from "react-native";
+import { View, ScrollView, RefreshControl, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings } from "lucide-react-native";
 import { Card } from "@/components/Card";

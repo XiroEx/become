@@ -1,4 +1,5 @@
-import { Modal, View, Text, Pressable, ScrollView } from "react-native";
+import { Modal, View, Pressable, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import type { AlternativeCandidate } from "@become/api-client";
 
