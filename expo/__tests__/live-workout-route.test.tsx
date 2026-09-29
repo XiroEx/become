@@ -28,7 +28,7 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createMemoryKeyValueStore } from "@/lib/live/liveWorkoutCache";
-import LiveWorkoutRoute from "../app/(tabs)/programming/[id]/workout/[idx]/live";
+import LiveWorkoutRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/live";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

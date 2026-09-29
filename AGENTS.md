@@ -765,9 +765,9 @@ Five things about it that are load-bearing:
   runner deleting the same rows. The route's `GET` is a dry run by
   construction — only a POST may delete a person.
 
-Native specifics: the settings screen is `expo/app/(tabs)/profile/health.tsx`,
-a hidden route in the `(tabs)` tree, so **the gear on the dashboard is the only
-way in** — without it the screen (and the deletion path) is unreachable in a
+Native specifics: the settings screen is
+`expo/app/(app)/(tabs)/profile/health.tsx`, a hidden route (`href: null`) in
+the `(tabs)` tree, so **the gear on the dashboard is the only way in** — without it the screen (and the deletion path) is unreachable in a
 store build while still compiling. Android claims `/account/restore` with its
 own `autoVerify` intent filter; iOS gets it from `applinks:become.redbtn.io`.
 The confirmation phrase and the window are duplicated in
@@ -781,6 +781,48 @@ Tests: `tests/unit/account/deletion.test.ts` (window, MAC, purge plan),
 `storeReadiness.test.tsx` (reachability on all three surfaces, including the
 Expo sources, which it reads as text — it is the only check that can see both
 codebases at once), and `expo/__tests__/deleteAccount.test.tsx`.
+
+### The native navigation shell (NP-003)
+
+`expo/app/` is three things and a redirect:
+
+| Path | What it is |
+|---|---|
+| `app/index.tsx` | The launch decision: spinner → `/login`, `/onboarding` or Home |
+| `app/(auth)/` | `login`, `verify`, `account/restore` — **no session required** |
+| `app/(app)/` | AuthGuard → ConsentGate → OnboardingGuard, then the Stack |
+| `app/onboarding.tsx` | Signed-in, but deliberately OUTSIDE `(app)` |
+
+Four rules, each of them a bug that shipped:
+
+- **A group is invisible in a URL.** `/login`, `/verify` and `/account/restore`
+  are unchanged, which is what `app.json`'s associated domains and Android
+  intent filters claim, and `/(tabs)/…` hrefs still resolve inside `(app)`.
+- **Nothing above a route may replace it.** The cold-open gate in
+  `app/_layout.tsx` used to `router.replace` its verdict on every launch, and a
+  cold start on `/verify?token=…` lost the race: the token was spent and
+  sign-in was on screen. The gate now only signs out after a failed unlock;
+  the destination is decided by `app/index.tsx`, which exists only on a launch
+  with no link. `app/+native-intent.tsx` is where a link may be rewritten
+  (a pass-through until NP-034's web-path resolver).
+- **Every folder under `(tabs)` needs its own `_layout.tsx`.** Without one,
+  expo-router flattens the folder into the TAB navigator: the bar shipped with
+  20 buttons, including `programming/[id]/workout/[idx]/live`, and `profile`
+  matched no route at all so Settings was a tab. One Stack per tab
+  (`components/navigation/TabStack.tsx`) makes each folder one screen and every
+  detail a push, with the iOS back swipe.
+- **Onboarding is gated on `onboardingCompleted === false`, strictly**
+  (`expo/lib/auth/onboardingGate.ts`, mirroring
+  `webapp/components/AuthGuard.tsx`). Legacy rows have no flag and must not be
+  gated. And `/onboarding` cannot live inside `(app)`, or the gate would
+  redirect to a route behind itself.
+
+Tests: `expo/__tests__/navigation-shell.test.tsx` (the bar and the per-tab
+stacks) and `expo/__tests__/launch-and-links.test.tsx` (launch destinations and
+cold-start links) render the REAL layouts over the real `app/` directory via
+`expo/test-support/appRoutes.tsx`, so a screen file added tomorrow is in the
+render tomorrow. The array-shaped `TabLayout.test.tsx` they replace was green
+throughout the 20-slot bar.
 
 ### CI runs three packages, not one
 

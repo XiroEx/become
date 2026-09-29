@@ -28,8 +28,8 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import RecipesIndexRoute from "../app/(tabs)/nutrition/recipes/index";
-import RecipeDetailRoute from "../app/(tabs)/nutrition/recipes/[id]";
+import RecipesIndexRoute from "../app/(app)/(tabs)/nutrition/recipes/index";
+import RecipeDetailRoute from "../app/(app)/(tabs)/nutrition/recipes/[id]";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
