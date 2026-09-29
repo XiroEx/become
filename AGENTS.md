@@ -888,6 +888,60 @@ cold-start links) render the REAL layouts over the real `app/` directory via
 render tomorrow. The array-shaped `TabLayout.test.tsx` they replace was green
 throughout the 20-slot bar.
 
+#### The tab bar is the web's tab bar (NP-013)
+
+`webapp/components/BottomNav.tsx` is the source of truth for tab ORDER, LABELS
+and ICONS, and native now matches it: **Workout, Mind, Home, Nutrition** —
+lucide `ClipboardList`, `Brain`, `Home`, `UtensilsCrossed`, with Home in the
+middle where the thumb is. Native used to ship its own set (Home, Programs,
+Mind, Nutrition, Chat), so the two clients disagreed about what the app is
+called in four places out of five.
+
+Community is absent because the web hides it too
+(`webapp/components/FeatureGuard.tsx` answers "Coming soon" to everyone but an
+admin). The rule that travels: **tab order and names follow the web's
+BottomNav, minus Community while it is hidden.**
+
+Two things that look like mistakes and are not:
+
+- **The `programming` folder is the Workout tab.** Only the label changed; the
+  folder keeps its name because renaming it breaks every
+  `/(tabs)/programming/…` href in the app, and the screen behind it stays
+  today's programs list until NP-071 ports the web's workout home.
+- **`chat` is still in the `(tabs)` tree**, as a hidden tab (`href: null`). It
+  is NP-032 that removes those routes, behind
+  `EXPO_PUBLIC_COMMUNITY_ENABLED`; there is deliberately no second flag in the
+  tab bar.
+
+#### `_` is not a private prefix in expo-router, and dark is pinned
+
+Two store-readiness facts that landed with the tab bar:
+
+- **expo-router ignores exactly `+api`, `+html` and `+native-intent`**
+  (`getIgnoreList`, `expo-router/build/getRoutesCore.js`). A leading underscore
+  is a Next.js habit that buys nothing, so `expo/app/_stories.tsx` — the
+  component gallery — shipped as a LIVE route at `become://_stories`, and the
+  two read-only admin lists under `expo/app/(app)/admin/` were behind a
+  client-side role check, which is a blocked screen and not an absent one. All
+  three are now wrapped in `devOnlyRoute()`
+  (`expo/lib/dev/devOnlyRoute.tsx`): the screen in a development build, a
+  `Redirect` to Home in anything else. NP-122 deletes the admin code and adds an
+  admin-only link to the web. Tests: `expo/__tests__/dev-only-routes.test.tsx`
+  opens all three URLs with `__DEV__` flipped both ways.
+- **v1 is dark-only, and the pin is two lines in two files.** NativeWind
+  follows the SYSTEM colour scheme unless told otherwise, while 39 files
+  hard-code `#0a0a0a` in a plain RN `style` (a SafeAreaView or a StatusBar
+  cannot read a Tailwind class) — so a phone in light mode drew light-mode text
+  (`--foreground: 24 24 27`, near-black) on those near-black surfaces.
+  `pinDarkMode()` (`expo/lib/theme/colorScheme.ts`) calls
+  `colorScheme.set("dark")` and is invoked at MODULE LOAD in
+  `expo/app/_layout.tsx`, not in an effect, so there is no frame in the
+  system's theme; `expo/app.json` sets `userInterfaceStyle: "dark"` so the OS
+  agrees about keyboards, share sheets and the launch screen; the status bar
+  stays `style="light"`. NP-123 builds the real light theme, and it starts by
+  deleting the literals — not by deleting the pin. Test:
+  `expo/__tests__/darkModePin.test.tsx`.
+
 ### CI runs three packages, not one
 
 `.github/workflows/ci.yml` has three jobs, because the repo is three packages

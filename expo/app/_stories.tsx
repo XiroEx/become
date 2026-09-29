@@ -8,8 +8,15 @@ import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Toggle } from "@/components/Toggle";
+import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 
-export default function StoriesScreen() {
+/**
+ * The component gallery. `_stories` is not a private filename to expo-router —
+ * it ignores only `+api`, `+html` and `+native-intent` — so this shipped as a
+ * live route reachable at `become://_stories`. `devOnlyRoute` (below) sends it
+ * to Home in anything but a development build.
+ */
+export function StoriesGallery() {
   const [text, setText] = useState("");
   const [toggleOn, setToggleOn] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -125,3 +132,5 @@ export default function StoriesScreen() {
     </SafeAreaView>
   );
 }
+
+export default devOnlyRoute(StoriesGallery);

@@ -145,6 +145,21 @@ The same triplets are exported from `lib/theme/tokens.ts` as a typed map, for RN
 
 `darkMode: "class"` is set in `tailwind.config.js` — non-negotiable for NativeWind's runtime `colorScheme.set()`.
 
+### v1 is dark-only, and the pin is deliberate
+
+`lib/theme/colorScheme.ts` exports `pinDarkMode()`, which `app/_layout.tsx`
+calls **at module load** — before the first render, so there is no frame in the
+system's theme. `app.json` sets `userInterfaceStyle: "dark"` so the OS agrees
+about keyboards, share sheets and the launch screen, and the status bar stays
+`style="light"` because the surface is dark.
+
+Why: NativeWind follows the system colour scheme unless told otherwise, while 39
+files hard-code `#0a0a0a` in a plain RN `style` (a SafeAreaView or a StatusBar
+cannot read a Tailwind class). A phone in light mode therefore drew light-mode
+text — `--foreground: 24 24 27`, near-black — on those near-black surfaces.
+NP-123 builds the real light theme, and it starts by deleting the literals, not
+by deleting the pin. Asserted by `__tests__/darkModePin.test.tsx`.
+
 ## File layout
 
 ```
@@ -156,16 +171,22 @@ expo/
 │   ├── +native-intent.tsx# Every incoming link passes through here first
 │   ├── index.tsx         # The launch redirect (sign-in, onboarding or Home)
 │   ├── onboarding.tsx    # Signed-in, but OUTSIDE (app): the gate points here
+│   ├── _stories.tsx      # Component gallery. A LIVE route (see below) — it
+│   │                     #   redirects to Home unless __DEV__
 │   ├── (auth)/           # No session required: login, verify, account/restore
 │   └── (app)/            # AuthGuard → ConsentGate → OnboardingGuard
-│       ├── (tabs)/       # Five tabs; calendar + profile hidden (href: null)
+│       ├── (tabs)/       # Four tabs (the web's bar); chat + calendar +
+│       │   │             #   profile hidden (href: null)
 │       │   └── <tab>/    # each with its own _layout.tsx Stack, so detail
 │       │                 #   screens PUSH inside the tab instead of becoming
 │       │                 #   tab buttons of their own
-│       └── admin/        # Read-only native admin shells
+│       └── admin/        # Read-only native admin shells — also __DEV__ only
 ├── lib/
+│   ├── dev/
+│   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
 │   └── theme/
-│       └── tokens.ts     # Typed RGB-triplet map (light + dark)
+│       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
+│       └── tokens.ts         # Typed RGB-triplet map (light + dark)
 ├── __tests__/            # Jest + RTL tests
 ├── __mocks__/            # cssStub.js — resolves the `global.css` side-effect import under Jest
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
@@ -217,3 +238,17 @@ See the plan doc for full sequencing.
   in the render tomorrow: that is how a tab bar with twenty buttons went
   unnoticed while a five-entry `TAB_ROUTES` array was asserted to be five
   entries long.
+- **The tab bar is the WEB's tab bar** — order, labels and icons come from
+  `webapp/components/BottomNav.tsx`: Workout, Mind, Home, Nutrition, minus
+  Community while the web hides it behind `FeatureGuard`. The `programming`
+  folder is the *Workout* tab (the route keeps its name; renaming it would
+  break every `/(tabs)/programming/…` href), and `chat` stays in the tree as a
+  hidden tab until NP-032 removes those routes behind
+  `EXPO_PUBLIC_COMMUNITY_ENABLED`.
+- **`_` is not a private prefix in expo-router** — its ignore list is exactly
+  `+api`, `+html` and `+native-intent` (`getIgnoreList` in
+  `expo-router/build/getRoutesCore.js`), so `app/_stories.tsx` is a live route
+  at `become://_stories`. A screen that must not ship is wrapped in
+  `devOnlyRoute()` (`lib/dev/devOnlyRoute.tsx`), which redirects to Home unless
+  `__DEV__`. `__tests__/dev-only-routes.test.tsx` opens all three URLs with
+  `__DEV__` flipped and asserts where they land.

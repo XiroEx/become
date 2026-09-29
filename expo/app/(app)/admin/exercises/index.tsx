@@ -8,14 +8,19 @@ import {
 } from "@/components/admin/AdminExerciseList";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 import { useFetch } from "@/lib/hooks/useFetch";
 
 /**
  * Read-only native admin exercise list. Gated on user.role === 'admin'. There
  * is no /api/admin/exercises route, so the canonical GET /api/exercises list is
  * used; edits route back to the webapp via AdminExerciseList's Edit-in-browser.
+ *
+ * Not in v1: admins work on the web (Tier 3) and nothing in the app links here.
+ * `devOnlyRoute` sends `become://admin/exercises` to Home outside a development
+ * build; NP-122 deletes the screen and adds an admin-only link to the web.
  */
-export default function AdminExercisesRoute() {
+export function AdminExercisesScreen() {
   const { user, token } = useAuth();
   const role = user?.role ?? null;
   const isAdmin = role === "admin";
@@ -50,3 +55,5 @@ export default function AdminExercisesRoute() {
     </SafeAreaView>
   );
 }
+
+export default devOnlyRoute(AdminExercisesScreen);
