@@ -19,8 +19,10 @@ node scripts/generate-app-assets.mjs
 The launch screen is `expo-splash-screen` with
 `image: "./assets/splash-icon.png"`, `imageWidth: 200`, `resizeMode: "contain"`
 and `backgroundColor: "#0a0a0a"` — plus a `dark` block with the **same** colour
-and image, because `userInterfaceStyle` is `automatic` and a light-mode phone
-would otherwise get the default white one.
+and image. `userInterfaceStyle` is now pinned to `dark` (see "Status bar"
+below), so the system cannot reach for the default white launch screen; the
+`dark` block stays because it costs nothing and is what keeps this true if the
+pin is ever lifted.
 
 `#0a0a0a` is not a decoration, it is the whole trick: it is the app's first
 paint (`app/_layout.tsx`'s Stack `contentStyle`), the root view background
@@ -112,8 +114,16 @@ project memory, that style produces an unfixable bottom gap on iOS. The
 runtime test in `__tests__/iosConfig.test.ts` asserts the layout's StatusBar
 prop is one of `'light' | 'dark' | 'auto'` and never `'black-translucent'`.
 
-`app.json`'s `userInterfaceStyle: "automatic"` lets the system pick light vs
-dark dynamically (which the dark theme defaults to dark anyway).
+`app.json`'s `userInterfaceStyle` is **`dark`**, not `automatic` (NP-013).
+`automatic` handed the app whatever the phone was set to, and NativeWind
+followed it — while 39 files hard-code `#0a0a0a` in a plain RN `style`, because
+a SafeAreaView or a StatusBar cannot read a Tailwind class. A phone in light
+mode therefore drew light-mode text (`--foreground: 24 24 27`, near-black) on
+those near-black surfaces. v1 ships one theme: `lib/theme/colorScheme.ts`'s
+`pinDarkMode()` runs at module load in `app/_layout.tsx` and `app.json` says
+`dark` so the OS agrees about keyboards, share sheets and the launch screen.
+`__tests__/darkModePin.test.tsx` asserts all of it. NP-123 is where a real
+light theme lands, and it starts by deleting the literals.
 
 ## Swipe-back
 

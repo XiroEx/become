@@ -17,6 +17,18 @@ import {
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
+import { pinDarkMode } from "@/lib/theme/colorScheme";
+
+/**
+ * ONE THEME, AND IT IS DARK — set before the first render, not in an effect.
+ *
+ * NativeWind follows the system colour scheme unless told otherwise, while 39
+ * files in this app hard-code `#0a0a0a` in a plain RN style. A phone in light
+ * mode drew near-black light-mode text on those near-black surfaces. Pinned
+ * here (see `lib/theme/colorScheme.ts`) and in `app.json`'s
+ * `userInterfaceStyle`, until NP-123 builds a real light theme.
+ */
+pinDarkMode();
 
 /**
  * THE COLD-OPEN UNLOCK — and nothing else.

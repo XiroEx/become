@@ -1,5 +1,8 @@
 import { render } from "@testing-library/react-native";
-import StoriesScreen from "../app/_stories";
+// The GALLERY, not the route's default export: the default is wrapped in
+// `devOnlyRoute`, which redirects to Home outside `__DEV__`. That wrapper is
+// tested by `__tests__/dev-only-routes.test.tsx`; this file is about the cards.
+import { StoriesGallery as StoriesScreen } from "../app/_stories";
 
 describe("StoriesScreen", () => {
   it("mounts the stories container", () => {

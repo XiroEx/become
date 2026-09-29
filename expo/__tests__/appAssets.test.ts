@@ -161,8 +161,12 @@ describe("no white flash between the launch screen and the first screen", () => 
     expect(splashProps().backgroundColor).toBe(FIRST_PAINT);
   });
 
-  it("the dark-mode splash is the same colour (userInterfaceStyle is automatic)", () => {
-    expect(config.expo.userInterfaceStyle).toBe("automatic");
+  // NP-013 pinned `userInterfaceStyle` to `dark`, so the system can no longer
+  // reach for the default WHITE launch screen. The `dark` block stays anyway:
+  // it costs nothing, it is the same colour and image, and it is what keeps
+  // this true if the pin is ever lifted (NP-123's light theme).
+  it("the dark-mode splash is the same colour, and the style is pinned dark", () => {
+    expect(config.expo.userInterfaceStyle).toBe("dark");
     const dark = splashProps().dark as
       | { backgroundColor?: string; image?: string }
       | undefined;

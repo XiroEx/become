@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "become",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
     "backgroundColor": "#0a0a0a",
     "ios": {
