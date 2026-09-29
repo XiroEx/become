@@ -13,6 +13,8 @@ import {
 import type { CheckInPayload } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { localDateKey } from "@/lib/nutrition/localDay";
+import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
@@ -140,6 +142,17 @@ export default function DashboardRoute() {
         // not earned a streak day yet; the replay's response will.
         if (moodStatus === "sent" || weightStatus === "sent") {
           await streak.refetch();
+        }
+        if (payload.weightLbs != null) {
+          // BECOME → HEALTH. Mirrors the weigh-in into Apple Health / Health
+          // Connect, and does nothing unless the member left that direction on
+          // when the app opened (lib/health/sync.ts). Never awaited and never
+          // throws: the check-in is kept either way, sent or queued.
+          void mirrorWeighInToHealth({
+            valueLbs: payload.weightLbs,
+            atISO: new Date().toISOString(),
+            clientId: weighInClientId(localDateKey()),
+          });
         }
       } finally {
         setSubmittingCheckIn(false);

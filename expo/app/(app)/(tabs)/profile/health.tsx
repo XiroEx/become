@@ -17,6 +17,8 @@ import { DangerZone } from "@/components/settings/DangerZone";
 import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { localDateKey } from "@/lib/nutrition/localDay";
+import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { getOfflineWrites } from "@/lib/offline/writes";
@@ -33,8 +35,10 @@ interface ProfilePatchInput {
  * the account-deletion path both stores require to be reachable from inside
  * the app.
  *
- * The Apple Health / Health Connect section lives in HealthSyncSection and
- * renders nothing until NP-185 installs a real health module.
+ * The Apple Health / Health Connect section lives in HealthSyncSection: the
+ * umbrella opt-in plus one switch per direction. It renders on Android, where
+ * NP-199 wired Health Connect, and not yet on iOS, where no HealthKit module is
+ * installed (NP-185) — `lib/health/enabled.ts` is the gate.
  *
  * It is reached from the gear on the dashboard (app/(tabs)/dashboard). Before
  * that entry point existed this screen was in the route tree and unreachable
@@ -116,6 +120,15 @@ export default function HealthSettingsRoute() {
     try {
       const status = await getOfflineWrites().logWeight(parsed);
       setWeightQueued(status === "queued");
+      // BECOME → HEALTH. Mirrors the weigh-in (sent or queued; a skip never
+      // gets here) into Apple Health / Health Connect, and does nothing unless
+      // the member left the write direction on when the app opened
+      // (lib/health/sync.ts). Never awaited and never throws.
+      void mirrorWeighInToHealth({
+        valueLbs: parsed,
+        atISO: new Date().toISOString(),
+        clientId: weighInClientId(localDateKey()),
+      });
       if (status === "sent") await refetchWeightCheck();
     } catch {
       // A refusal. The queue keeps a missing connection; there is nothing to
@@ -204,8 +217,8 @@ export default function HealthSettingsRoute() {
           ) : null}
         </View>
 
-        {/* Health sync renders nothing until NP-185 installs a real HealthKit /
-            Health Connect module — see lib/health/enabled.ts. */}
+        {/* Health sync: on for Health Connect (NP-199), still hidden on iOS
+            until NP-185 installs HealthKit — see lib/health/enabled.ts. */}
         <HealthSyncSection />
 
         {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE. This screen is the app's

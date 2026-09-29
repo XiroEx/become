@@ -94,8 +94,71 @@ All three assets are written by `scripts/generate-app-assets.mjs` from
 phone icon and the browser icon are the same mark. Re-run it (and only it) when
 the real store icon lands.
 
+## Health Connect (NP-199)
+
+Weight both ways and finished workouts out, through
+`react-native-health-connect` (the maintained module; v4 ships its own Expo
+config plugin, so there is no `expo-health-connect` to install).
+
+**It needs a dev build.** Health Connect is not in Expo Go's module set, and the
+client requires API 26 — `app.json` raises `minSdkVersion` to 26 through
+`expo-build-properties`, or the manifest merge fails at build time. The config
+plugin writes the two rationale entry points the permission sheet links to: an
+`androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE` intent-filter on the main
+activity (through Android 13) and a `ViewPermissionUsageActivity` alias guarded
+by `START_VIEW_PERMISSION_USAGE` (Android 14+).
+
+**Three permissions, and only three** (`app.json` → `android.permissions`):
+`READ_WEIGHT`, `WRITE_WEIGHT`, `WRITE_EXERCISE`. Nothing reads workouts or steps
+back out of Health Connect, so neither is requested — an unused health
+permission is something Play asks about and the app cannot justify.
+`HEALTH_CONNECT_PERMISSIONS` in `lib/health/healthConnect.ts` is the list; the
+manifest and Play's declaration are held equal to it by
+`__tests__/androidHealthConnect.test.ts`.
+
+**The switches.** Three flags, each its own SecureStore key, all default off:
+
+| Key | What it answers |
+|---|---|
+| `become.optin.health` | the umbrella: talk to the health store at all |
+| `become.sync.health.read` | Health → Become (import weigh-ins) |
+| `become.sync.health.write` | Become → Health (weigh-ins + workouts out) |
+
+They are read ONCE per process, at launch (`lib/health/switches.ts`), and the
+sync consults that snapshot — so **turning a direction off stops it at the next
+launch**, which is what Settings says and what iOS will do for the same reason.
+It is also the honest description of the platform: Health Connect's own
+`revokeAllPermissions()` does not take effect until the process restarts, and its
+docs say not to hang an in-app disconnect toggle on it — track the state
+yourself and stop syncing yourself.
+
+**The loop guard.** Become writes weigh-ins into Health Connect and Health
+Connect offers them back on the next read. A read therefore drops every record
+whose `metadata.dataOrigin` is `io.redbtn.become`. (Health Connect's
+`dataOriginFilter` can only allow-list, so it cannot do this for us.) On the
+server side the same sample arriving twice is already inert: the row carries the
+sample's `externalId` and a repeat is answered `applied: false`.
+
+**The day is the sample's own.** A record's `zoneOffset` (seconds EAST) becomes
+minutes WEST and builds the `date` the import sends, so a weigh-in recorded at
+9pm — or in another country — lands on the day it was made, not the day the sync
+ran. `POST /api/weight` refuses an import with no `date` for exactly that reason.
+
+Files: `lib/health/healthConnect.ts` (the module), `lib/health/android.ts` (the
+adapter), `lib/health/sync.ts` (both directions, one server route),
+`lib/health/switches.ts` (the switches + snapshot),
+`components/health/HealthSyncBridge.tsx` (the launch import),
+`components/settings/HealthSyncSection.tsx` (the switches in Settings).
+
 ## Verified by
 
+- `__tests__/androidHealthConnect.test.ts` — the module, the plugin, minSdk 26,
+  and the manifest permissions held equal to the code's list and to Play's
+  health apps declaration in RELEASE.md
+- `__tests__/healthConnectBridge.test.ts` — record mapping, the own-package loop
+  guard, zone offsets, and asking only for missing permissions
+- `__tests__/healthSwitches.test.ts` — the switches and "next launch"
+- `__tests__/healthSync.test.ts` — both directions over `POST /api/weight`
 - `__tests__/androidConfig.test.ts` — app.json invariants (edge-to-edge,
   package, intentFilters, adaptiveIcon)
 - `__tests__/androidBackHandler.test.tsx` — useAndroidBackHandler subscribes
