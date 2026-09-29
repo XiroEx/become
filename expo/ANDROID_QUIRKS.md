@@ -150,16 +150,6 @@ adapter), `lib/health/sync.ts` (both directions, one server route),
 `components/health/HealthSyncBridge.tsx` (the launch import),
 `components/settings/HealthSyncSection.tsx` (the switches in Settings).
 
-## Verified by
-
-- `__tests__/androidHealthConnect.test.ts` — the module, the plugin, minSdk 26,
-  and the manifest permissions held equal to the code's list and to Play's
-  health apps declaration in RELEASE.md
-- `__tests__/healthConnectBridge.test.ts` — record mapping, the own-package loop
-  guard, zone offsets, and asking only for missing permissions
-- `__tests__/healthSwitches.test.ts` — the switches and "next launch"
-- `__tests__/healthSync.test.ts` — both directions over `POST /api/weight`
-
 ## Accessibility (TalkBack, font size, Remove animations)
 
 The baseline and the device checklist live in `ACCESSIBILITY.md` (NP-124). The
@@ -184,6 +174,13 @@ Android-specific parts:
 
 ## Verified by
 
+- `__tests__/androidHealthConnect.test.ts` — the module, the plugin, minSdk 26,
+  and the manifest permissions held equal to the code's list and to Play's
+  health apps declaration in RELEASE.md
+- `__tests__/healthConnectBridge.test.ts` — record mapping, the own-package loop
+  guard, zone offsets, and asking only for missing permissions
+- `__tests__/healthSwitches.test.ts` — the switches and "next launch"
+- `__tests__/healthSync.test.ts` — both directions over `POST /api/weight`
 - `__tests__/accessibility.test.tsx` / `__tests__/reducedMotion.test.tsx` — the
   roles, names, targets, Dynamic Type constructions and the Reduce Motion rule
   (both platforms; see `ACCESSIBILITY.md`)
