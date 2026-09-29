@@ -59,6 +59,61 @@ export interface EntitlementsSnapshot {
   features: Partial<Record<Feature, FeatureEntitlement>>
 }
 
+// ─── Who has billing to manage ───────────────────────────────────────────────
+
+/**
+ * Statuses that mean STRIPE IS HOLDING A SUBSCRIPTION for this member, so the
+ * billing portal has something to show them.
+ *
+ * Deliberately wider than "has Plus right now". `past_due` and `unpaid` are the
+ * members who most need the portal — their card is the problem — and hiding it
+ * from them is how an app ends up taking a cancellation by email. `paused` and
+ * `incomplete` are the same argument: a subscription exists on the Stripe side
+ * and only the portal can act on it.
+ *
+ * NOT here, and each for its own reason:
+ *   • 'none' — the row every member gets the moment they OPEN checkout, because
+ *     `writeCustomerIdIfAbsent` stamps a customer id and the schema defaults
+ *     the status. A customer with no subscription is not a subscriber.
+ *   • 'incomplete_expired' — a checkout that was never completed. Nothing was
+ *     ever charged and nothing renews.
+ *   • 'canceled' — handled below, because whether it is still running is a
+ *     question about the CLOCK, not the status.
+ */
+const MANAGEABLE_STATUSES: readonly string[] = [
+  'active',
+  'trialing',
+  'past_due',
+  'unpaid',
+  'paused',
+  'incomplete',
+]
+
+/**
+ * Does this member have billing to manage — i.e. should "Manage billing" be
+ * drawn for them at all?
+ *
+ * Grandfathered members and admins hold Plus with NO Stripe customer and no
+ * subscription (`subscription: null` on the snapshot), so they get nothing:
+ * a portal button for someone Stripe has never heard of answers 409 no_customer
+ * and reads as a broken app. Tier is not consulted for the same reason — a
+ * past_due member is gated as FREE and still has a card to fix.
+ *
+ * A cancelled subscription is still manageable while the period it paid for is
+ * running: that member can still read invoices, and the portal is where a
+ * cancellation gets undone.
+ */
+export function hasManageableBilling(
+  subscription: SubscriptionSnapshot | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!subscription || typeof subscription.status !== 'string') return false
+  if (MANAGEABLE_STATUSES.includes(subscription.status)) return true
+  if (subscription.status !== 'canceled') return false
+  const end = subscription.currentPeriodEnd ? Date.parse(subscription.currentPeriodEnd) : NaN
+  return Number.isFinite(end) && end > now.getTime()
+}
+
 // ─── Copy ────────────────────────────────────────────────────────────────────
 
 /** Tier as a member reads it. Extend alongside the Tier union, not instead. */

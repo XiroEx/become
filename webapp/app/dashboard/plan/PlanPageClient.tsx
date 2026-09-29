@@ -34,8 +34,12 @@ import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { Card } from '@/components/ui'
 import LegalLinks from '@/components/legal/LegalLinks'
+// The way into the Stripe portal, named exactly as the Terms and the support
+// page name it. Pure and props-driven, so this page keeps owning the request.
+import ManageBillingButton from '@/components/billing/ManageBillingButton'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import { getToken } from '@/lib/clientAuth'
+import { BILLING_PORTAL_PATH, openBillingPortal } from '@/lib/billingPortal'
 // The automatic-renewal wording is NOT written here. New York GBL 527-a wants
 // it in visual proximity to the request for consent, and the request for
 // consent is the button below — but it also has to be the same words the Terms
@@ -49,6 +53,7 @@ import {
 } from '@/components/UpgradeSheet'
 import {
   FEATURE_LABELS,
+  hasManageableBilling,
   tierLabel,
   type EntitlementsSnapshot,
   type FeatureEntitlement,
@@ -68,11 +73,10 @@ import {
 // bundle.
 import type { BillingPlan } from '@/lib/billing/mode'
 
-/** The portal state CheckoutAction expects. Taken from its own props type. */
+/** The portal state CheckoutAction expects. Taken from its own props type, and
+ *  structurally the same union lib/billingPortal exports — the two surfaces
+ *  that can open the portal from this page share one vocabulary. */
 type PortalState = CheckoutActionProps['portalState']
-
-/** Fallback only — a 409 carries the real path and that is what gets followed. */
-const PORTAL_PATH = '/api/billing/portal'
 
 function authHeaders(): HeadersInit {
   const token = getToken()
@@ -373,9 +377,29 @@ export function PlanPricing({
 
 // ─── Current plan ────────────────────────────────────────────────────────────
 
-/** The member's plan today. Same renew/ends distinction as PlanCard. */
-export function CurrentPlan({ snapshot }: { snapshot: EntitlementsSnapshot }) {
+export interface CurrentPlanProps {
+  snapshot: EntitlementsSnapshot
+  portalState: PortalState
+  onOpenPortal: () => void
+}
+
+/**
+ * The member's plan today. Same renew/ends distinction as PlanCard.
+ *
+ * ...AND THE WAY OUT OF IT. This card is the only thing an active subscriber
+ * sees on this page — the pricing block is hidden for anyone who already holds
+ * Plus — so it is where "Manage billing" has to live. Without it the Terms, the
+ * support page and the renewal line all pointed at a button that did not exist,
+ * and the only way to cancel was to email.
+ *
+ * Drawn from `hasManageableBilling`, i.e. from whether STRIPE has a
+ * subscription for this member — never from the tier. Grandfathered members and
+ * admins are on Plus with no Stripe customer and get nothing; a past_due member
+ * is gated as free and still has a card to fix.
+ */
+export function CurrentPlan({ snapshot, portalState, onOpenPortal }: CurrentPlanProps) {
   const isPlus = snapshot.tier !== 'free'
+  const manageable = hasManageableBilling(snapshot.subscription)
   const periodEnd = snapshot.subscription?.currentPeriodEnd
     ? new Date(snapshot.subscription.currentPeriodEnd)
     : null
@@ -386,32 +410,42 @@ export function CurrentPlan({ snapshot }: { snapshot: EntitlementsSnapshot }) {
   const dated = periodEnd && !Number.isNaN(periodEnd.getTime())
 
   return (
-    <Card variant="compact" className="flex items-center gap-2.5">
-      <div
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-          isPlus ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-zinc-100 dark:bg-zinc-800'
-        }`}
-      >
-        <Sparkles
-          className={`h-5 w-5 ${
-            isPlus ? 'text-purple-600 dark:text-purple-400' : 'text-zinc-500 dark:text-zinc-400'
+    <Card variant="compact">
+      <div className="flex items-center gap-2.5">
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            isPlus ? 'bg-purple-100 dark:bg-purple-900/30' : 'bg-zinc-100 dark:bg-zinc-800'
           }`}
+        >
+          <Sparkles
+            className={`h-5 w-5 ${
+              isPlus ? 'text-purple-600 dark:text-purple-400' : 'text-zinc-500 dark:text-zinc-400'
+            }`}
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+            You&apos;re on {tierLabel(snapshot.tier)}
+          </h2>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
+            {isPlus
+              ? snapshot.grandfathered
+                ? 'Thanks for being here early'
+                : dated
+                  ? `${endsInstead ? 'Ends' : 'Renews'} ${periodEnd.toLocaleDateString()}`
+                  : 'No limits on anything'
+              : 'Here is exactly what that includes.'}
+          </p>
+        </div>
+      </div>
+      {manageable && (
+        <ManageBillingButton
+          state={portalState}
+          onOpenPortal={onOpenPortal}
+          showNote
+          className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800"
         />
-      </div>
-      <div className="min-w-0 flex-1">
-        <h2 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
-          You&apos;re on {tierLabel(snapshot.tier)}
-        </h2>
-        <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-          {isPlus
-            ? snapshot.grandfathered
-              ? 'Thanks for being here early'
-              : dated
-                ? `${endsInstead ? 'Ends' : 'Renews'} ${periodEnd.toLocaleDateString()}`
-                : 'No limits on anything'
-            : 'Here is exactly what that includes.'}
-        </p>
-      </div>
+      )}
     </Card>
   )
 }
@@ -487,7 +521,7 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
   const [checkout, setCheckout] = useState<CheckoutState>('checking')
   const [available, setAvailable] = useState<PlanAvailability>({ monthly: false, annual: false })
   const [portalState, setPortalState] = useState<PortalState>('idle')
-  const [portalPath, setPortalPath] = useState<string>(PORTAL_PATH)
+  const [portalPath, setPortalPath] = useState<string>(BILLING_PORTAL_PATH)
   const checkoutAvailable = data?.checkoutAvailable
 
   // Availability. Unlike the sheet, a `checkoutAvailable: true` snapshot is NOT
@@ -606,7 +640,7 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
           return
         }
         const next = checkoutRefusalState(res.status, body)
-        if (next === 'fix-payment') setPortalPath(readString(body, 'portal') ?? PORTAL_PATH)
+        if (next === 'fix-payment') setPortalPath(readString(body, 'portal') ?? BILLING_PORTAL_PATH)
         setCheckout(next)
       } catch {
         // A dropped connection is never "upgrades aren't open yet".
@@ -616,20 +650,14 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
     [checkout],
   )
 
+  // Shared with Settings (components/billing/BillingSection.tsx) so there is
+  // ONE definition of how a portal session is asked for and followed. It
+  // navigates on success, so 'opening' is the last state this page renders in
+  // the happy path.
   const openPortal = useCallback(async () => {
     setPortalState('opening')
-    try {
-      const res = await fetch(portalPath, { method: 'POST', headers: authHeaders() })
-      const body: unknown = res.ok ? await res.json().catch(() => null) : null
-      const url = readString(body, 'url')
-      if (url) {
-        window.location.assign(url)
-        return
-      }
-      setPortalState('failed')
-    } catch {
-      setPortalState('failed')
-    }
+    const opened = await openBillingPortal(portalPath)
+    if (!opened) setPortalState('failed')
   }, [portalPath])
 
   const header = (
@@ -689,7 +717,9 @@ export default function PlanPageClient({ rows, mindTotalSessions }: PlanPageClie
         <CheckoutConfirmation state={checkoutReturn} isPlus={isPlus} />
       )}
 
-      <CurrentPlan snapshot={data} />
+      {/* The plan, and — for anyone Stripe is actually billing — the way into
+          the portal to change or end it. */}
+      <CurrentPlan snapshot={data} portalState={portalState} onOpenPortal={openPortal} />
 
       {/* A member who already holds Plus is shown what they have, never a
           second price. Checkout would refuse them anyway (409 already_*). */}

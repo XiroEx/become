@@ -13,6 +13,8 @@ import {
   LEGAL_DELETION_DAYS,
   LEGAL_REFUND_WINDOW_DAYS,
   LEGAL_SUPPORT_RESPONSE,
+  MANAGE_BILLING_LABEL,
+  MANAGE_BILLING_PORTAL_NOTE,
   RENEWAL_TERMS,
   type LegalDoc,
 } from '@/lib/legal'
@@ -71,7 +73,12 @@ export const SUPPORT: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: 'Open the **Plan** page in the app and choose **Manage billing**. That opens the Stripe billing portal, where you can update your payment method, see and download your invoices, and cancel.',
+          // The control this names EXISTS: components/billing/ManageBillingButton.tsx
+          // renders MANAGE_BILLING_LABEL on the Plan page (and in Settings) for
+          // any member with a subscription. Both halves are read by
+          // tests/unit/billing/manageBilling.test.tsx, so this instruction
+          // cannot go back to pointing at nothing.
+          text: `Open the **Plan** page in the app and choose **${MANAGE_BILLING_LABEL}**. ${MANAGE_BILLING_PORTAL_NOTE} You will also find it in **Settings**.`,
         },
         {
           kind: 'ul',
