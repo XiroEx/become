@@ -24,9 +24,12 @@
 //   5. the public /delete-account page exists, renders signed out, and is
 //      linked from surfaces that do not require a session.
 //
-// The native assertions read expo/ from here on purpose: nothing runs the Expo
-// test suite in CI (see .github/workflows/ci.yml), so this is the only gate
-// the native half of the feature has.
+// The native assertions read expo/ from here on purpose: reachability is a fact
+// about the two codebases TOGETHER, and only a test that can see both can check
+// it. It is no longer the only gate the native half has — ci.yml now runs
+// expo/'s own typecheck, lint, Jest and dependency check (see
+// tests/unit/ci/nativeJobs.test.ts) — but those run inside expo/ and cannot see
+// the webapp half of the same promise.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
