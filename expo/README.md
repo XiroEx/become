@@ -297,6 +297,8 @@ expo/
 │       │                 #   screens PUSH inside the tab instead of becoming
 │       │                 #   tab buttons of their own
 │       └── admin/        # Read-only native admin shells — also __DEV__ only
+├── index.js              # THE app entry (package.json `main`): expo-router/entry
+│                         #   plus the Android App Widget task registration
 ├── lib/
 │   ├── a11y/
 │   │   ├── announce.ts       # announce() — VoiceOver is told what replaced what
@@ -305,6 +307,9 @@ expo/
 │   │   └── touchTarget.ts    # 44 points: minTouchTarget + hitSlopToMinTarget()
 │   ├── dev/
 │   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
+│   ├── widgets/              # Android App Widgets (NP-198): the four tiles, the
+│   │                         #   widgets-token hand-off, the feed read, the
+│   │                         #   cached day, the surfaces and the OS refresh
 │   ├── navigation/
 │   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
 │   ├── offline/
@@ -423,6 +428,12 @@ See the plan doc for full sequencing.
   break every `/(tabs)/programming/…` href), and `chat` stays in the tree as a
   hidden tab until NP-032 removes those routes behind
   `EXPO_PUBLIC_COMMUNITY_ENABLED`.
+- **The app entry is `index.js`, not `expo-router/entry` directly** — it imports
+  that same module and then registers the Android App Widget task handler
+  (NP-198). Android wakes a widget's provider as a headless JS task with no UI,
+  so `AppRegistry.registerHeadlessTask` must have run by the time the bundle
+  finishes evaluating; a registration inside a component only exists once the UI
+  does. See `ANDROID_QUIRKS.md` § App Widgets and `lib/widgets/`.
 - **`_` is not a private prefix in expo-router** — its ignore list is exactly
   `+api`, `+html` and `+native-intent` (`getIgnoreList` in
   `expo-router/build/getRoutesCore.js`), so `app/_stories.tsx` is a live route

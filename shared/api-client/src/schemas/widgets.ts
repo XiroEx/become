@@ -75,7 +75,34 @@ export const WidgetFeedSchema = z
   })
   .passthrough();
 
+/**
+ * POST /api/widgets/token — trade a full session for the READ-ONLY credential an
+ * OS widget surface holds.
+ *
+ * Mirrors webapp/app/api/widgets/token/route.ts:60-69. A widget surface is a
+ * different process with a different lifetime, so it never holds the member's
+ * 30-day session: `scope: 'widgets'` is refused by every route in the app
+ * except `GET /api/widgets/summary` (`verifyAuth` is default-deny for scoped
+ * tokens). `scope` is a literal for that reason — a response that came back
+ * with any other scope is not a widgets token and must not be stored as one.
+ *
+ * `refreshAfterSeconds` is the cadence the feed itself advertises, so a surface
+ * configuring its refresh reads one number from the server rather than
+ * inventing a tighter one.
+ */
+export const WidgetTokenResponseSchema = z
+  .object({
+    token: z.string().min(1),
+    scope: z.literal('widgets'),
+    /** Lifetime in seconds (180 days today — an OS refresh budget is hours). */
+    expiresIn: z.number().optional(),
+    expiresAt: z.string().optional(),
+    refreshAfterSeconds: z.number().optional(),
+  })
+  .passthrough();
+
 export type WidgetKey = z.infer<typeof WidgetKeySchema>;
+export type WidgetTokenResponse = z.infer<typeof WidgetTokenResponseSchema>;
 export type WidgetState = z.infer<typeof WidgetStateSchema>;
 export type WidgetRing = z.infer<typeof WidgetRingSchema>;
 export type BecomeWidget = z.infer<typeof BecomeWidgetSchema>;

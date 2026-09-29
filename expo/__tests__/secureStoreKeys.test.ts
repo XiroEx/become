@@ -43,6 +43,8 @@ import {
   healthSyncReadSecureStore,
   healthSyncWriteSecureStore,
   sessionStore,
+  widgetsSnapshotSecureStore,
+  widgetsTokenSecureStore,
 } from "@/lib/auth/secureStoreToken";
 import * as secureStoreModule from "@/lib/auth/secureStoreToken";
 import { createBiometricsOptInStore } from "@/lib/auth/biometrics";
@@ -68,6 +70,8 @@ describe("SECURE_STORE_KEYS", () => {
       healthSyncRead: "become.sync.health.read",
       healthSyncWrite: "become.sync.health.write",
       biometricsOptIn: "become.optin.biometrics",
+      widgetsToken: "become.widgets.token",
+      widgetsSnapshot: "become.widgets.snapshot",
     });
     const values = Object.values(SECURE_STORE_KEYS);
     expect(new Set(values).size).toBe(values.length);
@@ -85,6 +89,8 @@ describe("SECURE_STORE_KEYS", () => {
     await healthSyncReadSecureStore.set("yes");
     await healthSyncWriteSecureStore.set("yes");
     await biometricsOptInSecureStore.set("yes");
+    await widgetsTokenSecureStore.set("widgets.jwt");
+    await widgetsSnapshotSecureStore.set("{}");
 
     expect(fake.__keys()).toEqual([
       "become.optin.biometrics",
@@ -92,12 +98,30 @@ describe("SECURE_STORE_KEYS", () => {
       "become.session",
       "become.sync.health.read",
       "become.sync.health.write",
+      "become.widgets.snapshot",
+      "become.widgets.token",
     ]);
     expect(await SecureStore.getItemAsync("become.session")).toBe(JWT);
     expect(await SecureStore.getItemAsync("become.optin.health")).toBe("yes");
     expect(await SecureStore.getItemAsync("become.optin.biometrics")).toBe(
       "yes",
     );
+  });
+
+  // NP-198: an App Widget's headless task reads `become.widgets.token`. The
+  // whole point of a `scope: 'widgets'` credential is that the widget cannot
+  // reach the session, so these two may never be one key — and clearing the
+  // widgets token at sign-out may not take the session with it on the way past.
+  it("the widgets token is not the session, in either direction", async () => {
+    await sessionStore.set(JWT);
+    await widgetsTokenSecureStore.set("widgets.jwt");
+
+    expect(await sessionStore.get()).toBe(JWT);
+    expect(await widgetsTokenSecureStore.get()).toBe("widgets.jwt");
+
+    await widgetsTokenSecureStore.clear();
+    expect(await sessionStore.get()).toBe(JWT);
+    expect(await widgetsTokenSecureStore.get()).toBeNull();
   });
 
   it("createSecureStore reads and writes only the key it was built with", async () => {

@@ -18,6 +18,7 @@ import {
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
+import { WidgetsBridge } from "@/components/widgets/WidgetsBridge";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 import { pinDarkMode } from "@/lib/theme/colorScheme";
 import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
@@ -117,6 +118,13 @@ export default function RootLayout() {
               stored, and a workout save used to be the only thing that wrote
               one. */}
           <TimezoneReporter />
+          {/* Keeps the Android home-screen widgets in step with the session
+              (NP-198): a signed-in open hands the read-only widgets token over
+              and redraws the four tiles from the feed; a sign-out forgets it and
+              draws the sign-in prompt. At the ROOT on purpose — the sign-out
+              transition unmounts anything inside (app), which is exactly when
+              the widgets must stop showing the member's day. */}
+          <WidgetsBridge />
           {/*
             THE mount point for refusal handling: every screen below reaches it
             with useApiErrorHandler(). The three answers arrive with the cards

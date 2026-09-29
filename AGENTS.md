@@ -1657,8 +1657,20 @@ notification: streak, today's session, calories left, Mind session waiting.
   whole sweep is wrapped: it is the heaviest section here (one `loadWidgetFeed`
   per qualifying member) and must not be able to cost anyone a nudge.
 
-What is still native-only: an actual WIDGET, of any size, on either OS. Nothing
-above changes that, and `expo/` still has no distribution.
+What is still native-only: an actual WIDGET, of any size. Nothing above changes
+that — but `expo/` now draws four of them on **Android** (NP-198): streak,
+nutrition, Mind and Becoming, as App Widgets through
+`react-native-android-widget`, reading this feed with a widgets token minted at
+each app open and cached for a day at a time so a refresh with no network still
+paints. Signing out drops the token on the device and pushes the sign-in prompt
+onto all four tiles, alongside the `widgetTokenVersion` bump that stops the ones
+that have left it; taps carry `become://…` through the app's one path resolver.
+See `expo/ANDROID_QUIRKS.md` § App Widgets and `expo/lib/widgets/`.
+
+iOS's WidgetKit extension (NP-181/NP-182) is still unbuilt and shares this feed,
+this token and those states when it lands. **Neither has been seen on a phone:
+`expo/` still has no distribution**, which remains the real blocker on a member
+ever seeing one.
 
 ## Development
 

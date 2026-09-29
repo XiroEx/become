@@ -33,6 +33,22 @@ export const SECURE_STORE_KEYS = {
   healthSyncWrite: "become.sync.health.write",
   /** Biometric-unlock opt-in — `"yes"` when on, absent when off. */
   biometricsOptIn: "become.optin.biometrics",
+  /**
+   * The READ-ONLY widgets token (`scope: 'widgets'`), handed to the OS widget
+   * surfaces at each app open. Its OWN key, never the session: an App Widget's
+   * headless task reads this one, and the credential it reads may not be the
+   * one that can log a workout or delete the account (NP-198,
+   * `lib/widgets/token.ts`).
+   */
+  widgetsToken: "become.widgets.token",
+  /**
+   * The last widget feed the app saw, compacted — what an App Widget paints
+   * when its refresh has no network. Data, not a credential, but it is the
+   * member's day, and SecureStore is where this app already puts per-member
+   * strings. Values are kept small on purpose (`lib/widgets/snapshot.ts`):
+   * expo-secure-store's documented ceiling is 2048 bytes.
+   */
+  widgetsSnapshot: "become.widgets.snapshot",
 } as const;
 
 export type SecureStoreKey =
@@ -94,6 +110,16 @@ export const healthSyncWriteSecureStore: TokenStore = createSecureStore(
 /** The biometrics opt-in flag, on `become.optin.biometrics`. */
 export const biometricsOptInSecureStore: TokenStore = createSecureStore(
   SECURE_STORE_KEYS.biometricsOptIn,
+);
+
+/** The read-only widgets token, on `become.widgets.token`. */
+export const widgetsTokenSecureStore: TokenStore = createSecureStore(
+  SECURE_STORE_KEYS.widgetsToken,
+);
+
+/** The compacted widget feed snapshot, on `become.widgets.snapshot`. */
+export const widgetsSnapshotSecureStore: TokenStore = createSecureStore(
+  SECURE_STORE_KEYS.widgetsSnapshot,
 );
 
 /** In-memory store for tests / SSR / browser-mode fallback. */
