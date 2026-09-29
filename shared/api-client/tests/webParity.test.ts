@@ -48,6 +48,20 @@ test('the gate parser still requires both `feature` and `requiresTier`, as gateF
   );
 });
 
+test('the plans route still builds its body from the web constants', () => {
+  // GET /api/billing/plans exists so a price change never needs a store
+  // release. That only holds while the payload is READ from the same constants
+  // the web plan page renders: an amount typed into the builder is a second
+  // source of truth, and the device would be the last to hear it changed.
+  const plans = read('webapp/lib/billing/plans.ts');
+  for (const constant of ['PLAN_PRICING', 'FREE_LIMITS', 'FEATURE_LABELS', 'FREE_FOREVER', 'renewalLine']) {
+    assert.match(plans, new RegExp(`\\b${constant}\\b`), `the payload no longer reads ${constant}`);
+  }
+  // Comments stripped: prose about a price is not a price.
+  const code = plans.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  assert.doesNotMatch(code, /\$\s?\d/, 'an amount is typed into the plans payload');
+});
+
 test('a spend ceiling is still a 429 carrying `rate_limit`, so it can never be an upsell', () => {
   const allowance = read('webapp/lib/ai/allowance.ts');
   const from = allowance.indexOf('export async function requireSpendCap');
