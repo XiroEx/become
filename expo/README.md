@@ -168,7 +168,8 @@ expo/
 │   ├── _layout.tsx       # Root: GestureHandlerRootView, SafeAreaProvider,
 │   │                     #   AuthProvider, the cold-open unlock, and a Stack
 │   │                     #   over index / (auth) / (app) / onboarding
-│   ├── +native-intent.tsx# Every incoming link passes through here first
+│   ├── +native-intent.tsx# Every incoming link passes through here first, and
+│   │                     #   is resolved by lib/navigation/webPathToRoute.ts
 │   ├── index.tsx         # The launch redirect (sign-in, onboarding or Home)
 │   ├── onboarding.tsx    # Signed-in, but OUTSIDE (app): the gate points here
 │   ├── _stories.tsx      # Component gallery. A LIVE route (see below) — it
@@ -184,6 +185,8 @@ expo/
 ├── lib/
 │   ├── dev/
 │   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
+│   ├── navigation/
+│   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
 │   └── theme/
 │       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
 │       └── tokens.ts         # Typed RGB-triplet map (light + dark)
@@ -238,6 +241,20 @@ See the plan doc for full sequencing.
   in the render tomorrow: that is how a tab bar with twenty buttons went
   unnoticed while a five-entry `TAB_ROUTES` array was asserted to be five
   entries long.
+- **One resolver from web paths to native routes** — the server only speaks in
+  web paths (emails link to `/verify` and `/account/restore`, pushes carry
+  `/dashboard/…` urls, widgets carry a `deepLink`, suggestion cards a
+  `primaryAction.href`), and `lib/navigation/webPathToRoute.ts` is the ONE table
+  that turns them into `/(tabs)/…` routes. Every entry point reads it:
+  `app/+native-intent.tsx` (every incoming link, cold start included),
+  `lib/push/deepLinkRouter.ts` (notification taps), and widget taps and
+  suggestion cards when they land. Two rules travel with it — one mapping for
+  every entry point, and a row whose native screen is not built yet falls back
+  deliberately (`fallback: "nearest" | "hidden"`) and never to a blank screen.
+  `__tests__/webPathToRoute.test.ts` READS the server's own sources
+  (`webapp/app/api/cron/notify/route.ts`, `webapp/lib/widgets/feed.ts`,
+  `webapp/lib/goals/suggestions.ts`, `webapp/lib/suggestions/**`), so a url
+  added over there fails this suite until it has a row.
 - **The tab bar is the WEB's tab bar** — order, labels and icons come from
   `webapp/components/BottomNav.tsx`: Workout, Mind, Home, Nutrition, minus
   Community while the web hides it behind `FeatureGuard`. The `programming`
