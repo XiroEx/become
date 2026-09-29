@@ -464,6 +464,34 @@ test('WorkoutSaveRequestSchema: parses the live-workout save payload', () => {
   assert.equal(r.success, true);
 });
 
+test('WorkoutSaveRequestSchema: carries the attempt id that makes a save safe to replay', () => {
+  // Every save of one attempt sends the same id, so the server recognises a
+  // queued write flushed after local midnight as a REPLAY rather than a
+  // second completed workout.
+  const r = WorkoutSaveRequestSchema.safeParse({
+    programId: 'prog-1',
+    phase: 1,
+    day: 'Day 1',
+    completed: true,
+    attemptId: 'b0b7a1f2-0c1e-4f0b-9a1a-9f1b2c3d4e5f',
+    exercises: [],
+  });
+  assert.equal(r.success, true);
+  assert.equal(r.data?.attemptId, 'b0b7a1f2-0c1e-4f0b-9a1a-9f1b2c3d4e5f');
+
+  // …and it stays optional: a client that sends none is on the server's
+  // pre-existing date windows, exactly as before.
+  const without = WorkoutSaveRequestSchema.safeParse({
+    programId: 'prog-1',
+    phase: 1,
+    day: 'Day 1',
+    completed: true,
+    exercises: [],
+  });
+  assert.equal(without.success, true);
+  assert.equal(without.data?.attemptId, undefined);
+});
+
 test('WorkoutSaveRequestSchema: rejects a missing day', () => {
   const r = WorkoutSaveRequestSchema.safeParse({
     programId: 'p',

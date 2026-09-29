@@ -3,6 +3,14 @@ import type { IExercisePR, IPRDimension } from '@/lib/exercisePRs'
 
 export interface IWeightEntry {
   date: Date
+  /**
+   * When the member actually made this entry (an INSTANT — `date` is the
+   * 00:00Z marker for the local DAY it belongs to). Written since back-dated
+   * writes existed; absent on older rows, which any replay may overwrite.
+   * Used to keep the newer value when the same day is delivered twice — see
+   * isStaleReplay in lib/dayWindow.ts.
+   */
+  loggedAt?: Date
   /** Raw number the member typed, in `unit`. */
   weight: number
   /** The unit `weight` was entered in. Absent on entries logged before this
@@ -14,6 +22,8 @@ export interface IWeightEntry {
 
 export interface IMoodEntry {
   date: Date
+  /** When the member actually made this entry — see IWeightEntry.loggedAt. */
+  loggedAt?: Date
   mood: 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 }
 
@@ -84,8 +94,16 @@ export interface IWorkoutLog {
   needsName?: boolean
   // Client-generated id used to match-for-update a quick session across
   // incremental saves within the same live session (program logs use
-  // programId+day+today instead).
+  // `attemptId` below, falling back to programId+day+window).
   sessionId?: string
+  // Client-generated id for ONE attempt at a program day, sent on every save
+  // of that attempt (the program-workout analogue of `sessionId`). POST
+  // /api/workouts matches it BEFORE its date windows, so a save replayed from
+  // an offline queue — including after the member's local midnight, where no
+  // window matches any more — updates this log instead of inserting a second
+  // one and running the completion side effects twice. Absent on legacy logs
+  // and on saves from a client that sends no id.
+  attemptId?: string
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
@@ -301,6 +319,7 @@ export interface IDashboardTile {
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   weight: { type: Number, required: true },
   unit: { type: String, enum: ['lbs', 'kg'] },
   bodyFat: { type: Number }
@@ -308,6 +327,7 @@ const WeightEntrySchema = new Schema<IWeightEntry>({
 
 const MoodEntrySchema = new Schema<IMoodEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   mood: { type: Number, required: true, min: 1, max: 5 }
 }, { _id: false })
 
@@ -362,6 +382,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   title: { type: String },
   needsName: { type: Boolean },
   sessionId: { type: String },
+  attemptId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
   skipped: { type: Boolean },
