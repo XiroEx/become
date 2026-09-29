@@ -4,6 +4,73 @@ Polish-pass decisions for the iOS half of the native app. Each section calls
 out the choice + the rationale + the file it lives in, so a future polish
 pass can find + revisit.
 
+## Icon and launch screen
+
+`expo.icon` is `./assets/icon.png`: 1024 x 1024, **opaque, no alpha channel**.
+App Store Connect rejects an icon with one, and `assets/` is generated rather
+than hand-exported precisely so that property cannot drift —
+`scripts/generate-app-assets.mjs` writes an RGB PNG for the icon and RGBA for
+the other two. Run it after replacing the source artwork:
+
+```bash
+node scripts/generate-app-assets.mjs
+```
+
+The launch screen is `expo-splash-screen` with
+`image: "./assets/splash-icon.png"`, `imageWidth: 200`, `resizeMode: "contain"`
+and `backgroundColor: "#0a0a0a"` — plus a `dark` block with the **same** colour
+and image, because `userInterfaceStyle` is `automatic` and a light-mode phone
+would otherwise get the default white one.
+
+`#0a0a0a` is not a decoration, it is the whole trick: it is the app's first
+paint (`app/_layout.tsx`'s Stack `contentStyle`), the root view background
+(`expo.backgroundColor`, which is why `expo-system-ui` is a dependency — on iOS
+that key does nothing without it) and the adaptive-icon background. Launch
+screen, window and first screen are one colour, so there is nothing to flash
+between them. `__tests__/appAssets.test.ts` asserts all four agree.
+
+## Export compliance
+
+`ios.infoPlist.ITSAppUsesNonExemptEncryption: false`. Become talks to
+`become.redbtn.io` over HTTPS and ships no crypto of its own, which is exempt.
+Declaring it in the build is what stops App Store Connect asking the
+export-compliance question on every single upload.
+
+## Privacy manifest
+
+`ios.privacyManifests` becomes `PrivacyInfo.xcprivacy` in the build. Without it
+an upload comes back with ITMS-91053 ("Missing API declaration"). Four
+required-reason categories, one reason code each:
+
+| Category | Reason | Who uses it |
+|---|---|---|
+| `NSPrivacyAccessedAPICategoryFileTimestamp` | `C617.1` | file timestamps inside the app container — the bundle loader / file system |
+| `NSPrivacyAccessedAPICategoryUserDefaults` | `CA92.1` | React Native + expo-constants, reading only this app's own defaults |
+| `NSPrivacyAccessedAPICategorySystemBootTime` | `35F9.1` | React Native's performance timers, measuring elapsed time between in-app events |
+| `NSPrivacyAccessedAPICategoryDiskSpace` | `E174.1` | checking there is room before writing a cached file |
+
+`NSPrivacyTracking: false` with no tracking domains (no ad or analytics SDK,
+and the app never asks for ATT), and the three collected data types — email,
+user ID, push token — mirror the App Privacy answers drafted in `RELEASE.md`.
+Keep the two in step: they are answers to the same question in two places.
+
+## Permission usage strings
+
+One place: `expo.ios.infoPlist` in `app.json`. The rule lives in
+`lib/config/permissions.ts` and is enforced by
+`__tests__/permissionStrings.test.ts` — install a module that makes iOS prompt
+(camera, photos, microphone, speech, Face ID, HealthKit) without adding its
+sentence and the suite fails, naming the Info.plist key and the card.
+
+A sentence says what **Become** does with the resource, in the app's voice: not
+"This app requires access to the camera." The test enforces the mechanical part
+of that (it names Become, it is long enough to be a sentence, it is not a
+placeholder) and the unused half of the rule too: a usage string with no module
+behind it is a question from App Review, so it fails as well.
+
+Today the app installs none of those modules and there are no usage strings;
+each later feature brings its own with its code.
+
 ## Safe area
 
 Every top-level screen wraps its content in `SafeAreaView` from
@@ -78,7 +145,13 @@ See P6 for the parse/verify flow.
 
 ## Verified by
 
-- `__tests__/iosConfig.test.ts` — app.json invariants + StatusBar style
+- `__tests__/iosConfig.test.ts` — app.json invariants + StatusBar style +
+  export compliance + the privacy manifest
+- `__tests__/appAssets.test.ts` — every asset path in app.json exists (the
+  check `expo-doctor` runs), the icon has no alpha, and the four
+  launch-to-first-paint colours are one colour
+- `__tests__/permissionStrings.test.ts` — a permission-bearing module without
+  its usage string fails
 - `__tests__/iosSafeArea.test.ts` — every top-level screen file references
   `SafeAreaView`
 - `__tests__/iosKeyboardAvoiding.test.ts` — every input-bearing screen file

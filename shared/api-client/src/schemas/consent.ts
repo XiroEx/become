@@ -106,9 +106,9 @@ export const AiConsentRefusalSchema = z
   })
   .passthrough();
 
-export type AiConsentStatus = z.infer<typeof AiConsentStatusSchema>;
+export type AiConsentStatusBody = z.infer<typeof AiConsentStatusSchema>;
 export type ConsentStatus = z.infer<typeof ConsentStatusSchema>;
 export type ConsentAcceptRequest = z.infer<typeof ConsentAcceptRequestSchema>;
 export type AiConsentSource = z.infer<typeof AiConsentSourceSchema>;
 export type AiConsentRequest = z.infer<typeof AiConsentRequestSchema>;
-export type AiConsentRefusal = z.infer<typeof AiConsentRefusalSchema>;
+export type AiConsentRefusalBody = z.infer<typeof AiConsentRefusalSchema>;

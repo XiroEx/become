@@ -24,6 +24,7 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
 });
 
 import HealthSettingsRoute from "../app/(tabs)/profile/health";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
 import { HEALTH_SYNC_ENABLED } from "@/lib/health/enabled";
 import { createMemoryHealthOptInStore } from "@/lib/health/opt-in";
@@ -33,9 +34,18 @@ import { createMemoryHealthOptInStore } from "@/lib/health/opt-in";
  * Health Connect module. Until then the toggle synced nothing — and, before
  * this ticket, signed the member out by writing its flag over the session key.
  */
+/** The screen reads the session from the one provider, so mount it. */
+function renderRoute() {
+  return render(
+    <AuthProvider>
+      <HealthSettingsRoute />
+    </AuthProvider>,
+  );
+}
+
 describe("HealthSettingsRoute", () => {
   it("mounts", async () => {
-    const { getByTestId } = render(<HealthSettingsRoute />);
+    const { getByTestId } = renderRoute();
     expect(getByTestId("health-settings-route")).toBeTruthy();
     await waitFor(() => {
       expect(getByTestId("danger-zone")).toBeTruthy();
@@ -43,7 +53,7 @@ describe("HealthSettingsRoute", () => {
   });
 
   it("does not show the Health sync section or its toggle (NP-185)", async () => {
-    const { queryByTestId, queryByText } = render(<HealthSettingsRoute />);
+    const { queryByTestId, queryByText } = renderRoute();
     await waitFor(() => {
       expect(queryByTestId("danger-zone")).toBeTruthy();
     });
