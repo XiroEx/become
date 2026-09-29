@@ -88,6 +88,36 @@ Submit defaults:
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
 
+## What the build already answers for you
+
+Two questions an iOS upload normally stops to ask are answered in `app.json`,
+so `eas submit` does not need a person:
+
+- **Export compliance.** `ios.infoPlist.ITSAppUsesNonExemptEncryption: false` —
+  HTTPS only, no crypto of our own, which is exempt. Without it App Store
+  Connect asks on every build.
+- **Privacy manifest.** `ios.privacyManifests` ships `PrivacyInfo.xcprivacy`
+  with the four required-reason API categories the bundled modules use
+  (file timestamp `C617.1`, user defaults `CA92.1`, system boot time `35F9.1`,
+  disk space `E174.1`), `NSPrivacyTracking: false`, and the same three
+  collected data types as the App Privacy answers below. Without it the upload
+  comes back with ITMS-91053.
+
+Both are asserted by `__tests__/iosConfig.test.ts`. If a new native module
+touches another required-reason API, add its category there with the module.
+
+**Permission usage strings** live in one place, `expo.ios.infoPlist` in
+`app.json`, and `__tests__/permissionStrings.test.ts` fails the build when a
+permission-bearing module arrives without one (ITMS-90683 otherwise). See
+`IOS_QUIRKS.md` → "Permission usage strings".
+
+**Icons and the launch screen** are generated, not hand-exported:
+`node scripts/generate-app-assets.mjs` writes `assets/icon.png` (1024 px,
+opaque — App Store Connect rejects an icon with an alpha channel),
+`assets/adaptive-icon.png` and `assets/splash-icon.png` from
+`webapp/public/logo.png`. Re-run it when the real store icon replaces the
+stand-in, and check `npx expo-doctor` still passes 21/21.
+
 ## Apple App Privacy form
 
 Become collects these data types (declare in App Store Connect):
