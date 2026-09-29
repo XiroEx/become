@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { Stack, useRouter } from "expo-router";
 import { AuthGuard } from "@/lib/auth/AuthGuard";
 import { ConsentGate } from "@/components/auth/ConsentGate";
+import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 
@@ -56,6 +57,11 @@ export default function AppGroupLayout() {
           loading={loading}
           onNeedsOnboarding={onNeedsOnboarding}
         >
+          {/* Imports Health-recorded weigh-ins once per launch, if the member
+              left that direction on. Renders nothing, and does nothing at all on
+              a platform with no health module (iOS until NP-185) — see
+              components/health/HealthSyncBridge.tsx. */}
+          <HealthSyncBridge />
           <Stack
             screenOptions={{
               headerShown: false,
