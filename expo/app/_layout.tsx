@@ -15,6 +15,7 @@ import {
   sessionStore,
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
+import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 
 /**
@@ -74,6 +75,11 @@ export default function RootLayout() {
         <AuthProvider>
           <StatusBar style="light" />
           <ColdOpenGate />
+          {/* Records the member's timezone on launch and on the first foreground
+              of a new local day. The notify cron skips a member with none
+              stored, and a workout save used to be the only thing that wrote
+              one. */}
+          <TimezoneReporter />
           {/*
             THE mount point for refusal handling: every screen below reaches it
             with useApiErrorHandler(). The three answers arrive with the cards
