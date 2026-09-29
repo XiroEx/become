@@ -217,6 +217,14 @@ export interface IUser {
    *  redauth-backed login (Google / passkey); backfilled by email for existing
    *  magic-link/password users. */
   authId?: string;
+  /** Revocation counter for the read-only widgets token (lib/widgets/token.ts).
+   *  Every `widgets`-scoped token carries the value it was minted at, and
+   *  GET /api/widgets/summary refuses any token that does not match — so
+   *  incrementing this is how a stateless, long-lived token is killed. Bumped
+   *  on sign-out and on an account-deletion request. Absent === 0: the field
+   *  is missing on every row written before this shipped, and `$inc` turns
+   *  absent into 1. */
+  widgetTokenVersion?: number;
   /** Profile picture from a social provider (e.g. Google) or a custom upload. */
   avatarUrl?: string;
   /** Equipped profile icon: a PRESET_ICONS id, or 'custom' to use avatarUrl.
@@ -359,6 +367,10 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
   authId: { type: String, default: null },
+  // No `default`: absent must stay absent so `$inc` (0 → 1 on the first bump)
+  // and normalizeWidgetTokenVersion (absent → 0) agree, and so the field is not
+  // written onto every legacy row the first time anything saves one.
+  widgetTokenVersion: { type: Number },
   avatarUrl: { type: String },
   profileIcon: { type: String },
 }, {

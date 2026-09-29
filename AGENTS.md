@@ -1395,6 +1395,61 @@ The usual two date species both appear in `load.ts`, one line apart: a
 `workoutLogs.date` is an INSTANT put through the offset. See the day-marker
 section and `tests/unit/dayMarkerConvention.test.ts`.
 
+### The widgets token: `POST /api/widgets/token`
+
+**A widget extension does not get the member's session.** It is a different
+process with a different lifetime; whatever it holds sits on the device for
+months and is read by code the member never opened. Handing it the 30-day JWT —
+the credential that can log a workout, move a goal, start a checkout or delete
+the account — so it can draw a streak number is a grant wildly out of
+proportion to the job.
+
+So `POST /api/widgets/token` (full session required, writes nothing, hit at each
+app open) mints a token with `scope: 'widgets'`. `verifyAuth` is **default-deny
+for scoped tokens** (`lib/auth.ts`), so that token is refused by every route in
+the app except the one that names `WIDGET_SCOPES` — which is
+`GET /api/widgets/summary` and nothing else. In particular `/api/auth/me` refuses
+it, which matters more than it looks: that route's sliding refresh mints a fresh
+30-day SESSION from whatever it accepts. **A widgets token reads the feed and
+nothing else.** `tests/unit/auth/token-scope.test.ts` fails if any other route
+file opts in.
+
+It cannot mint another one either: `POST /api/widgets/token` passes no scope
+opt-in, so a widgets token presented there is refused like anything else.
+
+**The version is the revocation, because a JWT has none.** `ai-tools` tokens are
+safe to leave stateless — they live 15 minutes. This one lives 180 days, because
+an OS refresh budget is measured in hours and a widget that re-authenticates
+every quarter of an hour shows a stale number all day. So it carries
+`widgetTokenVersion`, the counter stored on the User at mint time, and the
+summary route compares it against the stored value on every read — **before the
+60s Redis entry is consulted**, or a revoked token could still read a warm feed.
+Bumping the counter (`$inc`, so absent → 1) kills every token minted before it,
+with one write and no revocation list:
+
+- the member signs out in the app → `POST /api/auth/logout`, which for this
+  reason now takes the token from the Authorization header OR the `auth_token`
+  cookie (native sends one, the web sends the other) and is fail-soft: signing
+  out may never fail because a write did;
+- the member requests deletion → `DELETE /api/me/account`, in the same
+  `updateOne` as the deletion plan, for the same reason that route drops push
+  registrations at request time rather than at purge time. Minting is refused
+  while a deletion is pending, or the next app open would hand the token back.
+
+A scoped token can never bump anything (`signOutRevocationTarget` returns null
+for it): revocation is a WRITE, and the read-only credential does not get one.
+The counter has **no schema default** — absent and 0 have to be the same thing
+for `$inc` to be safe. `lib/widgets/token.ts` carries the argument in full and
+`tests/unit/widgets/token.test.ts` pins it; the version check takes an injectable
+loader, so the whole decision is exercisable with no database.
+
+What `expo/` owns today is one line of it: a deliberate sign-out POSTs
+`/api/auth/logout` with the token it is giving up (`lib/auth/AuthProvider.tsx`).
+An involuntary one (`unauthorized`, `expired`) deliberately does not — the server
+has already stopped accepting that token, so the call would revoke nothing. The
+widget extension itself is still unbuilt, and its side of the contract is: ask
+for a fresh token at each open, store nothing longer, and read only the summary.
+
 ### What the web app CAN put on a phone
 
 Three surfaces, and between them they are the whole of a PWA's presence outside

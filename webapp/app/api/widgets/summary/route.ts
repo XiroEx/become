@@ -14,12 +14,21 @@
  * This is a READ. It writes nothing — no lastShownAt, no ensureGoals upsert —
  * because a background refresh that mutates state makes every derived number
  * depend on how many widgets someone happens to have installed.
+ *
+ * THE ONE ROUTE THAT ACCEPTS A WIDGETS TOKEN. An extension runs outside the app
+ * and must not hold the member's 30-day session, so it carries a token whose
+ * `scope: 'widgets'` claim is refused by every other route in the app
+ * (verifyAuth is default-deny for scoped tokens). That token is long-lived, so
+ * this is also the one place its `widgetTokenVersion` is checked against the
+ * stored one — see lib/widgets/token.ts, and note the check sits BEFORE the
+ * cache read, because a revoked token must not be able to read a warm entry.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/auth'
+import { verifyAuth, WIDGET_SCOPES } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import { loadWidgetFeed } from '@/lib/widgets/load'
+import { isWidgetAuthAccepted } from '@/lib/widgets/token'
 import { WIDGET_REFRESH_SECONDS } from '@/lib/widgets/feed'
 import {
   cacheGetJson,
@@ -43,8 +52,19 @@ function readOptionalTz(params: URLSearchParams): number | null {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
+    const auth = await verifyAuth(request, { allowScopes: WIDGET_SCOPES })
     if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Revocation. A widgets token is stateless and lives for months, so the
+    // stored counter is the only thing that can end it: signing out in the app
+    // or requesting deletion bumps it, and every token minted before that stops
+    // being accepted here. Costs one indexed read by _id, and only for widget
+    // callers — a member reading their own feed in the app pays nothing
+    // (isWidgetAuthAccepted returns true for an unscoped session immediately).
+    if (auth.scope === 'widgets') await dbConnect()
+    if (!(await isWidgetAuthAccepted(auth))) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

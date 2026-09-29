@@ -5,7 +5,8 @@
 //
 //   GET    → is a deletion pending, and until when? (the danger zone reads this)
 //   DELETE → request it. Signs this device out, drops every push registration
-//            this account holds, emails the restore link.
+//            this account holds, kills every read-only widgets token it holds,
+//            emails the restore link.
 //   POST   { cancel: true } → change of mind, from a session that still works.
 //
 // WHY DELETE DOES NOT DELETE ANYTHING YET
@@ -114,7 +115,15 @@ export async function DELETE(request: NextRequest) {
     }
 
     const plan = planDeletion(new Date(), source)
-    await User.updateOne({ _id: auth.userId }, { $set: { deletion: plan } })
+    // The same write bumps `widgetTokenVersion`. A read-only widgets token
+    // (lib/widgets/token.ts) lives for months on an OS extension the member
+    // cannot see, so a member who has asked to be deleted must stop feeding one
+    // that minute — the same argument as the push registrations below, and the
+    // bump is what makes it true for a token nothing else can revoke.
+    await User.updateOne(
+      { _id: auth.userId },
+      { $set: { deletion: plan }, $inc: { widgetTokenVersion: 1 } },
+    )
 
     // Stop talking to their devices NOW — web endpoints and native Expo push
     // tokens alike — and latch the master switch so a background resync cannot
