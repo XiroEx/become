@@ -2,13 +2,14 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 // The danger zone clears the session out of SecureStore on success. Swap the
-// real store for an in-memory one so jest never touches the native module.
+// session store (`become.session`) for an in-memory one so jest never touches
+// the native module.
 jest.mock("@/lib/auth/secureStoreToken", () => {
   const actual = jest.requireActual("@/lib/auth/secureStoreToken");
   let value: string | null = "jwt-in-the-keychain";
   return {
     ...actual,
-    secureTokenStore: {
+    sessionStore: {
       async get() {
         return value;
       },

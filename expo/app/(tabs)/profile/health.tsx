@@ -12,9 +12,8 @@ import {
 import { useRouter } from "expo-router";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
-import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
-import { createHealthOptInStore } from "@/lib/health/opt-in";
+import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -28,9 +27,12 @@ interface ProfilePatchInput {
 
 /**
  * SETTINGS. Edit name (GET/PATCH /api/profile), log weight or skip (GET
- * skip-state + POST /api/weight), the Apple Health / Health Connect opt-in
- * toggle — and the danger zone at the bottom, which is the account-deletion
- * path both stores require to be reachable from inside the app.
+ * skip-state + POST /api/weight) — and the danger zone at the bottom, which is
+ * the account-deletion path both stores require to be reachable from inside
+ * the app.
+ *
+ * The Apple Health / Health Connect section lives in HealthSyncSection and
+ * renders nothing until NP-185 installs a real health module.
  *
  * It is reached from the gear on the dashboard (app/(tabs)/dashboard). Before
  * that entry point existed this screen was in the route tree and unreachable
@@ -40,9 +42,6 @@ interface ProfilePatchInput {
 export default function HealthSettingsRoute() {
   const { token } = useAuth();
   const router = useRouter();
-  const [enabled, setEnabled] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [store] = useState(() => createHealthOptInStore());
 
   const fetchOpts = {
     baseUrl: WEBAPP_BASE_URL,
@@ -113,25 +112,6 @@ export default function HealthSettingsRoute() {
   const lastWeight = weightCheck.data?.lastWeight;
   const daysSince = weightCheck.data?.daysSinceLastEntry;
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const initial = await store.isOptedIn();
-      if (!cancelled) {
-        setEnabled(initial);
-        setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [store]);
-
-  const handleToggle = async (next: boolean): Promise<void> => {
-    setEnabled(next);
-    await store.setOptedIn(next);
-  };
-
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -193,35 +173,9 @@ export default function HealthSettingsRoute() {
           </View>
         </View>
 
-        <Text className="text-foreground text-2xl font-bold mt-2">
-          Health sync
-        </Text>
-        <Text className="text-muted-foreground text-sm">
-          Read weight + steps from Apple Health (iOS) or Health Connect
-          (Android). Become only reads — we never write.
-        </Text>
-        <View
-          testID="health-toggle-row"
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: 12,
-            borderRadius: 12,
-          }}
-          className="bg-card border border-border"
-        >
-          <Text className="text-foreground">Sync from Health</Text>
-          <Toggle
-            testID="health-toggle"
-            value={enabled}
-            onValueChange={(v) => {
-              void handleToggle(v);
-            }}
-            disabled={loading}
-            accessibilityLabel="Sync from Health"
-          />
-        </View>
+        {/* Health sync renders nothing until NP-185 installs a real HealthKit /
+            Health Connect module — see lib/health/enabled.ts. */}
+        <HealthSyncSection />
 
         {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE. This screen is the app's
             Settings, so this is where an App Store reviewer looks for account

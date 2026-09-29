@@ -2,11 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiFetch } from "@become/api-client";
 import { MeResponseSchema, type User } from "@become/api-client";
 import {
-  secureTokenStore,
+  sessionStore,
   type TokenStore,
 } from "@/lib/auth/secureStoreToken";
 
 export interface UseAuthOptions {
+  /**
+   * Where the JWT lives. Omitted → `sessionStore`, which names the
+   * `become.session` key; there is no purpose-agnostic "the token store" any
+   * more. Tests pass an in-memory store.
+   */
   store?: TokenStore;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -23,7 +28,7 @@ export interface UseAuthResult {
 }
 
 export function useAuth(options: UseAuthOptions = {}): UseAuthResult {
-  const store = options.store ?? secureTokenStore;
+  const store = options.store ?? sessionStore;
   const [token, setTokenState] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
