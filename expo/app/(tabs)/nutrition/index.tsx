@@ -7,15 +7,18 @@ import { DayTotals } from "@/components/nutrition/DayTotals";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { localDateKey, withTz } from "@/lib/nutrition/localDay";
 import { toMealEntries } from "@/lib/nutrition/mealLog";
 
 export default function NutritionIndexRoute() {
   const router = useRouter();
   const { token } = useAuth();
-  const today = new Date().toISOString().slice(0, 10);
+  // The device's day, with the offset that produced it — `toISOString()` is
+  // the UTC day, so at 9pm in New York this screen asked for tomorrow.
+  const today = localDateKey();
 
   const { data } = useFetch(
-    `/api/nutrition/log?date=${today}`,
+    withTz(`/api/nutrition/log?date=${today}`),
     MealLogResponseSchema,
     {
       baseUrl: WEBAPP_BASE_URL,

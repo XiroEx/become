@@ -1,18 +1,27 @@
-import type {
-  FoodSearchResponse,
-  FoodDetailFood,
-} from "@become/api-client";
+import type { FoodSearchResponse, FoodSearchItem } from "@become/api-client";
 import type {
   FoodSearchResult,
   FoodSource,
 } from "@/components/nutrition/FoodSearchInput";
-import type { FoodNutrition } from "@/lib/nutrition/servingMath";
+import { foodRowParam } from "@/lib/nutrition/foodImport";
 
-/** Map the webapp food `source` string to the presentational tier. */
+/**
+ * Map the webapp food `source` string to the presentational tier.
+ *
+ * The web says `openfoodfacts` (that is the string the search route and the
+ * import route both use); `off` only ever appears as the `off-` id prefix.
+ * Accepting just `off` here mapped every OpenFoodFacts row to "custom", which
+ * then skipped the external path entirely.
+ */
 export function narrowFoodSource(value: string | undefined): FoodSource {
   if (value === "usda") return "usda";
-  if (value === "off") return "off";
+  if (value === "off" || value === "openfoodfacts") return "off";
   return "custom"; // manual / custom / saved DB foods
+}
+
+/** The id a search row is addressed by — synthetic for external hits. */
+export function foodSearchRowId(food: FoodSearchItem): string {
+  return food._id ?? food.id ?? "";
 }
 
 /** Flatten the food-search response into the presentational result list. */
@@ -21,7 +30,7 @@ export function toFoodSearchResults(
 ): FoodSearchResult[] {
   if (!response?.foods) return [];
   return response.foods.map((f) => ({
-    id: f._id ?? f.id ?? "",
+    id: foodSearchRowId(f),
     name: f.name,
     brand: f.brand ?? null,
     source: narrowFoodSource(f.source),
@@ -29,13 +38,21 @@ export function toFoodSearchResults(
   }));
 }
 
-/** Map a food-detail record to the ServingPicker per-100g nutrition shape. */
-export function toServingFood(food: FoodDetailFood): FoodNutrition {
-  const n = food.nutrition ?? {};
-  return {
-    kcalPer100g: n.calories ?? 0,
-    proteinPer100g: n.protein ?? 0,
-    carbsPer100g: n.carbs ?? 0,
-    fatPer100g: n.fats ?? 0,
-  };
+/** The raw row behind a presentational result, by id. */
+export function findFoodSearchRow(
+  response: FoodSearchResponse | null | undefined,
+  id: string,
+): FoodSearchItem | null {
+  return (response?.foods ?? []).find((f) => foodSearchRowId(f) === id) ?? null;
+}
+
+/**
+ * Where tapping a search result goes. A `usda-*` / `off-*` hit has no Food
+ * document yet, so the row travels with it: the detail screen re-imports it as
+ * `{ source: 'manual', data }` when the source import can't answer.
+ */
+export function foodDetailHref(id: string, row?: unknown): string {
+  const path = `/(tabs)/nutrition/food/${encodeURIComponent(id)}`;
+  const param = row ? foodRowParam(row) : null;
+  return param ? `${path}?row=${encodeURIComponent(param)}` : path;
 }
