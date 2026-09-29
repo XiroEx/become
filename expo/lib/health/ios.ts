@@ -7,10 +7,19 @@
  * is injected in jest.
  *
  * HealthKit reports weight in kilograms; this adapter normalises to pounds so
- * the rest of the app speaks one unit (`weight_lbs` mirrors the webapp).
+ * the rest of the app speaks one unit (`weight_lbs` mirrors the webapp). The
+ * conversion itself lives in `lib/health/units.ts`, shared with the Android
+ * adapter, so a read and a write cannot disagree about the factor.
+ *
+ * WRITING is not here yet: NP-185 / NP-186 add the `write` half of
+ * `HealthClient` for iOS, which is the shape Android already implements in
+ * `lib/health/android.ts`. Everything above the adapter — the switches, the
+ * launch snapshot, the sync and the server route — is platform-neutral and
+ * waiting for it.
  */
 import type { DateRange, HealthClient, StepSample, WeightSample } from "./types";
 import { HealthPermissionError } from "./types";
+import { kgToLbs } from "./units";
 
 export interface IosClientImpl {
   isPermissionGranted: () => Promise<boolean>;
@@ -20,10 +29,6 @@ export interface IosClientImpl {
   querySteps: (range: DateRange) => Promise<
     { count: number; timestamp: string }[]
   >;
-}
-
-export function kgToLbs(valueKg: number): number {
-  return valueKg * 2.2046226218;
 }
 
 export function createIosAdapter(impl: IosClientImpl): HealthClient {

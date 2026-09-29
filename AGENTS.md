@@ -357,6 +357,38 @@ Both are stored on the `weightHistory` entry, and four rules follow from them:
 
 An import must carry a weight: `skip` with a `source` is a 400.
 
+#### The native side of it (Health Connect, NP-199)
+
+Android speaks that route through `react-native-health-connect`, and everything
+above the platform boundary is shared with the iOS half that follows in NP-185 /
+NP-186 — one sync (`expo/lib/health/sync.ts`), one set of switches, one route.
+Four things to know before touching it:
+
+- **Three flags, all default off, each its own SecureStore key**:
+  `become.optin.health` (the umbrella), `become.sync.health.read` (Health →
+  Become) and `become.sync.health.write` (Become → Health). They are read ONCE
+  per process, at launch (`expo/lib/health/switches.ts`), and the sync consults
+  that snapshot — so turning a direction off stops it at the NEXT LAUNCH, which
+  is what Settings tells the member and what Health Connect itself does with a
+  revoked permission ("does not take effect until the app process restarts").
+- **Three Android permissions and no more**: `READ_WEIGHT`, `WRITE_WEIGHT`,
+  `WRITE_EXERCISE`. Nothing reads workouts or steps back out of Health Connect.
+  The code's list, `app.json`'s manifest permissions and Play's health apps
+  declaration in `expo/RELEASE.md` are held equal by
+  `expo/__tests__/androidHealthConnect.test.ts` — Play blocks a release whose
+  declaration does not match, and an unused health permission is a question
+  nobody can answer.
+- **Become's own writes are filtered out of every read** (`metadata.dataOrigin`
+  = `io.redbtn.become`). Without it the app re-imports the weigh-in it just
+  wrote, on every launch, and re-stamps the member's own typed value as imported.
+- **The day comes from the record's own `zoneOffset`** (seconds east, converted
+  to the minutes west the wire uses), not from the phone's current zone — same
+  rule as above, enforced on the client so a sample the route would refuse is
+  dropped instead of posted.
+
+It needs a dev build (Health Connect is not in Expo Go) and `minSdkVersion 26`,
+raised in `app.json` through `expo-build-properties`.
+
 ## Frontend Patterns
 
 - **AuthGuard** component wraps protected routes

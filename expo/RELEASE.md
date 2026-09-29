@@ -93,6 +93,7 @@ Submit defaults:
 | Promote to Closed Testing | Play Console → Closed Testing | Adds Google review (~hours) |
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
+| Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
 
 ## What the build already answers for you
 
@@ -149,11 +150,60 @@ Mirror image:
 | **Personal info** | User IDs | Yes | No | Authentication |
 | **App activity** | In-app actions | Yes | No | Workout / mood / weight logs synced to backend |
 | **Device or other IDs** | Push token | Yes | Yes (notifications off) | Push reminders |
-| **Health & fitness** | Weight | Yes | Yes (HealthKit opt-in) | Sync from Apple Health / Health Connect |
+| **Health & fitness** | Weight | Yes | Yes (health sync is opt-in, per direction) | Weigh-ins imported from Apple Health / Health Connect, stored with the member's weight history |
+| **Health & fitness** | Exercise (workout sessions) | No — written out only | Yes (health sync is opt-in, per direction) | Workouts finished in Become are written to Health Connect; none are read back |
 
 We do NOT collect: precise location, financial info, photos, audio, contacts,
 calendar, files, advertising IDs. Data is encrypted in transit (HTTPS). Users
 can request deletion via in-app account → delete.
+
+## Play health apps declaration (Health Connect)
+
+Play Console → **App content → Health apps**. Required, and BLOCKING, because
+the manifest requests Health Connect permissions (NP-199). Answer it with
+exactly this; the three permissions below are the whole list, and
+`__tests__/androidHealthConnect.test.ts` fails the build if the manifest, the
+code or this table drift apart.
+
+**App type / category:** fitness and wellness coaching app. Health Connect is
+used for the member's own weight and workout data, inside the app, at their
+request.
+
+| Permission | Data type | Access | Why Become asks | Where it is used |
+|---|---|---|---|---|
+| `android.permission.health.READ_WEIGHT` | Weight | Read | So a weigh-in recorded by the member's scale or another app appears in Become without being typed twice, on the day it was recorded | `lib/health/sync.ts` → `POST /api/weight` with `source: "health-connect"` |
+| `android.permission.health.WRITE_WEIGHT` | Weight | Write | So a weigh-in logged in Become is available to the member's other health apps | `lib/health/sync.ts` → `exportWeighInToHealth` |
+| `android.permission.health.WRITE_EXERCISE` | Exercise (session) | Write | So a workout finished in Become shows up as an exercise session alongside the rest of the member's activity | `lib/health/sync.ts` → `exportWorkoutToHealth` |
+
+Declaration answers, in the words the form asks for:
+
+- **Is Health Connect data shared with third parties?** No. It is not sold, not
+  shared with third parties, and never used for advertising, marketing,
+  profiling or any automated decision about the member. It is stored against
+  their own account and shown back to them.
+- **Is it used for anything other than the feature the member enabled?** No.
+  Weight read from Health Connect appears in their own weight history and the
+  targets computed from it; a written weigh-in or session is their own data
+  going back out.
+- **Is it processed on a server?** Weight is, yes: an imported weigh-in is sent
+  to Become's own API (`POST /api/weight`) and stored with the member's history,
+  tagged `source: "health-connect"` and de-duplicated on the sample's own id.
+  Workouts written to Health Connect come FROM that API and are not re-read.
+- **Is it retained after the member turns the feature off?** Weigh-ins already
+  imported stay in their Become history (it is their weight log, and they can
+  delete their account or the entry). Nothing further is read or written: each
+  direction has its own switch in Settings and both are off by default.
+- **Health permissions requested but not used?** None — see the table.
+- **Privacy policy URL:** https://become.redbtn.io/privacy
+- **Health data policy URL (the one the declaration and the Health Connect
+  rationale link to):** https://become.redbtn.io/health-data
+- **Where the rationale screen comes from:** the
+  `react-native-health-connect` config plugin writes the
+  `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE` intent-filter and the
+  Android 14+ `ViewPermissionUsageActivity` alias, so the "learn more" link in
+  Health Connect's permission sheet has somewhere to land.
+- **Minimum SDK:** 26, raised in `app.json` via `expo-build-properties` because
+  the Health Connect client requires it.
 
 ## Rollback
 
