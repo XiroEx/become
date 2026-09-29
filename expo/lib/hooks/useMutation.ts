@@ -6,7 +6,15 @@ import type { ApiCallInit, ApiFetchOptions } from "@become/api-client";
 export interface UseMutationOptions<TInput, TOutput> {
   baseUrl?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
-  tz?: string;
+  /**
+   * `tz` override in MINUTES WEST OF UTC (`Date.getTimezoneOffset()` units —
+   * New York in summer is 240), which is what the server reads. Leave unset:
+   * the client computes it from the device clock per request and merges it into
+   * the JSON body, alongside the IANA `tzZone`, for date-scoped writes.
+   */
+  tz?: number;
+  /** IANA zone override; travels as `tzZone` in the body. */
+  tzZone?: string;
   fetchImpl?: typeof fetch;
   method?: ApiCallInit["method"];
   headers?: Record<string, string>;
@@ -75,6 +83,7 @@ export function useMutation<TInput, TOutput>(
       if (opts.baseUrl !== undefined) init.baseUrl = opts.baseUrl;
       if (opts.getToken !== undefined) init.getToken = opts.getToken;
       if (opts.tz !== undefined) init.tz = opts.tz;
+      if (opts.tzZone !== undefined) init.tzZone = opts.tzZone;
       if (opts.fetchImpl !== undefined) init.fetchImpl = opts.fetchImpl;
 
       try {

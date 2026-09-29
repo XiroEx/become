@@ -5,7 +5,14 @@ import { apiFetch, ApiError, SchemaValidationError } from "@become/api-client";
 export interface UseFetchOptions {
   baseUrl?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
-  tz?: string;
+  /**
+   * `tz` override in MINUTES WEST OF UTC (`Date.getTimezoneOffset()` units —
+   * New York in summer is 240), which is what the server reads. Leave unset:
+   * the client computes it from the device clock per request.
+   */
+  tz?: number;
+  /** IANA zone override; travels as `tzZone` in write bodies only. */
+  tzZone?: string;
   fetchImpl?: typeof fetch;
   /** Skip the initial fetch — call `refetch()` to trigger manually. */
   skip?: boolean;
