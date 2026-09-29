@@ -120,7 +120,12 @@ export default function HealthSettingsRoute() {
       testID="health-settings-route"
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-        <Text className="text-foreground text-2xl font-bold">Settings</Text>
+        <Text
+          accessibilityRole="header"
+          className="text-foreground text-2xl font-bold"
+        >
+          Settings
+        </Text>
 
         <View style={{ gap: 8 }}>
           <Input
@@ -140,7 +145,12 @@ export default function HealthSettingsRoute() {
         </View>
 
         <View style={{ gap: 8 }}>
-          <Text className="text-foreground font-semibold">Log weight</Text>
+          <Text
+            accessibilityRole="header"
+            className="text-foreground font-semibold"
+          >
+            Log weight
+          </Text>
           {lastWeight != null ? (
             <Text testID="weight-last" className="text-muted-foreground text-xs">
               Last logged {lastWeight} lbs
@@ -155,22 +165,30 @@ export default function HealthSettingsRoute() {
             onChangeText={setWeightText}
             placeholder="180"
           />
+          {/* Two buttons sharing the row (`flex: 1` each) rather than sitting at
+              their intrinsic width: at the largest Dynamic Type size "Log
+              weight" and "Skip today" are wider than the screen together, and
+              the second one would be pushed off the edge. */}
           <View style={{ flexDirection: "row", gap: 8 }}>
-            <Button
-              testID="weight-log"
-              onPress={onLogWeight}
-              disabled={weightMutation.loading}
-            >
-              Log weight
-            </Button>
-            <Button
-              testID="weight-skip"
-              variant="secondary"
-              onPress={onSkipWeight}
-              disabled={weightMutation.loading}
-            >
-              Skip today
-            </Button>
+            <View style={{ flex: 1 }}>
+              <Button
+                testID="weight-log"
+                onPress={onLogWeight}
+                disabled={weightMutation.loading}
+              >
+                Log weight
+              </Button>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                testID="weight-skip"
+                variant="secondary"
+                onPress={onSkipWeight}
+                disabled={weightMutation.loading}
+              >
+                Skip today
+              </Button>
+            </View>
           </View>
         </View>
 

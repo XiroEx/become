@@ -95,13 +95,21 @@ export function VerifyScreen({
       style={{ flex: 1, backgroundColor: "#0a0a0a" }}
       testID="verify-screen"
     >
-      <View className="flex-1 items-center justify-center px-6">
+      {/* This screen is three states and no controls, so the only thing a
+          VoiceOver user has to go on is what it SAYS — a live region, so each
+          state is read as it arrives instead of on the next swipe. */}
+      <View
+        className="flex-1 items-center justify-center px-6"
+        accessibilityLiveRegion="polite"
+      >
         {status === "working" ? (
           <>
             <ActivityIndicator
               size="large"
               color={resolveToken("primary", "dark")}
               testID="verify-spinner"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
             />
             <Text className="text-foreground mt-3" testID="verify-working-text">
               Signing you in…
@@ -113,7 +121,10 @@ export function VerifyScreen({
           </Text>
         ) : (
           <View testID="verify-error">
-            <Text className="text-destructive text-center">
+            <Text
+              accessibilityRole="alert"
+              className="text-destructive text-center"
+            >
               {error ?? "Something went wrong"}
             </Text>
           </View>

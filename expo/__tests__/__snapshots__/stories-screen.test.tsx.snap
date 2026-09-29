@@ -115,6 +115,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           }
         >
           <View
+            accessibilityLabel="Primary"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -146,6 +147,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-primary"
           >
             <Text
@@ -155,7 +162,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -163,6 +177,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </Text>
           </View>
           <View
+            accessibilityLabel="Secondary"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -194,6 +209,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-secondary"
           >
             <Text
@@ -203,7 +224,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -211,6 +239,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </Text>
           </View>
           <View
+            accessibilityLabel="Destructive"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -242,6 +271,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-destructive"
           >
             <Text
@@ -251,7 +286,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -259,6 +301,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </Text>
           </View>
           <View
+            accessibilityLabel="Ghost"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -290,6 +333,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-ghost"
           >
             <Text
@@ -299,7 +348,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -307,6 +363,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </Text>
           </View>
           <View
+            accessibilityLabel="Loading"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -338,6 +395,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-loading"
           >
             <View
@@ -350,6 +413,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </View>
           </View>
           <View
+            accessibilityLabel="Disabled"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -381,6 +445,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-disabled"
           >
             <Text
@@ -390,7 +460,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -442,9 +519,15 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             placeholder="Jon"
             placeholderTextColor="rgb(161 161 170)"
             style={
-              {
-                "fontFamily": "Geist-Regular",
-              }
+              [
+                {
+                  "minHeight": 44,
+                  "minWidth": 44,
+                },
+                {
+                  "fontFamily": "Geist-Regular",
+                },
+              ]
             }
             testID="input-name"
             value=""
@@ -475,19 +558,28 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             Email
           </Text>
           <TextInput
+            accessibilityHint="Enter a valid email"
             accessibilityLabel="Email"
             className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-destructive"
             editable={false}
             placeholderTextColor="rgb(161 161 170)"
             style={
-              {
-                "fontFamily": "Geist-Regular",
-              }
+              [
+                {
+                  "minHeight": 44,
+                  "minWidth": 44,
+                },
+                {
+                  "fontFamily": "Geist-Regular",
+                },
+              ]
             }
             testID="input-error"
             value="not-an-email"
           />
           <Text
+            accessibilityLiveRegion="assertive"
+            accessibilityRole="alert"
             className="text-destructive text-xs mt-1"
             style={
               [
@@ -546,6 +638,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           className="w-12 h-7 rounded-full justify-center px-1 bg-primary "
           collapsable={false}
           focusable={true}
+          hitSlop={
+            {
+              "bottom": 8,
+              "left": 0,
+              "right": 0,
+              "top": 8,
+            }
+          }
           onBlur={[Function]}
           onClick={[Function]}
           onFocus={[Function]}
@@ -720,6 +820,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           }
         >
           <View
+            accessibilityLabel="Open modal"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -751,6 +852,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-open-modal"
           >
             <Text
@@ -760,7 +867,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >
@@ -768,6 +882,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             </Text>
           </View>
           <View
+            accessibilityLabel="Open bottom sheet"
             accessibilityRole="button"
             accessibilityState={
               {
@@ -799,6 +914,12 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
             onResponderTerminate={[Function]}
             onResponderTerminationRequest={[Function]}
             onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
             testID="btn-open-sheet"
           >
             <Text
@@ -808,7 +929,14 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
                   {
                     "fontFamily": "Geist-SemiBold",
                   },
-                  undefined,
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
                 ]
               }
             >

@@ -1098,6 +1098,77 @@ through loading / loaded / failed, and reads `webapp/` so the web changing
 typeface fails the native suite. `expo/__mocks__/expo-font.js` answers "loaded"
 everywhere else, so no other suite has to await a font.
 
+#### The accessibility baseline (NP-124)
+
+The primitives carried roles and labels from the first component pass — 38
+`accessibilityRole`s, 55 `accessibilityLabel`s — and **nobody had opened the app
+with VoiceOver on or the text size at its largest**. Counting labels is not a
+test: the settings gear was a 36-point target, the modal backdrop was a
+full-screen "Close modal, button" in FRONT of every dialog, a button that started
+loading lost its name (the spinner replaces the label, and a spinner has no
+name), the streak message was read as a fragment unrelated to the streak, the
+sheet's grab bar announced a gesture VoiceOver cannot make, and "Log weight" /
+"Skip today" sat side by side at their intrinsic width — which at the largest
+Dynamic Type size is wider than the phone. Full detail and the device checklist:
+`expo/ACCESSIBILITY.md`.
+
+Four rules, each of them one of those bugs:
+
+- **Every interactive element has a role AND a label.** The label may be the
+  words inside the control, but `expo/components/Button.tsx` computes it
+  (`accessibleName`) because `loading` swaps the label for an
+  `ActivityIndicator`. `Toggle`'s `accessibilityLabel` is a REQUIRED prop — a
+  switch has no words of its own and the row label beside it is a different
+  element, so a type error is the only check that catches the next omission (the
+  same trick as `onStartWorkout`). A group that reads as one fact is ONE element
+  (`accessible` plus a composed label: `streakAccessibilityLabel`,
+  `todayWorkoutSummaryLabel`), and decoration is HIDDEN rather than described.
+- **44 × 44 points, two ways** (`expo/lib/a11y/touchTarget.ts`):
+  `minTouchTarget` grows the view where growing is invisible; `hitSlopToMinTarget`
+  grows only the touchable area where the size is the design — the 48 × 28 switch
+  track takes 8 points of vertical slop instead of becoming 44 tall. NativeWind
+  padding is not a target: a className is never resolved in jest, and `p-2` around
+  a 20-point icon is exactly how the gear came to be 36 points.
+- **Dynamic Type is never capped, and what breaks is layout.** Nothing sets
+  `allowFontScaling={false}` (the tab bar's labels are react-navigation's, which
+  turns scaling off on iOS 13+ on purpose and uses the Large Content Viewer).
+  **React Native's `flexShrink` is 0 where CSS's is 1**, so a `<Text>` in a flex
+  ROW keeps its intrinsic width at any scale and runs off the end instead of
+  wrapping — that is what "the label is cut off" always is. Text in a row gets
+  `WRAPPABLE_TEXT`, rows of controls get `flex: 1` wrappers
+  (`expo/lib/a11y/dynamicType.ts`).
+- **Reduce Motion is honoured, and the rule travels.** React Native applies none
+  of it: `Modal.animationType` animates, moti animates, every Reanimated
+  `withTiming` runs. `useReducedMotion()` reads the setting and follows
+  `reduceMotionChanged` live; `modalAnimation()` turns the fade and the slide into
+  a cut. A file importing `moti` or `react-native-reanimated` must also reach for
+  the hook, and the suite sweeps the sources for the first one that does not — a
+  reduced-motion bug is invisible to everybody whose phone has the switch off,
+  which is everybody who builds it.
+
+Two iOS/Android facts that shape the code: `accessibilityLiveRegion` is a
+TalkBack prop and does NOTHING on iOS, so every replaced-content state change
+also posts `AccessibilityInfo.announceForAccessibility`
+(`expo/lib/a11y/announce.ts`); and a modal is confined with
+`accessibilityViewIsModal` and dismissed with `onAccessibilityEscape` (the
+two-finger scrub), which is what replaces the backdrop-as-button.
+
+Tests: `expo/__tests__/accessibility.test.tsx` RENDERS the v1 screens (sign-in in
+both states, the consent seam, onboarding first and last step, Home with and
+without the check-in modal, Settings with and without the delete confirmation)
+and walks the tree the way a screen reader does (`expo/test-support/a11y.ts`),
+including driving sign-in → onboarding → Home **using only queries by role and
+accessible name**; `expo/__tests__/reducedMotion.test.tsx` drives the hook through
+the system setting and both overlays with it. What they cannot do is lay text out
+or speak: jest has no text engine, so "nothing is cut off" is enforced as the
+absence of the constructions that cut text off (`allowFontScaling={false}`,
+`numberOfLines`, `ellipsizeMode`, a fixed height around text, an unshrinkable
+child of a row) plus a render at 3.12×. The reading ORDER and the swipe path are
+hardware facts, and they are `ACCESSIBILITY.md`'s device checklist, which
+`RELEASE.md` now gates a candidate build on. **The native plan page is not in the
+walk because it does not exist** (NP-050/NP-053); the suite fails the day a route
+with "plan" in its name appears, which is the reminder to add it.
+
 ### CI runs three packages, not one
 
 `.github/workflows/ci.yml` has three jobs, because the repo is three packages

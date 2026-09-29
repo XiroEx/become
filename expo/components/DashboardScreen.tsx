@@ -10,12 +10,23 @@ import {
   CheckInModal,
   type CheckInPayload,
 } from "@/components/CheckInModal";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
 export interface TodayWorkoutSummary {
   programName: string;
   workoutTitle: string;
   phaseLabel: string;
   exerciseCount: number;
+}
+
+/**
+ * Today's workout as one sentence, for the grouped summary below. Reads the way
+ * the card reads, in the order it reads: what, which program and phase, how big.
+ */
+export function todayWorkoutSummaryLabel(w: TodayWorkoutSummary): string {
+  const exercises = `${w.exerciseCount} exercise${w.exerciseCount === 1 ? "" : "s"}`;
+  const where = [w.programName, w.phaseLabel].filter(Boolean).join(", ");
+  return `${w.workoutTitle}. ${where}. ${exercises}.`;
 }
 
 export interface DashboardScreenProps {
@@ -92,7 +103,12 @@ export function DashboardScreen({
         <View
           testID="dashboard-skeleton"
           style={{ padding: 16, gap: 16 }}
+          // Three grey rectangles are nothing at all to a screen reader unless
+          // they are one element that says what is happening.
+          accessible
+          accessibilityRole="progressbar"
           accessibilityLabel="Loading your dashboard"
+          accessibilityLiveRegion="polite"
         >
           {[0, 1, 2].map((i) => (
             <View
@@ -131,13 +147,16 @@ export function DashboardScreen({
         {errorText ? (
           <View
             testID="dashboard-error"
+            accessibilityLiveRegion="polite"
             style={{
               padding: 12,
               borderRadius: 12,
               backgroundColor: "#3a1212",
             }}
           >
-            <Text className="text-destructive text-sm">{errorText}</Text>
+            <Text accessibilityRole="alert" className="text-destructive text-sm">
+              {errorText}
+            </Text>
           </View>
         ) : null}
         <View
@@ -150,6 +169,7 @@ export function DashboardScreen({
           <View style={{ flexShrink: 1 }}>
             <Text
               testID="dashboard-greeting"
+              accessibilityRole="header"
               className="text-foreground text-2xl font-bold"
             >
               {userName ? `Hey, ${userName}` : "Welcome"}
@@ -166,6 +186,9 @@ export function DashboardScreen({
             accessibilityLabel="Settings"
             onPress={onOpenSettings}
             disabled={!onOpenSettings}
+            // A 20-point icon in 8 points of padding is a 36-point target. The
+            // border grows to 44 x 44 and the icon stays centred in it.
+            style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
             className="rounded-xl border border-border p-2"
           >
             <Settings color="#a1a1aa" size={20} strokeWidth={1.5} />
@@ -180,26 +203,40 @@ export function DashboardScreen({
 
         {todayWorkout ? (
           <Card testID="dashboard-today" title="Today's workout">
-            <Text
-              testID="dashboard-today-workout"
-              className="text-foreground text-lg font-semibold mb-1"
+            {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
+                count are one fact about today, so they are one accessibility
+                element that reads as a sentence; the button after it is the
+                thing to act on. */}
+            <View
+              testID="dashboard-today-summary"
+              accessible
+              accessibilityLabel={todayWorkoutSummaryLabel(todayWorkout)}
             >
-              {todayWorkout.workoutTitle}
-            </Text>
-            <Text
-              testID="dashboard-today-program"
-              className="text-muted-foreground text-sm mb-1"
+              <Text
+                testID="dashboard-today-workout"
+                className="text-foreground text-lg font-semibold mb-1"
+              >
+                {todayWorkout.workoutTitle}
+              </Text>
+              <Text
+                testID="dashboard-today-program"
+                className="text-muted-foreground text-sm mb-1"
+              >
+                {todayWorkout.programName} · {todayWorkout.phaseLabel}
+              </Text>
+              <Text
+                testID="dashboard-today-exercises"
+                className="text-muted-foreground text-sm mb-3"
+              >
+                {todayWorkout.exerciseCount} exercise
+                {todayWorkout.exerciseCount === 1 ? "" : "s"}
+              </Text>
+            </View>
+            <Button
+              testID="dashboard-start-workout"
+              accessibilityLabel={`Start workout: ${todayWorkout.workoutTitle}`}
+              onPress={onStartWorkout}
             >
-              {todayWorkout.programName} · {todayWorkout.phaseLabel}
-            </Text>
-            <Text
-              testID="dashboard-today-exercises"
-              className="text-muted-foreground text-sm mb-3"
-            >
-              {todayWorkout.exerciseCount} exercise
-              {todayWorkout.exerciseCount === 1 ? "" : "s"}
-            </Text>
-            <Button testID="dashboard-start-workout" onPress={onStartWorkout}>
               Start workout
             </Button>
           </Card>

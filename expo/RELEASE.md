@@ -40,6 +40,11 @@ npm run typecheck
 npm run lint
 npm test
 
+# 2b. Run the accessibility device pass — ACCESSIBILITY.md's checklist. The
+#     suite cannot lay text out or speak: VoiceOver / TalkBack over sign-in to
+#     Home, the largest Dynamic Type size and Reduce Motion are checked on one
+#     iPhone and one Android device, by hand, on the candidate build.
+
 # 3. Build for both platforms. Production builds use the `production` profile
 #    declared in eas.json — bundles app-bundle (.aab) for Android, .ipa for iOS.
 eas build --platform all --profile production
@@ -73,6 +78,7 @@ Submit defaults:
 
 | Step | Where | Notes |
 |---|---|---|
+| Accessibility device pass | One iPhone + one Android device | `ACCESSIBILITY.md` → Device QA checklist: VoiceOver / TalkBack from sign-in to Home, largest Dynamic Type, 44-point targets, Reduce Motion |
 | Build appears in TestFlight | App Store Connect → TestFlight tab | Usually 10-30 min after `eas submit` |
 | Internal testers added | TestFlight → Internal Testing group | Up to 100 internal testers — no Apple review |
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
