@@ -33,6 +33,7 @@ import {
   type KeyValueStore,
   type LiveWorkoutSnapshot,
 } from "@/lib/live/liveWorkoutCache";
+import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -178,6 +179,10 @@ export default function LiveWorkoutRoute({
   // queue flushes later, after local midnight) is recognised by the server as
   // the SAME attempt instead of being logged a second time.
   const [attemptId] = useState(newWorkoutAttemptId);
+  // When this attempt STARTED — the session Become writes to Apple Health /
+  // Health Connect needs a window, and the screen being open is the only honest
+  // one we have (the server records a duration, not a start instant).
+  const [startedAtISO] = useState(() => new Date().toISOString());
 
   const onFinish = useCallback(
     (grid: LiveGrid) => {
@@ -197,13 +202,33 @@ export default function LiveWorkoutRoute({
         .then((res) => {
           setPrs(res.newPRsAchieved ?? []);
           void cache.clear(cacheKey);
+          // BECOME → HEALTH. One exercise session per finished workout, keyed on
+          // the attempt id so a retry replaces it instead of logging a second
+          // one. Does nothing unless the member left the write direction on when
+          // the app opened, and never throws (lib/health/sync.ts).
+          void mirrorWorkoutToHealth({
+            title: workout.workoutTitle,
+            startISO: startedAtISO,
+            endISO: new Date().toISOString(),
+            clientId: workoutClientId(attemptId),
+          });
         })
         .catch(() => {
           // Keep the cache so the user can retry without losing logged sets.
         })
         .finally(() => setFinishing(false));
     },
-    [workout, id, resolvedPhase, dayLabel, attemptId, saveMutation, cache, cacheKey],
+    [
+      workout,
+      id,
+      resolvedPhase,
+      dayLabel,
+      attemptId,
+      startedAtISO,
+      saveMutation,
+      cache,
+      cacheKey,
+    ],
   );
 
   if (!valid) {
