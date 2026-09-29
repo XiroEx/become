@@ -1,4 +1,5 @@
-import { useLocalSearchParams } from "expo-router";
+import { useCallback } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProgramDetailResponseSchema } from "@become/api-client";
@@ -19,8 +20,16 @@ export default function WorkoutOverviewRoute() {
   const idx = Number(params.idx ?? -1);
   const phaseIndex = Number(params.phase ?? 0);
   const { token } = useAuth();
+  const router = useRouter();
 
   const valid = !!id && Number.isFinite(idx) && idx >= 0;
+  const phase = Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0;
+
+  // Start live workout — the same program, phase and index this overview is
+  // showing, so the live screen slices the workout the member just read.
+  const onStartLive = useCallback(() => {
+    router.push(`/(tabs)/programming/${id}/workout/${idx}/live?phase=${phase}`);
+  }, [router, id, idx, phase]);
 
   const { data } = useFetch(
     valid ? `/api/programs/${encodeURIComponent(id)}` : null,
@@ -44,11 +53,10 @@ export default function WorkoutOverviewRoute() {
     );
   }
 
-  const resolvedPhase = Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0;
   const workout: WorkoutOverviewViewModel = (data &&
-    toWorkoutOverview(data, resolvedPhase, idx)) || {
+    toWorkoutOverview(data, phase, idx)) || {
     programId: id,
-    phaseIndex: resolvedPhase,
+    phaseIndex: phase,
     workoutIndex: idx,
     title: "Loading…",
     exercises: [],
@@ -60,7 +68,7 @@ export default function WorkoutOverviewRoute() {
       style={{ flex: 1, backgroundColor: "#0a0a0a" }}
       testID="programming-workout-route"
     >
-      <WorkoutOverview workout={workout} />
+      <WorkoutOverview workout={workout} onStartLive={onStartLive} />
     </SafeAreaView>
   );
 }

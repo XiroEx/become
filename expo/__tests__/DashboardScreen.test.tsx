@@ -10,6 +10,12 @@ describe("DashboardScreen", () => {
       phaseLabel: "Phase 1, Week 2",
       exerciseCount: 6,
     },
+    // Both of these are REQUIRED props now. They used to default to a no-op
+    // inside the component (`onStartWorkout ?? (() => {})`), which is exactly
+    // why the shipped Start workout button did nothing: the route never passed
+    // one and neither the compiler nor this file could tell.
+    onStartWorkout: jest.fn(),
+    onOpenCalendar: jest.fn(),
     onSubmitCheckIn: jest.fn(),
   };
 
@@ -84,6 +90,41 @@ describe("DashboardScreen", () => {
       <DashboardScreen {...baseProps} onStartWorkout={onStartWorkout} />,
     );
     fireEvent.press(getByTestId("dashboard-start-workout"));
+    expect(onStartWorkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("fires onOpenCalendar when the calendar button is pressed", () => {
+    // The calendar is a hidden route in the (tabs) tree, so this control is
+    // the dashboard's only way in — like the settings gear above it.
+    const onOpenCalendar = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen {...baseProps} onOpenCalendar={onOpenCalendar} />,
+    );
+    fireEvent.press(getByTestId("dashboard-open-calendar"));
+    expect(onOpenCalendar).toHaveBeenCalledTimes(1);
+  });
+
+  it("presses through to the handler it was given, with no no-op default", () => {
+    // The regression this file missed: with `onStartWorkout ?? (() => {})` in
+    // the component, a screen rendered without the prop still had a live,
+    // pressable button. There is no default any more — `tsc` requires the
+    // prop — so the press has to reach the caller's function.
+    const onStartWorkout = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onStartWorkout={onStartWorkout}
+        todayWorkout={{
+          programName: "Foundation",
+          workoutTitle: "Pull A",
+          phaseLabel: "Phase 1",
+          exerciseCount: 4,
+        }}
+      />,
+    );
+    const button = getByTestId("dashboard-start-workout");
+    expect(button.props.accessibilityState?.disabled).toBe(false);
+    fireEvent.press(button);
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
   });
 });

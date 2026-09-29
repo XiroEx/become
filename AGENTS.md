@@ -954,6 +954,44 @@ Two things that look like mistakes and are not:
   `EXPO_PUBLIC_COMMUNITY_ENABLED`; there is deliberately no second flag in the
   tab bar.
 
+#### The buttons that lead somewhere (NP-026)
+
+A screen with no entry point is not a screen. Three of them shipped that way,
+and two buttons shipped inert:
+
+- **`onStartWorkout` and `onStartLive` are REQUIRED props.** Both defaulted to
+  `?? (() => {})` inside the component and neither route passed one, so Start
+  workout (`DashboardScreen`) and Start live workout (`WorkoutOverview`)
+  rendered, pressed, animated and went nowhere — in files that compiled and
+  under tests that were green. A required prop makes the next omission a `tsc`
+  failure (TS2741), which is the only check that can see a route that forgot.
+- **The dashboard opens the workout overview by DAY LABEL.** The web's Continue
+  link is `…/workout?day=<label>`; the native routes address a workout by its
+  index inside the phase, so `current-workout`'s `day` goes through
+  `workoutIndexFromDayLabel` (`lib/schedule/scheduleSlots.ts` — the calendar's
+  own mapping) and its 1-based `phase` becomes the 0-based `?phase=`. NP-078 is
+  what teaches the native routes about day labels; until then the two screens
+  share one mapping so they cannot disagree.
+- **Search, Saved and the calendar are pushed from the programs header**, and
+  the calendar from the dashboard as well — inside NP-003's per-tab stacks, so
+  Back returns to the list and the tab bar never moves. The web carries search
+  and saved on the Workout page itself and links the calendar from the week
+  strip; native has them as three separate screens and nothing pushed any of
+  them.
+- **The gear, its `testID`, its `accessibilityLabel` and the settings push are
+  unchanged on purpose**: `webapp/tests/unit/account/storeReadiness.test.tsx`
+  string-matches them to prove Delete account is reachable in a store build.
+
+Test: `expo/__tests__/training-entry-points.test.tsx` renders the REAL route
+tree (`test-support/appRoutes.tsx`) and taps the tab bar, so "two taps from the
+tab bar" is a render rather than a claim.
+
+Until NP-083, NP-074 and NP-069 land, this wiring makes three native paths that
+write wrong data reachable (swap renaming, enrolment without a start date or a
+schedule, schedule settings that regenerate into the past). Beta shares
+production's database (NP-008), so pointing a build at beta is no protection:
+builds carrying this wiring are used only with named test accounts.
+
 #### `_` is not a private prefix in expo-router, and dark is pinned
 
 Two store-readiness facts that landed with the tab bar:

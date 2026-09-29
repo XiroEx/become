@@ -1,6 +1,12 @@
 /* eslint-disable import/first */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
+const mockPush = jest.fn();
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+  useLocalSearchParams: () => ({}),
+}));
+
 const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
@@ -29,6 +35,16 @@ import DashboardRoute from "../app/(app)/(tabs)/dashboard/index";
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 
+const DEFAULT_CURRENT_WORKOUT: Record<string, unknown> = {
+  workout: { title: "Upper A", day: "Day 3", exercises: [{}, {}, {}] },
+  phase: 2,
+  day: "Day 3",
+  phaseInfo: { name: "Phase 2" },
+};
+
+/** Swapped by the navigation tests to change the day label / phase. */
+let currentWorkout: Record<string, unknown> = DEFAULT_CURRENT_WORKOUT;
+
 function wireApiFetch() {
   mockApiFetch.mockImplementation((path: string) => {
     if (path === "/api/auth/me") {
@@ -49,11 +65,10 @@ function wireApiFetch() {
       });
     }
     if (path.startsWith("/api/programs/current-workout")) {
-      return Promise.resolve({
-        workout: { title: "Upper A", exercises: [{}, {}, {}] },
-        phase: 1,
-        phaseInfo: { name: "Phase 1" },
-      });
+      // The shape the webapp route answers with: the workout, a 1-BASED phase
+      // number, and the DAY LABEL the web addresses the session by
+      // (`…/workout?day=Day 3`).
+      return Promise.resolve(currentWorkout);
     }
     if (path === "/api/mood" || path === "/api/weight") {
       return Promise.resolve({ success: true });
@@ -71,6 +86,8 @@ function callsTo(path: string): unknown[][] {
 describe("DashboardRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
+    mockPush.mockReset();
+    currentWorkout = DEFAULT_CURRENT_WORKOUT;
     wireApiFetch();
   });
 
@@ -245,5 +262,77 @@ describe("DashboardRoute", () => {
       expect(callsTo("/api/mood").length).toBeGreaterThan(0);
     });
     expect(callsTo("/api/weight").length).toBe(0);
+  });
+});
+
+// THE TWO BUTTONS THAT DID NOTHING.
+//
+// `DashboardScreen` shipped with `onPress={onStartWorkout ?? (() => {})}` and
+// this route never passed one, so Start workout rendered, pressed, animated —
+// and went nowhere. The prop is required now; these assertions are about WHERE
+// it goes.
+describe("DashboardRoute navigation", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockPush.mockReset();
+    currentWorkout = DEFAULT_CURRENT_WORKOUT;
+    wireApiFetch();
+  });
+
+  it("Start workout opens the current workout's overview, by day label and phase", async () => {
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-start-workout"));
+
+    // The web opens `…/workout?day=Day 3`; the native route addresses the
+    // workout by index, so "Day 3" → 2 (workoutIndexFromDayLabel) and the
+    // 1-based phase 2 → `?phase=1`.
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/p1/workout/2?phase=1",
+    );
+  });
+
+  it("falls back to the first workout of phase 1 when the response has no day", async () => {
+    currentWorkout = {
+      workout: { title: "Upper A", exercises: [{}] },
+      phaseInfo: { name: "Phase 1" },
+    };
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-start-workout"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/p1/workout/0?phase=0",
+    );
+  });
+
+  it("Calendar opens the calendar screen", async () => {
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-open-calendar")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-open-calendar"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
+  });
+
+  it("still opens settings from the gear — the store's deletion path", async () => {
+    // storeReadiness.test.tsx (webapp) string-matches this wiring, because it
+    // is the only way to Delete account in a store build.
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-open-settings")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-open-settings"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile/health");
   });
 });

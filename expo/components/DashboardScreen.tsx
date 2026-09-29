@@ -22,7 +22,19 @@ export interface DashboardScreenProps {
   streakDays: number;
   freezeAvailable?: boolean;
   todayWorkout: TodayWorkoutSummary | null;
-  onStartWorkout?: () => void;
+  /**
+   * Opens today's workout. REQUIRED, and deliberately not defaulted: it shipped
+   * as `onStartWorkout ?? (() => {})` and the dashboard route never passed one,
+   * so the button rendered, pressed, and did nothing. A required prop is what
+   * makes `tsc` fail the next time a route forgets it.
+   */
+  onStartWorkout: () => void;
+  /**
+   * Opens the calendar. Calendar is a hidden route in the (tabs) tree
+   * (`href: null`), so — like the settings gear — a screen has to offer the way
+   * in or the month view is unreachable from the UI.
+   */
+  onOpenCalendar: () => void;
   onSubmitCheckIn: (payload: CheckInPayload) => Promise<void> | void;
   submittingCheckIn?: boolean;
   /** Controls modal externally for testability. Defaults to internal state. */
@@ -50,6 +62,7 @@ export function DashboardScreen({
   freezeAvailable = false,
   todayWorkout,
   onStartWorkout,
+  onOpenCalendar,
   onSubmitCheckIn,
   submittingCheckIn = false,
   checkInOpen,
@@ -185,10 +198,7 @@ export function DashboardScreen({
               {todayWorkout.exerciseCount} exercise
               {todayWorkout.exerciseCount === 1 ? "" : "s"}
             </Text>
-            <Button
-              testID="dashboard-start-workout"
-              onPress={onStartWorkout ?? (() => {})}
-            >
+            <Button testID="dashboard-start-workout" onPress={onStartWorkout}>
               Start workout
             </Button>
           </Card>
@@ -199,6 +209,17 @@ export function DashboardScreen({
             </Text>
           </Card>
         )}
+
+        {/* The way into the calendar — a hidden route in the (tabs) tree, so
+            the month view has no entry point of its own. */}
+        <Button
+          testID="dashboard-open-calendar"
+          variant="secondary"
+          accessibilityLabel="Calendar"
+          onPress={onOpenCalendar}
+        >
+          Calendar
+        </Button>
 
         <Button
           testID="dashboard-open-checkin"
