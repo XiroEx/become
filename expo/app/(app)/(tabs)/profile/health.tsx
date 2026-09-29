@@ -18,6 +18,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
+import { getOfflineWrites } from "@/lib/offline/writes";
 
 interface ProfilePatchInput {
   name?: string;
@@ -80,7 +81,12 @@ export default function HealthSettingsRoute() {
     fetchOpts,
   );
 
-  const weightMutation = useMutation<WeightPostRequest, LogWeightResponse>(
+  // THE SKIP ONLY. A skip is a TODAY event — it answers today's prompt and
+  // moves the skip counter (`webapp/app/api/weight/route.ts`) — so it is never
+  // queued and never back-dated: a skip replayed onto yesterday would answer a
+  // prompt that is long gone. The weigh-in itself goes through the offline
+  // queue below.
+  const skipMutation = useMutation<WeightPostRequest, LogWeightResponse>(
     "/api/weight",
     LogWeightResponseSchema,
     {
@@ -88,26 +94,40 @@ export default function HealthSettingsRoute() {
       baseUrl: WEBAPP_BASE_URL,
       getToken: () => token ?? undefined,
       onSuccess: () => {
-        // Re-pull the skip-tracking state so the summary reflects the new log/skip.
+        // Re-pull the skip-tracking state so the summary reflects the skip.
         void weightCheck.refetch();
       },
     },
   );
   const [weightText, setWeightText] = useState<string>("");
+  const [savingWeight, setSavingWeight] = useState<boolean>(false);
+  const [weightQueued, setWeightQueued] = useState<boolean>(false);
 
   const onSaveName = useCallback(() => {
     void profileMutation.mutate({ name: name.trim() });
   }, [profileMutation, name]);
 
-  const onLogWeight = useCallback(() => {
+  const refetchWeightCheck = weightCheck.refetch;
+  const onLogWeight = useCallback(async () => {
     const parsed = Number(weightText);
     if (!Number.isFinite(parsed) || parsed <= 0) return;
-    void weightMutation.mutate({ weight: parsed });
-  }, [weightMutation, weightText]);
+    setSavingWeight(true);
+    try {
+      const status = await getOfflineWrites().logWeight(parsed);
+      setWeightQueued(status === "queued");
+      if (status === "sent") await refetchWeightCheck();
+    } catch {
+      // A refusal. The queue keeps a missing connection; there is nothing to
+      // retry here, and the inline state below says nothing new happened.
+      setWeightQueued(false);
+    } finally {
+      setSavingWeight(false);
+    }
+  }, [refetchWeightCheck, weightText]);
 
   const onSkipWeight = useCallback(() => {
-    void weightMutation.mutate({ weight: null, skip: true });
-  }, [weightMutation]);
+    void skipMutation.mutate({ weight: null, skip: true });
+  }, [skipMutation]);
 
   const lastWeight = weightCheck.data?.lastWeight;
   const daysSince = weightCheck.data?.daysSinceLastEntry;
@@ -157,8 +177,10 @@ export default function HealthSettingsRoute() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Button
               testID="weight-log"
-              onPress={onLogWeight}
-              disabled={weightMutation.loading}
+              onPress={() => {
+                void onLogWeight();
+              }}
+              disabled={savingWeight}
             >
               Log weight
             </Button>
@@ -166,11 +188,19 @@ export default function HealthSettingsRoute() {
               testID="weight-skip"
               variant="secondary"
               onPress={onSkipWeight}
-              disabled={weightMutation.loading}
+              disabled={skipMutation.loading}
             >
               Skip today
             </Button>
           </View>
+          {weightQueued ? (
+            <Text
+              testID="weight-queued-note"
+              className="text-muted-foreground text-xs"
+            >
+              Saved on this device — it will sync when you&apos;re back online.
+            </Text>
+          ) : null}
         </View>
 
         {/* Health sync renders nothing until NP-185 installs a real HealthKit /

@@ -160,6 +160,39 @@ text — `--foreground: 24 24 27`, near-black — on those near-black surfaces.
 NP-123 builds the real light theme, and it starts by deleting the literals, not
 by deleting the pin. Asserted by `__tests__/darkModePin.test.tsx`.
 
+## Offline: the banner, and the writes that keep their day
+
+The app is usable with no connection, and two files are the whole of it:
+
+- **`components/offline/ConnectivityBanner.tsx`** — mounted once, at the root,
+  above the Stack. It shows a bar the moment NetInfo says the connection is
+  gone and hides it when it is back (NetInfo pushes its events; nothing
+  debounces or polls them), it starts the write queue, and it **clears the
+  queue when the session ends** — every sign-out, a tapped one and a 401 alike,
+  arrives here as `status: "signed-out"`.
+- **`lib/offline/writes.ts`** — the mount of `lib/query/offlineQueue.ts` (dedup,
+  backoff, a persisted snapshot). Every weight and every mood the member logs
+  goes through it, online or not: the dashboard check-in, the Mind screen and
+  the weigh-in in Settings.
+
+**The rule that makes a replay safe: a queued write keeps its own day.** The
+payload is built when the member taps and is never rebuilt at delivery —
+`date` (their local day), `loggedAt` (the instant) and `tz` (minutes west of
+UTC). Without them the server dates a write by its own clock, so a mood logged
+at 11:50pm and delivered at 12:05am would land on tomorrow. `/api/mood` and
+`/api/weight` read all three (NP-189, `webapp/lib/dayWindow.ts#resolveEntryDay`),
+keep one entry per local day, and let the newer `loggedAt` win — so a replay
+can never move an entry to another day or overwrite a newer value.
+
+Two things deliberately do NOT go through it: a weight **skip** (it answers
+*today's* prompt, so back-dating it would answer a prompt that is gone) and the
+live workout's own saves (NP-191 owns those, over the four-collection façade in
+`lib/query/offlineMutations.ts`).
+
+An unreachable server is no longer an error the member sees — the write is kept
+and the banner says so. A **refusal** (a 4xx that is not 408/425/429) still is:
+retrying cannot change it, so the item is dropped and the caller told.
+
 ## File layout
 
 ```
@@ -187,11 +220,18 @@ expo/
 │   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
 │   ├── navigation/
 │   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
+│   ├── offline/
+│   │   ├── connectivity.ts   # THE NetInfo state → "online" mapping (one per app)
+│   │   ├── storage.ts        # AsyncStorage, where the queue's snapshot lives
+│   │   └── writes.ts         # The mounted weight/mood queue (see Offline, below)
+│   ├── query/                # offlineQueue.ts — dedup + backoff + snapshot
 │   └── theme/
 │       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
 │       └── tokens.ts         # Typed RGB-triplet map (light + dark)
 ├── __tests__/            # Jest + RTL tests
-├── __mocks__/            # cssStub.js — resolves the `global.css` side-effect import under Jest
+├── __mocks__/            # cssStub.js (the `global.css` side-effect import) plus
+│                         #   node-module mocks for NetInfo and AsyncStorage,
+│                         #   applied automatically (no jest.mock call)
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
 │                         # (Android foreground), splash-icon.png —
 │                         # all three written by scripts/generate-app-assets.mjs
@@ -228,6 +268,15 @@ See the plan doc for full sequencing.
   package's `react-native` export condition points at an `.mjs` bundle, and
   jest-expo's babel transform only matches `.[jt]sx?`, so the ESM bundle reaches
   Jest untranspiled. Metro is unaffected; this is a test-only mapping.
+- **NetInfo and AsyncStorage are mocked as NODE MODULES, not per test** —
+  `__mocks__/@react-native-community/netinfo.js` and
+  `__mocks__/@react-native-async-storage/async-storage.js` sit next to
+  `node_modules`, so Jest applies them automatically with no `jest.mock()`
+  call. The root layout mounts the connectivity banner and starts the write
+  queue, so every suite that renders it would otherwise reach for a native
+  module the test renderer does not have. A test that needs the connection to
+  CHANGE either drives `NetInfo.fetch` (a `jest.fn`) or passes its own
+  `ConnectivitySource` — both the banner and the queue take one.
 - **`__tests__/root-layout-smoke.test.tsx` is the launch canary** — it renders
   the real `app/_layout.tsx` through `renderRouter` from
   `expo-router/testing-library`. Every other suite renders a screen in

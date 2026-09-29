@@ -5,12 +5,6 @@ import {
   StreakResponseSchema,
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
-  LogWeightResponseSchema,
-  LogMoodResponseSchema,
-  type LogWeightRequest,
-  type LogWeightResponse,
-  type LogMoodRequest,
-  type LogMoodResponse,
 } from "@become/api-client";
 import {
   DashboardScreen,
@@ -20,7 +14,7 @@ import type { CheckInPayload } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
-import { useMutation } from "@/lib/hooks/useMutation";
+import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 
 /**
@@ -123,36 +117,35 @@ export default function DashboardRoute() {
   // Daily check-in writes — mirrors the webapp DailyCheckInModal flow: log mood
   // (always) + weight (when provided), then refresh the streak so the new
   // activity is reflected immediately.
-  const mutOpts = {
-    baseUrl: WEBAPP_BASE_URL,
-    getToken: () => token ?? undefined,
-  };
-  const moodMutation = useMutation<LogMoodRequest, LogMoodResponse>(
-    "/api/mood",
-    LogMoodResponseSchema,
-    mutOpts,
-  );
-  const weightMutation = useMutation<LogWeightRequest, LogWeightResponse>(
-    "/api/weight",
-    LogWeightResponseSchema,
-    mutOpts,
-  );
+  //
+  // BOTH GO THROUGH THE OFFLINE QUEUE (`lib/offline/writes.ts`). When there is
+  // a connection that is a POST and nothing changes. When there is not, the
+  // check-in is kept on the device WITH the local day it was made on and
+  // replayed on reconnect, so a check-in made at 11:50pm in airplane mode does
+  // not become tomorrow's when it is delivered at 12:05am. A queued write is
+  // not an error: the banner at the root says what happened. A REFUSAL still
+  // is, and CheckInModal shows it inline.
   const [submittingCheckIn, setSubmittingCheckIn] = useState(false);
   const onSubmitCheckIn = useCallback(
     async (payload: CheckInPayload) => {
       setSubmittingCheckIn(true);
       try {
-        await moodMutation.mutate({ mood: payload.mood });
-        if (payload.weightLbs != null) {
-          await weightMutation.mutate({ weight: payload.weightLbs });
+        const writes = getOfflineWrites();
+        const moodStatus = await writes.logMood(payload.mood);
+        const weightStatus =
+          payload.weightLbs != null
+            ? await writes.logWeight(payload.weightLbs)
+            : null;
+        // New activity the SERVER has → re-pull the streak. A queued write has
+        // not earned a streak day yet; the replay's response will.
+        if (moodStatus === "sent" || weightStatus === "sent") {
+          await streak.refetch();
         }
-        // New activity → re-pull the streak so the counter updates.
-        await streak.refetch();
       } finally {
         setSubmittingCheckIn(false);
       }
     },
-    [moodMutation.mutate, weightMutation.mutate, streak.refetch],
+    [streak.refetch],
   );
 
   return (

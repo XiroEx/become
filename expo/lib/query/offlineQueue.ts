@@ -51,6 +51,16 @@ export interface OfflineQueue<T> {
   items: () => OfflineQueueItem<T>[];
   /** Re-hydrate from storage. Called automatically by start(). */
   rehydrate: () => Promise<void>;
+  /**
+   * Drop everything, in memory AND on disk.
+   *
+   * THE SIGN-OUT PATH. A queued write belongs to the session that made it: the
+   * next member on this device must never have last week's weigh-in delivered
+   * under their token, and a member who signed out is entitled to have the
+   * device forget what they typed. Clearing the array alone would not do it —
+   * the snapshot on disk is what a cold start reads back.
+   */
+  clear: () => Promise<void>;
 }
 
 const DEFAULT_KEY = "become.offline-queue.v1";
@@ -159,6 +169,11 @@ export function createOfflineQueue<T>(
     }
   }
 
+  async function clear(): Promise<void> {
+    queue = [];
+    if (persistor) await persistor.clear();
+  }
+
   function stop(): void {
     if (unsubscribe) {
       unsubscribe();
@@ -176,6 +191,7 @@ export function createOfflineQueue<T>(
     start,
     stop,
     rehydrate,
+    clear,
     size: () => queue.length,
     items: () => [...queue],
   };
