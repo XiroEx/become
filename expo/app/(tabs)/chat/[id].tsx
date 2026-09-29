@@ -13,6 +13,7 @@ import { type ChatMessage } from "@/lib/chat/chatSelectors";
 import { toChatMessage, toChatMessages } from "@/lib/chat/chatApi";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { reportRequestError } from "@/lib/auth/unauthorized";
 import { useFetch } from "@/lib/hooks/useFetch";
 
 export default function ChatThreadRoute() {
@@ -65,7 +66,10 @@ export default function ChatThreadRoute() {
         // Wrapped { message } → replace the optimistic placeholder with the real one.
         const real = toChatMessage(res.message, currentUserId);
         setMessages((prev) => prev.map((m) => (m.id === tmpId ? real : m)));
-      } catch {
+      } catch (err) {
+        // This POST does not go through useMutation, so it reports its own
+        // failure to the one 401 handler before rolling back.
+        reportRequestError(err);
         // Roll back the optimistic message on failure.
         setMessages((prev) => prev.filter((m) => m.id !== tmpId));
       } finally {

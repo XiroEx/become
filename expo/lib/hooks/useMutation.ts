@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { z } from "zod";
 import { apiFetch } from "@become/api-client";
 import type { ApiCallInit, ApiFetchOptions } from "@become/api-client";
+import { reportRequestError } from "@/lib/auth/unauthorized";
 
 export interface UseMutationOptions<TInput, TOutput> {
   baseUrl?: string;
@@ -95,6 +96,8 @@ export function useMutation<TInput, TOutput>(
         opts.onSuccess?.(result, input);
         return result;
       } catch (err) {
+        // One place decides what a 401 means; this hook only reports it.
+        reportRequestError(err);
         if (mountedRef.current) {
           if (optimistic !== undefined) setData(null);
           setError(err);

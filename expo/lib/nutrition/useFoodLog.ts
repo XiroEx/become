@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { z } from "zod";
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { watchUnauthorized } from "@/lib/auth/unauthorized";
 
 const OkSchema = z.object({}).passthrough();
 
@@ -53,27 +54,35 @@ export function useFoodLog(options: UseFoodLogOptions) {
       baseUrl: WEBAPP_BASE_URL,
       getToken: () => getTokenRef.current(),
     };
+    // These three call apiFetch directly rather than through useMutation, so
+    // they report their own failures to the one 401 handler.
     return {
       addToLog: (input: AddToLogInput) =>
-        apiFetch("/api/nutrition/log", OkSchema, {
-          method: "POST",
-          body: input,
-          ...base,
-        }),
+        watchUnauthorized(
+          apiFetch("/api/nutrition/log", OkSchema, {
+            method: "POST",
+            body: input,
+            ...base,
+          }),
+        ),
       removeFromLog: (input: { foodEntryId: string; date: string }) =>
-        apiFetch(
-          `/api/nutrition/log?foodEntryId=${encodeURIComponent(
-            input.foodEntryId,
-          )}&date=${encodeURIComponent(input.date)}`,
-          OkSchema,
-          { method: "DELETE", ...base },
+        watchUnauthorized(
+          apiFetch(
+            `/api/nutrition/log?foodEntryId=${encodeURIComponent(
+              input.foodEntryId,
+            )}&date=${encodeURIComponent(input.date)}`,
+            OkSchema,
+            { method: "DELETE", ...base },
+          ),
         ),
       saveFood: (input: SaveFoodInput) =>
-        apiFetch("/api/nutrition/foods", OkSchema, {
-          method: "POST",
-          body: input,
-          ...base,
-        }),
+        watchUnauthorized(
+          apiFetch("/api/nutrition/foods", OkSchema, {
+            method: "POST",
+            body: input,
+            ...base,
+          }),
+        ),
     };
   }, []);
 }
