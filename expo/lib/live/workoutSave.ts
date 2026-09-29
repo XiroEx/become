@@ -1,6 +1,8 @@
 import type { WorkoutSaveRequest } from "@become/api-client";
-import type { LiveWorkoutExercise } from "@/components/live/LiveWorkoutClient";
-import type { LiveGrid } from "@/components/live/LiveWorkoutClient";
+import type {
+  LiveGrid,
+  LiveWorkoutExercise,
+} from "@/components/live/LiveWorkoutClient";
 
 export interface BuildWorkoutSaveInput {
   programId: string;

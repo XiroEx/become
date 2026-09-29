@@ -1,7 +1,7 @@
 import type { ProgramCatalogItem } from "@become/api-client";
 import type { ProgramSummary } from "@/components/programs/ProgramsList";
 
-const TARGET_USERS: ReadonlyArray<ProgramSummary["targetUser"]> = [
+const TARGET_USERS: readonly ProgramSummary["targetUser"][] = [
   "Beginner",
   "Intermediate",
   "Advanced",

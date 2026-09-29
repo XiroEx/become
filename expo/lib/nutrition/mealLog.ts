@@ -1,7 +1,7 @@
 import type { MealLogResponse } from "@become/api-client";
 import type { MealEntry, MealType } from "@/lib/nutrition/daySelector";
 
-const MEAL_TYPES: ReadonlyArray<MealType> = [
+const MEAL_TYPES: readonly MealType[] = [
   "breakfast",
   "lunch",
   "dinner",
