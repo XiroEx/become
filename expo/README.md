@@ -160,6 +160,39 @@ text — `--foreground: 24 24 27`, near-black — on those near-black surfaces.
 NP-123 builds the real light theme, and it starts by deleting the literals, not
 by deleting the pin. Asserted by `__tests__/darkModePin.test.tsx`.
 
+## Offline: the banner, and the writes that keep their day
+
+The app is usable with no connection, and two files are the whole of it:
+
+- **`components/offline/ConnectivityBanner.tsx`** — mounted once, at the root,
+  above the Stack. It shows a bar the moment NetInfo says the connection is
+  gone and hides it when it is back (NetInfo pushes its events; nothing
+  debounces or polls them), it starts the write queue, and it **clears the
+  queue when the session ends** — every sign-out, a tapped one and a 401 alike,
+  arrives here as `status: "signed-out"`.
+- **`lib/offline/writes.ts`** — the mount of `lib/query/offlineQueue.ts` (dedup,
+  backoff, a persisted snapshot). Every weight and every mood the member logs
+  goes through it, online or not: the dashboard check-in, the Mind screen and
+  the weigh-in in Settings.
+
+**The rule that makes a replay safe: a queued write keeps its own day.** The
+payload is built when the member taps and is never rebuilt at delivery —
+`date` (their local day), `loggedAt` (the instant) and `tz` (minutes west of
+UTC). Without them the server dates a write by its own clock, so a mood logged
+at 11:50pm and delivered at 12:05am would land on tomorrow. `/api/mood` and
+`/api/weight` read all three (NP-189, `webapp/lib/dayWindow.ts#resolveEntryDay`),
+keep one entry per local day, and let the newer `loggedAt` win — so a replay
+can never move an entry to another day or overwrite a newer value.
+
+Two things deliberately do NOT go through it: a weight **skip** (it answers
+*today's* prompt, so back-dating it would answer a prompt that is gone) and the
+live workout's own saves (NP-191 owns those, over the four-collection façade in
+`lib/query/offlineMutations.ts`).
+
+An unreachable server is no longer an error the member sees — the write is kept
+and the banner says so. A **refusal** (a 4xx that is not 408/425/429) still is:
+retrying cannot change it, so the item is dropped and the caller told.
+
 ## Typography — Geist, the web's typeface (NP-160)
 
 The web has set **Geist** and **Geist Mono** since the first commit
@@ -203,6 +236,45 @@ parses the `.ttf` headers, walks `app/` and `components/` for a stray
 `react-native` Text import, drives the splash gate through both states, and
 reads `webapp/` to check the web still uses Geist.
 
+## Accessibility baseline (NP-124)
+
+Full detail — including the device QA checklist — is in
+[`ACCESSIBILITY.md`](./ACCESSIBILITY.md). The four rules, and where each lives:
+
+- **Every interactive element has a role and a label.** The label may be the
+  words inside the control, but `components/Button.tsx` computes it
+  (`accessibleName`) because `loading` replaces the label with a spinner and a
+  spinner has no name. `Toggle`'s `accessibilityLabel` is a REQUIRED prop: a
+  switch has no words of its own, and a type error is the only check that catches
+  the next one that forgets. A group that reads as one fact (the streak banner,
+  today's workout) is ONE element with a composed label; decoration (the sheet's
+  grab bar, the modal backdrop) is hidden rather than described.
+- **44 × 44 points, minimum** — `lib/a11y/touchTarget.ts`. `minTouchTarget`
+  grows the view where growing is invisible; `hitSlopToMinTarget(w, h)` grows
+  only the touchable area where the size IS the design (the 48 × 28 switch
+  track). The settings gear was a 36-point target until this card.
+- **Dynamic Type is never capped** — `lib/a11y/dynamicType.ts`. Nothing sets
+  `allowFontScaling={false}`; what breaks at the largest size is layout, and it
+  breaks because **React Native's `flexShrink` is 0 where CSS's is 1** — a
+  `<Text>` in a flex ROW keeps its intrinsic width and runs off the end instead
+  of wrapping. So text in a row gets `WRAPPABLE_TEXT`, and rows of controls get
+  `flex: 1` wrappers. (The tab bar's labels do not scale, by react-navigation's
+  design: it uses iOS's Large Content Viewer instead.)
+- **Reduce Motion is honoured** — `lib/a11y/reducedMotion.ts`. React Native
+  applies none of it: `Modal.animationType` animates and every Reanimated
+  `withTiming` runs whatever the setting says. The rule that travels: a file
+  importing `moti` or `react-native-reanimated` must also reach for
+  `useReducedMotion`, and `__tests__/reducedMotion.test.tsx` sweeps the sources
+  for the first one that does not.
+
+Tests: `__tests__/accessibility.test.tsx` renders the v1 screens (sign-in,
+consent, onboarding, Home, Settings — the plan page has no native screen until
+NP-053) and walks the rendered tree the way a screen reader does, driving sign-in
+→ Home **using only queries by role and accessible name**;
+`__tests__/reducedMotion.test.tsx` drives the hook through the system setting
+and both overlays with it. Neither can lay text out, which is why the device pass
+in `ACCESSIBILITY.md` exists.
+
 ## File layout
 
 ```
@@ -228,6 +300,11 @@ expo/
 ├── index.js              # THE app entry (package.json `main`): expo-router/entry
 │                         #   plus the Android App Widget task registration
 ├── lib/
+│   ├── a11y/
+│   │   ├── announce.ts       # announce() — VoiceOver is told what replaced what
+│   │   ├── dynamicType.ts    # The largest scales + WRAPPABLE_TEXT (flexShrink: 1)
+│   │   ├── reducedMotion.ts  # useReducedMotion() / modalAnimation() / motionDuration()
+│   │   └── touchTarget.ts    # 44 points: minTouchTarget + hitSlopToMinTarget()
 │   ├── dev/
 │   │   └── devOnlyRoute.tsx  # Wraps a route so it redirects to Home outside __DEV__
 │   ├── widgets/              # Android App Widgets (NP-198): the four tiles, the
@@ -235,6 +312,11 @@ expo/
 │   │                         #   cached day, the surfaces and the OS refresh
 │   ├── navigation/
 │   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
+│   ├── offline/
+│   │   ├── connectivity.ts   # THE NetInfo state → "online" mapping (one per app)
+│   │   ├── storage.ts        # AsyncStorage, where the queue's snapshot lives
+│   │   └── writes.ts         # The mounted weight/mood queue (see Offline, below)
+│   ├── query/                # offlineQueue.ts — dedup + backoff + snapshot
 │   └── theme/
 │       ├── colorScheme.ts    # pinDarkMode() — the v1 dark pin
 │       ├── fonts.ts          # The Geist faces + family × weight → one face
@@ -245,7 +327,9 @@ expo/
 ├── __tests__/            # Jest + RTL tests
 ├── __mocks__/            # cssStub.js (the `global.css` side-effect import),
 │                         # expo-font.js + expo-splash-screen.js (fonts are
-│                         # already loaded for every suite but geistFont's)
+│                         # already loaded for every suite but geistFont's),
+│                         # plus node-module mocks for NetInfo and AsyncStorage,
+│                         #   applied automatically (no jest.mock call)
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
 │   │                     # (Android foreground), splash-icon.png —
 │   │                     # all three written by scripts/generate-app-assets.mjs
@@ -281,12 +365,35 @@ See the plan doc for full sequencing.
   cascade, so a bare `<Text>` is the system font no matter what the Tailwind
   theme says. ESLint fails the build on it; see [Typography](#typography--geist-the-webs-typeface-np-160).
 - **`strokeWidth={1.5}` on every lucide icon** — RN default is 2 and looks bolder than the webapp.
+- **A new touchable needs a role, a label and 44 points** — the role and the
+  label because that is all VoiceOver has to go on, and the 44 from
+  `lib/a11y/touchTarget.ts` because NativeWind padding around a small icon is
+  not a hit target. `__tests__/accessibility.test.tsx` walks the v1 screens for
+  both and sweeps every `.tsx` under `app/` and `components/` so no file holds
+  more touchables than roles. See [Accessibility
+  baseline](#accessibility-baseline-np-124).
+- **Never `allowFontScaling={false}`, and never a fixed height around text** —
+  Dynamic Type goes to 3.12× on iOS. A `<Text>` inside a flex row also needs
+  `WRAPPABLE_TEXT`: React Native's `flexShrink` is 0, so it would run off the end
+  of the screen rather than wrap.
+- **Anything that animates asks `useReducedMotion()` first** — moti and
+  Reanimated do not consult the system setting, and the suite fails the build on
+  a file that imports either without it.
 - **No black-translucent statusBarStyle** — per [[feedback_black_translucent]] memory.
 - **Tailwind v3, not v4** — NativeWind 4 doesn't support v4 yet.
 - **`lucide-react-native` is mapped to its CJS build in the Jest config** — the
   package's `react-native` export condition points at an `.mjs` bundle, and
   jest-expo's babel transform only matches `.[jt]sx?`, so the ESM bundle reaches
   Jest untranspiled. Metro is unaffected; this is a test-only mapping.
+- **NetInfo and AsyncStorage are mocked as NODE MODULES, not per test** —
+  `__mocks__/@react-native-community/netinfo.js` and
+  `__mocks__/@react-native-async-storage/async-storage.js` sit next to
+  `node_modules`, so Jest applies them automatically with no `jest.mock()`
+  call. The root layout mounts the connectivity banner and starts the write
+  queue, so every suite that renders it would otherwise reach for a native
+  module the test renderer does not have. A test that needs the connection to
+  CHANGE either drives `NetInfo.fetch` (a `jest.fn`) or passes its own
+  `ConnectivitySource` — both the banner and the queue take one.
 - **`__tests__/root-layout-smoke.test.tsx` is the launch canary** — it renders
   the real `app/_layout.tsx` through `renderRouter` from
   `expo-router/testing-library`. Every other suite renders a screen in

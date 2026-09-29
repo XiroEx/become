@@ -80,7 +80,12 @@ export function DangerZone({
 
   return (
     <View testID={testID} style={{ gap: 8 }}>
-      <Text className="text-destructive text-lg font-semibold">Delete account</Text>
+      <Text
+        accessibilityRole="header"
+        className="text-destructive text-lg font-semibold"
+      >
+        Delete account
+      </Text>
       <Text className="text-muted-foreground text-sm">
         This deletes your account and the data attached to it — training, nutrition, mind and
         everything you logged. You have {RESTORE_WINDOW_DAYS} days to change your mind using the link
@@ -97,7 +102,12 @@ export function DangerZone({
       </Button>
 
       {error ? (
-        <Text testID="delete-account-error" className="text-destructive text-xs">
+        <Text
+          testID="delete-account-error"
+          accessibilityRole="alert"
+          accessibilityLiveRegion="assertive"
+          className="text-destructive text-xs"
+        >
           {error}
         </Text>
       ) : null}
