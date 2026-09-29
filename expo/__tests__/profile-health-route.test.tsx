@@ -5,7 +5,7 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
   const actual = jest.requireActual("@/lib/auth/secureStoreToken");
   return {
     ...actual,
-    secureTokenStore: {
+    sessionStore: {
       async get() {
         return null;
       },

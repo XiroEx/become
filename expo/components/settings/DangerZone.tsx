@@ -6,7 +6,7 @@ import {
   RESTORE_WINDOW_DAYS,
   requestAccountDeletion,
 } from "@/lib/account/deleteAccount";
-import { secureTokenStore } from "@/lib/auth/secureStoreToken";
+import { sessionStore } from "@/lib/auth/secureStoreToken";
 
 /**
  * Delete account, on the settings screen of both store builds.
@@ -34,6 +34,10 @@ export interface DangerZoneProps {
   onDeleted?: () => void;
   /** DI seams for tests. */
   requestImpl?: typeof requestAccountDeletion;
+  /**
+   * Drops the session. Omitted → `sessionStore` (`become.session`), named
+   * explicitly so this can only ever clear the session key.
+   */
   clearToken?: () => Promise<void>;
   /** 'ios' | 'android'. Defaults to the running platform. */
   source?: "ios" | "android" | "unknown";
@@ -44,7 +48,7 @@ export function DangerZone({
   token,
   onDeleted,
   requestImpl = requestAccountDeletion,
-  clearToken = () => secureTokenStore.clear(),
+  clearToken = () => sessionStore.clear(),
   source,
   testID = "danger-zone",
 }: DangerZoneProps) {
