@@ -17,6 +17,13 @@
  * STORE the token it returns, and never sign anyone out because the network
  * was unavailable. The one native addition is signing out on a 401 — the web
  * can fall back to its cookie, native cannot.
+ *
+ * A DELIBERATE SIGN-OUT ALSO TELLS THE SERVER, which the web has always done
+ * (`webapp/components/TopNav.tsx` POSTs `/api/auth/logout`). Forgetting the JWT
+ * is enough for the app itself — but not for a read-only widgets token, which
+ * lives in an OS widget extension outside this process and outlasts it by
+ * months. `POST /api/auth/logout` bumps `User.widgetTokenVersion`, and that is
+ * the only thing that can stop one (`webapp/lib/widgets/token.ts`).
  */
 import {
   createContext,
@@ -190,11 +197,36 @@ export function AuthProvider({
     }
   }, []);
 
+  /**
+   * Tell the server the member signed out, so every read-only widgets token
+   * they hold stops working. Raw `fetch`, not `apiFetch`: there is no body worth
+   * parsing, and a 401 here must not be reported to the unauthorized handler
+   * that called us.
+   *
+   * BEST-EFFORT, AND IT RUNS AFTER THE LOCAL SESSION IS ALREADY GONE. Offline,
+   * DNS, a 500 — none of them may keep a member signed in on a device they
+   * asked to be signed out of. A widgets token that outlives a failed call dies
+   * at the next deliberate sign-out, at a deletion request, or with its own exp.
+   */
+  const notifyServerOfSignOut = useCallback(async (jwt: string): Promise<void> => {
+    const config = configRef.current;
+    const send = config.fetchImpl ?? fetch;
+    try {
+      await send(`${config.baseUrl}/api/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${jwt}` },
+      });
+    } catch {
+      /* a sign-out may never fail */
+    }
+  }, []);
+
   const signOut = useCallback(
     async (reason: SignOutReason = "member"): Promise<void> => {
       // ONCE. Three requests can 401 together; the member is signed out one
       // time, with one reason, and the sign-in screen is reached one time.
       if (sessionRef.current.status === "signed-out") return;
+      const presented = sessionRef.current.token;
       commit({
         status: "signed-out",
         token: null,
@@ -208,8 +240,14 @@ export function AuthProvider({
         // the in-memory session is already gone, and the next launch re-checks
         // `exp` anyway.
       }
+      // Only a DELIBERATE sign-out. "unauthorized" and "expired" mean the server
+      // has already stopped accepting this token, so the call could not be
+      // authenticated and would revoke nothing.
+      if (reason === "member" && presented) {
+        await notifyServerOfSignOut(presented);
+      }
     },
-    [commit],
+    [commit, notifyServerOfSignOut],
   );
 
   /**

@@ -248,6 +248,77 @@ describe("AuthProvider — signing in", () => {
     expect(result.current.signedOutReason).toBeNull();
     expect(await store.get()).toBeNull();
   });
+
+  it("signOut('member') tells the server, so a widgets token dies with it", async () => {
+    // Forgetting the JWT is enough for the app. It is NOT enough for a
+    // read-only widgets token: that lives in an OS widget extension outside
+    // this process and outlives it by months, and the only thing that stops one
+    // is the `widgetTokenVersion` bump POST /api/auth/logout does.
+    const store = trackedStore(FRESH_JWT);
+    const fetchImpl = jest.fn(async () => jsonResponse(200, { user: USER }));
+
+    const { result } = renderAuth(store, fetchImpl);
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+    fetchImpl.mockClear();
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    const logoutCall = fetchImpl.mock.calls.find(([url]) =>
+      String(url).includes("/api/auth/logout"),
+    ) as unknown as [string, RequestInit] | undefined;
+    expect(logoutCall).toBeDefined();
+    expect(logoutCall?.[0]).toBe("https://become.redbtn.io/api/auth/logout");
+    expect(logoutCall?.[1].method).toBe("POST");
+    // Presented with the token being given up — the server cannot bump a
+    // counter for a member it cannot identify.
+    expect(
+      (logoutCall?.[1].headers as Record<string, string>)["Authorization"],
+    ).toBe(`Bearer ${FRESH_JWT}`);
+  });
+
+  it("a sign-out the server never hears about still signs the member out", async () => {
+    // Airplane mode may not trap someone in a session they asked to leave. The
+    // local session is gone before the call is even attempted.
+    const store = trackedStore(FRESH_JWT);
+    const fetchImpl = jest
+      .fn<Promise<Response>, unknown[]>()
+      .mockResolvedValueOnce(jsonResponse(200, { user: USER }))
+      .mockRejectedValue(new TypeError("Network request failed"));
+
+    const { result } = renderAuth(store, fetchImpl);
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+
+    await act(async () => {
+      await result.current.logout();
+    });
+
+    expect(result.current.status).toBe("signed-out");
+    expect(result.current.token).toBeNull();
+    expect(await store.get()).toBeNull();
+  });
+
+  it("an involuntary sign-out sends nothing — the token is already refused", async () => {
+    // `unauthorized` means the server has stopped accepting this token, so
+    // POSTing it to /api/auth/logout could not be authenticated and would
+    // revoke nothing. The same goes for a token past its own `exp`.
+    const store = trackedStore(FRESH_JWT);
+    const fetchImpl = jest.fn(async () => jsonResponse(200, { user: USER }));
+
+    const { result } = renderAuth(store, fetchImpl);
+    await waitFor(() => expect(result.current.status).toBe("signed-in"));
+    fetchImpl.mockClear();
+
+    await act(async () => {
+      await result.current.signOut("unauthorized");
+    });
+
+    expect(result.current.status).toBe("signed-out");
+    expect(
+      fetchImpl.mock.calls.filter(([url]) => String(url).includes("/api/auth/logout")),
+    ).toHaveLength(0);
+  });
 });
 
 describe("a 401 from any request", () => {
