@@ -15,6 +15,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramSummary } from "@/lib/programs/programSummary";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * Saved-programs route — GET /api/programs/saved lists the user's saved
@@ -22,6 +23,7 @@ import { toProgramSummary } from "@/lib/programs/programSummary";
  * optimistic removal that rolls back + refetches on failure.
  */
 export default function SavedProgramsRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -74,7 +76,7 @@ export default function SavedProgramsRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-saved-route"
     >
       <View style={{ padding: 16 }}>

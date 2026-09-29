@@ -30,6 +30,35 @@ export default [
           ],
         },
       ],
+      // NO COLOUR LITERALS (NP-123). The app was dark-only because 43 `#0a0a0a`
+      // literals sat in plain RN styles while the classes beside them followed
+      // the system colour scheme, so a light-mode phone drew light-mode text on
+      // hard-coded dark surfaces. A hex has ONE value; a token has two.
+      // `__tests__/noHexColorLiterals.test.ts` is the same ban in CI.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "Literal[value=/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]",
+          message:
+            "No hex colours (NP-123): use a Tailwind class (bg-background) or useThemeTokens() — a literal cannot follow the system light/dark setting.",
+        },
+        {
+          selector: "Literal[value=/^rgba?\\(/]",
+          message:
+            "No hand-written rgb()/rgba() (NP-123): the two palettes live in lib/theme/tokens.ts — reach them through useThemeTokens().",
+        },
+      ],
+    },
+  },
+  {
+    // THE ONE FILE ALLOWED TO WRITE A COLOUR DOWN. It is the two palettes and
+    // the scrim, as RGB triplets and one rgba() per mode; `useThemeTokens()`
+    // hands them to everything else. Banning literals here would be banning the
+    // token file.
+    files: ["lib/theme/tokens.ts"],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
   {

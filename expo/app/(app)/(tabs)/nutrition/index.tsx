@@ -10,8 +10,10 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { localDateKey, withTz } from "@/lib/nutrition/localDay";
 import { toMealEntries } from "@/lib/nutrition/mealLog";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function NutritionIndexRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   // The device's day, with the offset that produced it — `toISOString()` is
@@ -33,7 +35,7 @@ export default function NutritionIndexRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-index-route"
     >
       <View style={{ padding: 16, gap: 16 }}>

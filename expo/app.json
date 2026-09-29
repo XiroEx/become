@@ -5,7 +5,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "become",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "backgroundColor": "#0a0a0a",
     "ios": {
@@ -122,8 +122,8 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0a0a0a",
-          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#fafafa",
+          "image": "./assets/splash-icon-light.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "dark": {

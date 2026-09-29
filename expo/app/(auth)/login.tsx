@@ -18,6 +18,7 @@ import { createPoller } from "@/lib/auth/polling";
 import { announce } from "@/lib/a11y/announce";
 import { signOutMessage } from "@/lib/auth/AuthProvider";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** Default poll cadence for the magic-link fallback (mirrors the webapp). */
 const POLL_INTERVAL_MS = 2000;
@@ -64,6 +65,7 @@ export default function LoginScreen({
   setTimeoutImpl,
   clearTimeoutImpl,
 }: LoginScreenProps = {}) {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const auth = useAuth();
 
@@ -189,7 +191,7 @@ export default function LoginScreen({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="login-screen"
     >
       <KeyboardAvoidingView

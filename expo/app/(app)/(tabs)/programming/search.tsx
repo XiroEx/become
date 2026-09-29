@@ -9,6 +9,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toProgramSummary } from "@/lib/programs/programSummary";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -18,6 +19,7 @@ const SEARCH_DEBOUNCE_MS = 250;
  * for the debounced value and maps the results for the presentational list.
  */
 export default function ProgramsSearchRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const [query, setQuery] = useState<string>("");
@@ -37,7 +39,7 @@ export default function ProgramsSearchRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-search-route"
     >
       <View style={{ padding: 16 }}>

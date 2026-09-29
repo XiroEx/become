@@ -140,8 +140,20 @@ describe("iOS config — _layout.tsx StatusBar", () => {
     expect(src).toMatch(/<StatusBar/);
   });
 
-  it("StatusBar style is one of 'light' / 'dark' / 'auto', never 'black-translucent'", () => {
+  it("StatusBar style comes from the theme, never 'black-translucent'", () => {
+    // `black-translucent` is the web/PWA value and is not an expo-status-bar
+    // style at all. Since NP-123 the value is not a literal either: it is
+    // `statusBarStyle` from `useThemeTokens()`, which is "light" content on the
+    // dark surface and "dark" content on the light one.
     expect(src).not.toMatch(/style="black-translucent"/);
-    expect(src).toMatch(/style="(light|dark|auto)"/);
+    expect(src).toMatch(/<StatusBar style=\{statusBarStyle\} \/>/);
+  });
+
+  it("and that value is only ever expo-status-bar's 'light' or 'dark'", () => {
+    const hook = fs.readFileSync(
+      path.join(__dirname, "..", "lib", "theme", "useThemeTokens.ts"),
+      "utf8",
+    );
+    expect(hook).toContain('statusBarStyle: mode === "dark" ? "light" : "dark"');
   });
 });

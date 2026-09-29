@@ -4,7 +4,7 @@ import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import type { VerifyMode } from "@/lib/auth";
@@ -37,6 +37,7 @@ export function VerifyScreen({
   onSuccess,
   onFailure,
 }: VerifyScreenProps = {}) {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; mode?: string }>();
   const [status, setStatus] = useState<"working" | "success" | "error">(
@@ -92,7 +93,7 @@ export function VerifyScreen({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="verify-screen"
     >
       {/* This screen is three states and no controls, so the only thing a
@@ -106,7 +107,7 @@ export function VerifyScreen({
           <>
             <ActivityIndicator
               size="large"
-              color={resolveToken("primary", "dark")}
+              color={colors.primary}
               testID="verify-spinner"
               accessibilityElementsHidden
               importantForAccessibility="no"

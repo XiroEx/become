@@ -5,6 +5,7 @@ import { ConsentGate } from "@/components/auth/ConsentGate";
 import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
  * THE GUARDED GROUP. Everything a signed-in member sees is below this file.
@@ -33,6 +34,7 @@ import { useAuth } from "@/lib/auth/useAuth";
  * redirect loop.
  */
 export default function AppGroupLayout() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { isAuthed, loading, user } = useAuth();
 
@@ -65,7 +67,7 @@ export default function AppGroupLayout() {
           <Stack
             screenOptions={{
               headerShown: false,
-              contentStyle: { backgroundColor: "#0a0a0a" },
+              contentStyle: { backgroundColor: colors.background },
             }}
           >
             <Stack.Screen name="(tabs)" />

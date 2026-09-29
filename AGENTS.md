@@ -1057,7 +1057,7 @@ schedule, schedule settings that regenerate into the past). Beta shares
 production's database (NP-008), so pointing a build at beta is no protection:
 builds carrying this wiring are used only with named test accounts.
 
-#### `_` is not a private prefix in expo-router, and dark is pinned
+#### `_` is not a private prefix in expo-router, and the theme follows the system
 
 Two store-readiness facts that landed with the tab bar:
 
@@ -1072,19 +1072,42 @@ Two store-readiness facts that landed with the tab bar:
   `Redirect` to Home in anything else. NP-122 deletes the admin code and adds an
   admin-only link to the web. Tests: `expo/__tests__/dev-only-routes.test.tsx`
   opens all three URLs with `__DEV__` flipped both ways.
-- **v1 is dark-only, and the pin is two lines in two files.** NativeWind
-  follows the SYSTEM colour scheme unless told otherwise, while 39 files
-  hard-code `#0a0a0a` in a plain RN `style` (a SafeAreaView or a StatusBar
-  cannot read a Tailwind class) — so a phone in light mode drew light-mode text
-  (`--foreground: 24 24 27`, near-black) on those near-black surfaces.
-  `pinDarkMode()` (`expo/lib/theme/colorScheme.ts`) calls
-  `colorScheme.set("dark")` and is invoked at MODULE LOAD in
-  `expo/app/_layout.tsx`, not in an effect, so there is no frame in the
-  system's theme; `expo/app.json` sets `userInterfaceStyle: "dark"` so the OS
-  agrees about keyboards, share sheets and the launch screen; the status bar
-  stays `style="light"`. NP-123 builds the real light theme, and it starts by
-  deleting the literals — not by deleting the pin. Test:
-  `expo/__tests__/darkModePin.test.tsx`.
+- **Light and dark both ship, and the system picks (NP-123).** The web follows
+  `prefers-color-scheme` (`webapp/app/layout.tsx` toggles the `dark` class from
+  the media query) and native now does the same:
+  `followSystemColorScheme()` (`expo/lib/theme/colorScheme.ts`) runs at MODULE
+  LOAD in `expo/app/_layout.tsx` — not in an effect, or there is one frame in
+  the wrong theme on every cold start — and `expo/app.json` says
+  `userInterfaceStyle: "automatic"`.
+
+  **The rule that makes it hold: there are no colour literals.** NP-013 pinned
+  dark for exactly one reason — 43 `#0a0a0a` literals sat in plain RN `style`
+  objects (a SafeAreaView, a Stack's `contentStyle`, the tab bar, a lucide
+  `color`, a modal backdrop) while the classes beside them followed the system,
+  so a phone in light mode drew light-mode text (`--foreground: 24 24 27`,
+  near-black) on those near-black surfaces. Every one of them is now a Tailwind
+  class or a value from **`useThemeTokens()`** (`expo/lib/theme/useThemeTokens.ts`),
+  which reads NativeWind's colour scheme — the same signal `bg-background`
+  resolves against — so a class and a `style` on one screen cannot disagree and a
+  live flip re-renders both. A hex colour in `expo/app`, `expo/components` or
+  `expo/lib` is now a LINT ERROR (`no-restricted-syntax` in
+  `expo/eslint.config.mjs`) and a test failure
+  (`expo/__tests__/noHexColorLiterals.test.ts`).
+
+  Three things the hook cannot do with a class, and where they live instead: the
+  window background is `useThemedWindowBackground()` via `expo-system-ui`
+  (`app.json`'s `backgroundColor` is applied before JS and can only be one
+  colour, so it stays the dark one and is repainted while the splash is up); the
+  status bar is `<StatusBar style={statusBarStyle} />`; the launch screen is two
+  assets — `splash-icon.png` (white mark, `#0a0a0a`) and
+  `splash-icon-light.png` (the same mark in zinc-900, `#fafafa`), both written by
+  `expo/scripts/generate-app-assets.mjs`, because a white mark on a light splash
+  is an empty launch screen. Token values are the web's zinc/red/amber/green
+  pairs, and `expo/global.css` and `expo/lib/theme/tokens.ts` are compared by the
+  test so they cannot drift. Test:
+  `expo/__tests__/themeFollowsSystem.test.tsx` (it replaced `darkModePin.test.tsx`),
+  including WCAG contrast for every text/surface pair in BOTH modes — the web
+  shipped a dark-mode chart bug, so legibility is asserted rather than eyeballed.
 
 #### The web's typeface, on the phone (NP-160)
 
@@ -1116,7 +1139,8 @@ side. Four facts, each of them a bug that would otherwise ship:
   same by hand for the app's one `TextInput`.
 - **The launch screen is held until the faces are registered.**
   `holdSplashForFonts()` runs at MODULE LOAD in `expo/app/_layout.tsx` (an
-  effect is one frame too late — the same reason `pinDarkMode()` is there), the
+  effect is one frame too late — the same reason `followSystemColorScheme()` is
+  there), the
   layout renders `null` until `useGeistFonts()` says ready, and the hook hides
   the splash. React Native does not re-render a `<Text>` when a font arrives, so
   a frame painted early keeps the system font for the life of that screen. A

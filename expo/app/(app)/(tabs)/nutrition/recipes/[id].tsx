@@ -11,8 +11,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toRecipeDetailViewModel } from "@/lib/nutrition/recipes";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function RecipeDetailRoute() {
+  const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
   const { token } = useAuth();
@@ -30,7 +32,7 @@ export default function RecipeDetailRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Missing recipe id</Text>
@@ -54,7 +56,7 @@ export default function RecipeDetailRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="recipe-detail-route"
     >
       <RecipeDetail

@@ -13,8 +13,10 @@ import {
   foodDetailHref,
   toFoodSearchResults,
 } from "@/lib/nutrition/foodSearch";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function NutritionSearchRoute() {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const [query, setQuery] = useState<string>("");
@@ -34,7 +36,7 @@ export default function NutritionSearchRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-search-route"
     >
       <KeyboardAvoidingView

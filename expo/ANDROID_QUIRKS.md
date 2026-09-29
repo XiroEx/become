@@ -76,9 +76,11 @@ skipping the disambiguation chooser.
 ## Adaptive icon
 
 `android.adaptiveIcon` is wired in `app.json` with
-`foregroundImage: "./assets/adaptive-icon.png"` + `backgroundColor: "#0a0a0a"`
-(the app's own background, so the launcher tile is the same dark as the first
-screen).
+`foregroundImage: "./assets/adaptive-icon.png"` + `backgroundColor: "#0a0a0a"`.
+That plate stays dark in both themes on purpose (NP-123 made the app itself
+follow the system): the launcher tile is brand artwork sitting on the launcher's
+own wallpaper, not a UI surface the member reads text on, and a tile that
+changed colour with the system setting would be a different icon twice a day.
 
 The foreground is its OWN file, not the store icon: the store icon is opaque
 edge to edge, and every launcher mask (circle, squircle, teardrop, rounded
@@ -88,6 +90,10 @@ the ~66% safe zone every mask keeps.
 
 The same applies to the splash: Android 12+ masks the splash icon to a circle,
 so `assets/splash-icon.png` is the mark on transparency too, not the lockup.
+There are TWO of them since NP-123 — `splash-icon.png` (white mark, for the
+`#0a0a0a` dark splash) and `splash-icon-light.png` (the same mark in zinc-900,
+for the `#fafafa` light one), which the plugin writes into `values/` and
+`values-night/`. A white mark on a light splash is an empty launch screen.
 
 All three assets are written by `scripts/generate-app-assets.mjs` from
 `webapp/public/logo.png`, which is also what the PWA installs with — so the

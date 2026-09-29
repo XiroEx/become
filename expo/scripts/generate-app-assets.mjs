@@ -59,7 +59,18 @@ const MARK_FRACTION = {
   "icon.png": 0.56,
   "adaptive-icon.png": 0.5,
   "splash-icon.png": 0.58,
+  "splash-icon-light.png": 0.58,
 };
+
+/** The ink the mark is painted in.
+ *
+ *  White everywhere the surface behind it is the app's near-black. The LIGHT
+ *  splash (NP-123: the launch screen follows the system now, and its light
+ *  background is zinc-50) needs the opposite, or the launch screen is an empty
+ *  #fafafa rectangle — so that one is painted in the light theme's foreground,
+ *  zinc-900. Same mark, same crop, same safe margin: only the ink differs. */
+const WHITE = [0xff, 0xff, 0xff];
+const INK = { "splash-icon-light.png": [0x18, 0x18, 0x1b] };
 
 // ─── PNG decode ──────────────────────────────────────────────────────────────
 
@@ -328,8 +339,8 @@ function extractMark(image) {
   return { alpha, width: w, height: h, meanSaturation };
 }
 
-/** Paint the mark white, centred, on `background` (null = transparent). */
-function compose(mark, size, fraction, background) {
+/** Paint the mark in `ink`, centred, on `background` (null = transparent). */
+function compose(mark, size, fraction, background, ink = WHITE) {
   const scale = (size * fraction) / Math.max(mark.width, mark.height);
   const dstW = Math.max(1, Math.round(mark.width * scale));
   const dstH = Math.max(1, Math.round(mark.height * scale));
@@ -352,15 +363,15 @@ function compose(mark, size, fraction, background) {
       if (a <= 0) continue;
       const i = ((offsetY + y) * size + offsetX + x) * channels;
       if (background) {
-        // Opaque icon: composite white over the background colour. No alpha
+        // Opaque icon: composite the ink over the background colour. No alpha
         // channel at all — an App Store icon with one is rejected.
         for (let c = 0; c < 3; c++) {
-          pixels[i + c] = Math.round(background[c] * (1 - a) + 255 * a);
+          pixels[i + c] = Math.round(background[c] * (1 - a) + ink[c] * a);
         }
       } else {
-        pixels[i] = 255;
-        pixels[i + 1] = 255;
-        pixels[i + 2] = 255;
+        pixels[i] = ink[0];
+        pixels[i + 1] = ink[1];
+        pixels[i + 2] = ink[2];
         pixels[i + 3] = Math.round(a * 255);
       }
     }
@@ -377,7 +388,8 @@ mkdirSync(OUT_DIR, { recursive: true });
 const written = [];
 for (const [name, fraction] of Object.entries(MARK_FRACTION)) {
   const opaque = name === "icon.png";
-  const image = compose(mark, CANVAS, fraction, opaque ? BACKGROUND : null);
+  const ink = INK[name] ?? WHITE;
+  const image = compose(mark, CANVAS, fraction, opaque ? BACKGROUND : null, ink);
   const bytes = encodePng(image);
   writeFileSync(join(OUT_DIR, name), bytes);
   written.push(

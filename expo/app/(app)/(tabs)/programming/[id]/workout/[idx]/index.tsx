@@ -10,8 +10,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toWorkoutOverview } from "@/lib/programs/programDetail";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function WorkoutOverviewRoute() {
+  const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{
     id?: string;
     idx?: string;
@@ -45,7 +47,7 @@ export default function WorkoutOverviewRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Invalid workout</Text>
@@ -66,7 +68,7 @@ export default function WorkoutOverviewRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-workout-route"
     >
       <WorkoutOverview workout={workout} onStartLive={onStartLive} />

@@ -16,8 +16,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { reportRequestError } from "@/lib/auth/unauthorized";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function ChatThreadRoute() {
+  const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ id?: string }>();
   const conversationId = typeof params.id === "string" ? params.id : "";
   const { token, user } = useAuth();
@@ -84,7 +86,7 @@ export default function ChatThreadRoute() {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
       >
         <View style={{ padding: 16 }}>
           <Text className="text-destructive">Missing conversation id</Text>
@@ -96,7 +98,7 @@ export default function ChatThreadRoute() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="chat-thread-route"
     >
       <KeyboardAvoidingView
