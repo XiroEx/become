@@ -22,6 +22,7 @@ const WEBHOOK = 'app/api/billing/webhook/route.ts'
 const CHECKOUT = 'app/api/billing/checkout/route.ts'
 const PORTAL = 'app/api/billing/portal/route.ts'
 const STATUS = 'app/api/billing/status/route.ts'
+const PLANS = 'app/api/billing/plans/route.ts'
 const MONGO_DEPS = 'lib/billing/mongoDeps.ts'
 const USER_MODEL = 'models/User.ts'
 
@@ -37,7 +38,7 @@ test('the webhook pins the node runtime', () => {
 })
 
 test('every billing route is force-dynamic', () => {
-  for (const rel of [WEBHOOK, CHECKOUT, PORTAL, STATUS]) {
+  for (const rel of [WEBHOOK, CHECKOUT, PORTAL, STATUS, PLANS]) {
     assert.match(read(rel), /export const dynamic = ['"]force-dynamic['"]/, rel)
   }
 })
@@ -50,9 +51,20 @@ test('the signature is the webhook’s only auth — it must NOT call verifyAuth
 })
 
 test('every other billing route DOES authenticate', () => {
-  for (const rel of [CHECKOUT, PORTAL, STATUS]) {
+  for (const rel of [CHECKOUT, PORTAL, STATUS, PLANS]) {
     assert.match(read(rel), /verifyAuth\(/, rel)
   }
+})
+
+test('plans serves copy and nothing else — no Stripe, no database, no member', () => {
+  // The prices and the Free/Plus table, built from the same constants the web
+  // plan page reads. It answers the same body for everyone: what this member
+  // holds is GET /api/billing/status, and touching Stripe or Mongo here would
+  // put a price screen behind an outage in either.
+  const src = read(PLANS)
+  assert.match(src, /buildPlansPayload\(\)/)
+  assert.doesNotMatch(src, /getStripe\(|getBillingConfig\(/, 'plan COPY needs no Stripe call')
+  assert.doesNotMatch(src, /dbConnect\(/, 'plan COPY needs no database')
 })
 
 test('checkout creates a subscription session with the fields the webhook relies on', () => {

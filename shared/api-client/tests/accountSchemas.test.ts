@@ -38,6 +38,7 @@ import {
   EntitlementsResponseSchema,
   // billing
   BillingStatusResponseSchema,
+  BillingPlansResponseSchema,
   CheckoutRequestSchema,
   CheckoutResponseSchema,
   PortalResponseSchema,
@@ -187,6 +188,54 @@ const BILLING_STATUS_BODY = {
     grandfathered: false,
     managed: true,
   },
+};
+
+/**
+ * GET /api/billing/plans — webapp/lib/billing/plans.ts, built from
+ * PLAN_PRICING, FREE_LIMITS, FEATURE_LABELS, FREE_FOREVER and RENEWAL_TERMS.
+ *
+ * Abridged (two rows, one free-forever entry, one renewal term) because the
+ * point here is the SHAPE. The strings themselves are pinned against the web
+ * constants by webapp/tests/unit/billing/planPrices.test.tsx, which is the only
+ * test that can read them; a fixture is a copy, and a copy cannot pin a price.
+ */
+const BILLING_PLANS_BODY = {
+  currency: 'USD',
+  plans: {
+    monthly: {
+      display: '$14.99',
+      per: 'month',
+      billed: 'Billed monthly.',
+      renewalLine:
+        'Renews automatically at $14.99 every month until you cancel. Cancel any time under Manage billing; your access runs to the end of the period you paid for.',
+    },
+    annual: {
+      display: '$119.99',
+      per: 'year',
+      billed: 'Billed once a year.',
+      renewalLine:
+        'Renews automatically at $119.99 every year until you cancel. Cancel any time under Manage billing; your access runs to the end of the period you paid for.',
+      perMonthDisplay: '$10.00',
+      savesDisplay: '$59.89',
+      savesPercentDisplay: '33%',
+      savingLine: 'Save $59.89 a year, 33% off the monthly price.',
+    },
+  },
+  rows: [
+    { feature: 'ai-food-estimate', label: 'AI food scans', free: '1 a day', plus: 'Unlimited' },
+    { feature: 'mind-sessions', label: 'Mind sessions', free: 'First 10', plus: 'All 50' },
+  ],
+  freeForever: [
+    {
+      label: 'Logging your training',
+      detail: 'Every workout, set, rep and weight, as many as you train.',
+    },
+  ],
+  freeForeverNote:
+    'No plan needed, no time limit, and nothing you have already made is ever taken away.',
+  renewalTerms: [
+    'Your plan renews automatically at the end of every billing period. Unless you cancel first, the payment method you gave Stripe is charged the same amount again, for another period of the same length, and this repeats until you cancel.',
+  ],
 };
 
 /** POST /api/billing/checkout 200 — route.ts:208. */
@@ -589,6 +638,36 @@ test('BillingStatusResponseSchema: parses the switched-off install', () => {
   assert.equal(r.data?.configured, false);
 });
 
+test('BillingPlansResponseSchema: parses the prices and the Free/Plus table', () => {
+  const r = BillingPlansResponseSchema.safeParse(BILLING_PLANS_BODY);
+  assert.equal(r.success, true);
+  assert.equal(r.data?.plans.annual.savesPercentDisplay, '33%');
+  // The monthly plan has no derived figures, and the schema must not demand any.
+  assert.equal(r.data?.plans.monthly.perMonthDisplay, undefined);
+  assert.equal(r.data?.rows[1]?.plus, 'All 50');
+});
+
+test('BillingPlansResponseSchema: every price is a STRING, never a number', () => {
+  // The rule that travels with this route: the client renders what it is given
+  // and computes nothing. A numeric price would invite a device to format it —
+  // and then disagree with what Stripe charges.
+  const numeric = BillingPlansResponseSchema.safeParse({
+    ...BILLING_PLANS_BODY,
+    plans: {
+      ...BILLING_PLANS_BODY.plans,
+      monthly: { ...BILLING_PLANS_BODY.plans.monthly, display: 14.99 },
+    },
+  });
+  assert.equal(numeric.success, false);
+
+  // …and a row without both columns is not a row.
+  const halfRow = BillingPlansResponseSchema.safeParse({
+    ...BILLING_PLANS_BODY,
+    rows: [{ feature: 'vision', label: 'Vision', free: 'Not included' }],
+  });
+  assert.equal(halfRow.success, false);
+});
+
 test('CheckoutRequestSchema: plan is optional, a wrong one is refused', () => {
   assert.equal(CheckoutRequestSchema.safeParse({}).success, true);
   assert.equal(CheckoutRequestSchema.safeParse({ plan: 'annual' }).success, true);
@@ -894,6 +973,7 @@ const RESPONSES: Array<[string, { safeParse: (v: unknown) => { success: boolean;
   ['GET|POST|DELETE /api/me/ai-consent', AiConsentStatusSchema, AI_CONSENT_BODY],
   ['GET /api/me/entitlements', EntitlementsResponseSchema, ENTITLEMENTS_BODY],
   ['GET /api/billing/status', BillingStatusResponseSchema, BILLING_STATUS_BODY],
+  ['GET /api/billing/plans', BillingPlansResponseSchema, BILLING_PLANS_BODY],
   ['POST /api/billing/checkout', CheckoutResponseSchema, CHECKOUT_BODY],
   ['POST /api/billing/portal', PortalResponseSchema, PORTAL_BODY],
   ['GET /api/notifications/preferences', NotificationPreferencesResponseSchema, NOTIFICATION_PREFERENCES_BODY],
@@ -921,7 +1001,7 @@ for (const [route, schema, body] of RESPONSES) {
 }
 
 test('the sweep covers every route this card added a schema for', () => {
-  assert.equal(RESPONSES.length, 18);
+  assert.equal(RESPONSES.length, 19);
 });
 
 // Nested objects are extended too, not just the envelope.

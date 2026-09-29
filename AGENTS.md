@@ -569,6 +569,20 @@ Three things about it are structural rather than cosmetic:
   `tests/unit/entitlements/planPage.test.tsx`, so editing one number and not the
   others fails the build. **They must match the Stripe prices**
   (`billing.stripePricePlus*`); nothing reads an amount back off Stripe.
+- **Every other client reads those same strings over the wire.**
+  `GET /api/billing/plans` (`app/api/billing/plans/route.ts` →
+  `lib/billing/plans.ts`) serves the two prices, the renewal lines and the
+  Free/Plus rows as DISPLAY STRINGS, built per request from `PLAN_PRICING`,
+  `FREE_LIMITS`/`FEATURE_MIN_TIER`, `FEATURE_LABELS`, `FREE_FOREVER` and
+  `RENEWAL_TERMS` — so a price change is a deploy and never an App Store
+  release, and the web page and the API cannot disagree. No number crosses that
+  wire and no client computes an amount. The schema is
+  `BillingPlansResponseSchema` in `shared/api-client`;
+  `tests/unit/billing/planPrices.test.tsx` renders the real plan page
+  components and asserts every string in the response appears in that markup,
+  then mutates `PLAN_PRICING` and watches the response follow it. It is NOT
+  `/api/billing/status`: that one answers what is configured and what this
+  member holds, this one what the plan costs and contains.
 - **The free-forever list names the route that serves each claim**, and the same
   test asserts that route calls no entitlement guard (bar a cap the entry names
   itself, e.g. logging a workout is free while STARRING it is `custom-sessions`).
