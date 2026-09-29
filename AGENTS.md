@@ -184,6 +184,47 @@ step will not advance until it is filled. `MagicLink.name` survives read-only so
 a link minted by the previous build, all of which live 15 minutes, still lands
 the name its owner typed.
 
+### Opening the web signed in (the one-time hand-off)
+
+A web-only screen opened from the native app used to land the member on
+`/login`: `middleware.ts` gates `/dashboard/*` on the `auth_token` cookie and
+the in-app browser has none. `POST /api/auth/handoff { path }` (session
+required) answers a random CODE — 32 bytes, stored only as a SHA-256, alive for
+60 seconds, bound to the member and to ONE target path — and
+`GET /auth/handoff?code=` spends it, sets the cookie and hands the browser to
+`/auth/finish?next=<path>#<jwt>`, which puts the same JWT where the web app
+keeps it (localStorage, `token`) and routes on. **The token travels in the
+FRAGMENT**, never the query string, which is the shape the Google return already
+uses (`app/auth/callback/google/route.ts`).
+
+Four rules, and they all live in `webapp/lib/authHandoff.ts`:
+
+- **Single use** — one atomic `findOneAndUpdate` filtered on `usedAt: null`
+  (`models/HandoffCode.ts`). Read-then-write would hand two browsers a session.
+- **Sixty seconds, decided in code.** The TTL index is housekeeping only; mongod
+  sweeps about once a minute, which would keep a dead code alive.
+- **One member.** The session is minted from the User ROW at redemption, so a
+  demotion, or an account that has gone, is honoured.
+- **Allow-listed targets only** — `HANDOFF_ALLOWED_PATHS`, checked when the code
+  is minted AND again when it is spent, so shrinking the list takes effect for
+  codes already in flight. Every refusal redirects to `/login?error=handoff`,
+  identically, so "no such code" cannot be told from "already spent".
+
+Native side: **`expo/lib/web/openWebSignedIn.ts` is the one helper.** It takes a
+PATH (never a URL), prefixes `WEBAPP_BASE_URL`, fetches a code and opens the
+in-app browser; on a network error, a refusal, or no session it opens the plain
+URL — exactly today's signed-out behaviour, because a Tier-3 button that does
+nothing is worse than one that asks you to sign in. The three hand-built link
+helpers (`lib/programs/browserLauncher.ts`, `lib/nutrition/recipeLinks.ts`,
+`lib/admin/adminLinks.ts`) move onto it as their own tickets land — two of them
+still point at pages that do not exist.
+
+Tests: `webapp/tests/unit/auth/handoff.test.ts` (the rules, both routes'
+refusals, and every allow-listed target resolved against a real page under
+`app/`), `handoffCode.test.ts` (single use, the race, expiry — real Mongo),
+`handoffRoundTrip.test.ts` (mint → redeem → replay, end to end) and
+`expo/__tests__/openWebSignedIn.test.ts`.
+
 ## API Conventions
 
 - Route handlers in `app/api/` using Next.js App Router (`route.ts` exports)

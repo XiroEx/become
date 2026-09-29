@@ -223,6 +223,12 @@ export const PURGE_PLAN: readonly PurgeStep[] = [
     match: 'email',
     note: 'Unused sign-in links. They expire in 15 minutes anyway; a purge that left one behind would leave a way in.',
   },
+  {
+    model: 'HandoffCode',
+    field: 'userId',
+    action: 'delete',
+    note: 'Unspent one-time web hand-off codes. Sixty seconds each, but the same rule as a sign-in link: nothing that can mint a session may outlive the account.',
+  },
 ] as const
 
 // ─── The runner ──────────────────────────────────────────────────────────────
