@@ -84,8 +84,16 @@ export interface IWorkoutLog {
   needsName?: boolean
   // Client-generated id used to match-for-update a quick session across
   // incremental saves within the same live session (program logs use
-  // programId+day+today instead).
+  // `attemptId` below, falling back to programId+day+window).
   sessionId?: string
+  // Client-generated id for ONE attempt at a program day, sent on every save
+  // of that attempt (the program-workout analogue of `sessionId`). POST
+  // /api/workouts matches it BEFORE its date windows, so a save replayed from
+  // an offline queue — including after the member's local midnight, where no
+  // window matches any more — updates this log instead of inserting a second
+  // one and running the completion side effects twice. Absent on legacy logs
+  // and on saves from a client that sends no id.
+  attemptId?: string
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
@@ -226,9 +234,13 @@ export interface IUserProgress {
     dailyGlance?: Date
     checkInReminder?: Date
   }
-  // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
-  // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
-  // requests so the cron can send notifications at a reasonable LOCAL hour.
+  // Client-reported Date.getTimezoneOffset() in minutes — positive when local
+  // is BEHIND UTC (e.g. 300 for EST). Written by POST /api/me/timezone (both
+  // apps, on app open, at most once per local day) and by POST /api/workouts
+  // when a save carries a `tz`, so the cron can send notifications at a
+  // reasonable LOCAL hour. Validated on the way in by lib/captureUserTimezone.ts
+  // — never a stand-in, because a member stored as UTC gets their morning push
+  // in the small hours.
   timezoneOffset?: number
   /**
    * IANA zone, e.g. "America/New_York". Preferred over timezoneOffset because a
@@ -358,6 +370,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   title: { type: String },
   needsName: { type: Boolean },
   sessionId: { type: String },
+  attemptId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
   skipped: { type: Boolean },

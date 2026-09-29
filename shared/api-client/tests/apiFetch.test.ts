@@ -174,6 +174,26 @@ test('apiFetch: POST /api/workouts reports the zone so reminders fire locally', 
   assert.equal(sent.programId, 'p1');
 });
 
+test('apiFetch: POST /api/me/timezone carries the whole report on an empty body', async () => {
+  // The app-open report (expo/lib/timezone/reportTimezone.ts) sends `{}` and
+  // lets this client fill it in — the one place `tz` and `tzZone` are computed.
+  // Without the merge the route receives no `tz`, refuses the report, and the
+  // member stays unreachable by every reminder the app sells.
+  const spy = makeFetchSpy({ body: { ok: true } });
+  await inZone('America/New_York', async () => {
+    await apiFetch('/api/me/timezone', TrivialSchema, {
+      fetchImpl: spy.fetch,
+      method: 'POST',
+      body: {},
+      now: () => new Date('2026-07-15T23:30:00Z'),
+    });
+  });
+  assert.deepEqual(JSON.parse(spy.calls[0]!.init.body as string), {
+    tz: 240,
+    tzZone: 'America/New_York',
+  });
+});
+
 test('apiFetch: PUT and PATCH bodies get tz too', async () => {
   for (const method of ['PUT', 'PATCH'] as const) {
     const spy = makeFetchSpy({ body: { ok: true } });
