@@ -191,6 +191,41 @@ the name its owner typed.
 - Response format: `NextResponse.json({ ...data })` or `NextResponse.json({ error: "msg" }, { status: 4xx })`
 - No centralized error handler — try/catch per route
 
+### `tz` is a number, and the IANA zone is `tzZone`
+
+Every date-scoped route answers for the CALLER'S local day, and the only thing
+it will listen to is `tz` as **minutes west of UTC** — `Date.getTimezoneOffset()`
+semantics, so New York in summer is `240` and CET in winter is `-60`.
+`readTzOffset` / `readTzOffsetFromBody` (`webapp/lib/dayWindow.ts`) parse it with
+`Number()`, clamp to ±840, and turn **anything else into 0 = UTC**. Sending
+`tz=America/New_York` therefore reads as "UTC" and is silently wrong — which is
+exactly how every native read was answered for the UTC day, and how an Eastern
+member's 9pm mood was dated tomorrow (fixed: NP-009).
+
+Rules, all four load-bearing:
+
+- **Reads** put it on the query string; **writes** put it in the JSON body. A
+  handful of routes read both (`/api/streaks/freeze`, `/api/nutrition/log`'s
+  DELETE), so the shared client sends the query param on every method and
+  additionally merges `{ tz, tzZone }` into POST/PUT/PATCH JSON bodies.
+- **The IANA zone travels only as `tzZone`** (body only). The server can verify
+  that one with `Intl` and prefers it over the number beside it —
+  `webapp/lib/captureUserTimezone.ts`.
+- **Never send `tz: 0` as a stand-in for unknown.** `POST /api/workouts`
+  PERSISTS a reported offset as the member's zone, and a fabricated 0 marks them
+  UTC, which fires their morning push at ~3am local. Omit it instead: route
+  code gates on `readOptionalTzOffsetFromBody(body) !== null`.
+- **Windowed allowances never key on the request's `tz`** — they key on the
+  STORED zone (`webapp/lib/allowances.ts`), so moving your clock cannot open a
+  fresh daily bucket.
+
+The native/shared side is `shared/api-client/src/tz.ts`: `DATE_SCOPED_FAMILIES`
+lists every family that reads `tz`, and the offset is recomputed per request
+because DST moves it. That list drifts the moment a new route reads `tz`, so
+`webapp/tests/unit/tzFamilyParity.test.ts` scans `app/api` for the readers and
+fails when a family is missing from it. `admin` is the one deliberate exemption
+(coach-only; native never calls it).
+
 ## Frontend Patterns
 
 - **AuthGuard** component wraps protected routes
