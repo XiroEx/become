@@ -1,3 +1,5 @@
+> **Superseded on 2026-09-28** by [`PARITY_GAP_ANALYSIS.md`](./PARITY_GAP_ANALYSIS.md), the parity gap analysis audited against commit `82f8b4bc`. Most URLs below no longer exist; section 7 of that document folds this list in with the current routes and decisions. This file stays only until NP-116 retires it together with its format test (`expo/__tests__/gaps.test.ts`).
+
 # Native gap analysis
 
 Heavy editor surfaces stay web-only via Tier-3 "Edit in browser" deep links per
