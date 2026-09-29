@@ -1,4 +1,7 @@
-import { buildWorkoutSaveRequest } from "@/lib/live/workoutSave";
+import {
+  buildWorkoutSaveRequest,
+  newWorkoutAttemptId,
+} from "@/lib/live/workoutSave";
 import type { LiveWorkoutExercise, LiveGrid } from "@/components/live/LiveWorkoutClient";
 
 const exercises: LiveWorkoutExercise[] = [
@@ -107,6 +110,36 @@ describe("buildWorkoutSaveRequest", () => {
     });
   });
 
+  // The save has to be safe to send twice: the offline queue replays writes,
+  // and a completing save replayed after local midnight used to be logged as a
+  // second completed workout (the program day advanced twice and another
+  // schedule slot of the same label was marked done). The attempt id is what
+  // the server matches a replay by, so it has to travel on the payload.
+  it("carries the attempt id when the caller has one", () => {
+    const req = buildWorkoutSaveRequest({
+      programId: "p",
+      phase: 1,
+      day: "Day 1",
+      exercises: [{ slug: "bench", name: "Bench", sets: 1 }],
+      grid: { bench: [{ reps: 5, weight: 135, completed: true }] },
+      completed: true,
+      attemptId: "attempt-1",
+    });
+    expect(req.attemptId).toBe("attempt-1");
+  });
+
+  it("omits the attempt id entirely when there is none (server falls back to its window rules)", () => {
+    const req = buildWorkoutSaveRequest({
+      programId: "p",
+      phase: 1,
+      day: "Day 1",
+      exercises: [{ slug: "bench", name: "Bench", sets: 1 }],
+      grid: { bench: [{ reps: 5, weight: 135, completed: true }] },
+      completed: true,
+    });
+    expect(req).not.toHaveProperty("attemptId");
+  });
+
   it("omits duration/distance for plain strength sets", () => {
     const req = buildWorkoutSaveRequest({
       programId: "p",
@@ -118,5 +151,14 @@ describe("buildWorkoutSaveRequest", () => {
     });
     expect(req.exercises[0]!.sets[0]).not.toHaveProperty("duration");
     expect(req.exercises[0]!.sets[0]).not.toHaveProperty("distance");
+  });
+});
+
+describe("newWorkoutAttemptId", () => {
+  it("mints a distinct, non-empty id per attempt", () => {
+    const a = newWorkoutAttemptId();
+    const b = newWorkoutAttemptId();
+    expect(a.length).toBeGreaterThan(0);
+    expect(b).not.toBe(a);
   });
 });

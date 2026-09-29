@@ -84,8 +84,16 @@ export interface IWorkoutLog {
   needsName?: boolean
   // Client-generated id used to match-for-update a quick session across
   // incremental saves within the same live session (program logs use
-  // programId+day+today instead).
+  // `attemptId` below, falling back to programId+day+window).
   sessionId?: string
+  // Client-generated id for ONE attempt at a program day, sent on every save
+  // of that attempt (the program-workout analogue of `sessionId`). POST
+  // /api/workouts matches it BEFORE its date windows, so a save replayed from
+  // an offline queue — including after the member's local midnight, where no
+  // window matches any more — updates this log instead of inserting a second
+  // one and running the completion side effects twice. Absent on legacy logs
+  // and on saves from a client that sends no id.
+  attemptId?: string
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
@@ -362,6 +370,7 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   title: { type: String },
   needsName: { type: Boolean },
   sessionId: { type: String },
+  attemptId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
   skipped: { type: Boolean },

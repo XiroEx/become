@@ -25,6 +25,7 @@ import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
+import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
 import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
@@ -1142,6 +1143,11 @@ export default function LiveWorkoutPage() {
             ...(scheduledDate && { scheduledDate }),
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
             ...(logDateOverride && { performedAt: logDateOverride }),
+            // This attempt's id, on every save of it — quick sessions send
+            // `sessionId` for the same reason. It is what lets the server tell
+            // a REPLAY (a retry, or a queued write flushed after midnight)
+            // from a genuinely new workout, instead of logging it twice.
+            attemptId: workoutAttemptId(programId, workout.day),
             tz: new Date().getTimezoneOffset(),
           };
       const res = await fetch("/api/workouts", {
@@ -1161,6 +1167,10 @@ export default function LiveWorkoutPage() {
         invalidateMindSession();
         // Clear the draft — workout is done, no need to resume
         try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
+        // …and the attempt id with it: the next workout on this day label is a
+        // NEW attempt, and reusing this one's id would have the server read
+        // its first save as a replay of the workout just finished.
+        if (!isQuick) clearWorkoutAttemptId(programId, workout.day);
         clearPosition(isQuick && quickSessionId ? quickScope(quickSessionId) : programScope(programId, workout.day));
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
