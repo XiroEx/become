@@ -69,8 +69,15 @@ export function appRouteMap(
       continue;
     }
     // `+native-intent` is not a route (expo-router reads it as the link
-    // resolver), and `_stories` is a dev screen the router ignores.
-    if (base.startsWith("+") || base.startsWith("_")) continue;
+    // resolver, and its ignore list is exactly `+api`, `+html` and
+    // `+native-intent` — see `getIgnoreList` in
+    // `expo-router/build/getRoutesCore.js`).
+    //
+    // `_stories` IS a route, and that is the point: the leading underscore is a
+    // Next.js habit that buys nothing here, so the component gallery shipped
+    // reachable at `become://_stories`. It is in this map so a test can open it
+    // and watch it redirect (`__tests__/dev-only-routes.test.tsx`).
+    if (base.startsWith("+")) continue;
     map[key] = function StubRoute() {
       return <Text testID={`screen:${key}`}>{key}</Text>;
     };
