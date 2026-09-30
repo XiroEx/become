@@ -9,6 +9,8 @@ import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Toggle } from "@/components/Toggle";
+import { PermissionDeniedNotice } from "@/components/media/PermissionDeniedNotice";
+import { permissionDeniedMessage } from "@/lib/media/capture";
 import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -102,6 +104,24 @@ export function StoriesGallery() {
               Open bottom sheet
             </Button>
           </View>
+        </Card>
+
+        {/*
+          The one thing a member sees when they refuse the camera or their
+          photos (NP-059). It is here because it is the hardest state to reach
+          on purpose — you have to deny the permission first — and because a
+          sentence that has to be read under stress is worth looking at.
+        */}
+        <Card testID="card-media" title="Permission denied">
+          <PermissionDeniedNotice
+            testID="media-permission-denied"
+            denial={{
+              status: "permission-denied",
+              source: "camera",
+              canAskAgain: false,
+              message: permissionDeniedMessage("camera", false),
+            }}
+          />
         </Card>
       </ScrollView>
 

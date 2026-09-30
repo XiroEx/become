@@ -28,6 +28,15 @@ describe("StoriesScreen", () => {
     expect(getByTestId("card-toggle")).toBeTruthy();
     expect(getByTestId("card-badges")).toBeTruthy();
     expect(getByTestId("card-overlays")).toBeTruthy();
+    expect(getByTestId("card-media")).toBeTruthy();
+  });
+
+  it("shows the permission refusal with its way to Settings (NP-059)", () => {
+    const { getByTestId } = render(<StoriesScreen />);
+    expect(getByTestId("media-permission-denied-settings")).toBeTruthy();
+    expect(
+      String(getByTestId("media-permission-denied-message").props.children),
+    ).toMatch(/Settings/);
   });
 
   it("takes its surface from the system's scheme, both ways", () => {
