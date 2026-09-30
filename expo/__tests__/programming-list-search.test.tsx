@@ -27,7 +27,7 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { toProgramSummary } from "@/lib/programs/programSummary";
-import ProgrammingIndexRoute from "../app/(app)/(tabs)/programming/index";
+import ProgramsBrowseRoute from "../app/(app)/(tabs)/programming/browse";
 import ProgramsSearchRoute from "../app/(app)/(tabs)/programming/search";
 /* eslint-enable import/first */
 
@@ -69,7 +69,7 @@ describe("toProgramSummary", () => {
   });
 });
 
-describe("ProgrammingIndexRoute", () => {
+describe("ProgramsBrowseRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockPush.mockReset();
@@ -86,7 +86,7 @@ describe("ProgrammingIndexRoute", () => {
       { program_id: "p2", name: "Hypertrophy", description: "d2" },
     ]);
 
-    const { getByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId } = render(<ProgramsBrowseRoute />);
 
     await waitFor(() => {
       expect(callsTo("/api/programs").length).toBeGreaterThan(0);
@@ -110,9 +110,9 @@ describe("ProgrammingIndexRoute", () => {
   it("shows the loading skeleton while the fetch is in flight (not the empty state)", async () => {
     // Never-resolving fetch keeps the route in its initial-loading state.
     mockApiFetch.mockReturnValue(new Promise(() => {}));
-    const { getByTestId, queryByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId, queryByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
-      expect(getByTestId("programming-index-loading")).toBeTruthy();
+      expect(getByTestId("programming-browse-loading")).toBeTruthy();
     });
     // The "No programs yet" empty message must NOT show during loading.
     expect(queryByTestId("programs-list-empty")).toBeNull();
@@ -120,18 +120,18 @@ describe("ProgrammingIndexRoute", () => {
 
   it("renders the empty state when the catalog is empty", async () => {
     mockApiFetch.mockResolvedValue([]);
-    const { getByTestId, queryByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId, queryByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
       expect(getByTestId("programs-list-empty")).toBeTruthy();
     });
-    expect(queryByTestId("programming-index-loading")).toBeNull();
+    expect(queryByTestId("programming-browse-loading")).toBeNull();
   });
 
   it("surfaces an error when the fetch fails", async () => {
     mockApiFetch.mockRejectedValue(new Error("boom"));
-    const { getByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
-      expect(getByTestId("programming-index-error")).toBeTruthy();
+      expect(getByTestId("programming-browse-error")).toBeTruthy();
     });
   });
 
@@ -149,7 +149,7 @@ describe("ProgrammingIndexRoute", () => {
       ["programming-open-saved", "/(tabs)/programming/saved"],
       ["programming-open-calendar", "/(tabs)/calendar"],
     ])("%s pushes %s", async (testID, href) => {
-      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
       await waitFor(() => {
         expect(getByTestId(testID)).toBeTruthy();
       });
@@ -160,7 +160,7 @@ describe("ProgrammingIndexRoute", () => {
     });
 
     it("labels all three for a screen reader", async () => {
-      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
       await waitFor(() => {
         expect(getByTestId("programming-open-search")).toBeTruthy();
       });
@@ -180,9 +180,9 @@ describe("ProgrammingIndexRoute", () => {
       // failed programs fetch must not take Search, Saved and the calendar
       // with it.
       mockApiFetch.mockReturnValue(new Promise(() => {}));
-      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
       await waitFor(() => {
-        expect(getByTestId("programming-index-loading")).toBeTruthy();
+        expect(getByTestId("programming-browse-loading")).toBeTruthy();
       });
       expect(getByTestId("programming-open-search")).toBeTruthy();
       expect(getByTestId("programming-open-saved")).toBeTruthy();

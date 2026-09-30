@@ -20,7 +20,6 @@ export * from './schemas/streak';
 export * from './schemas/exercises';
 export * from './schemas/nutrition';
 export * from './schemas/chat';
-export * from './schemas/admin';
 export * from './schemas/checkin';
 export * from './schemas/dashboard';
 export * from './schemas/appConfig';

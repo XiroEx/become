@@ -7,6 +7,7 @@ const DIRECT_SCREENS = [
   "app/(auth)/login.tsx",
   "app/(auth)/verify.tsx",
   "app/(app)/(tabs)/programming/index.tsx",
+  "app/(app)/(tabs)/programming/browse.tsx",
   "app/(app)/(tabs)/programming/search.tsx",
   "app/(app)/(tabs)/programming/saved.tsx",
   "app/(app)/(tabs)/programming/[id]/index.tsx",
@@ -25,8 +26,6 @@ const DIRECT_SCREENS = [
   "app/(app)/(tabs)/calendar/settings.tsx",
   "app/(app)/(tabs)/profile/health.tsx",
   "app/(app)/settings.tsx",
-  "app/(app)/admin/foods/index.tsx",
-  "app/(app)/admin/exercises/index.tsx",
 ];
 
 // Routes that delegate the SafeAreaView responsibility to a component they

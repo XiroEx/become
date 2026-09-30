@@ -62,6 +62,7 @@ test('the allow-listed shapes are accepted, with a real id in the slot', () => {
     '/dashboard/programs/68f1b2c3d4e5f60718293a4b/edit',
     '/dashboard/recipes/new',
     '/dashboard/recipes/68f1b2c3d4e5f60718293a4b/edit',
+    '/dashboard/admin',
     '/dashboard/admin/foods/68f1b2c3d4e5f60718293a4b',
     '/dashboard/admin/exercises/new',
     '/dashboard/admin/exercises/barbell-back-squat/edit',
@@ -80,7 +81,6 @@ test('a path outside the allow-list is refused', () => {
   const refused = [
     // Not on the list.
     '/dashboard/settings',
-    '/dashboard/admin',
     '/dashboard/admin/users/abc/delete',
     '/login',
     '/',

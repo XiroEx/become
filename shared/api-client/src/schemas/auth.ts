@@ -206,6 +206,50 @@ export const AppleLinkEmailResponseSchema = z.object({
   message: z.string(),
 });
 
+// ---------------------------------------------------------------------------
+// The native sign-in hand-back (webapp/app/api/auth/exchange/route.ts, NP-126).
+//
+// Google refuses sign-in inside an embedded web view, so the app runs the web
+// flow in the SYSTEM authentication session. That flow cannot end by handing
+// the app a JWT — the only way a URL gets back into the app is a scheme any app
+// on the device could claim — so it ends with a one-time CODE, and the app
+// trades it here for the session, presenting the VERIFIER whose SHA-256 it sent
+// when it started the flow. A code alone is worthless; that is the point.
+//
+// Codes are single use and expire in 60 seconds, and every refusal is one 400
+// (`{ error: 'invalid_code' }`) so a caller cannot tell "no such code" from
+// "already spent" from "wrong verifier".
+// ---------------------------------------------------------------------------
+
+/** POST /api/auth/exchange request body. */
+export const AppAuthExchangeRequestSchema = z.object({
+  code: z.string(),
+  /** The value the challenge was made from. Never sent anywhere else. */
+  verifier: z.string(),
+});
+
+/** POST /api/auth/exchange 200 response — the same session shape verify-link
+ *  answers with, so the app stores it the same way. */
+export const AppAuthExchangeResponseSchema = z
+  .object({
+    token: z.string(),
+    user: z
+      .object({
+        id: z.string(),
+        name: z.string().optional().nullable(),
+        // Deliberately NOT `.email()`, for the reason AppleSignInResponse says:
+        // a row may carry an Apple relay alias or the server's placeholder, and
+        // a session must never be dropped over the shape of an address this
+        // client is only going to display.
+        email: z.string(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export type AppAuthExchangeRequest = z.infer<typeof AppAuthExchangeRequestSchema>;
+export type AppAuthExchangeResponse = z.infer<typeof AppAuthExchangeResponseSchema>;
+
 export type AppleFullName = z.infer<typeof AppleFullNameSchema>;
 export type AppleSignInRequest = z.infer<typeof AppleSignInRequestSchema>;
 export type AppleSignInResponse = z.infer<typeof AppleSignInResponseSchema>;
