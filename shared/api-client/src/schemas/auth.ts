@@ -106,6 +106,38 @@ export const VerifyLinkResponseSchema = z.object({
     .passthrough(),
 });
 
+// ---------------------------------------------------------------------------
+// The reviewer demo sign-in (webapp/app/api/auth/review-sign-in/route.ts).
+//
+// Become is passwordless, and an App Store / Play reviewer cannot read the
+// inbox a magic link lands in. ONE designated demo account signs in with a
+// fixed code from the runtime config, typed on the normal sign-in screen. The
+// code works for that account only, is rate limited (429 + Retry-After) and is
+// switchable off from config (404). See webapp/lib/reviewSignIn.ts.
+// ---------------------------------------------------------------------------
+
+/** POST /api/auth/review-sign-in request body. */
+export const ReviewSignInRequestSchema = z.object({
+  email: z.string().email(),
+  code: z.string(),
+});
+
+/** POST /api/auth/review-sign-in 200 response — the same shape verify-link
+ *  answers with, so the app stores the session the same way. */
+export const ReviewSignInResponseSchema = z.object({
+  token: z.string(),
+  user: z
+    .object({
+      id: z.string(),
+      name: z.string().optional().nullable(),
+      email: z.string().email(),
+    })
+    .passthrough(),
+});
+
+export type ReviewSignInRequest = z.infer<typeof ReviewSignInRequestSchema>;
+export type ReviewSignInResponse = z.infer<typeof ReviewSignInResponseSchema>;
+
 export type SendLinkRequest = z.infer<typeof SendLinkRequestSchema>;
 export type SendLinkResponse = z.infer<typeof SendLinkResponseSchema>;
 export type CheckSessionRequest = z.infer<typeof CheckSessionRequestSchema>;

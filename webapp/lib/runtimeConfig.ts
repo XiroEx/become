@@ -60,6 +60,21 @@ export interface RuntimeConfig {
     stripeMode: StripeMode
   }
   /**
+   * The reviewer demo sign-in (lib/reviewSignIn.ts).
+   *
+   * OFF unless `enabled` is explicitly true, and useless without both an email
+   * and a code — so an absent section means the door does not exist. It lives
+   * in the runtime payload rather than the container environment because it is
+   * a secret AND a switch someone may need to throw without a deploy; read it
+   * with `getRuntimeConfig({ maxAgeMs: REVIEW_CONFIG_MAX_AGE_MS })` so a flip
+   * lands on running instances.
+   */
+  review: {
+    enabled: boolean
+    email?: string
+    code?: string
+  }
+  /**
    * App version configuration for native minimum-version gating and store updates (NP-041).
    * Every field is resolved with optional(), so an unset value never breaks the app.
    */
@@ -88,6 +103,7 @@ type RuntimePayload = Partial<{
   admin: RuntimeConfig['admin']
   external: RuntimeConfig['external']
   billing: Partial<RuntimeConfig['billing']>
+  review: Partial<RuntimeConfig['review']>
   app: Partial<{
     ios: Partial<RuntimeConfig['app']['ios']>
     android: Partial<RuntimeConfig['app']['android']>
@@ -102,7 +118,10 @@ export class RuntimeConfigError extends Error {
 }
 
 let cachedConfig: RuntimeConfig | null = null
+/** When `cachedConfig` was resolved — only a maxAgeMs caller reads it. */
+let cachedAt = 0
 let inFlight: Promise<RuntimeConfig> | null = null
+let refreshInFlight: Promise<void> | null = null
 let secretsClient: SecretsClient | null = null
 let secretsMongoClient: MongoClient | null = null
 
@@ -246,6 +265,7 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
   const admin = payload.admin ?? {}
   const external = payload.external ?? {}
   const billing = payload.billing ?? {}
+  const review = payload.review ?? {}
   const app = payload.app ?? {}
   const appIos = app.ios ?? {}
   const appAndroid = app.android ?? {}
@@ -315,6 +335,13 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
         stripeSecretKey,
       ),
     },
+    review: {
+      // Default FALSE, and only an explicit true opens it: a door for app
+      // reviewers must never be open because a field was forgotten.
+      enabled: booleanValue(review.enabled, localEnv('REVIEW_SIGN_IN_ENABLED')) === true,
+      email: optional(review.email, localEnv('REVIEW_DEMO_EMAIL')),
+      code: optional(review.code, localEnv('REVIEW_DEMO_CODE')),
+    },
     app: {
       ios: {
         minVersion: optional(appIos.minVersion, localEnv('APP_IOS_MIN_VERSION'), localEnv('APP_MIN_VERSION')),
@@ -334,12 +361,55 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
   return buildConfig(await readRuntimePayload())
 }
 
-export async function getRuntimeConfig(): Promise<RuntimeConfig> {
-  if (cachedConfig) return cachedConfig
+export interface GetRuntimeConfigOptions {
+  /**
+   * Re-resolve from the secret store when the cached value is older than this.
+   *
+   * OMITTED IS THE DEFAULT AND MEANS "FOREVER", which is right for a database
+   * URI or a signing key: those do not change under a running process, and a
+   * read per request would put redsecrets on the hot path of every route.
+   *
+   * It is wrong for a KILL SWITCH. The reviewer demo sign-in has to be
+   * closeable from config without a deploy and without a restart, so that
+   * route asks for a value no older than REVIEW_CONFIG_MAX_AGE_MS. A refresh
+   * that fails keeps the cached config — a secret store that is briefly
+   * unreachable must not take the app down.
+   */
+  maxAgeMs?: number
+}
+
+export async function getRuntimeConfig(
+  options?: GetRuntimeConfigOptions,
+): Promise<RuntimeConfig> {
+  if (cachedConfig) {
+    const maxAgeMs = options?.maxAgeMs
+    const isStale = typeof maxAgeMs === 'number'
+      && maxAgeMs >= 0
+      && Date.now() - cachedAt > maxAgeMs
+    if (!isStale) return cachedConfig
+    if (!refreshInFlight) {
+      refreshInFlight = resolveRuntimeConfig()
+        .then((config) => {
+          cachedConfig = config
+          cachedAt = Date.now()
+        })
+        .catch((err) => {
+          // Keep serving the cached value, but do not retry on every call.
+          cachedAt = Date.now()
+          console.error('[Become runtime config] refresh failed; keeping the cached value', err)
+        })
+        .finally(() => {
+          refreshInFlight = null
+        })
+    }
+    await refreshInFlight
+    return cachedConfig
+  }
   if (!inFlight) {
     inFlight = resolveRuntimeConfig()
       .then((config) => {
         cachedConfig = config
+        cachedAt = Date.now()
         return config
       })
       .finally(() => {
@@ -363,7 +433,9 @@ export function requireRuntimeSecret(value: string | undefined, name: string): s
 
 export function __resetRuntimeConfigForTests(): void {
   cachedConfig = null
+  cachedAt = 0
   inFlight = null
+  refreshInFlight = null
   secretsClient = null
   secretsMongoClient = null
 }
