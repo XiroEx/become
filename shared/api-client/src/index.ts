@@ -21,6 +21,7 @@ export * from './schemas/exercises';
 export * from './schemas/nutrition';
 export * from './schemas/chat';
 export * from './schemas/admin';
+export * from './schemas/checkin';
 export * from './schemas/dashboard';
 
 // `./errors` and `./schemas/consent` both name the AI-consent shapes: the

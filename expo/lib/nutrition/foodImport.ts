@@ -16,8 +16,8 @@
  * search row we already hold is re-imported as `{ source: 'manual', data }`.
  */
 
-import { apiFetch, FoodDetailResponseSchema } from "@become/api-client";
-import type { FoodDetailFood } from "@become/api-client";
+import { apiFetch, FoodImportResponseSchema } from "@become/api-client";
+import type { Food } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 
@@ -123,12 +123,12 @@ export async function importExternalFood({
   ref,
   fallback,
   getToken,
-}: ImportExternalFoodOptions): Promise<FoodDetailFood> {
+}: ImportExternalFoodOptions): Promise<Food> {
   const base = { baseUrl: WEBAPP_BASE_URL, getToken };
   try {
     const res = await apiFetch(
       "/api/nutrition/foods/import",
-      FoodDetailResponseSchema,
+      FoodImportResponseSchema,
       { method: "POST", body: { source: ref.source, externalId: ref.externalId }, ...base },
     );
     return res.food;
@@ -137,7 +137,7 @@ export async function importExternalFood({
   }
   const res = await apiFetch(
     "/api/nutrition/foods/import",
-    FoodDetailResponseSchema,
+    FoodImportResponseSchema,
     { method: "POST", body: { source: "manual", data: fallback }, ...base },
   );
   return res.food;
