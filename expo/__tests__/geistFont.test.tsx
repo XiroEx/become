@@ -31,7 +31,7 @@ import { render } from "@testing-library/react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
-import { DayTotals } from "@/components/nutrition/DayTotals";
+import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { StreakBanner } from "@/components/StreakBanner";
 import {
   GEIST_FACES,
@@ -407,20 +407,12 @@ describe("the same families as the web", () => {
     expect(statTile).not.toContain("font-mono");
 
     const totals = render(
-      <DayTotals
-        date="2026-09-29"
-        entries={[
-          {
-            id: "e1",
-            date: "2026-09-29",
-            mealType: "breakfast",
-            foodName: "Oats",
-            kcal: 320,
-            protein: 12,
-            carbs: 54,
-            fat: 6,
-          },
-        ]}
+      <CalorieRing
+        consumed={320}
+        goal={2000}
+        protein={{ current: 12, goal: 150 }}
+        carbs={{ current: 54, goal: 200 }}
+        fats={{ current: 6, goal: 65 }}
       />,
     );
     expect(styleOf(totals.getByTestId("day-totals-kcal")).fontFamily).toBe(

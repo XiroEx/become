@@ -216,12 +216,6 @@ describe("detail screens push inside their tab", () => {
       to: "/(tabs)/nutrition/recipes/r1",
       detail: "(app)/(tabs)/nutrition/recipes/[id]",
     },
-    {
-      tab: "Nutrition",
-      from: "/(tabs)/nutrition",
-      to: "/(tabs)/nutrition/log/2026-09-29",
-      detail: "(app)/(tabs)/nutrition/log/[date]",
-    },
   ];
 
   it.each(cases)(

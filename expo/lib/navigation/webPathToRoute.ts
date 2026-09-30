@@ -378,11 +378,9 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   if (section === "nutrition") {
     const sub = lower(segments[2]);
     if (!sub) {
-      const date = params.date;
-      // The web's day is a query param on one page; native has a day route.
-      return isDateKey(date)
-        ? native(`${NATIVE_ROUTES.nutrition}/log/${date}`, omit(params, "date"), "exact")
-        : native(NATIVE_ROUTES.nutrition, params, "exact");
+      // The web's day is a query param on one page (/dashboard/nutrition?date=...)
+      // Registered here (NP-034/NP-091) so pushes and widgets open this screen.
+      return native(NATIVE_ROUTES.nutrition, params, "exact");
     }
     if (sub === "recipes") return native(NATIVE_ROUTES.recipes, params, "exact");
     // goals, meal-schedule, scans — nothing native yet (NP-091 and friends).
@@ -503,17 +501,3 @@ function matchWorkout(
   return native(pathname, params, "exact");
 }
 
-function isDateKey(value: string | undefined): value is string {
-  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function omit(
-  params: Record<string, string>,
-  key: string,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (k !== key) out[k] = v;
-  }
-  return out;
-}
