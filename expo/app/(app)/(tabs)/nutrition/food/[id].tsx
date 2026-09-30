@@ -9,7 +9,7 @@ import {
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FoodDetailResponseSchema } from "@become/api-client";
-import type { FoodDetailFood } from "@become/api-client";
+import type { Food } from "@become/api-client";
 import { ServingPicker } from "@/components/nutrition/ServingPicker";
 import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -64,7 +64,7 @@ export default function FoodDetailRoute() {
     },
   );
 
-  const [importedFood, setImportedFood] = useState<FoodDetailFood | null>(null);
+  const [importedFood, setImportedFood] = useState<Food | null>(null);
   const [importFailed, setImportFailed] = useState<boolean>(false);
 
   useEffect(() => {
