@@ -161,6 +161,11 @@
       "types": "./dist/types/mind/*.d.ts",
       "import": "./dist/esm/mind/*.js",
       "require": "./dist/cjs/mind/*.js"
+    },
+    "./training": {
+      "types": "./dist/types/training/index.d.ts",
+      "import": "./dist/esm/training/index.js",
+      "require": "./dist/cjs/training/index.js"
     }
   },
   "files": [

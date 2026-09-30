@@ -4,14 +4,47 @@ import { Check } from "lucide-react-native";
 import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
-  type BellStyle,
-  totalWeightHelper,
-  weightLabel,
-} from "@/lib/live/bellStyle";
-import {
-  setInputsForTrackingType,
-  type SetInputs,
-} from "@/lib/live/trackingInputs";
+  bellWeightLabel,
+  isFloorsExercise,
+  normalizeTracking,
+  tracksTime,
+  type BellWeightInfo,
+} from "@become/core";
+
+/** A set with nothing in it — no bell, no total hint. */
+export const NO_BELL: BellWeightInfo = { style: null, showTotal: false };
+
+export interface SetInputs {
+  weight: boolean;
+  reps: boolean;
+  duration: boolean;
+  distance: boolean;
+}
+
+/**
+ * Which per-set inputs this exercise asks for.
+ *
+ * This used to be `lib/live/trackingInputs.ts`, which matched trackingType by
+ * SUBSTRING against a vocabulary the web does not use ("weight_reps",
+ * "reps") — so a `reps_bodyweight` exercise got a weight box and a `none`
+ * exercise got weight and reps. The rules below are the web live screen's,
+ * read off the ONE normalizer both apps now share
+ * (`normalizeTracking`, `@become/core` ← webapp/lib/workout/tracking.ts):
+ * see webapp/app/dashboard/workout/[programId]/workout/live/
+ * LiveWorkoutClient.tsx, `showWeightInput` … `tracking === "time_distance"`.
+ *
+ * The web also offers a speed input and a sec/min toggle for cardio; those are
+ * NP-080's UI, not this card's logic.
+ */
+export function setInputsFor(trackingType?: string | null): SetInputs {
+  const t = normalizeTracking(trackingType);
+  return {
+    weight: t === "reps_weight",
+    reps: t === "reps_weight" || t === "reps_bodyweight" || t === "reps_only",
+    duration: tracksTime(t),
+    distance: t === "time_distance",
+  };
+}
 
 export interface LiveSetState {
   reps: number | null;
@@ -25,7 +58,13 @@ export interface LiveSetState {
 
 export interface LiveSetRowProps {
   setIndex: number;
-  bellStyle: BellStyle;
+  /**
+   * What this exercise is loaded with, from `getBellWeightInfo` — the web's
+   * equipment-first rule, not a guess at the name. Defaults to {@link NO_BELL}.
+   */
+  bell?: BellWeightInfo;
+  /** The exercise's displayed name, for the Floors-vs-metres distance label. */
+  exerciseName?: string;
   state: LiveSetState;
   /** Last completed performance of this set (prefill source). */
   prefill?: LiveSetState | null;
@@ -44,7 +83,8 @@ function parseNum(text: string): number | null {
 
 export function LiveSetRow({
   setIndex,
-  bellStyle,
+  bell = NO_BELL,
+  exerciseName,
   state,
   prefill,
   trackingType,
@@ -53,8 +93,16 @@ export function LiveSetRow({
 }: LiveSetRowProps) {
   const { colors } = useThemeTokens();
   const tid = testID ?? `live-set-${setIndex}`;
-  const inputs: SetInputs = setInputsForTrackingType(trackingType);
-  const helper = totalWeightHelper(bellStyle, state.weight ?? prefill?.weight);
+  const inputs: SetInputs = setInputsFor(trackingType);
+  // The web's rule, verbatim: the doubled total is shown when the implement is
+  // one of a loaded PAIR and a positive weight has been entered. A goblet
+  // squat, a carry and any single-arm dumbbell work are one implement, so
+  // `showTotal` is false for them and no total is claimed.
+  const perBell = state.weight ?? prefill?.weight;
+  const helper =
+    bell.showTotal && typeof perBell === "number" && Number.isFinite(perBell) && perBell > 0
+      ? `= ${perBell * 2} lbs total`
+      : null;
 
   return (
     <View
@@ -71,7 +119,7 @@ export function LiveSetRow({
         <View style={{ flex: 1 }}>
           <Input
             testID={`${tid}-weight`}
-            label={weightLabel(bellStyle)}
+            label={bellWeightLabel(bell.style)}
             keyboardType="decimal-pad"
             value={state.weight !== null ? String(state.weight) : ""}
             onChangeText={(text) =>
@@ -141,7 +189,7 @@ export function LiveSetRow({
         <View style={{ flex: 1 }}>
           <Input
             testID={`${tid}-distance`}
-            label="Dist (m)"
+            label={isFloorsExercise(exerciseName) ? "Floors" : "Dist (m)"}
             keyboardType="decimal-pad"
             value={
               state.distance !== null && state.distance !== undefined
