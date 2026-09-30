@@ -1259,6 +1259,43 @@ kind could be produced. Metro's only route to it is the `file:` link in
 `shared/api-client` stays a plain sibling package: the webapp keeps importing it
 through its own tsconfig path exactly as before.
 
+#### The contract test: what the native app is actually sent (NP-016)
+
+`webapp/tests/unit/contract/` calls the REAL route handlers against the
+loopback test database with signed tokens and parses every response with the
+schema `shared/api-client` exports, imported **by relative path**. It exists
+because nothing failed when the web changed a response: about 680 webapp
+commits have landed since 2026-05-31 against 4 in `expo/` and `shared/`, and
+`shared/api-client/tests/schemas.test.ts` parses hand-written fixtures, which
+agree with the schema by construction and say nothing about what a route
+returns.
+
+Four things about it:
+
+- **It lives in `verify`, the job that always runs**, because that is where web
+  changes are. A failing contract test blocks the web PR, and the fix is to
+  update the shared schema IN THAT PR — never to loosen it to `z.unknown()`.
+- **"It parses" is not the test.** Every response schema is `.passthrough()` so
+  a shipped store build survives a server that grew a field — and that same
+  tolerance is what lets a RENAMED field sail through `schema.parse()` as an
+  unknown extra while the field the app reads is gone. `assertContract` also
+  fails on any key the response carries that the schema does not declare, at
+  every depth, and on any key the native app reads that the response no longer
+  carries.
+- **Tests may import `shared/api-client`; app code may not.** `webapp/Dockerfile`
+  builds with the build context set to `webapp/` (`COPY . .`), so `../shared`
+  is not in the image and an import from a route would typecheck on a dev box
+  and fail the production build. That is why `webapp/lib/sharedApiTypes.ts` is
+  still a hand copy — of the auth shapes only; `zod` is now DECLARED in
+  `webapp/package.json` for it instead of being borrowed from a hoisted
+  transitive copy, and `tests/unit/contract/sharedApiTypes.test.ts` compares it
+  with `shared/api-client` key for key, so the two cannot disagree in silence.
+- **The route list is a manifest, and it is checked.**
+  `np015Routes.test.ts` declares the 24 routes NP-015's schemas describe and
+  fails if one of them was never called, so a manifest entry cannot pass for
+  coverage. A domain ticket (NP-018 … NP-024, NP-037, NP-202) adds its own file
+  with its own manifest; the recipe is in `tests/unit/contract/_contract.ts`.
+
 ### Information security program (go-live item 17)
 
 **`SECURITY_PROGRAM.md` at the repo root is the written information security
