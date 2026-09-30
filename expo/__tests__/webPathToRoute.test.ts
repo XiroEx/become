@@ -212,7 +212,7 @@ describe("the table", () => {
     ["/dashboard/calendar/settings", "/(tabs)/calendar/settings", "exact"],
     // Nutrition
     ["/dashboard/nutrition", "/(tabs)/nutrition", "exact"],
-    ["/dashboard/nutrition?date=2026-09-29", "/(tabs)/nutrition/log/2026-09-29", "exact"],
+    ["/dashboard/nutrition?date=2026-09-29", "/(tabs)/nutrition?date=2026-09-29", "exact"],
     ["/dashboard/nutrition/goals", "/(tabs)/nutrition", "nearest"],
     ["/dashboard/nutrition/recipes", "/(tabs)/nutrition/recipes", "exact"],
     ["/dashboard/recipes/r1", "/(tabs)/nutrition/recipes/r1", "exact"],
