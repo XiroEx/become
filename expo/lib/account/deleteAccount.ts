@@ -21,6 +21,7 @@
 
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { isBecomeWebHost } from "@/lib/navigation/webPathToRoute";
+import { DELETE_CONFIRMATION as _DC, RESTORE_WINDOW_DAYS as _RWD } from "@become/core";
 
 /**
  * What the server requires in the body before it will schedule a deletion.

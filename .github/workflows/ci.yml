@@ -7,14 +7,15 @@ name: CI
 # This does NOT gate the deploy — RedRun builds on merge to main and does not
 # consult GitHub. It tells you a merge broke something; it cannot stop it. To
 # actually block a bad merge, turn on a branch protection rule requiring these
-# checks (`verify`, `expo`, `shared-api-client`) on `main` and `beta`.
+# checks (`verify`, `expo`, `shared-api-client`, `shared-core`) on `main` and `beta`.
 #
-# Three jobs, because the repo is three packages with three lockfiles:
+# Four jobs, because the repo is four packages with four lockfiles:
 #   verify            — webapp/ (always; it is what ships to production)
 #   expo              — expo/ (only when expo/ or shared/ changed)
 #   shared-api-client — shared/api-client/ (same condition)
+#   shared-core       — shared/core/ (same condition)
 #
-# `expo` and `shared-api-client` are gated by the `changes` job below rather
+# `expo`, `shared-api-client` and `shared-core` are gated by the `changes` job below rather
 # than a workflow-level `paths:` filter, because a workflow that is filtered
 # out never reports at all and a REQUIRED check that never reports blocks the
 # merge forever. A job skipped by `if:` reports as skipped, which branch
@@ -128,6 +129,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Install and build shared/core
+        working-directory: shared/core
+        run: |
+          npm ci
+          npm run build
+
       # The webapp's tsconfig reaches into ../shared/api-client, which is its own
       # package with its own lockfile. Locally that typechecks only because those
       # modules already sit on the machine; a clean checkout has nothing there and
@@ -204,6 +211,12 @@ jobs:
         working-directory: shared/api-client
         run: npm ci
 
+      - name: Install and build shared/core
+        working-directory: shared/core
+        run: |
+          npm ci
+          npm run build
+
       - run: npm ci
 
       # Each step is named so a failure names itself, and each one fails the job:
@@ -270,3 +283,34 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+  # The shared pure logic. TypeScript sources built into ESM/CJS and .d.ts,
+  # imported by both webapp and expo.
+  shared-core:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: shared/core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: shared/core/package-lock.json
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck

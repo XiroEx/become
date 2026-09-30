@@ -1,0 +1,106 @@
+{
+  "name": "@become/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    },
+    "./bodyUnits": {
+      "types": "./dist/types/bodyUnits.d.ts",
+      "import": "./dist/esm/bodyUnits.js",
+      "require": "./dist/cjs/bodyUnits.js"
+    },
+    "./goals/pace": {
+      "types": "./dist/types/goals/pace.d.ts",
+      "import": "./dist/esm/goals/pace.js",
+      "require": "./dist/cjs/goals/pace.js"
+    },
+    "./goals/status": {
+      "types": "./dist/types/goals/status.d.ts",
+      "import": "./dist/esm/goals/status.js",
+      "require": "./dist/cjs/goals/status.js"
+    },
+    "./nutrition/tdee": {
+      "types": "./dist/types/nutrition/tdee.d.ts",
+      "import": "./dist/esm/nutrition/tdee.js",
+      "require": "./dist/cjs/nutrition/tdee.js"
+    },
+    "./entitlements": {
+      "types": "./dist/types/entitlements.d.ts",
+      "import": "./dist/esm/entitlements.js",
+      "require": "./dist/cjs/entitlements.js"
+    },
+    "./legal": {
+      "types": "./dist/types/legal/index.d.ts",
+      "import": "./dist/esm/legal/index.js",
+      "require": "./dist/cjs/legal/index.js"
+    },
+    "./legal/terms": {
+      "types": "./dist/types/legal/terms.d.ts",
+      "import": "./dist/esm/legal/terms.js",
+      "require": "./dist/cjs/legal/terms.js"
+    },
+    "./legal/privacy": {
+      "types": "./dist/types/legal/privacy.d.ts",
+      "import": "./dist/esm/legal/privacy.js",
+      "require": "./dist/cjs/legal/privacy.js"
+    },
+    "./legal/healthData": {
+      "types": "./dist/types/legal/healthData.d.ts",
+      "import": "./dist/esm/legal/healthData.js",
+      "require": "./dist/cjs/legal/healthData.js"
+    },
+    "./legal/support": {
+      "types": "./dist/types/legal/support.d.ts",
+      "import": "./dist/esm/legal/support.js",
+      "require": "./dist/cjs/legal/support.js"
+    },
+    "./legal/deleteAccount": {
+      "types": "./dist/types/legal/deleteAccount.d.ts",
+      "import": "./dist/esm/legal/deleteAccount.js",
+      "require": "./dist/cjs/legal/deleteAccount.js"
+    },
+    "./planCopy": {
+      "types": "./dist/types/planCopy.d.ts",
+      "import": "./dist/esm/planCopy.js",
+      "require": "./dist/cjs/planCopy.js"
+    },
+    "./accountDeletion": {
+      "types": "./dist/types/accountDeletion.d.ts",
+      "import": "./dist/esm/accountDeletion.js",
+      "require": "./dist/cjs/accountDeletion.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.redbtn.io/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XiroEx/become.git",
+    "directory": "shared/core"
+  },
+  "scripts": {
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node -e \"fs.writeFileSync('dist/cjs/package.json', JSON.stringify({type: 'commonjs'}))\"",
+    "build": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\" && npm run build:esm && npm run build:cjs",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.2"
+  }
+}

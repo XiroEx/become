@@ -94,6 +94,12 @@ describe("package.json", () => {
     );
   });
 
+  it("links @become/core into node_modules", () => {
+    expect(pkg.dependencies?.["@become/core"]).toBe(
+      "file:../shared/core",
+    );
+  });
+
   it("declares zod itself, because the app bundles exactly one copy of it", () => {
     expect(pkg.dependencies?.zod).toBeTruthy();
   });

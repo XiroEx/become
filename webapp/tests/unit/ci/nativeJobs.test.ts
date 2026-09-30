@@ -63,7 +63,7 @@ function executable(job: string): string {
 // ── The jobs exist ───────────────────────────────────────────────────────────
 
 test('ci.yml has a webapp job, an expo job and a shared-api-client job', () => {
-  for (const name of ['verify', 'expo', 'shared-api-client', 'changes']) {
+  for (const name of ['verify', 'expo', 'shared-api-client', 'shared-core', 'changes']) {
     assert.ok(JOBS[name] !== undefined, `ci.yml has no \`${name}\` job`)
   }
 })
@@ -86,7 +86,7 @@ test('no workflow-level paths: filter — a filtered-out run never reports at al
 // ── They run for the PRs that need them ──────────────────────────────────────
 
 test('both native jobs are gated on the changes job, not on nothing', () => {
-  for (const name of ['expo', 'shared-api-client']) {
+  for (const name of ['expo', 'shared-api-client', 'shared-core']) {
     assert.match(JOBS[name], /needs: changes/, `\`${name}\` must depend on \`changes\``)
     assert.match(
       JOBS[name],
@@ -154,6 +154,11 @@ test('the native app links the shared client as a dependency, not only as a tsco
     'file:../shared/api-client',
     'expo/package.json must link the shared client for Metro to resolve it',
   )
+  assert.equal(
+    expo.dependencies?.['@become/core'],
+    'file:../shared/core',
+    'expo/package.json must link @become/core for Metro to resolve it',
+  )
 
   // `npm ci` refuses to run when the lockfile does not describe package.json,
   // which would take the whole expo job down before it reached the bundle step.
@@ -163,6 +168,10 @@ test('the native app links the shared client as a dependency, not only as a tsco
   const linked = lock.packages?.['node_modules/@become/api-client']
   assert.ok(linked?.link, 'expo/package-lock.json must carry the @become/api-client link')
   assert.equal(linked?.resolved, '../shared/api-client')
+
+  const coreLinked = lock.packages?.['node_modules/@become/core']
+  assert.ok(coreLinked?.link, 'expo/package-lock.json must carry the @become/core link')
+  assert.equal(coreLinked?.resolved, '../shared/core')
 })
 
 test('the shared-api-client job runs its own tests and typecheck on its own lockfile', () => {
@@ -175,12 +184,28 @@ test('the shared-api-client job runs its own tests and typecheck on its own lock
   assert.match(job, /run: npx tsc --noEmit/)
 })
 
+test('the shared-core job runs its build, tests and typecheck on its own lockfile', () => {
+  const job = executable(JOBS['shared-core'])
+  assert.match(job, /working-directory: shared\/core/)
+  assert.match(job, /node-version: 22/)
+  assert.match(job, /cache-dependency-path: shared\/core\/package-lock\.json/)
+  assert.match(job, /run: npm ci/)
+  assert.match(job, /run: npm run build/)
+  assert.match(job, /run: npm test/)
+  assert.match(job, /run: npm run typecheck/)
+})
+
 test('the scripts the jobs call exist in the packages they call them in', () => {
   const shared = readJson('shared/api-client/package.json')
   assert.ok(shared.scripts?.test, 'shared/api-client has no `test` script')
+  const core = readJson('shared/core/package.json')
+  assert.ok(core.scripts?.build, 'shared/core has no `build` script')
+  assert.ok(core.scripts?.test, 'shared/core has no `test` script')
+  assert.ok(core.scripts?.typecheck, 'shared/core has no `typecheck` script')
   for (const rel of [
     'expo/package-lock.json',
     'shared/api-client/package-lock.json',
+    'shared/core/package-lock.json',
   ]) {
     assert.ok(fs.existsSync(path.join(REPO, rel)), `${rel} is missing`)
   }
@@ -189,7 +214,7 @@ test('the scripts the jobs call exist in the packages they call them in', () => 
 // ── A failure has to fail the check ──────────────────────────────────────────
 
 test('no native step swallows its own failure', () => {
-  for (const name of ['expo', 'shared-api-client']) {
+  for (const name of ['expo', 'shared-api-client', 'shared-core']) {
     // Comments may discuss it; the job itself may not do it.
     const job = executable(JOBS[name])
     assert.ok(
@@ -200,6 +225,7 @@ test('no native step swallows its own failure', () => {
   }
   assert.match(JOBS['expo'], /timeout-minutes: \d+/)
   assert.match(JOBS['shared-api-client'], /timeout-minutes: \d+/)
+  assert.match(JOBS['shared-core'], /timeout-minutes: \d+/)
 })
 
 // ── Neither native job needs the private registry ────────────────────────────
@@ -209,7 +235,7 @@ test('expo/ and shared/api-client have no @redbtn/* dependency, so no npmrc step
   // on packages that live on a private Verdaccio. These two do not, and the
   // jobs are written on that assumption — if a `@redbtn/*` dependency ever
   // lands here, the install 401s and this test says why before CI does.
-  for (const rel of ['expo/package.json', 'shared/api-client/package.json']) {
+  for (const rel of ['expo/package.json', 'shared/api-client/package.json', 'shared/core/package.json']) {
     const pkg = readJson(rel)
     const names = [
       ...Object.keys(pkg.dependencies ?? {}),
@@ -219,7 +245,7 @@ test('expo/ and shared/api-client have no @redbtn/* dependency, so no npmrc step
     assert.deepEqual(priv, [], `${rel} depends on ${priv.join(', ')} — the job needs an npmrc step`)
   }
 
-  for (const name of ['expo', 'shared-api-client']) {
+  for (const name of ['expo', 'shared-api-client', 'shared-core']) {
     assert.ok(
       !/BECOME_NPMRC/.test(JOBS[name]),
       `\`${name}\` should not need the private registry`,

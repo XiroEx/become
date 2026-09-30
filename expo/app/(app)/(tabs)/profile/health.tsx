@@ -10,6 +10,7 @@ import {
   type LogWeightResponse,
   type WeightPostRequest,
 } from "@become/api-client";
+import { displayWeight, toKg, roundWeight } from "@become/core";
 import { useRouter } from "expo-router";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";

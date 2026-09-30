@@ -23,10 +23,10 @@ import {
 import { getToken } from '@/lib/clientAuth'
 import { isFallbackName } from '@/lib/displayName'
 import ConsentGate from '@/components/ConsentGate'
-import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@become/core'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
 import PacePicker from '@/components/goals/PacePicker'
-import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
+import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@become/core'
 import {
   explainCalories,
   explainMacro,
@@ -51,7 +51,7 @@ import {
   type NutritionDirection,
   type ActivityLevel,
   type MacroPreset,
-} from '@/lib/nutrition/tdee'
+} from '@become/core'
 import type { FitnessGoal, ExperienceLevel, EquipmentType } from '@/lib/programMatch'
 import {
   lbsToKg,
@@ -60,7 +60,7 @@ import {
   displayWeight,
   roundWeight,
   roundHeightCm,
-} from '@/lib/bodyUnits'
+} from '@become/core'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

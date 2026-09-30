@@ -1225,23 +1225,24 @@ hardware facts, and they are `ACCESSIBILITY.md`'s device checklist, which
 walk because it does not exist** (NP-050/NP-053); the suite fails the day a route
 with "plan" in its name appears, which is the reminder to add it.
 
-### CI runs three packages, not one
+### CI runs four packages, not one
 
-`.github/workflows/ci.yml` has three jobs, because the repo is three packages
-with three lockfiles:
+`.github/workflows/ci.yml` has four jobs, because the repo is four packages
+with four lockfiles:
 
 | Job | Package | Runs |
 |---|---|---|
 | `verify` | `webapp/` | typecheck, unit tests (real Mongo service), production build |
 | `expo` | `expo/` | `tsc --noEmit`, `eslint .`, `jest --ci`, `expo install --check`, `expo export --platform ios` |
 | `shared-api-client` | `shared/api-client/` | `npm test`, `tsc --noEmit` |
+| `shared-core` | `shared/core/` | `npm run build`, `npm test`, `npm run typecheck` |
 
-`expo` and `shared-api-client` run only when `expo/`, `shared/` or `ci.yml`
+`expo`, `shared-api-client` and `shared-core` run only when `expo/`, `shared/` or `ci.yml`
 itself changed, and they are gated by the `changes` job's `if:` rather than a
 workflow-level `paths:` filter **on purpose**: a filtered-out workflow never
 reports, and a REQUIRED check that never reports blocks the merge forever. A job
 skipped by `if:` reports as skipped, which branch protection accepts. Neither
-native job writes an `.npmrc`: `expo/` and `shared/api-client/` have no
+native job writes an `.npmrc`: `expo/`, `shared/api-client/` and `shared/core/` have no
 `@redbtn/*` dependency, so the public registry is enough —
 `webapp/tests/unit/ci/nativeJobs.test.ts` fails if one ever lands there, and it
 lives in the webapp suite because that is the job that always runs, so deleting
@@ -1258,6 +1259,13 @@ kind could be produced. Metro's only route to it is the `file:` link in
 ("The shared API client") and asserted by `expo/__tests__/metroConfig.test.ts`.
 `shared/api-client` stays a plain sibling package: the webapp keeps importing it
 through its own tsconfig path exactly as before.
+
+#### The shared pure logic package: @become/core (NP-017)
+
+`shared/core/` (`@become/core`) contains pure business logic, calculations, and domain constants shared between `webapp/` and `expo/` without React or Node-only dependencies. It compiles to dual ESM/CJS and `.d.ts`. Seeded modules include `bodyUnits`, `goals/pace`, `goals/status`, `nutrition/tdee`, `entitlements` (tier model, limits, gate copy, 403 parser), `legal`, `planCopy` (`PLAN_PRICING`, `ANNUAL_SAVING_LINE`), and pure account deletion logic.
+- Both `webapp/` and `expo/` import from `@become/core`.
+- In `webapp/`, `lib/` files re-export from `@become/core` for backwards compatibility, and app routes/pages import directly from `@become/core`.
+- In `expo/`, `@become/core` is linked as a `file:../shared/core` dependency in `expo/package.json` and resolved cleanly by Metro bundler.
 
 #### The contract test: what the native app is actually sent (NP-016)
 

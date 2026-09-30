@@ -25,15 +25,15 @@ const read = (rel: string): string => {
   return fs.readFileSync(url, 'utf8');
 };
 
-test('AI_CONSENT_REASON is the literal webapp/lib/legal sends', () => {
-  const legal = read('webapp/lib/legal/index.ts');
+test('AI_CONSENT_REASON is the literal shared/core/src/legal sends', () => {
+  const legal = read('shared/core/src/legal/index.ts');
   const match = /AI_CONSENT_REASON\s*=\s*'([^']+)'/.exec(legal);
-  assert.ok(match, 'webapp/lib/legal no longer declares AI_CONSENT_REASON');
+  assert.ok(match, 'shared/core/src/legal no longer declares AI_CONSENT_REASON');
   assert.equal(AI_CONSENT_REASON, match[1]);
 });
 
 test('the gate parser still requires both `feature` and `requiresTier`, as gateFrom does', () => {
-  const client = read('webapp/lib/entitlementsClient.ts');
+  const client = read('shared/core/src/entitlements.ts');
   const gateFrom = client.slice(client.indexOf('export function gateFrom'));
   assert.match(gateFrom, /status !== 403/);
   assert.match(gateFrom, /typeof b\.error !== 'string' \|\| !b\.error/);

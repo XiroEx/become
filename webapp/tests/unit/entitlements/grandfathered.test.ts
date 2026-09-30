@@ -65,7 +65,8 @@ test('an impossible row is logged rather than quietly gated as free', () => {
 })
 
 test('the client type says what the field means', () => {
-  const src = read('lib/entitlementsClient.ts')
+  const coreEntitlements = path.join(ROOT, '../shared/core/src/entitlements.ts')
+  const src = fs.existsSync(coreEntitlements) ? fs.readFileSync(coreEntitlements, 'utf8') : read('lib/entitlementsClient.ts')
   const at = src.indexOf('grandfathered: boolean')
   assert.ok(at > 0)
   const doc = src.slice(Math.max(0, at - 400), at)
