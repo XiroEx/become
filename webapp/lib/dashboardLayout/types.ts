@@ -6,10 +6,12 @@
 // the shared auth schemas under a contract test; nothing else here uses it.)
 // Following the existing webapp pattern (see
 // lib/dashboardTiles/validatePinnedTiles.ts), this module hand-rolls the same
-// shape + validators that `@become/api-client`'s
-// `schemas/dashboard.ts` describes with zod. Keep the two in sync — they
-// describe the same persisted/wire shape used by GET/PATCH /api/dashboard/layout
-// and stored on UserProgress.dashboardLayout.
+// shape + validators that `shared/api-client/src/schemas/dashboard.ts`
+// describes with zod. Keep the two in sync — they describe the same
+// persisted/wire shape used by GET/PATCH /api/dashboard/layout and stored on
+// UserProgress.dashboardLayout. Two tests fail when they drift:
+// tests/unit/contract/dashboardParity.test.ts (imports both and compares them)
+// and shared/api-client/tests/webParity.test.ts (reads this file as text).
 //
 // No React/DOM/Mongoose deps — safe to import from API routes, the customizer,
 // and unit tests alike.
