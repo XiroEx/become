@@ -7,6 +7,17 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 **Repo:** `XiroEx/become` on GitHub (private)
 **Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Firebase config in repo is legacy/unused.
 
+
+## Before you ship (agents): run what CI runs
+
+CI's `expo` job fails on things that are cheap to catch locally. On 2026-09-30, three native PRs went red on exactly these (TS2322 on an optional string, and `react-hooks/set-state-in-effect` twice). Before `workspace_ship` or `git push`:
+
+- Any change under `expo/`: `cd expo && npx tsc --noEmit && npx eslint .`. Zero errors; warnings are fine.
+- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`.
+- Any contract test you add under `webapp/tests/unit/contract/`: seed fixtures the way the model requires (required fields included), and give the file its OWN member. Contract files run in parallel against one database.
+- `react-hooks/set-state-in-effect`: prefer deriving the value during render. Suppress it (`// eslint-disable-next-line react-hooks/set-state-in-effect`) ONLY when the effect genuinely syncs from something outside React (a route param, an app-state or network callback), with a one-line reason above it.
+- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build.
+
 ## Channels
 
 Two git-sourced RedRun workspaces, same MongoDB and same env:
