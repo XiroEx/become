@@ -17,6 +17,12 @@ import {
   AI_CONSENT_REASON,
   SPEND_CAP_REASON,
   classifyApiResponse,
+  DASHBOARD_TILE_KINDS,
+  DASHBOARD_TILE_SIZES,
+  MAX_DASHBOARD_TILES,
+  SMART_INTERVAL_OPTIONS_MS,
+  DEFAULT_SMART_INTERVAL_MS,
+  MAX_SMART_POOL,
 } from '../src/index';
 
 const read = (rel: string): string => {
@@ -75,3 +81,36 @@ test('a spend ceiling is still a 429 carrying `rate_limit`, so it can never be a
   assert.match(refusal, /status: 429/);
   assert.doesNotMatch(refusal, /requiresTier/);
 });
+
+test('dashboard layout constants match webapp/lib/dashboardLayout/types.ts', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+  for (const kind of DASHBOARD_TILE_KINDS) {
+    assert.match(types, new RegExp(`'${kind}'`));
+  }
+  for (const size of DASHBOARD_TILE_SIZES) {
+    assert.match(types, new RegExp(`'${size}'`));
+  }
+  assert.match(types, new RegExp(`MAX_DASHBOARD_TILES\\s*=\\s*${MAX_DASHBOARD_TILES}`));
+  for (const interval of SMART_INTERVAL_OPTIONS_MS) {
+    assert.match(types, new RegExp(`\\b${interval}\\b`));
+  }
+  assert.match(types, new RegExp(`DEFAULT_SMART_INTERVAL_MS\\s*=\\s*${DEFAULT_SMART_INTERVAL_MS}`));
+  assert.match(types, new RegExp(`MAX_SMART_POOL\\s*=\\s*${MAX_SMART_POOL}`));
+});
+
+test('a test fails when the tile kinds, sizes, interval options or the 20-tile limit differ from webapp/lib/dashboardLayout/types.ts', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+  assert.throws(() => {
+    assert.match(types, /'extra-kind'/);
+  });
+  assert.throws(() => {
+    assert.match(types, /'3x1'/);
+  });
+  assert.throws(() => {
+    assert.match(types, /MAX_DASHBOARD_TILES\s*=\s*25/);
+  });
+  assert.throws(() => {
+    assert.match(types, /\b99999\b/);
+  });
+});
+
