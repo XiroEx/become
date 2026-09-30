@@ -305,6 +305,56 @@ against real Mongo and a fake Apple — `tests/unit/auth/fakeApple.ts`),
 `tests/unit/account/appleRevocation.test.ts` (the revocation, the deferral and
 its bound) and `expo/__tests__/appleSignIn.test.tsx`.
 
+### Google, natively (NP-126): the system auth session and a one-time code
+
+**Google refuses sign-in inside an embedded web view** (`disallowed_useragent`),
+so the app runs the web flow in the SYSTEM authentication session
+(`WebBrowser.openAuthSessionAsync` → `ASWebAuthenticationSession` / a Custom
+Tab). The web flow ends at `/auth/finish#<jwt>`, which is right for a browser
+tab and wrong for an app: the only way a URL re-enters an app is a scheme ANY
+app on the device can claim, so **the app never receives the token.** It
+receives NP-121's one-time code, in the other direction:
+
+1. the app invents a **verifier** (32 bytes from `expo-crypto`'s CSPRNG, kept in
+   memory) and opens `/api/auth/google?app=1&challenge=<sha256, base64url>`;
+2. that route arms one short-lived HttpOnly cookie (`become_app_auth`, holding
+   the challenge — a hash, not a secret) and otherwise starts the ordinary
+   redAuth flow. `app=1` with no usable challenge is REFUSED before the flow
+   starts, because a started flow would end with a token in a fragment no app
+   can read;
+3. `/auth/callback/google` sees the cookie, mints a code bound to the member AND
+   the challenge, and redirects to `/auth/app-callback?code=…`. No JWT, no
+   session cookie: the token it just minted is discarded;
+4. `/auth/app-callback` redirects to `become://auth/app-callback?code=…`, which
+   is what CLOSES the authentication session and resolves
+   `openAuthSessionAsync`. A universal link cannot: the authentication session
+   only recognises its own callback scheme;
+5. `POST /api/auth/exchange { code, verifier }` answers the same session
+   everything else does. **Every refusal is one 400 `{ error: 'invalid_code' }`**
+   — unknown, spent, expired, wrong verifier — so none can be told apart.
+
+The rules that travel are NP-121's, plus one: **single use** (atomic claim on
+`usedAt: null`), **sixty seconds decided in code** (never mongod's TTL sweep),
+and **one device** — the verifier, which is why carrying the code over a
+claimable scheme is safe and carrying a token would not be. Neither the code nor
+the verifier is stored: `models/AppAuthCode.ts` keeps SHA-256s of both.
+
+`webapp/lib/appAuthCode.ts` holds the rules and the four constants the app
+mirrors in `expo/lib/auth/googleSignIn.ts`. The app computes the challenge with
+a plain-TypeScript SHA-256 (`expo/lib/auth/sha256.ts`) rather than a native
+digest, so the one value the flow's security rests on is computable in Jest;
+`expo/__tests__/sha256.test.ts` pins it against Node's crypto on every padding
+boundary. `components/GoogleSignInButton.tsx` draws the web's own four-colour G —
+the only colour literals allowed to exist outside `lib/theme/tokens.ts`, as RGB
+triplets, because Google's brand colours are fixed by Google and not the app's
+palette.
+
+Tests: `webapp/tests/unit/auth/appAuthCode.test.ts` (the rules, the refusals
+both routes make before Mongo, and the constants read out of `expo/`),
+`appAuthRoundTrip.test.ts` (mint → exchange → **replay is 400**, wrong verifier
+burns the code, expiry, a deleted member, the race — real Mongo), and
+`expo/__tests__/googleSignIn.test.tsx`.
+
 ## API Conventions
 
 - Route handlers in `app/api/` using Next.js App Router (`route.ts` exports)
