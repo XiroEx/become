@@ -616,6 +616,9 @@ export default function LoginScreen({
                       label="Review code"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      autoComplete="one-time-code"
+                      returnKeyType="go"
+                      onSubmitEditing={handleReviewSignIn}
                       value={reviewCode}
                       onChangeText={setReviewCode}
                       placeholder="Review code"
