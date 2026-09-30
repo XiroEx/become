@@ -27,7 +27,7 @@ import {
   parseExternalFoodId,
   parseFoodRowParam,
 } from "@/lib/nutrition/foodImport";
-import { localDateKey } from "@/lib/nutrition/localDay";
+import { useLocalDay } from "@/lib/time/localDay";
 import { useFoodLog } from "@/lib/nutrition/useFoodLog";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -41,6 +41,7 @@ const EMPTY_PICKER_FOOD = {
 export default function FoodDetailRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
+  const { day: today } = useLocalDay();
   const params = useLocalSearchParams<{ id?: string; row?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
   const { token } = useAuth();
@@ -121,7 +122,7 @@ export default function FoodDetailRoute() {
       await foodLog.addToLog({
         mealType,
         // The device's day, not UTC's.
-        date: localDateKey(),
+        date: today,
         food: {
           ...(foodId ? { foodId } : {}),
           name: food.name,
@@ -142,7 +143,7 @@ export default function FoodDetailRoute() {
       });
       router.back();
     },
-    [food, variant, basis, chosenAmount, foodLog, router],
+    [food, variant, basis, chosenAmount, foodLog, router, today],
   );
 
   if (!id) {
