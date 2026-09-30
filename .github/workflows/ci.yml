@@ -221,7 +221,14 @@ jobs:
       # it fails when a dependency is pinned outside the range the installed SDK
       # supports. That is a class of break the typecheck cannot see, and the one
       # that turns into a store build that will not bundle.
+      #
+      # EXPO_OFFLINE: check against the versions bundled with the installed
+      # `expo` package instead of asking Expo's servers for the latest patch
+      # releases. Online, this step went red every time Expo shipped a patch
+      # (#1256), and Become uses no Expo-hosted services (George, 2026-09-30).
       - name: Expo dependency check
+        env:
+          EXPO_OFFLINE: '1'
         run: npx expo install --check
 
       # The only step here that actually BUILDS the app, and the reason it

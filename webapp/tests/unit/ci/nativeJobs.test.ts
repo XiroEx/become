@@ -125,6 +125,8 @@ test('the expo job typechecks, lints, tests and checks dependency versions', () 
   assert.match(job, /run: npx eslint \./)
   assert.match(job, /run: npx jest --ci --maxWorkers=2/)
   assert.match(job, /run: npx expo install --check/)
+  // Offline: the check must not call Expo's servers (no Expo-hosted services).
+  assert.match(job, /EXPO_OFFLINE: '1'\n\s+run: npx expo install --check/)
 })
 
 // ── …and it bundles, which is the only step that builds the app ──────────────
