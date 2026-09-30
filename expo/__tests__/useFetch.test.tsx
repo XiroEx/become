@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { z } from "zod";
 import { useFetch } from "@/lib/hooks";
+import { clearAll } from "@/lib/cache/lastKnown";
 
 const Schema = z.object({ message: z.string() });
 
@@ -21,6 +22,9 @@ function makeFetch(
 }
 
 describe("useFetch", () => {
+  afterEach(async () => {
+    await clearAll();
+  });
   it("happy path: returns parsed data and toggles loading", async () => {
     const fetchImpl = makeFetch(() => ({ body: { message: "hi" } }));
     const { result } = renderHook(() =>

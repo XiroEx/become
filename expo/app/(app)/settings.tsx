@@ -18,6 +18,7 @@ import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
+import { ScreenState } from "@/components/ScreenState";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -38,6 +39,7 @@ export default function SettingsScreen() {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !token,
+    useCache: true,
   };
 
   const consent = useFetch("/api/me/consent", ConsentStatusSchema, fetchOpts);
@@ -46,6 +48,14 @@ export default function SettingsScreen() {
     NotificationPreferencesResponseSchema,
     fetchOpts,
   );
+
+  const hasData = !!(consent.data || notifPrefs.data || user);
+  const fetchError = consent.error || notifPrefs.error;
+  const initialLoading = (consent.loading || notifPrefs.loading) && !hasData;
+
+  const onRetry = useCallback(async () => {
+    await Promise.all([consent.refetch(), notifPrefs.refetch()]);
+  }, [consent, notifPrefs]);
 
   // Notifications (NP-068) state
   const [savingNotif, setSavingNotif] = useState(false);
@@ -183,20 +193,28 @@ export default function SettingsScreen() {
     : null;
 
   return (
-    <SafeAreaView
-      edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: colors.background }}
-      testID="native-settings-screen"
+    <ScreenState
+      loading={initialLoading}
+      error={fetchError}
+      hasData={hasData}
+      onRetry={onRetry}
+      offlineNote="You're offline. Showing last-saved settings."
+      testID="settings-screen-state"
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
-        <Text
-          accessibilityRole="header"
-          className="text-foreground text-2xl font-bold"
-        >
-          Settings
-        </Text>
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{ flex: 1, backgroundColor: colors.background }}
+        testID="native-settings-screen"
+      >
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
+          <Text
+            accessibilityRole="header"
+            className="text-foreground text-2xl font-bold"
+          >
+            Settings
+          </Text>
 
-        {/* 1. Account Section */}
+          {/* 1. Account Section */}
         <View
           testID="settings-account-section"
           className="rounded-xl border border-border bg-card p-4"
@@ -430,5 +448,6 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  </ScreenState>
   );
 }

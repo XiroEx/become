@@ -12,6 +12,7 @@ import { AuthGuard } from "@/lib/auth/AuthGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { ScreenState } from "@/components/ScreenState";
 
 interface ProfilePatchInput {
   profile: OnboardingProfile;
@@ -49,17 +50,21 @@ export default function OnboardingRoute() {
     },
   );
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<unknown>(null);
+  const [lastProfile, setLastProfile] = useState<OnboardingProfile | null>(null);
 
   const onComplete = useCallback(
     async (profile: OnboardingProfile) => {
+      setLastProfile(profile);
       setSubmitting(true);
+      setSubmitError(null);
       try {
         await patch.mutate({ profile, onboardingCompleted: true });
         // Re-pull the user so the onboarding gate sees the cleared flag.
         await refresh();
         router.replace("/(tabs)/dashboard");
-      } catch {
-        // Leave the user on the flow so they can retry.
+      } catch (err) {
+        setSubmitError(err);
       } finally {
         setSubmitting(false);
       }
@@ -74,13 +79,26 @@ export default function OnboardingRoute() {
       onUnauthed={onUnauthed}
       testID="onboarding-guard"
     >
-      <SafeAreaView
-        edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: colors.background }}
-        testID="onboarding-route"
+      <ScreenState
+        error={submitError}
+        hasData={!submitError}
+        onRetry={async () => {
+          if (lastProfile) {
+            await onComplete(lastProfile);
+          } else {
+            setSubmitError(null);
+          }
+        }}
+        testID="onboarding-screen-state"
       >
-        <OnboardingFlow onComplete={onComplete} submitting={submitting} />
-      </SafeAreaView>
+        <SafeAreaView
+          edges={["top", "bottom"]}
+          style={{ flex: 1, backgroundColor: colors.background }}
+          testID="onboarding-route"
+        >
+          <OnboardingFlow onComplete={onComplete} submitting={submitting} />
+        </SafeAreaView>
+      </ScreenState>
     </AuthGuard>
   );
 }

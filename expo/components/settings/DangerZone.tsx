@@ -8,6 +8,7 @@ import {
   requestAccountDeletion,
 } from "@/lib/account/deleteAccount";
 import { sessionStore } from "@/lib/auth/secureStoreToken";
+import { clearAll as clearAllLastKnownCache, setCacheMemberId } from "@/lib/cache/lastKnown";
 
 /**
  * Delete account, on the settings screen of both store builds.
@@ -73,6 +74,12 @@ export function DangerZone({
     // Drop the session before navigating: the account is on its way out and
     // the push token for this install is already gone server-side.
     await clearToken();
+    try {
+      await clearAllLastKnownCache();
+    } catch {
+      /* ignore */
+    }
+    setCacheMemberId(null);
     setBusy(false);
     setConfirming(false);
     onDeleted?.();

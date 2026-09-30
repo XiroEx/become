@@ -5,6 +5,7 @@ import {
   StreakResponseSchema,
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
+  classifyApiError,
 } from "@become/api-client";
 import {
   DashboardScreen,
@@ -34,6 +35,7 @@ export default function DashboardRoute() {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !ready,
+    useCache: true,
   };
 
   const me = useFetch("/api/auth/me", MeResponseSchema, fetchOpts);
@@ -52,7 +54,7 @@ export default function DashboardRoute() {
       ? `/api/programs/current-workout?programId=${encodeURIComponent(programId)}`
       : null,
     CurrentWorkoutResponseSchema,
-    { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+    { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined, useCache: true },
   );
 
   const todayWorkout: TodayWorkoutSummary | null =
@@ -98,8 +100,13 @@ export default function DashboardRoute() {
     ready && (me.loading || streak.loading || active.loading) && !me.data;
 
   const firstError = me.error ?? streak.error ?? active.error ?? workout.error;
+  const isOffline = firstError
+    ? classifyApiError(firstError).kind === "offline"
+    : false;
   const errorText = firstError
-    ? "Couldn't load your dashboard. Pull to refresh."
+    ? isOffline && me.data
+      ? "You're offline — showing last-known data."
+      : "Couldn't load your dashboard. Pull to refresh."
     : null;
 
   const [refreshing, setRefreshing] = useState(false);

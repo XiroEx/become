@@ -155,11 +155,23 @@ export function DashboardScreen({
               padding: 12,
               borderRadius: 12,
               backgroundColor: tint("destructive", 0.18),
+              gap: 8,
             }}
           >
             <Text accessibilityRole="alert" className="text-destructive text-sm">
               {errorText}
             </Text>
+            {onRefresh ? (
+              <Button
+                testID="dashboard-retry-button"
+                variant="secondary"
+                size="sm"
+                onPress={onRefresh}
+                accessibilityLabel="Retry"
+              >
+                Retry
+              </Button>
+            ) : null}
           </View>
         ) : null}
         <View
