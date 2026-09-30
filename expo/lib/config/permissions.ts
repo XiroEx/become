@@ -17,6 +17,17 @@
  *   3. the row below already exists for every module the roadmap names; add
  *      one if yours is new.
  *
+ * NOT ASKING IS ALSO AN ANSWER. A permission-bearing plugin writes ITS OWN
+ * placeholder sentence for every key it knows about unless you say otherwise —
+ * `expo-camera` and `expo-image-picker` both add "Allow $(PRODUCT_NAME) to
+ * access your microphone" whether or not anything in the app records audio. A
+ * prop set to `false` (`microphonePermission: false`) makes the plugin DELETE
+ * that key instead (`@expo/config-plugins` `ios/Permissions.ts#applyPermissions`),
+ * which is the honest thing to ship for a feature that does not use the
+ * resource: no key, no prompt, and nothing for App Review to ask about. So
+ * `false` is a legitimate resolution here — see `findUsageStringViolations`,
+ * which requires it to be unanimous and to agree with `ios.infoPlist`.
+ *
  * What a sentence has to say: what BECOME does with the resource, in the app's
  * voice, as a sentence a person reading a system alert would understand. Not
  * "This app requires access to the camera." The rules below are the mechanical
@@ -199,16 +210,11 @@ export function installedModules(input: UsageStringInput): Set<string> {
   ]);
 }
 
-/**
- * Resolve the sentence iOS would show for `infoPlistKey`: the value in
- * `ios.infoPlist`, or the prop the module's config plugin writes it from.
- */
-export function resolveUsageString(
+/** What this module's plugin prop says about the key, if it says anything. */
+function pluginPropValue(
   input: UsageStringInput,
   entry: PermissionBearingModule,
 ): unknown {
-  const fromInfoPlist = input.config.expo.ios?.infoPlist?.[entry.infoPlistKey];
-  if (fromInfoPlist !== undefined) return fromInfoPlist;
   if (!entry.pluginProp) return undefined;
   for (const plugin of input.config.expo.plugins ?? []) {
     if (pluginName(plugin) !== entry.module) continue;
@@ -216,6 +222,26 @@ export function resolveUsageString(
     if (value !== undefined) return value;
   }
   return undefined;
+}
+
+/**
+ * Resolve the sentence iOS would show for `infoPlistKey`: the value in
+ * `ios.infoPlist`, or the prop the module's config plugin writes it from.
+ * `false` means the plugin OPTS OUT of the key.
+ *
+ * The opt-out wins over `ios.infoPlist`, because that is what actually happens:
+ * the plugin's mod runs on the assembled Info.plist and DELETES the key it was
+ * told to skip, whatever `app.json` put there.
+ */
+export function resolveUsageString(
+  input: UsageStringInput,
+  entry: PermissionBearingModule,
+): unknown {
+  const fromPlugin = pluginPropValue(input, entry);
+  if (fromPlugin === false) return false;
+  const fromInfoPlist = input.config.expo.ios?.infoPlist?.[entry.infoPlistKey];
+  if (fromInfoPlist !== undefined) return fromInfoPlist;
+  return fromPlugin;
 }
 
 /** The mechanical half of "says what Become does with it, in the app's voice". */
@@ -244,27 +270,67 @@ function judgeSentence(value: unknown): string | null {
 
 /**
  * Every reason this app's usage strings are not shippable. Empty means
- * shippable. Two rules:
+ * shippable. Four rules:
  *
  *  1. a permission-bearing module that is installed must have its sentence,
  *  2. a sentence must not be there for a module that is not installed — an
- *     unexplained prompt string is a question from App Review.
+ *     unexplained prompt string is a question from App Review,
+ *  3. opting a key out (`prop: false`) has to be UNANIMOUS across the installed
+ *     modules that write it, or the plugin that runs last decides whether the
+ *     app ships Expo's placeholder sentence,
+ *  4. an opted-out key must not also be declared in `ios.infoPlist` — the
+ *     plugin deletes it, so the declaration is a lie about what ships.
  */
 export function findUsageStringViolations(
   input: UsageStringInput,
 ): UsageStringViolation[] {
   const installed = installedModules(input);
   const violations: UsageStringViolation[] = [];
+  const declared = input.config.expo.ios?.infoPlist ?? {};
 
+  // Grouped by KEY, because two installed modules can write the same one —
+  // `expo-camera` and `expo-image-picker` both write NSCameraUsageDescription
+  // and NSMicrophoneUsageDescription — and one of them opting out deletes what
+  // the other wrote.
+  const byKey = new Map<string, PermissionBearingModule[]>();
   for (const entry of PERMISSION_BEARING_MODULES) {
     if (!installed.has(entry.module)) continue;
-    const problem = judgeSentence(resolveUsageString(input, entry));
-    if (problem) {
-      violations.push({
-        module: entry.module,
-        infoPlistKey: entry.infoPlistKey,
-        problem: `${problem} (${entry.card}: ${entry.what})`,
-      });
+    const rows = byKey.get(entry.infoPlistKey) ?? [];
+    rows.push(entry);
+    byKey.set(entry.infoPlistKey, rows);
+  }
+
+  for (const [key, rows] of byKey) {
+    const optedOut = rows.filter(
+      (entry) => resolveUsageString(input, entry) === false,
+    );
+    if (optedOut.length > 0) {
+      for (const entry of rows) {
+        if (optedOut.includes(entry)) continue;
+        violations.push({
+          module: entry.module,
+          infoPlistKey: key,
+          problem: `${optedOut[0]?.module} opts out of ${key} while ${entry.module} still writes it — whichever plugin runs last decides, and one of the outcomes is Expo's own placeholder sentence`,
+        });
+      }
+      if (key in declared) {
+        violations.push({
+          module: optedOut[0]?.module ?? "(opted out)",
+          infoPlistKey: key,
+          problem: `declared in ios.infoPlist while ${optedOut[0]?.module} opts out of it — the plugin deletes the key, so this sentence never ships`,
+        });
+      }
+      continue;
+    }
+    for (const entry of rows) {
+      const problem = judgeSentence(resolveUsageString(input, entry));
+      if (problem) {
+        violations.push({
+          module: entry.module,
+          infoPlistKey: key,
+          problem: `${problem} (${entry.card}: ${entry.what})`,
+        });
+      }
     }
   }
 

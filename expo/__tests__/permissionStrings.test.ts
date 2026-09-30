@@ -72,6 +72,35 @@ describe("this app's usage strings", () => {
     }
   });
 
+  // NP-059 installs expo-camera and expo-image-picker. Both plugins would
+  // otherwise write Expo's own "Allow $(PRODUCT_NAME) to access your
+  // microphone" into Info.plist, for a feature that records no audio at all.
+  it("opts the microphone OUT rather than shipping a prompt Become never needs", () => {
+    const plugins = realInput.config.expo.plugins ?? [];
+    for (const module of ["expo-camera", "expo-image-picker"]) {
+      const entry = plugins.find(
+        (p) => (typeof p === "string" ? p : p[0]) === module,
+      );
+      expect(entry).toBeDefined();
+      expect(Array.isArray(entry) ? entry[1]?.microphonePermission : undefined).toBe(
+        false,
+      );
+    }
+    expect(
+      realInput.config.expo.ios?.infoPlist?.NSMicrophoneUsageDescription,
+    ).toBeUndefined();
+  });
+
+  it("says what the camera and the photo library are FOR", () => {
+    const infoPlist = realInput.config.expo.ios?.infoPlist ?? {};
+    expect(String(infoPlist.NSCameraUsageDescription)).toMatch(/\bBecome\b/);
+    expect(String(infoPlist.NSCameraUsageDescription)).toMatch(/meal/i);
+    expect(String(infoPlist.NSPhotoLibraryUsageDescription)).toMatch(
+      /\bBecome\b/,
+    );
+    expect(String(infoPlist.NSPhotoLibraryUsageDescription)).toMatch(/photo/i);
+  });
+
   it("covers every module the roadmap names", () => {
     const modules = new Set(PERMISSION_BEARING_MODULES.map((e) => e.module));
     for (const expected of [
@@ -161,6 +190,73 @@ describe("the rule fails when a permission-bearing plugin has no usage string", 
     });
     expect(violations).toHaveLength(1);
     expect(violations[0]?.problem).toMatch(/no module behind it/);
+  });
+});
+
+// A plugin prop set to `false` makes the plugin DELETE the key instead of
+// writing its own placeholder (`@expo/config-plugins`
+// `ios/Permissions.ts#applyPermissions`). That is the honest thing to ship for
+// a resource the app does not use — and it has to be unanimous, or whichever
+// plugin runs last decides what App Review reads.
+describe("opting a key out is an answer too", () => {
+  it("a module that opts out needs no sentence", () => {
+    expect(
+      findUsageStringViolations({
+        config: config({ NSCameraUsageDescription: GOOD_CAMERA }, [
+          ["expo-camera", { microphonePermission: false }],
+        ]),
+        dependencies: { "expo-camera": "~57.0.6" },
+      }),
+    ).toEqual([]);
+  });
+
+  it("the opt-out beats a string in ios.infoPlist, because the plugin deletes it", () => {
+    const input = {
+      config: config(
+        {
+          NSCameraUsageDescription: GOOD_CAMERA,
+          NSMicrophoneUsageDescription:
+            "Become records sound with any video you capture in the app.",
+        },
+        [["expo-camera", { microphonePermission: false }]],
+      ),
+      dependencies: { "expo-camera": "~57.0.6" },
+    };
+    expect(
+      resolveUsageString(input, {
+        module: "expo-camera",
+        infoPlistKey: "NSMicrophoneUsageDescription",
+        pluginProp: "microphonePermission",
+        what: "record sound",
+        card: "NP-059",
+      }),
+    ).toBe(false);
+    const violations = findUsageStringViolations(input);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]?.problem).toMatch(/never ships/);
+  });
+
+  it("one module opting out while another still writes the key is a contradiction", () => {
+    const violations = findUsageStringViolations({
+      config: config(
+        {
+          NSPhotoLibraryUsageDescription:
+            "Become opens your photo library when you pick a photo to attach.",
+        },
+        [
+          ["expo-camera", { cameraPermission: false, microphonePermission: false }],
+          ["expo-image-picker", { microphonePermission: false }],
+        ],
+      ),
+      dependencies: {
+        "expo-camera": "~57.0.6",
+        "expo-image-picker": "~57.0.20",
+      },
+    });
+    expect(violations.map((v) => v.infoPlistKey)).toEqual([
+      "NSCameraUsageDescription",
+    ]);
+    expect(violations[0]?.problem).toMatch(/opts out of NSCameraUsageDescription/);
   });
 });
 

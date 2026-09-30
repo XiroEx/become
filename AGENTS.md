@@ -1225,6 +1225,57 @@ hardware facts, and they are `ACCESSIBILITY.md`'s device checklist, which
 walk because it does not exist** (NP-050/NP-053); the suite fails the day a route
 with "plan" in its name appears, which is the reminder to add it.
 
+### Photos: the camera, the picker, and an image that needs the session (NP-059)
+
+Three modules (`expo-camera`, `expo-image-picker`, `expo-image-manipulator`) and
+three files, and every photo surface that follows — meal and recipe photos
+(NP-143/144), feedback screenshots (NP-162), the avatar (NP-163), food flags
+(NP-174), the barcode scanner (NP-088) — is meant to reuse them rather than
+reach for the modules directly.
+
+- **`expo/lib/media/capture.ts`** takes a photo or picks one and returns a JPEG
+  `uri` **and** a `data:image/jpeg;base64,…` URL, because multipart wants the
+  first and the AI routes take only the second (`webapp/lib/blobToBase64.ts`).
+  **The resize parameters are the WEB'S**: `PLATE_PHOTO_RESIZE` is 1024 / 0.6
+  (the plate scan, the food report, the evidence picker) and
+  `MEAL_PHOTO_RESIZE` is 1600 / 0.82 (`webapp/components/meals/MealForm.tsx`) —
+  a vision call is billed against the member's allowance, so the same tap has
+  to spend it on the same picture on both clients. `targetSize` reproduces
+  `resizeImageToBlob`'s branch: cap `max(w, h)`, scale the other edge, never
+  enlarge. A REFUSAL IS A RESULT, not a throw:
+  `{ status: "permission-denied", canAskAgain, message }`, rendered by
+  `components/media/PermissionDeniedNotice.tsx` with the way to Settings.
+- **`expo/lib/media/upload.ts`** posts `{ uri, name, type }` — React Native's
+  FormData streams the file off disk itself — through the shared client's `raw`
+  call, so an upload carries the same Bearer token as every other request.
+  Never set `Content-Type`: the multipart boundary belongs to the networking
+  layer. `file` is the field for `/api/nutrition/{scans,flags}/image`, `image`
+  for `/api/meals/{id}/image`.
+- **`expo/components/media/AuthedImage.tsx`** is how a per-member image is
+  shown. `<Image source={{ uri: "/api/blob/…" }}>` cannot work: the path has no
+  origin and an `<Image>` sends no header, and the blob route answers **404**
+  (not 403) to anyone who is not the owner. So `lib/media/authedBlob.ts`
+  prefixes `WEBAPP_BASE_URL`, fetches with the Bearer token and hands over a
+  `data:` URL. Two rules live there: the token only ever goes to the Become
+  origin (anything else is `refused`, unsent), and **a member's image is never
+  cached where another account on the device could read it** — memory only,
+  capped, keyed by the token that fetched it, and emptied by `AuthProvider` on
+  sign-out.
+
+iOS asks with the sentence in `app.json`, and `lib/config/permissions.ts` is
+still the one place that rule lives. Both plugins are given
+`microphonePermission: false`, which makes them DELETE
+`NSMicrophoneUsageDescription` instead of writing Expo's own placeholder for a
+feature that records no audio; the rule understands that opt-out and requires it
+to be unanimous and to agree with `ios.infoPlist`. Android declares `CAMERA` and
+not `RECORD_AUDIO`.
+
+Tests: `expo/__tests__/mediaCapture.test.ts` (the web's numbers, read out of the
+web's own source; the default path through the real module calls; every
+refusal), `mediaUpload.test.ts`, `authedImage.test.tsx` (the 404, and that a
+second session never reads the first one's bytes) and
+`permissionDeniedNotice.test.tsx`.
+
 ### CI runs four packages, not one
 
 `.github/workflows/ci.yml` has four jobs, because the repo is four packages

@@ -945,6 +945,112 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           </View>
         </View>
       </View>
+      <View
+        accessibilityRole="summary"
+        className="bg-card rounded-2xl p-4 border border-border"
+        testID="card-media"
+      >
+        <Text
+          className="text-foreground text-lg font-semibold mb-1"
+          style={
+            [
+              {
+                "fontFamily": "Geist-SemiBold",
+              },
+              undefined,
+            ]
+          }
+          testID="card-media-title"
+        >
+          Permission denied
+        </Text>
+        <View
+          accessibilityRole="alert"
+          className="rounded-2xl border border-border bg-card p-4"
+          testID="media-permission-denied"
+        >
+          <Text
+            className="text-foreground text-sm"
+            style={
+              [
+                {
+                  "fontFamily": "Geist-Regular",
+                },
+                undefined,
+              ]
+            }
+            testID="media-permission-denied-message"
+          >
+            Camera access is off for Become, so there is nothing to take the photo with. Turn Camera on in Settings, then try again.
+          </Text>
+          <View
+            className="h-3"
+          />
+          <View
+            accessibilityHint="Opens the Settings app at Become's permissions"
+            accessibilityLabel="Open Settings"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            className="rounded-xl items-center justify-center flex-row bg-muted px-4 py-2.5 "
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "minHeight": 44,
+                "minWidth": 44,
+              }
+            }
+            testID="media-permission-denied-settings"
+          >
+            <Text
+              className="font-semibold text-foreground text-base"
+              style={
+                [
+                  {
+                    "fontFamily": "Geist-SemiBold",
+                  },
+                  [
+                    {
+                      "flexShrink": 1,
+                    },
+                    {
+                      "textAlign": "center",
+                    },
+                  ],
+                ]
+              }
+            >
+              Open Settings
+            </Text>
+          </View>
+        </View>
+      </View>
     </View>
   </RCTScrollView>
 </RNCSafeAreaView>
