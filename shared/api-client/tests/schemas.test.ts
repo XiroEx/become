@@ -2,13 +2,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ActiveProgramsResponseSchema,
+  ActiveProgramsApiResponseSchema,
   ProgramListResponseSchema,
   ProgramSearchResponseSchema,
   SavedProgramsResponseSchema,
   SaveToggleResponseSchema,
   ProgramDetailResponseSchema,
-  ProgramMutationResponseSchema,
+  ProgramAbandonResponseSchema,
+  ProgramStartDateResponseSchema,
   CheckSessionRequestSchema,
   CheckSessionResponseSchema,
   LogMoodRequestSchema,
@@ -194,13 +195,14 @@ test('ScheduleResponseSchema: rejects an unknown status enum value', () => {
   assert.equal(result.success, false);
 });
 
-test('ActiveProgramsResponseSchema: parses minimal response and accepts extras (passthrough)', () => {
-  const result = ActiveProgramsResponseSchema.safeParse({
-    programs: [
+test('ActiveProgramsApiResponseSchema: parses minimal response and accepts extras (passthrough)', () => {
+  const result = ActiveProgramsApiResponseSchema.safeParse({
+    activePrograms: [
       {
         programId: 'p1',
-        status: 'active',
-        startedAt: '2026-04-01',
+        programName: 'Foundation',
+        status: 'in-progress',
+        startDate: '2026-04-01T00:00:00.000Z',
       },
     ],
     extra: 'allowed',
@@ -308,24 +310,27 @@ test('ProgramDetailResponseSchema: defaults phases to [] when absent', () => {
   }
 });
 
-test('ProgramMutationResponseSchema: parses enroll/abandon {success, message}', () => {
-  const r = ProgramMutationResponseSchema.safeParse({
+test('ProgramAbandonResponseSchema: parses {success, message}', () => {
+  const r = ProgramAbandonResponseSchema.safeParse({
     success: true,
-    message: 'Program saved',
+    message: 'Program abandoned successfully',
   });
   assert.equal(r.success, true);
 });
 
-test('ProgramMutationResponseSchema: parses start-date {message, startDate}', () => {
-  const r = ProgramMutationResponseSchema.safeParse({
+test('ProgramStartDateResponseSchema: parses {message, startDate}', () => {
+  const r = ProgramStartDateResponseSchema.safeParse({
     message: 'Start date updated',
     startDate: '2026-06-01',
   });
   assert.equal(r.success, true);
 });
 
-test('ProgramMutationResponseSchema: rejects a non-string message', () => {
-  const r = ProgramMutationResponseSchema.safeParse({ message: 42 });
+test('ProgramStartDateResponseSchema: rejects a non-string message', () => {
+  const r = ProgramStartDateResponseSchema.safeParse({
+    message: 42,
+    startDate: '2026-06-01',
+  });
   assert.equal(r.success, false);
 });
 
