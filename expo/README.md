@@ -109,6 +109,47 @@ tracked and not ignored — there is no `.easignore`), then installs and builds
 in `expo/`. The `file:` link therefore resolves on the builder exactly as it
 does here.
 
+## Shared pure logic and re-copying modules (NP-017 / NP-058)
+
+Pure calculations, formatting, layout, tracking, and workout rules from `webapp/lib/` are vendored into `expo/lib/shared/training/` so the native app shares identical domain behavior with the web without duplicating or diverging logic.
+
+### Rules that travel
+- **Copies are never edited on the native side directly.** Any behavior change lands on the web (`webapp/lib/`) first and is re-copied here.
+- **The lockstep drift test** in `webapp/tests/unit/nativeParity/trainingModules.test.ts` runs on webapp CI and fails if any native copy returns a different result from its web source across the fixture tables.
+
+### How to re-copy a module after a web change
+1. **Identify the source file** in `webapp/lib/`:
+   - `workoutUtils.ts`: `webapp/lib/workoutUtils.ts` → `expo/lib/shared/training/workoutUtils.ts`
+   - `tracking.ts`: `webapp/lib/workout/tracking.ts` → `expo/lib/shared/training/tracking.ts`
+   - `durationUnit.ts`: `webapp/lib/workout/durationUnit.ts` → `expo/lib/shared/training/durationUnit.ts`
+   - `dumbbellWeight.ts` & `equipmentVariant.ts`: `webapp/lib/workout/{dumbbellWeight,equipmentVariant}.ts` → `expo/lib/shared/training/{dumbbellWeight,equipmentVariant}.ts`
+   - `buildAsYouGo.ts`: `webapp/lib/workout/buildAsYouGo.ts` → `expo/lib/shared/training/buildAsYouGo.ts`
+   - `position.ts`: `webapp/lib/workout/position.ts` → `expo/lib/shared/training/position.ts`
+   - `naming.ts` & `log.ts`: `webapp/lib/quickSession/{naming,log}.ts` → `expo/lib/shared/training/{naming,log}.ts`
+   - `tile.ts` & `pillars.ts`: `webapp/lib/streaks/{tile,pillars}.ts` → `expo/lib/shared/training/{tile,pillars}.ts`
+   - `goalTile.ts`: `webapp/lib/dashboard/goalTile.ts` → `expo/lib/shared/training/goalTile.ts`
+   - `dashboardLayout`: `webapp/lib/dashboardLayout/{types,defaults}.ts` → `expo/lib/shared/training/dashboardLayout/{types,defaults}.ts`
+   - `videoTrim.ts` & `videoFraming.ts`: `webapp/lib/{videoTrim,videoFraming}.ts` → `expo/lib/shared/training/{videoTrim,videoFraming}.ts`
+
+2. **Copy the file** into `expo/lib/shared/training/`:
+   ```bash
+   cp webapp/lib/<path-to-module>.ts expo/lib/shared/training/<filename>.ts
+   ```
+
+3. **Rewrite imports to relative paths**:
+   - Change alias imports like `@/lib/workoutUtils` to `./workoutUtils`.
+   - Change `@/lib/streaks/pillars` to `./pillars`.
+   - Model-only types (e.g. `FitnessGoal`, `StoredQuickSession`, `DraftExercise`) must be imported from local `./types`.
+
+4. **Preserve native storage constraints**:
+   - React Native does not provide DOM `localStorage`. For modules like `position.ts`, vendor only the pure step resolution and scoping rules (`resolveStartStep`, `quickScope`, `programScope`, `POSITION_MAX_AGE_MS`); native storage uses AsyncStorage.
+
+5. **Verify parity with the lockstep test**:
+   ```bash
+   cd webapp && npm run test:file tests/unit/nativeParity/trainingModules.test.ts
+   cd ../expo && npm test && npx eslint .
+   ```
+
 ## Scripts
 
 ```bash

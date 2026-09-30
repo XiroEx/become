@@ -4,14 +4,47 @@ import { Check } from "lucide-react-native";
 import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
-  type BellStyle,
-  totalWeightHelper,
-  weightLabel,
-} from "@/lib/live/bellStyle";
-import {
-  setInputsForTrackingType,
-  type SetInputs,
-} from "@/lib/live/trackingInputs";
+  type BellStyle as SharedBellStyle,
+  bellWeightLabel,
+} from "@/lib/shared/training/dumbbellWeight";
+import { normalizeTracking } from "@/lib/shared/training/tracking";
+
+export type BellStyle = SharedBellStyle | "barbell" | "other" | string | null;
+
+export const weightLabel = (style: BellStyle): string => {
+  return bellWeightLabel(style as SharedBellStyle);
+};
+
+export function totalWeightHelper(
+  style: BellStyle,
+  perBell: number | null | undefined,
+): string | null {
+  if (style !== "dumbbell") return null;
+  if (perBell === null || perBell === undefined) return null;
+  if (!Number.isFinite(perBell) || perBell <= 0) return null;
+  return `= ${perBell * 2} lbs total`;
+}
+
+export interface SetInputs {
+  weight: boolean;
+  reps: boolean;
+  duration: boolean;
+  distance: boolean;
+}
+
+export function setInputsForTrackingType(trackingType?: string | null): SetInputs {
+  const raw = (trackingType ?? "").toLowerCase().trim();
+  if (raw === "reps" || raw === "reps_only" || raw === "bodyweight" || raw === "reps_bodyweight") {
+    return { weight: false, reps: true, duration: false, distance: false };
+  }
+  const t = normalizeTracking(trackingType);
+  return {
+    weight: t === "reps_weight",
+    reps: t === "reps_weight" || t === "reps_bodyweight" || t === "reps_only",
+    duration: t === "time" || t === "time_distance" || t === "intervals",
+    distance: t === "time_distance",
+  };
+}
 
 export interface LiveSetState {
   reps: number | null;

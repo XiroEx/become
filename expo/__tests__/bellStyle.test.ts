@@ -1,66 +1,62 @@
 import {
-  detectBellStyle,
-  totalWeightHelper,
-  weightLabel,
-} from "@/lib/live/bellStyle";
+  getBellWeightInfo,
+  bellWeightLabel,
+  weightQuickPicks,
+} from "@/lib/shared/training/dumbbellWeight";
+import { totalWeightHelper } from "@/components/live/LiveSetRow";
 
-describe("detectBellStyle", () => {
-  it("detects 'Dumbbell Press' → dumbbell", () => {
-    expect(detectBellStyle("Dumbbell Press")).toBe("dumbbell");
+describe("dumbbellWeight parity", () => {
+  it("detects dumbbell from equipment or name", () => {
+    expect(getBellWeightInfo({ equipment: ["dumbbell"] }).style).toBe("dumbbell");
+    expect(getBellWeightInfo({ name: "DB Incline Press" }).style).toBe("dumbbell");
+    expect(getBellWeightInfo({ name: "Dumbbell Press" }).style).toBe("dumbbell");
   });
 
-  it("detects 'DB Row' short form → dumbbell", () => {
-    expect(detectBellStyle("DB Row")).toBe("dumbbell");
+  it("detects kettlebell from equipment or name", () => {
+    expect(getBellWeightInfo({ equipment: ["kettlebell"] }).style).toBe("kettlebell");
+    expect(getBellWeightInfo({ name: "Kettlebell Swing" }).style).toBe("kettlebell");
+    expect(getBellWeightInfo({ name: "KB Snatch" }).style).toBe("kettlebell");
   });
 
-  it("detects 'Dumbbells Curl' plural → dumbbell", () => {
-    expect(detectBellStyle("Dumbbells Curl")).toBe("dumbbell");
+  it("returns null style for barbell or non-bell movements", () => {
+    expect(getBellWeightInfo({ equipment: ["barbell"] }).style).toBeNull();
+    expect(getBellWeightInfo({ name: "Barbell Bench Press", equipment: ["barbell"] }).style).toBeNull();
+    expect(getBellWeightInfo({ name: "Push-up", equipment: ["bodyweight"] }).style).toBeNull();
+    expect(getBellWeightInfo(null).style).toBeNull();
   });
 
-  it("detects 'Kettlebell Swing' → kettlebell", () => {
-    expect(detectBellStyle("Kettlebell Swing")).toBe("kettlebell");
-  });
-
-  it("detects 'KB Snatch' short form → kettlebell", () => {
-    expect(detectBellStyle("KB Snatch")).toBe("kettlebell");
-  });
-
-  it("detects 'Barbell Bench Press' → barbell", () => {
-    expect(detectBellStyle("Barbell Bench Press")).toBe("barbell");
-  });
-
-  it("detects 'BB Squat' short form → barbell", () => {
-    expect(detectBellStyle("BB Squat")).toBe("barbell");
-  });
-
-  it("is case-insensitive", () => {
-    expect(detectBellStyle("dumbbell row")).toBe("dumbbell");
-    expect(detectBellStyle("KETTLEBELL CLEAN")).toBe("kettlebell");
-  });
-
-  it("defaults to 'other' for non-implement exercises", () => {
-    expect(detectBellStyle("Push-up")).toBe("other");
-    expect(detectBellStyle("Plank")).toBe("other");
-    expect(detectBellStyle("")).toBe("other");
-  });
-
-  it("prefers kettlebell over dumbbell when both substrings present", () => {
-    // Edge: 'kettlebell + dumbbell complex' — we still want KB to win
-    // because KB is the more specific implement.
-    expect(detectBellStyle("Kettlebell + Dumbbell complex")).toBe("kettlebell");
+  it("does not let aliases misclassify barbell lifts as dumbbells (NP-028 9/9 fix)", () => {
+    expect(
+      getBellWeightInfo({
+        name: "Barbell Bench Press",
+        aliases: ["Bench Press (DB/bar)"],
+        equipment: ["barbell", "bench"],
+      }).style,
+    ).toBeNull();
   });
 });
 
-describe("weightLabel", () => {
+describe("bellWeightLabel", () => {
   it("returns 'Weight per DB (lbs)' for dumbbell", () => {
-    expect(weightLabel("dumbbell")).toBe("Weight per DB (lbs)");
+    expect(bellWeightLabel("dumbbell")).toBe("Weight per DB (lbs)");
   });
   it("returns 'Weight per KB (lbs)' for kettlebell", () => {
-    expect(weightLabel("kettlebell")).toBe("Weight per KB (lbs)");
+    expect(bellWeightLabel("kettlebell")).toBe("Weight per KB (lbs)");
   });
-  it("returns 'Weight (lbs)' for barbell + other", () => {
-    expect(weightLabel("barbell")).toBe("Weight (lbs)");
-    expect(weightLabel("other")).toBe("Weight (lbs)");
+  it("returns 'Weight (lbs)' for null and others", () => {
+    expect(bellWeightLabel(null)).toBe("Weight (lbs)");
+  });
+});
+
+describe("weightQuickPicks", () => {
+  it("returns per-hand quick picks for dumbbell", () => {
+    expect(weightQuickPicks("dumbbell")).toEqual([10, 20, 30, 40, 50]);
+  });
+  it("returns kettlebell quick picks", () => {
+    expect(weightQuickPicks("kettlebell")).toEqual([18, 26, 35, 44, 53]);
+  });
+  it("returns barbell quick picks for default/null", () => {
+    expect(weightQuickPicks(null)).toEqual([45, 95, 135, 185, 225]);
   });
 });
 

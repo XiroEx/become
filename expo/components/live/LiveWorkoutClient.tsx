@@ -12,7 +12,7 @@ import {
   ExerciseGroupNav,
   type ExerciseGroupType,
 } from "@/components/live/ExerciseGroupNav";
-import { detectBellStyle } from "@/lib/live/bellStyle";
+import { getBellWeightInfo } from "@/lib/shared/training/dumbbellWeight";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
@@ -171,7 +171,7 @@ export function LiveWorkoutClient({
         ) : null}
 
         {workout.exercises.map((ex, exIdx) => {
-          const bellStyle = detectBellStyle(ex.name);
+          const bellStyle = getBellWeightInfo(ex).style;
           const sets = grid[ex.slug] ?? [];
           // Render a group header the first time a new groupId appears, so
           // superset/circuit/triset members render contiguously under a label.
