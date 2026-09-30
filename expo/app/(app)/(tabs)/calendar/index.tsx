@@ -105,6 +105,8 @@ export default function CalendarIndexRoute() {
   // When ?date= param arrives or changes, jump to that date and select it
   useEffect(() => {
     if (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) {
+      // Syncs from the route param (an external navigation), not a render cascade.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedDate(params.date);
       const [y, m, d] = params.date.split("-").map(Number);
       setCurrentDate(new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1, 12, 0, 0));
