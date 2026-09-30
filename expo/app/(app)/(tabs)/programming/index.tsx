@@ -111,7 +111,7 @@ export default function ProgrammingIndexRoute() {
             onPress={handleOpenHistory}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
           >
-            <History size={14} color="#3b82f6" />
+            <History size={14} color={colors.primary} />
             <Text className="text-foreground text-xs font-semibold">
               History
             </Text>
@@ -124,7 +124,7 @@ export default function ProgrammingIndexRoute() {
             onPress={handleOpenBrowse}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
           >
-            <Sparkles size={14} color="#f59e0b" />
+            <Sparkles size={14} color={colors.accent} />
             <Text className="text-foreground text-xs font-semibold">
               Browse
             </Text>
@@ -137,7 +137,7 @@ export default function ProgrammingIndexRoute() {
             onPress={handleWorkoutNow}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600"
           >
-            <Zap size={14} color="#ffffff" fill="#ffffff" />
+            <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
             <Text className="text-white text-xs font-semibold">
               Workout Now
             </Text>

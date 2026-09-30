@@ -18,6 +18,7 @@ import {
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { ConfirmModal } from "@/components/workout/ConfirmModal";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface ResumeWorkoutPillProps {
   className?: string;
@@ -34,6 +35,7 @@ export function ResumeWorkoutPill({
   testID = "resume-workout-pill",
   onDiscard,
 }: ResumeWorkoutPillProps) {
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const mountedRef = useRef(true);
@@ -74,6 +76,8 @@ export function ResumeWorkoutPill({
 
   useEffect(() => {
     if (initialData !== undefined) return;
+    // Sync with external system: fetch in-progress workout on mount or auth change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchInProgress();
   }, [initialData, fetchInProgress]);
 
@@ -213,7 +217,7 @@ export function ResumeWorkoutPill({
           </View>
 
           <View className="h-10 w-10 rounded-full bg-white/20 items-center justify-center">
-            <Play size={18} color="#ffffff" fill="#ffffff" />
+            <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
           </View>
         </View>
       </Pressable>

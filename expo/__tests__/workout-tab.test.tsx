@@ -29,7 +29,6 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 
-import { ConfirmModal } from "@/components/workout/ConfirmModal";
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";

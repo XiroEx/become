@@ -2,7 +2,6 @@ import React from "react";
 import { Modal, Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { useReducedMotion, modalAnimation } from "@/lib/a11y/reducedMotion";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface ConfirmModalProps {
   open: boolean;
@@ -28,7 +27,6 @@ export function ConfirmModal({
   testID = "confirm-modal",
 }: ConfirmModalProps) {
   const reduceMotion = useReducedMotion();
-  const { colors } = useThemeTokens();
 
   if (!open) return null;
 

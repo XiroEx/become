@@ -1,6 +1,5 @@
 import {
   computeWeekStripDayStatus,
-  DAY_LABELS,
   getWeekDays,
   isSameDay,
   toLocalDateKey,

@@ -53,15 +53,16 @@ interface PrimaryWorkout {
 }
 
 function StatusIndicator({ status }: { status: WeekStripDayStatus }) {
+  const { colors } = useThemeTokens();
   switch (status) {
     case "completed":
-      return <Check size={14} color="#22c55e" strokeWidth={2.5} />;
+      return <Check size={14} color={colors.success} strokeWidth={2.5} />;
     case "missed":
-      return <X size={14} color="#f87171" strokeWidth={2.5} />;
+      return <X size={14} color={colors.destructive} strokeWidth={2.5} />;
     case "skipped":
-      return <Clock size={14} color="#fbbf24" strokeWidth={2} />;
+      return <Clock size={14} color={colors.accent} strokeWidth={2} />;
     case "scheduled":
-      return <Dumbbell size={14} color="#3b82f6" strokeWidth={2} />;
+      return <Dumbbell size={14} color={colors.primary} strokeWidth={2} />;
     case "quick":
       return <View className="h-2 w-2 rounded-full bg-purple-500" />;
     case "rest":
@@ -176,7 +177,7 @@ export function UpcomingWeekStrip({
 
   // Group quick logs by local date
   const quickByDate = useMemo(() => {
-    const map = new Map<string, Array<{ completed: boolean }>>();
+    const map = new Map<string, { completed: boolean }[]>();
     for (const log of logsData?.logs ?? []) {
       if (log.kind === "quick") {
         const key = toLocalDateKey(new Date(log.date));
@@ -197,7 +198,7 @@ export function UpcomingWeekStrip({
       <Card testID={`${testID}-loading`}>
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center gap-2">
-            <Calendar size={18} color="#3b82f6" />
+            <Calendar size={18} color={colors.primary} />
             <Text className="text-foreground text-base font-semibold">
               Loading schedule…
             </Text>
@@ -220,7 +221,7 @@ export function UpcomingWeekStrip({
       <Card testID={`${testID}-empty`}>
         <View className="flex-row items-center justify-between mb-2">
           <View className="flex-row items-center gap-2">
-            <Calendar size={18} color="#3b82f6" />
+            <Calendar size={18} color={colors.primary} />
             <Text className="text-foreground text-base font-semibold">
               This Week
             </Text>
@@ -266,7 +267,7 @@ export function UpcomingWeekStrip({
       {/* Header with week label, controls, and calendar link */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">
-          <Calendar size={18} color="#3b82f6" />
+          <Calendar size={18} color={colors.primary} />
           <Text
             testID="week-strip-label"
             className="text-foreground text-base font-semibold"
@@ -386,7 +387,7 @@ export function UpcomingWeekStrip({
           className="mt-3 flex-row items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20"
         >
           <View className="h-9 w-9 rounded-lg bg-blue-500/20 items-center justify-center">
-            <Dumbbell size={18} color="#3b82f6" />
+            <Dumbbell size={18} color={colors.primary} />
           </View>
           <View className="flex-1 min-w-0">
             <Text className="text-foreground text-sm font-semibold">

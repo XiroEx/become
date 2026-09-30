@@ -63,6 +63,8 @@ export function ContinueTrainingSection({
 
   useEffect(() => {
     if (initialPrograms !== undefined) return;
+    // Sync with external system: fetch active programs on mount or auth change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchActive();
   }, [initialPrograms, fetchActive]);
 
@@ -121,7 +123,7 @@ export function ContinueTrainingSection({
               onPress={handleWorkoutNow}
               className="flex-row items-center gap-1.5 px-3.5 py-2 rounded-full bg-emerald-600"
             >
-              <Zap size={14} color="#ffffff" fill="#ffffff" />
+              <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
               <Text className="text-white text-xs font-bold">Workout Now</Text>
             </Pressable>
           </View>
@@ -144,7 +146,7 @@ export function ContinueTrainingSection({
           onPress={handleWorkoutNow}
           className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-600"
         >
-          <Zap size={14} color="#ffffff" fill="#ffffff" />
+          <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
           <Text className="text-white text-xs font-bold">Workout Now</Text>
         </Pressable>
       </View>
@@ -183,7 +185,7 @@ export function ContinueTrainingSection({
                       testID={`continue-program-paused-${program.programId}`}
                       className="flex-row items-center gap-1 mt-1"
                     >
-                      <Pause size={12} color="#d97706" />
+                      <Pause size={12} color={colors.accent} />
                       <Text className="text-amber-600 dark:text-amber-400 text-xs font-semibold">
                         Paused
                       </Text>
@@ -225,9 +227,9 @@ export function ContinueTrainingSection({
                     }`}
                   >
                     {isPaused ? (
-                      <Pause size={16} color="#ffffff" />
+                      <Pause size={16} color={colors["primary-foreground"]} />
                     ) : (
-                      <Play size={16} color="#ffffff" fill="#ffffff" />
+                      <Play size={16} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
                     )}
                   </View>
                 </View>

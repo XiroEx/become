@@ -16,8 +16,8 @@ export type WeekStripDayStatus = ScheduledWorkoutStatus | 'quick' | 'rest';
  * slot or a quick session logged the same day.
  */
 export function computeWeekStripDayStatus(
-  workouts: Array<{ status: ScheduledWorkoutStatus }> | undefined,
-  quickSessions: Array<{ completed: boolean }> | undefined,
+  workouts: { status: ScheduledWorkoutStatus }[] | undefined,
+  quickSessions: { completed: boolean }[] | undefined,
 ): WeekStripDayStatus {
   const hasCompletedWorkout =
     !!workouts?.some((w) => w.status === 'completed') ||
