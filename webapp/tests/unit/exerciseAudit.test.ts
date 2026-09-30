@@ -20,6 +20,8 @@ import {
   findDuplicateOf,
   escapeRegExp,
   describeExerciseIssues,
+  matchesAuditSearch,
+  exerciseTextSearchClause,
 } from '../../lib/exerciseAudit'
 
 const ROOT = path.join(__dirname, '../..')
@@ -220,6 +222,64 @@ test('Admin exercises list surfaces a hazard icon for rows with audit issues', (
   const src = readSource('app/dashboard/admin/exercises/page.tsx')
   assert.match(src, /describeExerciseIssues/)
   assert.match(src, /AlertTriangle/)
+})
+
+// ─── Admin catalog search understands the shorthand ──────────────────────
+//
+// Card: "We need to have support for our dumbbell only program. When I
+// searched the exercise in the admin portal, none of the exercises pop up."
+// The list's `?q=` was a raw substring match, so the half of the catalog
+// written in gym shorthand was unreachable from the words Jon types, and the
+// half written out in full was unreachable from the shorthand his programs use.
+
+const DUMBBELL_CURL = { slug: 'dumbbell-curl', name: 'Dumbbell Curl', aliases: ['Dumbbell Curls'] }
+const STILL_SHORTHAND = { slug: 'chest-supported-row', name: 'Chest-Supported Row', aliases: ['Incline DB Row or Cable Row'] }
+
+test('matchesAuditSearch finds a spelled-out row from the shorthand a program uses', () => {
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, 'DB Curl'), true)
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, 'db curl'), true)
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, 'RDL'), false, 'an expansion must not match everything')
+})
+
+test('matchesAuditSearch still finds a row whose alias is the shorthand', () => {
+  assert.equal(matchesAuditSearch(STILL_SHORTHAND, 'DB Row'), true)
+  assert.equal(matchesAuditSearch(STILL_SHORTHAND, 'chest-supported'), true)
+})
+
+test('matchesAuditSearch keeps its literal substring behaviour and its empty-query pass', () => {
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, 'curl'), true)
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, '   '), true)
+  assert.equal(matchesAuditSearch(DUMBBELL_CURL, 'squat'), false)
+})
+
+test('exerciseTextSearchClause searches name, slug and aliases for every query variant', () => {
+  const clause = exerciseTextSearchClause('DB Curl') as { $or: Record<string, unknown>[] }
+  // Two variants ("db curl", "dumbbell curl") × three fields.
+  assert.equal(clause.$or.length, 6)
+  const patterns = clause.$or.map((c) => JSON.stringify(c))
+  assert.ok(patterns.some((p) => p.includes('db curl')), 'the literal query must reach Mongo')
+  assert.ok(patterns.some((p) => p.includes('dumbbell curl')), 'so must its expansion')
+  assert.ok(patterns.some((p) => p.includes('"name"')))
+  assert.ok(patterns.some((p) => p.includes('"slug"')))
+  assert.ok(patterns.some((p) => p.includes('"aliases"')))
+})
+
+test('exerciseTextSearchClause is null for an empty query and escapes regex metacharacters', () => {
+  assert.equal(exerciseTextSearchClause(''), null)
+  assert.equal(exerciseTextSearchClause('   '), null)
+  const clause = exerciseTextSearchClause('Curl (EZ') as { $or: Record<string, unknown>[] }
+  const first = clause.$or[0] as { name: { $regex: string } }
+  assert.doesNotThrow(() => new RegExp(first.name.$regex), 'a half-typed name must not throw inside $regex')
+})
+
+test('the admin exercises list route builds its query through exerciseTextSearchClause', () => {
+  const src = readSource('app/api/exercises/route.ts')
+  assert.match(src, /exerciseTextSearchClause\(q\)/)
+  assert.doesNotMatch(
+    src,
+    /escapeRegExp\(q\)/,
+    'the hand-rolled single-variant substring query is what the card is about',
+  )
 })
 
 test('ExerciseSwapModal queries the full catalog, not just the pre-scored alternatives list', () => {
