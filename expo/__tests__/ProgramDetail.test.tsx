@@ -81,4 +81,36 @@ describe("ProgramDetail", () => {
       "https://become.redbtn.io/dashboard/programming/a%20b%2Fc/edit",
     );
   });
+
+  it("renders Save/Unsave toggle button and calls onToggleSave", () => {
+    const onToggleSave = jest.fn();
+    const { getByTestId, rerender } = render(
+      <ProgramDetail
+        program={sample}
+        isSaved={false}
+        onToggleSave={onToggleSave}
+      />,
+    );
+
+    const toggleBtn = getByTestId("program-detail-toggle-save");
+    expect(toggleBtn).toBeTruthy();
+    expect(toggleBtn.props.accessibilityLabel).toBe(
+      "Save program Strength Foundation",
+    );
+
+    fireEvent.press(toggleBtn);
+    expect(onToggleSave).toHaveBeenCalledTimes(1);
+
+    // When saved, label updates to Unsave
+    rerender(
+      <ProgramDetail
+        program={sample}
+        isSaved={true}
+        onToggleSave={onToggleSave}
+      />,
+    );
+    expect(getByTestId("program-detail-toggle-save").props.accessibilityLabel).toBe(
+      "Unsave program Strength Foundation",
+    );
+  });
 });
