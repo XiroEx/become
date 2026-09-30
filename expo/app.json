@@ -12,6 +12,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.redbtn.become",
       "associatedDomains": ["applinks:become.redbtn.io"],
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Become uses the camera to photograph a meal so it can log what is in it, a food label when you report a food, and a progress photo when you choose to add one.",
@@ -113,6 +114,7 @@
       "expo-router",
       "expo-secure-store",
       "expo-font",
+      "expo-apple-authentication",
       "react-native-health-connect",
       [
         "expo-camera",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   KeyboardAvoidingView,
@@ -19,12 +19,21 @@ import {
   type CheckSessionResponse,
   ReviewSignInResponseSchema,
   type ReviewSignInResponse,
+  type AppleLinkEmailResponse,
   type AuthMode,
   type SendLinkRequest,
 } from "@become/api-client";
 import { CONSENT_STATEMENT } from "@become/core";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
+import AppleSignInButton, {
+  appleSignInSupported,
+} from "@/components/AppleSignInButton";
+import {
+  sendAppleEmailLink,
+  signInWithApple,
+  type AppleSignInResult,
+} from "@/lib/auth/appleSignIn";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createPoller, type Poller } from "@/lib/auth/polling";
 import { announce } from "@/lib/a11y/announce";
@@ -95,6 +104,12 @@ export interface LoginScreenProps {
     email: string,
     code: string,
   ) => Promise<ReviewSignInResponse>;
+  /** DI hook for tests — runs Apple's sheet and POSTs /api/auth/apple. */
+  appleSignInFn?: () => Promise<AppleSignInResult>;
+  /** DI hook for tests — POSTs /api/auth/apple/link with the Apple session. */
+  appleLinkFn?: (token: string, email: string) => Promise<AppleLinkEmailResponse>;
+  /** DI hook for tests — the Apple button's availability probe (iOS 13+ only). */
+  appleAvailableAsync?: () => Promise<boolean>;
   /** DI hook for tests — persists the JWT. Defaults to useAuth().setToken. */
   onAuthed?: (token: string) => void | Promise<void>;
   pollIntervalMs?: number;
@@ -112,6 +127,9 @@ export default function LoginScreen({
   sendLinkFn,
   checkSessionFn,
   reviewSignInFn,
+  appleSignInFn,
+  appleLinkFn,
+  appleAvailableAsync,
   onAuthed,
   pollIntervalMs,
   setTimeoutImpl,
@@ -146,6 +164,16 @@ export default function LoginScreen({
   const [showReviewCode, setShowReviewCode] = useState(false);
   const [reviewCode, setReviewCode] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [appleBusy, setAppleBusy] = useState(false);
+  /**
+   * A finished Apple sign-in whose session is NOT stored yet, because the
+   * account it opened is reachable only at a Hide My Email relay alias and may
+   * therefore belong to a member who already has an account. Storing the token
+   * would navigate them straight into the empty one; holding it here is what
+   * makes "Already a member? Link your email" possible.
+   */
+  const [appleOffer, setAppleOffer] = useState<{ token: string } | null>(null);
+  const [appleLinkBusy, setAppleLinkBusy] = useState(false);
   const submittingRef = useRef(false);
   const pollerRef = useRef<Poller | null>(null);
   const isResumedRef = useRef(false);
@@ -182,6 +210,10 @@ export default function LoginScreen({
         body: { email: value, code },
         baseUrl: WEBAPP_BASE_URL,
       }));
+
+  const appleSignIn = appleSignInFn ?? (() => signInWithApple());
+  const appleLink =
+    appleLinkFn ?? ((token: string, value: string) => sendAppleEmailLink(token, value));
 
   const handleAuthed = onAuthed ?? auth.setToken;
 
@@ -365,6 +397,105 @@ export default function LoginScreen({
     }
   };
 
+  /**
+   * SIGN IN WITH APPLE. Three endings, and the middle one is the whole point
+   * of this card: a member who chose Hide My Email is NOT navigated into the
+   * account that was just created — they are offered the link first.
+   */
+  const handleAppleSignIn = async (): Promise<void> => {
+    if (appleBusy) return;
+    setError(null);
+    setAppleBusy(true);
+    try {
+      const result = await appleSignIn();
+      if (result.status === "cancelled") return; // a dismissal is not an error
+      if (result.status === "unavailable") {
+        setError("Sign in with Apple isn't available on this device.");
+        return;
+      }
+      if (result.status !== "signed-in" || !result.session) {
+        setError(result.message ?? "Apple sign-in failed. Please try again.");
+        return;
+      }
+      const session = result.session;
+      if (session.canLinkEmail) {
+        setAppleOffer({ token: session.token });
+        setEmail("");
+        announce(
+          "Signed in with Apple. If you already have a Become account, link your email address.",
+        );
+        return;
+      }
+      await pendingStore.clear();
+      await Promise.resolve(handleAuthed(session.token));
+      router.replace("/");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setAppleBusy(false);
+    }
+  };
+
+  /** Continue into the account Apple just created, relay address and all. */
+  const handleAppleContinue = async (): Promise<void> => {
+    const offer = appleOffer;
+    if (!offer) return;
+    await pendingStore.clear();
+    setAppleOffer(null);
+    await Promise.resolve(handleAuthed(offer.token));
+    router.replace("/");
+  };
+
+  /**
+   * Send the sign-in link to the member's real address. The answer is a
+   * sessionId, which is polled by exactly the same machinery a magic link
+   * uses — and the session it eventually yields belongs to their EXISTING
+   * account, because the server merges on verification.
+   */
+  const handleAppleLinkSubmit = async (): Promise<void> => {
+    const offer = appleOffer;
+    if (!offer || appleLinkBusy) return;
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail.includes("@")) {
+      setError("Enter the email address your account uses");
+      return;
+    }
+    setError(null);
+    setAppleLinkBusy(true);
+    try {
+      const resp = await appleLink(offer.token, trimmedEmail);
+      const startMs = nowImpl();
+      setAppleOffer(null);
+      setMode("login");
+      setSessionId(resp.sessionId);
+      setStartedAt(startMs);
+      setSubmitted(true);
+      await pendingStore.set({
+        sessionId: resp.sessionId,
+        email: trimmedEmail,
+        mode: "login",
+        startedAt: startMs,
+      });
+      announce(`Check your inbox. We sent a sign-in link to ${trimmedEmail}.`);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setAppleLinkBusy(false);
+    }
+  };
+
+  // A STABLE press handler for the memoised Apple button, latched through a
+  // ref the same way the poller's callbacks are: the handler closes over this
+  // render's state, the identity the button sees never changes, and the native
+  // view is not re-rendered on every keystroke in the email box.
+  const appleSignInRef = useRef(handleAppleSignIn);
+  useEffect(() => {
+    appleSignInRef.current = handleAppleSignIn;
+  });
+  const onApplePress = useCallback(() => {
+    void appleSignInRef.current();
+  }, []);
+
   const handleChangeEmail = async (): Promise<void> => {
     if (pollerRef.current) {
       pollerRef.current.stop();
@@ -490,6 +621,53 @@ export default function LoginScreen({
                 Use a different email
               </Button>
             </View>
+          ) : appleOffer ? (
+            /* Signed in with Apple, holding the session back. See appleOffer. */
+            <View testID="apple-link-offer" style={{ width: "100%" }}>
+              <Text
+                accessibilityRole="header"
+                className="text-foreground text-center mb-2"
+              >
+                Already a member?
+              </Text>
+              <Text className="text-muted-foreground text-center text-sm mb-4">
+                Apple kept your email address private, so we could not tell
+                whether you already have a Become account. Enter the email
+                address you use and we will send a link to bring it across —
+                you will keep one account, with all your history.
+              </Text>
+              <Input
+                testID="apple-link-email"
+                label="Your email"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+                returnKeyType="go"
+                onSubmitEditing={handleAppleLinkSubmit}
+                value={email}
+                onChangeText={setEmail}
+                error={error ?? undefined}
+                placeholder="you@example.com"
+              />
+              <View style={{ height: 12 }} />
+              <Button
+                testID="apple-link-submit"
+                onPress={handleAppleLinkSubmit}
+                disabled={appleLinkBusy}
+                accessibilityLabel="Send a link to my email"
+              >
+                {appleLinkBusy ? "Sending…" : "Link my email"}
+              </Button>
+              <View style={{ height: 8 }} />
+              <Button
+                testID="apple-link-skip"
+                variant="ghost"
+                onPress={handleAppleContinue}
+                accessibilityLabel="Continue as a new member"
+              >
+                I&apos;m new — continue
+              </Button>
+            </View>
           ) : (
             <View style={{ width: "100%" }}>
               <Input
@@ -549,6 +727,37 @@ export default function LoginScreen({
                     ? "Create account"
                     : "Send magic link"}
               </Button>
+
+              {/* SIGN IN WITH APPLE, drawn by Apple, and no less prominent
+                  than the button above it — which is what the Human Interface
+                  Guidelines require of it. The whole block, divider included,
+                  is absent where the platform cannot have it: a lone "or" with
+                  nothing under it is how that goes wrong on Android. */}
+              {appleSignInSupported() ? (
+                <>
+                  <View className="my-4 flex-row items-center gap-3">
+                    <View className="flex-1 h-px bg-border" />
+                    <Text className="text-muted-foreground text-xs">or</Text>
+                    <View className="flex-1 h-px bg-border" />
+                  </View>
+                  <AppleSignInButton
+                    intent={mode === "register" ? "sign-up" : "sign-in"}
+                    onPress={onApplePress}
+                    {...(appleAvailableAsync
+                      ? { isAvailableAsync: appleAvailableAsync }
+                      : {})}
+                  />
+                  {appleBusy ? (
+                    <Text
+                      testID="apple-sign-in-busy"
+                      accessibilityLiveRegion="polite"
+                      className="text-muted-foreground text-xs text-center mt-2"
+                    >
+                      Signing in with Apple…
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
 
               {mode === "register" &&
                 error &&

@@ -16,6 +16,22 @@ export interface IMagicLink extends Document {
    *  lands on the User row at the instant the row is created (verify-link),
    *  not on some later screen. Register mode only. */
   consentTermsVersion?: string
+  /**
+   * SIGN IN WITH APPLE, "Already a member? Link your email" (lib/appleLink.ts).
+   *
+   * Set to the id of the account Apple's relay address created. The link is an
+   * ordinary sign-in link to the member's REAL address — control of that inbox
+   * is the proof that the two accounts are one person — and this field is the
+   * intent riding on it: when verify-link consumes a link carrying it, the
+   * Apple subject moves onto the account that owns the address and the
+   * throwaway row is purged.
+   *
+   * It lives on the link rather than in a table of its own because the link
+   * already has the right lifetime (15 minutes, TTL-swept), the right
+   * single-use semantics (`used`) and the right polling machinery — and
+   * because a second store would be a second thing that can be left behind.
+   */
+  appleLinkUserId?: string
   expiresAt: Date
   used: boolean
   authToken?: string  // JWT stored after verification
@@ -55,6 +71,9 @@ const MagicLinkSchema = new Schema<IMagicLink, MagicLinkModel>({
   consentTermsVersion: {
     type: String,
   },
+  appleLinkUserId: {
+    type: String,
+  },
   expiresAt: {
     type: Date,
     required: true,
@@ -89,6 +108,8 @@ export async function createMagicLink(
   email: string,
   mode: 'login' | 'register',
   consentTermsVersion?: string,
+  /** Extra intent carried by this link. See IMagicLink.appleLinkUserId. */
+  options?: { appleLinkUserId?: string },
 ): Promise<IMagicLink> {
   const MagicLink = mongoose.models.MagicLink || mongoose.model<IMagicLink, MagicLinkModel>('MagicLink', MagicLinkSchema)
   
@@ -108,6 +129,7 @@ export async function createMagicLink(
     sessionId,
     mode,
     consentTermsVersion,
+    appleLinkUserId: options?.appleLinkUserId,
     expiresAt,
     used: false,
   })
