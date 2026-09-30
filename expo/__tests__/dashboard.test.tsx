@@ -413,6 +413,6 @@ describe("DashboardRoute navigation", () => {
 
     fireEvent.press(getByTestId("dashboard-open-settings"));
 
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile/health");
+    expect(mockPush).toHaveBeenCalledWith("/settings");
   });
 });

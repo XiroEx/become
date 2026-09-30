@@ -24,6 +24,7 @@ const DIRECT_SCREENS = [
   "app/(app)/(tabs)/calendar/index.tsx",
   "app/(app)/(tabs)/calendar/settings.tsx",
   "app/(app)/(tabs)/profile/health.tsx",
+  "app/(app)/settings.tsx",
   "app/(app)/admin/foods/index.tsx",
   "app/(app)/admin/exercises/index.tsx",
 ];
