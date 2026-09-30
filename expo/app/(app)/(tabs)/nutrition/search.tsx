@@ -1,37 +1,13 @@
-import { useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
-import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FoodSearchResponseSchema } from "@become/api-client";
-import { FoodSearchInput } from "@/components/nutrition/FoodSearchInput";
-import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useAuth } from "@/lib/auth/useAuth";
-import { useFetch } from "@/lib/hooks/useFetch";
-import {
-  findFoodSearchRow,
-  foodDetailHref,
-  toFoodSearchResults,
-} from "@/lib/nutrition/foodSearch";
+import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function NutritionSearchRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
-  const { token } = useAuth();
-  const [query, setQuery] = useState<string>("");
-
-  const trimmed = query.trim();
-  const { data } = useFetch(
-    trimmed ? `/api/nutrition/foods?q=${encodeURIComponent(trimmed)}` : null,
-    FoodSearchResponseSchema,
-    {
-      baseUrl: WEBAPP_BASE_URL,
-      getToken: () => token ?? undefined,
-    },
-  );
-
-  const results = toFoodSearchResults(data);
+  const params = useLocalSearchParams<{ tag?: string; date?: string }>();
 
   return (
     <SafeAreaView
@@ -44,19 +20,13 @@ export default function NutritionSearchRoute() {
         style={{ flex: 1 }}
         testID="nutrition-search-route-kav"
       >
-        <View style={{ padding: 16 }}>
-          <Text className="text-foreground text-2xl font-bold mb-3">
-            Find a food
-          </Text>
-          <FoodSearchInput
-            results={results}
-            onSearch={setQuery}
-            onPickResult={(r) =>
-              // The row travels with the tap: a USDA/OpenFoodFacts hit has no
-              // Food document yet, and this cached row is what the detail
-              // screen re-imports with when the source import can't answer.
-              router.push(foodDetailHref(r.id, findFoodSearchRow(data, r.id)))
-            }
+        <View style={{ flex: 1 }}>
+          <FoodSearchSheet
+            visible={true}
+            onClose={() => router.back()}
+            currentTag={params.tag}
+            activeDate={params.date}
+            testID="nutrition-search-sheet"
           />
         </View>
       </KeyboardAvoidingView>
