@@ -351,9 +351,13 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
 
       fireEvent.press(getByTestId("login-change-email"));
 
-      await waitFor(() => {
-        expect(queryByTestId("login-submitted")).toBeNull();
-      });
+      // CI runners are slow; the reset lands after an async SecureStore clear.
+      await waitFor(
+        () => {
+          expect(queryByTestId("login-submitted")).toBeNull();
+        },
+        { timeout: 5000 },
+      );
       expect(getByTestId("login-email")).toBeTruthy();
       expect(await pendingStore.get()).toBeNull();
     });
