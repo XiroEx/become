@@ -39,7 +39,8 @@ const recipe = {
   name: "Protein Oats",
   description: "Quick breakfast",
   servings: 2,
-  nutrition: { calories: 450, protein: 30, carbs: 50, fats: 12 },
+  // Where the web really keeps a recipe's macros (webapp/models/Recipe.ts).
+  totalsPerServing: { calories: 210, protein: 17, carbs: 26.5, fats: 3.5 },
   ingredients: [
     { name: "Oats", amount: 80, unit: "g", nutrition: { calories: 300, protein: 10, carbs: 50, fats: 5 } },
   ],
@@ -100,7 +101,8 @@ describe("RecipeDetailRoute", () => {
         "Protein Oats",
       );
     });
+    // The same per-serving figure the web shows for this recipe.
     const kcal = getByTestId("recipe-detail-nutrition-kcal").props.children;
-    expect(Array.isArray(kcal) ? kcal.join("") : kcal).toContain("450");
+    expect(Array.isArray(kcal) ? kcal.join("") : kcal).toContain("210");
   });
 });

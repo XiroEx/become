@@ -1,8 +1,12 @@
 import { toMealEntries } from "@/lib/nutrition/mealLog";
 
 describe("toMealEntries", () => {
+  // The legacy day as GET /api/nutrition/log really answers it: `water`,
+  // `quickAdds`, `dailyTotals` and `goals` beside the four meal buckets. The
+  // side tables are what keep this route alive at all (NP-024 rule 4).
   const response = {
     date: "2026-06-01",
+    quickAdds: [],
     meals: [
       {
         mealType: "breakfast",
@@ -47,6 +51,7 @@ describe("toMealEntries", () => {
   it("multiplies the per-serving block by servings, as the server totals it", () => {
     const entries = toMealEntries(
       {
+        quickAdds: [],
         meals: [
           {
             mealType: "snack",
@@ -79,6 +84,7 @@ describe("toMealEntries", () => {
   it("narrows an unknown mealType to 'snack' and tolerates empty input", () => {
     const entries = toMealEntries(
       {
+        quickAdds: [],
         meals: [
           {
             mealType: "brunch",
@@ -92,6 +98,6 @@ describe("toMealEntries", () => {
     );
     expect(entries[0]!.mealType).toBe("snack");
     expect(toMealEntries(null, "2026-06-01")).toEqual([]);
-    expect(toMealEntries({ meals: [] }, "2026-06-01")).toEqual([]);
+    expect(toMealEntries({ meals: [], quickAdds: [] }, "2026-06-01")).toEqual([]);
   });
 });
