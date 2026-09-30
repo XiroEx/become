@@ -1,9 +1,12 @@
 // Unified dashboard tile model — webapp-canonical (zod-free).
 //
-// The webapp has no `zod` dependency (only the shared `@become/api-client`
-// package does, which the Expo app consumes). Following the existing webapp
-// pattern (see lib/dashboardTiles/validatePinnedTiles.ts), this module hand-
-// rolls the same shape + validators that `@become/api-client`'s
+// The webapp does not import `@become/api-client` — webapp/Dockerfile's build
+// context is `webapp/`, so the sibling package is not in the image. (It
+// declares `zod` for exactly one file, `lib/sharedApiTypes.ts`, which mirrors
+// the shared auth schemas under a contract test; nothing else here uses it.)
+// Following the existing webapp pattern (see
+// lib/dashboardTiles/validatePinnedTiles.ts), this module hand-rolls the same
+// shape + validators that `@become/api-client`'s
 // `schemas/dashboard.ts` describes with zod. Keep the two in sync — they
 // describe the same persisted/wire shape used by GET/PATCH /api/dashboard/layout
 // and stored on UserProgress.dashboardLayout.
