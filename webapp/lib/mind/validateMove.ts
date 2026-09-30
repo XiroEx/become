@@ -201,7 +201,7 @@ function contentWords(s: string): Set<string> {
 
 function lastSentence(s: string): string {
   const parts = s.split(/[.!?]+/).map((p) => p.trim()).filter(Boolean)
-  return parts.length > 0 ? parts[parts.length - 1] : s
+  return parts.length > 0 ? parts[parts.length - 1]! : s
 }
 
 const STOPWORDS = new Set([

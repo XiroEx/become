@@ -833,6 +833,52 @@ server's `error` text is rendered verbatim; a 429 is never an upsell.
 reason code, the gate's two required fields or the 429 ever drift from the copy
 the shared client carries.
 
+#### The NATIVE side of the plan snapshot (NP-049)
+
+The phone reads plan state through the same three pieces the web does, in the
+same order, and grows no fourth:
+
+| Piece | Job |
+|---|---|
+| `expo/lib/entitlements/store.ts` | The ONLY native caller of `GET /api/me/entitlements`. A module snapshot + the same 60s TTL, a persisted seed for first paint, and the ordering rules below. Usable outside React, which is why it is a store and not a hook. |
+| `expo/lib/entitlements/useEntitlements.ts` | The hook over it. `enforced`, `canCreate(feature)`, `feature(feature)`, `refresh()`. |
+| `expo/components/entitlements/` | `AllowanceLock` (the lock + the reason + the way back out) and `AllowanceCounter` (`2/3`, and when it resets). Both draw NOTHING when `enforced` is false. |
+
+**There is no native copy of the gate copy.** `featureHeadline`,
+`allowanceLine`, `formatResetsAt`, `syntheticGate`, `planGate`, `gateFrom`,
+`FEATURE_LABELS` and `PLUS_BENEFITS` are re-exported from `@become/core`
+(Decision NP-017) through the Metro `file:` link, which is the same module
+`webapp/lib/entitlementsClient.ts` re-exports from the published package. That
+those two are the same module is the ONLY reason the phone and the browser
+cannot explain a cap in different words, and it is checked from both sides:
+`webapp/tests/unit/entitlements/coreDrift.test.ts` (the always-on `verify` job)
+imports the webapp's module AND `shared/core/src/entitlements.ts` and compares
+every table and every function output, so a source change that has not been
+published and pinned fails there; `expo/__tests__/entitlementsWebParity.test.ts`
+refuses a second declaration in either tree and pins the TTL against the web
+hook's.
+
+Four ordering rules, ported whole from `webapp/hooks/useEntitlements.ts` and
+asserted in `expo/__tests__/entitlementsStore.test.ts`: the identity check runs
+FIRST (a token the store has not seen drops the snapshot — it is not stale data,
+it is somebody else's plan); a forced read never adopts a request that was
+already on the wire; a forced read also marks those requests superseded so one
+cannot land on top; and `invalidateEntitlements()` supersedes as well as
+expiring the TTL. Without the last two, a member at 3/3 who deletes one stays
+locked for a further full minute.
+
+Two things are native-only. `AuthProvider` tells the store the session on every
+`commit` and **drops the snapshot on sign-out**, because a sign-out here is a
+navigation rather than a page load, so the module cache would otherwise outlive
+it. And the persisted seed **is never read while signed out**: it is scoped to a
+member by `lib/cache/lastKnown`, and with no session to scope it to that module
+falls back to whichever member id is still active — which painted the previous
+member's tier straight back onto the next member's first screen.
+
+The rules that travel are the web's: read `canCreate`, never recompute it from
+`limit` and `used`; when `enforced` is false render no lock, counter or plan
+card; a delete frees its slot immediately, so force a read after one.
+
 #### The plan page (`app/dashboard/plan`)
 
 The sheet answers "why was I stopped?"; this answers "what is this and what
@@ -1521,6 +1567,38 @@ through its own tsconfig path exactly as before.
 - Any PR changing `shared/core` MUST bump its version in `shared/core/package.json`.
 - **`src/training/` is COPIES of `webapp/lib/**`, and they are never edited there (NP-058).** The training, streak and dashboard-tile modules (`workoutUtils`, `workout/*`, `quickSession/{naming,log}`, `streaks/{tile,pillars}`, `dashboard/goalTile`, `dashboardLayout/{types,defaults}`, `videoTrim`, `videoFraming`) sit under the same relative paths they have in `webapp/lib`, so a re-copy is a file-for-file overwrite. `expo/` imports them from `@become/core`; the webapp still imports its OWN module, because webapp code may never import `../shared/*`. `webapp/tests/unit/nativeParity/trainingModules.test.ts` (in `verify`, which always runs) drives both over one fixture table and fails the moment an answer differs — including when a new web export has no fixture. A behaviour change lands on the WEB first and is then re-copied; the procedure is in `expo/README.md` ("Re-copying a training module after a web change"). When the webapp switches to the published package, the copies and that test go away together.
 - Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step: publish from clean main with publisher credentials to `https://registry.redbtn.io/`, verify `npm view @become/core versions`, and update `webapp/package.json` with `npm install --package-lock-only`.
+
+#### The copied Mind domain and its drift tests (NP-062)
+
+The Mind session path, deterministic composer, move builders, XP/chapter maths
+and speech matcher live in `webapp/lib/mind*`, `webapp/lib/mindXP.ts`,
+`webapp/lib/mindContent.ts` and `webapp/lib/ai/sanitize.ts`. `@become/core`
+carries a COPY of all 22 of those modules (`shared/core/src/mind*`,
+`shared/core/src/ai/sanitize.ts`) so the native app can run the same behaviour.
+
+- **The web file is the source of truth.** Composer and XP changes land on the
+  web first. `webapp/` does NOT import them from `@become/core` yet (RedRun
+  builds `webapp/` alone); it keeps its own module until the package is
+  published and the webapp switches over.
+- **Write the copy with the script, never by hand:** `node scripts/vendor-mind.mjs`
+  (`--check` just reports). The only edit it makes is rewriting the webapp's
+  `@/` import aliases. `GuidedStep` — the one type the copies needed from a
+  component — travels with them as `shared/core/src/mind/guidedStep.ts`.
+- **Three suites hold it together.** `webapp/tests/unit/mindDrift.test.ts` fails
+  when a copy is not its web source verbatim; `webapp/tests/unit/mindParity.test.ts`
+  fails when the copy and the web disagree behaviourally across 360 contexts
+  (seeds × chapters × states × path positions) or when the committed fixtures no
+  longer match the web; `shared/core/tests/mind.test.ts` and
+  `expo/__tests__/mind.test.ts` hold `@become/core` to those same fixtures.
+- **The fixtures are generated, not written:**
+  `cd webapp && npx tsx scripts/gen-mind-fixtures.ts` writes
+  `shared/core/tests/fixtures/mindParity.json` from the WEB modules. Change the
+  composer or the XP maths on the web and you must re-run the vendor script AND
+  the generator in the same commit, or `verify` goes red.
+- `expo/tsconfig.json` typechecks `shared/core/src` with `noUncheckedIndexedAccess`,
+  so the web sources carry type-only non-null assertions on provably in-range
+  index reads. They erase at compile time and change no behaviour; keep them
+  when you edit those files or the `expo` job fails.
 
 #### The contract test: what the native app is actually sent (NP-016)
 

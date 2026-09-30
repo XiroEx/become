@@ -117,8 +117,9 @@ export function orderIndexForTag(windows: TagWindow[], tag: string): number {
  */
 export function tagForMinutes(windows: TagWindow[], minutes: number): string | null {
   const hits = windows.filter(isScheduled).filter(w => windowContains(w, minutes))
-  if (hits.length === 0) return null
-  let best = hits[0]
+  const first = hits[0]
+  if (!first) return null
+  let best: ScheduledWindow = first
   for (const w of hits) if (windowLength(w) < windowLength(best)) best = w
   return best.tag.toLowerCase()
 }

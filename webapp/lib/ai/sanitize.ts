@@ -118,7 +118,7 @@ function isQuestion(s: string): boolean {
 export function trailingQuestion(body: string): string | null {
   const m = body.trim().match(/([^.!?]+\?)["'”’)\]]*\s*$/)
   if (!m) return null
-  const q = m[1].trim()
+  const q = m[1]!.trim()
   // Guard against a stray "?" or a two-word fragment being promoted.
   return q.split(/\s+/).length >= 3 ? q : null
 }

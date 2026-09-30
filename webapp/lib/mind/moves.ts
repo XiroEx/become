@@ -121,15 +121,15 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
 export function breathForState(state: MindState | null | undefined): BreathProtocol {
   switch (state) {
     case 'stressed':
-      return BREATH_PROTOCOLS.sigh
+      return BREATH_PROTOCOLS.sigh!
     case 'distracted':
-      return BREATH_PROTOCOLS.box
+      return BREATH_PROTOCOLS.box!
     case 'low_energy':
-      return BREATH_PROTOCOLS.energize
+      return BREATH_PROTOCOLS.energize!
     case 'locked_in':
-      return BREATH_PROTOCOLS.coherence
+      return BREATH_PROTOCOLS.coherence!
     default:
-      return BREATH_PROTOCOLS.sigh
+      return BREATH_PROTOCOLS.sigh!
   }
 }
 
