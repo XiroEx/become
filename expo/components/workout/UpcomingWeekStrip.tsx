@@ -164,8 +164,8 @@ export function UpcomingWeekStrip({
           date: key,
           programId: w.programId ?? schedule.programId,
           phase: w.phase ?? 1,
-          dayLabel: w.dayLabel,
-          workoutTitle: w.workoutTitle || schedule.programName,
+          dayLabel: w.dayLabel ?? "",
+          workoutTitle: w.workoutTitle || schedule.programName || "",
           status: w.status as ScheduledWorkoutStatus,
         });
         map.set(key, existing);
