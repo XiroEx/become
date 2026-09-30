@@ -56,7 +56,9 @@ export function VersionGate({
   }, [deps]);
 
   useEffect(() => {
-    // 1. Launch check
+    // 1. Launch check. `check` awaits the server before it sets state, so this
+    // is a sync with an external system, not a synchronous cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void check();
 
     // 2. Foreground check
