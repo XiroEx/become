@@ -126,7 +126,8 @@ test('the AI version is independent of the Terms version', () => {
   // Bumping one must never silently re-ask the other: a member re-asked for AI
   // permission who declines loses a feature they were using.
   assert.notEqual(AI_CONSENT_VERSION, LEGAL_VERSION)
-  const src = read('lib/legal/index.ts')
+  const coreLegal = path.join(ROOT, '../shared/core/src/legal/index.ts')
+  const src = fs.existsSync(coreLegal) ? fs.readFileSync(coreLegal, 'utf8') : read('lib/legal/index.ts')
   assert.match(src, /export const AI_CONSENT_VERSION = '/)
 })
 

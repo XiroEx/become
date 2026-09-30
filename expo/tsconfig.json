@@ -17,7 +17,9 @@
     "paths": {
       "@/*": ["./*"],
       "@become/api-client": ["../shared/api-client/src/index"],
-      "@become/api-client/*": ["../shared/api-client/src/*"]
+      "@become/api-client/*": ["../shared/api-client/src/*"],
+      "@become/core": ["../shared/core/src/index"],
+      "@become/core/*": ["../shared/core/src/*"]
     }
   },
   "include": [
@@ -26,7 +28,8 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "nativewind-env.d.ts",
-    "../shared/api-client/src/**/*.ts"
+    "../shared/api-client/src/**/*.ts",
+    "../shared/core/src/**/*.ts"
   ],
   "exclude": ["node_modules", "babel.config.js", "metro.config.js"]
 }

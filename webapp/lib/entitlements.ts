@@ -20,72 +20,22 @@ import type { IUserSubscription } from '@/models/User'
  * another one right now". Every create path uses that, never `requireFeature`.
  */
 
-// 'coach' is deliberately NOT implemented yet. The union + TIER_RANK are the
-// only two places that need an entry when it lands.
-export type Tier = 'free' | 'plus'
-export const TIERS: Tier[] = ['free', 'plus']
-export const TIER_RANK: Record<Tier, number> = { free: 0, plus: 1 }
-export const DEFAULT_TIER: Tier = 'free'
-
-/**
- * The tier at which a feature becomes UNCAPPED. A free member may still get a
- * nonzero allowance below it — see FREE_LIMITS.
- *
- * EVERY ENTRY HERE MUST BE ENFORCED BY A ROUTE. This map is what
- * GET /api/me/entitlements advertises, so an entry no gate consults is a
- * promise the app does not keep. `share-programs` was one: it appeared here,
- * in FREE_LIMITS and in the client copy, and nothing anywhere called a guard
- * with it. It is gone, and it is not coming back as a tier feature, because
- * sharing is a ROLE capability, not a tier one — POST
- * /api/programs/[programId]/share is `requireTrainerOrAdmin`, staff only, and
- * that is the whole gate. Advertising it as Plus was wrong in both directions
- * at once: a Plus member was told they had sharing and was still refused by
- * the role check, and a free-tier TRAINER was told they did not and shared
- * anyway. tests/unit/entitlements/enforcementCoverage.test.ts fails the build
- * if a feature is advertised here without a route that gates on it.
- */
-export const FEATURE_MIN_TIER = {
-  'custom-meals': 'plus',
-  'custom-exercises': 'plus',
-  'custom-programs': 'plus',
-  'custom-foods': 'plus',
-  'custom-sessions': 'plus',
-  'workout-generation': 'plus',
-  'ai-food-estimate': 'plus',
-  'mind-sessions': 'plus',
-  vision: 'plus',
-} as const satisfies Record<string, Tier>
-
-export type Feature = keyof typeof FEATURE_MIN_TIER
-
-export const FEATURES = Object.keys(FEATURE_MIN_TIER) as Feature[]
-
-// ─── Free-tier allowances ────────────────────────────────────────────────────
-//
-// kind:
-//   'inventory' — a LIVE count of rows the member owns. Deleting frees a slot.
-//   'window'    — a counter inside a local day / ISO week bucket.
-//   'milestone' — a monotonic progress number already stored elsewhere.
-export type AllowanceKind = 'inventory' | 'window' | 'milestone'
-export type AllowanceWindow = 'day' | 'week' | 'lifetime'
-
-export interface FreeLimit {
-  limit: number
-  kind: AllowanceKind
-  window: AllowanceWindow
-}
-
-export const FREE_LIMITS = {
-  'ai-food-estimate': { limit: 1, kind: 'window', window: 'day' },
-  'workout-generation': { limit: 3, kind: 'window', window: 'week' },
-  'custom-programs': { limit: 3, kind: 'inventory', window: 'lifetime' },
-  'custom-sessions': { limit: 3, kind: 'inventory', window: 'lifetime' },
-  'custom-exercises': { limit: 3, kind: 'inventory', window: 'lifetime' },
-  'custom-meals': { limit: 3, kind: 'inventory', window: 'lifetime' },
-  'custom-foods': { limit: 3, kind: 'inventory', window: 'lifetime' },
-  'mind-sessions': { limit: 10, kind: 'milestone', window: 'lifetime' },
-  vision: { limit: 0, kind: 'inventory', window: 'lifetime' },
-} as const satisfies Record<Feature, FreeLimit>
+export {
+  TIERS,
+  TIER_RANK,
+  DEFAULT_TIER,
+  FEATURE_MIN_TIER,
+  FEATURES,
+  FREE_LIMITS,
+  type Tier,
+  type Feature,
+  type AllowanceKind,
+  type AllowanceWindow,
+  type FreeLimit,
+  type GatePayload,
+} from '@become/core/entitlements'
+import type { Tier, Feature, GatePayload } from '@become/core/entitlements'
+import { TIER_RANK, FEATURE_MIN_TIER, FREE_LIMITS, DEFAULT_TIER, TIERS } from '@become/core/entitlements'
 
 // ─── Access ──────────────────────────────────────────────────────────────────
 
@@ -123,16 +73,6 @@ export function entitlementsEnforced(): boolean {
 }
 
 // ─── The canonical 403 ───────────────────────────────────────────────────────
-
-export interface GatePayload {
-  error: string
-  requiresTier: Tier
-  feature: Feature
-  limit?: number
-  remaining?: number
-  resetsAt?: string | null
-  window?: AllowanceWindow
-}
 
 /**
  * THE canonical gate response. Every gate in the app returns exactly this
