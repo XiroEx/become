@@ -117,11 +117,14 @@ describe("programDetail mappers", () => {
         weekEnd: 4,
       }),
     );
-    expect(vm.phases[0]!.workouts[0]).toEqual({
-      workoutIndex: 0,
-      title: "Push A",
-      exerciseCount: 2,
-    });
+    expect(vm.phases[0]!.workouts[0]).toEqual(
+      expect.objectContaining({
+        workoutIndex: 0,
+        day: "Day 1",
+        title: "Push A",
+        exerciseCount: 2,
+      }),
+    );
   });
 
   it("toWorkoutOverview slices the right workout", () => {
@@ -165,6 +168,132 @@ describe("ProgramDetailRoute", () => {
     });
     expect(getByTestId("program-detail-phase-0")).toBeTruthy();
     expect(getByTestId("program-detail-phase-1")).toBeTruthy();
+  });
+
+  it("(id: e015c83f) An enrolled member sees Continue, completed days checked and the first incomplete day selected, matching the web", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+            },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts/logs?programId=prog-1")) {
+        return Promise.resolve({
+          logs: [
+            { day: "Day 1", completed: true, date: "2026-09-29T10:00:00Z" },
+            { day: "Day 2", completed: false, date: "2026-09-30T10:00:00Z" },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts?")) {
+        return Promise.resolve({ isResume: false, workout: null });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, queryByTestId, getByText } = render(
+      <ProgramDetailRoute />,
+    );
+
+    // 1. Enrolled member sees Continue (not Enroll / Start Program)
+    await waitFor(() => {
+      expect(getByTestId("program-detail-continue")).toBeTruthy();
+    });
+    expect(getByText("Continue")).toBeTruthy();
+    expect(queryByTestId("program-detail-start")).toBeNull();
+
+    // 2. Completed day is checked (Day 1 completed: true)
+    await waitFor(() => {
+      expect(getByTestId("program-detail-day-check-Day 1")).toBeTruthy();
+    });
+    // Incomplete day is NOT checked (Day 2 completed: false)
+    expect(queryByTestId("program-detail-day-check-Day 2")).toBeNull();
+
+    // 3. First incomplete day in active phase is selected by default (Day 2)
+    // Workout title shows Day 2 workout: "Pull A"
+    expect(getByTestId("program-detail-workout-title").props.children).toBe(
+      "Pull A",
+    );
+
+    // 4. Pressing Continue routes to Track on the day the schedule says is next
+    fireEvent.press(getByTestId("program-detail-continue"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0?phase=0",
+    );
+  });
+
+  it("(id: e015c840) A member with a workout in progress sees the in-progress state and resumes it", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+            },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts/logs?programId=prog-1")) {
+        return Promise.resolve({ logs: [] });
+      }
+      if (path.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: true,
+          workout: {
+            kind: "program",
+            programId: "prog-1",
+            day: "Day 1",
+            phase: 1,
+          },
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, getByText, queryByTestId } = render(
+      <ProgramDetailRoute />,
+    );
+
+    // In-progress workout is displayed as "Resume"
+    await waitFor(() => {
+      expect(getByTestId("program-detail-resume")).toBeTruthy();
+    });
+    expect(getByText("Resume")).toBeTruthy();
+    expect(queryByTestId("program-detail-workout-live")).toBeNull();
+
+    // Resuming opens live workout route directly
+    fireEvent.press(getByTestId("program-detail-resume"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=0&day=Day%201",
+    );
+  });
+
+  it("(id: e015c841) No native screen links to /dashboard/programming/*", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { queryByTestId, queryByText } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-edit-in-browser")).toBeNull();
+    });
+    expect(queryByText("Edit in browser")).toBeNull();
   });
 });
 
