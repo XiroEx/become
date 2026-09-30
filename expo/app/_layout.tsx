@@ -18,6 +18,7 @@ import {
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
+import { VersionGate } from "@/components/version/VersionGate";
 import { WidgetsBridge } from "@/components/widgets/WidgetsBridge";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 import { followSystemColorScheme } from "@/lib/theme/colorScheme";
@@ -159,17 +160,19 @@ export default function RootLayout() {
             */}
             <View style={{ flex: 1 }}>
               <ConnectivityBanner />
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.background },
-                }}
-              >
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(app)" />
-                <Stack.Screen name="onboarding" />
-              </Stack>
+              <VersionGate>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.background },
+                  }}
+                >
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="(auth)" />
+                  <Stack.Screen name="(app)" />
+                  <Stack.Screen name="onboarding" />
+                </Stack>
+              </VersionGate>
             </View>
           </ApiErrorHandlerProvider>
         </AuthProvider>
