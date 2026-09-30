@@ -10,6 +10,7 @@ describe("Android config — app.json", () => {
       androidNavigationBar?: { barStyle?: string };
       android?: {
         package?: string;
+        permissions?: string[];
         adaptiveIcon?: { foregroundImage?: string; backgroundColor?: string };
         intentFilters?: {
           action?: string;
@@ -49,6 +50,17 @@ describe("Android config — app.json", () => {
       "./assets/adaptive-icon.png",
     );
     expect(parsed.expo.android?.adaptiveIcon?.backgroundColor).toBe("#0a0a0a");
+  });
+
+  // Android has no usage string in the manifest — the sentence a member reads
+  // is the app's own (`lib/media/capture.ts`), and the manifest just declares
+  // what the app may ask for. CAMERA is declared because `ImagePicker`'s camera
+  // launch needs it once it is in the manifest (NP-059); RECORD_AUDIO is NOT,
+  // because nothing here records audio and both plugins are told to skip it.
+  it("declares CAMERA, and nothing for the microphone", () => {
+    const permissions = parsed.expo.android?.permissions ?? [];
+    expect(permissions).toContain("android.permission.CAMERA");
+    expect(permissions).not.toContain("android.permission.RECORD_AUDIO");
   });
 
   // The account-deletion restore link arrives by email and may open anywhere.

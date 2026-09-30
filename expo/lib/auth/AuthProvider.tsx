@@ -53,6 +53,7 @@ import {
 } from "@/lib/push/pushTokenStore";
 import { clearAppBadge } from "@/lib/widgets/badge";
 import { clearAllLiveWorkoutDrafts } from "@/lib/live/liveWorkoutCache";
+import { clearAuthedImageCache } from "@/lib/media/authedBlob";
 import { getOfflineWrites } from "@/lib/offline/writes";
 
 /**
@@ -300,6 +301,11 @@ export function AuthProvider({
       } catch {
         /* ignore */
       }
+      // The per-member images this session had in memory (NP-059). They are
+      // keyed by the token that fetched them, so the next account could never
+      // have read them anyway — this is so they do not outlive the session at
+      // all.
+      clearAuthedImageCache();
 
       // Only a DELIBERATE sign-out. "unauthorized" and "expired" mean the server
       // has already stopped accepting this token, so the call could not be

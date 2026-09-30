@@ -13,7 +13,9 @@
       "bundleIdentifier": "io.redbtn.become",
       "associatedDomains": ["applinks:become.redbtn.io"],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Become uses the camera to photograph a meal so it can log what is in it, a food label when you report a food, and a progress photo when you choose to add one.",
+        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo to attach — a meal, a food label, a progress shot or an avatar — and reads nothing else from it."
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -71,6 +73,7 @@
     "android": {
       "package": "io.redbtn.become",
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.WRITE_WEIGHT",
         "android.permission.health.WRITE_EXERCISE"
@@ -111,6 +114,19 @@
       "expo-secure-store",
       "expo-font",
       "react-native-health-connect",
+      [
+        "expo-camera",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-build-properties",
         {
