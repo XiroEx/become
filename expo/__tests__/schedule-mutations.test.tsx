@@ -80,7 +80,25 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
         return Promise.resolve(scheduleDoc(getCount === 1 ? dateA : dateB));
       }
       if (path === "/api/schedule" && method === "PATCH") {
-        return Promise.resolve({ message: "Workout rescheduled" });
+        // The real slot-action answer: { message, schedule: { … } }. The hook
+        // parses it with SchedulePatchResponseSchema now, so a made-up shape
+        // here would be a test agreeing with nothing.
+        return Promise.resolve({
+          message: "Schedule updated: reschedule",
+          schedule: {
+            programId: "prog-1",
+            scheduledWorkouts: [
+              {
+                date: `${dateB}T00:00:00.000Z`,
+                programId: "prog-1",
+                phase: 1,
+                dayLabel: "Day 1",
+                workoutTitle: "Lower A",
+                status: "scheduled",
+              },
+            ],
+          },
+        });
       }
       return Promise.resolve({});
     });
@@ -135,7 +153,21 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
         return Promise.resolve(scheduleDoc(dateA));
       }
       if (path === "/api/schedule/settings" && method === "PUT") {
-        return Promise.resolve({ settings: {} });
+        // What PUT /api/schedule/settings actually answers with — the hook
+        // parses it with ScheduleSettingsUpdateResponseSchema.
+        return Promise.resolve({
+          message: "Schedule settings updated and future workouts regenerated",
+          schedule: {
+            programId: "prog-1",
+            settings: {
+              trainingDays: [1, 2, 3, 5],
+              startDate: `${dateA}T00:00:00.000Z`,
+            },
+            totalScheduledWorkouts: 12,
+            pastWorkouts: 5,
+            futureWorkouts: 7,
+          },
+        });
       }
       return Promise.resolve({});
     });
