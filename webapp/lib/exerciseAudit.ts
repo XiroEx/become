@@ -9,6 +9,20 @@
 // point is surfacing candidates a human would otherwise have to stumble on
 // by hand (see the "Leg Extension" / "Leg extensions" duplicate this was
 // built for).
+//
+// It also owns the admin catalog list's text search, which is a plain
+// substring match on name/slug/aliases — deliberately different from
+// GET /api/exercises/search, where a coach picking an exercise wants a ranked
+// shortlist and an admin looking for a row to edit wants every row the letters
+// appear in. What it was NOT allowed to be is deaf to the shorthand the
+// catalog is half-written in: on the "dumbbell only program" card Jon searched
+// the portal for his own exercises and "none of the exercises pop up", because
+// his programs say "DB Crunch" and a substring of that is not a substring of
+// "Dumbbell Crunch". So the query is tried literally AND in its expanded form,
+// the same rule the member-facing search already used
+// (lib/exerciseAbbreviations.ts).
+
+import { expandQueryVariants } from './exerciseAbbreviations';
 
 export interface AuditableExercise {
   slug: string;
@@ -33,11 +47,36 @@ export function matchesAuditSearch(
   ex: Pick<AuditableExercise, 'slug' | 'name' | 'aliases'>,
   query: string
 ): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  if (ex.name?.toLowerCase().includes(q)) return true;
-  if (ex.slug?.toLowerCase().includes(q)) return true;
-  return (ex.aliases ?? []).some((alias) => typeof alias === 'string' && alias.toLowerCase().includes(q));
+  if (!query.trim()) return true;
+  return expandQueryVariants(query).some((q) => {
+    if (ex.name?.toLowerCase().includes(q)) return true;
+    if (ex.slug?.toLowerCase().includes(q)) return true;
+    return (ex.aliases ?? []).some((alias) => typeof alias === 'string' && alias.toLowerCase().includes(q));
+  });
+}
+
+/**
+ * The Mongo clause behind the admin catalog list's `?q=`: a case-insensitive
+ * substring of the name, the slug or any alias — once per query variant, so
+ * typing "DB curl" reaches Dumbbell Curl and typing "dumbbell curl" reaches a
+ * row still aliased "DB Curls". `null` when there is nothing to search for, so
+ * the caller can skip the clause entirely.
+ *
+ * `q` is escaped: an unescaped '(' from a half-typed "Curl (EZ" would
+ * otherwise throw inside $regex and take the whole list down.
+ */
+export function exerciseTextSearchClause(query: string): Record<string, unknown> | null {
+  const variants = expandQueryVariants(query);
+  if (variants.length === 0) return null;
+  const or = variants.flatMap((variant) => {
+    const pattern = escapeRegExp(variant);
+    return [
+      { name: { $regex: pattern, $options: 'i' } },
+      { slug: { $regex: pattern, $options: 'i' } },
+      { aliases: { $elemMatch: { $regex: pattern, $options: 'i' } } },
+    ];
+  });
+  return { $or: or };
 }
 
 /**

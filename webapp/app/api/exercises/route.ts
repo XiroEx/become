@@ -5,7 +5,7 @@ import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
-import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
+import { exerciseTextSearchClause, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
 
 interface AuditRow extends AuditableExercise {
   category?: string;
@@ -83,16 +83,8 @@ export async function GET(request: NextRequest) {
     // Catalog exercises + this user's own customs + any custom exercise an
     // admin has approved as universal — never someone else's unreviewed one.
     const clauses: Record<string, unknown>[] = [visibleExerciseFilter(auth.userId)];
-    if (q) {
-      const pattern = escapeRegExp(q);
-      clauses.push({
-        $or: [
-          { name: { $regex: pattern, $options: 'i' } },
-          { slug: { $regex: pattern, $options: 'i' } },
-          { aliases: { $elemMatch: { $regex: pattern, $options: 'i' } } },
-        ],
-      });
-    }
+    const textClause = exerciseTextSearchClause(q);
+    if (textClause) clauses.push(textClause);
     const filter: Record<string, unknown> = clauses.length > 1 ? { $and: clauses } : clauses[0];
     if (category) filter.category = category;
     if (movement) filter.movementPatterns = movement;
