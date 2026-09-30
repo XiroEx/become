@@ -1799,6 +1799,67 @@ collection that throws on an unexpected write) and
 `tests/unit/billing/resweepSchedule.test.ts` (one schedule, often enough,
 production only, secret checked before the sweep, no record on a no-op).
 
+## The exercise catalog: a repo table that WRITES ITSELF to production
+
+**A data migration that needs a human to run it does not exist.** This is the
+lesson of the "dumbbell only program" card, and it cost a whole round trip.
+
+The card was: the dumbbell exercises a dumbbell-only program prescribes were not
+in the admin portal, because the importer had attached the coach's wording to
+the nearest barbell/machine/bodyweight row AS AN ALIAS rather than minting a
+row. Round one shipped the reviewed decision (`webapp/lib/dumbbellCatalog.ts`),
+a pure planner (`lib/dumbbellCatalogPlan.ts`), the repo's snapshot of the
+catalog (`data/exercises.json`, `data/programs.json`), a passing test suite —
+and `scripts/dumbbell-catalog.ts --prod --apply` for somebody to run. Nobody
+ran it. The admin portal reads MongoDB, so the coach's reply was simply
+correct: *"You didn't change anything. The exercises still read with a DB. The
+exercises still don't exist in the admin portal."*
+
+`data/*.json` IS NOT THE DATABASE. It is a snapshot the tests read. Editing it
+changes what CI checks and nothing a member or an admin can see.
+
+So the catalog now has a WRITER, on the same pattern as the tier resweep and
+the deletion purge:
+
+- `lib/dumbbellCatalogSync.ts` — reads the live `exercises` and `programs`
+  collections, plans with the same pure functions the test uses, writes only
+  the difference, then RE-PLANS and reports whether a second run would find
+  anything. Convergent and idempotent: a run with nothing to do writes nothing
+  at all, which is what makes it safe on a schedule.
+- `app/api/cron/sync-exercise-catalog` — POST applies, GET is a dry run by
+  construction, `?dryRun=1` on either. Auth is `x-cron-secret`
+  (redsecrets `admin.cronSecret`), like every other cron route.
+- `.github/workflows/sync-exercise-catalog.yml` — **push to `main`** (beta is
+  promoted to main, so merging IS applying) plus a **daily schedule** as the
+  backstop, plus `workflow_dispatch` for a dry run. Repo secret
+  `BECOME_CRON_SECRET`, the same one the other two schedules use, so there is
+  no new secret to provision. Production host only: beta and production are two
+  workspaces over ONE database.
+- `scripts/dumbbell-catalog.ts` still exists, and its `--prod` half now calls
+  `syncDumbbellCatalog` rather than restating it, so a laptop dry run and the
+  scheduled production run cannot disagree. `--fixture` rewrites `data/`.
+
+Two rules that follow, and they generalise past this card:
+
+1. **A catalog change is not shipped until something in CI or a workflow
+   applies it.** If you add a row to the table, the workflow puts it in
+   production on the promotion; if you invent a new KIND of change, it needs a
+   planner, an applier and a line in the report, or it silently never happens.
+2. **Member history is never migrated by it.** A split's host row is a real
+   exercise six other programs still prescribe, and a logged set does not
+   record which program it came from — so moving somebody's
+   `romanian-deadlift` PR onto `dumbbell-romanian-deadlift` would be wrong for
+   everyone training under a barbell. Sets already logged stay where they are;
+   sets logged after the split land on the new row.
+
+`tests/unit/dumbbellCatalog.test.ts` pins all of it: the outcome (every
+exercise the two dumbbell-only programs name has its OWN row, findable by the
+coach's wording, with no video so it sits in the portal's "No Video" upload
+queue), the table (a value the schema would reject, a repoint that escapes the
+two programs, an alias left on the host that would make the new name resolve to
+nothing), the plan being settled against `data/`, and the wiring — the route,
+the sync, and the fact that exactly one workflow calls it.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"

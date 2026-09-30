@@ -15,7 +15,9 @@ export const PROGRAMS: ProgramConfig[] = [
   { id: 'no-excuses-at-home-transformation',        name: 'No Excuses',                                firstDay: 'Day 1', trainingDaysCount: 4 },
   { id: 'program_5',                                name: '30-Minute Dumbbell',                        firstDay: 'Day 1', trainingDaysCount: 4 },
   { id: 'program_jon_don_split',                    name: 'Jon Don Split',                             firstDay: 'Day 1', trainingDaysCount: 5 },
-  { id: 'db-only-total-transformation',             name: 'DB Only',                                   firstDay: 'Day 1', trainingDaysCount: 4 },
+  // Renamed from "DB Only" by the dumbbell-catalog sync: "I'd rather switch
+  // them all to just say dumbbell" (webapp/lib/dumbbellCatalogPlan.ts).
+  { id: 'db-only-total-transformation',             name: 'Dumbbell Only',                             firstDay: 'Day 1', trainingDaysCount: 4 },
   // Slow: 30-Day Shred creates ~150 scheduled workouts — keep outside slice(0,5)
   { id: 'program_2_30day_shred',                   name: '30-Day Shred',                              firstDay: 'Day 1', trainingDaysCount: 5 },
   { id: 'circuit-superset-shred',                   name: 'Circuit',                                   firstDay: 'Day 1', trainingDaysCount: 3 },
