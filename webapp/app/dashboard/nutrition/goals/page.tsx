@@ -28,9 +28,9 @@ import {
   type MacroSplit,
   type ActivityLevel,
   type NutritionDirection,
-} from '@become/core'
+} from '@/lib/nutrition/tdee'
 import type { FitnessGoal } from '@/lib/programMatch'
-import { toKg, kgToLbs, roundWeight, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@become/core'
+import { toKg, kgToLbs, roundWeight, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection

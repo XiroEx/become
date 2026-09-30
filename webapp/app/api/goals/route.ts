@@ -14,7 +14,7 @@ import User from '@/models/User'
 import UserProgress from '@/models/UserProgress'
 import { computeGoalProgress } from '@/lib/goals/progress'
 import { ensureGoals, prSnapshot } from '@/lib/goals/ensure'
-import { clampPaceKg } from '@become/core'
+import { clampPaceKg } from '@/lib/goals/pace'
 import { suggestTargetsFromProgress, toStoredLift } from '@/lib/strength/fromLogs'
 
 export async function GET(request: NextRequest) {
