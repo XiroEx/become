@@ -6,6 +6,7 @@ import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
 import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
+import { expandQueryVariants } from '@/lib/exerciseAbbreviations';
 
 interface AuditRow extends AuditableExercise {
   category?: string;
@@ -84,13 +85,19 @@ export async function GET(request: NextRequest) {
     // admin has approved as universal — never someone else's unreviewed one.
     const clauses: Record<string, unknown>[] = [visibleExerciseFilter(auth.userId)];
     if (q) {
-      const pattern = escapeRegExp(q);
+      // One pattern per query variant: what was typed, plus its gym-shorthand
+      // expansion ("DB Crunch" → "dumbbell crunch"). The catalog spells
+      // "Dumbbell" out everywhere now (lib/dumbbellCatalog.ts), so an admin
+      // searching in the shorthand they write programs in would otherwise get
+      // nothing back — which is the card this came from: "When I searched the
+      // exercise in the admin portal, none of the exercises pop up."
+      const patterns = expandQueryVariants(q).map(escapeRegExp);
       clauses.push({
-        $or: [
+        $or: patterns.flatMap((pattern) => [
           { name: { $regex: pattern, $options: 'i' } },
           { slug: { $regex: pattern, $options: 'i' } },
           { aliases: { $elemMatch: { $regex: pattern, $options: 'i' } } },
-        ],
+        ]),
       });
     }
     const filter: Record<string, unknown> = clauses.length > 1 ? { $and: clauses } : clauses[0];
