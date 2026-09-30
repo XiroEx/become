@@ -6,6 +6,9 @@ import { Settings } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StreakBanner } from "@/components/StreakBanner";
+import { BottomSheet } from "@/components/BottomSheet";
+import { TileGrid } from "@/components/dashboard/TileGrid";
+import type { DashboardTile } from "@become/api-client";
 import {
   CheckInModal,
   type CheckInPayload,
@@ -68,6 +71,17 @@ export interface DashboardScreenProps {
    * both app stores require — is unreachable by a member or a reviewer.
    */
   onOpenSettings?: () => void;
+  /** Saved dashboard layout from server or cache (controlled). */
+  layout?: DashboardTile[] | null;
+  /** Action tile callback: opens Mind tab / session. */
+  onOpenMind?: () => void;
+  /** Action tile callback: opens Nutrition tab. */
+  onOpenNutrition?: () => void;
+  /** Action tile callback: opens Workout Now sheet. */
+  onOpenWorkoutNow?: () => void;
+  /** Controls Workout Now sheet externally for testability. */
+  workoutNowOpen?: boolean;
+  onWorkoutNowOpenChange?: (open: boolean) => void;
 }
 
 export function DashboardScreen({
@@ -86,6 +100,12 @@ export function DashboardScreen({
   refreshing = false,
   onRefresh,
   onOpenSettings,
+  layout,
+  onOpenMind,
+  onOpenNutrition,
+  onOpenWorkoutNow,
+  workoutNowOpen,
+  onWorkoutNowOpenChange,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
@@ -94,6 +114,25 @@ export function DashboardScreen({
   const setOpen = (value: boolean) => {
     if (isControlled) onCheckInOpenChange?.(value);
     else setInternalOpen(value);
+  };
+
+  const [internalWorkoutNowOpen, setInternalWorkoutNowOpen] =
+    useState<boolean>(false);
+  const isWorkoutNowControlled = workoutNowOpen !== undefined;
+  const isWorkoutNowOpen = isWorkoutNowControlled
+    ? workoutNowOpen
+    : internalWorkoutNowOpen;
+  const setWorkoutNowOpen = (value: boolean) => {
+    if (isWorkoutNowControlled) onWorkoutNowOpenChange?.(value);
+    else setInternalWorkoutNowOpen(value);
+  };
+
+  const handleWorkoutNow = () => {
+    if (onOpenWorkoutNow) {
+      onOpenWorkoutNow();
+    } else {
+      setWorkoutNowOpen(true);
+    }
   };
 
   if (loading) {
@@ -263,6 +302,14 @@ export function DashboardScreen({
           </Card>
         )}
 
+        {/* Unified Dashboard Tile Grid (NP-104) */}
+        <TileGrid
+          layout={layout}
+          onOpenMind={onOpenMind}
+          onOpenNutrition={onOpenNutrition}
+          onOpenWorkoutNow={handleWorkoutNow}
+        />
+
         {/* The way into the calendar — a hidden route in the (tabs) tree, so
             the month view has no entry point of its own. */}
         <Button
@@ -303,6 +350,28 @@ export function DashboardScreen({
         }}
         submitting={submittingCheckIn}
       />
+
+      <BottomSheet
+        testID="dashboard-workout-now-sheet"
+        visible={isWorkoutNowOpen}
+        onClose={() => setWorkoutNowOpen(false)}
+        title="Workout Now"
+      >
+        <View style={{ padding: 16, gap: 12 }}>
+          <Text className="text-foreground text-base">
+            Start a quick workout session.
+          </Text>
+          <Button
+            testID="dashboard-workout-now-sheet-start"
+            onPress={() => {
+              setWorkoutNowOpen(false);
+              onStartWorkout();
+            }}
+          >
+            Start Session
+          </Button>
+        </View>
+      </BottomSheet>
     </SafeAreaView>
   );
 }

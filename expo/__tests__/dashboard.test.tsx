@@ -45,6 +45,7 @@ import { ApiError, apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { localDateKey } from "@/lib/nutrition/localDay";
+import { writeCachedLayout } from "@/lib/dashboard/tileLayout";
 import DashboardRoute from "../app/(app)/(tabs)/dashboard/index";
 /* eslint-enable import/first */
 
@@ -87,6 +88,15 @@ function wireApiFetch() {
       // number, and the DAY LABEL the web addresses the session by
       // (`…/workout?day=Day 3`).
       return Promise.resolve(currentWorkout);
+    }
+    if (path.startsWith("/api/dashboard/layout")) {
+      return Promise.resolve({
+        layout: [
+          { id: "mindset", kind: "stat", size: "1x1" },
+          { id: "nutrition", kind: "stat", size: "1x1" },
+          { id: "workoutNow", kind: "stat", size: "2x1" },
+        ],
+      });
     }
     if (path === "/api/mood" || path === "/api/weight") {
       return Promise.resolve({ success: true });
@@ -414,5 +424,72 @@ describe("DashboardRoute navigation", () => {
     fireEvent.press(getByTestId("dashboard-open-settings"));
 
     expect(mockPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("fires the layout GET with baseUrl + token, and NEVER sends statPref", async () => {
+    render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(callsTo("/api/dashboard/layout").length).toBeGreaterThan(0);
+    });
+
+    const call = callsTo("/api/dashboard/layout")[0]!;
+    const url = String(call[0]);
+    expect(url).toBe("/api/dashboard/layout");
+    expect(url).not.toContain("statPref");
+
+    const opts = call[2] as {
+      baseUrl?: string;
+      getToken?: () => string | undefined;
+    };
+    expect(opts).toEqual(expect.objectContaining({ baseUrl: WEBAPP_BASE_URL }));
+    expect(opts.getToken?.()).toBe(mockToken);
+  });
+
+  it("action tiles from layout trigger navigation to Mind, Nutrition, and Workout Now", async () => {
+    const { getByTestId, queryByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("tilegrid")).toBeTruthy();
+      expect(getByTestId("tile-mindset")).toBeTruthy();
+    });
+
+    // Mindset opens Mind tab and auto-starts (?start=1)
+    fireEvent.press(getByTestId("tile-mindset"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/mind?start=1");
+
+    // Nutrition opens Nutrition tab
+    fireEvent.press(getByTestId("tile-nutrition"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition");
+
+    // Workout Now opens NP-076's sheet
+    expect(queryByTestId("dashboard-workout-now-sheet-start")).toBeNull();
+    fireEvent.press(getByTestId("tile-workoutNow"));
+    expect(getByTestId("dashboard-workout-now-sheet-start")).toBeTruthy();
+  });
+
+  it("relaunching with no network renders the cached layout", async () => {
+    await writeCachedLayout([
+      { id: "mindset", kind: "stat", size: "1x1" },
+      { id: "workoutNow", kind: "stat", size: "2x1" },
+    ]);
+
+    // Force network fetch to reject (offline)
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/dashboard/layout") {
+        return Promise.reject(new Error("Network unavailable"));
+      }
+      if (path === "/api/auth/me") {
+        return Promise.resolve({
+          user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("tilegrid")).toBeTruthy();
+      expect(getByTestId("tile-mindset")).toBeTruthy();
+      expect(getByTestId("tile-workoutNow")).toBeTruthy();
+    });
   });
 });
