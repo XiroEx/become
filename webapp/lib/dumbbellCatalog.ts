@@ -14,6 +14,29 @@
 // the exercise already exists let it be. I need to be able to upload videos
 // to every exercise."
 //
+// And, after the first round shipped: "You didn't change anything. The
+// exercises still read with a DB. The exercises still don't exist in the admin
+// portal." / "Ensure all of these exercises exist in the admin portal NOT AS
+// ALIAS. ACTUAL EXERCISES. I need to upload the video. For example a dumbbell
+// row is not a dumbbell bent over row. They should be two separate."
+//
+// Both of those are answered elsewhere and both matter more than the table:
+//
+//   * "You didn't change anything" was TRUE. The first round wrote this table,
+//     the repo's catalog fixture and a script — and a script nobody runs
+//     changes nothing in the database the admin portal reads. The writer is now
+//     `app/api/cron/sync-exercise-catalog`, called by
+//     `.github/workflows/sync-exercise-catalog.yml` on every push to `main` and
+//     daily after that, so shipping IS applying. lib/dumbbellCatalogSync.ts is
+//     the one code path both it and the script use.
+//
+//   * "a dumbbell row is not a dumbbell bent over row" is a thirteenth row in
+//     the table below, and it is the same defect as the other nine: the
+//     two-arm bent-over row was living as an ALIAS on `dumbbell-row`, whose
+//     recorded demo is `/exercises/db-single-arm-row.mov` and whose default
+//     prescription is "8-12 per side" — i.e. the row that existed was always
+//     the SINGLE-ARM row.
+//
 // ── What was actually wrong ────────────────────────────────────────────────
 // The two dumbbell-only programs (`db-only-total-transformation` and
 // `program_5`, the 30-Minute Dumbbell-Only Program) were imported by name.
@@ -122,6 +145,33 @@ export interface DumbbellExerciseCreate extends InferredExerciseFields {
   video?: DumbbellExistingVideo
 }
 
+/**
+ * Which of a program's references to the host row really mean the new one.
+ *
+ * `'all'` (the default) is right when the host is a different IMPLEMENT — a
+ * dumbbell-only program can never mean the barbell hip thrust, so every
+ * reference moves.
+ *
+ * `'both-arms'` is for the one split where host and new row are both dumbbell
+ * exercises and the prescription is the only evidence: `dumbbell-row` is the
+ * single-arm row (its demo is `db-single-arm-row.mov`, its default is "8-12 per
+ * side"), so a reference prescribing "12 per arm" or "12/side" STAYS and a
+ * reference prescribing plain reps is the two-arm bent-over row.
+ */
+export type DumbbellRepointScope = 'all' | 'both-arms'
+
+/** A per-side prescription — "12 per arm", "10/side", "12 each leg". */
+const PER_SIDE_PRESCRIPTION = /\b(?:per|each)\s+(?:side|arm|leg)\b|\/\s*(?:side|arm|leg)\b/i
+
+/**
+ * True when a program entry's rep prescription is written per side, which is
+ * what distinguishes a single-arm row from a two-arm one in the only place the
+ * program records the difference.
+ */
+export function isPerSidePrescription(reps: unknown): boolean {
+  return typeof reps === 'string' && PER_SIDE_PRESCRIPTION.test(reps)
+}
+
 /** A dumbbell exercise that was living as an alias on another row. */
 export interface DumbbellSplit {
   /** The new row. */
@@ -135,6 +185,8 @@ export interface DumbbellSplit {
   movedAliases: string[]
   /** `program_id`s whose reference to `from` is really this exercise. */
   repoint: readonly string[]
+  /** Which references inside those programs move. Defaults to `'all'`. */
+  repointScope?: DumbbellRepointScope
   create: DumbbellExerciseCreate
   note: string
 }
@@ -161,6 +213,53 @@ export interface DumbbellRename {
 // ─── SPLIT ──────────────────────────────────────────────────────────────────
 
 export const DUMBBELL_SPLITS: DumbbellSplit[] = [
+  {
+    slug: 'dumbbell-bent-over-row',
+    from: 'dumbbell-row',
+    movedAliases: ['Dumbbell Bent-Over Row', 'Dumbbell Bent Over Row'],
+    repoint: ['db-only-total-transformation', 'program_5'],
+    repointScope: 'both-arms',
+    note: 'Jon\'s follow-up, verbatim: "a dumbbell row is not a dumbbell bent over row. They should be two separate." `dumbbell-row` was carrying BOTH — aliases "Dumbbell Bent-Over Row" and "Dumbbell Single-Arm Row" on one row — and the evidence says the row that exists is the single-arm one: its recorded demo is `/exercises/db-single-arm-row.mov`, its `laterality` is `unilateral` and its default prescription is "8-12 per side". So the two-arm bent-over row is the one with no row and nowhere to upload a video to. The dumbbell-only programs prescribe both: "4 × 8" and "3 × 12" are the two-arm row, "12 per arm" and "12/side" are the single-arm one, which is why this is the only split that repoints by prescription rather than wholesale.',
+    create: {
+      name: 'Dumbbell Bent-Over Row',
+      aliases: ['Dumbbell Bent-Over Rows', 'Bent-Over Dumbbell Row', 'Two-Arm Dumbbell Row'],
+      description:
+        'Both dumbbells rowed at the same time from a hinged-over torso, elbows driving back past the ribs. The two-arm half of the pair — the one-arm-at-a-time version, braced on a bench, is Dumbbell Row.',
+      instructions: [
+        'Stand with feet hip width, a dumbbell in each hand, knees slightly soft.',
+        'Hinge at the hips until your torso is somewhere near 45° or lower, back flat, arms hanging straight down.',
+        'Row both dumbbells to the sides of your ribcage, leading with the elbows.',
+        'Squeeze the shoulder blades together at the top, then lower under control until the arms are straight again.',
+      ],
+      cues: [
+        'Set the torso angle before the first rep and do not let it rise as the set gets hard.',
+        'Elbows past the ribs, not out wide — that is the difference between back work and rear-delt work.',
+        'Let the arms hang fully at the bottom. A row that never straightens is half a rep.',
+      ],
+      commonMistakes: [
+        'Standing up a little on every rep, which turns it into a shrug.',
+        'Rounding the lower back to chase heavier dumbbells.',
+        'Jerking the weight with the hips instead of pulling with the back.',
+      ],
+      category: 'strength',
+      mechanics: 'compound',
+      role: 'compound',
+      movementPatterns: ['horizontal_pull'],
+      laterality: 'bilateral',
+      difficulty: 'intermediate',
+      primaryMuscles: ['lats', 'mid_back'],
+      secondaryMuscles: ['biceps', 'rear_delts'],
+      stabilizers: ['abs', 'erector_spinae', 'grip'],
+      equipment: ['dumbbell'],
+      trackingType: 'reps_weight',
+      bodyRegion: 'upper_body',
+      tags: ['pull', 'back', 'dumbbell'],
+      variations: ['dumbbell-row', 'barbell-row', 'dumbbell-underhand-row'],
+      defaultSets: 4,
+      defaultReps: '8-12',
+      defaultRest: '90 sec',
+    },
+  },
   {
     slug: 'dumbbell-crunch',
     from: 'crunch',
@@ -759,4 +858,23 @@ export function spellOutDumbbell(text: string): string {
 /** True if `text` still contains the shorthand. */
 export function usesDumbbellShorthand(text: string): boolean {
   return /\bDBs?\b/i.test(text)
+}
+
+/**
+ * The heading a `__protocol__*` entry shows on the workout card when it carries
+ * no `name` of its own — `lib/exerciseAutoCatalog.ts`'s `exerciseNameFromSlug`
+ * rule, reimplemented here so this module stays free of the Mongoose model that
+ * one imports. `tests/unit/dumbbellCatalog.test.ts` pins the two against each
+ * other.
+ *
+ * It matters because one such slug is `__protocol__db-complex-5-rounds`, which
+ * renders as "Db Complex 5 Rounds" — a block of the dumbbell-only program that
+ * still reads "DB" with no name anywhere to fix it on.
+ */
+export function protocolLabelFromSlug(slug: string): string {
+  return slug
+    .replace(/^__protocol__/, '')
+    .replace(/[-_]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (c: string) => c.toUpperCase())
 }

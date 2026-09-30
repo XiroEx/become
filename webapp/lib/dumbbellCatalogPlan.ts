@@ -18,8 +18,12 @@ import {
   DUMBBELL_ONLY_PROGRAM_IDS,
   DUMBBELL_RENAMES,
   DUMBBELL_SPLITS,
+  isPerSidePrescription,
+  protocolLabelFromSlug,
   spellOutDumbbell,
+  usesDumbbellShorthand,
   type DumbbellExerciseCreate,
+  type DumbbellRepointScope,
 } from './dumbbellCatalog'
 
 export interface CatalogRow {
@@ -263,6 +267,8 @@ export interface ProgramExerciseRef {
 export interface ProgramLike {
   program_id?: string
   name?: string
+  description?: string
+  goal?: string
   phases?: Array<{ workouts?: Array<{ exercises?: ProgramExerciseRef[] }> }>
 }
 
@@ -286,11 +292,12 @@ export interface PlannedRepoint {
  * considered, which the unit test pins.
  */
 export function planDumbbellProgramRepoints(programs: readonly ProgramLike[]): PlannedRepoint[] {
-  const targets = new Map<string, Map<string, string>>(); // programId → from → to
+  interface Target { to: string; scope: DumbbellRepointScope }
+  const targets = new Map<string, Map<string, Target>>(); // programId → from → target
   for (const split of DUMBBELL_SPLITS) {
     for (const programId of split.repoint) {
-      const forProgram = targets.get(programId) ?? new Map<string, string>()
-      forProgram.set(split.from, split.slug)
+      const forProgram = targets.get(programId) ?? new Map<string, Target>()
+      forProgram.set(split.from, { to: split.slug, scope: split.repointScope ?? 'all' })
       targets.set(programId, forProgram)
     }
   }
@@ -308,10 +315,15 @@ export function planDumbbellProgramRepoints(programs: readonly ProgramLike[]): P
       for (let workoutIndex = 0; workoutIndex < workouts.length; workoutIndex += 1) {
         const exercises = workouts[workoutIndex]?.exercises ?? []
         for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
-          const from = exercises[exerciseIndex]?.exerciseSlug
+          const entry = exercises[exerciseIndex]
+          const from = entry?.exerciseSlug
           if (!from) continue
-          const to = moves.get(from)
-          if (!to) continue
+          const target = moves.get(from)
+          if (!target) continue
+          // A 'both-arms' split leaves the per-side prescriptions where they
+          // are: those references are the single-arm exercise the host row
+          // already is.
+          if (target.scope === 'both-arms' && isPerSidePrescription(entry?.reps)) continue
           out.push({
             programId,
             programName: program.name,
@@ -319,7 +331,7 @@ export function planDumbbellProgramRepoints(programs: readonly ProgramLike[]): P
             workoutIndex,
             exerciseIndex,
             from,
-            to,
+            to: target.to,
           })
         }
       }
@@ -377,6 +389,168 @@ export function planDumbbellDetailSpellOuts(programs: readonly ProgramLike[]): P
     }
   }
   return out
+}
+
+// ─── Program text ───────────────────────────────────────────────────────────
+
+/** The top-level program fields a member reads, with "DB" spelled out. */
+export interface PlannedProgramTextSpellOut {
+  programId: string
+  programName?: string
+  field: 'name' | 'description' | 'goal'
+  from: string
+  to: string
+}
+
+/**
+ * The program's own wording. `DB Only: Total Transformation` is the title on
+ * the library card, the enrolment screen and every workout header — the single
+ * most-read "DB" in the app, and the first round left it alone while spelling
+ * the catalog out underneath it. "The exercises still read with a DB."
+ *
+ * Every program, not just the dumbbell-only ones: "I'd rather switch them all
+ * to just say dumbbell."
+ */
+export function planDumbbellProgramTextSpellOuts(
+  programs: readonly ProgramLike[],
+): PlannedProgramTextSpellOut[] {
+  const fields: Array<PlannedProgramTextSpellOut['field']> = ['name', 'description', 'goal']
+  const out: PlannedProgramTextSpellOut[] = []
+  for (const program of programs) {
+    const programId = program.program_id
+    if (!programId) continue
+    for (const field of fields) {
+      const from = program[field]
+      if (typeof from !== 'string' || !from) continue
+      const to = spellOutDumbbell(from)
+      if (to === from) continue
+      out.push({ programId, programName: program.name, field, from, to })
+    }
+  }
+  return out
+}
+
+/** A protocol block that needs an explicit name so it stops reading "Db …". */
+export interface PlannedProtocolLabel {
+  programId: string
+  programName?: string
+  phaseIndex: number
+  workoutIndex: number
+  exerciseIndex: number
+  slug: string
+  from: string | null
+  to: string
+}
+
+/**
+ * A `__protocol__*` entry has no catalog row by design, so its heading is
+ * derived from the slug — and `__protocol__db-complex-5-rounds` derives to
+ * "Db Complex 5 Rounds". There is nothing to rename: the fix is to stamp the
+ * entry with an explicit `name`, which `hydrateExercise` already prefers over
+ * anything derived (`overrideName`). The slug itself is deliberately NOT
+ * rewritten — it is the key a stored set is filed under.
+ */
+export function planDumbbellProtocolLabels(programs: readonly ProgramLike[]): PlannedProtocolLabel[] {
+  const out: PlannedProtocolLabel[] = []
+  for (const program of programs) {
+    const programId = program.program_id
+    if (!programId) continue
+    const phases = program.phases ?? []
+    for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
+      const workouts = phases[phaseIndex]?.workouts ?? []
+      for (let workoutIndex = 0; workoutIndex < workouts.length; workoutIndex += 1) {
+        const exercises = workouts[workoutIndex]?.exercises ?? []
+        for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
+          const entry = exercises[exerciseIndex]
+          const slug = entry?.exerciseSlug
+          if (!slug || !slug.startsWith('__protocol__')) continue
+          const existing = typeof entry?.name === 'string' && entry.name ? entry.name : null
+          const current = existing ?? protocolLabelFromSlug(slug)
+          if (!usesDumbbellShorthand(current)) continue
+          const to = spellOutDumbbell(current)
+          if (to === existing) continue
+          out.push({
+            programId,
+            programName: program.name,
+            phaseIndex,
+            workoutIndex,
+            exerciseIndex,
+            slug,
+            from: existing,
+            to,
+          })
+        }
+      }
+    }
+  }
+  return out
+}
+
+/** Nothing left to do to the programs. */
+export function isDumbbellProgramsSettled(programs: readonly ProgramLike[]): boolean {
+  return (
+    planDumbbellProgramRepoints(programs).length === 0
+    && planDumbbellDetailSpellOuts(programs).length === 0
+    && planDumbbellProgramTextSpellOuts(programs).length === 0
+    && planDumbbellProtocolLabels(programs).length === 0
+  )
+}
+
+// ─── The document a create writes ───────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRow = Record<string, any>
+
+/**
+ * The document body for one of the table's new rows. Keys are ordered the way
+ * `data/exercises.json` orders them (slug first, then alphabetical) so the
+ * fixture stays readable next to the rows already in it.
+ *
+ * Shared by the fixture writer and the live sync on purpose: a row created in
+ * production and the same row in the repo's snapshot have to be the same
+ * document, or the next `--fixture` run reports a diff that is not a change.
+ *
+ * No `videoUrl`, unless the table names a demo that was already recorded for
+ * this exact movement (`create.video`). An exercise with no video is what the
+ * admin portal's "No Video" tab lists, and that tab is the queue of exercises
+ * waiting for a recording (see lib/exerciseAutoCatalog.ts).
+ */
+export function buildDumbbellExerciseDoc(slug: string, create: DumbbellExerciseCreate): AnyRow {
+  return {
+    slug,
+    aliases: normalizeAliases(create.name, create.aliases ?? []),
+    alternatives: [],
+    bodyRegion: create.bodyRegion,
+    cardioMetrics: null,
+    category: create.category,
+    commonMistakes: create.commonMistakes ?? [],
+    cues: create.cues ?? [],
+    defaultDuration: null,
+    defaultReps: create.defaultReps ?? null,
+    defaultRest: create.defaultRest ?? null,
+    defaultSets: create.defaultSets ?? null,
+    defaultTempo: null,
+    description: create.description ?? '',
+    difficulty: create.difficulty,
+    equipment: create.equipment ?? [],
+    instructions: create.instructions ?? [],
+    isActive: true,
+    laterality: create.laterality,
+    mechanics: create.mechanics,
+    movementPatterns: create.movementPatterns ?? [],
+    name: create.name,
+    optionalEquipment: [],
+    prerequisites: [],
+    primaryMuscles: create.primaryMuscles ?? [],
+    role: create.role,
+    secondaryMuscles: create.secondaryMuscles ?? [],
+    stabilizers: create.stabilizers ?? [],
+    tags: create.tags ?? [],
+    ...(create.video ? { thumbnailUrl: create.video.thumbnailUrl } : {}),
+    trackingType: create.trackingType,
+    variations: create.variations ?? [],
+    ...(create.video ? { videoUrl: create.video.videoUrl } : {}),
+  }
 }
 
 /** Every program id a split repoints — for asserting the table stays inside

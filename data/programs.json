@@ -1138,7 +1138,7 @@
       "Dumbbells"
     ],
     "goal": "Hypertrophy, fat loss, strength, conditioning",
-    "name": "DB Only: Total Transformation",
+    "name": "Dumbbell Only: Total Transformation",
     "phases": [
       {
         "phase": "Phase 1",
@@ -1155,7 +1155,7 @@
                 "reps": "8"
               },
               {
-                "exerciseSlug": "dumbbell-row",
+                "exerciseSlug": "dumbbell-bent-over-row",
                 "sets": 4,
                 "reps": "10"
               },
@@ -1281,7 +1281,7 @@
                 "reps": "12"
               },
               {
-                "exerciseSlug": "dumbbell-row",
+                "exerciseSlug": "dumbbell-bent-over-row",
                 "sets": 3,
                 "reps": "12"
               },
@@ -1308,7 +1308,8 @@
               },
               {
                 "exerciseSlug": "__protocol__db-complex-5-rounds",
-                "details": "[\"5 Dumbbell Deadlifts\",\"5 Dumbbell Rows\",\"5 Dumbbell Hang Cleans\",\"5 Dumbbell Push Press\"]"
+                "details": "[\"5 Dumbbell Deadlifts\",\"5 Dumbbell Rows\",\"5 Dumbbell Hang Cleans\",\"5 Dumbbell Push Press\"]",
+                "name": "Dumbbell Complex 5 Rounds"
               },
               {
                 "exerciseSlug": "dumbbell-russian-twist"
@@ -1494,7 +1495,7 @@
                 "reps": "12"
               },
               {
-                "exerciseSlug": "dumbbell-row",
+                "exerciseSlug": "dumbbell-bent-over-row",
                 "reps": "12"
               },
               {
