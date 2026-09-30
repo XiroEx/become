@@ -10,6 +10,8 @@
 // by hand (see the "Leg Extension" / "Leg extensions" duplicate this was
 // built for).
 
+import { expandQueryVariants } from './exerciseAbbreviations';
+
 export interface AuditableExercise {
   slug: string;
   name: string;
@@ -28,16 +30,23 @@ export interface AuditableExercise {
  * Machine" on the card, "Seated Leg Curl" in the portal, the first an alias
  * of the second. Searching the No Video queue for the name on the card has to
  * find the row that queue exists to get a video onto.
+ *
+ * Gym shorthand counts too. The catalog now spells "Dumbbell" out everywhere
+ * ("We use DB for those exercises and I'd rather switch them all to just say
+ * dumbbell" — lib/dumbbellCatalog.ts), so an admin typing "DB Crunch" would
+ * otherwise match nothing at all. `expandQueryVariants` is the same expansion
+ * the member-facing search uses.
  */
 export function matchesAuditSearch(
   ex: Pick<AuditableExercise, 'slug' | 'name' | 'aliases'>,
   query: string
 ): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  if (ex.name?.toLowerCase().includes(q)) return true;
-  if (ex.slug?.toLowerCase().includes(q)) return true;
-  return (ex.aliases ?? []).some((alias) => typeof alias === 'string' && alias.toLowerCase().includes(q));
+  const variants = expandQueryVariants(query);
+  if (variants.length === 0) return true;
+  const haystack = [ex.name, ex.slug, ...(ex.aliases ?? [])]
+    .filter((v): v is string => typeof v === 'string')
+    .map((v) => v.toLowerCase());
+  return variants.some((variant) => haystack.some((hay) => hay.includes(variant)));
 }
 
 /**

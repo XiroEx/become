@@ -127,7 +127,7 @@
     "_id": "699fbd44751d9854c0799304",
     "slug": "goblet-squat",
     "aliases": [
-      "DB Goblet Squat"
+      "Dumbbell Goblet Squat"
     ],
     "alternatives": [
       "leg-press"
@@ -556,10 +556,7 @@
     "slug": "romanian-deadlift",
     "aliases": [
       "RDL",
-      "RDL (Barbell or Dumbbell)",
-      "Dumbbell RDL",
-      "DB Romanian Deadlift",
-      "Dumbbell Romanian Deadlift"
+      "RDL (Barbell or Dumbbell)"
     ],
     "alternatives": [],
     "bodyRegion": "lower_body",
@@ -587,7 +584,6 @@
     ],
     "name": "Romanian Deadlift",
     "optionalEquipment": [
-      "dumbbell",
       "kettlebell"
     ],
     "prerequisites": [],
@@ -611,7 +607,8 @@
     "trackingType": "reps_weight",
     "variations": [
       "stiff-leg-deadlift",
-      "single-leg-rdl"
+      "single-leg-rdl",
+      "dumbbell-romanian-deadlift"
     ],
     "videoUrl": "/exercises/romanian-deadlift.mov"
   },
@@ -673,9 +670,7 @@
   {
     "_id": "699fbd44751d9854c079930e",
     "slug": "dumbbell-deadlift",
-    "aliases": [
-      "DB Deadlift"
-    ],
+    "aliases": [],
     "alternatives": [
       "deadlift",
       "kettlebell-deadlift"
@@ -841,9 +836,7 @@
     "_id": "699fbd44751d9854c0799311",
     "slug": "hip-thrust",
     "aliases": [
-      "Barbell Hip Thrust",
-      "DB Hip Thrust",
-      "Dumbbell Hip Thrust"
+      "Barbell Hip Thrust"
     ],
     "alternatives": [],
     "bodyRegion": "lower_body",
@@ -871,9 +864,7 @@
       "hinge"
     ],
     "name": "Hip Thrust",
-    "optionalEquipment": [
-      "dumbbell"
-    ],
+    "optionalEquipment": [],
     "prerequisites": [],
     "primaryMuscles": [
       "glutes"
@@ -892,7 +883,8 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [
-      "glute-bridge"
+      "glute-bridge",
+      "dumbbell-hip-thrust"
     ],
     "videoUrl": "/exercises/hip-thrust.mov"
   },
@@ -1273,7 +1265,7 @@
     "_id": "699fbd44751d9854c0799319",
     "slug": "bulgarian-split-squat",
     "aliases": [
-      "DB Bulgarian Split Squat"
+      "Dumbbell Bulgarian Split Squat"
     ],
     "alternatives": [],
     "bodyRegion": "lower_body",
@@ -1333,7 +1325,6 @@
     "_id": "699fbd44751d9854c079931a",
     "slug": "split-squat",
     "aliases": [
-      "DB Split Squat",
       "Dumbbell Split Squat"
     ],
     "alternatives": [],
@@ -1452,7 +1443,6 @@
     "_id": "699fbd44751d9854c079931c",
     "slug": "reverse-lunge",
     "aliases": [
-      "DB Reverse Lunge",
       "Dumbbell Reverse Lunge",
       "Reverse Lunges × 20"
     ],
@@ -1511,7 +1501,6 @@
     "slug": "step-up",
     "aliases": [
       "Step Ups",
-      "DB Step-Ups",
       "Box Step-Ups"
     ],
     "alternatives": [],
@@ -1540,7 +1529,6 @@
     ],
     "name": "Step-Up",
     "optionalEquipment": [
-      "dumbbell",
       "barbell",
       "bodyweight"
     ],
@@ -1564,14 +1552,16 @@
     ],
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
-    "variations": [],
+    "variations": [
+      "dumbbell-step-up"
+    ],
     "videoUrl": "/placeholder2.mp4"
   },
   {
     "_id": "699fbd44751d9854c079931e",
     "slug": "lateral-lunge",
     "aliases": [
-      "DB Lateral Lunge"
+      "Dumbbell Lateral Lunge"
     ],
     "alternatives": [],
     "bodyRegion": "lower_body",
@@ -1626,7 +1616,7 @@
     "slug": "barbell-bench-press",
     "aliases": [
       "Bench Press",
-      "Bench Press (DB/bar)"
+      "Bench Press (Dumbbell/bar)"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -1684,9 +1674,7 @@
   {
     "_id": "699fbd44751d9854c0799320",
     "slug": "dumbbell-bench-press",
-    "aliases": [
-      "DB Bench Press"
-    ],
+    "aliases": [],
     "alternatives": [],
     "bodyRegion": "upper_body",
     "cardioMetrics": null,
@@ -1743,8 +1731,7 @@
     "_id": "699fbd44751d9854c0799321",
     "slug": "dumbbell-floor-press",
     "aliases": [
-      "DB Floor Press or Bench Press",
-      "Dumbbell Floor Press"
+      "Dumbbell Floor Press or Bench Press"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -1854,9 +1841,7 @@
   {
     "_id": "699fbd44751d9854c0799323",
     "slug": "incline-dumbbell-press",
-    "aliases": [
-      "Incline DB Press"
-    ],
+    "aliases": [],
     "alternatives": [],
     "bodyRegion": "upper_body",
     "cardioMetrics": null,
@@ -1913,7 +1898,7 @@
     "_id": "699fbd44751d9854c0799324",
     "slug": "close-grip-dumbbell-press",
     "aliases": [
-      "Close Grip DB Press"
+      "Close Grip Dumbbell Press"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -1967,7 +1952,7 @@
     "_id": "699fbd44751d9854c0799325",
     "slug": "incline-close-grip-dumbbell-press",
     "aliases": [
-      "Incline Close Grip DB Press"
+      "Incline Close Grip Dumbbell Press"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -2023,7 +2008,6 @@
     "slug": "push-up",
     "aliases": [
       "Push-Ups",
-      "Push-ups",
       "Slow Push-Ups × 10",
       "Push-Ups × 10"
     ],
@@ -2251,7 +2235,7 @@
     "slug": "dumbbell-chest-fly",
     "aliases": [
       "Chest Fly (Cable or Dumbbell)",
-      "DB Chest Fly (Floor or Bench)",
+      "Dumbbell Chest Fly (Floor or Bench)",
       "Dumbbell Chest Fly on Floor"
     ],
     "alternatives": [],
@@ -2594,7 +2578,7 @@
     "aliases": [
       "Chest Supported Row",
       "Machine Row / Chest-Supported Row",
-      "Incline DB Row or Cable Row"
+      "Incline Dumbbell Row or Cable Row"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -2650,13 +2634,10 @@
     "_id": "699fbd44751d9854c0799331",
     "slug": "dumbbell-row",
     "aliases": [
-      "DB Bent-Over Row",
-      "Dumbbell Bent Over Row",
       "Dumbbell Bent-Over Row",
-      "DB Single-Arm Row",
+      "Dumbbell Bent Over Row",
       "Dumbbell Single-Arm Row",
-      "Single-Arm Row",
-      "Dumbbell Row"
+      "Single-Arm Row"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -2716,9 +2697,7 @@
   {
     "_id": "699fbd44751d9854c0799332",
     "slug": "dumbbell-underhand-row",
-    "aliases": [
-      "DB Underhand Row"
-    ],
+    "aliases": [],
     "alternatives": [],
     "bodyRegion": "upper_body",
     "cardioMetrics": null,
@@ -3208,7 +3187,6 @@
     "_id": "699fbd44751d9854c079933b",
     "slug": "dumbbell-shoulder-press",
     "aliases": [
-      "DB Shoulder Press",
       "Seated Dumbbell Shoulder Press"
     ],
     "alternatives": [],
@@ -3269,7 +3247,7 @@
     "_id": "699fbd44751d9854c079933c",
     "slug": "arnold-press",
     "aliases": [
-      "DB Arnold Press"
+      "Dumbbell Arnold Press"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -3326,8 +3304,7 @@
     "_id": "699fbd44751d9854c079933d",
     "slug": "push-press",
     "aliases": [
-      "Push-Press",
-      "Dumbbell Push Press"
+      "Push-Press"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -3354,9 +3331,7 @@
       "vertical_push"
     ],
     "name": "Push Press",
-    "optionalEquipment": [
-      "dumbbell"
-    ],
+    "optionalEquipment": [],
     "prerequisites": [],
     "primaryMuscles": [
       "front_delts",
@@ -3380,7 +3355,8 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [
-      "overhead-press"
+      "overhead-press",
+      "dumbbell-push-press"
     ],
     "videoUrl": "/exercises/shoulder-press.mov"
   },
@@ -3494,10 +3470,9 @@
     "_id": "699fbd45751d9854c0799340",
     "slug": "dumbbell-lateral-raise",
     "aliases": [
-      "DB Lateral Raises",
+      "Dumbbell Lateral Raises",
       "Cable Lateral Raise",
-      "Side Lateral Raises",
-      "Dumbbell Lateral Raise"
+      "Side Lateral Raises"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -3948,9 +3923,7 @@
   {
     "_id": "699fbd45751d9854c0799348",
     "slug": "cable-woodchopper",
-    "aliases": [
-      "DB Woodchoppers × 15 per side"
-    ],
+    "aliases": [],
     "alternatives": [],
     "bodyRegion": "core",
     "cardioMetrics": null,
@@ -3977,7 +3950,6 @@
     ],
     "name": "Cable Woodchopper",
     "optionalEquipment": [
-      "dumbbell",
       "medicine_ball"
     ],
     "prerequisites": [],
@@ -3999,16 +3971,16 @@
       "functional"
     ],
     "trackingType": "reps_weight",
-    "variations": []
+    "variations": [
+      "dumbbell-woodchopper"
+    ]
   },
   {
     "_id": "699fbd45751d9854c0799349",
     "slug": "russian-twist",
     "aliases": [
       "Russian Twists",
-      "Russian Twists × 40",
-      "Russian Twists (with DB) × 40",
-      "Dumbbell Russian Twist"
+      "Russian Twists × 40"
     ],
     "alternatives": [],
     "bodyRegion": "core",
@@ -4036,7 +4008,6 @@
     ],
     "name": "Russian Twist",
     "optionalEquipment": [
-      "dumbbell",
       "medicine_ball"
     ],
     "prerequisites": [],
@@ -4055,7 +4026,9 @@
     ],
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_bodyweight",
-    "variations": [],
+    "variations": [
+      "dumbbell-russian-twist"
+    ],
     "videoUrl": "/placeholder.mp4"
   },
   {
@@ -4820,9 +4793,7 @@
   {
     "_id": "699fbd45751d9854c0799359",
     "slug": "crunch",
-    "aliases": [
-      "DB Crunch × 20"
-    ],
+    "aliases": [],
     "alternatives": [],
     "bodyRegion": "core",
     "cardioMetrics": null,
@@ -4848,9 +4819,7 @@
       "n/a"
     ],
     "name": "Crunch",
-    "optionalEquipment": [
-      "dumbbell"
-    ],
+    "optionalEquipment": [],
     "prerequisites": [],
     "primaryMuscles": [
       "abs"
@@ -4864,7 +4833,9 @@
       "beginner_friendly"
     ],
     "trackingType": "reps_bodyweight",
-    "variations": []
+    "variations": [
+      "dumbbell-crunch"
+    ]
   },
   {
     "_id": "699fbd45751d9854c079935a",
@@ -4921,10 +4892,10 @@
     "_id": "699fbd45751d9854c079935b",
     "slug": "dumbbell-curl",
     "aliases": [
-      "DB Curls",
+      "Dumbbell Curls",
       "Dumbbell Bicep Curl",
       "Dumbbell Biceps Curl",
-      "DB Biceps Burnout"
+      "Dumbbell Biceps Burnout"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -4980,7 +4951,7 @@
     "slug": "hammer-curl",
     "aliases": [
       "Hammer Curls",
-      "DB Hammer Curls"
+      "Dumbbell Hammer Curls"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -5247,7 +5218,6 @@
     "_id": "699fbd45751d9854c0799361",
     "slug": "cable-tricep-pushdown",
     "aliases": [
-      "Cable Tricep Pushdown",
       "Cable Triceps Pressdown",
       "Tricep Cable Pushdowns",
       "Tricep Pushdowns",
@@ -5305,8 +5275,10 @@
     "slug": "overhead-tricep-extension",
     "aliases": [
       "Overhead Triceps Extension",
-      "DB Overhead Tricep Extension",
-      "Dumbbell Triceps Overhead Extension"
+      "Dumbbell Triceps Overhead Extension",
+      "Dumbbell Overhead Tricep Press",
+      "Overhead Tricep Press",
+      "Overhead Tricep Extension"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -5332,7 +5304,7 @@
     "movementPatterns": [
       "elbow_extension"
     ],
-    "name": "Overhead Tricep Extension",
+    "name": "Dumbbell Overhead Tricep Extension",
     "optionalEquipment": [
       "cable",
       "ez_bar"
@@ -5363,8 +5335,7 @@
     "_id": "699fbd45751d9854c0799363",
     "slug": "skull-crusher",
     "aliases": [
-      "Skull Crushers",
-      "DB Skull Crushers"
+      "Skull Crushers"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -5393,7 +5364,6 @@
     ],
     "name": "Skull Crusher",
     "optionalEquipment": [
-      "dumbbell",
       "barbell"
     ],
     "prerequisites": [],
@@ -5414,7 +5384,8 @@
     "trackingType": "reps_weight",
     "variations": [
       "cable-tricep-pushdown",
-      "overhead-tricep-extension"
+      "overhead-tricep-extension",
+      "dumbbell-skull-crusher"
     ],
     "videoUrl": "/placeholder.mp4"
   },
@@ -5531,9 +5502,7 @@
     "_id": "699fbd45751d9854c0799366",
     "slug": "standing-calf-raise",
     "aliases": [
-      "Standing Calf Raise (with DBs)",
-      "Standing or Seated Calf Raise",
-      "DB Calf Raises"
+      "Standing or Seated Calf Raise"
     ],
     "alternatives": [],
     "bodyRegion": "lower_body",
@@ -5561,7 +5530,6 @@
     ],
     "name": "Standing Calf Raise",
     "optionalEquipment": [
-      "dumbbell",
       "bodyweight",
       "smith_machine"
     ],
@@ -5578,7 +5546,8 @@
     ],
     "trackingType": "reps_weight",
     "variations": [
-      "seated-calf-raise"
+      "seated-calf-raise",
+      "dumbbell-calf-raise"
     ]
   },
   {
@@ -5727,7 +5696,7 @@
     "_id": "699fbd45751d9854c079936a",
     "slug": "dumbbell-shrug",
     "aliases": [
-      "DB Shrugs"
+      "Dumbbell Shrugs"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -6715,7 +6684,7 @@
     "_id": "699fbd45751d9854c079937c",
     "slug": "shoulder-opener",
     "aliases": [
-      "DB Shoulder Openers × 20"
+      "Dumbbell Shoulder Openers × 20"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -6767,7 +6736,7 @@
     "_id": "699fbd45751d9854c079937d",
     "slug": "light-dumbbell-floor-press",
     "aliases": [
-      "Light DB Floor Press × 15"
+      "Light Dumbbell Floor Press × 15"
     ],
     "alternatives": [],
     "bodyRegion": "upper_body",
@@ -6818,7 +6787,7 @@
     "_id": "699fbd45751d9854c079937e",
     "slug": "light-dumbbell-rdl-to-upright-row",
     "aliases": [
-      "Light DB RDL → Upright Row × 15"
+      "Light Dumbbell RDL → Upright Row × 15"
     ],
     "alternatives": [],
     "bodyRegion": "full_body",
@@ -7074,5 +7043,826 @@
     ],
     "trackingType": "time_distance",
     "variations": []
+  },
+  {
+    "slug": "dumbbell-crunch",
+    "aliases": [
+      "Dumbbell Crunches",
+      "Weighted Crunch",
+      "Dumbbell Crunch × 20"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Pulling on the neck, or letting the dumbbell drag the head forward.",
+      "Going so heavy that the hips start swinging and the movement becomes a sit-up.",
+      "Bouncing off the floor instead of stopping short of it."
+    ],
+    "cues": [
+      "Ribs towards hips — it is a short movement, not a sit-up.",
+      "Breathe the air out as you curl up; the abs cannot shorten fully on a full chest.",
+      "Keep the dumbbell still relative to your chest. If it swings, it is doing the rep for you."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "30 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "A crunch performed holding a dumbbell at the chest or overhead, so the abs work against load rather than bodyweight alone. The weighted half of the pair — the unloaded version is Crunch.",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Lie on your back with your knees bent and feet flat.",
+      "Hold one dumbbell against your chest with both hands, or pressed straight up over your shoulders.",
+      "Curl your shoulder blades off the floor by shortening the distance between your ribs and hips.",
+      "Pause at the top, then lower under control without letting your shoulders rest between reps."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "n/a"
+    ],
+    "name": "Dumbbell Crunch",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "abs"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "dumbbell",
+      "isolation"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "crunch"
+    ]
+  },
+  {
+    "slug": "dumbbell-russian-twist",
+    "aliases": [
+      "Dumbbell Russian Twists",
+      "Weighted Russian Twist",
+      "Russian Twists (with Dumbbell) × 40"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Swinging the dumbbell across the body while the torso stays square.",
+      "Letting the lower back round until it is taking the load instead of the core.",
+      "Counting each side as a full rep when the program asked for reps per side."
+    ],
+    "cues": [
+      "Turn the ribs, not just the arms — if only the dumbbell moves, the obliques are not working.",
+      "Keep the chest tall through the whole set; rounding forward turns it into a hip-flexor hold.",
+      "Slow the turn down. Speed here comes from momentum, not from the obliques."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "20 total",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "Seated rotation of the torso from side to side holding a dumbbell, feet on or just off the floor. The loaded version of the Russian Twist.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Sit on the floor with your knees bent, heels down or hovering.",
+      "Hold one dumbbell at your chest with both hands and lean back until you feel your abs engage.",
+      "Rotate your ribcage to one side and tap the dumbbell down beside your hip.",
+      "Rotate through to the other side. One rep per side unless the program says \"total\"."
+    ],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "rotation"
+    ],
+    "name": "Dumbbell Russian Twist",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs",
+      "hip_flexors"
+    ],
+    "stabilizers": [],
+    "tags": [
+      "core",
+      "rotation",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "russian-twist"
+    ]
+  },
+  {
+    "slug": "dumbbell-calf-raise",
+    "aliases": [
+      "Standing Dumbbell Calf Raise",
+      "Standing Calf Raise (with Dumbbells)",
+      "Dumbbell Calf Raises"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Short, fast reps that never reach a full stretch or a full contraction.",
+      "Bending the knees and turning it into a quarter squat.",
+      "Grip failing before the calves do — use straps or a wall for balance and heavier bells."
+    ],
+    "cues": [
+      "All the way up, all the way down — calves respond to range, not to load you cannot control.",
+      "Pause at the top. A bouncing calf raise is the tendon working, not the muscle.",
+      "Stay tall: no bending the knees to help the heels up."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "15-20",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "Standing calf raise holding dumbbells at your sides, one or both feet on the floor or on a step for extra range. The dumbbell way of doing what the calf-raise machine does.",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand tall holding a dumbbell in each hand at your sides.",
+      "Put the balls of your feet on the floor or on the edge of a step, heels free.",
+      "Rise as high onto your toes as you can and hold for a beat at the top.",
+      "Lower until you feel a stretch through the calf, then go again."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "ankle_flexion"
+    ],
+    "name": "Dumbbell Calf Raise",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "calves"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "grip"
+    ],
+    "tags": [
+      "calves",
+      "isolation",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "standing-calf-raise",
+      "seated-calf-raise"
+    ]
+  },
+  {
+    "slug": "dumbbell-hip-thrust",
+    "aliases": [
+      "Dumbbell Hip Thrusts",
+      "Weighted Hip Thrust"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Arching the lower back at the top instead of finishing with the glutes.",
+      "Feet too far forward, which turns it into a hamstring exercise.",
+      "Letting the dumbbell drift up the stomach so the drive goes nowhere."
+    ],
+    "cues": [
+      "Finish with the glutes, not the lower back — ribs down, chin tucked at the top.",
+      "Push the floor away through the heels rather than pulling with the toes.",
+      "Pad the dumbbell with a towel or mat; it is the bar bruise that ends most sets early."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "12-15",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "Shoulders on a bench or the floor, one dumbbell resting across the hips, driving the hips up to full extension. The dumbbell way of loading a hip thrust when there is no barbell.",
+    "difficulty": "beginner",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Sit on the floor with your upper back against a bench, or lie flat if you have no bench.",
+      "Rest one dumbbell across the crease of your hips and hold it there with both hands.",
+      "Plant your feet flat, about shoulder width, heels under your knees.",
+      "Drive through the heels and squeeze the glutes until hips, knees and shoulders are in line.",
+      "Lower until your hips are just off the floor and go again without resting the weight down."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Dumbbell Hip Thrust",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "glute_builder",
+      "hinge",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "hip-thrust",
+      "glute-bridge"
+    ],
+    "videoUrl": "/exercises/dumbbell-hip-thrust.mov"
+  },
+  {
+    "slug": "dumbbell-step-up",
+    "aliases": [
+      "Dumbbell Step-Ups",
+      "Loaded Step-Up"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Bouncing off the trailing foot to get up.",
+      "A box so high the hip has to hitch to reach it.",
+      "Dropping down instead of lowering, which wastes the hardest half of the rep."
+    ],
+    "cues": [
+      "Whole foot on the box, knee tracking over the middle of the foot.",
+      "Stand up with the top leg. If the bottom foot is pushing off, the box is too high or the weight too heavy.",
+      "Control the way down — that is where the quad and glute actually get worked."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "12 per leg",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "Stepping up onto a box or bench holding a dumbbell in each hand, driving through the lead leg. One leg does the work, so the load needed is modest.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell",
+      "box"
+    ],
+    "instructions": [
+      "Hold a dumbbell in each hand at your sides and stand facing a box around knee height.",
+      "Plant the whole of one foot on the box.",
+      "Drive through that leg to stand up tall on the box — no pushing off the back foot.",
+      "Lower yourself back down under control and repeat on the same leg for the prescribed reps."
+    ],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge"
+    ],
+    "name": "Dumbbell Step-Up",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "hamstrings"
+    ],
+    "stabilizers": [
+      "abs",
+      "calves"
+    ],
+    "tags": [
+      "lunge",
+      "unilateral",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "step-up"
+    ]
+  },
+  {
+    "slug": "dumbbell-romanian-deadlift",
+    "aliases": [
+      "Dumbbell RDL",
+      "Dumbbell Romanian Deadlifts"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Turning it into a squat by letting the knees travel forward.",
+      "Chasing depth past the point the hamstrings can hold a flat back.",
+      "Yanking the top of the rep with the lower back instead of finishing with the glutes."
+    ],
+    "cues": [
+      "Hips back, not knees forward.",
+      "Keep the dumbbells brushing the legs; letting them drift forward is what loads the lower back.",
+      "Long spine from the tailbone to the crown — the back never rounds to get lower."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "A hip hinge holding a dumbbell in each hand, lowering the bells down the front of the legs until the hamstrings are stretched, then standing back up. The dumbbell version of the RDL.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand with feet hip width, a dumbbell in each hand in front of your thighs.",
+      "Soften the knees slightly and keep them there — this is a hinge, not a squat.",
+      "Push the hips back and let the dumbbells travel down the front of your legs.",
+      "Stop when you feel the hamstrings stretch and your back is still flat.",
+      "Drive the hips forward to stand tall, squeezing the glutes at the top."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge"
+    ],
+    "name": "Dumbbell Romanian Deadlift",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "hamstrings"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "glutes",
+      "lower_back"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "posterior_chain",
+      "dumbbell"
+    ],
+    "thumbnailUrl": "/icons/icon-192.png",
+    "trackingType": "reps_weight",
+    "variations": [
+      "romanian-deadlift",
+      "single-leg-rdl",
+      "dumbbell-deadlift"
+    ],
+    "videoUrl": "/exercises/dumbbell-rdl.mov"
+  },
+  {
+    "slug": "dumbbell-push-press",
+    "aliases": [
+      "Dumbbell Push-Press"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Dipping so deep it becomes a squat.",
+      "Leaning back to get under the weight instead of pressing it up.",
+      "Pressing before the leg drive has done anything, which makes it a strict press with a wobble."
+    ],
+    "cues": [
+      "Dip straight down, not forward — a forward dip sends the dumbbells away from you.",
+      "One dip per rep. Two is a thruster with extra steps.",
+      "Finish with the bells stacked over the shoulders, not out in front."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "8-10",
+    "defaultRest": "90 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "An overhead press driven off a short dip of the knees, with a dumbbell in each hand. The leg drive is what lets you press more than a strict shoulder press.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand with a dumbbell at each shoulder, elbows in front of the bells.",
+      "Dip the knees a few inches, keeping your torso upright.",
+      "Drive the floor away and let that momentum start the dumbbells overhead.",
+      "Finish the press with the shoulders and triceps until your arms are locked out.",
+      "Lower the dumbbells back to the shoulders under control and reset before the next rep."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "vertical_push"
+    ],
+    "name": "Dumbbell Push Press",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "front_delts",
+      "side_delts"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "triceps",
+      "quads",
+      "glutes"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "press",
+      "overhead",
+      "dumbbell",
+      "explosive"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "push-press",
+      "dumbbell-shoulder-press",
+      "dumbbell-thruster"
+    ]
+  },
+  {
+    "slug": "dumbbell-skull-crusher",
+    "aliases": [
+      "Dumbbell Skull Crushers",
+      "Dumbbell Lying Tricep Extension"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Letting the upper arms swing back, which turns it into a pullover.",
+      "Flaring the elbows out to move heavier weight.",
+      "Clanging the bells together at the top instead of controlling the finish."
+    ],
+    "cues": [
+      "Elbows stay pointed at the ceiling for the whole set — nothing above the elbow moves.",
+      "Palms facing each other keeps the wrists and elbows happy; that is why the dumbbells are better than a bar here.",
+      "Stop just short of a full lockout to keep the tension on the triceps."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "10-12",
+    "defaultRest": "60 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "Lying tricep extension with a dumbbell in each hand, palms facing each other, lowering the bells beside the head. The neutral-grip version of the skull crusher.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Lie on a bench or the floor with a dumbbell in each hand pressed over your chest, palms facing each other.",
+      "Keep the upper arms still and bend at the elbows only.",
+      "Lower the dumbbells until they are beside your ears.",
+      "Extend back up until the arms are straight, without letting the elbows drift outwards."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "isolation",
+    "movementPatterns": [
+      "elbow_extension"
+    ],
+    "name": "Dumbbell Skull Crusher",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "triceps"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [],
+    "stabilizers": [
+      "front_delts"
+    ],
+    "tags": [
+      "arms",
+      "triceps",
+      "isolation",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "skull-crusher",
+      "overhead-tricep-extension"
+    ]
+  },
+  {
+    "slug": "dumbbell-woodchopper",
+    "aliases": [
+      "Dumbbell Woodchoppers",
+      "Dumbbell Chop",
+      "Dumbbell Woodchoppers × 15 per side"
+    ],
+    "alternatives": [],
+    "bodyRegion": "core",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Chopping with the arms while the torso stays square.",
+      "Going heavy enough that the lower back does the turning.",
+      "Rounding forward at the bottom instead of staying tall through the chest."
+    ],
+    "cues": [
+      "Rotate through the ribs and hips together — the arms are just holding on.",
+      "Let the back heel turn. Fighting the rotation at the foot is what tweaks knees.",
+      "Move the dumbbell on a diagonal, not a circle."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "15 per side",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "A diagonal chop across the body holding one dumbbell in both hands, from above one shoulder down past the opposite hip. The dumbbell way of training rotation when there is no cable stack.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand with feet a little wider than shoulder width, holding one dumbbell in both hands.",
+      "Reach the dumbbell up and over one shoulder, letting the torso rotate with it.",
+      "Chop down and across to the outside of the opposite hip, pivoting the back foot as you turn.",
+      "Reverse the path back to the start under control. Complete all reps on one side, then swap."
+    ],
+    "isActive": true,
+    "laterality": "unilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "rotation"
+    ],
+    "name": "Dumbbell Woodchopper",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "obliques"
+    ],
+    "role": "accessory",
+    "secondaryMuscles": [
+      "abs",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "hip_flexors",
+      "glutes"
+    ],
+    "tags": [
+      "core",
+      "rotation",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "cable-woodchopper",
+      "dumbbell-russian-twist"
+    ]
+  },
+  {
+    "slug": "dumbbell-swing",
+    "aliases": [
+      "Dumbbell Swings"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "power",
+    "commonMistakes": [
+      "Squatting the weight up and down instead of hinging.",
+      "Lifting with the shoulders once the hips run out of drive.",
+      "Swinging above chest height with a dumbbell, which is where grip fails."
+    ],
+    "cues": [
+      "It is a hinge, not a squat, and not a front raise — the arms never lift the weight.",
+      "Snap the glutes at the top and stand tall for a split second.",
+      "Grip the top head firmly with both hands. A dumbbell is not shaped for this, so lighter than your kettlebell weight."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "15",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "A hip-driven swing holding one dumbbell by the head with both hands, hiked back between the legs and snapped forward to chest height. The dumbbell stand-in for a kettlebell swing.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand with feet a little wider than shoulder width, one dumbbell held vertically by its top head in both hands.",
+      "Hinge at the hips and hike the dumbbell back between your legs, above the knees.",
+      "Snap the hips forward hard and let that send the dumbbell out to chest height.",
+      "Let it fall back into the next hinge and keep the rhythm for the prescribed reps."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge",
+      "triple_extension"
+    ],
+    "name": "Dumbbell Swing",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "erector_spinae",
+      "front_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "grip"
+    ],
+    "tags": [
+      "hinge",
+      "explosive",
+      "conditioning",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "kettlebell-swing"
+    ]
+  },
+  {
+    "slug": "dumbbell-hang-clean",
+    "aliases": [
+      "Dumbbell Hang Cleans"
+    ],
+    "alternatives": [],
+    "bodyRegion": "full_body",
+    "cardioMetrics": null,
+    "category": "power",
+    "commonMistakes": [
+      "Reverse-curling the dumbbells up with the arms.",
+      "Catching with locked knees, which is how wrists and elbows get jarred.",
+      "Rounding the back on the way back down to the start position."
+    ],
+    "cues": [
+      "The jump comes first, the arms second. Pulling early kills the bar speed.",
+      "Keep the dumbbells close — a bell that swings out has to be muscled up.",
+      "Catch soft: knees bend to receive the weight rather than locking out under it."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "5",
+    "defaultRest": "2 min",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "From a dumbbell in each hand at mid-thigh, an explosive hip extension that pulls the bells up and catches them at the shoulders. The power movement in a dumbbell complex.",
+    "difficulty": "advanced",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand holding a dumbbell in each hand at arm's length, just above the knees.",
+      "Hinge slightly so the bells sit at mid-thigh, back flat and shoulders over them.",
+      "Extend the hips, knees and ankles hard and shrug — the bells travel up close to the body.",
+      "Whip the elbows under and catch a dumbbell on each shoulder with the knees slightly bent.",
+      "Stand tall, then lower the bells back to mid-thigh for the next rep."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "hinge",
+      "triple_extension"
+    ],
+    "name": "Dumbbell Hang Clean",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "glutes",
+      "hamstrings",
+      "traps"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "quads",
+      "front_delts",
+      "forearms"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae"
+    ],
+    "tags": [
+      "explosive",
+      "power",
+      "dumbbell",
+      "full_body"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-snatch",
+      "dumbbell-push-press"
+    ]
+  },
+  {
+    "slug": "jumping-lunge",
+    "aliases": [
+      "Jump Lunge",
+      "Jumping Lunges",
+      "Split Jump",
+      "Alternating Jump Lunge"
+    ],
+    "alternatives": [],
+    "bodyRegion": "lower_body",
+    "cardioMetrics": null,
+    "category": "plyometric",
+    "commonMistakes": [
+      "Landing with a locked front leg.",
+      "Letting the front knee cave inwards on the landing.",
+      "Racing the clock in an AMRAP until the lunge depth disappears."
+    ],
+    "cues": [
+      "Land quietly — noise is the landing you did not absorb.",
+      "Stay tall through the chest; leaning forward puts it all on the front knee.",
+      "Keep the jumps small and controlled once they get sloppy. Sloppy plyos are where knees go."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "10 per leg",
+    "defaultRest": "45 sec",
+    "defaultSets": 3,
+    "defaultTempo": null,
+    "description": "A bodyweight split-stance jump that swaps the legs in the air, landing in a lunge on the other side. The plyometric version of a lunge, programmed here inside an AMRAP.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "bodyweight"
+    ],
+    "instructions": [
+      "Start in a lunge: one foot forward, back knee bent and under your hip.",
+      "Push hard through both legs and jump straight up.",
+      "Switch your legs in the air and land in a lunge on the other side.",
+      "Absorb the landing by letting both knees bend, then go straight into the next jump."
+    ],
+    "isActive": true,
+    "laterality": "alternating",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "lunge",
+      "triple_extension"
+    ],
+    "name": "Jumping Lunge",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "quads",
+      "glutes"
+    ],
+    "role": "secondary",
+    "secondaryMuscles": [
+      "hamstrings",
+      "calves"
+    ],
+    "stabilizers": [
+      "abs"
+    ],
+    "tags": [
+      "lunge",
+      "plyometric",
+      "conditioning",
+      "bodyweight"
+    ],
+    "trackingType": "reps_only",
+    "variations": [
+      "reverse-lunge",
+      "split-squat",
+      "squat-jump"
+    ]
   }
 ]
