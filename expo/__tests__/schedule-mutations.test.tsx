@@ -4,6 +4,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 const mockBack = jest.fn();
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: mockBack }),
+  useLocalSearchParams: () => ({}),
 }));
 
 const mockToken = "test-jwt";
@@ -48,7 +49,7 @@ function callsByMethod(path: string, method?: string): unknown[][] {
 function getsTo(path: string): unknown[][] {
   return mockApiFetch.mock.calls.filter(
     (c) =>
-      String(c[0]) === path &&
+      String(c[0]).split("?")[0] === path &&
       ((c[2] as { method?: string } | undefined)?.method ?? "GET") === "GET",
   );
 }
@@ -74,7 +75,7 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
     let getCount = 0;
     mockApiFetch.mockImplementation((path: string, _s, init) => {
       const method = (init as { method?: string } | undefined)?.method;
-      if (path === "/api/schedule" && (!method || method === "GET")) {
+      if (path.split("?")[0] === "/api/schedule" && (!method || method === "GET")) {
         getCount += 1;
         // First load shows dateA; after reschedule the refetch shows dateB.
         return Promise.resolve(scheduleDoc(getCount === 1 ? dateA : dateB));
@@ -149,7 +150,7 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
     mockBack.mockReset();
     mockApiFetch.mockImplementation((path: string, _s, init) => {
       const method = (init as { method?: string } | undefined)?.method;
-      if (path === "/api/schedule" && (!method || method === "GET")) {
+      if (path.split("?")[0] === "/api/schedule" && (!method || method === "GET")) {
         return Promise.resolve(scheduleDoc(dateA));
       }
       if (path === "/api/schedule/settings" && method === "PUT") {
@@ -226,7 +227,7 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
 
     mockApiFetch.mockImplementation((path: string, _s, init) => {
       const method = (init as { method?: string } | undefined)?.method;
-      if (path === "/api/schedule" && (!method || method === "GET")) {
+      if (path.split("?")[0] === "/api/schedule" && (!method || method === "GET")) {
         return Promise.resolve(twoProgramsDoc);
       }
       if (path === "/api/schedule/settings" && method === "PUT") {
@@ -297,7 +298,7 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
 
     mockApiFetch.mockImplementation((path: string, _s, init) => {
       const method = (init as { method?: string } | undefined)?.method;
-      if (path === "/api/schedule" && (!method || method === "GET")) {
+      if (path.split("?")[0] === "/api/schedule" && (!method || method === "GET")) {
         return Promise.resolve(scheduleWithPast);
       }
       if (path === "/api/schedule/settings" && method === "PUT") {

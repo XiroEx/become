@@ -31,13 +31,20 @@ export function toScheduledSlots(
   const slots: ScheduledSlot[] = [];
   for (const schedule of response.schedules) {
     for (const w of schedule.scheduledWorkouts ?? []) {
-      slots.push({
+      const slot: ScheduledSlot = {
         date: slotDateKey(w.date),
         programId: w.programId ?? schedule.programId,
         phaseIndex: Math.max(0, (w.phase ?? 1) - 1),
         workoutIndex: workoutIndexFromDayLabel(w.dayLabel),
         status: w.status,
-      });
+      };
+      if (w.phase !== undefined) slot.phase = w.phase;
+      if (w.dayLabel !== undefined) slot.dayLabel = w.dayLabel;
+      if (w.workoutTitle !== undefined) slot.workoutTitle = w.workoutTitle;
+      if (schedule.programName !== undefined) slot.programName = schedule.programName;
+      if (schedule.programStatus !== undefined) slot.programStatus = schedule.programStatus;
+      if (w.completedAt !== undefined) slot.completedAt = w.completedAt;
+      slots.push(slot);
     }
   }
   return slots;
