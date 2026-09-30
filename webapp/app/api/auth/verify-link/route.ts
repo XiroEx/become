@@ -4,6 +4,7 @@ import MagicLink, { verifyMagicLink, storeAuthToken } from '@/models/MagicLink'
 import { signToken, authCookie } from '@/lib/auth'
 import { LEGAL_MINIMUM_AGE } from '@/lib/legal'
 import { fallbackNameFromEmail } from '@/lib/displayName'
+import { completeAppleEmailLink } from '@/lib/appleLink'
 
 export async function POST(req: Request) {
   try {
@@ -25,7 +26,47 @@ export async function POST(req: Request) {
       }), { status: 400 })
     }
 
-    const { email, mode, name, consentTermsVersion } = magicLink
+    const { email, mode, name, consentTermsVersion, appleLinkUserId } = magicLink
+
+    // "Already a member? Link your email" (lib/appleLink.ts). This link was
+    // sent to the member's REAL address on behalf of the account Apple's relay
+    // alias had just created, and clicking it is the proof that the two are
+    // one person. The Apple subject moves onto the account that owns this
+    // address and the throwaway row is purged, so the member ends with ONE
+    // account — then the session is minted for it exactly as below.
+    //
+    // It is handled before everything else because `mode` is 'login' and the
+    // ordinary path would happily sign them into the right account while
+    // leaving the duplicate in place.
+    if (appleLinkUserId) {
+      const outcome = await completeAppleEmailLink({ appleUserId: appleLinkUserId, email })
+      if (!outcome.ok || !outcome.user) {
+        // The link is already consumed; un-consume it so a transient refusal
+        // is retryable, the same way a failed save below is.
+        await MagicLink.updateOne({ token }, { $set: { used: false } })
+        console.error(`[apple-link] merge refused: ${outcome.reason}`)
+        return new Response(JSON.stringify({
+          message: 'We could not link that email to your Apple sign-in. Please try again from the app.',
+          reason: outcome.reason,
+        }), { status: 400 })
+      }
+      const linked = outcome.user
+      const jwtToken = await signToken({
+        userId: String(linked._id),
+        email: linked.email,
+        role: linked.role || 'user',
+      })
+      await storeAuthToken(token, jwtToken)
+      console.log(
+        `[apple-link] linked user=${String(linked._id)} merged=${outcome.merged}`
+          + ` purgedRows=${outcome.purgedRows ?? 0}`,
+      )
+      return new Response(JSON.stringify({
+        token: jwtToken,
+        user: { id: linked._id, name: linked.name, email: linked.email },
+        appleLinked: true,
+      }), { status: 200, headers: { 'Set-Cookie': authCookie(jwtToken) } })
+    }
 
     let user = await User.findOne({ email })
 
