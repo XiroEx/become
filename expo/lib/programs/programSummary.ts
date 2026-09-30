@@ -21,7 +21,7 @@ function narrowTargetUser(
  * is the canonical id; falls back to `_id` when a projection omits it.
  */
 export function toProgramSummary(raw: ProgramCatalogItem): ProgramSummary {
-  return {
+  const summary: ProgramSummary = {
     id: raw.program_id ?? raw._id ?? "",
     name: raw.name,
     description: raw.description ?? "",
@@ -30,4 +30,8 @@ export function toProgramSummary(raw: ProgramCatalogItem): ProgramSummary {
     goal: raw.goal,
     targetUser: narrowTargetUser(raw.target_user),
   };
+  if (raw.tags !== undefined) {
+    summary.tags = raw.tags;
+  }
+  return summary;
 }

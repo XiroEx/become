@@ -75,7 +75,7 @@ describe("ProgramsBrowseRoute", () => {
     mockPush.mockReset();
   });
 
-  it("GETs /api/programs with baseUrl + token and renders the mapped list", async () => {
+  it("GETs /api/programs/search with baseUrl + token and renders the mapped list", async () => {
     mockApiFetch.mockResolvedValue([
       {
         program_id: "p1",
@@ -89,10 +89,10 @@ describe("ProgramsBrowseRoute", () => {
     const { getByTestId } = render(<ProgramsBrowseRoute />);
 
     await waitFor(() => {
-      expect(callsTo("/api/programs").length).toBeGreaterThan(0);
+      expect(callsTo("/api/programs/search").length).toBeGreaterThan(0);
     });
-    const call = callsTo("/api/programs")[0]!;
-    expect(call[0]).toBe("/api/programs");
+    const call = callsTo("/api/programs/search")[0]!;
+    expect(String(call[0])).toMatch(/^\/api\/programs\/search/);
     const opts = call[2] as {
       baseUrl?: string;
       getToken?: () => string | undefined;
