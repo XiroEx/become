@@ -98,7 +98,8 @@ describe("widgetTapUri", () => {
     const target = resolveWebPath(uri);
     expect(target).toMatchObject({
       kind: "native",
-      pathname: `${NATIVE_ROUTES.nutrition}/log/2026-09-29`,
+      pathname: NATIVE_ROUTES.nutrition,
+      params: { date: "2026-09-29" },
     });
   });
 

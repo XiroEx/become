@@ -17,7 +17,6 @@ const DIRECT_SCREENS = [
   "app/(app)/(tabs)/nutrition/index.tsx",
   "app/(app)/(tabs)/nutrition/search.tsx",
   "app/(app)/(tabs)/nutrition/food/[id].tsx",
-  "app/(app)/(tabs)/nutrition/log/[date].tsx",
   "app/(app)/(tabs)/nutrition/recipes/index.tsx",
   "app/(app)/(tabs)/nutrition/recipes/[id].tsx",
   "app/(app)/(tabs)/chat/index.tsx",
