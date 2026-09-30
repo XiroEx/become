@@ -18,6 +18,8 @@ import {
   ProfileResponseSchema,
   WeightCheckResponseSchema,
   WeightPostRequestSchema,
+  ReviewSignInRequestSchema,
+  ReviewSignInResponseSchema,
   SendLinkRequestSchema,
   SendLinkResponseSchema,
   UserSchema,
@@ -382,6 +384,46 @@ test('VerifyLinkResponseSchema: rejects a response missing the token', () => {
     user: { id: 'a', email: 'jon@example.com' },
   });
   assert.equal(result.success, false);
+});
+
+// ---------------------------------------------------------------------------
+// The reviewer demo sign-in. One designated account, a fixed code from the
+// runtime config, typed on the normal sign-in screen — the store builds' only
+// way past a magic link they cannot receive.
+// ---------------------------------------------------------------------------
+
+test('ReviewSignInRequestSchema: an email and a code, both required', () => {
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({
+      email: 'app-review@become.redbtn.io',
+      code: 'become-review-2026-a1b2',
+    }).success,
+    true,
+  );
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({ email: 'app-review@become.redbtn.io' }).success,
+    false,
+  );
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({ email: 'not-an-email', code: 'x' }).success,
+    false,
+  );
+});
+
+test('ReviewSignInResponseSchema: the same envelope verify-link answers with', () => {
+  // Deliberately identical in shape: the app stores a review session exactly
+  // as it stores a magic-link one.
+  const body = {
+    token: 'jwt.token.value',
+    user: { id: '67000000abc', name: 'Alex Reviewer', email: 'app-review@become.redbtn.io' },
+  };
+  assert.equal(ReviewSignInResponseSchema.safeParse(body).success, true);
+  assert.equal(VerifyLinkResponseSchema.safeParse(body).success, true);
+  // A refusal carries no token, and must not parse as a session.
+  assert.equal(
+    ReviewSignInResponseSchema.safeParse({ message: 'That review code is not valid' }).success,
+    false,
+  );
 });
 
 // The POST /api/workouts save body and its response moved to

@@ -17,6 +17,8 @@ import {
   CheckSessionResponseSchema,
   type SendLinkResponse,
   type CheckSessionResponse,
+  ReviewSignInResponseSchema,
+  type ReviewSignInResponse,
   type AuthMode,
   type SendLinkRequest,
 } from "@become/api-client";
@@ -39,6 +41,19 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
 /** Default poll cadence for the magic-link fallback (mirrors the webapp). */
 const POLL_INTERVAL_MS = 2000;
+
+/**
+ * The reviewer demo sign-in, on the same screen the members use.
+ *
+ * Apple and Google hand the build to a person who has to sign in, and a magic
+ * link needs an inbox they do not have. ONE designated demo account can be
+ * opened with a fixed code from the runtime config instead — the code works
+ * for that account only, is rate limited, and is switchable off from config.
+ * The rules live server-side in webapp/lib/reviewSignIn.ts; this string must
+ * match REVIEW_SIGN_IN_PATH there, and
+ * webapp/tests/unit/auth/reviewSignIn.test.ts fails if it drifts.
+ */
+export const REVIEW_SIGN_IN_PATH = "/api/auth/review-sign-in";
 
 function defaultSubscribeToAppState(
   listener: (status: AppStateStatus) => void,
@@ -75,6 +90,11 @@ export interface LoginScreenProps {
   ) => Promise<SendLinkResponse>;
   /** DI hook for tests — POSTs /api/auth/check-session for the polling fallback. */
   checkSessionFn?: (sessionId: string) => Promise<CheckSessionResponse>;
+  /** DI hook for tests — POSTs /api/auth/review-sign-in (the reviewer door). */
+  reviewSignInFn?: (
+    email: string,
+    code: string,
+  ) => Promise<ReviewSignInResponse>;
   /** DI hook for tests — persists the JWT. Defaults to useAuth().setToken. */
   onAuthed?: (token: string) => void | Promise<void>;
   pollIntervalMs?: number;
@@ -91,6 +111,7 @@ export interface LoginScreenProps {
 export default function LoginScreen({
   sendLinkFn,
   checkSessionFn,
+  reviewSignInFn,
   onAuthed,
   pollIntervalMs,
   setTimeoutImpl,
@@ -121,6 +142,10 @@ export default function LoginScreen({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The reviewer door, collapsed. Not something a member has.
+  const [showReviewCode, setShowReviewCode] = useState(false);
+  const [reviewCode, setReviewCode] = useState("");
+  const [reviewBusy, setReviewBusy] = useState(false);
   const submittingRef = useRef(false);
   const pollerRef = useRef<Poller | null>(null);
   const isResumedRef = useRef(false);
@@ -146,6 +171,15 @@ export default function LoginScreen({
       apiFetch("/api/auth/check-session", CheckSessionResponseSchema, {
         method: "POST",
         body: { sessionId: sid },
+        baseUrl: WEBAPP_BASE_URL,
+      }));
+
+  const reviewSignIn =
+    reviewSignInFn ??
+    ((value: string, code: string) =>
+      apiFetch(REVIEW_SIGN_IN_PATH, ReviewSignInResponseSchema, {
+        method: "POST",
+        body: { email: value, code },
         baseUrl: WEBAPP_BASE_URL,
       }));
 
@@ -301,6 +335,33 @@ export default function LoginScreen({
     } finally {
       submittingRef.current = false;
       setSending(false);
+    }
+  };
+
+  /**
+   * Spend a review code. Same email box, same screen; the server answers with
+   * the session directly instead of sending mail, and it is stored exactly as
+   * a magic-link session is.
+   */
+  const handleReviewSignIn = async (): Promise<void> => {
+    if (reviewBusy) return;
+    const trimmedEmail = email.trim().toLowerCase();
+    const code = reviewCode.trim();
+    if (!trimmedEmail.includes("@") || !code) {
+      setError("Enter the email and review code you were given");
+      return;
+    }
+    setError(null);
+    setReviewBusy(true);
+    try {
+      const resp = await reviewSignIn(trimmedEmail, code);
+      await pendingStore.clear();
+      await Promise.resolve(handleAuthed(resp.token));
+      router.replace("/");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setReviewBusy(false);
     }
   };
 
@@ -540,6 +601,50 @@ export default function LoginScreen({
                   )}
                 </Text>
               </Pressable>
+
+              {/* App reviewers. See REVIEW_SIGN_IN_PATH above for why this
+                  exists: a reviewer must be able to sign in, and there is no
+                  inbox here for a magic link. Sign-in mode only. */}
+              {mode === "login" &&
+                (showReviewCode ? (
+                  <View className="mt-4 w-full" testID="login-review-code">
+                    <Text className="text-muted-foreground text-xs mb-2">
+                      Enter the email and review code you were given.
+                    </Text>
+                    <Input
+                      testID="login-review-code-input"
+                      label="Review code"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={reviewCode}
+                      onChangeText={setReviewCode}
+                      placeholder="Review code"
+                    />
+                    <View style={{ height: 8 }} />
+                    <Button
+                      testID="login-review-code-submit"
+                      variant="secondary"
+                      disabled={reviewBusy}
+                      onPress={handleReviewSignIn}
+                      accessibilityLabel="Sign in with review code"
+                    >
+                      {reviewBusy ? "Signing in…" : "Sign in with review code"}
+                    </Button>
+                  </View>
+                ) : (
+                  <Pressable
+                    testID="login-review-code-disclosure"
+                    accessibilityRole="button"
+                    accessibilityLabel="App reviewer? Use a review code"
+                    style={minTouchTarget}
+                    onPress={() => setShowReviewCode(true)}
+                    className="mt-2 py-2 items-center justify-center"
+                  >
+                    <Text className="text-muted-foreground text-xs text-center">
+                      App reviewer? Use a review code
+                    </Text>
+                  </Pressable>
+                ))}
             </View>
           )}
         </View>

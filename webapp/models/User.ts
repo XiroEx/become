@@ -225,6 +225,24 @@ export interface IUser {
    *  is missing on every row written before this shipped, and `$inc` turns
    *  absent into 1. */
   widgetTokenVersion?: number;
+  /**
+   * THE DESIGNATED REVIEWER DEMO ACCOUNT, and the reason the review code
+   * cannot open anybody else's account (lib/reviewSignIn.ts).
+   *
+   * The code is checked against a configured email, but a configured value is
+   * a value someone can get wrong — and getting it wrong must not mean signing
+   * a real member in. So the flag is the second half of the door:
+   * `POST /api/auth/review-sign-in` refuses an existing row that does not
+   * carry `true`, and `lib/reviewSeed.ts` refuses to write to one. It is set
+   * only when the route CREATES the demo account, never by any other path.
+   *
+   * Absent (the normal state) means "an ordinary member" — which is why the
+   * check is `=== true` and never `!== false`.
+   */
+  isReviewAccount?: boolean;
+  /** When the demo account's data was last written (lib/reviewSeed.ts). Only
+   *  ever set on the row above. */
+  reviewSeededAt?: Date;
   /** Profile picture from a social provider (e.g. Google) or a custom upload. */
   avatarUrl?: string;
   /** Equipped profile icon: a PRESET_ICONS id, or 'custom' to use avatarUrl.
@@ -371,6 +389,10 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   // and normalizeWidgetTokenVersion (absent → 0) agree, and so the field is not
   // written onto every legacy row the first time anything saves one.
   widgetTokenVersion: { type: Number },
+  // No `default`: absent must stay absent, so an ordinary member's row is
+  // never written with a review flag on it, and every read is `=== true`.
+  isReviewAccount: { type: Boolean },
+  reviewSeededAt: { type: Date },
   avatarUrl: { type: String },
   profileIcon: { type: String },
 }, {

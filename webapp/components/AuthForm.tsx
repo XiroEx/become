@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { loginWithPasskey, passkeysSupported } from '@/lib/passkeyClient'
 import { CONSENT_STATEMENT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
+import { REVIEW_SIGN_IN_PATH } from '@/lib/reviewSignIn'
 
 interface Props {
   mode: 'login' | 'register'
@@ -21,6 +22,12 @@ export default function AuthForm({ mode }: Props) {
   const [loading, setLoading] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
   const [canPasskey, setCanPasskey] = useState(false)
+  // App-reviewer door. Collapsed by default — it is one designated account and
+  // a code held in the runtime config, not something a member has. See
+  // lib/reviewSignIn.ts.
+  const [showReviewCode, setShowReviewCode] = useState(false)
+  const [reviewCode, setReviewCode] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
   const submittingRef = useRef(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -120,6 +127,35 @@ export default function AuthForm({ mode }: Props) {
     } finally {
       submittingRef.current = false
       setLoading(false)
+    }
+  }
+
+  /**
+   * Spend a review code. Same screen, same email box — the only difference is
+   * that the server answers with the session directly instead of sending mail,
+   * which is the whole point: a reviewer has no inbox here.
+   */
+  async function handleReviewSignIn(e?: React.SyntheticEvent) {
+    e?.preventDefault()
+    if (reviewBusy) return
+    setError(null)
+    setReviewBusy(true)
+    try {
+      const res = await fetch(REVIEW_SIGN_IN_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: reviewCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.token) {
+        throw new Error(data?.message || 'That review code is not valid for this email address.')
+      }
+      localStorage.setItem('token', data.token)
+      router.push('/dashboard')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not sign in with that review code.')
+    } finally {
+      setReviewBusy(false)
     }
   }
 
@@ -257,6 +293,60 @@ export default function AuthForm({ mode }: Props) {
           </svg>
           {passkeyBusy ? 'Waiting for passkey…' : 'Sign in with a passkey'}
         </button>
+      )}
+
+      {/* App reviewers. Apple and Google hand the build to a person who has to
+          sign in, and a magic link needs an inbox they do not have — so the one
+          designated demo account can be opened with the review code instead.
+          The code only ever works for that account, it is rate limited, and it
+          is switchable off from the runtime config (lib/reviewSignIn.ts).
+          Collapsed, and below the divider: it is not an option a member has. */}
+      {mode === 'login' && (
+        <div className="mt-1 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {!showReviewCode ? (
+            <button
+              type="button"
+              data-testid="review-code-disclosure"
+              onClick={() => setShowReviewCode(true)}
+              className="cursor-pointer text-xs text-zinc-500 underline underline-offset-2 dark:text-zinc-400"
+            >
+              App reviewer? Use a review code
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="review-code" className="text-xs text-zinc-500 dark:text-zinc-400">
+                Enter the email and review code you were given.
+              </label>
+              <input
+                id="review-code"
+                data-testid="review-code-input"
+                value={reviewCode}
+                onChange={(e) => setReviewCode(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter here means "spend the code", not "send me a link" —
+                  // without this the outer form would swallow it.
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleReviewSignIn()
+                  }
+                }}
+                placeholder="Review code"
+                autoComplete="one-time-code"
+                spellCheck={false}
+                className="rounded border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+              <button
+                type="button"
+                data-testid="review-code-submit"
+                disabled={reviewBusy || !email.trim() || !reviewCode.trim()}
+                onClick={handleReviewSignIn}
+                className="cursor-pointer rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-white"
+              >
+                {reviewBusy ? 'Signing in…' : 'Sign in with review code'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
