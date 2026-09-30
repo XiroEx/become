@@ -83,6 +83,7 @@ Submit defaults:
 | Internal testers added | TestFlight → Internal Testing group | Up to 100 internal testers — no Apple review |
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
 | Privacy form filled | App Store Connect → App Privacy | See "Apple App Privacy form" below |
+| **Demo account filled in** | App Store Connect → App Review Information → Sign-in required | **Blocking.** See "Reviewer demo account" below — an app the reviewer cannot sign in to is rejected under Guideline 2.1 |
 | Submit for App Review | App Store Connect → Distribution | When ready to go GA |
 
 ## Play Console (Android) checklist
@@ -94,6 +95,38 @@ Submit defaults:
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
 | Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
+| **Demo account in the release notes** | Play Console → App content → App access | **Blocking.** All functionality is behind sign-in; give the same demo email + review code. See "Reviewer demo account" below |
+
+## Reviewer demo account
+
+Become is passwordless, so there is no password to hand a reviewer and they
+cannot read the inbox a magic link lands in. Both stores are given the SAME
+thing: the demo email and a review code, typed on the normal sign-in screen
+behind **"App reviewer? Use a review code"**.
+
+What to put in the form:
+
+```
+Email: <review.email from BECOME_RUNTIME_CONFIG>
+Password: <review.code from BECOME_RUNTIME_CONFIG>
+Notes: Passwordless app. On the sign-in screen tap "App reviewer? Use a
+       review code", enter the email above and the code above. The account is
+       a demo account with sample data and a Plus subscription already
+       applied; no purchase is required to see any screen.
+```
+
+Three things to check before you submit, all of them in
+`webapp/RUNTIME_SECRETS.md` → `review`:
+
+1. `review.enabled` is `true` in the production payload. It defaults to OFF, so
+   a payload that has never had this section makes the code answer 404.
+2. The code you paste is the code in the payload. Nothing caches it for more
+   than a minute, so a rotation takes effect without a deploy — including
+   mid-review, which is how you close the door the day the app goes live.
+3. Sign in with it yourself, on the candidate build, on both platforms. That is
+   the only check that covers the whole path; the suites cover the rest
+   (`webapp/tests/unit/auth/reviewSignIn*.test.ts`,
+   `__tests__/reviewSignIn.test.tsx`).
 
 ## What the build already answers for you
 

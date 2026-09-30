@@ -113,6 +113,7 @@ export const PURGE_EXEMPT: Readonly<Record<string, string>> = {
   MealImage: 'Keyed by mealId, not by member — deleted by the Meal cascade above.',
   ProgramImage: 'Keyed by programId, not by member — deleted by the Program cascade above.',
   RecipeImage: 'Keyed by recipeId, not by member — deleted by the Recipe cascade above.',
+  ReviewSignInAttempt: 'Rate-limit counters for the reviewer demo sign-in, keyed by a SHA-256 of the email or address that tried it — no member field, no user row, and every one of them is swept by a TTL index within the hour.',
   User: 'Deleted last, by the runner itself — see PURGE_PLAN’s closing note.',
 }
 

@@ -952,6 +952,77 @@ Tests: `tests/unit/account/deletion.test.ts` (window, MAC, purge plan),
 Expo sources, which it reads as text — it is the only check that can see both
 codebases at once), and `expo/__tests__/deleteAccount.test.tsx`.
 
+### Reviewer demo sign-in (store readiness)
+
+**Apple and Google reviewers must be handed credentials that work** (App Store
+Review Guideline 2.1; Play asks for the same in the release notes), and Become
+is passwordless — there is no password to hand over, and a reviewer cannot read
+the inbox a magic link lands in. So there is exactly ONE narrow door:
+`POST /api/auth/review-sign-in`, one designated demo account, a fixed code held
+in `BECOME_RUNTIME_CONFIG`, typed on the NORMAL sign-in screen (the web form's
+"App reviewer? Use a review code" disclosure, and the same control on
+`expo/app/(auth)/login.tsx`, which is both store builds).
+
+Config lives in the runtime payload's `review` section:
+
+```json
+"review": { "enabled": true, "email": "app-review@become.redbtn.io", "code": "<≥12 chars>" }
+```
+
+Six things about it are load-bearing:
+
+- **`review.enabled` must be exactly `true`.** The section defaults to off, and
+  a config with no email, no code, or a code shorter than
+  `REVIEW_CODE_MIN_LENGTH` (12) is treated as off — `resolveReviewAccount`
+  collapses all four into the same `null`, which the route answers as a 404.
+- **It is closeable without a deploy.** The route reads the config with
+  `getRuntimeConfig({ maxAgeMs: REVIEW_CONFIG_MAX_AGE_MS })` — a new option, and
+  the ONLY caller that passes it. `getRuntimeConfig()` otherwise caches for the
+  life of the process, which is right for a Mongo URI and wrong for a switch:
+  without a max age, flipping `enabled` would need a restart, and on RedRun a
+  restart is a deploy. A refresh that throws keeps the cached value, so an
+  unreachable secret store cannot take the app down.
+- **The config names an address, and config can be wrong — so the ROW decides.**
+  `User.isReviewAccount` is set once, by the route, on the account it creates.
+  `ensureReviewAccount` refuses an existing row without it and
+  `seedReviewAccount` refuses to write to one. A `review.email` typed as a real
+  member's address therefore fails closed instead of handing a stranger that
+  member's weigh-ins, meals and journal. Beta and production share one
+  database, so "a real account" always means a real person.
+- **Wrong account and wrong code are the SAME refusal** — same 403, same
+  sentence (`REVIEW_INVALID_MESSAGE`), differing only in a `reason` that stays
+  server-side. The door must not double as an oracle for which address is the
+  demo account. Both comparisons run in constant time (`constantTimeEquals`);
+  `===` on a shared secret leaks its length and its prefix.
+- **Rate limited on TWO keys.** `REVIEW_MAX_ATTEMPTS` (5) per
+  `REVIEW_ATTEMPT_WINDOW_MS` (10 min), counted per email AND per client address
+  (`models/ReviewSignInAttempt.ts`, keys stored as SHA-256, TTL-swept). Either
+  key alone is bypassable — rotate addresses to miss an email limit, rotate
+  addresses-typed to miss an IP limit. The limit is checked BEFORE either
+  comparison, so a locked-out caller learns nothing, and it refuses the CORRECT
+  code too. A successful sign-in clears both keys: a reviewer must not be locked
+  out of their second device by one fumble.
+- **The data is written, not borrowed, and re-anchored to now.**
+  `lib/reviewSeed.ts` puts the demo account on `tier: 'plus'`
+  (`grandfathered: true`, and deliberately NO fake `subscription` block),
+  onboarded, consented (Terms + AI), with 12 days of meals and moods, 28 days of
+  weigh-ins, nine completed sessions, a catalogue program in progress plus its
+  schedule, and Mind chapter 2 with a Vision. A streak is a fact about
+  CONSECUTIVE RECENT days, so a seed written once reads as zero months later —
+  each sign-in rewrites it, at most once every `SEED_MAX_AGE_MS` (6h) so two
+  devices in one review session see the same thing. Every write is filtered by
+  the demo userId.
+
+Tests: `webapp/tests/unit/auth/reviewSignIn.test.ts` (the rules, the three-surface
+reachability, the seed shape — no database),
+`webapp/tests/unit/auth/reviewSignInRoute.test.ts` (the real handler against the
+real database: the grant, a real member refused, the wrong code, the fifth-guess
+lockout, the switch off) and `expo/__tests__/reviewSignIn.test.tsx`.
+
+`REVIEW_SIGN_IN_PATH` is duplicated in `expo/app/(auth)/login.tsx` because the
+native app cannot import from `webapp/`; the webapp suite compares the two
+strings, so a rename cannot 404 every store-build review sign-in in silence.
+
 ### The native navigation shell (NP-003)
 
 `expo/app/` is three things and a redirect:
