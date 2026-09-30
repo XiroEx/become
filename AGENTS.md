@@ -1295,6 +1295,21 @@ Four things about it:
   fails if one of them was never called, so a manifest entry cannot pass for
   coverage. A domain ticket (NP-018 … NP-024, NP-037, NP-202) adds its own file
   with its own manifest; the recipe is in `tests/unit/contract/_contract.ts`.
+  `np019Programs.test.ts` is the programs domain: 22 routes, its OWN fixture
+  members (`@np019.contract.test`) rather than the shared np015 pair, because
+  the runner executes test files in parallel and two files sharing a row race.
+
+The programs contract carries three rules, stated at the top of
+`shared/api-client/src/schemas/programs.ts` and asserted by that file:
+**`phase` numbers are 1-based on the wire** (an array index leaking out logs a
+session against the wrong phase), **programs are addressed by `program_id`**
+(the slug, never the Mongo `_id`), and **`activePrograms[].status` is one of
+`active | in-progress | paused | completed`** — there is no `abandoned`,
+because abandoning REMOVES the enrolment. The hydrated exercise
+(`ProgramExerciseSchema`) is typed once and used by both the program-detail and
+current-workout responses; `groupType` is an enum whose wire spelling is
+`giant_set`, while `trackingType` stays a plain string so a catalog that grows
+a new tracking type cannot make a shipped store build drop a whole workout.
 
 ### Information security program (go-live item 17)
 

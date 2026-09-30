@@ -113,24 +113,21 @@ export default function LiveWorkoutRoute({
     return {
       programId: id,
       workoutTitle: overview.title,
+      // No casts: ProgramExerciseSchema types the hydrated exercise the web
+      // actually sends (NP-019), so trackingType and the group fields are
+      // properties here rather than guesses about a passthrough extra.
       exercises: (rawWorkout?.exercises ?? []).map((ex, i) => {
         const slug = ex.exerciseSlug ?? `exercise-${i}`;
-        const raw = ex as {
-          groupId?: string;
-          groupType?: string;
-          groupLabel?: string;
-          trackingType?: string;
-        };
         return {
           slug,
           name: swaps[slug] ?? ex.name ?? ex.exerciseSlug ?? "Exercise",
           sets: ex.sets ?? 1,
           repsLabel: ex.reps,
           notes: ex.details,
-          ...(raw.trackingType ? { trackingType: raw.trackingType } : {}),
-          ...(raw.groupId ? { groupId: raw.groupId } : {}),
-          ...(raw.groupLabel || raw.groupType
-            ? { groupLabel: raw.groupLabel ?? raw.groupType }
+          ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+          ...(ex.groupId ? { groupId: ex.groupId } : {}),
+          ...(ex.groupLabel || ex.groupType
+            ? { groupLabel: ex.groupLabel ?? ex.groupType }
             : {}),
         };
       }),
