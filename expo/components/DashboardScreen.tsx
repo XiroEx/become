@@ -10,6 +10,7 @@ import {
   CheckInModal,
   type CheckInPayload,
 } from "@/components/CheckInModal";
+import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -268,6 +269,16 @@ export function DashboardScreen({
         >
           Check in
         </Button>
+
+        {/* The in-app footer. Apple wants the privacy policy reachable from
+            inside the app, not only from a marketing page a member installing to
+            the home screen never returns to. Mirrors web's DashboardClient.tsx:965. */}
+        <View
+          testID="dashboard-legal-footer"
+          className="border-t border-border pt-4 mt-4"
+        >
+          <LegalLinks showCopyright />
+        </View>
       </ScrollView>
 
       <CheckInModal

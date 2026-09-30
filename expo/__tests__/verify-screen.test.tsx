@@ -76,7 +76,7 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalledWith("new-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("shows an error when the token is missing", () => {
@@ -154,7 +154,31 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     await waitFor(() => {
       expect(mockSetToken).toHaveBeenCalledWith("persisted-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("clears any pending magic-link session on successful verify", async () => {
+    mockParams = { token: "real-token-1234", mode: "register" };
+    const verifyFn = jest.fn(async () => ({ token: "new-jwt" }));
+    const mockClear = jest.fn(async () => {});
+    const pendingStore = {
+      get: jest.fn(async () => null),
+      set: jest.fn(async () => {}),
+      clear: mockClear,
+    };
+    render(
+      <VerifyScreen
+        verifyFn={verifyFn}
+        pendingSessionStore={pendingStore}
+      />,
+    );
+    await waitFor(() => {
+      expect(verifyFn).toHaveBeenCalledWith("real-token-1234", "register");
+    });
+    await waitFor(() => {
+      expect(mockClear).toHaveBeenCalled();
+    });
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("does not persist a token when verify fails", async () => {

@@ -8,6 +8,10 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import type { VerifyMode } from "@/lib/auth";
+import {
+  defaultPendingSessionStore,
+  type PendingSessionStore,
+} from "@/lib/auth/pendingAuthSession";
 
 export interface VerifyScreenProps {
   /** DI hook for tests — sends the verify-link request. */
@@ -15,8 +19,9 @@ export interface VerifyScreenProps {
     token: string,
     mode: VerifyMode,
   ) => Promise<{ token: string }>;
-  onSuccess?: (jwt: string) => void;
+  onSuccess?: (jwt: string) => void | Promise<void>;
   onFailure?: (error: unknown) => void;
+  pendingSessionStore?: PendingSessionStore;
 }
 
 /**
@@ -36,6 +41,7 @@ export function VerifyScreen({
   verifyFn,
   onSuccess,
   onFailure,
+  pendingSessionStore,
 }: VerifyScreenProps = {}) {
   const { colors } = useThemeTokens();
   const router = useRouter();
@@ -44,6 +50,7 @@ export function VerifyScreen({
     "working",
   );
   const [error, setError] = useState<string | null>(null);
+  const pendingStore = pendingSessionStore ?? defaultPendingSessionStore;
 
   useEffect(() => {
     const rawToken = params.token;
@@ -72,12 +79,12 @@ export function VerifyScreen({
         const result = await fn(rawToken, rawMode);
         if (cancelled) return;
         setStatus("success");
-        onSuccess?.(result.token);
-        // Land the user in the app. Mirrors login.tsx's post-auth target;
-        // navigating to "/" would strand them on the cold-open scaffold, which
-        // only redirects *unauthed* users (to /login) and never routes an
-        // authed user onward.
-        router.replace("/(tabs)/dashboard");
+        // Clear any pending magic-link session and complete sign-in
+        await pendingStore.clear();
+        await Promise.resolve(onSuccess?.(result.token));
+        // After sign-in, go through the guards (consent, onboarding) instead
+        // of straight to the dashboard.
+        router.replace("/");
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -88,7 +95,15 @@ export function VerifyScreen({
     return () => {
       cancelled = true;
     };
-  }, [params.token, params.mode, verifyFn, onSuccess, onFailure, router]);
+  }, [
+    params.token,
+    params.mode,
+    verifyFn,
+    onSuccess,
+    onFailure,
+    pendingStore,
+    router,
+  ]);
 
   return (
     <SafeAreaView
@@ -144,8 +159,8 @@ export default function VerifyRoute() {
   const { setToken } = useAuth();
   return (
     <VerifyScreen
-      onSuccess={(jwt) => {
-        void setToken(jwt);
+      onSuccess={async (jwt) => {
+        await setToken(jwt);
       }}
     />
   );

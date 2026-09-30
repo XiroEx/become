@@ -47,6 +47,13 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { isJwtExpired } from "@/lib/auth/jwt";
 import { setUnauthorizedHandler } from "@/lib/auth/unauthorized";
 import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
+import {
+  getStoredPushToken,
+  clearStoredPushToken,
+} from "@/lib/push/pushTokenStore";
+import { clearAppBadge } from "@/lib/widgets/badge";
+import { clearAllLiveWorkoutDrafts } from "@/lib/live/liveWorkoutCache";
+import { getOfflineWrites } from "@/lib/offline/writes";
 
 /**
  * `loading` is the launch read of the secure store — it is NOT "a request is
@@ -86,6 +93,10 @@ export function signOutMessage(reason: SignOutReason | null): string | null {
   return SIGN_OUT_MESSAGES[reason] ?? null;
 }
 
+export interface SignOutOptions {
+  endpoint?: string;
+}
+
 export interface AuthContextValue {
   status: AuthStatus;
   token: string | null;
@@ -101,9 +112,9 @@ export interface AuthContextValue {
   /** Re-read the session and roll it against `/api/auth/me`. */
   refresh: () => Promise<void>;
   /** End the session once, everywhere, with a reason the login screen reads. */
-  signOut: (reason?: SignOutReason) => Promise<void>;
+  signOut: (reason?: SignOutReason, options?: SignOutOptions) => Promise<void>;
   /** `signOut("member")`. The name every screen already calls. */
-  logout: () => Promise<void>;
+  logout: (options?: SignOutOptions) => Promise<void>;
 }
 
 interface SessionState {
@@ -221,8 +232,39 @@ export function AuthProvider({
     }
   }, []);
 
+  const dropPushSubscription = useCallback(
+    async (jwt: string, endpoint?: string): Promise<void> => {
+      const config = configRef.current;
+      const send = config.fetchImpl ?? fetch;
+      const targetEndpoint = endpoint ?? (await getStoredPushToken());
+      if (targetEndpoint) {
+        try {
+          await send(`${config.baseUrl}/api/notifications/unsubscribe`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${jwt}`,
+            },
+            body: JSON.stringify({ endpoint: targetEndpoint }),
+          });
+        } catch {
+          /* unsubscribe failure must not block sign out */
+        }
+      }
+      try {
+        await clearStoredPushToken();
+      } catch {
+        /* ignore */
+      }
+    },
+    [],
+  );
+
   const signOut = useCallback(
-    async (reason: SignOutReason = "member"): Promise<void> => {
+    async (
+      reason: SignOutReason = "member",
+      options?: SignOutOptions,
+    ): Promise<void> => {
       // ONCE. Three requests can 401 together; the member is signed out one
       // time, with one reason, and the sign-in screen is reached one time.
       if (sessionRef.current.status === "signed-out") return;
@@ -240,14 +282,34 @@ export function AuthProvider({
         // the in-memory session is already gone, and the next launch re-checks
         // `exp` anyway.
       }
+
+      // Drop on-device caches: last-known cache / offline queue (NP-036),
+      // the app icon badge, and any live workout drafts (NP-079).
+      try {
+        await getOfflineWrites().clear();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await clearAppBadge();
+      } catch {
+        /* ignore */
+      }
+      try {
+        await clearAllLiveWorkoutDrafts();
+      } catch {
+        /* ignore */
+      }
+
       // Only a DELIBERATE sign-out. "unauthorized" and "expired" mean the server
       // has already stopped accepting this token, so the call could not be
       // authenticated and would revoke nothing.
       if (reason === "member" && presented) {
+        await dropPushSubscription(presented, options?.endpoint);
         await notifyServerOfSignOut(presented);
       }
     },
-    [commit, notifyServerOfSignOut],
+    [commit, dropPushSubscription, notifyServerOfSignOut],
   );
 
   /**
@@ -401,9 +463,12 @@ export function AuthProvider({
     await hydrate(false);
   }, [hydrate]);
 
-  const logout = useCallback(async (): Promise<void> => {
-    await signOut("member");
-  }, [signOut]);
+  const logout = useCallback(
+    async (options?: SignOutOptions): Promise<void> => {
+      await signOut("member", options);
+    },
+    [signOut],
+  );
 
   useEffect(() => {
     // The launch read. This is the whole point of the provider.

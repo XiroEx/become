@@ -87,6 +87,59 @@ export function createMemoryKeyValueStore(
   };
 }
 
+export const LIVE_WORKOUT_TRACKER_KEY = "become.live._keys";
+
+async function getTrackedLiveKeys(store: KeyValueStore): Promise<string[]> {
+  try {
+    const raw = await store.get(LIVE_WORKOUT_TRACKER_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function addTrackedLiveKey(store: KeyValueStore, key: string): Promise<void> {
+  try {
+    const keys = await getTrackedLiveKeys(store);
+    if (!keys.includes(key)) {
+      keys.push(key);
+      await store.set(LIVE_WORKOUT_TRACKER_KEY, JSON.stringify(keys));
+    }
+  } catch {
+    // failure to track must not throw
+  }
+}
+
+async function removeTrackedLiveKey(store: KeyValueStore, key: string): Promise<void> {
+  try {
+    const keys = await getTrackedLiveKeys(store);
+    const next = keys.filter((k) => k !== key);
+    await store.set(LIVE_WORKOUT_TRACKER_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Clears all in-flight live workout drafts tracked in SecureStore.
+ * SecureStore cannot enumerate keys, so keys are tracked in LIVE_WORKOUT_TRACKER_KEY.
+ */
+export async function clearAllLiveWorkoutDrafts(
+  store: KeyValueStore = secureKeyValueStore,
+): Promise<void> {
+  try {
+    const keys = await getTrackedLiveKeys(store);
+    for (const key of keys) {
+      await store.remove(key);
+    }
+    await store.remove(LIVE_WORKOUT_TRACKER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export interface LiveWorkoutCache {
   load(key: string): Promise<LiveWorkoutSnapshot | null>;
   save(key: string, snapshot: LiveWorkoutSnapshot): Promise<void>;
@@ -113,9 +166,11 @@ export function createLiveWorkoutCache(
     },
     async save(key: string, snapshot: LiveWorkoutSnapshot): Promise<void> {
       await store.set(key, JSON.stringify(snapshot));
+      await addTrackedLiveKey(store, key);
     },
     async clear(key: string): Promise<void> {
       await store.remove(key);
+      await removeTrackedLiveKey(store, key);
     },
   };
 }
