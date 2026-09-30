@@ -1,0 +1,197 @@
+// Support page for /support.
+//
+// This is the URL App Store Connect asks for as the "Support URL", so it has to
+// be a real page a human can act on, not a link to a contact form that does not
+// exist. Everything on it is something Become can actually do today: one email
+// address, a response range rather than a promise, the real cancellation path,
+// and the real account deletion path — which is now a button in Settings, with
+// the email address as the fallback for someone who cannot sign in.
+
+import { RESTORE_WINDOW_DAYS } from '../accountDeletion'
+import {
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_DELETION_DAYS,
+  LEGAL_REFUND_WINDOW_DAYS,
+  LEGAL_SUPPORT_RESPONSE,
+  MANAGE_BILLING_LABEL,
+  MANAGE_BILLING_PORTAL_NOTE,
+  RENEWAL_TERMS,
+  type LegalDoc,
+} from './index'
+
+export const SUPPORT: LegalDoc = {
+  slug: 'support',
+  title: 'Support',
+  standfirst: 'One inbox, answered by a person. Here is how to reach it and what to send.',
+  sections: [
+    {
+      id: 'contact',
+      heading: 'Get help',
+      blocks: [
+        {
+          kind: 'callout',
+          tone: 'info',
+          title: `Email ${LEGAL_CONTACT_EMAIL}`,
+          items: [
+            `We reply within ${LEGAL_SUPPORT_RESPONSE}, and usually sooner. If you have not heard back after that, send the message again; occasionally one gets filtered.`,
+            'There is no phone line and no live chat. Email is the whole support channel, and it is read by a person.',
+            'Write from the email address on your account where you can. It is how we know it is you, and it saves a round trip.',
+          ],
+        },
+      ],
+    },
+
+    {
+      id: 'what-to-send',
+      heading: 'What to include',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'The more of this you send first time, the faster this goes:',
+        },
+        {
+          kind: 'ul',
+          items: [
+            'The email address on your account.',
+            'What you were trying to do, and what happened instead.',
+            'The screen or feature it happened on, and roughly when.',
+            'Your device and browser, for example "iPhone 15, Safari" or "Windows, Chrome".',
+            'Whether it happens every time or just happened once.',
+            'A screenshot, if you have one.',
+          ],
+        },
+        {
+          kind: 'p',
+          text: 'If it is about a charge, add the date and the amount, and the last four digits shown on your Stripe receipt. **Never send us a full card number.** We do not need it, and we cannot use it.',
+        },
+      ],
+    },
+
+    {
+      id: 'billing',
+      heading: 'Billing, and how to cancel',
+      blocks: [
+        {
+          kind: 'p',
+          // The control this names EXISTS: components/billing/ManageBillingButton.tsx
+          // renders MANAGE_BILLING_LABEL on the Plan page (and in Settings) for
+          // any member with a subscription. Both halves are read by
+          // tests/unit/billing/manageBilling.test.tsx, so this instruction
+          // cannot go back to pointing at nothing.
+          text: `Open the **Plan** page in the app and choose **${MANAGE_BILLING_LABEL}**. ${MANAGE_BILLING_PORTAL_NOTE} You will also find it in **Settings**.`,
+        },
+        {
+          kind: 'ul',
+          items: [...RENEWAL_TERMS],
+        },
+        {
+          kind: 'p',
+          text: `If you cannot reach the portal for any reason, email us and we will cancel it for you. Your first payment is refundable in full for ${LEGAL_REFUND_WINDOW_DAYS} days: email us within that window and we will refund it and cancel the plan, no reason needed. After that, cancelling stops the next renewal and does not refund the current period. The full terms are in the [Terms](/terms#cancelling).`,
+        },
+      ],
+    },
+
+    {
+      id: 'signing-in',
+      heading: 'Trouble signing in',
+      blocks: [
+        {
+          kind: 'dl',
+          items: [
+            {
+              term: 'The sign-in email has not arrived',
+              detail:
+                'Check your spam and promotions folders. Links are single use and expire a few minutes after they are sent, so if one has been sitting there a while, request a new one. Keep the tab you requested it from open: it is the tab that signs you in.',
+            },
+            {
+              term: 'Sign in with Google is not working',
+              detail:
+                'Use the same Google account as the email address on your Become account. If you have several Google accounts signed in, pick deliberately rather than letting the browser choose.',
+            },
+            {
+              term: 'My passkey is gone',
+              detail:
+                'A passkey lives on the device or in the password manager that created it. If you have lost that device, sign in with a one-time email link instead, and then register a new passkey. It is worth registering a second one on another device.',
+            },
+            {
+              term: 'I changed email address',
+              detail: 'Email us from the old address if you still have it, or from the new one if you do not, and we will sort it out.',
+            },
+          ],
+        },
+      ],
+    },
+
+    {
+      id: 'delete',
+      heading: 'Deleting your account',
+      blocks: [
+        {
+          kind: 'p',
+          text: `Do it yourself: **Settings → Delete account**, in the app or on the web. We email you a link that undoes it for ${RESTORE_WINDOW_DAYS} days, and after that everything is permanently deleted — always within the ${LEGAL_DELETION_DAYS} days the [Privacy Policy](/privacy) commits to. The public [Delete account](/delete-account) page explains it without a login.`,
+        },
+        {
+          kind: 'p',
+          text: `If you cannot sign in, email ${LEGAL_CONTACT_EMAIL} from the address on your account and ask us to delete it. Cancel any paid plan first, or ask us to cancel it in the same message. What deletion covers, and the few things that survive it, is set out in section 13 of the [Privacy Policy](/privacy).`,
+        },
+      ],
+    },
+
+    {
+      id: 'data',
+      heading: 'Your data',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'To get a copy of your data, correct something that is wrong, or ask what we hold, email us from your account address. The full list of what you can ask for is in the [Privacy Policy](/privacy).',
+        },
+      ],
+    },
+
+    {
+      id: 'bugs',
+      heading: 'Report a bug, or a security problem',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'Bugs: email us with "Bug" in the subject line and as much of the detail above as you have.',
+        },
+        {
+          kind: 'p',
+          text: 'Security: if you think you have found a vulnerability, email us with "Security" in the subject line and please give us a chance to fix it before telling anyone else.',
+        },
+      ],
+    },
+
+    {
+      id: 'health',
+      heading: 'Health and emergencies',
+      blocks: [
+        {
+          kind: 'callout',
+          tone: 'warning',
+          title: 'Support cannot help with a medical problem',
+          items: [
+            'Become is not medical care and not medical advice. If you are hurt or unwell, talk to a physician.',
+            'In an emergency in the United States, call 911. Outside the United States, call your local emergency number.',
+            'If you are in crisis or thinking about harming yourself, call or text 988 in the United States for the Suicide and Crisis Lifeline.',
+          ],
+        },
+      ],
+    },
+
+    {
+      id: 'legal',
+      heading: 'The legal pages',
+      blocks: [
+        {
+          kind: 'ul',
+          items: [
+            '[Terms of Service](/terms): what the Service is, subscription and renewal terms, cancellation, and the health disclaimer.',
+            '[Privacy Policy](/privacy): what we collect, who processes it, how long we keep it, and your rights.',
+          ],
+        },
+      ],
+    },
+  ],
+}
