@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -76,6 +76,11 @@
       "types": "./dist/types/accountDeletion.d.ts",
       "import": "./dist/esm/accountDeletion.js",
       "require": "./dist/cjs/accountDeletion.js"
+    },
+    "./training": {
+      "types": "./dist/types/training/index.d.ts",
+      "import": "./dist/esm/training/index.js",
+      "require": "./dist/cjs/training/index.js"
     }
   },
   "files": [

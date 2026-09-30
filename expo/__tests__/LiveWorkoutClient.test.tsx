@@ -217,7 +217,17 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     exercises: [
       { slug: "plank", name: "Plank", sets: 1, trackingType: "time" },
       { slug: "run", name: "Treadmill Run", sets: 1, trackingType: "time_distance" },
-      { slug: "pushup", name: "Push-up", sets: 1, trackingType: "reps" },
+      {
+        slug: "pushup",
+        name: "Push-up",
+        sets: 1,
+        // The canonical type for a bodyweight movement. It used to read
+        // "reps", which is one of the aliases the web's rebuild paths emit —
+        // and the web resolves that to `reps_weight` on purpose, because a
+        // set that cannot be logged is worse than a spare weight box. See the
+        // "a resumed session" case below.
+        trackingType: "reps_bodyweight",
+      },
     ],
   };
 
@@ -238,6 +248,23 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     expect(getByTestId("live-workout-pushup-set-0-reps")).toBeTruthy();
     expect(queryByTestId("live-workout-pushup-set-0-weight")).toBeNull();
     expect(queryByTestId("live-workout-pushup-set-0-duration")).toBeNull();
+  });
+
+  it("a resumed session typed 'reps' still offers a weight (web parity)", () => {
+    // NP-058: the inputs come from the web's `normalizeTracking`, and the
+    // vocabulary the rebuild paths invented ('reps', 'weight', 'duration') maps
+    // into it rather than falling through every branch. The old native rule
+    // read "reps" as reps-only and a resumed loaded set became unloggable.
+    const resumed: LiveWorkoutViewModel = {
+      programId: "p",
+      workoutTitle: "Resumed",
+      exercises: [
+        { slug: "calf", name: "Calf Raise", sets: 1, trackingType: "reps" },
+      ],
+    };
+    const { getByTestId } = render(<LiveWorkoutClient workout={resumed} />);
+    expect(getByTestId("live-workout-calf-set-0-weight")).toBeTruthy();
+    expect(getByTestId("live-workout-calf-set-0-reps")).toBeTruthy();
   });
 
   it("logging a duration set persists durationSec to the grid (onGridChange)", () => {
