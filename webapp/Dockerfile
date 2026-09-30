@@ -23,6 +23,7 @@ RUN --mount=type=secret,id=npmrc,target=/tmp/npmrc-secret \
     elif [ -n "$_BUILD_SECRET_NPMRC" ]; then \
       printf '%s' "$_BUILD_SECRET_NPMRC" > .npmrc; \
     fi && \
+    printf '\n@become:registry=https://registry.redbtn.io/\n' >> .npmrc && \
     npm install --ignore-scripts && \
     rm -f .npmrc
 

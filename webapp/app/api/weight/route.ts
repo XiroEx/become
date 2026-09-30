@@ -5,7 +5,7 @@ import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
-import { toKg, type WeightUnit } from '@/lib/bodyUnits'
+import { toKg, type WeightUnit } from '@become/core'
 import { checkGoalReached } from '@/lib/goals/reached'
 import {
   readHealthImport,

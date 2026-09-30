@@ -75,6 +75,16 @@ export const UserSubscriptionSchema = z
   })
   .passthrough()
 
+const UserSavedProgramSchema = z
+  .object({
+    programId: z.string(),
+    savedAt: z.union([z.string(), z.date()]).optional(),
+    order: z.number().optional(),
+  })
+  .passthrough()
+
+export type UserSavedProgram = z.infer<typeof UserSavedProgramSchema>
+
 export const UserSchema = z
   .object({
     _id: z.string(),
@@ -86,7 +96,10 @@ export const UserSchema = z
     grandfathered: z.boolean().optional(),
     subscription: UserSubscriptionSchema.optional().nullable(),
     trainerId: z.string().optional().nullable(),
-    savedPrograms: z.array(z.string()).optional(),
+    savedPrograms: z
+      .array(z.union([z.string(), UserSavedProgramSchema]))
+      .optional()
+      .nullable(),
     profile: UserProfileSchema.optional().nullable(),
     onboardingCompleted: z.boolean().optional(),
     createdAt: z.string().optional(),
