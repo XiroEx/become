@@ -833,6 +833,52 @@ server's `error` text is rendered verbatim; a 429 is never an upsell.
 reason code, the gate's two required fields or the 429 ever drift from the copy
 the shared client carries.
 
+#### The NATIVE side of the plan snapshot (NP-049)
+
+The phone reads plan state through the same three pieces the web does, in the
+same order, and grows no fourth:
+
+| Piece | Job |
+|---|---|
+| `expo/lib/entitlements/store.ts` | The ONLY native caller of `GET /api/me/entitlements`. A module snapshot + the same 60s TTL, a persisted seed for first paint, and the ordering rules below. Usable outside React, which is why it is a store and not a hook. |
+| `expo/lib/entitlements/useEntitlements.ts` | The hook over it. `enforced`, `canCreate(feature)`, `feature(feature)`, `refresh()`. |
+| `expo/components/entitlements/` | `AllowanceLock` (the lock + the reason + the way back out) and `AllowanceCounter` (`2/3`, and when it resets). Both draw NOTHING when `enforced` is false. |
+
+**There is no native copy of the gate copy.** `featureHeadline`,
+`allowanceLine`, `formatResetsAt`, `syntheticGate`, `planGate`, `gateFrom`,
+`FEATURE_LABELS` and `PLUS_BENEFITS` are re-exported from `@become/core`
+(Decision NP-017) through the Metro `file:` link, which is the same module
+`webapp/lib/entitlementsClient.ts` re-exports from the published package. That
+those two are the same module is the ONLY reason the phone and the browser
+cannot explain a cap in different words, and it is checked from both sides:
+`webapp/tests/unit/entitlements/coreDrift.test.ts` (the always-on `verify` job)
+imports the webapp's module AND `shared/core/src/entitlements.ts` and compares
+every table and every function output, so a source change that has not been
+published and pinned fails there; `expo/__tests__/entitlementsWebParity.test.ts`
+refuses a second declaration in either tree and pins the TTL against the web
+hook's.
+
+Four ordering rules, ported whole from `webapp/hooks/useEntitlements.ts` and
+asserted in `expo/__tests__/entitlementsStore.test.ts`: the identity check runs
+FIRST (a token the store has not seen drops the snapshot — it is not stale data,
+it is somebody else's plan); a forced read never adopts a request that was
+already on the wire; a forced read also marks those requests superseded so one
+cannot land on top; and `invalidateEntitlements()` supersedes as well as
+expiring the TTL. Without the last two, a member at 3/3 who deletes one stays
+locked for a further full minute.
+
+Two things are native-only. `AuthProvider` tells the store the session on every
+`commit` and **drops the snapshot on sign-out**, because a sign-out here is a
+navigation rather than a page load, so the module cache would otherwise outlive
+it. And the persisted seed **is never read while signed out**: it is scoped to a
+member by `lib/cache/lastKnown`, and with no session to scope it to that module
+falls back to whichever member id is still active — which painted the previous
+member's tier straight back onto the next member's first screen.
+
+The rules that travel are the web's: read `canCreate`, never recompute it from
+`limit` and `used`; when `enforced` is false render no lock, counter or plan
+card; a delete frees its slot immediately, so force a read after one.
+
 #### The plan page (`app/dashboard/plan`)
 
 The sheet answers "why was I stopped?"; this answers "what is this and what

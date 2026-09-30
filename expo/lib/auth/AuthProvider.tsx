@@ -46,6 +46,10 @@ import {
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { isJwtExpired, decodeJwtPayload } from "@/lib/auth/jwt";
 import { clearAll as clearAllLastKnownCache, setCacheMemberId } from "@/lib/cache/lastKnown";
+import {
+  resetEntitlementsSnapshot,
+  setEntitlementsToken,
+} from "@/lib/entitlements/store";
 import { setUnauthorizedHandler } from "@/lib/auth/unauthorized";
 import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
 import {
@@ -179,6 +183,12 @@ export function AuthProvider({
 
   const commit = useCallback((next: SessionState): void => {
     sessionRef.current = next;
+    // The plan snapshot belongs to a SESSION (NP-049). Telling the store here
+    // rather than from each screen means a sign-in, a sliding-session roll and a
+    // sign-out all reach it, whether or not a gated screen is mounted — and a
+    // token it has not seen before drops the previous member's snapshot on the
+    // spot instead of at the next read.
+    setEntitlementsToken(next.token);
     if (mountedRef.current) setSession(next);
   }, []);
 
@@ -293,6 +303,11 @@ export function AuthProvider({
         /* ignore */
       }
       setCacheMemberId(null);
+      // The member's PLAN, in memory (NP-049). `clearAllLastKnownCache` has
+      // already taken its persisted seed — this is the module snapshot, which
+      // would otherwise outlive the session that filled it and show the next
+      // person to sign in on this device somebody else's tier.
+      resetEntitlementsSnapshot();
       try {
         await getOfflineWrites().clear();
       } catch {
