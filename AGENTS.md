@@ -13,10 +13,10 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 CI's `expo` job fails on things that are cheap to catch locally. On 2026-09-30, three native PRs went red on exactly these (TS2322 on an optional string, and `react-hooks/set-state-in-effect` twice). Before `workspace_ship` or `git push`:
 
 - Any change under `expo/`: `cd expo && npx tsc --noEmit && npx eslint .`. Zero errors; warnings are fine.
-- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`.
+- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`. Any PR changing `shared/core/` MUST bump its version in `shared/core/package.json`. Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step.
 - Any contract test you add under `webapp/tests/unit/contract/`: seed fixtures the way the model requires (required fields included), and give the file its OWN member. Contract files run in parallel against one database.
 - `react-hooks/set-state-in-effect`: prefer deriving the value during render. Suppress it (`// eslint-disable-next-line react-hooks/set-state-in-effect`) ONLY when the effect genuinely syncs from something outside React (a route param, an app-state or network callback), with a one-line reason above it.
-- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build.
+- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build. Webapp consumes published `@become/core` from `https://registry.redbtn.io/`.
 
 ## Channels
 
@@ -304,6 +304,56 @@ expired, nonce mismatch, wrong issuer, forged signature, the address rules),
 against real Mongo and a fake Apple — `tests/unit/auth/fakeApple.ts`),
 `tests/unit/account/appleRevocation.test.ts` (the revocation, the deferral and
 its bound) and `expo/__tests__/appleSignIn.test.tsx`.
+
+### Google, natively (NP-126): the system auth session and a one-time code
+
+**Google refuses sign-in inside an embedded web view** (`disallowed_useragent`),
+so the app runs the web flow in the SYSTEM authentication session
+(`WebBrowser.openAuthSessionAsync` → `ASWebAuthenticationSession` / a Custom
+Tab). The web flow ends at `/auth/finish#<jwt>`, which is right for a browser
+tab and wrong for an app: the only way a URL re-enters an app is a scheme ANY
+app on the device can claim, so **the app never receives the token.** It
+receives NP-121's one-time code, in the other direction:
+
+1. the app invents a **verifier** (32 bytes from `expo-crypto`'s CSPRNG, kept in
+   memory) and opens `/api/auth/google?app=1&challenge=<sha256, base64url>`;
+2. that route arms one short-lived HttpOnly cookie (`become_app_auth`, holding
+   the challenge — a hash, not a secret) and otherwise starts the ordinary
+   redAuth flow. `app=1` with no usable challenge is REFUSED before the flow
+   starts, because a started flow would end with a token in a fragment no app
+   can read;
+3. `/auth/callback/google` sees the cookie, mints a code bound to the member AND
+   the challenge, and redirects to `/auth/app-callback?code=…`. No JWT, no
+   session cookie: the token it just minted is discarded;
+4. `/auth/app-callback` redirects to `become://auth/app-callback?code=…`, which
+   is what CLOSES the authentication session and resolves
+   `openAuthSessionAsync`. A universal link cannot: the authentication session
+   only recognises its own callback scheme;
+5. `POST /api/auth/exchange { code, verifier }` answers the same session
+   everything else does. **Every refusal is one 400 `{ error: 'invalid_code' }`**
+   — unknown, spent, expired, wrong verifier — so none can be told apart.
+
+The rules that travel are NP-121's, plus one: **single use** (atomic claim on
+`usedAt: null`), **sixty seconds decided in code** (never mongod's TTL sweep),
+and **one device** — the verifier, which is why carrying the code over a
+claimable scheme is safe and carrying a token would not be. Neither the code nor
+the verifier is stored: `models/AppAuthCode.ts` keeps SHA-256s of both.
+
+`webapp/lib/appAuthCode.ts` holds the rules and the four constants the app
+mirrors in `expo/lib/auth/googleSignIn.ts`. The app computes the challenge with
+a plain-TypeScript SHA-256 (`expo/lib/auth/sha256.ts`) rather than a native
+digest, so the one value the flow's security rests on is computable in Jest;
+`expo/__tests__/sha256.test.ts` pins it against Node's crypto on every padding
+boundary. `components/GoogleSignInButton.tsx` draws the web's own four-colour G —
+the only colour literals allowed to exist outside `lib/theme/tokens.ts`, as RGB
+triplets, because Google's brand colours are fixed by Google and not the app's
+palette.
+
+Tests: `webapp/tests/unit/auth/appAuthCode.test.ts` (the rules, the refusals
+both routes make before Mongo, and the constants read out of `expo/`),
+`appAuthRoundTrip.test.ts` (mint → exchange → **replay is 400**, wrong verifier
+burns the code, expiry, a deleted member, the race — real Mongo), and
+`expo/__tests__/googleSignIn.test.tsx`.
 
 ## API Conventions
 
@@ -1466,8 +1516,10 @@ through its own tsconfig path exactly as before.
 
 `shared/core/` (`@become/core`) contains pure business logic, calculations, and domain constants shared between `webapp/` and `expo/` without React or Node-only dependencies. It compiles to dual ESM/CJS and `.d.ts`. Seeded modules include `bodyUnits`, `goals/pace`, `goals/status`, `nutrition/tdee`, `entitlements` (tier model, limits, gate copy, 403 parser), `legal`, `planCopy` (`PLAN_PRICING`, `ANNUAL_SAVING_LINE`), and pure account deletion logic.
 - Both `webapp/` and `expo/` import from `@become/core`.
-- In `webapp/`, `lib/` files re-export from `@become/core` for backwards compatibility, and app routes/pages import directly from `@become/core`.
+- `webapp/` consumes `@become/core` as a real published package from `https://registry.redbtn.io/` (resolved via `@become:registry` in `.npmrc`), with `lib/` files re-exporting from `@become/core` for backwards compatibility. Never use `../shared` or tsconfig paths in `webapp/`.
 - In `expo/`, `@become/core` is linked as a `file:../shared/core` dependency in `expo/package.json` and resolved cleanly by Metro bundler.
+- Any PR changing `shared/core` MUST bump its version in `shared/core/package.json`.
+- Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step: publish from clean main with publisher credentials to `https://registry.redbtn.io/`, verify `npm view @become/core versions`, and update `webapp/package.json` with `npm install --package-lock-only`.
 
 #### The contract test: what the native app is actually sent (NP-016)
 
