@@ -6,8 +6,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ProgramDetailResponseSchema,
   ActiveProgramsApiResponseSchema,
-  ProgramMutationResponseSchema,
-  type ProgramMutationResponse,
+  ProgramEnrollResponseSchema,
+  ProgramStartDateResponseSchema,
+  ProgramAbandonResponseSchema,
+  type ProgramAbandonRequest,
+  type ProgramAbandonResponse,
+  type ProgramEnrollRequest,
+  type ProgramEnrollResponse,
+  type ProgramStartDateRequest,
+  type ProgramStartDateResponse,
 } from "@become/api-client";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
 import type { ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
@@ -56,21 +63,24 @@ export default function ProgramDetailRoute() {
       void active.refetch();
     },
   };
-  const enrollMut = useMutation<{ programId: string }, ProgramMutationResponse>(
+  // One schema per route (NP-019). ProgramEnrollResponseSchema parses BOTH
+  // enrol answers — the fresh one and the already-enrolled one, which share a
+  // 200 and differ only by `alreadyEnrolled`.
+  const enrollMut = useMutation<ProgramEnrollRequest, ProgramEnrollResponse>(
     "/api/programs/enroll",
-    ProgramMutationResponseSchema,
+    ProgramEnrollResponseSchema,
     { method: "POST", ...mutOpts },
   );
   const startDateMut = useMutation<
-    { programId: string; startDate: string },
-    ProgramMutationResponse
-  >("/api/programs/start-date", ProgramMutationResponseSchema, {
+    ProgramStartDateRequest,
+    ProgramStartDateResponse
+  >("/api/programs/start-date", ProgramStartDateResponseSchema, {
     method: "PUT",
     ...mutOpts,
   });
-  const abandonMut = useMutation<{ programId: string }, ProgramMutationResponse>(
+  const abandonMut = useMutation<ProgramAbandonRequest, ProgramAbandonResponse>(
     "/api/programs/abandon",
-    ProgramMutationResponseSchema,
+    ProgramAbandonResponseSchema,
     { method: "POST", ...mutOpts },
   );
 

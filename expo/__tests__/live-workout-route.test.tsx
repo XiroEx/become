@@ -54,6 +54,61 @@ const PROGRAM = {
   ],
 };
 
+/**
+ * The SAME workout as the web sends it (NP-019): hydrateExercises puts
+ * `trackingType` and the video fields on each exercise, and the program's own
+ * grouping rides alongside. These used to reach the route as passthrough
+ * extras and be read through a hand-written cast; they are typed now.
+ */
+const HYDRATED_PROGRAM = {
+  program_id: "prog-1",
+  name: "Strength",
+  phases: [
+    {
+      phase: "Phase 1",
+      weeks: "1-4",
+      focus: "f",
+      workouts: [
+        {
+          day: "Day 1",
+          title: "Push A",
+          exercises: [
+            {
+              exerciseSlug: "plank",
+              name: "Plank",
+              type: "strength",
+              sets: 1,
+              reps: "30s",
+              rest: "60 sec",
+              tempo: "—",
+              details: "Ribs down.",
+              groupId: "g1",
+              groupType: "giant_set",
+              groupLabel: "Core Block",
+              groupRounds: 3,
+              trackingType: "time",
+              videoUrl: "https://cdn.example.test/plank.mp4",
+              videoWidth: 1080,
+              videoHeight: 1920,
+              videoFraming: { fit: "cover", positionX: 50, positionY: 50 },
+              videoTrim: { start: 0.5, end: 6 },
+            },
+            {
+              // No groupLabel: the wire `groupType` is the fallback.
+              exerciseSlug: "hollow-hold",
+              name: "Hollow Hold",
+              sets: 1,
+              groupId: "g2",
+              groupType: "circuit",
+              trackingType: "reps_weight",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 function getsTo(path: string): unknown[][] {
   return mockApiFetch.mock.calls.filter((c) => String(c[0]) === path);
 }
@@ -112,6 +167,38 @@ describe("LiveWorkoutRoute", () => {
         second.getByTestId("live-workout-bench-set-0-weight").props.value,
       ).toBe("135");
     });
+  });
+
+  it("reads the hydrated trackingType and grouping straight off the parsed program — no cast", async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue(HYDRATED_PROGRAM);
+
+    const store = createMemoryKeyValueStore();
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutRoute cacheStore={store} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("live-workout-exercise-plank")).toBeTruthy();
+    });
+
+    // trackingType: 'time' selects the duration input and drops weight/reps.
+    expect(getByTestId("live-workout-plank-set-0-duration")).toBeTruthy();
+    expect(queryByTestId("live-workout-plank-set-0-weight")).toBeNull();
+    expect(queryByTestId("live-workout-plank-set-0-reps")).toBeNull();
+    // …while the reps_weight exercise keeps them.
+    expect(getByTestId("live-workout-hollow-hold-set-0-weight")).toBeTruthy();
+
+    // The grouping renders a header per groupId, labelled by groupLabel…
+    expect(getByTestId("live-workout-group-g1").props.children).toBe(
+      "Core Block",
+    );
+    // …falling back to the wire groupType when the program named no label.
+    expect(getByTestId("live-workout-group-g2").props.children).toBe("circuit");
+
+    // And the coach's note still comes through as the exercise's notes.
+    expect(getByTestId("live-workout-plank-notes").props.children).toBe(
+      "Ribs down.",
+    );
   });
 
   it("shows an invalid state for a bad workout index", () => {
