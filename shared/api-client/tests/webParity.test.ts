@@ -17,6 +17,10 @@ import {
   AI_CONSENT_REASON,
   SPEND_CAP_REASON,
   classifyApiResponse,
+  TILE_KINDS,
+  TILE_SIZES,
+  SMART_INTERVAL_OPTIONS_MS,
+  MAX_DASHBOARD_TILES,
 } from '../src/index';
 
 const read = (rel: string): string => {
@@ -75,3 +79,31 @@ test('a spend ceiling is still a 429 carrying `rate_limit`, so it can never be a
   assert.match(refusal, /status: 429/);
   assert.doesNotMatch(refusal, /requiresTier/);
 });
+
+test('webapp/lib/dashboardLayout/types.ts constants match shared/api-client', () => {
+  const typesSource = read('webapp/lib/dashboardLayout/types.ts');
+
+  // Tile kinds: ['stat', 'metric', 'smart-rotating']
+  const kindsMatch = /TILE_KINDS\s*=\s*\[([^\]]+)\]/.exec(typesSource);
+  assert.ok(kindsMatch && kindsMatch[1], 'types.ts no longer declares TILE_KINDS');
+  const webKinds = kindsMatch[1].split(',').map((s) => s.trim().replace(/['"]/g, ''));
+  assert.deepEqual(webKinds, [...TILE_KINDS], 'tile kinds differ between types.ts and shared schema');
+
+  // Tile sizes: ['1x1', '2x1']
+  const sizesMatch = /TILE_SIZES\s*=\s*\[([^\]]+)\]/.exec(typesSource);
+  assert.ok(sizesMatch && sizesMatch[1], 'types.ts no longer declares TILE_SIZES');
+  const webSizes = sizesMatch[1].split(',').map((s) => s.trim().replace(/['"]/g, ''));
+  assert.deepEqual(webSizes, [...TILE_SIZES], 'tile sizes differ between types.ts and shared schema');
+
+  // Smart interval options: [4000, 6000, 10000, 30000]
+  const intervalsMatch = /SMART_INTERVAL_OPTIONS_MS\s*=\s*\[([^\]]+)\]/.exec(typesSource);
+  assert.ok(intervalsMatch && intervalsMatch[1], 'types.ts no longer declares SMART_INTERVAL_OPTIONS_MS');
+  const webIntervals = intervalsMatch[1].split(',').map((s) => Number(s.trim()));
+  assert.deepEqual(webIntervals, [...SMART_INTERVAL_OPTIONS_MS], 'interval options differ between types.ts and shared schema');
+
+  // Max dashboard tiles: 20
+  const maxMatch = /MAX_DASHBOARD_TILES\s*=\s*(\d+)/.exec(typesSource);
+  assert.ok(maxMatch && maxMatch[1], 'types.ts no longer declares MAX_DASHBOARD_TILES');
+  assert.equal(Number(maxMatch[1]), MAX_DASHBOARD_TILES, '20-tile limit differs between types.ts and shared schema');
+});
+

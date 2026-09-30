@@ -6,8 +6,8 @@
 // the shared auth schemas under a contract test; nothing else here uses it.)
 // Following the existing webapp pattern (see
 // lib/dashboardTiles/validatePinnedTiles.ts), this module hand-rolls the same
-// shape + validators that `@become/api-client`'s
-// `schemas/dashboard.ts` describes with zod. Keep the two in sync — they
+// shape + validators that `shared/api-client/src/schemas/dashboard.ts`
+// describes with zod. Keep the two in sync — they
 // describe the same persisted/wire shape used by GET/PATCH /api/dashboard/layout
 // and stored on UserProgress.dashboardLayout.
 //
