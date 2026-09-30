@@ -1333,6 +1333,30 @@ screen sends it. The speculative `ScheduleSlotSchema` / `ScheduleResponseSchema`
 (a `{ schedule: [ … ] }` envelope with `phaseIndex`/`workoutIndex`) described a
 response no handler has ever sent and are gone.
 
+The Mind + Becoming contract (NP-037) lives in
+`shared/api-client/src/schemas/mind.ts` and `becoming.ts` and is asserted by
+`tests/unit/contract/np037Mind.test.ts` (28 routes). Five rules travel with it:
+**`POST /api/mind/session` takes `{ tz, moves: [{ kind }] }` and `PUT` takes
+`{ seed, plan, tz }`**, and the day the completion is stamped with comes from
+`tz` and nothing else — the web sends `tzOffset` on the POST, which
+`readTzOffsetFromBody` ignores, so the web's own completions carry the UTC day
+until NP-031 lands; **both of those methods answer a locked member with the
+canonical 403 gate body** (`MindGatePayloadSchema`, `feature: 'mind-sessions'`,
+`requiresTier: 'plus'`) because gating only the payoff walks somebody through a
+whole session for nothing; **a `dateKey` is a LOCAL day and an `*At` number is
+an epoch-ms instant** — `lastBreathAt` is a number on the session read and an
+ISO string on the progress read, and they are not interchangeable;
+**`mainSessionCount` is chapter progress, not a session count** (the paywall
+reads `sessionsUsed`, i.e. `completedMainSessions`); and **`locked` and
+`mainSessionAvailable` are orthogonal** — the plan wall never lifts on its own,
+the 20h cooldown always does. `MindSessionPlan` (`webapp/lib/mind/moves.ts`) is
+typed whole, with `kind` as a plain string so a composer that grows a beat
+cannot make a shipped build drop a session. Six routes are deliberately
+UNTYPED, listed in `MIND_ROUTES_WITHOUT_SCHEMAS` and enforced by that test file:
+`/api/mind/content/daily`, `/api/mind/progress/xp`,
+`/api/mind/progress/levelup`, `/api/journal`, `/api/meditation`, `/api/sleep` —
+none has a live web caller, so nothing would be holding the web to their shape.
+
 ### Information security program (go-live item 17)
 
 **`SECURITY_PROGRAM.md` at the repo root is the written information security
