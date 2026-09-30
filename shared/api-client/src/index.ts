@@ -11,6 +11,8 @@ export * from './schemas/widgets';
 export * from './schemas/deletion';
 export * from './schemas/weight';
 export * from './schemas/mood';
+export * from './schemas/mind';
+export * from './schemas/becoming';
 export * from './schemas/workouts';
 export * from './schemas/schedule';
 export * from './schemas/programs';
