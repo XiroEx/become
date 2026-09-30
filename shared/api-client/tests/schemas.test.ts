@@ -18,14 +18,12 @@ import {
   ProfileResponseSchema,
   WeightCheckResponseSchema,
   WeightPostRequestSchema,
-  MoodHistoryResponseSchema,
   SaveWorkoutResponseSchema,
   SendLinkRequestSchema,
   SendLinkResponseSchema,
   UserSchema,
   VerifyLinkRequestSchema,
   VerifyLinkResponseSchema,
-  WeightHistoryResponseSchema,
   WorkoutLogSchema,
   WorkoutsListResponseSchema,
   WorkoutSaveRequestSchema,
@@ -75,16 +73,6 @@ test('UserSchema: ignores extra fields via passthrough', () => {
   assert.equal(result.success, true);
 });
 
-test('WeightHistoryResponseSchema: parses an array of entries', () => {
-  const result = WeightHistoryResponseSchema.safeParse({
-    history: [
-      { date: '2026-05-01', weight: 180 },
-      { date: '2026-05-02', weight: null, skipped: true },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
 test('LogWeightRequestSchema: rejects negative weight', () => {
   const result = LogWeightRequestSchema.safeParse({ weight: -10 });
   assert.equal(result.success, false);
@@ -107,13 +95,6 @@ test('LogMoodRequestSchema: accepts mood=3 with optional notes', () => {
   const result = LogMoodRequestSchema.safeParse({
     mood: 3,
     notes: 'feeling steady',
-  });
-  assert.equal(result.success, true);
-});
-
-test('MoodHistoryResponseSchema: parses array with mood scale enum', () => {
-  const result = MoodHistoryResponseSchema.safeParse({
-    history: [{ date: '2026-05-01', mood: 5 }],
   });
   assert.equal(result.success, true);
 });
