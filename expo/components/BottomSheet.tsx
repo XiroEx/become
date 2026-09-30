@@ -1,4 +1,4 @@
-import { Modal as RNModal, View, Pressable } from "react-native";
+import { Modal as RNModal, View, Pressable, type StyleProp, type ViewStyle } from "react-native";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import {
@@ -13,6 +13,7 @@ export interface BottomSheetProps {
   children?: ReactNode;
   testID?: string;
   accessibilityLabel?: string;
+  sheetStyle?: StyleProp<ViewStyle>;
 }
 
 /**
@@ -32,6 +33,7 @@ export function BottomSheet({
   children,
   testID,
   accessibilityLabel,
+  sheetStyle,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   return (
@@ -59,6 +61,7 @@ export function BottomSheet({
             /* swallow */
           }}
           className="bg-card border-t border-border rounded-t-2xl p-5 pb-8"
+          style={sheetStyle}
         >
           {/* The grab bar is a picture of an affordance VoiceOver cannot use —
               there is no drag gesture to offer it — so it is hidden rather than
