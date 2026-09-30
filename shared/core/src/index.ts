@@ -10,6 +10,10 @@
  *   - legal: terms, privacy, health data, support, delete account, constants
  *   - planCopy: plan comparison copy and PLAN_PRICING
  *   - accountDeletion: pure account deletion types, constants and planning
+ *   - training: the web's training / streak / dashboard-tile logic, copied
+ *     module-for-module from webapp/lib (NP-058). See ./training/index.ts —
+ *     the copies are never edited here, and a web-side drift test fails until
+ *     a web change is re-copied.
  *   - units: food units, conversion, bridges, formatting
  *   - foodMath: variant-aware nutrition scaling
  *   - mealPlanTimes: default tag times and clock helpers
@@ -40,6 +44,7 @@ export * from './legal/support'
 export * from './legal/deleteAccount'
 export * from './planCopy'
 export * from './accountDeletion'
+export * from './training/index'
 export * from './units'
 export * from './foodMath'
 export * from './mealPlanTimes'

@@ -125,6 +125,16 @@ export default function LiveWorkoutRoute({
           repsLabel: ex.reps,
           notes: ex.details,
           ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+          // The catalog metadata the weight convention is read off — see
+          // LiveWorkoutExercise.equipment. It is hydrated by the web onto
+          // every program exercise, so the native screen applies the same
+          // equipment-first rule as `getBellWeightInfo` does on the web
+          // instead of guessing from the exercise's name.
+          ...(ex.equipment ? { equipment: ex.equipment } : {}),
+          ...(ex.laterality ? { laterality: ex.laterality } : {}),
+          ...(ex.movementPatterns
+            ? { movementPatterns: ex.movementPatterns }
+            : {}),
           ...(ex.groupId ? { groupId: ex.groupId } : {}),
           ...(ex.groupLabel || ex.groupType
             ? { groupLabel: ex.groupLabel ?? ex.groupType }

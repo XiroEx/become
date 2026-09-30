@@ -12,7 +12,7 @@ import {
   ExerciseGroupNav,
   type ExerciseGroupType,
 } from "@/components/live/ExerciseGroupNav";
-import { detectBellStyle } from "@/lib/live/bellStyle";
+import { getBellWeightInfo } from "@become/core";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
@@ -29,6 +29,17 @@ export interface LiveWorkoutExercise {
   notes?: string;
   /** Canonical Exercise trackingType — selects per-set inputs (reps/weight/duration/distance). */
   trackingType?: string | null;
+  /**
+   * Catalog metadata, hydrated by the web onto every program exercise
+   * (`ProgramExerciseSchema`). It — not the name — decides whether the weight
+   * box says "Weight per DB (lbs)" and whether a doubled total is claimed:
+   * a Chest-Supported Row is dumbbell work and says so nowhere in its name,
+   * while a Barbell Bench Press is aliased "Bench Press (DB/bar)" and is not.
+   * See `getBellWeightInfo` in `@become/core`.
+   */
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   /** Grouping metadata — exercises sharing a groupId form a superset/circuit/etc. */
   groupId?: string;
   groupLabel?: string;
@@ -171,7 +182,7 @@ export function LiveWorkoutClient({
         ) : null}
 
         {workout.exercises.map((ex, exIdx) => {
-          const bellStyle = detectBellStyle(ex.name);
+          const bell = getBellWeightInfo(ex);
           const sets = grid[ex.slug] ?? [];
           // Render a group header the first time a new groupId appears, so
           // superset/circuit/triset members render contiguously under a label.
@@ -206,7 +217,8 @@ export function LiveWorkoutClient({
                   <LiveSetRow
                     key={i}
                     setIndex={i}
-                    bellStyle={bellStyle}
+                    bell={bell}
+                    exerciseName={ex.name}
                     state={s}
                     prefill={ex.prefill?.[i] ?? null}
                     trackingType={ex.trackingType}

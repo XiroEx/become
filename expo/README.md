@@ -109,6 +109,75 @@ tracked and not ignored — there is no `.easignore`), then installs and builds
 in `expo/`. The `file:` link therefore resolves on the builder exactly as it
 does here.
 
+## The shared pure logic: `@become/core`
+
+`../shared/core` (`@become/core`) holds the logic that has no React, no DOM and
+no Node in it — unit conversions, goal pace, TDEE, entitlements, legal copy,
+and (NP-058) the **training, streak and dashboard** modules under
+`shared/core/src/training/`. It reaches this app the same three ways
+`@become/api-client` does: a `file:` link in `package.json` for Metro,
+`paths` for `tsc`, `moduleNameMapper` for Jest. Import it as `@become/core`.
+
+### Re-copying a training module after a web change
+
+Everything under `shared/core/src/training/` is a **copy of a file under
+`webapp/lib/`**, at the same relative path:
+
+| Web (canonical) | Copy |
+|---|---|
+| `webapp/lib/workoutUtils.ts` | `shared/core/src/training/workoutUtils.ts` |
+| `webapp/lib/workout/*.ts` | `shared/core/src/training/workout/*.ts` |
+| `webapp/lib/quickSession/{naming,log}.ts` | `shared/core/src/training/quickSession/` |
+| `webapp/lib/streaks/{tile,pillars}.ts` | `shared/core/src/training/streaks/` |
+| `webapp/lib/dashboard/goalTile.ts` | `shared/core/src/training/dashboard/goalTile.ts` |
+| `webapp/lib/dashboardLayout/{types,defaults}.ts` | `shared/core/src/training/dashboardLayout/` |
+| `webapp/lib/video{Trim,Framing}.ts` | `shared/core/src/training/` |
+
+The webapp still imports its OWN copy of these, because RedRun builds
+`webapp/` alone and webapp code may never import `../shared/*` — that broke
+every production build on 2026-09-30 between 07:09 and 11:35. So two files
+exist, and `webapp/tests/unit/nativeParity/trainingModules.test.ts` (in
+`verify`, the CI job that always runs) drives **both** over one fixture table
+and fails the moment an answer differs. When `@become/core` is published and
+the webapp switches over, the copies and that test go away together.
+
+**A copy is never edited here.** A behaviour change lands on the WEB first and
+is then re-copied — the parity test stays red until it is:
+
+```bash
+# 1. From the repo root, overwrite the copy with the web file.
+cp webapp/lib/streaks/tile.ts shared/core/src/training/streaks/tile.ts
+
+# 2. Put back the three things a copy is allowed to change (the file's own
+#    header comment lists them, and `git diff` shows what you just dropped):
+#      - the "A COPY. DO NOT EDIT" header;
+#      - imports rewritten to relative paths — `@/lib/x` → `../x`, and a
+#        type-only import of a webapp model → `../types.ts`;
+#      - the non-null assertions `noUncheckedIndexedAccess` wants (this
+#        package's sources are typechecked by `expo`'s tsconfig, which sets
+#        it; the webapp's does not).
+git diff shared/core/src/training/streaks/tile.ts
+
+# 3. Re-export anything NEW from shared/core/src/training/index.ts, and bump
+#    the version in shared/core/package.json (CI requires it).
+
+# 4. Prove it.
+cd webapp && npm run test:file tests/unit/nativeParity/trainingModules.test.ts
+cd ../shared/core && npm run build && npm run typecheck
+cd ../../expo && npx tsc --noEmit && npx eslint . && npx jest --ci
+```
+
+If the web gained a new exported function, the parity test fails with
+`<module>.<name> is exported but no fixture compares it` until the fixture
+table covers it. That is the point: an uncompared export is not a copy.
+
+Two files are deliberately only half-copied, and both say so at the top:
+`workout/position.ts` (the web half is `localStorage`; the native store
+arrives with NP-081) and `quickSession/log.ts` (`logQuickSession` reads a
+token out of `localStorage` and POSTs a relative URL — native saves through
+`@become/api-client`). The parity test names each omission with its reason and
+fails if anything else goes missing.
+
 ## Scripts
 
 ```bash
