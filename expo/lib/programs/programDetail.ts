@@ -43,12 +43,33 @@ function phaseOutline(
   return {
     phaseIndex,
     name: phase.phase,
+    weeks: phase.weeks,
     weekStart: start,
     weekEnd: end,
+    focus: phase.focus,
     workouts: (phase.workouts ?? []).map((w, workoutIndex) => ({
       workoutIndex,
+      day: w.day ?? `Day ${workoutIndex + 1}`,
       title: w.title,
       exerciseCount: (w.exercises ?? []).length,
+      exercises: (w.exercises ?? []).map((ex, i) => ({
+        slug: ex.exerciseSlug ?? `exercise-${i}`,
+        name: ex.name ?? ex.exerciseSlug ?? "Exercise",
+        type: ex.type,
+        sets: ex.sets,
+        reps: ex.reps,
+        repsUnit: typeof ex.repsUnit === "string" ? ex.repsUnit : undefined,
+        rest: ex.rest,
+        details: ex.details,
+        tip: ex.tip,
+        groupId: ex.groupId,
+        groupType: ex.groupType,
+        groupLabel: ex.groupLabel,
+        groupRest: ex.groupRest,
+        groupRounds: ex.groupRounds,
+        thumbnailUrl: ex.thumbnailUrl ?? null,
+        videoUrl: ex.videoUrl ?? null,
+      })),
     })),
   };
 }
