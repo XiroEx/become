@@ -7,7 +7,7 @@ import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
 import PacePicker from '@/components/goals/PacePicker'
-import { defaultPaceKg } from '@become/core'
+import { defaultPaceKg } from '@/lib/goals/pace'
 import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
 import LegalLinks from '@/components/legal/LegalLinks'
@@ -22,12 +22,12 @@ import {
   HEALTH_DISCLAIMER_SHORT,
   LEGAL_CONTACT_EMAIL,
   LEGAL_DELETION_DAYS,
-} from '@become/core'
+} from '@/lib/legal'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
 // Conversions are shared with onboarding and the nutrition goals page so the
-// three screens can never disagree about what a member weighs. See @become/core.
+// three screens can never disagree about what a member weighs. See lib/bodyUnits.
 import {
   cmToFtIn,
   ftInToCm,
@@ -35,7 +35,7 @@ import {
   displayWeight,
   roundWeight,
   roundHeightCm,
-} from '@become/core'
+} from '@/lib/bodyUnits'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

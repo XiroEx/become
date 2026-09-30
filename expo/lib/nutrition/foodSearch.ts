@@ -34,7 +34,11 @@ export function toFoodSearchResults(
     name: f.name,
     brand: f.brand ?? null,
     source: narrowFoodSource(f.source),
-    kcalPer100g: f.nutrition?.calories ?? f.calories ?? 0,
+    // The flattened DEFAULT VARIANT's block, which is per SERVING — the row's
+    // `kcalPer100g` name is the presentational component's, not the wire's. No
+    // route has ever sent a bare top-level `calories`, so the fallback that read
+    // one is gone with the schema that invented it.
+    kcalPer100g: f.nutrition?.calories ?? 0,
   }));
 }
 

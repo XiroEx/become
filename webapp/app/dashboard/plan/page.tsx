@@ -9,9 +9,9 @@ import type { Metadata } from 'next'
 // read HERE and handed across as plain props. Nothing on this page is typed out
 // by hand: add a feature to FEATURE_MIN_TIER and it appears in the table on the
 // next build, with its real allowance.
-import { FEATURES, FREE_LIMITS, FEATURE_MIN_TIER } from '@become/core'
+import { FEATURES, FREE_LIMITS, FEATURE_MIN_TIER } from '@/lib/entitlements'
 import { MAX_CHAPTER, SESSIONS_PER_CHAPTER } from '@/lib/mindXP'
-import type { PlanFeatureRow } from '@become/core'
+import type { PlanFeatureRow } from '@/lib/planCopy'
 import PlanPageClient from './PlanPageClient'
 
 export const metadata: Metadata = { title: 'Plan' }

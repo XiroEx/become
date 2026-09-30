@@ -14,7 +14,13 @@ function formatAmount(amount: number | undefined, unit: string | undefined): str
   return unit ? `${amount} ${unit}` : String(amount);
 }
 
-/** Map the recipes-list response to the presentational RecipeSummary list. */
+/**
+ * Map the recipes-list response to the presentational RecipeSummary list.
+ *
+ * `totalsPerServing` is where the web stores a recipe's macros
+ * (`webapp/models/Recipe.ts`). This used to read `nutrition`, which no handler
+ * has ever sent, so every card showed no calories at all.
+ */
 export function toRecipeSummaries(
   response: RecipesListResponse | null | undefined,
 ): RecipeSummary[] {
@@ -24,14 +30,20 @@ export function toRecipeSummaries(
     name: r.name,
     description: r.description ?? "",
     thumbnailUrl: r.imageUrl ?? null,
-    totalKcal: r.nutrition?.calories,
+    totalKcal: r.totalsPerServing?.calories,
     servings: r.servings,
   }));
 }
 
-/** Map a recipe doc to the RecipeDetail view model (nutrition is per serving). */
+/**
+ * Map a recipe doc to the RecipeDetail view model.
+ *
+ * `totalsPerServing` is ALREADY per serving — the route sums the ingredients
+ * and divides by `servings` before storing it — so it is shown as-is and never
+ * divided again.
+ */
 export function toRecipeDetailViewModel(recipe: Recipe): RecipeDetailViewModel {
-  const n = recipe.nutrition;
+  const n = recipe.totalsPerServing;
   return {
     id: recipeId(recipe),
     name: recipe.name,
