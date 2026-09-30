@@ -23,11 +23,12 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
+import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** Local YYYY-MM-DD for the start-date mutation default. */
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey();
 }
 
 export default function ProgramDetailRoute() {

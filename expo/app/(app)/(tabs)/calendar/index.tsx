@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
@@ -18,6 +18,7 @@ import {
   slotKey,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
+import { useLocalDay, useOnForeground } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
@@ -31,9 +32,9 @@ export default function CalendarIndexRoute() {
   const router = useRouter();
   const { token } = useAuth();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const today = new Date();
-  const month = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  const todayDate = today.toISOString().slice(0, 10);
+  // Device-local today and month, rolled over on foreground resume and midnight (NP-035).
+  const { day: todayDate } = useLocalDay();
+  const month = todayDate.slice(0, 7);
 
   const { data, error, refetch } = useFetch(
     "/api/schedule",
@@ -44,6 +45,18 @@ export default function CalendarIndexRoute() {
       skip: !token,
     },
   );
+
+  const initialTodayRef = useRef(todayDate);
+  useEffect(() => {
+    if (initialTodayRef.current !== todayDate) {
+      initialTodayRef.current = todayDate;
+      void refetch();
+    }
+  }, [todayDate, refetch]);
+
+  useOnForeground(() => {
+    void refetch();
+  });
 
   const slots = useMemo(() => toScheduledSlots(data), [data]);
 
