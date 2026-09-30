@@ -3,20 +3,18 @@ import { ScheduleSettingsForm } from "@/components/schedule/ScheduleSettingsForm
 
 const initial = {
   trainingDays: [1, 3, 5],
-  startDate: "2026-05-27",
-  autoAdvance: true,
 };
 
 describe("ScheduleSettingsForm", () => {
-  it("renders 7 day toggles + date input + auto-advance switch + submit", () => {
-    const { getByTestId } = render(
+  it("renders 7 day toggles + submit (no start-date, no auto-advance)", () => {
+    const { getByTestId, queryByTestId } = render(
       <ScheduleSettingsForm initial={initial} onSubmit={() => {}} />,
     );
     for (let d = 0; d <= 6; d++) {
       expect(getByTestId(`schedule-settings-day-${d}`)).toBeTruthy();
     }
-    expect(getByTestId("schedule-settings-start-date")).toBeTruthy();
-    expect(getByTestId("schedule-settings-auto-advance")).toBeTruthy();
+    expect(queryByTestId("schedule-settings-start-date")).toBeNull();
+    expect(queryByTestId("schedule-settings-auto-advance")).toBeNull();
     expect(getByTestId("schedule-settings-submit")).toBeTruthy();
   });
 
@@ -44,8 +42,6 @@ describe("ScheduleSettingsForm", () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({
         trainingDays: [1, 3, 5],
-        startDate: "2026-05-27",
-        autoAdvance: true,
       });
     });
   });
@@ -58,9 +54,9 @@ describe("ScheduleSettingsForm", () => {
     fireEvent.press(getByTestId("schedule-settings-day-2"));
     fireEvent.press(getByTestId("schedule-settings-submit"));
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith(
-        expect.objectContaining({ trainingDays: [1, 2, 3, 5] }),
-      );
+      expect(onSubmit).toHaveBeenCalledWith({
+        trainingDays: [1, 2, 3, 5],
+      });
     });
   });
 
@@ -68,7 +64,7 @@ describe("ScheduleSettingsForm", () => {
     const onSubmit = jest.fn();
     const { getByTestId, queryByTestId } = render(
       <ScheduleSettingsForm
-        initial={{ trainingDays: [1], startDate: "bad", autoAdvance: false }}
+        initial={{ trainingDays: [] }}
         onSubmit={onSubmit}
       />,
     );

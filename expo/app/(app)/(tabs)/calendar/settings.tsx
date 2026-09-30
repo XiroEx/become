@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
@@ -6,7 +7,8 @@ import {
 } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScheduleApiResponseSchema, slotDateKey } from "@become/api-client";
+import { ScheduleApiResponseSchema } from "@become/api-client";
+import { Card } from "@/components/Card";
 import { ScheduleSettingsForm } from "@/components/schedule/ScheduleSettingsForm";
 import type { ScheduleSettings } from "@/lib/schedule/scheduleSettings";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -19,45 +21,19 @@ export default function CalendarSettingsRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
-  const today = new Date().toISOString().slice(0, 10);
+  const [savingProgramId, setSavingProgramId] = useState<string | null>(null);
 
-  const { data } = useFetch("/api/schedule", ScheduleApiResponseSchema, {
+  const { data, loading } = useFetch("/api/schedule", ScheduleApiResponseSchema, {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !token,
   });
 
-  const doc = data?.schedules?.[0] ?? null;
-  // `settings` is typed by the shared schema now (it was `z.unknown()`, which
-  // is why this used to cast). `startDate` is a 00:00Z DAY MARKER, so its day
-  // is the date part — never a timezone conversion. `autoAdvance` is the form's
-  // own state: webapp/models/Schedule.ts persists trainingDays and startDate
-  // and nothing else, so the server never sends it.
-  const settings = doc?.settings;
-  const initial: ScheduleSettings = {
-    trainingDays: settings?.trainingDays?.length
-      ? settings.trainingDays
-      : [1, 3, 5],
-    startDate: settings?.startDate
-      ? slotDateKey(settings.startDate)
-      : today,
-    autoAdvance: true,
-  };
+  const schedules = data?.schedules ?? [];
 
   const mutations = useScheduleMutations({
     getToken: () => token ?? undefined,
   });
-
-  const onSubmit = async (next: ScheduleSettings) => {
-    if (doc?.programId) {
-      await mutations.updateSettings({
-        programId: doc.programId,
-        trainingDays: next.trainingDays,
-        startDate: next.startDate,
-      });
-    }
-    router.back();
-  };
 
   return (
     <SafeAreaView
@@ -74,12 +50,72 @@ export default function CalendarSettingsRoute() {
           <Text className="text-foreground text-2xl font-bold">
             Schedule settings
           </Text>
-          {/* Keyed on the loaded settings so the form re-seeds once data lands. */}
-          <ScheduleSettingsForm
-            key={`${initial.trainingDays.join("-")}-${initial.startDate}`}
-            initial={initial}
-            onSubmit={onSubmit}
-          />
+
+          {loading && schedules.length === 0 ? (
+            <Text className="text-muted-foreground" testID="calendar-settings-loading">
+              Loading schedule settings...
+            </Text>
+          ) : null}
+
+          {!loading && schedules.length === 0 ? (
+            <Text
+              className="text-muted-foreground text-center mt-8"
+              testID="calendar-settings-empty"
+            >
+              No schedules to manage.
+            </Text>
+          ) : null}
+
+          {schedules.map((schedule, index) => {
+            const settings = schedule.settings;
+            const initial: ScheduleSettings = {
+              trainingDays: settings?.trainingDays?.length
+                ? settings.trainingDays
+                : [1, 3, 5],
+            };
+            const completedCount =
+              schedule.scheduledWorkouts?.filter((w) => w.status === "completed")
+                .length ?? 0;
+            const totalCount = schedule.scheduledWorkouts?.length ?? 0;
+            const subtitle =
+              totalCount > 0
+                ? `${completedCount}/${totalCount} workouts completed`
+                : undefined;
+            const formTestId =
+              schedules.length === 1
+                ? "schedule-settings"
+                : `schedule-settings-${schedule.programId}`;
+
+            return (
+              <Card
+                key={schedule.programId || `schedule-${index}`}
+                testID={`schedule-card-${schedule.programId || index}`}
+                title={schedule.programName || schedule.programId}
+                subtitle={subtitle}
+              >
+                <ScheduleSettingsForm
+                  key={`${schedule.programId}-${initial.trainingDays.join("-")}`}
+                  initial={initial}
+                  testID={formTestId}
+                  saving={savingProgramId === schedule.programId}
+                  onSubmit={async (next: ScheduleSettings) => {
+                    if (schedule.programId) {
+                      setSavingProgramId(schedule.programId);
+                      try {
+                        await mutations.updateSettings({
+                          programId: schedule.programId,
+                          trainingDays: next.trainingDays,
+                        });
+                      } finally {
+                        setSavingProgramId(null);
+                      }
+                    }
+                    router.back();
+                  }}
+                />
+              </Card>
+            );
+          })}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

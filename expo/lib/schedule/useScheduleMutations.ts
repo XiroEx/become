@@ -39,7 +39,7 @@ export type RescheduleInput = Omit<
 
 export type SettingsInput = Omit<
   ScheduleSettingsUpdateRequest,
-  "tz" | "tzZone"
+  "tz" | "tzZone" | "startDate"
 >;
 
 export interface ScheduleMutationsOptions {
