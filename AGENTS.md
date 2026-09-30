@@ -13,10 +13,10 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 CI's `expo` job fails on things that are cheap to catch locally. On 2026-09-30, three native PRs went red on exactly these (TS2322 on an optional string, and `react-hooks/set-state-in-effect` twice). Before `workspace_ship` or `git push`:
 
 - Any change under `expo/`: `cd expo && npx tsc --noEmit && npx eslint .`. Zero errors; warnings are fine.
-- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`.
+- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`. Any PR changing `shared/core/` MUST bump its version in `shared/core/package.json`. Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step.
 - Any contract test you add under `webapp/tests/unit/contract/`: seed fixtures the way the model requires (required fields included), and give the file its OWN member. Contract files run in parallel against one database.
 - `react-hooks/set-state-in-effect`: prefer deriving the value during render. Suppress it (`// eslint-disable-next-line react-hooks/set-state-in-effect`) ONLY when the effect genuinely syncs from something outside React (a route param, an app-state or network callback), with a one-line reason above it.
-- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build.
+- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build. Webapp consumes published `@become/core` from `https://registry.redbtn.io/`.
 
 ## Channels
 
@@ -1516,8 +1516,10 @@ through its own tsconfig path exactly as before.
 
 `shared/core/` (`@become/core`) contains pure business logic, calculations, and domain constants shared between `webapp/` and `expo/` without React or Node-only dependencies. It compiles to dual ESM/CJS and `.d.ts`. Seeded modules include `bodyUnits`, `goals/pace`, `goals/status`, `nutrition/tdee`, `entitlements` (tier model, limits, gate copy, 403 parser), `legal`, `planCopy` (`PLAN_PRICING`, `ANNUAL_SAVING_LINE`), and pure account deletion logic.
 - Both `webapp/` and `expo/` import from `@become/core`.
-- In `webapp/`, `lib/` files re-export from `@become/core` for backwards compatibility, and app routes/pages import directly from `@become/core`.
+- `webapp/` consumes `@become/core` as a real published package from `https://registry.redbtn.io/` (resolved via `@become:registry` in `.npmrc`), with `lib/` files re-exporting from `@become/core` for backwards compatibility. Never use `../shared` or tsconfig paths in `webapp/`.
 - In `expo/`, `@become/core` is linked as a `file:../shared/core` dependency in `expo/package.json` and resolved cleanly by Metro bundler.
+- Any PR changing `shared/core` MUST bump its version in `shared/core/package.json`.
+- Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step: publish from clean main with publisher credentials to `https://registry.redbtn.io/`, verify `npm view @become/core versions`, and update `webapp/package.json` with `npm install --package-lock-only`.
 
 #### The contract test: what the native app is actually sent (NP-016)
 
