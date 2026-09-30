@@ -18,16 +18,11 @@ import {
   ProfileResponseSchema,
   WeightCheckResponseSchema,
   WeightPostRequestSchema,
-  SaveWorkoutResponseSchema,
   SendLinkRequestSchema,
   SendLinkResponseSchema,
   UserSchema,
   VerifyLinkRequestSchema,
   VerifyLinkResponseSchema,
-  WorkoutLogSchema,
-  WorkoutsListResponseSchema,
-  WorkoutSaveRequestSchema,
-  WorkoutSaveResponseSchema,
   ExerciseAlternativesResponseSchema,
   ProgressMoodResponseSchema,
   // NP-024 nutrition. One recorded fixture per route lives below; the REAL
@@ -123,50 +118,11 @@ test('LogMoodRequestSchema: accepts mood=3 with optional notes', () => {
   assert.equal(result.success, true);
 });
 
-test('WorkoutLogSchema: accepts a minimal completed workout', () => {
-  const result = WorkoutLogSchema.safeParse({
-    programId: 'p1',
-    phaseIndex: 0,
-    workoutIndex: 0,
-    date: '2026-05-01',
-    exercises: [{ exerciseSlug: 'bench-press', sets: [] }],
-    completed: true,
-  });
-  assert.equal(result.success, true);
-});
-
-test('WorkoutLogSchema: rejects negative phaseIndex', () => {
-  const result = WorkoutLogSchema.safeParse({
-    programId: 'p1',
-    phaseIndex: -1,
-    workoutIndex: 0,
-    date: '2026-05-01',
-    exercises: [],
-    completed: false,
-  });
-  assert.equal(result.success, false);
-});
-
-test('WorkoutsListResponseSchema: parses a list of workouts', () => {
-  const result = WorkoutsListResponseSchema.safeParse({
-    workouts: [
-      {
-        programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        date: '2026-05-01',
-        exercises: [],
-        completed: false,
-      },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
-test('SaveWorkoutResponseSchema: parses success-only response', () => {
-  const result = SaveWorkoutResponseSchema.safeParse({ success: true });
-  assert.equal(result.success, true);
-});
+// The speculative `WorkoutLogSchema` / `WorkoutsListResponseSchema` /
+// `SaveWorkoutResponseSchema` trio that used to be checked here described a
+// `{ workouts: [ { phaseIndex, workoutIndex } ] }` API no handler has ever
+// answered with. It was deleted with NP-018; the real /api/workouts surface is
+// covered by tests/workoutsSchemas.test.ts and by the webapp contract harness.
 
 // The speculative `{ schedule: [ { phaseIndex, workoutIndex } ] }` envelope
 // that used to be checked here described a response no route has ever sent. It
@@ -428,81 +384,10 @@ test('VerifyLinkResponseSchema: rejects a response missing the token', () => {
   assert.equal(result.success, false);
 });
 
-test('WorkoutSaveRequestSchema: parses the live-workout save payload', () => {
-  const r = WorkoutSaveRequestSchema.safeParse({
-    programId: 'prog-1',
-    phase: 1,
-    day: 'Day 1',
-    completed: true,
-    activeSeconds: 600,
-    duration: 10,
-    exercises: [
-      {
-        name: 'Bench',
-        exerciseSlug: 'bench',
-        sets: [{ setNumber: 1, reps: 5, weight: 135, completed: true }],
-      },
-    ],
-  });
-  assert.equal(r.success, true);
-});
-
-test('WorkoutSaveRequestSchema: carries the attempt id that makes a save safe to replay', () => {
-  // Every save of one attempt sends the same id, so the server recognises a
-  // queued write flushed after local midnight as a REPLAY rather than a
-  // second completed workout.
-  const r = WorkoutSaveRequestSchema.safeParse({
-    programId: 'prog-1',
-    phase: 1,
-    day: 'Day 1',
-    completed: true,
-    attemptId: 'b0b7a1f2-0c1e-4f0b-9a1a-9f1b2c3d4e5f',
-    exercises: [],
-  });
-  assert.equal(r.success, true);
-  assert.equal(r.data?.attemptId, 'b0b7a1f2-0c1e-4f0b-9a1a-9f1b2c3d4e5f');
-
-  // …and it stays optional: a client that sends none is on the server's
-  // pre-existing date windows, exactly as before.
-  const without = WorkoutSaveRequestSchema.safeParse({
-    programId: 'prog-1',
-    phase: 1,
-    day: 'Day 1',
-    completed: true,
-    exercises: [],
-  });
-  assert.equal(without.success, true);
-  assert.equal(without.data?.attemptId, undefined);
-});
-
-test('WorkoutSaveRequestSchema: rejects a missing day', () => {
-  const r = WorkoutSaveRequestSchema.safeParse({
-    programId: 'p',
-    phase: 1,
-    completed: true,
-    exercises: [],
-  });
-  assert.equal(r.success, false);
-});
-
-test('WorkoutSaveResponseSchema: parses a save response with PRs', () => {
-  const r = WorkoutSaveResponseSchema.safeParse({
-    message: 'Workout saved successfully',
-    completed: true,
-    newPRsAchieved: [
-      { exerciseSlug: 'bench', exerciseName: 'Bench', dimensions: ['weight', 'e1rm'] },
-    ],
-  });
-  assert.equal(r.success, true);
-});
-
-test('WorkoutSaveResponseSchema: rejects a malformed PR entry', () => {
-  const r = WorkoutSaveResponseSchema.safeParse({
-    newPRsAchieved: [{ exerciseSlug: 'bench' }],
-  });
-  assert.equal(r.success, false);
-});
-
+// The POST /api/workouts save body and its response moved to
+// tests/workoutsSchemas.test.ts with NP-018, where they are checked against
+// the body LiveWorkoutClient actually builds for both a program day and a
+// quick session.
 
 test('ExerciseAlternativesResponseSchema: parses alternatives list', () => {
   const r = ExerciseAlternativesResponseSchema.safeParse({
