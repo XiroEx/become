@@ -53,6 +53,7 @@ import Share from '@/models/Share'
 import PushSubscription from '@/models/PushSubscription'
 import MagicLink from '@/models/MagicLink'
 import HandoffCode from '@/models/HandoffCode'
+import AppAuthCode from '@/models/AppAuthCode'
 // Cascade children: keyed by the row they illustrate, not by a member.
 import MealImage from '@/models/MealImage'
 import RecipeImage from '@/models/RecipeImage'
@@ -110,6 +111,7 @@ export const PURGE_MODELS: Record<string, PurgeableModel> = {
   PushSubscription: PushSubscription as unknown as PurgeableModel,
   MagicLink: MagicLink as unknown as PurgeableModel,
   HandoffCode: HandoffCode as unknown as PurgeableModel,
+  AppAuthCode: AppAuthCode as unknown as PurgeableModel,
   MealImage: MealImage as unknown as PurgeableModel,
   RecipeImage: RecipeImage as unknown as PurgeableModel,
   ProgramImage: ProgramImage as unknown as PurgeableModel,

@@ -406,6 +406,28 @@ test('MeResponseSchema: parses a real /api/auth/me body, plan state included', (
   assert.equal(r.data?.user.subscription?.status, 'active');
 });
 
+test('MeResponseSchema: parses user.savedPrograms with ISavedProgram objects and string ids', () => {
+  const bodyWithSavedObjects = {
+    ...ME_BODY,
+    user: {
+      ...ME_BODY.user,
+      savedPrograms: [
+        {
+          programId: 'program_jon_don_split',
+          savedAt: '2026-02-20T02:39:29.385Z',
+          order: 0,
+        },
+        'legacy_string_program_id',
+      ],
+    },
+  };
+  const r = MeResponseSchema.safeParse(bodyWithSavedObjects);
+  assert.equal(r.success, true);
+  assert.equal(r.data?.user.savedPrograms?.length, 2);
+  const first = r.data?.user.savedPrograms?.[0];
+  assert.equal(typeof first === 'object' && first !== null && 'programId' in first && first.programId, 'program_jon_don_split');
+});
+
 // ---------------------------------------------------------------------------
 // GET | PATCH /api/profile
 // ---------------------------------------------------------------------------

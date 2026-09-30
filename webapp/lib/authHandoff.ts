@@ -59,6 +59,7 @@ export const HANDOFF_ALLOWED_PATHS = [
   '/dashboard/recipes/:recipeId/edit',
   // Admin (NP-122). Coach-only screens; the session minted is still the
   // member's own, so these open with exactly the rights they already had.
+  '/dashboard/admin',
   '/dashboard/admin/foods/:foodId',
   '/dashboard/admin/exercises/new',
   '/dashboard/admin/exercises/:slug/edit',

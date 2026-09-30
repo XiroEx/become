@@ -1,15 +1,13 @@
 /* eslint-disable import/first */
 // THE SCREENS A STORE BUILD MUST NOT HAVE — opened, and watched to leave.
 //
-// Three routes shipped that no member should be able to reach:
+// The dev-only routes that no member should be able to reach:
 //
 //   `_stories`         the component gallery. Underscore is a Next.js habit;
 //                      expo-router's ignore list is exactly `+api`, `+html`
 //                      and `+native-intent`, so this was a LIVE route at
 //                      `become://_stories`.
-//   `admin/foods`      read-only admin list behind a CLIENT-side role check,
-//   `admin/exercises`  which is a blocked screen, not an absent one — and its
-//                      Edit link leaves for the browser anyway.
+//                      (The two admin screens were deleted in NP-122).
 //
 // So these are rendered through the REAL route tree (`test-support/appRoutes`)
 // with `__DEV__` flipped to what a release bundle has, and the assertion is
@@ -58,19 +56,9 @@ import { HOME_HREF, isDevBuild } from "@/lib/dev/devOnlyRoute";
 
 const fake = SecureStore as unknown as { __reset: () => void };
 
-/** The three route files, and the testID each renders when it DOES render. */
+/** Dev-only route files, and the testID each renders when it DOES render. */
 const DEV_ONLY = [
   { url: "/_stories", key: "_stories", testID: "stories-screen" },
-  {
-    url: "/admin/foods",
-    key: "(app)/admin/foods/index",
-    testID: "admin-foods-route",
-  },
-  {
-    url: "/admin/exercises",
-    key: "(app)/admin/exercises/index",
-    testID: "admin-exercises-route",
-  },
 ];
 
 const REAL = DEV_ONLY.map((r) => r.key);
