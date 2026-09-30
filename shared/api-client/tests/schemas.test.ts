@@ -20,7 +20,6 @@ import {
   WeightPostRequestSchema,
   MoodHistoryResponseSchema,
   SaveWorkoutResponseSchema,
-  ScheduleResponseSchema,
   SendLinkRequestSchema,
   SendLinkResponseSchema,
   UserSchema,
@@ -32,7 +31,6 @@ import {
   WorkoutSaveRequestSchema,
   WorkoutSaveResponseSchema,
   ExerciseAlternativesResponseSchema,
-  ScheduleApiResponseSchema,
   ProgressMoodResponseSchema,
   MealLogResponseSchema,
   FoodSearchResponseSchema,
@@ -165,35 +163,10 @@ test('SaveWorkoutResponseSchema: parses success-only response', () => {
   assert.equal(result.success, true);
 });
 
-test('ScheduleResponseSchema: parses array of slots', () => {
-  const result = ScheduleResponseSchema.safeParse({
-    schedule: [
-      {
-        date: '2026-05-01',
-        programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        status: 'scheduled',
-      },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
-test('ScheduleResponseSchema: rejects an unknown status enum value', () => {
-  const result = ScheduleResponseSchema.safeParse({
-    schedule: [
-      {
-        date: '2026-05-01',
-        programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        status: 'mystery',
-      },
-    ],
-  });
-  assert.equal(result.success, false);
-});
+// The speculative `{ schedule: [ { phaseIndex, workoutIndex } ] }` envelope
+// that used to be checked here described a response no route has ever sent. It
+// was deleted with NP-021; the real GET /api/schedule is covered by
+// tests/scheduleSchemas.test.ts and by the webapp contract harness.
 
 test('ActiveProgramsApiResponseSchema: parses minimal response and accepts extras (passthrough)', () => {
   const result = ActiveProgramsApiResponseSchema.safeParse({
@@ -545,30 +518,8 @@ test('ExerciseAlternativesResponseSchema: rejects a candidate missing name', () 
 });
 
 
-test('ScheduleApiResponseSchema: parses nested schedules with scheduledWorkouts', () => {
-  const r = ScheduleApiResponseSchema.safeParse({
-    schedules: [
-      {
-        _id: 's1',
-        programId: 'prog-1',
-        programName: 'Strength',
-        programStatus: 'active',
-        scheduledWorkouts: [
-          { date: '2026-06-01T00:00:00.000Z', dayLabel: 'Day 1', status: 'scheduled', phase: 1 },
-        ],
-      },
-    ],
-  });
-  assert.equal(r.success, true);
-});
-
-test('ScheduleApiResponseSchema: defaults schedules to [] and a workout requires date+status', () => {
-  assert.equal(ScheduleApiResponseSchema.safeParse({}).success, true);
-  const bad = ScheduleApiResponseSchema.safeParse({
-    schedules: [{ programId: 'p', scheduledWorkouts: [{ dayLabel: 'Day 1' }] }],
-  });
-  assert.equal(bad.success, false);
-});
+// GET /api/schedule and the PATCH/POST/PUT writes moved to
+// tests/scheduleSchemas.test.ts with NP-021.
 
 
 test('ProgressMoodResponseSchema: parses moodData points', () => {
