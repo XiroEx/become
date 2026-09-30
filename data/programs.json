@@ -498,7 +498,7 @@
             "exercises": [
               {
                 "exerciseSlug": "__protocol__hiit-circuit-4-rounds",
-                "details": "40s work / 20s rest. 1. Assault bike/row, 2. DB Thrusters, 3. Walking Lunges, 4. Plank to Push-Up"
+                "details": "40s work / 20s rest. 1. Assault bike/row, 2. Dumbbell Thrusters, 3. Walking Lunges, 4. Plank to Push-Up"
               }
             ]
           },
@@ -1195,13 +1195,13 @@
               },
               {
                 "exerciseSlug": "__protocol__emom-8-minutes",
-                "details": "[\"Minute 1: 12 DB Push Press\",\"Minute 2: 15 Renegade Rows\"]"
+                "details": "[\"Minute 1: 12 Dumbbell Push Press\",\"Minute 2: 15 Renegade Rows\"]"
               },
               {
                 "exerciseSlug": "plank"
               },
               {
-                "exerciseSlug": "crunch"
+                "exerciseSlug": "dumbbell-crunch"
               },
               {
                 "exerciseSlug": "toe-touch"
@@ -1218,7 +1218,7 @@
                 "reps": "10"
               },
               {
-                "exerciseSlug": "romanian-deadlift",
+                "exerciseSlug": "dumbbell-romanian-deadlift",
                 "sets": 4,
                 "reps": "12"
               },
@@ -1228,17 +1228,17 @@
                 "reps": "12 per leg"
               },
               {
-                "exerciseSlug": "hip-thrust",
+                "exerciseSlug": "dumbbell-hip-thrust",
                 "sets": 4,
                 "reps": "15"
               },
               {
-                "exerciseSlug": "step-up",
+                "exerciseSlug": "dumbbell-step-up",
                 "sets": 3,
                 "reps": "12 per leg"
               },
               {
-                "exerciseSlug": "standing-calf-raise",
+                "exerciseSlug": "dumbbell-calf-raise",
                 "sets": 3,
                 "reps": "20"
               },
@@ -1253,7 +1253,7 @@
               },
               {
                 "exerciseSlug": "__protocol__amrap-6-minutes",
-                "details": "[\"10 Jumping Lunges or Reverse Lunges\",\"10 DB Thrusters\",\"10 DB Swings\"]"
+                "details": "[\"10 Jumping Lunges or Reverse Lunges\",\"10 Dumbbell Thrusters\",\"10 Dumbbell Swings\"]"
               },
               {
                 "exerciseSlug": "dead-bug"
@@ -1296,7 +1296,7 @@
                 "reps": "12"
               },
               {
-                "exerciseSlug": "skull-crusher",
+                "exerciseSlug": "dumbbell-skull-crusher",
                 "sets": 3,
                 "reps": "12"
               },
@@ -1311,7 +1311,7 @@
                 "details": "[\"5 Dumbbell Deadlifts\",\"5 Dumbbell Rows\",\"5 Dumbbell Hang Cleans\",\"5 Dumbbell Push Press\"]"
               },
               {
-                "exerciseSlug": "russian-twist"
+                "exerciseSlug": "dumbbell-russian-twist"
               },
               {
                 "exerciseSlug": "leg-raise"
@@ -1371,10 +1371,10 @@
               },
               {
                 "exerciseSlug": "__protocol__tabata-4-minutes",
-                "details": "[\"DB Goblet Squat\",\"DB Push Press\"]"
+                "details": "[\"Dumbbell Goblet Squat\",\"Dumbbell Push Press\"]"
               },
               {
-                "exerciseSlug": "cable-woodchopper"
+                "exerciseSlug": "dumbbell-woodchopper"
               },
               {
                 "exerciseSlug": "toe-touch"
@@ -1460,7 +1460,7 @@
                 "rest": "60s"
               },
               {
-                "exerciseSlug": "romanian-deadlift",
+                "exerciseSlug": "dumbbell-romanian-deadlift",
                 "sets": 3,
                 "reps": "12",
                 "rest": "60s"
@@ -1472,13 +1472,13 @@
                 "rest": "60s"
               },
               {
-                "exerciseSlug": "hip-thrust",
+                "exerciseSlug": "dumbbell-hip-thrust",
                 "sets": 3,
                 "reps": "15",
                 "rest": "45s"
               },
               {
-                "exerciseSlug": "standing-calf-raise",
+                "exerciseSlug": "dumbbell-calf-raise",
                 "sets": 3,
                 "reps": "20",
                 "rest": "45s"
@@ -1515,7 +1515,7 @@
             "title": "Upper/Lower Hybrid",
             "exercises": [
               {
-                "exerciseSlug": "push-press",
+                "exerciseSlug": "dumbbell-push-press",
                 "sets": 3,
                 "reps": "10",
                 "rest": "45s"
@@ -1539,7 +1539,7 @@
                 "rest": "45s"
               },
               {
-                "exerciseSlug": "russian-twist",
+                "exerciseSlug": "dumbbell-russian-twist",
                 "sets": 3,
                 "reps": "20",
                 "rest": "45s"
