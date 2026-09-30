@@ -311,13 +311,19 @@ describe("ProgramDetailRoute mutations", () => {
     });
   });
 
-  it("enroll POSTs /api/programs/enroll {programId} and refetches active", async () => {
+  it("enroll opens dialog, POSTs /api/programs/enroll {programId, startDate}, refetches active and routes to schedule", async () => {
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() => expect(getByTestId("program-detail-start")).toBeTruthy());
     const activeBefore = getsTo("/api/programs/active").length;
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-start"));
+    });
+
+    await waitFor(() => expect(getByTestId("enroll-modal-confirm")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("enroll-modal-confirm"));
     });
 
     await waitFor(() => {
@@ -327,13 +333,17 @@ describe("ProgramDetailRoute mutations", () => {
     expect(call[2]).toEqual(
       expect.objectContaining({
         method: "POST",
-        body: { programId: "prog-1" },
+        body: expect.objectContaining({
+          programId: "prog-1",
+          startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        }),
         baseUrl: WEBAPP_BASE_URL,
       }),
     );
     await waitFor(() => {
       expect(getsTo("/api/programs/active").length).toBeGreaterThan(activeBefore);
     });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/prog-1/schedule");
   });
 
   it("start-date PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
