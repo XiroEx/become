@@ -29,11 +29,16 @@ import { Input } from "@/components/Input";
 import AppleSignInButton, {
   appleSignInSupported,
 } from "@/components/AppleSignInButton";
+import GoogleSignInButton from "@/components/GoogleSignInButton";
 import {
   sendAppleEmailLink,
   signInWithApple,
   type AppleSignInResult,
 } from "@/lib/auth/appleSignIn";
+import {
+  signInWithGoogle,
+  type GoogleSignInResult,
+} from "@/lib/auth/googleSignIn";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createPoller, type Poller } from "@/lib/auth/polling";
 import { announce } from "@/lib/a11y/announce";
@@ -106,6 +111,8 @@ export interface LoginScreenProps {
   ) => Promise<ReviewSignInResponse>;
   /** DI hook for tests — runs Apple's sheet and POSTs /api/auth/apple. */
   appleSignInFn?: () => Promise<AppleSignInResult>;
+  /** DI hook for tests — runs the system auth session and POSTs /api/auth/exchange. */
+  googleSignInFn?: () => Promise<GoogleSignInResult>;
   /** DI hook for tests — POSTs /api/auth/apple/link with the Apple session. */
   appleLinkFn?: (token: string, email: string) => Promise<AppleLinkEmailResponse>;
   /** DI hook for tests — the Apple button's availability probe (iOS 13+ only). */
@@ -128,6 +135,7 @@ export default function LoginScreen({
   checkSessionFn,
   reviewSignInFn,
   appleSignInFn,
+  googleSignInFn,
   appleLinkFn,
   appleAvailableAsync,
   onAuthed,
@@ -165,6 +173,7 @@ export default function LoginScreen({
   const [reviewCode, setReviewCode] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
   const [appleBusy, setAppleBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   /**
    * A finished Apple sign-in whose session is NOT stored yet, because the
    * account it opened is reachable only at a Hide My Email relay alias and may
@@ -212,6 +221,7 @@ export default function LoginScreen({
       }));
 
   const appleSignIn = appleSignInFn ?? (() => signInWithApple());
+  const googleSignIn = googleSignInFn ?? (() => signInWithGoogle());
   const appleLink =
     appleLinkFn ?? ((token: string, value: string) => sendAppleEmailLink(token, value));
 
@@ -436,6 +446,38 @@ export default function LoginScreen({
     }
   };
 
+  /**
+   * SIGN IN WITH GOOGLE. The whole ceremony lives in lib/auth/googleSignIn.ts
+   * (the system authentication session, then the one-time code exchanged with
+   * the verifier); what happens HERE is only what the screen owes the member:
+   * a dismissal says nothing, a failure says one sentence, and a success is
+   * stored exactly as a magic-link session is.
+   *
+   * There is no "link your email" branch, unlike Apple: Google always shares a
+   * real address, so `bridgeToBecomeSession` matches an existing member on it
+   * and they land in the account they already have.
+   */
+  const handleGoogleSignIn = async (): Promise<void> => {
+    if (googleBusy) return;
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      const result = await googleSignIn();
+      if (result.status === "cancelled") return; // a dismissal is not an error
+      if (result.status !== "signed-in" || !result.session) {
+        setError(result.message ?? "Google sign-in failed. Please try again.");
+        return;
+      }
+      await pendingStore.clear();
+      await Promise.resolve(handleAuthed(result.session.token));
+      router.replace("/");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setGoogleBusy(false);
+    }
+  };
+
   /** Continue into the account Apple just created, relay address and all. */
   const handleAppleContinue = async (): Promise<void> => {
     const offer = appleOffer;
@@ -494,6 +536,15 @@ export default function LoginScreen({
   });
   const onApplePress = useCallback(() => {
     void appleSignInRef.current();
+  }, []);
+
+  // The Google button is memoised for the same reason and latched the same way.
+  const googleSignInRef = useRef(handleGoogleSignIn);
+  useEffect(() => {
+    googleSignInRef.current = handleGoogleSignIn;
+  });
+  const onGooglePress = useCallback(() => {
+    void googleSignInRef.current();
   }, []);
 
   const handleChangeEmail = async (): Promise<void> => {
@@ -728,18 +779,39 @@ export default function LoginScreen({
                     : "Send magic link"}
               </Button>
 
+              {/* THE OTHER WAYS IN. The divider is unconditional now, because
+                  Google is offered on both platforms (NP-126) — it runs in the
+                  SYSTEM authentication session, which is the only place Google
+                  allows sign-in, and comes back as a one-time code rather than
+                  a token in a URL. Sign in with Apple sits under it and is
+                  absent where the platform cannot have it. */}
+              <View className="my-4 flex-row items-center gap-3">
+                <View className="flex-1 h-px bg-border" />
+                <Text className="text-muted-foreground text-xs">or</Text>
+                <View className="flex-1 h-px bg-border" />
+              </View>
+
+              <GoogleSignInButton
+                intent={mode === "register" ? "sign-up" : "sign-in"}
+                onPress={onGooglePress}
+                disabled={googleBusy}
+              />
+              {googleBusy ? (
+                <Text
+                  testID="google-sign-in-busy"
+                  accessibilityLiveRegion="polite"
+                  className="text-muted-foreground text-xs text-center mt-2"
+                >
+                  Signing in with Google…
+                </Text>
+              ) : null}
+
               {/* SIGN IN WITH APPLE, drawn by Apple, and no less prominent
-                  than the button above it — which is what the Human Interface
-                  Guidelines require of it. The whole block, divider included,
-                  is absent where the platform cannot have it: a lone "or" with
-                  nothing under it is how that goes wrong on Android. */}
+                  than the buttons above it — which is what the Human Interface
+                  Guidelines require of it. */}
               {appleSignInSupported() ? (
                 <>
-                  <View className="my-4 flex-row items-center gap-3">
-                    <View className="flex-1 h-px bg-border" />
-                    <Text className="text-muted-foreground text-xs">or</Text>
-                    <View className="flex-1 h-px bg-border" />
-                  </View>
+                  <View style={{ height: 12 }} />
                   <AppleSignInButton
                     intent={mode === "register" ? "sign-up" : "sign-in"}
                     onPress={onApplePress}

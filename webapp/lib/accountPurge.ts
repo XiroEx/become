@@ -230,6 +230,12 @@ export const PURGE_PLAN: readonly PurgeStep[] = [
     action: 'delete',
     note: 'Unspent one-time web hand-off codes. Sixty seconds each, but the same rule as a sign-in link: nothing that can mint a session may outlive the account.',
   },
+  {
+    model: 'AppAuthCode',
+    field: 'userId',
+    action: 'delete',
+    note: 'Unspent one-time NATIVE sign-in codes (NP-126), the same hand-off in the other direction. Sixty seconds each, and the same rule: nothing that can mint a session may outlive the account.',
+  },
 ] as const
 
 // ─── The runner ──────────────────────────────────────────────────────────────

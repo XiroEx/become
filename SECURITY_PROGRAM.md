@@ -223,6 +223,15 @@ provider, an incident, or a new data category is a trigger, not a note for next 
   atomically so it works exactly once, bound to one member, and able to redirect only to a path on a
   fixed allow-list. The session it produces is minted from the user row at redemption, so a role
   change or a deleted account is honoured.
+- **Hand-back to the app, from a Google sign-in.** Google refuses sign-in in an embedded web view,
+  so the app runs the flow in the system authentication session — and that flow ends with a one-time
+  code, never a token: the only way a URL re-enters an app is a scheme any app on the device could
+  claim. The code is bound to a **verifier** the app generated and never transmitted until it is
+  spent (only its SHA-256 travels, in the start URL), is stored only as a SHA-256, lives 60 seconds
+  decided in code, and is claimed atomically so it works exactly once
+  (`/api/auth/google?app=1&challenge=` → `/auth/app-callback?code=` →
+  `POST /api/auth/exchange { code, verifier }`). Every refusal is one `400` — unknown, spent,
+  expired, wrong verifier — and the session, again, is minted from the user row at redemption.
 - **Authorisation is server-side, always.** Middleware only checks that a cookie is present; every
   route re-verifies. Admin is confirmed by reading the user row, never from a token claim. Binary
   objects are authorised from the object key, with an unrecognised prefix treated as owner-scoped.
