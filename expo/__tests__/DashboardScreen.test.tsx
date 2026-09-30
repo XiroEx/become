@@ -127,4 +127,46 @@ describe("DashboardScreen", () => {
     fireEvent.press(button);
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
   });
+
+  it("renders tiles from the layout prop and opens the Workout Now sheet when workoutNow is pressed", async () => {
+    const onStartWorkout = jest.fn();
+    const onOpenMind = jest.fn();
+    const onOpenNutrition = jest.fn();
+
+    const { getByTestId, queryByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onStartWorkout={onStartWorkout}
+        onOpenMind={onOpenMind}
+        onOpenNutrition={onOpenNutrition}
+        layout={[
+          { id: "mindset", kind: "stat", size: "1x1" },
+          { id: "nutrition", kind: "stat", size: "1x1" },
+          { id: "workoutNow", kind: "stat", size: "2x1" },
+        ]}
+      />,
+    );
+
+    // Tiles rendered
+    expect(getByTestId("tilegrid")).toBeTruthy();
+    expect(getByTestId("tile-mindset")).toBeTruthy();
+    expect(getByTestId("tile-nutrition")).toBeTruthy();
+    expect(getByTestId("tile-workoutNow")).toBeTruthy();
+
+    // Action clicks
+    fireEvent.press(getByTestId("tile-mindset"));
+    expect(onOpenMind).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByTestId("tile-nutrition"));
+    expect(onOpenNutrition).toHaveBeenCalledTimes(1);
+
+    // Workout Now sheet opens in place (NP-076)
+    expect(queryByTestId("dashboard-workout-now-sheet-start")).toBeNull();
+    fireEvent.press(getByTestId("tile-workoutNow"));
+    expect(getByTestId("dashboard-workout-now-sheet-start")).toBeTruthy();
+
+    // Press start session in sheet
+    fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
+    expect(onStartWorkout).toHaveBeenCalledTimes(1);
+  });
 });
