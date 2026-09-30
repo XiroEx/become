@@ -42,6 +42,7 @@ import {
   healthOptInSecureStore,
   healthSyncReadSecureStore,
   healthSyncWriteSecureStore,
+  pendingAuthSessionSecureStore,
   sessionStore,
   widgetsSnapshotSecureStore,
   widgetsTokenSecureStore,
@@ -66,6 +67,7 @@ describe("SECURE_STORE_KEYS", () => {
   it("gives each purpose its own key", () => {
     expect(SECURE_STORE_KEYS).toEqual({
       session: "become.session",
+      pendingAuthSession: "become.auth.pending_session",
       healthOptIn: "become.optin.health",
       healthSyncRead: "become.sync.health.read",
       healthSyncWrite: "become.sync.health.write",
@@ -85,6 +87,7 @@ describe("SECURE_STORE_KEYS", () => {
 
   it("writes each purpose to its own key and nowhere else", async () => {
     await sessionStore.set(JWT);
+    await pendingAuthSessionSecureStore.set("{}");
     await healthOptInSecureStore.set("yes");
     await healthSyncReadSecureStore.set("yes");
     await healthSyncWriteSecureStore.set("yes");
@@ -93,6 +96,7 @@ describe("SECURE_STORE_KEYS", () => {
     await widgetsSnapshotSecureStore.set("{}");
 
     expect(fake.__keys()).toEqual([
+      "become.auth.pending_session",
       "become.optin.biometrics",
       "become.optin.health",
       "become.session",

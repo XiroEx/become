@@ -175,11 +175,10 @@ export default function DashboardRoute() {
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
-      // Settings lives at a hidden route in the (tabs) tree, so this gear is
-      // the only way a member — or an App Store reviewer looking for "Delete
-      // account" — can get to it.
+      // Settings lives in the (app) group, so this gear is the way a member —
+      // or an App Store reviewer looking for "Delete account" — can get to it.
       onOpenSettings={() => {
-        router.push("/(tabs)/profile/health");
+        router.push("/settings");
       }}
     />
   );

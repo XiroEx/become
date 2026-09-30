@@ -17,6 +17,15 @@ import {
   AI_CONSENT_REASON,
   SPEND_CAP_REASON,
   classifyApiResponse,
+  MAX_DASHBOARD_TILES,
+  MAX_SMART_POOL,
+  DEFAULT_SMART_INTERVAL_MS,
+  SMART_INTERVAL_OPTIONS_MS,
+  SMART_ROTATING_TILE_ID,
+  STAT_TILE_IDS,
+  TILE_KEY_REGEX,
+  TILE_KINDS,
+  TILE_SIZES,
 } from '../src/index';
 
 const read = (rel: string): string => {
@@ -74,4 +83,127 @@ test('a spend ceiling is still a 429 carrying `rate_limit`, so it can never be a
   assert.match(refusal, new RegExp(`reason: '${SPEND_CAP_REASON}'`));
   assert.match(refusal, /status: 429/);
   assert.doesNotMatch(refusal, /requiresTier/);
+});
+
+// ---------------------------------------------------------------------------
+// The dashboard tile vocabulary (NP-023)
+//
+// `schemas/dashboard.ts` and webapp/lib/dashboardLayout/{types,defaults}.ts
+// declare the same tile kinds, sizes, rotation intervals, stat ids and limits,
+// because the webapp cannot import this package (its Docker build context is
+// `webapp/`). A drift is silent in both builds and lands on the member: a kind
+// or size the native app does not know makes GET /api/dashboard/layout
+// unparseable and blanks the home screen, and a rotation interval the schema
+// rejects does the same to anyone who changed the frequency.
+//
+// The webapp side of this pair is webapp/tests/unit/contract/
+// dashboardParity.test.ts, which imports both modules; this one reads the web
+// files as TEXT, because the `shared-api-client` CI job has no webapp install.
+// ---------------------------------------------------------------------------
+
+/** The literal list inside `export const <name> = [ … ]`, as written. */
+const declaredArray = (source: string, name: string): string[] => {
+  const match = new RegExp(`${name}\\s*=\\s*\\[([^\\]]*)\\]`).exec(source);
+  assert.ok(match, `the web no longer declares ${name} — update this test with it`);
+  return (match[1] as string)
+    .split(',')
+    .map((entry) => entry.trim().replace(/^['"]|['"]$/g, ''))
+    .filter((entry) => entry.length > 0);
+};
+
+/** The literal after `export const <name> = `, as written. */
+const declaredValue = (source: string, name: string): string => {
+  const match = new RegExp(`${name}\\s*=\\s*([^\\s;]+)`).exec(source);
+  assert.ok(match, `the web no longer declares ${name} — update this test with it`);
+  return (match[1] as string).replace(/^['"]|['"]$/g, '');
+};
+
+test('dashboard tile kinds and sizes match webapp/lib/dashboardLayout/types.ts', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+
+  assert.deepEqual(
+    declaredArray(types, 'TILE_KINDS'),
+    [...TILE_KINDS],
+    'tile kinds differ between webapp/lib/dashboardLayout/types.ts and the shared schema',
+  );
+  assert.deepEqual(
+    declaredArray(types, 'TILE_SIZES'),
+    [...TILE_SIZES],
+    'tile sizes differ between webapp/lib/dashboardLayout/types.ts and the shared schema',
+  );
+});
+
+test('smart-tile rotation intervals match webapp/lib/dashboardLayout/types.ts', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+
+  assert.deepEqual(
+    declaredArray(types, 'SMART_INTERVAL_OPTIONS_MS').map(Number),
+    [...SMART_INTERVAL_OPTIONS_MS],
+    'interval options differ between webapp/lib/dashboardLayout/types.ts and the shared schema',
+  );
+  assert.equal(
+    Number(declaredValue(types, 'DEFAULT_SMART_INTERVAL_MS')),
+    DEFAULT_SMART_INTERVAL_MS,
+    'the default rotation interval differs between the web and the shared schema',
+  );
+});
+
+test('the 20-tile limit and the smart-pool cap match webapp/lib/dashboardLayout/types.ts', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+
+  assert.equal(
+    Number(declaredValue(types, 'MAX_DASHBOARD_TILES')),
+    MAX_DASHBOARD_TILES,
+    'the 20-tile limit differs between webapp/lib/dashboardLayout/types.ts and the shared schema',
+  );
+  assert.equal(
+    Number(declaredValue(types, 'MAX_SMART_POOL')),
+    MAX_SMART_POOL,
+    'the smart-pool cap differs between webapp/lib/dashboardLayout/types.ts and the shared schema',
+  );
+});
+
+test('the tile-key pattern and the stat tile ids match the webapp', () => {
+  const types = read('webapp/lib/dashboardLayout/types.ts');
+  const defaults = read('webapp/lib/dashboardLayout/defaults.ts');
+
+  const pattern = /TILE_KEY_RE\s*=\s*(\/.+\/)\s*$/m.exec(types);
+  assert.ok(pattern, 'webapp/lib/dashboardLayout/types.ts no longer declares TILE_KEY_RE');
+  assert.equal(
+    pattern[1],
+    TILE_KEY_REGEX.toString(),
+    'the tile-key pattern differs between the webapp and the shared schema',
+  );
+
+  assert.deepEqual(
+    declaredArray(defaults, 'STAT_TILE_IDS'),
+    [...STAT_TILE_IDS],
+    'the stat tile ids differ between webapp/lib/dashboardLayout/defaults.ts and the shared schema',
+  );
+  assert.equal(
+    declaredValue(defaults, 'SMART_ROTATING_TILE_ID'),
+    SMART_ROTATING_TILE_ID,
+    'the smart-rotating tile id differs between the webapp and the shared schema',
+  );
+});
+
+test('the parity readers actually notice a drift', () => {
+  // Without this, a regex that silently stopped matching would read as parity.
+  const drifted = `
+    export const TILE_KINDS = ['stat', 'metric'] as const
+    export const MAX_DASHBOARD_TILES = 25
+  `;
+  assert.throws(
+    () => assert.deepEqual(declaredArray(drifted, 'TILE_KINDS'), [...TILE_KINDS]),
+    /AssertionError/,
+  );
+  assert.throws(
+    () =>
+      assert.equal(
+        Number(declaredValue(drifted, 'MAX_DASHBOARD_TILES')),
+        MAX_DASHBOARD_TILES,
+      ),
+    /AssertionError/,
+  );
+  assert.throws(() => declaredArray(drifted, 'TILE_SIZES'), /no longer declares TILE_SIZES/);
 });
