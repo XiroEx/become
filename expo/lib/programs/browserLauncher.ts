@@ -18,7 +18,7 @@ export const defaultBrowserLauncher: BrowserLauncher = (url) =>
 export { WEBAPP_BASE_URL };
 
 export function programEditUrl(programId: string): string {
-  return `${WEBAPP_BASE_URL}/dashboard/programming/${encodeURIComponent(programId)}/edit`;
+  return `${WEBAPP_BASE_URL}/dashboard/programs/${encodeURIComponent(programId)}/edit`;
 }
 
 export async function openProgramEditInBrowser(

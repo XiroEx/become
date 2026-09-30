@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Text } from "@/components/Text";
@@ -6,6 +6,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ProgramDetailResponseSchema,
   ActiveProgramsApiResponseSchema,
+  ProgramWorkoutLogsResponseSchema,
+  WorkoutResumeResponseSchema,
   ProgramEnrollResponseSchema,
   ProgramStartDateResponseSchema,
   ProgramAbandonResponseSchema,
@@ -27,6 +29,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
+import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -61,6 +64,55 @@ export default function ProgramDetailRoute() {
     { ...fetchOpts, skip: !token },
   );
 
+  const activeProgram = useMemo(() => {
+    return (
+      active.data?.activePrograms?.find((p) => p.programId === id) ?? null
+    );
+  }, [active.data?.activePrograms, id]);
+
+  const isEnrolled = Boolean(
+    activeProgram && activeProgram.status !== "completed",
+  );
+
+  // Fetch completed workout logs for this program (completed: true only)
+  const logs = useFetch(
+    id && isEnrolled
+      ? `/api/workouts/logs?programId=${encodeURIComponent(id)}`
+      : null,
+    ProgramWorkoutLogsResponseSchema,
+    { ...fetchOpts, skip: !token || !isEnrolled },
+  );
+
+  const completedDays = useMemo(() => {
+    const set = new Set<string>();
+    const logsList = logs.data?.logs;
+    if (Array.isArray(logsList)) {
+      for (const log of logsList) {
+        if (log.completed && log.day) {
+          set.add(log.day);
+        }
+      }
+    }
+    return set;
+  }, [logs.data?.logs]);
+
+  // Check for in-progress workout using actual current day & device timezone
+  const currentDay = activeProgram?.currentDay || "Day 1";
+  const tz = new Date().getTimezoneOffset();
+
+  const progress = useFetch(
+    id && isEnrolled
+      ? `/api/workouts?programId=${encodeURIComponent(id)}&day=${encodeURIComponent(currentDay)}&tz=${tz}`
+      : null,
+    WorkoutResumeResponseSchema,
+    { ...fetchOpts, skip: !token || !isEnrolled },
+  );
+
+  const hasInProgressWorkout = Boolean(
+    progress.data?.isResume ||
+      (progress.data === null && activeProgram?.status === "in-progress"),
+  );
+
   const saved = useFetch(
     "/api/programs/saved",
     SavedProgramsResponseSchema,
@@ -85,9 +137,7 @@ export default function ProgramDetailRoute() {
       void active.refetch();
     },
   };
-  // One schema per route (NP-019). ProgramEnrollResponseSchema parses BOTH
-  // enrol answers — the fresh one and the already-enrolled one, which share a
-  // 200 and differ only by `alreadyEnrolled``.
+
   const enrollMut = useMutation<ProgramEnrollRequest, ProgramEnrollResponse>(
     "/api/programs/enroll",
     ProgramEnrollResponseSchema,
@@ -172,6 +222,130 @@ export default function ProgramDetailRoute() {
     }
   }, [isSaved, id, saveMut, unsaveMut, saved]);
 
+  const program: ProgramDetailViewModel = useMemo(() => {
+    return data
+      ? toProgramDetailViewModel(data)
+      : { id, name: "Loading…", description: "", phases: [] };
+  }, [data, id]);
+
+  // Derive phase and day tab defaults
+  const defaultPhaseIndex = useMemo(() => {
+    if (isEnrolled && activeProgram?.currentPhase) {
+      return Math.max(0, activeProgram.currentPhase - 1);
+    }
+    return 0;
+  }, [isEnrolled, activeProgram]);
+
+  const defaultDayKey = useMemo(() => {
+    const targetPhase = program.phases[defaultPhaseIndex] || program.phases[0];
+    const workouts = targetPhase?.workouts || [];
+    if (isEnrolled) {
+      // Find first incomplete day in active phase
+      const firstIncomplete = workouts.find((w) => {
+        const d = w.day ?? `Day ${w.workoutIndex + 1}`;
+        return !completedDays.has(d);
+      });
+      if (firstIncomplete) {
+        return firstIncomplete.day ?? `Day ${firstIncomplete.workoutIndex + 1}`;
+      }
+      if (activeProgram?.currentDay) {
+        return activeProgram.currentDay;
+      }
+    }
+    return workouts[0]?.day ?? (workouts[0] ? `Day ${workouts[0].workoutIndex + 1}` : "Day 1");
+  }, [isEnrolled, defaultPhaseIndex, program.phases, completedDays, activeProgram]);
+
+  const [userSelectedPhase, setUserSelectedPhase] = useState<number | null>(null);
+  const [userSelectedDay, setUserSelectedDay] = useState<string | null>(null);
+
+  const selectedPhaseIndex = userSelectedPhase ?? defaultPhaseIndex;
+  const selectedDayKey = userSelectedDay ?? defaultDayKey;
+
+  const onPhaseSelect = useCallback(
+    (phaseIndex: number) => {
+      setUserSelectedPhase(phaseIndex);
+      const newPhaseWorkouts = program.phases[phaseIndex]?.workouts || [];
+      const hasCurrentDay = newPhaseWorkouts.some(
+        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === selectedDayKey,
+      );
+      if (!hasCurrentDay && newPhaseWorkouts.length > 0) {
+        setUserSelectedDay(
+          newPhaseWorkouts[0]!.day ?? `Day ${newPhaseWorkouts[0]!.workoutIndex + 1}`,
+        );
+      }
+    },
+    [program.phases, selectedDayKey],
+  );
+
+  const onDaySelect = useCallback((dayKey: string) => {
+    setUserSelectedDay(dayKey);
+  }, []);
+
+  // Continue training on scheduled next day (opens Track/Workout overview)
+  const onContinue = useCallback(() => {
+    const phaseIndex = Math.max(0, (activeProgram?.currentPhase ?? 1) - 1);
+    const dayLabel = activeProgram?.currentDay;
+    const phaseWorkouts = program.phases[phaseIndex]?.workouts || [];
+    let workoutIndex = -1;
+    if (dayLabel) {
+      workoutIndex = phaseWorkouts.findIndex(
+        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === dayLabel,
+      );
+    }
+    if (workoutIndex < 0) {
+      workoutIndex = workoutIndexFromDayLabel(dayLabel ?? undefined);
+    }
+    if (workoutIndex < 0 || workoutIndex >= phaseWorkouts.length) {
+      workoutIndex = 0;
+    }
+    router.push(
+      `/(tabs)/programming/${encodeURIComponent(id)}/workout/${workoutIndex}?phase=${phaseIndex}`,
+    );
+  }, [router, id, activeProgram?.currentPhase, activeProgram?.currentDay, program.phases]);
+
+  // Live workout launchers
+  const onStartLive = useCallback(
+    (phaseIdx?: number, workoutIdx?: number, dayLabel?: string) => {
+      const pIdx = phaseIdx ?? selectedPhaseIndex;
+      const dLabel = dayLabel ?? selectedDayKey;
+      const phaseWorkouts = program.phases[pIdx]?.workouts || [];
+      let wIdx = workoutIdx;
+      if (wIdx === undefined || wIdx < 0) {
+        wIdx = phaseWorkouts.findIndex(
+          (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === dLabel,
+        );
+        if (wIdx < 0) wIdx = 0;
+      }
+      const dayParam = dLabel ? `&day=${encodeURIComponent(dLabel)}` : "";
+      router.push(
+        `/(tabs)/programming/${encodeURIComponent(id)}/workout/${wIdx}/live?phase=${pIdx}${dayParam}`,
+      );
+    },
+    [router, id, selectedPhaseIndex, selectedDayKey, program.phases],
+  );
+
+  const onResumeLive = useCallback(() => {
+    const resumePhase = Math.max(0, (activeProgram?.currentPhase ?? 1) - 1);
+    const resumeDay = activeProgram?.currentDay;
+    const phaseWorkouts = program.phases[resumePhase]?.workouts || [];
+    let resumeIdx = -1;
+    if (resumeDay) {
+      resumeIdx = phaseWorkouts.findIndex(
+        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === resumeDay,
+      );
+    }
+    if (resumeIdx < 0) {
+      resumeIdx = workoutIndexFromDayLabel(resumeDay ?? undefined);
+    }
+    if (resumeIdx < 0 || resumeIdx >= phaseWorkouts.length) {
+      resumeIdx = 0;
+    }
+    const dayParam = resumeDay ? `&day=${encodeURIComponent(resumeDay)}` : "";
+    router.push(
+      `/(tabs)/programming/${encodeURIComponent(id)}/workout/${resumeIdx}/live?phase=${resumePhase}${dayParam}`,
+    );
+  }, [router, id, activeProgram?.currentPhase, activeProgram?.currentDay, program.phases]);
+
   if (!id) {
     return (
       <SafeAreaView
@@ -184,10 +358,6 @@ export default function ProgramDetailRoute() {
       </SafeAreaView>
     );
   }
-
-  const program: ProgramDetailViewModel = data
-    ? toProgramDetailViewModel(data)
-    : { id, name: "Loading…", description: "", phases: [] };
 
   return (
     <SafeAreaView
@@ -204,10 +374,18 @@ export default function ProgramDetailRoute() {
       ) : null}
       <ProgramDetail
         program={program}
-        onPhasePress={(phaseIndex) =>
-          router.push(`/(tabs)/programming/${id}/phase/${phaseIndex}`)
-        }
+        isEnrolled={isEnrolled}
+        activeProgram={activeProgram}
+        completedDays={completedDays}
+        hasInProgressWorkout={hasInProgressWorkout}
+        selectedPhaseIndex={selectedPhaseIndex}
+        onPhaseSelect={onPhaseSelect}
+        selectedDayKey={selectedDayKey}
+        onDaySelect={onDaySelect}
         onEnroll={onEnroll}
+        onContinue={onContinue}
+        onStartLive={onStartLive}
+        onResumeLive={onResumeLive}
         onSetStartDate={onSetStartDate}
         onAbandon={onAbandon}
         isSaved={isSaved}
