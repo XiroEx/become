@@ -12,8 +12,7 @@ import {
   openRecipeEditInBrowser,
   recipeEditUrl,
 } from "@/lib/nutrition/recipeLinks";
-import type { MealType } from "@/lib/nutrition/daySelector";
-import type { MacroBreakdown } from "@/lib/nutrition/servingMath";
+import type { MealType, MacroBreakdown } from "@/lib/nutrition/daySelector";
 
 export interface RecipeIngredient {
   slug: string;

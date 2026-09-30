@@ -11,7 +11,7 @@
  * excludes the entire post-midnight half of any late-night tag.
  */
 
-import { DEFAULT_TAG_TIMES, defaultTimeForTag } from '@/lib/mealPlanTimes'
+import { DEFAULT_TAG_TIMES, defaultTimeForTag } from '../mealPlanTimes'
 
 export const MINUTES_PER_DAY = 1440
 

@@ -21,7 +21,14 @@
  *     picker defaults to, exactly like the web's picker.
  */
 
-import type { FoodNutrition as PickerNutrition } from "@/lib/nutrition/servingMath";
+export interface PickerNutrition {
+  kcalPer100g: number;
+  proteinPer100g: number;
+  carbsPer100g: number;
+  fatPer100g: number;
+}
+
+export * from "@become/core/foodMath";
 
 export interface FoodMacros {
   calories: number;

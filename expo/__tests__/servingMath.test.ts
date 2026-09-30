@@ -3,7 +3,7 @@ import {
   gramsForServing,
   macroBreakdownForServing,
   scaleNutrition,
-} from "@/lib/nutrition/servingMath";
+} from "@/components/nutrition/ServingPicker";
 
 const apple = {
   kcalPer100g: 52,
