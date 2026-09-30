@@ -75,6 +75,30 @@ export interface RuntimeConfig {
     code?: string
   }
   /**
+   * Sign in with Apple (lib/apple/*).
+   *
+   * `bundleId` is the ONLY field with a default, and it is not a secret: it is
+   * the audience an identity token minted for the iOS app carries, so a wrong
+   * value refuses every sign-in rather than accepting a token meant for
+   * somebody else's app. The other three are the Apple Developer key that
+   * signs the client secret (Team ID, Key ID, the .p8 contents) and they are
+   * needed for ONE thing only — exchanging the authorization code for a
+   * refresh token and revoking it again at deletion, which Apple requires of
+   * every app that offers Sign in with Apple. Unset means "sign-in works,
+   * revocation is logged as unconfigured": token verification needs no
+   * credential of ours at all, and an app that cannot sign anybody in because
+   * a .p8 was not pasted would be the worse failure.
+   */
+  apple: {
+    bundleId: string
+    /** A web Services ID, for the day the web offers the button too. */
+    serviceId?: string
+    teamId?: string
+    keyId?: string
+    /** PKCS#8 PEM. A value carrying literal `\n` escapes is normalised on use. */
+    privateKey?: string
+  }
+  /**
    * App version configuration for native minimum-version gating and store updates (NP-041).
    * Every field is resolved with optional(), so an unset value never breaks the app.
    */
@@ -104,6 +128,7 @@ type RuntimePayload = Partial<{
   external: RuntimeConfig['external']
   billing: Partial<RuntimeConfig['billing']>
   review: Partial<RuntimeConfig['review']>
+  apple: Partial<RuntimeConfig['apple']>
   app: Partial<{
     ios: Partial<RuntimeConfig['app']['ios']>
     android: Partial<RuntimeConfig['app']['android']>
@@ -266,6 +291,7 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
   const external = payload.external ?? {}
   const billing = payload.billing ?? {}
   const review = payload.review ?? {}
+  const apple = payload.apple ?? {}
   const app = payload.app ?? {}
   const appIos = app.ios ?? {}
   const appAndroid = app.android ?? {}
@@ -341,6 +367,15 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
       enabled: booleanValue(review.enabled, localEnv('REVIEW_SIGN_IN_ENABLED')) === true,
       email: optional(review.email, localEnv('REVIEW_DEMO_EMAIL')),
       code: optional(review.code, localEnv('REVIEW_DEMO_CODE')),
+    },
+    apple: {
+      // Not a secret and not optional: a token audienced to anything else is
+      // not ours. The default is the iOS bundle id in expo/app.json.
+      bundleId: optional(apple.bundleId, localEnv('APPLE_BUNDLE_ID')) || 'io.redbtn.become',
+      serviceId: optional(apple.serviceId, localEnv('APPLE_SERVICE_ID')),
+      teamId: optional(apple.teamId, localEnv('APPLE_TEAM_ID')),
+      keyId: optional(apple.keyId, localEnv('APPLE_KEY_ID')),
+      privateKey: optional(apple.privateKey, localEnv('APPLE_PRIVATE_KEY')),
     },
     app: {
       ios: {

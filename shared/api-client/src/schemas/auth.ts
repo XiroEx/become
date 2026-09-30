@@ -138,6 +138,80 @@ export const ReviewSignInResponseSchema = z.object({
 export type ReviewSignInRequest = z.infer<typeof ReviewSignInRequestSchema>;
 export type ReviewSignInResponse = z.infer<typeof ReviewSignInResponseSchema>;
 
+// ---------------------------------------------------------------------------
+// Sign in with Apple (webapp/app/api/auth/apple/*).
+//
+// The device talks to Apple; the server verifies what comes back. `nonce` is
+// the value THIS sign-in generated and is not optional — without it a captured
+// identity token replays. `authorizationCode` is optional on the wire only so
+// an older build is not refused: without it the server has no refresh token to
+// revoke when the account is deleted, which Apple requires of us.
+// ---------------------------------------------------------------------------
+
+/** Apple's `fullName`, which arrives on the FIRST authorization only. */
+export const AppleFullNameSchema = z
+  .object({
+    givenName: z.string().nullish(),
+    familyName: z.string().nullish(),
+    nickname: z.string().nullish(),
+  })
+  .partial()
+  .passthrough();
+
+/** POST /api/auth/apple request body. */
+export const AppleSignInRequestSchema = z.object({
+  identityToken: z.string(),
+  nonce: z.string(),
+  authorizationCode: z.string().optional(),
+  fullName: AppleFullNameSchema.nullish(),
+});
+
+/** POST /api/auth/apple 200 response — the same session shape verify-link
+ *  answers with, plus what the app needs to decide whether to offer the
+ *  "Already a member? Link your email" step. */
+export const AppleSignInResponseSchema = z
+  .object({
+    token: z.string(),
+    user: z
+      .object({
+        id: z.string(),
+        name: z.string().optional().nullable(),
+        // Deliberately NOT `.email()`: an Apple account may carry a relay
+        // alias or the server's unroutable placeholder, and a session must
+        // never be dropped by this client over the shape of an address it is
+        // only going to display.
+        email: z.string(),
+      })
+      .passthrough(),
+    isNew: z.boolean().optional(),
+    matchedBy: z.enum(['apple_sub', 'email', 'created']).optional(),
+    /** True when the account is reachable only at an Apple relay alias (or a
+     *  placeholder), so it may still belong to an existing member. */
+    canLinkEmail: z.boolean().optional(),
+  })
+  .passthrough();
+
+/** POST /api/auth/apple/link request body. */
+export const AppleLinkEmailRequestSchema = z.object({
+  email: z.string().email(),
+});
+
+/** POST /api/auth/apple/link 200 response. `sessionId` is polled with
+ *  /api/auth/check-session exactly as a magic link is — the merge happens when
+ *  the member taps the link, and the session that comes back belongs to their
+ *  EXISTING account. */
+export const AppleLinkEmailResponseSchema = z.object({
+  success: z.boolean(),
+  sessionId: z.string(),
+  message: z.string(),
+});
+
+export type AppleFullName = z.infer<typeof AppleFullNameSchema>;
+export type AppleSignInRequest = z.infer<typeof AppleSignInRequestSchema>;
+export type AppleSignInResponse = z.infer<typeof AppleSignInResponseSchema>;
+export type AppleLinkEmailRequest = z.infer<typeof AppleLinkEmailRequestSchema>;
+export type AppleLinkEmailResponse = z.infer<typeof AppleLinkEmailResponseSchema>;
+
 export type SendLinkRequest = z.infer<typeof SendLinkRequestSchema>;
 export type SendLinkResponse = z.infer<typeof SendLinkResponseSchema>;
 export type CheckSessionRequest = z.infer<typeof CheckSessionRequestSchema>;
