@@ -1,40 +1,46 @@
+import React from "react";
 import { useRouter } from "expo-router";
-import { View, Pressable } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CalendarDays, Heart, Search } from "lucide-react-native";
-import { ProgramListResponseSchema } from "@become/api-client";
-import { ProgramsList } from "@/components/programs/ProgramsList";
-import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useAuth } from "@/lib/auth/useAuth";
-import { useFetch } from "@/lib/hooks/useFetch";
-import { toProgramSummary } from "@/lib/programs/programSummary";
+import {
+  CalendarDays,
+  Heart,
+  History,
+  Search,
+  Sparkles,
+  Zap,
+} from "lucide-react-native";
+import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
+import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
+import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 
 /**
- * Browse-all programs route — GET /api/programs returns the hydrated catalog as
- * a bare array, mapped to ProgramSummary for the presentational list.
+ * Workout Tab Root Route (NP-071)
+ *
+ * Rebuilt around what the member is doing right now:
+ * - Resume pill for in-progress workout or planned session
+ * - Upcoming week strip with status icons and calendar link
+ * - Continue Training cards showing active programs with progress % and paused state
+ * - Quick links to History (NP-112), Browse (NP-072), Workout Now (NP-076), and Calendar
  */
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
-  const { token } = useAuth();
 
-  const { data, error, loading } = useFetch(
-    "/api/programs",
-    ProgramListResponseSchema,
-    {
-      baseUrl: WEBAPP_BASE_URL,
-      getToken: () => token ?? undefined,
-      skip: !token,
-    },
-  );
+  const handleOpenHistory = () => {
+    router.push(nativeRouteFor("/dashboard/history") as never);
+  };
 
-  const programs = (data ?? []).map(toProgramSummary);
-  // Distinguish the initial load from a genuinely empty catalog: without this
-  // the list renders its "No programs yet" empty state while the fetch is still
-  // in flight, which reads as a wrong/empty result.
-  const initialLoading = loading && !data;
+  const handleOpenBrowse = () => {
+    router.push("/(tabs)/programming/browse");
+  };
+
+  const handleWorkoutNow = () => {
+    router.push("/(tabs)/programming?quick=true" as never);
+  };
 
   return (
     <SafeAreaView
@@ -42,28 +48,14 @@ export default function ProgrammingIndexRoute() {
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-index-route"
     >
-      <View style={{ padding: 16 }}>
-        {/*
-          THE WAY INTO SEARCH, SAVED AND THE CALENDAR.
-
-          The web carries search and the saved list on the Workout page itself
-          and links the calendar from the week strip; native has them as three
-          separate screens — `programming/search`, `programming/saved` and the
-          hidden `calendar` tab — and nothing pushed any of them, so the most
-          complete screens in the app could not be opened from the UI at all.
-          They are pushes, so each one lands inside this tab's Stack (the
-          calendar is a hidden tab of its own) and Back returns here.
-        */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 12,
-          }}
-        >
-          <Text className="text-foreground text-2xl font-bold">Programs</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Top Header */}
+        <View className="flex-row items-center justify-between mb-2">
+          <Text className="text-foreground text-2xl font-bold">Workout</Text>
+          <View className="flex-row gap-2">
             <Pressable
               testID="programming-open-search"
               accessibilityRole="button"
@@ -71,7 +63,11 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/programming/search")}
               className="rounded-xl border border-border p-2"
             >
-              <Search color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+              <Search
+                color={colors["muted-foreground"]}
+                size={20}
+                strokeWidth={1.5}
+              />
             </Pressable>
             <Pressable
               testID="programming-open-saved"
@@ -80,7 +76,11 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/programming/saved")}
               className="rounded-xl border border-border p-2"
             >
-              <Heart color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+              <Heart
+                color={colors["muted-foreground"]}
+                size={20}
+                strokeWidth={1.5}
+              />
             </Pressable>
             <Pressable
               testID="programming-open-calendar"
@@ -89,30 +89,76 @@ export default function ProgrammingIndexRoute() {
               onPress={() => router.push("/(tabs)/calendar")}
               className="rounded-xl border border-border p-2"
             >
-              <CalendarDays color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+              <CalendarDays
+                color={colors["muted-foreground"]}
+                size={20}
+                strokeWidth={1.5}
+              />
             </Pressable>
           </View>
         </View>
-        {error ? (
-          <Text testID="programming-index-error" className="text-destructive">
-            Couldn&apos;t load programs.
-          </Text>
-        ) : initialLoading ? (
-          <View testID="programming-index-loading" style={{ gap: 12 }}>
-            {[0, 1, 2].map((i) => (
-              <View
-                key={i}
-                style={{ height: 72, borderRadius: 12, backgroundColor: colors.muted }}
-              />
-            ))}
-          </View>
-        ) : (
-          <ProgramsList
-            programs={programs}
-            onItemPress={(id) => router.push(`/(tabs)/programming/${id}`)}
-          />
-        )}
-      </View>
+
+        <Text className="text-muted-foreground text-sm mb-3">
+          Choose your training path and start building.
+        </Text>
+
+        {/* Quick Links Hub */}
+        <View className="flex-row flex-wrap items-center gap-2 mb-5">
+          <Pressable
+            testID="workout-open-history"
+            accessibilityRole="button"
+            accessibilityLabel="Training History"
+            onPress={handleOpenHistory}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+          >
+            <History size={14} color={colors.primary} />
+            <Text className="text-foreground text-xs font-semibold">
+              History
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="workout-open-browse"
+            accessibilityRole="button"
+            accessibilityLabel="Browse Programs"
+            onPress={handleOpenBrowse}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+          >
+            <Sparkles size={14} color={colors.accent} />
+            <Text className="text-foreground text-xs font-semibold">
+              Browse
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="workout-open-workout-now"
+            accessibilityRole="button"
+            accessibilityLabel="Workout Now"
+            onPress={handleWorkoutNow}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600"
+          >
+            <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+            <Text className="text-white text-xs font-semibold">
+              Workout Now
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* 1. Resume Workout Pill (if active or planned) */}
+        <View className="mb-5">
+          <ResumeWorkoutPill />
+        </View>
+
+        {/* 2. Upcoming Week Strip */}
+        <View className="mb-5">
+          <UpcomingWeekStrip />
+        </View>
+
+        {/* 3. Continue Training Cards */}
+        <View className="mb-5">
+          <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }

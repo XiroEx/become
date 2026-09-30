@@ -7,6 +7,7 @@ const DIRECT_SCREENS = [
   "app/(auth)/login.tsx",
   "app/(auth)/verify.tsx",
   "app/(app)/(tabs)/programming/index.tsx",
+  "app/(app)/(tabs)/programming/browse.tsx",
   "app/(app)/(tabs)/programming/search.tsx",
   "app/(app)/(tabs)/programming/saved.tsx",
   "app/(app)/(tabs)/programming/[id]/index.tsx",
