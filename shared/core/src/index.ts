@@ -10,6 +10,17 @@
  *   - legal: terms, privacy, health data, support, delete account, constants
  *   - planCopy: plan comparison copy and PLAN_PRICING
  *   - accountDeletion: pure account deletion types, constants and planning
+ *   - units: food units, conversion, bridges, formatting
+ *   - foodMath: variant-aware nutrition scaling
+ *   - mealPlanTimes: default tag times and clock helpers
+ *   - mealPlanDates: planned date keys, ISO dates, UTC/local date helpers
+ *   - nutrition/servingOptions: serving choices and groups for picker
+ *   - nutrition/servingQuantityStep: increment steps for units
+ *   - nutrition/dayOrder: day ordering for logs and plans
+ *   - nutrition/mealSchedule: windows, tags, and scheduling
+ *   - nutrition/logTagMatch: smart-append matching for meal logs
+ *   - nutrition/goalLine: summary line under calorie ring
+ *   - nutrition/types: pure food model types
  */
 
 export * from './bodyUnits'
@@ -25,3 +36,14 @@ export * from './legal/support'
 export * from './legal/deleteAccount'
 export * from './planCopy'
 export * from './accountDeletion'
+export * from './units'
+export * from './foodMath'
+export * from './mealPlanTimes'
+export * from './mealPlanDates'
+export * from './nutrition/servingOptions'
+export * from './nutrition/servingQuantityStep'
+export * from './nutrition/dayOrder'
+export * from './nutrition/mealSchedule'
+export * from './nutrition/logTagMatch'
+export { nutritionGoalLine, type GoalLineInput } from './nutrition/goalLine'
+export * from './nutrition/types'

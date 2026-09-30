@@ -76,6 +76,66 @@
       "types": "./dist/types/accountDeletion.d.ts",
       "import": "./dist/esm/accountDeletion.js",
       "require": "./dist/cjs/accountDeletion.js"
+    },
+    "./units": {
+      "types": "./dist/types/units.d.ts",
+      "import": "./dist/esm/units.js",
+      "require": "./dist/cjs/units.js"
+    },
+    "./foodMath": {
+      "types": "./dist/types/foodMath.d.ts",
+      "import": "./dist/esm/foodMath.js",
+      "require": "./dist/cjs/foodMath.js"
+    },
+    "./mealPlanTimes": {
+      "types": "./dist/types/mealPlanTimes.d.ts",
+      "import": "./dist/esm/mealPlanTimes.js",
+      "require": "./dist/cjs/mealPlanTimes.js"
+    },
+    "./mealPlanDates": {
+      "types": "./dist/types/mealPlanDates.d.ts",
+      "import": "./dist/esm/mealPlanDates.js",
+      "require": "./dist/cjs/mealPlanDates.js"
+    },
+    "./nutrition/servingOptions": {
+      "types": "./dist/types/nutrition/servingOptions.d.ts",
+      "import": "./dist/esm/nutrition/servingOptions.js",
+      "require": "./dist/cjs/nutrition/servingOptions.js"
+    },
+    "./nutrition/servingQuantityStep": {
+      "types": "./dist/types/nutrition/servingQuantityStep.d.ts",
+      "import": "./dist/esm/nutrition/servingQuantityStep.js",
+      "require": "./dist/cjs/nutrition/servingQuantityStep.js"
+    },
+    "./nutrition/dayOrder": {
+      "types": "./dist/types/nutrition/dayOrder.d.ts",
+      "import": "./dist/esm/nutrition/dayOrder.js",
+      "require": "./dist/cjs/nutrition/dayOrder.js"
+    },
+    "./nutrition/mealSchedule": {
+      "types": "./dist/types/nutrition/mealSchedule.d.ts",
+      "import": "./dist/esm/nutrition/mealSchedule.js",
+      "require": "./dist/cjs/nutrition/mealSchedule.js"
+    },
+    "./nutrition/logTagMatch": {
+      "types": "./dist/types/nutrition/logTagMatch.d.ts",
+      "import": "./dist/esm/nutrition/logTagMatch.js",
+      "require": "./dist/cjs/nutrition/logTagMatch.js"
+    },
+    "./nutrition/goalLine": {
+      "types": "./dist/types/nutrition/goalLine.d.ts",
+      "import": "./dist/esm/nutrition/goalLine.js",
+      "require": "./dist/cjs/nutrition/goalLine.js"
+    },
+    "./nutrition/types": {
+      "types": "./dist/types/nutrition/types.d.ts",
+      "import": "./dist/esm/nutrition/types.js",
+      "require": "./dist/cjs/nutrition/types.js"
+    },
+    "./nutrition": {
+      "types": "./dist/types/nutrition/index.d.ts",
+      "import": "./dist/esm/nutrition/index.js",
+      "require": "./dist/cjs/nutrition/index.js"
     }
   },
   "files": [
