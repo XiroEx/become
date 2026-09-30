@@ -1,4 +1,9 @@
-import type { MacroBreakdown } from "./servingMath";
+export interface MacroBreakdown {
+  kcal: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
