@@ -59,6 +59,22 @@ export interface RuntimeConfig {
     stripePricePlusAnnual?: string
     stripeMode: StripeMode
   }
+  /**
+   * App version configuration for native minimum-version gating and store updates (NP-041).
+   * Every field is resolved with optional(), so an unset value never breaks the app.
+   */
+  app: {
+    ios: {
+      minVersion?: string
+      latestVersion?: string
+      storeUrl?: string
+    }
+    android: {
+      minVersion?: string
+      latestVersion?: string
+      storeUrl?: string
+    }
+  }
 }
 
 type RuntimePayload = Partial<{
@@ -72,6 +88,10 @@ type RuntimePayload = Partial<{
   admin: RuntimeConfig['admin']
   external: RuntimeConfig['external']
   billing: Partial<RuntimeConfig['billing']>
+  app: Partial<{
+    ios: Partial<RuntimeConfig['app']['ios']>
+    android: Partial<RuntimeConfig['app']['android']>
+  }>
 }>
 
 export class RuntimeConfigError extends Error {
@@ -226,6 +246,9 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
   const admin = payload.admin ?? {}
   const external = payload.external ?? {}
   const billing = payload.billing ?? {}
+  const app = payload.app ?? {}
+  const appIos = app.ios ?? {}
+  const appAndroid = app.android ?? {}
 
   const stripeSecretKey = optional(billing.stripeSecretKey, localEnv('STRIPE_SECRET_KEY'))
 
@@ -291,6 +314,18 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
         billing.stripeMode ?? localEnv('STRIPE_MODE'),
         stripeSecretKey,
       ),
+    },
+    app: {
+      ios: {
+        minVersion: optional(appIos.minVersion, localEnv('APP_IOS_MIN_VERSION'), localEnv('APP_MIN_VERSION')),
+        latestVersion: optional(appIos.latestVersion, localEnv('APP_IOS_LATEST_VERSION'), localEnv('APP_LATEST_VERSION')),
+        storeUrl: optional(appIos.storeUrl, localEnv('APP_IOS_STORE_URL'), localEnv('APP_STORE_URL')),
+      },
+      android: {
+        minVersion: optional(appAndroid.minVersion, localEnv('APP_ANDROID_MIN_VERSION'), localEnv('APP_MIN_VERSION')),
+        latestVersion: optional(appAndroid.latestVersion, localEnv('APP_ANDROID_LATEST_VERSION'), localEnv('APP_LATEST_VERSION')),
+        storeUrl: optional(appAndroid.storeUrl, localEnv('APP_ANDROID_STORE_URL'), localEnv('APP_STORE_URL')),
+      },
     },
   }
 }
