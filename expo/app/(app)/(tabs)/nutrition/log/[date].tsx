@@ -9,7 +9,7 @@ import type { MealEntry } from "@/lib/nutrition/daySelector";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
-import { localDateKey, withTz } from "@/lib/nutrition/localDay";
+import { useLocalDay, useOnForeground, withTz } from "@/lib/time/localDay";
 import { toMealEntries } from "@/lib/nutrition/mealLog";
 import { useFoodLog } from "@/lib/nutrition/useFoodLog";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -17,14 +17,15 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 export default function DayLogRoute() {
   const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ date?: string }>();
+  const { day: localDay, tzOffset } = useLocalDay();
   // Falling back to the UTC day showed a New York member tomorrow's (empty)
   // log from 7pm on.
   const date =
-    typeof params.date === "string" ? params.date : localDateKey();
+    typeof params.date === "string" ? params.date : localDay;
   const { token } = useAuth();
 
   const { data, refetch } = useFetch(
-    withTz(`/api/nutrition/log?date=${date}`),
+    withTz(`/api/nutrition/log?date=${date}`, tzOffset),
     MealLogResponseSchema,
     {
       baseUrl: WEBAPP_BASE_URL,
@@ -32,6 +33,10 @@ export default function DayLogRoute() {
       skip: !token,
     },
   );
+
+  useOnForeground(() => {
+    void refetch();
+  });
 
   const foodLog = useFoodLog({ getToken: () => token ?? undefined });
   const onRemoveEntry = useCallback(

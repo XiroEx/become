@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   MeResponseSchema,
@@ -13,7 +13,7 @@ import {
 import type { CheckInPayload } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
-import { localDateKey } from "@/lib/nutrition/localDay";
+import { useLocalDay, useOnForeground } from "@/lib/time/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { getOfflineWrites } from "@/lib/offline/writes";
@@ -28,6 +28,7 @@ import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 export default function DashboardRoute() {
   const { token } = useAuth();
   const router = useRouter();
+  const { day: today } = useLocalDay();
   const ready = !!token;
   const fetchOpts = {
     baseUrl: WEBAPP_BASE_URL,
@@ -102,19 +103,37 @@ export default function DashboardRoute() {
     : null;
 
   const [refreshing, setRefreshing] = useState(false);
+  const refetchAll = useCallback(() => {
+    return Promise.all([
+      me.refetch(),
+      streak.refetch(),
+      active.refetch(),
+      workout.refetch(),
+    ]);
+  }, [active, me, streak, workout]);
+
+  const initialTodayRef = useRef(today);
+  // Refetch when the local day rolls over
+  useEffect(() => {
+    if (initialTodayRef.current !== today) {
+      initialTodayRef.current = today;
+      void refetchAll();
+    }
+  }, [today, refetchAll]);
+
+  // Refetch when returning to the foreground
+  useOnForeground(() => {
+    void refetchAll();
+  });
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        me.refetch(),
-        streak.refetch(),
-        active.refetch(),
-        workout.refetch(),
-      ]);
+      await refetchAll();
     } finally {
       setRefreshing(false);
     }
-  }, [me.refetch, streak.refetch, active.refetch, workout.refetch]);
+  }, [refetchAll]);
 
   // Daily check-in writes — mirrors the webapp DailyCheckInModal flow: log mood
   // (always) + weight (when provided), then refresh the streak so the new
@@ -151,14 +170,14 @@ export default function DashboardRoute() {
           void mirrorWeighInToHealth({
             valueLbs: payload.weightLbs,
             atISO: new Date().toISOString(),
-            clientId: weighInClientId(localDateKey()),
+            clientId: weighInClientId(today),
           });
         }
       } finally {
         setSubmittingCheckIn(false);
       }
     },
-    [streak.refetch],
+    [streak, today],
   );
 
   return (
