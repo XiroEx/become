@@ -169,6 +169,32 @@ export interface IUserDeletion {
   requestedFrom: 'web' | 'ios' | 'android' | 'unknown'
 }
 
+/**
+ * A linked Sign in with Apple identity (lib/apple/*, app/api/auth/apple).
+ *
+ * `sub` IS THE JOIN KEY, AND IT HAS TO BE. With "Hide My Email" Apple hands us
+ * a per-app relay address, so an account matched by email alone would be a
+ * SECOND account for a member who already has one — the exact duplicate this
+ * whole path exists to avoid. The subject is stable for (this member, this
+ * Apple team) and never changes, including after the member hides or reveals
+ * their address. Unique, partially indexed, for the same reason `authId` is.
+ *
+ * `refreshToken` is stored for ONE purpose: Apple requires an app that offers
+ * Sign in with Apple to revoke its tokens when the account is deleted, and
+ * this is the only handle it gives us. It is `select: false` — a third-party
+ * credential must not ride along on a `select('-password')` read — so the two
+ * places that need it (the purge sweep, and the email-link merge that moves
+ * the identity to another row) ask for it by name.
+ */
+export interface IUserApple {
+  sub: string
+  /** Apple's refresh token from the authorization-code exchange. */
+  refreshToken?: string
+  /** The address Apple gave at sign-in was a private relay one. */
+  isPrivateEmail?: boolean
+  linkedAt?: Date
+}
+
 /** Email categories a member can opt out of. Absent = ON, same convention as
  *  UserProgress.notificationPrefs. `engagement` is the streak / milestone mail
  *  (lib/email.ts), the only non-transactional email Become sends; sign-in
@@ -217,6 +243,9 @@ export interface IUser {
    *  redauth-backed login (Google / passkey); backfilled by email for existing
    *  magic-link/password users. */
   authId?: string;
+  /** The linked Sign in with Apple identity, if there is one. See IUserApple:
+   *  Apple's `sub` is the join key, not the email. */
+  apple?: IUserApple;
   /** Revocation counter for the read-only widgets token (lib/widgets/token.ts).
    *  Every `widgets`-scoped token carries the value it was minted at, and
    *  GET /api/widgets/summary refuses any token that does not match — so
@@ -328,6 +357,16 @@ const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
   engagement: { type: Boolean },
 }, { _id: false });
 
+const UserAppleSchema = new Schema<IUserApple>({
+  sub: { type: String, required: true },
+  // NOT returned by default: `select('-password')` (the admin read) would
+  // otherwise put a live Apple credential on the wire. The purge sweep and the
+  // email-link merge ask for it with `+apple.refreshToken`.
+  refreshToken: { type: String, select: false },
+  isPrivateEmail: { type: Boolean },
+  linkedAt: { type: Date },
+}, { _id: false });
+
 const UserDeletionSchema = new Schema<IUserDeletion>({
   requestedAt: { type: Date, required: true },
   purgeAfter: { type: Date, required: true },
@@ -385,6 +424,10 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
   authId: { type: String, default: null },
+  // Absent is the normal state, and `default: undefined` keeps it absent: the
+  // partial unique index below indexes only rows where `apple.sub` is a
+  // string, so a defaulted empty object would put every member in it.
+  apple: { type: UserAppleSchema, default: undefined },
   // No `default`: absent must stay absent so `$inc` (0 → 1 on the first bump)
   // and normalizeWidgetTokenVersion (absent → 0) agree, and so the field is not
   // written onto every legacy row the first time anything saves one.
@@ -409,6 +452,16 @@ UserSchema.index({ 'savedFoods.foodId': 1 })
 UserSchema.index(
   { authId: 1 },
   { unique: true, partialFilterExpression: { authId: { $type: 'string' } } }
+)
+// Sign in with Apple's join key. PARTIAL + UNIQUE for exactly the reasons
+// authId is (a sparse index would still index present-but-null rows), and
+// unique is not a nicety here: two rows holding one Apple subject means the
+// next Apple sign-in opens whichever document Mongo happens to return — one
+// member's phone signing into another member's account, with nothing in the
+// logs to say so. Unique makes that unrepresentable rather than undetectable.
+UserSchema.index(
+  { 'apple.sub': 1 },
+  { unique: true, partialFilterExpression: { 'apple.sub': { $type: 'string' } } }
 )
 // Webhook lookup by Stripe customer. PARTIAL for the same reason authId is:
 // every user defaults the field to null, so a sparse index would still index

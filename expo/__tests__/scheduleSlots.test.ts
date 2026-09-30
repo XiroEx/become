@@ -41,14 +41,18 @@ describe("toScheduledSlots", () => {
     expect(slots[0]).toEqual({
       date: "2026-06-01",
       programId: "prog-1",
+      phase: 1,
       phaseIndex: 0,
+      dayLabel: "Day 1",
       workoutIndex: 0,
       status: "scheduled",
     });
     expect(slots[1]).toEqual({
       date: "2026-06-03",
       programId: "prog-1",
+      phase: 2,
       phaseIndex: 1,
+      dayLabel: "Day 2",
       workoutIndex: 1,
       status: "completed",
     });

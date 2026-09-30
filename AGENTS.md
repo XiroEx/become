@@ -7,6 +7,17 @@ A mobile-first PWA for personalized fitness coaching. Users authenticate via mag
 **Repo:** `XiroEx/become` on GitHub (private)
 **Live deployment:** RedRun at `become.redbtn.io` (workspace ID: `69ab83dd21070736089dc29d`, node .3:32000). Firebase config in repo is legacy/unused.
 
+
+## Before you ship (agents): run what CI runs
+
+CI's `expo` job fails on things that are cheap to catch locally. On 2026-09-30, three native PRs went red on exactly these (TS2322 on an optional string, and `react-hooks/set-state-in-effect` twice). Before `workspace_ship` or `git push`:
+
+- Any change under `expo/`: `cd expo && npx tsc --noEmit && npx eslint .`. Zero errors; warnings are fine.
+- Any change under `shared/api-client/` or `shared/core/`: run that package's `npm test`.
+- Any contract test you add under `webapp/tests/unit/contract/`: seed fixtures the way the model requires (required fields included), and give the file its OWN member. Contract files run in parallel against one database.
+- `react-hooks/set-state-in-effect`: prefer deriving the value during render. Suppress it (`// eslint-disable-next-line react-hooks/set-state-in-effect`) ONLY when the effect genuinely syncs from something outside React (a route param, an app-state or network callback), with a one-line reason above it.
+- The webapp is built by RedRun from `webapp/` ALONE. Never import from `../shared/*` in webapp code: it passes CI and breaks every production build.
+
 ## Channels
 
 Two git-sourced RedRun workspaces, same MongoDB and same env:
@@ -224,6 +235,75 @@ refusals, and every allow-listed target resolved against a real page under
 `app/`), `handoffCode.test.ts` (single use, the race, expiry — real Mongo),
 `handoffRoundTrip.test.ts` (mint → redeem → replay, end to end) and
 `expo/__tests__/openWebSignedIn.test.ts`.
+
+### Sign in with Apple (NP-125, native v1)
+
+`POST /api/auth/apple { identityToken, nonce, authorizationCode?, fullName? }`
+answers the SAME session every other auth path answers — one JWT format, one
+cookie — because it ends in `bridgeAppleToBecomeSession`, which shares its
+minting step with `bridgeToBecomeSession` (`webapp/lib/authBridge.ts`).
+
+**The hard part is matching, not verifying.** With "Hide My Email" Apple hands
+us a per-app relay alias, so matching by email would create a SECOND account
+for a member who already has one. Hence the order, and it is the whole feature:
+
+1. **Apple's `sub`** — `User.apple.sub`, partial-unique indexed for the same
+   reasons `authId` is. Stable across an email change and across the member
+   turning Hide My Email on or off.
+2. **A verified, REAL email, once**, backfilling the subject. This is what lands
+   an existing magic-link/Google/passkey member in the account they already
+   have. Deliberately NOT tried for a relay alias or an unverified address —
+   `canMatchAppleEmailToMember` in `lib/apple/email.ts` is the whole rule.
+3. **Create**, `onboardingCompleted: false`. Apple shares the address on the
+   FIRST authorization only, so a row may have to be created with none: it gets
+   an unroutable placeholder on `appleid.invalid` (RFC 2606), which
+   `isApplePlaceholderEmail` recognises.
+
+**"Already a member? Link your email"** (`lib/appleLink.ts`) is the way out of
+case 3 for someone who is not new. `POST /api/auth/apple/link { email }`
+(session required, 409 unless the account has an Apple identity, no usable
+address AND unfinished onboarding) sends an ordinary sign-in link to the real
+address, carrying `MagicLink.appleLinkUserId`. Verifying it MOVES the Apple
+subject onto the account that owns the address and purges the throwaway row
+through `lib/accountPurge.ts` — so the member ends with one account and the
+proof was their inbox, not our guess. An existing account that already carries
+a DIFFERENT Apple subject is refused rather than overwritten.
+
+**Verification** (`lib/apple/identityToken.ts`) checks the signature against
+Apple's JWKS, the issuer, the audience (`io.redbtn.become` — Apple signs every
+app's tokens with the same keys, so the audience is the check that matters),
+exp/nbf with NO clock tolerance, and the nonce AFTER the signature. The nonce
+is accepted raw or as its SHA-256 hex, because some SDKs hash it for you.
+
+**Deletion revokes the grant, and that is an Apple requirement.** The
+authorization code is exchanged at sign-in for a refresh token
+(`lib/apple/rest.ts`, ES256 client secret signed with the .p8 — best effort, a
+member is never locked out by Apple having a bad minute), stored at
+`User.apple.refreshToken` with `select: false`, and handed back at PURGE time,
+not at request time (`lib/apple/deletion.ts`, called from
+`app/api/cron/purge-deletions`). A failed revoke HOLDS THE ROW BACK so the next
+daily sweep retries; that wait is bounded by `LEGAL_DELETION_DAYS`, or a
+mis-pasted .p8 would keep a deleted member's data alive forever.
+
+Config lives in the runtime payload's `apple` section (`bundleId` defaults to
+the iOS bundle id; `teamId` / `keyId` / `privateKey` are only needed for the
+exchange and the revoke).
+
+Native: `expo/components/AppleSignInButton.tsx` renders Apple's OWN
+`ASAuthorizationAppleIDButton` (approved title, logo, colours, localised for
+free — a hand-built one is a rejection), gated on `isAvailableAsync()` so it
+does not appear on Android, with `ios.usesAppleSignIn: true` and the
+`expo-apple-authentication` config plugin in `app.json`. The relay case does
+NOT store the session until the member answers the link offer, because storing
+it navigates them into the empty account they are trying to escape
+(`expo/app/(auth)/login.tsx`).
+
+Tests: `webapp/tests/unit/auth/appleIdentityToken.test.ts` (wrong audience,
+expired, nonce mismatch, wrong issuer, forged signature, the address rules),
+`appleSignInRoute.test.ts` (both matching paths and the link merge, end to end
+against real Mongo and a fake Apple — `tests/unit/auth/fakeApple.ts`),
+`tests/unit/account/appleRevocation.test.ts` (the revocation, the deferral and
+its bound) and `expo/__tests__/appleSignIn.test.tsx`.
 
 ## API Conventions
 

@@ -31,6 +31,7 @@ import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import { purgeSelector } from '@/lib/accountDeletion'
 import { purgeAccountData, type PurgeReport } from '@/lib/accountPurge'
 import { PURGE_MODELS } from '@/lib/accountPurgeModels'
+import { purgeMayProceed, revokeAppleIdentity } from '@/lib/apple/deletion'
 import User from '@/models/User'
 
 function isTruthyFlag(value: string | null): boolean {
@@ -42,7 +43,7 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
   const secret =
     request.headers.get('x-cron-secret') || request.nextUrl.searchParams.get('secret')
 
-  const { admin } = await getRuntimeConfig()
+  const { admin, apple } = await getRuntimeConfig()
   if (!secret || !admin.cronSecret || secret !== admin.cronSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -53,13 +54,53 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
   await dbConnect()
 
   const due = await User.find(purgeSelector(now))
-    .select('_id email deletion')
+    // `+apple.refreshToken` because the model deselects it by default (it is a
+    // live third-party credential). Without the `+` the revocation below would
+    // find no token and report 'no_token' forever — the one silent failure
+    // this step exists to prevent.
+    .select('_id email deletion apple.sub apple.isPrivateEmail +apple.refreshToken')
     .limit(200)
-    .lean<{ _id: unknown; email?: string; deletion?: { purgeAfter?: Date } }[]>()
+    .lean<{
+      _id: unknown
+      email?: string
+      deletion?: { requestedAt?: Date; purgeAfter?: Date }
+      apple?: { sub?: string; refreshToken?: string }
+    }[]>()
 
   const reports: PurgeReport[] = []
+  /** Rows held back this run because Apple refused the revocation. */
+  const deferred: { userId: string; reason?: string }[] = []
   if (!dryRun) {
     for (const row of due) {
+      // APPLE FIRST, AND BEFORE THE USER ROW THAT STORES THE TOKEN. Apple
+      // requires an app offering Sign in with Apple to revoke the tokens it
+      // holds when the account is deleted; lib/apple/deletion.ts carries the
+      // policy, including why a FAILED revoke holds the purge back (so the
+      // next daily sweep retries) and why that wait is bounded by the 30 days
+      // the Privacy Policy promises.
+      const revocation = await revokeAppleIdentity(row.apple, apple)
+      if (revocation.state !== 'not_applicable') {
+        console.log(
+          `[purge] apple revocation user=${String(row._id)} state=${revocation.state}`
+            + `${revocation.detail ? ` detail=${revocation.detail}` : ''}`,
+        )
+      }
+      if (!purgeMayProceed(revocation, { requestedAt: row.deletion?.requestedAt, now })) {
+        console.error(
+          `[purge] user=${String(row._id)} held back: Apple refused the token revocation`
+            + ` (${revocation.detail ?? 'unknown'}). Retrying on the next run.`,
+        )
+        deferred.push({ userId: String(row._id), reason: revocation.detail })
+        continue
+      }
+      if (revocation.state === 'failed') {
+        console.error(
+          `[purge] user=${String(row._id)} purged WITHOUT a successful Apple revocation`
+            + ` (${revocation.detail ?? 'unknown'}) — the grace period has run out;`
+            + ' the member\'s data may not be kept past it',
+        )
+      }
+
       const report = await purgeAccountData({
         models: PURGE_MODELS,
         userId: String(row._id),
@@ -82,7 +123,8 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
 
   const purged = reports.filter((r) => r.userDeleted).length
   console.log(
-    `[purge] ranAt=${now.toISOString()} dryRun=${dryRun} due=${due.length} purged=${purged}`,
+    `[purge] ranAt=${now.toISOString()} dryRun=${dryRun} due=${due.length} purged=${purged}`
+      + ` deferred=${deferred.length}`,
   )
 
   return NextResponse.json({
@@ -91,6 +133,8 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
     due: due.length,
     purged,
     failed: reports.filter((r) => r.errors > 0).length,
+    /** Held back because Apple refused the revocation; retried next run. */
+    deferred,
     // Ids, never emails: this output is pasted into chat and into a workflow
     // summary.
     users: reports.map((r) => ({
