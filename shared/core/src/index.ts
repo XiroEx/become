@@ -21,6 +21,10 @@
  *   - nutrition/logTagMatch: smart-append matching for meal logs
  *   - nutrition/goalLine: summary line under calorie ring
  *   - nutrition/types: pure food model types
+ *   - mindXP: chapters, levels, XP maths and the main-session cooldown
+ *   - mindContent: the 30-protocol content library and MindState
+ *   - ai/sanitize: model-output sanitizers and guided-step validation
+ *   - mind: session path, deterministic composer, move builders, speech matcher
  */
 
 export * from './bodyUnits'
@@ -47,3 +51,7 @@ export * from './nutrition/mealSchedule'
 export * from './nutrition/logTagMatch'
 export { nutritionGoalLine, type GoalLineInput } from './nutrition/goalLine'
 export * from './nutrition/types'
+export * from './mindXP'
+export * from './mindContent'
+export * from './ai/sanitize'
+export * from './mind/index'

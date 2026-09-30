@@ -1521,6 +1521,38 @@ through its own tsconfig path exactly as before.
 - Any PR changing `shared/core` MUST bump its version in `shared/core/package.json`.
 - Until redsync's app-repo fixes land, publishing a new `@become/core` version is a manual step: publish from clean main with publisher credentials to `https://registry.redbtn.io/`, verify `npm view @become/core versions`, and update `webapp/package.json` with `npm install --package-lock-only`.
 
+#### The copied Mind domain and its drift tests (NP-062)
+
+The Mind session path, deterministic composer, move builders, XP/chapter maths
+and speech matcher live in `webapp/lib/mind*`, `webapp/lib/mindXP.ts`,
+`webapp/lib/mindContent.ts` and `webapp/lib/ai/sanitize.ts`. `@become/core`
+carries a COPY of all 22 of those modules (`shared/core/src/mind*`,
+`shared/core/src/ai/sanitize.ts`) so the native app can run the same behaviour.
+
+- **The web file is the source of truth.** Composer and XP changes land on the
+  web first. `webapp/` does NOT import them from `@become/core` yet (RedRun
+  builds `webapp/` alone); it keeps its own module until the package is
+  published and the webapp switches over.
+- **Write the copy with the script, never by hand:** `node scripts/vendor-mind.mjs`
+  (`--check` just reports). The only edit it makes is rewriting the webapp's
+  `@/` import aliases. `GuidedStep` — the one type the copies needed from a
+  component — travels with them as `shared/core/src/mind/guidedStep.ts`.
+- **Three suites hold it together.** `webapp/tests/unit/mindDrift.test.ts` fails
+  when a copy is not its web source verbatim; `webapp/tests/unit/mindParity.test.ts`
+  fails when the copy and the web disagree behaviourally across 360 contexts
+  (seeds × chapters × states × path positions) or when the committed fixtures no
+  longer match the web; `shared/core/tests/mind.test.ts` and
+  `expo/__tests__/mind.test.ts` hold `@become/core` to those same fixtures.
+- **The fixtures are generated, not written:**
+  `cd webapp && npx tsx scripts/gen-mind-fixtures.ts` writes
+  `shared/core/tests/fixtures/mindParity.json` from the WEB modules. Change the
+  composer or the XP maths on the web and you must re-run the vendor script AND
+  the generator in the same commit, or `verify` goes red.
+- `expo/tsconfig.json` typechecks `shared/core/src` with `noUncheckedIndexedAccess`,
+  so the web sources carry type-only non-null assertions on provably in-range
+  index reads. They erase at compile time and change no behaviour; keep them
+  when you edit those files or the `expo` job fails.
+
 #### The contract test: what the native app is actually sent (NP-016)
 
 `webapp/tests/unit/contract/` calls the REAL route handlers against the
