@@ -1309,7 +1309,43 @@ Four things about it:
   `np021Schedule.test.ts` is the schedule domain: four routes, plus a second
   gate that every one of the eight PATCH actions was actually sent — one
   manifest entry for `PATCH /api/schedule` would otherwise pass for coverage of
-  a single action.
+  a single action. `np024Nutrition.test.ts` is the food-log domain: twenty
+  routes, its own member (`@np024.contract.test`), and `tz=0` on every read so a
+  "local day" is the UTC day.
+
+The nutrition contract (NP-024) lives in
+`shared/api-client/src/schemas/nutrition.ts` and carries four rules, stated at
+the top of that file and asserted by `np024Nutrition.test.ts` against the real
+handlers:
+
+- **Nutrition is PER SERVING of the default variant, never per 100 g.**
+  `webapp/lib/foodMath.ts` scales a variant's stored block by
+  `quantity / servingSize`, with `gramsPerServing` / `mlPerServing` as the
+  cross-family bridge and the only honest weight a count-native serving (`each`,
+  `slice`, `scoop`, `serving`) has. An OpenFoodFacts import looks per-100-g only
+  because its `servingSize` IS 100; a bar whose serving is "1 each (60 g)" is
+  not, and anything assuming /100 logs a hundredth of a bar.
+- **Food `source` is `usda` | `openfoodfacts` | `manual`.** There is no `off` —
+  that string is only the `off-<code>` id PREFIX of a live search hit.
+- **A Recipe's per-serving macros live in `totalsPerServing`**
+  (`webapp/models/Recipe.ts`). The shared schema used to say `nutrition`, which
+  no handler has ever sent, so the native recipe screen showed 0 kcal for every
+  recipe ever published. `RecipeNutritionSchema` survives as a deprecated ALIAS
+  of the totals shape; the KEY is gone.
+- **The canonical day is `GET /api/meal-logs?date=&tz=` → `{ logs, dailyTotals }`.**
+  The legacy `GET /api/nutrition/log` day is kept because it is still the only
+  source of `water`, `quickAdds` and `goals`, and because its `dailyTotals`
+  INCLUDE quick adds (the canonical day's do not) — which is what the web
+  dashboard reads. Its `meals[].foods[]` is a compat projection that cannot
+  express an untimed log, a custom tag, or more than one entry per meal.
+
+`MealLogResponseSchema`, `MealLogFoodSchema`, `MealLogMealSchema`,
+`FoodNutritionSchema`, `FlexNutritionSchema`, `FoodSearchItemSchema` and
+`FoodDetailFoodSchema` are DEPRECATED aliases of the new shapes — the same
+objects, so importing an old name cannot hand a caller a stale contract — and
+they stay until the screens move. `shared/api-client/tests/nutritionFixtures.ts`
+holds one recorded body per route for the client's own suite; it proves nothing
+about the server on its own, which is what the harness is for.
 
 The programs contract carries three rules, stated at the top of
 `shared/api-client/src/schemas/programs.ts` and asserted by that file:

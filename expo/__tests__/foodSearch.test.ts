@@ -17,20 +17,36 @@ describe("narrowFoodSource", () => {
   });
 });
 
+// Rows as GET /api/nutrition/foods really sends them: `_id` always (synthetic
+// for an external hit), and the macros on `nutrition` — the flattened default
+// variant's PER-SERVING block. There is no bare top-level `calories`.
+const oatsRow = {
+  _id: "db1",
+  name: "Oats",
+  source: "manual" as const,
+  servingSize: 100,
+  servingUnit: "g",
+  alternateServings: [],
+  nutrition: { calories: 380, protein: 13, carbs: 67, fats: 7 },
+  variants: [],
+};
+
+const bananaRow = {
+  _id: "usda-9",
+  name: "Banana",
+  brand: null,
+  source: "usda" as const,
+  servingSize: 100,
+  servingUnit: "g",
+  alternateServings: [],
+  nutrition: { calories: 89, protein: 1.1, carbs: 22.8, fats: 0.3 },
+  gramsPerServing: 118,
+  variants: [],
+};
+
 describe("toFoodSearchResults", () => {
   it("flattens foods → results with id/source/kcalPer100g", () => {
-    const results = toFoodSearchResults({
-      foods: [
-        { _id: "db1", name: "Oats", source: "manual", nutrition: { calories: 380 } },
-        {
-          id: "usda-9",
-          name: "Banana",
-          brand: null,
-          source: "usda",
-          calories: 89,
-        },
-      ],
-    });
+    const results = toFoodSearchResults({ foods: [oatsRow, bananaRow] });
     expect(results).toEqual([
       { id: "db1", name: "Oats", brand: null, source: "custom", kcalPer100g: 380 },
       { id: "usda-9", name: "Banana", brand: null, source: "usda", kcalPer100g: 89 },
@@ -44,12 +60,7 @@ describe("toFoodSearchResults", () => {
 });
 
 describe("findFoodSearchRow", () => {
-  const response = {
-    foods: [
-      { _id: "db1", name: "Oats", source: "manual" },
-      { id: "usda-9", name: "Banana", source: "usda" },
-    ],
-  };
+  const response = { foods: [oatsRow, bananaRow] };
 
   it("finds the raw row behind a result id", () => {
     expect(findFoodSearchRow(response, "usda-9")?.name).toBe("Banana");
