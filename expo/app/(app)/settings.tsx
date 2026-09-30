@@ -23,6 +23,9 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
+import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { ExternalLink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
@@ -238,6 +241,30 @@ export default function SettingsScreen() {
               </Text>
             ) : null}
           </View>
+          {user?.role === "admin" ? (
+            <Pressable
+              testID="admin-tools-row"
+              accessibilityRole="link"
+              accessibilityLabel="Admin tools"
+              onPress={() => {
+                void openWebSignedIn("/dashboard/admin");
+              }}
+              style={[
+                minTouchTarget,
+                {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 8,
+                },
+              ]}
+            >
+              <Text className="text-foreground text-sm font-medium">
+                Admin tools
+              </Text>
+              <ExternalLink size={16} color={colors["muted-foreground"]} />
+            </Pressable>
+          ) : null}
           <Button
             testID="sign-out-button"
             variant="secondary"
