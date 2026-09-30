@@ -1309,7 +1309,15 @@ Four things about it:
   `np021Schedule.test.ts` is the schedule domain: four routes, plus a second
   gate that every one of the eight PATCH actions was actually sent — one
   manifest entry for `PATCH /api/schedule` would otherwise pass for coverage of
-  a single action.
+  a single action. `np018Workouts.test.ts` is the workouts domain: 15 routes,
+  plus a second gate that BOTH halves of the `POST /api/workouts` union
+  (program | quick) were actually sent, and a third that
+  `webapp/lib/sharedApiTypes.ts` carries no workouts shape at all. Run it with
+  `CONTRACT_DUMP=1` and it prints every body — that is where the fixtures in
+  `shared/api-client/tests/workoutsSchemas.test.ts` come from. They are recorded
+  from the beta HANDLERS against the loopback test database and never from the
+  live beta site: beta shares production's MongoDB, so a recording taken there
+  would be a member's real data.
 
 The programs contract carries three rules, stated at the top of
 `shared/api-client/src/schemas/programs.ts` and asserted by that file:
@@ -1340,6 +1348,30 @@ program's slots, the three program-level ones return counters and no slots.
 screen sends it. The speculative `ScheduleSlotSchema` / `ScheduleResponseSchema`
 (a `{ schedule: [ … ] }` envelope with `phaseIndex`/`workoutIndex`) described a
 response no handler has ever sent and are gone.
+
+The workouts contract (NP-018) lives in
+`shared/api-client/src/schemas/workouts.ts` and is asserted by
+`tests/unit/contract/np018Workouts.test.ts` (15 routes). **The save body is ONE
+discriminated union on `kind`** — a program day (`programId` + 1-based `phase` +
+`day` LABEL, and `kind` absent, which is what the web sends) or a quick session
+(`kind: 'quick'` + `sessionId`) — so a body with half of each stops compiling
+instead of coming back as a 400 from a device. Five rules travel with it:
+**timed work is saved in `duration`/`distance`, never in `reps`/`weight`** (the
+live view types cardio into the same two boxes as reps and weight, so the client
+moves the values into the right FIELDS on the way out); **a skipped set is saved
+as completed with reps 0 and weight 0**, and PR detection ignores reps 0, which
+is what keeps a skip out of the records while still recording it; **`phase` is
+1-based**, as in the programs contract; **`performedAt` is sent only on the
+completing save**, so an autosave can never disturb the log's date; and **`tz` in
+a body is a NUMBER** (minutes west of UTC, NP-009) — `POST /api/workouts`
+PERSISTS a reported offset as the member's zone, so a fabricated `tz: 0` fires
+their morning push at ~3am local. Every measurement on a STORED log comes back
+`number | null` because `models/UserProgress.ts` defaults them; a draft
+exercise's `sets` is a COUNT and its `reps`/`duration`/`rest` are PRESCRIPTION
+STRINGS. The speculative `WorkoutLogSchema` / `WorkoutsListResponseSchema` /
+`SaveWorkoutResponseSchema` trio (a `{ workouts: [ … ] }` envelope keyed by
+`phaseIndex`/`workoutIndex`) described a response no handler has ever sent and
+are gone.
 
 The Mind + Becoming contract (NP-037) lives in
 `shared/api-client/src/schemas/mind.ts` and `becoming.ts` and is asserted by
