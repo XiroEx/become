@@ -61,6 +61,7 @@ import UserProgress from '../../../models/UserProgress'
 import Goal from '../../../models/Goal'
 import StreakCredit from '../../../models/StreakCredit'
 import { signToken } from '../../../lib/auth'
+import { ensureGoals } from '../../../lib/goals/ensure'
 
 // ---------------------------------------------------------------------------
 // The manifest: every route NP-022's schemas describe.
@@ -110,7 +111,13 @@ before(async () => {
     password: 'contract-test-unused',
     name: 'Contract NP022',
     tier: 'plus',
-    profile: { fitnessGoal: 'lose_weight', weightUnit: 'lbs' },
+    profile: {
+      fitnessGoal: 'lose_weight',
+      weightUnit: 'lbs',
+      nutritionDirection: 'lose',
+      targetWeightKg: 80,
+      currentWeightKg: 85,
+    },
     onboardingCompleted: true,
   })
 
@@ -180,22 +187,27 @@ test('POST /api/weight returns LogWeightResponseSchema with goalReached when fin
   const objectId = new mongoose.Types.ObjectId(MEMBER.id)
   const now = new Date()
   const startDate = new Date(now.getTime() - 14 * 86_400_000)
-  await Goal.create({
-    userId: objectId,
-    pillar: 'nutrition',
-    kind: 'weight',
-    status: 'active',
-    startedAt: startDate,
-    target: {
-      weightKg: 80,
-      direction: 'lose',
-      paceKgPerWeek: 0.5,
+
+  // Give the member their own fresh day (clear the weigh-in from the previous test)
+  await UserProgress.updateOne(
+    { userId: MEMBER.id },
+    { $set: { weightHistory: [], 'weightSkipTracking.consecutiveSkips': 0 } },
+  )
+  await Goal.deleteMany({ userId: objectId })
+
+  // Seed the goal the way ensureGoals expects
+  await User.updateOne(
+    { _id: objectId },
+    {
+      $set: {
+        'profile.targetWeightKg': 80,
+        'profile.nutritionDirection': 'lose',
+        'profile.currentWeightKg': 85,
+      },
     },
-    baseline: {
-      weightKg: 85,
-      date: startDate,
-    },
-  })
+  )
+  const seeded = await ensureGoals(MEMBER.id, startDate)
+  assert.ok(seeded.nutrition, 'ensureGoals seeded the nutrition goal')
 
   const { status, body } = await sendJson(weightPOST, 'POST', '/api/weight', MEMBER, {
     weight: 176, // in lbs = ~79.8 kg, inside finish band for 80 kg target
@@ -209,6 +221,12 @@ test('POST /api/weight returns LogWeightResponseSchema with goalReached when fin
     body,
     expectKeys: ['success', 'date', 'applied', 'goalReached'],
   })
+  const parsed = LogWeightResponseSchema.parse(body)
+  assert.ok(parsed.goalReached)
+  assert.equal(parsed.goalReached.pillar, 'nutrition')
+  assert.equal(parsed.goalReached.direction, 'lose')
+  assert.equal(parsed.goalReached.unit, 'lbs')
+  assert.equal(parsed.goalReached.currentWeight, 176)
 })
 
 test('GET /api/streaks returns StreaksResponseSchema with all pillars and super freeze', async () => {
