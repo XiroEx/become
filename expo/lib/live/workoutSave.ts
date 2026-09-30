@@ -1,4 +1,8 @@
-import type { WorkoutSaveRequest } from "@become/api-client";
+// The PROGRAM half of the POST /api/workouts discriminated union. The bare
+// `WorkoutSaveRequest` is `program | quick` (NP-018), and this screen only ever
+// builds a program day: naming the half is what keeps `req.activeSeconds = …`
+// below type-checked rather than narrowed away.
+import type { WorkoutProgramSaveRequest } from "@become/api-client";
 import type {
   LiveGrid,
   LiveWorkoutExercise,
@@ -47,7 +51,7 @@ export function newWorkoutAttemptId(): string {
  */
 export function buildWorkoutSaveRequest(
   input: BuildWorkoutSaveInput,
-): WorkoutSaveRequest {
+): WorkoutProgramSaveRequest {
   const exercises = input.exercises.map((ex) => {
     const sets = (input.grid[ex.slug] ?? []).map((s, i) => {
       const set: {
@@ -76,7 +80,7 @@ export function buildWorkoutSaveRequest(
     };
   });
 
-  const req: WorkoutSaveRequest = {
+  const req: WorkoutProgramSaveRequest = {
     programId: input.programId,
     phase: input.phase,
     day: input.day,
