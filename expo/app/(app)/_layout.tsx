@@ -71,6 +71,7 @@ export default function AppGroupLayout() {
             }}
           >
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="settings" />
           </Stack>
         </OnboardingGuard>
       </ConsentGate>

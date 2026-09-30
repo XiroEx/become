@@ -124,26 +124,21 @@ test('the web danger zone is two taps and signs the device out on success', () =
 // invisible in a URL and the settings screen is still a hidden tab reached
 // only from the dashboard gear.
 test('the native settings screen renders the danger zone', () => {
-  const screen = readRepo('expo/app/(app)/(tabs)/profile/health.tsx')
+  const screen = readRepo('expo/app/(app)/settings.tsx')
   assert.match(screen, /import \{ DangerZone \} from "@\/components\/settings\/DangerZone"/, 'not imported')
   assert.match(screen, /<DangerZone/, 'imported but never rendered')
   assert.match(screen, /onDeleted=\{/, 'nothing happens after the account is deleted')
 })
 
 test('the native settings screen is REACHABLE — the dashboard has the entry point', () => {
-  // Settings is a hidden route in the (tabs) tree (`href: null`), so without a
-  // button it exists in the router and nowhere else: "Delete account is two
-  // taps from Settings" is false if Settings cannot be opened at all.
-  const layout = readRepo('expo/app/(app)/(tabs)/_layout.tsx')
-  assert.match(layout, /name="profile" options=\{\{ href: null \}\}/, 'the profile route is no longer hidden — re-check this assertion')
-
+  // Settings lives in the (app) group, opened from the gear on the dashboard.
   const dashboardScreen = readRepo('expo/components/DashboardScreen.tsx')
   assert.match(dashboardScreen, /testID="dashboard-open-settings"/, 'no settings control on the dashboard')
   assert.match(dashboardScreen, /accessibilityLabel="Settings"/, 'the settings control has no label')
 
   const dashboardRoute = readRepo('expo/app/(app)/(tabs)/dashboard/index.tsx')
   assert.match(dashboardRoute, /onOpenSettings=\{/, 'the dashboard never wires the settings control')
-  assert.match(dashboardRoute, /\/\(tabs\)\/profile\/health/, 'the settings control does not open settings')
+  assert.match(dashboardRoute, /\/settings/, 'the settings control does not open settings')
 })
 
 test('the native delete flow confirms, posts the same body, and clears the session', () => {
