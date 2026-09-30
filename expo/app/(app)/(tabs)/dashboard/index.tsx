@@ -5,7 +5,11 @@ import {
   StreakResponseSchema,
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
+  CheckInResponseSchema,
+  CheckInActionResponseSchema,
+  GoalProgressResponseSchema,
   classifyApiError,
+  apiFetch,
 } from "@become/api-client";
 import {
   DashboardScreen,
@@ -23,6 +27,8 @@ import {
   LayoutWireSchema,
   LAYOUT_CACHE_KEY,
 } from "@/lib/dashboard/tileLayout";
+import { useUnits } from "@/lib/hooks/useUnits";
+import { kgToLbs } from "@/lib/bodyUnits";
 
 /**
  * Dashboard route — wires the first post-login screen to real data. Fetches the
@@ -57,6 +63,21 @@ export default function DashboardRoute() {
       cacheKey: LAYOUT_CACHE_KEY,
     },
   );
+  const checkin = useFetch(
+    ready ? "/api/checkin" : null,
+    CheckInResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !ready,
+    },
+  );
+  const goals = useFetch(
+    ready ? "/api/goals" : null,
+    GoalProgressResponseSchema,
+    fetchOpts,
+  );
+  const { unit } = useUnits();
 
   const activeProgram = active.data?.activePrograms?.[0] ?? null;
   const programId = activeProgram?.programId ?? null;
@@ -143,8 +164,31 @@ export default function DashboardRoute() {
       active.refetch(),
       workout.refetch(),
       layout.refetch(),
+      checkin.refetch(),
+      goals.refetch(),
     ]);
-  }, [active, layout, me, streak, workout]);
+  }, [active, checkin, goals, layout, me, streak, workout]);
+
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const lastPromptedDueRef = useRef(false);
+
+  // Sync check-in prompt appearance from server due status
+  useEffect(() => {
+    if (checkin.data?.due) {
+      if (!lastPromptedDueRef.current) {
+        lastPromptedDueRef.current = true;
+        setCheckInOpen(true);
+        void apiFetch("/api/checkin", CheckInActionResponseSchema, {
+          method: "POST",
+          body: { action: "shown" },
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+        }).catch(() => {});
+      }
+    } else {
+      lastPromptedDueRef.current = false;
+    }
+  }, [checkin.data?.due, token]);
 
   const initialTodayRef = useRef(today);
   // Refetch when the local day rolls over
@@ -186,23 +230,20 @@ export default function DashboardRoute() {
       setSubmittingCheckIn(true);
       try {
         const writes = getOfflineWrites();
-        const moodStatus = await writes.logMood(payload.mood);
+        const moodStatus =
+          payload.mood != null ? await writes.logMood(payload.mood) : null;
+        const weightVal = payload.weightLbs ?? payload.weight;
         const weightStatus =
-          payload.weightLbs != null
-            ? await writes.logWeight(payload.weightLbs)
-            : null;
-        // New activity the SERVER has → re-pull the streak. A queued write has
-        // not earned a streak day yet; the replay's response will.
+          weightVal != null ? await writes.logWeight(weightVal) : null;
+        // New activity the SERVER has → re-pull the streak and check-in.
         if (moodStatus === "sent" || weightStatus === "sent") {
           await streak.refetch();
+          await checkin.refetch();
         }
-        if (payload.weightLbs != null) {
-          // BECOME → HEALTH. Mirrors the weigh-in into Apple Health / Health
-          // Connect, and does nothing unless the member left that direction on
-          // when the app opened (lib/health/sync.ts). Never awaited and never
-          // throws: the check-in is kept either way, sent or queued.
+        if (weightVal != null) {
+          const lbsValue = unit === "kg" ? kgToLbs(weightVal) : weightVal;
           void mirrorWeighInToHealth({
-            valueLbs: payload.weightLbs,
+            valueLbs: lbsValue,
             atISO: new Date().toISOString(),
             clientId: weighInClientId(today),
           });
@@ -211,7 +252,36 @@ export default function DashboardRoute() {
         setSubmittingCheckIn(false);
       }
     },
-    [streak, today],
+    [checkin, streak, today, unit],
+  );
+
+  const onSkipCheckIn = useCallback(async () => {
+    await apiFetch("/api/checkin", CheckInActionResponseSchema, {
+      method: "POST",
+      body: { action: "skip" },
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    });
+    await checkin.refetch();
+  }, [checkin, token]);
+
+  const onWeightLogged = useCallback(
+    async (weightVal: number) => {
+      const writes = getOfflineWrites();
+      const weightStatus = await writes.logWeight(weightVal);
+      if (weightStatus === "sent") {
+        await streak.refetch();
+        await checkin.refetch();
+        await goals.refetch();
+      }
+      const lbsValue = unit === "kg" ? kgToLbs(weightVal) : weightVal;
+      void mirrorWeighInToHealth({
+        valueLbs: lbsValue,
+        atISO: new Date().toISOString(),
+        clientId: weighInClientId(today),
+      });
+    },
+    [checkin, goals, streak, today, unit],
   );
 
   return (
@@ -228,6 +298,15 @@ export default function DashboardRoute() {
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
+      checkInOpen={checkInOpen}
+      onCheckInOpenChange={setCheckInOpen}
+      onSkipCheckIn={onSkipCheckIn}
+      daysSinceMood={checkin.data?.daysSinceMood}
+      daysSinceWeight={checkin.data?.daysSinceWeight}
+      lastWeight={checkin.data?.lastWeight ?? undefined}
+      targetWeight={goals.data?.nutrition?.target?.weight ?? undefined}
+      weightUnit={unit}
+      onWeightLogged={onWeightLogged}
       layout={layout.data?.layout ?? null}
       onOpenMind={onOpenMind}
       onOpenNutrition={onOpenNutrition}

@@ -245,5 +245,16 @@ describe("TileGrid and Dashboard Tiles (NP-104)", () => {
       fireEvent.press(getByTestId("tile-workoutNow"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming?quick=true");
     });
+
+    it("weight tile triggers onOpenWeightSheet callback", () => {
+      const layout: DashboardTile[] = [{ id: "weight", kind: "stat", size: "1x1" }];
+      const onOpenWeightSheet = jest.fn();
+
+      const { getByTestId } = render(
+        <TileGrid layout={layout} onOpenWeightSheet={onOpenWeightSheet} />,
+      );
+      fireEvent.press(getByTestId("tile-weight"));
+      expect(onOpenWeightSheet).toHaveBeenCalledTimes(1);
+    });
   });
 });

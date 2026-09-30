@@ -7,10 +7,11 @@ jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({}),
 }));
 
+let mockUser: Record<string, unknown> | null = null;
 const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
-    user: null,
+    user: mockUser,
     token: mockToken,
     loading: false,
     isAuthed: true,
@@ -63,12 +64,50 @@ const DEFAULT_CURRENT_WORKOUT: Record<string, unknown> = {
 
 /** Swapped by the navigation tests to change the day label / phase. */
 let currentWorkout: Record<string, unknown> = DEFAULT_CURRENT_WORKOUT;
+let checkInStatus: Record<string, unknown> = {
+  due: false,
+  reason: "complete",
+  complete: true,
+};
+const DEFAULT_USER_GOALS: Record<string, unknown> = {
+  todayKey: "2026-09-30",
+  nutrition: {
+    unit: "lbs",
+    status: "active",
+    kind: "weight",
+    direction: "lose",
+    startedAt: null,
+    achievedAt: null,
+    baseline: { weight: 185, date: "2026-09-01" },
+    journeyStart: { weight: 185, date: "2026-09-01" },
+    now: { weight: 182, date: "2026-09-29", fourWeeksAgo: 185 },
+    target: { weight: 175, paceKgPerWeek: 0.5, pacePerWeek: 1.1, bandKg: 1 },
+    pace: null,
+    adherence: null,
+    proteinGoal: 150,
+    suggestion: { message: "Stay consistent" },
+  },
+  training: {
+    status: "none",
+    startedAt: null,
+    target: { daysPerWeek: 4, programId: null },
+    thisWeek: { done: 2, remaining: 2, chancesLeft: 3, weekLost: false },
+    avgLast4: 3.5,
+    weeklyCounts: [3, 4, 4, 3],
+    baseline: { daysPerWeek: 4, date: null, prs: [] },
+    lifts: [],
+    suggestedLifts: [],
+    hasLiftTargets: false,
+  },
+};
+let userGoals: Record<string, unknown> = DEFAULT_USER_GOALS;
 
 function wireApiFetch() {
-  mockApiFetch.mockImplementation((path: string) => {
+  mockApiFetch.mockImplementation((path: string, _schema, init) => {
+    const method = (init as { method?: string } | undefined)?.method ?? "GET";
     if (path === "/api/auth/me") {
       return Promise.resolve({
-        user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+        user: mockUser ?? { _id: "u1", email: "jon@example.com", name: "Jon" },
       });
     }
     if (path === "/api/streak") {
@@ -95,8 +134,16 @@ function wireApiFetch() {
           { id: "mindset", kind: "stat", size: "1x1" },
           { id: "nutrition", kind: "stat", size: "1x1" },
           { id: "workoutNow", kind: "stat", size: "2x1" },
+          { id: "weight", kind: "stat", size: "1x1" },
         ],
       });
+    }
+    if (path.startsWith("/api/checkin")) {
+      if (method === "POST") return Promise.resolve({ success: true });
+      return Promise.resolve(checkInStatus);
+    }
+    if (path.startsWith("/api/goals")) {
+      return Promise.resolve(userGoals);
     }
     if (path === "/api/mood" || path === "/api/weight") {
       return Promise.resolve({ success: true });
@@ -117,6 +164,9 @@ describe("DashboardRoute", () => {
     mockPush.mockReset();
     mockNetInfoFetch.mockResolvedValue(ONLINE);
     currentWorkout = DEFAULT_CURRENT_WORKOUT;
+    mockUser = null;
+    checkInStatus = { due: false, reason: "complete", complete: true };
+    userGoals = DEFAULT_USER_GOALS;
     wireApiFetch();
   });
 
@@ -352,6 +402,129 @@ describe("DashboardRoute", () => {
       expect(callsTo("/api/mood").length).toBeGreaterThan(0);
     });
     expect(callsTo("/api/weight").length).toBe(0);
+  });
+
+  // ─── Acceptance Criterion 1: e015c909 ──────────────────────────────────────
+  it("automatically opens check-in modal and stamps 'shown' when /api/checkin is due (id: e015c909)", async () => {
+    checkInStatus = {
+      due: true,
+      reason: "due",
+      complete: false,
+      daysSinceMood: 1,
+      daysSinceWeight: 1,
+      lastWeight: 180,
+    };
+
+    const { getByTestId } = render(<DashboardRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
+    });
+
+    // Stamped 'shown' on the server
+    await waitFor(() => {
+      const shownCalls = mockApiFetch.mock.calls.filter(
+        (c) =>
+          String(c[0]).startsWith("/api/checkin") &&
+          (c[2] as { body?: { action?: string } })?.body?.action === "shown",
+      );
+      expect(shownCalls.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("does not open check-in modal when /api/checkin is already complete (checked in on web) (id: e015c909)", async () => {
+    checkInStatus = {
+      due: false,
+      reason: "complete",
+      complete: true,
+    };
+
+    const { getByTestId, queryByTestId } = render(<DashboardRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+    });
+
+    expect(queryByTestId("dashboard-checkin-modal-mood-row")).toBeNull();
+  });
+
+  // ─── Acceptance Criterion 2: e015c90a ──────────────────────────────────────
+  it("Skip for Today posts action 'skip' to /api/checkin and keeps it closed (id: e015c90a)", async () => {
+    checkInStatus = {
+      due: true,
+      reason: "due",
+      complete: false,
+      daysSinceMood: 0,
+      daysSinceWeight: 0,
+    };
+
+    const { getByTestId, queryByTestId } = render(<DashboardRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("dashboard-checkin-modal-skip"));
+    });
+
+    await waitFor(() => {
+      const skipCalls = mockApiFetch.mock.calls.filter(
+        (c) =>
+          String(c[0]).startsWith("/api/checkin") &&
+          (c[2] as { body?: { action?: string } })?.body?.action === "skip",
+      );
+      expect(skipCalls.length).toBeGreaterThan(0);
+    });
+
+    expect(queryByTestId("dashboard-checkin-modal-mood-row")).toBeNull();
+  });
+
+  // ─── Acceptance Criterion 3: e015c90b ──────────────────────────────────────
+  it("shows kg for a kg member in check-in modal and live goal line (id: e015c90b)", async () => {
+    mockUser = {
+      _id: "u1",
+      email: "jon@example.com",
+      name: "Jon",
+      profile: { weightUnit: "kg" },
+    };
+    checkInStatus = {
+      due: true,
+      reason: "due",
+      complete: false,
+      lastWeight: 80,
+    };
+    userGoals = {
+      ...DEFAULT_USER_GOALS,
+      nutrition: {
+        ...(DEFAULT_USER_GOALS.nutrition as Record<string, unknown>),
+        unit: "kg",
+        target: { weight: 75, paceKgPerWeek: 0.5, pacePerWeek: 0.5, bandKg: 1 },
+      },
+    };
+
+    const { getByTestId, getByText } = render(<DashboardRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
+    });
+
+    expect(getByText("Weight (kg) — optional")).toBeTruthy();
+    expect(getByTestId("dashboard-checkin-modal-goal-line").props.children).toContain("kg");
+  });
+
+  it("tapping the Weight tile opens WeightLogSheet with member unit and goal line", async () => {
+    const { getByTestId } = render(<DashboardRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("tile-weight"));
+
+    await waitFor(() => {
+      expect(getByTestId("dashboard-weight-sheet-title")).toBeTruthy();
+    });
   });
 });
 
