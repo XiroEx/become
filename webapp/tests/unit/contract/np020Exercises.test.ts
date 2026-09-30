@@ -533,7 +533,12 @@ test('GET /api/exercises/variations matches ExerciseVariationsResponseSchema, so
   assert.equal(parsed.variations[0]?.slug, SOURCE_SLUG)
   // The rest of the squat family: same pattern set, shared primary muscle,
   // same body region. The lat pulldown is in neither.
-  const slugs = parsed.variations.map((v) => v.slug)
+  // Contract files run in parallel against one database, so another file's
+  // fixtures (np019-barbell-back-squat, say) can be in the family too. Compare
+  // only this file's own rows.
+  const slugs = parsed.variations
+    .map((v) => v.slug)
+    .filter((slug) => slug.startsWith('np020-'))
   assert.deepEqual(
     [...slugs].sort(),
     [OWNED_CUSTOM_SLUG, SOURCE_SLUG, 'np020-front-squat', 'np020-goblet-squat'].sort(),
