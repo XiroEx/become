@@ -6,7 +6,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import {
   SavedProgramsResponseSchema,
   SaveToggleResponseSchema,
+  SavedProgramsReorderResponseSchema,
   type SaveToggleResponse,
+  type SavedProgramsReorderRequest,
+  type SavedProgramsReorderResponse,
 } from "@become/api-client";
 import { SavedPrograms } from "@/components/programs/SavedPrograms";
 import type { ProgramSummary } from "@/components/programs/ProgramsList";
@@ -21,6 +24,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * Saved-programs route — GET /api/programs/saved lists the user's saved
  * programs; tapping the heart unsaves (DELETE /api/programs/saved) with an
  * optimistic removal that rolls back + refetches on failure.
+ * Dragging reorders the list (PATCH /api/programs/saved { programIds }).
  */
 export default function SavedProgramsRoute() {
   const { colors } = useThemeTokens();
@@ -41,7 +45,7 @@ export default function SavedProgramsRoute() {
   const [items, setItems] = useState<ProgramSummary[] | null>(null);
   useEffect(() => {
     if (saved.data) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync optimistic local state with server fetch
       setItems(saved.data.savedPrograms.map(toProgramSummary));
     }
   }, [saved.data]);
@@ -55,6 +59,15 @@ export default function SavedProgramsRoute() {
       getToken: () => token ?? undefined,
     },
   );
+
+  const reorder = useMutation<
+    SavedProgramsReorderRequest,
+    SavedProgramsReorderResponse
+  >("/api/programs/saved", SavedProgramsReorderResponseSchema, {
+    method: "PATCH",
+    baseUrl: WEBAPP_BASE_URL,
+    getToken: () => token ?? undefined,
+  });
 
   const onToggleSave = useCallback(
     async (id: string) => {
@@ -71,6 +84,20 @@ export default function SavedProgramsRoute() {
     [items, unsave, saved],
   );
 
+  const onReorder = useCallback(
+    async (reordered: ProgramSummary[]) => {
+      const prev = items;
+      setItems(reordered);
+      try {
+        await reorder.mutate({ programIds: reordered.map((p) => p.id) });
+      } catch {
+        setItems(prev);
+        await saved.refetch();
+      }
+    },
+    [items, reorder, saved],
+  );
+
   const list = items ?? [];
 
   return (
@@ -79,7 +106,7 @@ export default function SavedProgramsRoute() {
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-saved-route"
     >
-      <View style={{ padding: 16 }}>
+      <View style={{ padding: 16, flex: 1 }}>
         <Text className="text-foreground text-2xl font-bold mb-3">Saved</Text>
         {saved.error ? (
           <Text testID="programming-saved-error" className="text-destructive">
@@ -90,6 +117,8 @@ export default function SavedProgramsRoute() {
           programs={list}
           onItemPress={(id) => router.push(`/(tabs)/programming/${id}`)}
           onToggleSave={onToggleSave}
+          onReorder={onReorder}
+          scrollEnabled={true}
         />
       </View>
     </SafeAreaView>

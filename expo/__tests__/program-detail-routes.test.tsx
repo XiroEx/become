@@ -260,6 +260,27 @@ describe("ProgramDetailRoute mutations", () => {
       expect(getsTo("/api/programs/active").length).toBeGreaterThan(activeBefore);
     });
   });
+
+  it("save toggle POSTs and DELETEs /api/programs/saved {programId}", async () => {
+    const { getByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-toggle-save")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-toggle-save"));
+    });
+
+    await waitFor(() => {
+      expect(callsByPathMethod("/api/programs/saved", "POST").length).toBeGreaterThan(0);
+    });
+    const postCall = callsByPathMethod("/api/programs/saved", "POST")[0]!;
+    expect(postCall[2]).toEqual(
+      expect.objectContaining({
+        method: "POST",
+        body: { programId: "prog-1" },
+        baseUrl: WEBAPP_BASE_URL,
+      }),
+    );
+  });
 });
 
 describe("PhaseRoute", () => {
