@@ -68,9 +68,19 @@ function jsonResponse(status: number, body?: unknown): Response {
 
 describe("SettingsScreen", () => {
   let fetchCalls: { url: string; init?: RequestInit }[] = [];
+  let mockCurrentUser: { _id: string; name: string; email: string; role?: string } = {
+    _id: "user-1",
+    name: "Alex Runner",
+    email: "alex@example.com",
+  };
 
   beforeEach(async () => {
     mockStoredJwt = makeJwt(Date.now() + 30 * 24 * 60 * 60 * 1000, "fresh");
+    mockCurrentUser = {
+      _id: "user-1",
+      name: "Alex Runner",
+      email: "alex@example.com",
+    };
     fetchCalls = [];
     mockReplace.mockClear();
     mockPush.mockClear();
@@ -82,11 +92,13 @@ describe("SettingsScreen", () => {
 
       if (url.includes("/api/auth/me")) {
         return jsonResponse(200, {
-          user: {
-            _id: "user-1",
-            name: "Alex Runner",
-            email: "alex@example.com",
-          },
+          user: mockCurrentUser,
+        });
+      }
+
+      if (url.includes("/api/auth/handoff")) {
+        return jsonResponse(200, {
+          code: "admin-handoff-code",
         });
       }
 
@@ -306,5 +318,56 @@ describe("SettingsScreen", () => {
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/login");
     });
+  });
+
+  it("(e015c971) An admin sees Admin tools in native Settings and it opens the web admin overview", async () => {
+    mockCurrentUser = {
+      _id: "admin-1",
+      name: "Jon Coach",
+      email: "jon@example.com",
+      role: "admin",
+    };
+
+    const { getByTestId, getByText } = renderScreen();
+
+    await waitFor(() => {
+      expect(getByText("Admin tools")).toBeTruthy();
+    });
+
+    const adminRow = getByTestId("admin-tools-row");
+    expect(adminRow).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(adminRow);
+    });
+
+    await waitFor(() => {
+      const handoffCall = fetchCalls.find((c) => c.url.includes("/api/auth/handoff"));
+      expect(handoffCall).toBeDefined();
+      expect(JSON.parse(handoffCall?.init?.body as string)).toEqual({
+        path: "/dashboard/admin",
+      });
+      expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+        expect.stringContaining("/auth/handoff?code=admin-handoff-code"),
+      );
+    });
+  });
+
+  it("(e015c972) A member never sees the Admin tools row", async () => {
+    mockCurrentUser = {
+      _id: "member-1",
+      name: "Alex Member",
+      email: "alex@example.com",
+      role: "member",
+    };
+
+    const { queryByText, queryByTestId } = renderScreen();
+
+    await waitFor(() => {
+      expect(queryByTestId("account-user-name")).toBeTruthy();
+    });
+
+    expect(queryByText("Admin tools")).toBeNull();
+    expect(queryByTestId("admin-tools-row")).toBeNull();
   });
 });
