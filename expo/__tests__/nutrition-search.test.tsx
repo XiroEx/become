@@ -98,24 +98,36 @@ describe("NutritionSearchRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockPush.mockReset();
-    mockApiFetch.mockResolvedValue({
-      foods: [
-        { _id: "db1", name: "Oats", source: "manual", nutrition: { calories: 380 } },
-        usdaBarRow,
-      ],
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      const method = init?.method ?? "GET";
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/nutrition/foods/import") && method === "POST") {
+        return importedBar;
+      }
+      if (url.startsWith("/api/nutrition/foods")) {
+        return {
+          foods: [
+            { _id: "6512c0ffee11111111111111", name: "Oats", source: "manual", nutrition: { calories: 380 } },
+            usdaBarRow,
+          ],
+        };
+      }
+      return {};
     });
   });
 
   it("debounces, then GETs /api/nutrition/foods?q=… with baseUrl + token", async () => {
     const { getByTestId } = render(<NutritionSearchRoute />);
     fireEvent.changeText(getByTestId("food-search-input"), "bar");
-    // Debounce not elapsed → no request yet.
-    expect(callsStarting("/api/nutrition/foods").length).toBe(0);
+    // Debounce not elapsed → no search request yet.
+    expect(callsStarting("/api/nutrition/foods?q=").length).toBe(0);
 
     await waitFor(() => {
-      expect(callsStarting("/api/nutrition/foods").length).toBeGreaterThan(0);
+      expect(callsStarting("/api/nutrition/foods?q=").length).toBeGreaterThan(0);
     });
-    const call = callsStarting("/api/nutrition/foods")[0]!;
+    const call = callsStarting("/api/nutrition/foods?q=")[0]!;
     expect(String(call[0])).toBe("/api/nutrition/foods?q=bar");
     const opts = call[2] as {
       baseUrl?: string;
@@ -129,29 +141,21 @@ describe("NutritionSearchRoute", () => {
     });
   });
 
-  it("carries the cached row to the detail route so the hit can be imported", async () => {
+  it("imports external hits before handing to the detail route", async () => {
     const { getByTestId } = render(<NutritionSearchRoute />);
     fireEvent.changeText(getByTestId("food-search-input"), "bar");
     await waitFor(() => {
       expect(getByTestId("food-search-result-usda-2341234")).toBeTruthy();
     });
-    fireEvent.press(getByTestId("food-search-result-usda-2341234"));
+    await act(async () => {
+      fireEvent.press(getByTestId("food-search-result-usda-2341234"));
+    });
 
+    expect(findCall("/api/nutrition/foods/import", "POST")).toBeTruthy();
     expect(mockPush).toHaveBeenCalledTimes(1);
     const href = String(mockPush.mock.calls[0]![0]);
-    expect(href.startsWith("/(tabs)/nutrition/food/usda-2341234?row=")).toBe(
+    expect(href.startsWith("/(tabs)/nutrition/food/6512c0ffee1234567890abcd")).toBe(
       true,
-    );
-    const row = JSON.parse(
-      decodeURIComponent(href.split("?row=")[1] as string),
-    );
-    expect(row).toEqual(
-      expect.objectContaining({
-        name: "Protein Bar",
-        servingSize: 1,
-        servingUnit: "each",
-        gramsPerServing: 60,
-      }),
     );
   });
 });

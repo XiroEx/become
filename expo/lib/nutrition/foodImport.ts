@@ -17,7 +17,7 @@
  */
 
 import { apiFetch, FoodImportResponseSchema } from "@become/api-client";
-import type { Food } from "@become/api-client";
+import type { Food, FoodVariant } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 
@@ -141,4 +141,91 @@ export async function importExternalFood({
     { method: "POST", body: { source: "manual", data: fallback }, ...base },
   );
   return res.food;
+}
+
+export interface ImportExternalResult {
+  foodId: string;
+  food?: Food;
+  variants?: FoodVariant[];
+  error?: string;
+}
+
+/**
+ * Copy-on-pick / copy-on-save: external (`usda-*` / `off-*`) results get
+ * persisted to our Food collection before being logged or bookmarked.
+ * Real ObjectId foods pass through with no work.
+ * A `persistable: false` preview returns an error immediately.
+ * A failure falls back to `{ source: 'manual', data }`.
+ */
+export async function importExternalIfNeeded(
+  food: unknown,
+  getToken: () => string | undefined,
+): Promise<ImportExternalResult> {
+  const rec = asRecord(food);
+  const id = typeof rec?._id === "string" ? rec._id : typeof rec?.id === "string" ? rec.id : "";
+  const variants = Array.isArray(rec?.variants) ? (rec.variants as FoodVariant[]) : undefined;
+
+  if (rec?.persistable === false) {
+    return { foodId: id, variants, error: "food preview is not importable" };
+  }
+
+  // Already a real Food doc — no work to do.
+  if (isObjectIdString(id)) {
+    return { foodId: id, food: food as Food, variants };
+  }
+
+  const ref = parseExternalFoodId(id);
+  const fallback = manualFoodDataFromRow(food);
+
+  if (ref) {
+    try {
+      const imported = await importExternalFood({
+        ref,
+        fallback,
+        getToken,
+      });
+      return {
+        foodId: String(imported._id),
+        food: imported,
+        variants: imported.variants ?? variants,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        foodId: id,
+        variants,
+        error: msg || "Import failed",
+      };
+    }
+  }
+
+  // Not a synthetic usda-/off- prefix, but not an ObjectId: try manual fallback
+  if (fallback) {
+    try {
+      const base = { baseUrl: WEBAPP_BASE_URL, getToken };
+      const res = await apiFetch(
+        "/api/nutrition/foods/import",
+        FoodImportResponseSchema,
+        { method: "POST", body: { source: "manual", data: fallback }, ...base },
+      );
+      return {
+        foodId: String(res.food._id),
+        food: res.food,
+        variants: res.food.variants ?? variants,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        foodId: id,
+        variants,
+        error: msg || "Manual import failed",
+      };
+    }
+  }
+
+  return {
+    foodId: id,
+    variants,
+    error: "Could not import food",
+  };
 }

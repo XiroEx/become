@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   MoreVertical,
+  Search,
   X,
 } from "lucide-react-native";
 import { z } from "zod";
@@ -48,6 +49,7 @@ import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
+import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const EMPTY_PLANS: any[] = [];
@@ -389,12 +391,12 @@ export default function NutritionIndexRoute() {
   };
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
 
   const openSearch = (tagToUse?: string) => {
-    router.push({
-      pathname: "/(tabs)/nutrition/search",
-      params: { tag: tagToUse ?? currentDefaultTag, date: activeDate },
-    });
+    setSearchTag(tagToUse ?? currentDefaultTag);
+    setSearchOpen(true);
   };
 
   return (
@@ -444,6 +446,29 @@ export default function NutritionIndexRoute() {
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
         >
+          {/* Search bar */}
+          <Pressable
+            testID="nutrition-search-bar"
+            accessibilityRole="button"
+            accessibilityLabel="Search foods"
+            onPress={() => openSearch()}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+            }}
+          >
+            <Search size={16} color={colors["muted-foreground"]} />
+            <Text className="text-muted-foreground text-sm ml-2.5">
+              Search foods…
+            </Text>
+          </Pressable>
+
           {/* Date Navigator */}
           <DateNav
             dateKey={activeDate}
@@ -718,6 +743,14 @@ export default function NutritionIndexRoute() {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Food Search Sheet (NP-092) */}
+      <FoodSearchSheet
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        currentTag={searchTag}
+        activeDate={activeDate}
+      />
     </SafeAreaView>
   );
 }
