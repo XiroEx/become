@@ -79,6 +79,7 @@ export const NATIVE_ROUTES = {
   home: "/(tabs)/dashboard",
   /** The Workout tab — `programming` is the folder name, Workout is the label. */
   workout: "/(tabs)/programming",
+  browsePrograms: "/(tabs)/programming/browse",
   savedPrograms: "/(tabs)/programming/saved",
   programSearch: "/(tabs)/programming/search",
   mind: "/(tabs)/mind",
@@ -418,6 +419,7 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   if (section === "programs") {
     const sub = lower(segments[2]);
     if (sub === "mine") return native(NATIVE_ROUTES.savedPrograms, params, "nearest");
+    if (sub === "browse") return native(NATIVE_ROUTES.browsePrograms, params, "exact");
     // `new` and `[programId]/edit` are the program editor (NP-135): no native
     // screen, and a member-facing surface we do not link out of in v1.
     return native(NATIVE_ROUTES.workout, params, "nearest");
@@ -470,6 +472,7 @@ function matchWorkout(
   if (sub === "hub" || sub === "library" || sub === "create" || sub === "quick-session") {
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
+  if (sub === "browse") return native(NATIVE_ROUTES.browsePrograms, params, "exact");
 
   const third = lower(segments[3]);
 
