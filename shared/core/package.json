@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -136,6 +136,31 @@
       "types": "./dist/types/nutrition/index.d.ts",
       "import": "./dist/esm/nutrition/index.js",
       "require": "./dist/cjs/nutrition/index.js"
+    },
+    "./mindXP": {
+      "types": "./dist/types/mindXP.d.ts",
+      "import": "./dist/esm/mindXP.js",
+      "require": "./dist/cjs/mindXP.js"
+    },
+    "./mindContent": {
+      "types": "./dist/types/mindContent.d.ts",
+      "import": "./dist/esm/mindContent.js",
+      "require": "./dist/cjs/mindContent.js"
+    },
+    "./ai/sanitize": {
+      "types": "./dist/types/ai/sanitize.d.ts",
+      "import": "./dist/esm/ai/sanitize.js",
+      "require": "./dist/cjs/ai/sanitize.js"
+    },
+    "./mind": {
+      "types": "./dist/types/mind/index.d.ts",
+      "import": "./dist/esm/mind/index.js",
+      "require": "./dist/cjs/mind/index.js"
+    },
+    "./mind/*": {
+      "types": "./dist/types/mind/*.d.ts",
+      "import": "./dist/esm/mind/*.js",
+      "require": "./dist/cjs/mind/*.js"
     }
   },
   "files": [

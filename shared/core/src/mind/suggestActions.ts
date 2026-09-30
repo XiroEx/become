@@ -3,7 +3,7 @@
 // if the AI drifts. Picks protocols across DIFFERENT categories, led by the user's
 // current state, rotated by a seed for variety. Client-safe.
 
-import type { MindState } from '@/lib/mindContent'
+import type { MindState } from '../mindContent'
 import { CATALOG_BY_SYSTEM, SEGMENT_STYLE, type SuggestedAction } from './suggestedProtocols'
 
 const NEGATIVE: MindState[] = ['stressed', 'distracted', 'low_energy']

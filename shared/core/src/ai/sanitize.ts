@@ -3,7 +3,7 @@
 // the render seam so a bad generation degrades gracefully instead of shipping
 // slop to the screen.
 
-import type { GuidedStep } from '@/components/mind/system/GuidedFlow'
+import type { GuidedStep } from '../mind/guidedStep'
 
 /** Strip markdown formatting to plain text. Chat + scenes render plain text, so
  *  stray bold/italic/header/code markers would otherwise show up literally. */
