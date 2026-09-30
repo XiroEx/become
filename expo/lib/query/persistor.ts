@@ -8,6 +8,8 @@ export interface AsyncStorageLike {
   getItem: (key: string) => Promise<string | null>;
   setItem: (key: string, value: string) => Promise<void>;
   removeItem: (key: string) => Promise<void>;
+  getAllKeys?: () => Promise<readonly string[]>;
+  multiRemove?: (keys: readonly string[]) => Promise<void>;
 }
 
 export interface Persistor<T> {
@@ -51,6 +53,12 @@ export function createMemoryAsyncStorage(): AsyncStorageLike {
     },
     async removeItem(key) {
       map.delete(key);
+    },
+    async getAllKeys() {
+      return Array.from(map.keys());
+    },
+    async multiRemove(keys) {
+      for (const k of keys) map.delete(k);
     },
   };
 }
