@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/offEnergy.test.ts
+// Run with: npm run test:file tests/unit/offEnergy.test.ts
 //
 // The calorie handling described in lib/offEnergy.ts. The headline case is
 // Swanson Sipping Bone Broth: OFF says 89.3 kcal/100 g, which scaled to a 305 g

@@ -5,8 +5,9 @@
 // PlateEstimate. Image is base64-only server-side; the bearer/secret stay server-side.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -29,14 +30,38 @@ export async function POST(request: NextRequest) {
   // tacos") — the plate prompt is instructed to trust explicit counts/ingredients.
   const note = typeof body.note === 'string' ? body.note.slice(0, 500) : ''
 
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
+
+  // Charged AFTER validation (a missing image must not cost a scan) and BEFORE
+  // the trigger (the allowance gates the dispatch, it does not merely count
+  // it). Photo, upload and "describe it" share ONE daily allowance, which is
+  // why all three routes name the same feature.
+  //
+  // A ticket only rides a request that is SHAPED like a correction: the same
+  // plate, re-read with a note saying what was wrong. A photo arriving with no
+  // note is a new scan however valid the ticket beside it is.
+  const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
+    followUpTicket: body.allowanceTicket,
+    refines: Boolean(note.trim()),
+  })
+  if (!allow.ok) return allow.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask(
+  const trig = await triggerOwnedRun(
+    gate.user,
     'nutrition.plateEstimate',
     { user: grounding, ...(note.trim() ? { note } : {}) },
     { image },
   )
 
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
-  // couldn't even trigger → graceful unavailable.
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
+  // couldn't even trigger → nothing was queued, so give the unit back.
+  await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }

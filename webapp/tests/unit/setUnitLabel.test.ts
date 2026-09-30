@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/setUnitLabel.test.ts
+// Run with: npm run test:file tests/unit/setUnitLabel.test.ts
 //
 // A member created "Stairmaster" as a `time` tracking exercise (PR #922 fixed
 // the picker itself), then immediately hit a second bug: every surface that

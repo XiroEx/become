@@ -425,7 +425,7 @@ export default function FoodSearchModal({
   // This used to be a bare `customTime: string | null`, where clearing the time
   // silently meant "use the current clock" — so the X read as a reset rather
   // than a clear, which is exactly what it was reported as.
-  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('now')
+  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('none')
   const [customTime, setCustomTime] = useState<string | null>(null)
   // When true, the inline DateOnlyPicker disclosure is open.
   const [dateEditOpen, setDateEditOpen] = useState(false)
@@ -528,7 +528,7 @@ export default function FoodSearchModal({
       setSaveToast(null)
       setCustomDate(null)
       setCustomTime(null)
-      setTimeMode('now')
+      setTimeMode('none')
       setDateEditOpen(false)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
@@ -1203,7 +1203,7 @@ export default function FoodSearchModal({
       setSelectedVariantIdx(0)
       setCustomDate(null)
       setCustomTime(null)
-      setTimeMode('now')
+      setTimeMode('none')
       setDateEditOpen(false)
       setRepeatOpen(false)
       setRepeatCount(6)
@@ -2307,7 +2307,7 @@ export default function FoodSearchModal({
                                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                                           maxDate={dateToKey(new Date())}
                                           showTodayChip
-                                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('now'); setDateEditOpen(false) }}
+                                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('none'); setDateEditOpen(false) }}
                                           onChange={(next) => {
                                             // When the user picks "today", treat it as "Now"
                                             // (null) so the pill reflects that and we don't
@@ -2342,7 +2342,7 @@ export default function FoodSearchModal({
                                                 : formatHHMM(minutesOfDay(new Date()))}
                                               onChange={(ev) => {
                                                 const v = ev.target.value
-                                                if (!v) { setCustomTime(null); setTimeMode('now'); return }
+                                                if (!v) { setCustomTime(null); setTimeMode('none'); return }
                                                 setCustomTime(v)
                                                 setTimeMode('custom')
                                               }}

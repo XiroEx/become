@@ -15,7 +15,7 @@
 // Import ONLY from server code (API route handlers). The secret + read-back
 // token are non-NEXT_PUBLIC env vars, so they never reach a client bundle.
 
-// ─── Task registry (the 12 wired paths) ──────────────────────────────────────
+// ─── Task registry (the 14 wired paths) ──────────────────────────────────────
 
 export type BecomeTask =
   // freeform
@@ -40,6 +40,14 @@ export type BecomeTask =
   // Dotless because the task registry now rejects dotted keys.
   | 'nutritionFoodEvidence'
   | 'nutritionFoodReview'
+  // structured text → EXTRACT (not generate) a program from pasted/typed notes.
+  // Dotless — new task registered after the registry started rejecting dotted keys.
+  | 'workoutImportText'
+  // vision → EXTRACT a program from a photo of handwritten/typed notes. Registered
+  // but NOT called by any route: the shared vision runner node hardcodes the
+  // nutrition plate-estimate schema, so this always comes back empty. See the
+  // comment in app/api/ai/workout/import/route.ts before wiring this back up.
+  | 'workoutImportPhoto'
 
 export interface BecomeResponse {
   ok: boolean
@@ -80,6 +88,12 @@ export async function becomeAiConfigured(): Promise<boolean> {
 interface RunState {
   status: string
   output?: { data?: Record<string, unknown> }
+  /** Worker-side reason a run ended without producing a result. */
+  error?: unknown
+  /** How many nodes the worker actually executed. 0 = it never started. */
+  nodesExecuted?: unknown
+  /** The nodes it went through. Empty = it never started. */
+  executionPath?: unknown
 }
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'error'])
@@ -92,6 +106,43 @@ export interface RunSnapshot {
   result?: unknown
   text?: string
   error?: string
+  /**
+   * The run was accepted and then killed WITHOUT executing anything — the
+   * single-flight automation refusing an overlapping run. Distinct from a run
+   * that failed, and the ONLY failure the allowance is given back for.
+   */
+  skipped?: boolean
+}
+
+/**
+ * Did this run end without ever executing?
+ *
+ * The become-ai automation is single-flight. An overlapping trigger is accepted
+ * by the webhook — `triggerBecomeTask` returns ok, and it is right to — and the
+ * worker then reaps it ~15ms later with status 'error', the message
+ * '[worker:concurrency-skip] Run skipped: automation already running',
+ * `nodesExecuted: 0` and an empty `executionPath`. Nothing ran, nothing was
+ * spent, and the member got nothing: that unit has to come back.
+ *
+ * A run that STARTED and then failed is a different thing entirely and stays
+ * non-refundable. So both signals are read strictly and a MISSING field never
+ * reads as "skipped": either the worker names the skip, or it reports zero
+ * nodes executed AND an empty path.
+ */
+export function isSkippedRun(state: {
+  status?: string
+  error?: unknown
+  nodesExecuted?: unknown
+  executionPath?: unknown
+}): boolean {
+  if (!state || state.status === 'completed') return false
+  const named =
+    typeof state.error === 'string' && /concurrency-skip|run skipped/i.test(state.error)
+  const neverStarted =
+    state.nodesExecuted === 0 &&
+    Array.isArray(state.executionPath) &&
+    state.executionPath.length === 0
+  return named || neverStarted
 }
 
 /**
@@ -151,7 +202,10 @@ export async function fetchBecomeRun(runId: string): Promise<RunSnapshot> {
     if (!res.ok) return { status: 'pending' } // transient — keep polling
     const state = (await res.json()) as RunState
     if (!TERMINAL.has(state.status)) return { status: 'pending' }
-    if (state.status !== 'completed') return { status: 'failed', error: `run_${state.status}` }
+    if (state.status !== 'completed') {
+      if (isSkippedRun(state)) return { status: 'failed', error: 'run_skipped', skipped: true }
+      return { status: 'failed', error: `run_${state.status}` }
+    }
     const data = state.output?.data ?? {}
     const br = (data.becomeResponse ?? data.result) as BecomeResponse | undefined
     if (br && br.ok) {

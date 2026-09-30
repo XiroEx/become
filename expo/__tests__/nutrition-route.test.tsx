@@ -27,8 +27,8 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import NutritionIndexRoute from "../app/(tabs)/nutrition/index";
-import DayLogRoute from "../app/(tabs)/nutrition/log/[date]";
+import NutritionIndexRoute from "../app/(app)/(tabs)/nutrition/index";
+import DayLogRoute from "../app/(app)/(tabs)/nutrition/log/[date]";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -77,7 +77,13 @@ describe("NutritionIndexRoute", () => {
       expect(logCalls().length).toBeGreaterThan(0);
     });
     const call = logCalls()[0]!;
-    expect(String(call[0])).toMatch(/^\/api\/nutrition\/log\?date=\d{4}-\d{2}-\d{2}$/);
+    // The device's local day (never `toISOString()`'s UTC one) plus the
+    // offset that produced it.
+    const now = new Date();
+    const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    expect(String(call[0])).toBe(
+      `/api/nutrition/log?date=${localDay}&tz=${now.getTimezoneOffset()}`,
+    );
     const opts = call[2] as {
       baseUrl?: string;
       getToken?: () => string | undefined;
@@ -106,7 +112,7 @@ describe("DayLogRoute", () => {
       expect(logCalls().length).toBeGreaterThan(0);
     });
     expect(String(logCalls()[0]![0])).toBe(
-      "/api/nutrition/log?date=2026-06-01",
+      `/api/nutrition/log?date=2026-06-01&tz=${new Date().getTimezoneOffset()}`,
     );
     await waitFor(() => {
       const kcal = getByTestId("day-totals-kcal").props.children;
@@ -131,7 +137,7 @@ describe("DayLogRoute", () => {
     });
     const del = logCallsByMethod("DELETE")[0]!;
     expect(String(del[0])).toBe(
-      "/api/nutrition/log?foodEntryId=f1&date=2026-06-01",
+      `/api/nutrition/log?foodEntryId=f1&date=2026-06-01&tz=${new Date().getTimezoneOffset()}`,
     );
 
     // …then the overview re-pulls so totals reflect the removal.

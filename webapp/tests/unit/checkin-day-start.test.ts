@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/checkin-day-start.test.ts
+// Run with: npm run test:file tests/unit/checkin-day-start.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { CHECK_IN_DAY_START_HOUR, checkInTzOffset } from '../../lib/checkin/todayFacts'

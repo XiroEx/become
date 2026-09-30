@@ -3,7 +3,7 @@ import sharp from 'sharp'
 import dbConnect from '@/lib/mongodb'
 import ProgramModel from '@/models/Program'
 import ProgramImage from '@/models/ProgramImage'
-import { verifyAuth } from '@/lib/auth'
+import { requireAdmin } from '@/lib/adminAuth'
 
 const MAX_RAW_BYTES = 25 * 1024 * 1024
 
@@ -63,13 +63,10 @@ export async function POST(
   { params }: { params: Promise<{ programId: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (authResult.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-    }
+    // requireAdmin re-reads the User row: the token's `role` claim is a cache
+    // that survives a demotion, so it can gate nothing on its own.
+    const gate = await requireAdmin(request)
+    if (!gate.ok) return gate.response
 
     await dbConnect()
     const { programId } = await params
@@ -157,13 +154,10 @@ export async function DELETE(
   { params }: { params: Promise<{ programId: string }> }
 ) {
   try {
-    const authResult = await verifyAuth(request)
-    if (!authResult.success) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    if (authResult.role !== 'admin') {
-      return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-    }
+    // requireAdmin re-reads the User row: the token's `role` claim is a cache
+    // that survives a demotion, so it can gate nothing on its own.
+    const gate = await requireAdmin(request)
+    if (!gate.ok) return gate.response
 
     await dbConnect()
     const { programId } = await params

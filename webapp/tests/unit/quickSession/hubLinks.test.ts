@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/hubLinks.test.ts
+// Run with: npm run test:file tests/unit/quickSession/hubLinks.test.ts
 //
 // Locks the contract between "Build a custom session" (BUILD_SESSION_HREF)
 // and the hub page that reads its ?build=1 flag (shouldAutoOpenBuilder) — the

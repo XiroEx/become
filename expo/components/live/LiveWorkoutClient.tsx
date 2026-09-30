@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -15,6 +16,7 @@ import { detectBellStyle } from "@/lib/live/bellStyle";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -107,6 +109,7 @@ export function LiveWorkoutClient({
   restTimerClearInterval,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
+  const { colors } = useThemeTokens();
   const [grid, setGrid] = useState<LiveGrid>(() =>
     initialGrid(workout.exercises, restoredGrid),
   );
@@ -114,7 +117,16 @@ export function LiveWorkoutClient({
   // compose instead of clobbering each other (the closure `grid` would be stale
   // for the second edit).
   const gridRef = useRef<LiveGrid>(grid);
-  gridRef.current = grid;
+  // The mirror is maintained AFTER commit, never during render: writing a ref
+  // while rendering is what `react-hooks/refs` reports, and under a re-render
+  // that React throws away it leaves the ref holding a grid the UI never
+  // showed. Every edit below assigns `gridRef.current` itself before calling
+  // setGrid, so two edits inside one render cycle still compose; this effect
+  // only has to cover the grid changes that do not come from an edit (mount and
+  // the re-seed below).
+  useEffect(() => {
+    gridRef.current = grid;
+  }, [grid]);
   const [round, setRound] = useState<number>(1);
   const totalRounds = workout.groupRounds ?? 1;
 
@@ -139,7 +151,7 @@ export function LiveWorkoutClient({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>

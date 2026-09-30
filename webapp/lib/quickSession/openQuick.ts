@@ -11,6 +11,9 @@ interface SessionExercise {
   name: string
   exerciseSlug?: string
   trackingType?: string
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
   sets?: SessionSet[]
   groupId?: string
   groupType?: string
@@ -54,6 +57,9 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
         reps: p?.reps ?? (first?.reps != null ? String(first.reps) : ''),
         ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
         ...(p?.rest ? { rest: p.rest } : {}),
+        ...(ex.equipment ? { equipment: ex.equipment } : {}),
+        ...(ex.laterality ? { laterality: ex.laterality } : {}),
+        ...(ex.movementPatterns ? { movementPatterns: ex.movementPatterns } : {}),
         // A superset built mid-session is part of the session, not a detail of
         // one run of it — reopening has to bring it back.
         ...(ex.groupId ? { groupId: ex.groupId } : {}),

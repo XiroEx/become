@@ -1,31 +1,13 @@
-import dbConnect from '../../../../lib/mongodb'
-import User from '../../../../models/User'
-import { signToken } from '../../../../lib/auth'
+// RETIRED. This endpoint created an account and minted a full session JWT from a
+// bare name+email, with zero proof of address ownership. Nothing calls it —
+// verified by grep across webapp/, expo/, shared/, tests/ — so it is answered
+// with 410 Gone rather than deleted, which keeps the retirement discoverable
+// for any stale client still pointed at it.
+import { NextResponse } from 'next/server'
+import { legacyAuthGone } from '@/lib/legacyAuthGone'
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json()
-    const { name, email } = body
+export const dynamic = 'force-dynamic'
 
-    if (!name || !email) {
-      return new Response(JSON.stringify({ message: 'Name and email are required' }), { status: 400 })
-    }
-
-    await dbConnect()
-
-    const existing = await User.findOne({ email })
-    if (existing) {
-      return new Response(JSON.stringify({ message: 'Email already in use' }), { status: 409 })
-    }
-
-    const user = new User({ name, email, password: 'dummy-password-not-used' })
-    await user.save()
-
-    const token = await signToken({ userId: String(user._id), email: user.email, role: user.role })
-
-    return new Response(JSON.stringify({ token, user: { id: user._id, name: user.name, email: user.email } }), { status: 201 })
-  } catch (err: any) {
-    console.error('register error', err)
-    return new Response(JSON.stringify({ message: err.message || 'Server error' }), { status: 500 })
-  }
+export async function POST(): Promise<NextResponse> {
+  return legacyAuthGone()
 }

@@ -1,6 +1,12 @@
 /* eslint-disable import/first */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
+const mockPush = jest.fn();
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+  useLocalSearchParams: () => ({}),
+}));
+
 const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
@@ -22,12 +28,40 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn() };
 });
 
-import { apiFetch } from "@become/api-client";
+// The check-in's two writes go through the offline queue (NP-190), which reads
+// the JWT from the secure store: a replay fires on reconnect, which may be long
+// after this screen was unmounted.
+jest.mock("expo-secure-store", () => ({
+  __esModule: true,
+  async getItemAsync(): Promise<string | null> {
+    return "test-jwt";
+  },
+  async setItemAsync(): Promise<void> {},
+  async deleteItemAsync(): Promise<void> {},
+}));
+
+import NetInfo from "@react-native-community/netinfo";
+import { ApiError, apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import DashboardRoute from "../app/(tabs)/dashboard/index";
+import { getOfflineWrites } from "@/lib/offline/writes";
+import { localDateKey } from "@/lib/nutrition/localDay";
+import DashboardRoute from "../app/(app)/(tabs)/dashboard/index";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
+const mockNetInfoFetch = NetInfo.fetch as unknown as jest.Mock;
+const ONLINE = { isConnected: true, isInternetReachable: true };
+const AIRPLANE_MODE = { isConnected: false, isInternetReachable: false };
+
+const DEFAULT_CURRENT_WORKOUT: Record<string, unknown> = {
+  workout: { title: "Upper A", day: "Day 3", exercises: [{}, {}, {}] },
+  phase: 2,
+  day: "Day 3",
+  phaseInfo: { name: "Phase 2" },
+};
+
+/** Swapped by the navigation tests to change the day label / phase. */
+let currentWorkout: Record<string, unknown> = DEFAULT_CURRENT_WORKOUT;
 
 function wireApiFetch() {
   mockApiFetch.mockImplementation((path: string) => {
@@ -49,11 +83,10 @@ function wireApiFetch() {
       });
     }
     if (path.startsWith("/api/programs/current-workout")) {
-      return Promise.resolve({
-        workout: { title: "Upper A", exercises: [{}, {}, {}] },
-        phase: 1,
-        phaseInfo: { name: "Phase 1" },
-      });
+      // The shape the webapp route answers with: the workout, a 1-BASED phase
+      // number, and the DAY LABEL the web addresses the session by
+      // (`…/workout?day=Day 3`).
+      return Promise.resolve(currentWorkout);
     }
     if (path === "/api/mood" || path === "/api/weight") {
       return Promise.resolve({ success: true });
@@ -71,7 +104,16 @@ function callsTo(path: string): unknown[][] {
 describe("DashboardRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
+    mockPush.mockReset();
+    mockNetInfoFetch.mockResolvedValue(ONLINE);
+    currentWorkout = DEFAULT_CURRENT_WORKOUT;
     wireApiFetch();
+  });
+
+  afterEach(async () => {
+    // One queue for the app: leave nothing for the next test to replay.
+    await getOfflineWrites().clear();
+    mockNetInfoFetch.mockResolvedValue(ONLINE);
   });
 
   it("fires the user/streak/active GETs with baseUrl + token, then current-workout", async () => {
@@ -169,7 +211,6 @@ describe("DashboardRoute", () => {
     expect(moodCall[2]).toEqual(
       expect.objectContaining({
         method: "POST",
-        body: { mood: 4 },
         baseUrl: WEBAPP_BASE_URL,
       }),
     );
@@ -177,14 +218,23 @@ describe("DashboardRoute", () => {
       (moodCall[2] as { getToken?: () => string | undefined }).getToken?.(),
     ).toBe(mockToken);
 
+    // Each write carries the LOCAL DAY it was made on (NP-189/NP-190), so the
+    // same body is correct whether it is sent now or replayed after midnight.
+    const moodBody = (moodCall[2] as { body: Record<string, unknown> }).body;
+    expect(moodBody.mood).toBe(4);
+    expect(moodBody.date).toBe(localDateKey(new Date()));
+    expect(typeof moodBody.loggedAt).toBe("string");
+
     const weightCall = callsTo("/api/weight")[0]!;
     expect(weightCall[2]).toEqual(
       expect.objectContaining({
         method: "POST",
-        body: { weight: 183 },
         baseUrl: WEBAPP_BASE_URL,
       }),
     );
+    const weightBody = (weightCall[2] as { body: Record<string, unknown> }).body;
+    expect(weightBody.weight).toBe(183);
+    expect(weightBody.date).toBe(localDateKey(new Date()));
 
     // Streak re-pulled after the check-in.
     await waitFor(() => {
@@ -192,7 +242,11 @@ describe("DashboardRoute", () => {
     });
   });
 
-  it("surfaces an error in the check-in modal when a mutation fails", async () => {
+  // A REFUSAL, not a missing connection. Since NP-190 an unreachable server is
+  // no longer an error the member sees — the write is kept and replayed (see
+  // the airplane-mode test below). A 400 is the server's final answer, so
+  // retrying cannot help and the modal must say so.
+  it("surfaces an error in the check-in modal when the server REFUSES the write", async () => {
     const { getByTestId, queryByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting")).toBeTruthy();
@@ -200,7 +254,9 @@ describe("DashboardRoute", () => {
 
     // Make the mood POST fail; keep the GETs succeeding.
     mockApiFetch.mockImplementation((path: string) => {
-      if (path === "/api/mood") return Promise.reject(new Error("save failed"));
+      if (path === "/api/mood") {
+        return Promise.reject(new ApiError(400, { error: "Invalid mood value" }));
+      }
       if (path === "/api/auth/me") {
         return Promise.resolve({
           user: { _id: "u1", email: "jon@example.com", name: "Jon" },
@@ -229,6 +285,47 @@ describe("DashboardRoute", () => {
     expect(queryByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
   });
 
+  // NP-190's first acceptance: the check-in a member makes on a plane.
+  it("a check-in made in airplane mode is kept and replayed on its own day", async () => {
+    mockNetInfoFetch.mockResolvedValue(AIRPLANE_MODE);
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-greeting")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-open-checkin"));
+    fireEvent.press(getByTestId("dashboard-checkin-modal-mood-4"));
+    fireEvent.changeText(getByTestId("dashboard-checkin-modal-weight"), "183");
+    await act(async () => {
+      fireEvent.press(getByTestId("dashboard-checkin-modal-submit"));
+    });
+
+    // Nothing was sent, and nothing was lost — and no error was raised at the
+    // member, because there is nothing for them to do about it.
+    expect(callsTo("/api/mood").length).toBe(0);
+    expect(callsTo("/api/weight").length).toBe(0);
+    expect(getOfflineWrites().pending()).toBe(2);
+
+    // The connection returns.
+    mockNetInfoFetch.mockResolvedValue(ONLINE);
+    await act(async () => {
+      await getOfflineWrites().flush();
+    });
+
+    const today = localDateKey(new Date());
+    expect(callsTo("/api/mood").length).toBe(1);
+    expect(callsTo("/api/weight").length).toBe(1);
+    expect(
+      (callsTo("/api/mood")[0]![2] as { body: Record<string, unknown> }).body
+        .date,
+    ).toBe(today);
+    expect(
+      (callsTo("/api/weight")[0]![2] as { body: Record<string, unknown> }).body
+        .date,
+    ).toBe(today);
+    expect(getOfflineWrites().pending()).toBe(0);
+  });
+
   it("check-in logs mood only when weight is left blank", async () => {
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
@@ -245,5 +342,77 @@ describe("DashboardRoute", () => {
       expect(callsTo("/api/mood").length).toBeGreaterThan(0);
     });
     expect(callsTo("/api/weight").length).toBe(0);
+  });
+});
+
+// THE TWO BUTTONS THAT DID NOTHING.
+//
+// `DashboardScreen` shipped with `onPress={onStartWorkout ?? (() => {})}` and
+// this route never passed one, so Start workout rendered, pressed, animated —
+// and went nowhere. The prop is required now; these assertions are about WHERE
+// it goes.
+describe("DashboardRoute navigation", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockPush.mockReset();
+    currentWorkout = DEFAULT_CURRENT_WORKOUT;
+    wireApiFetch();
+  });
+
+  it("Start workout opens the current workout's overview, by day label and phase", async () => {
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-start-workout"));
+
+    // The web opens `…/workout?day=Day 3`; the native route addresses the
+    // workout by index, so "Day 3" → 2 (workoutIndexFromDayLabel) and the
+    // 1-based phase 2 → `?phase=1`.
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/p1/workout/2?phase=1",
+    );
+  });
+
+  it("falls back to the first workout of phase 1 when the response has no day", async () => {
+    currentWorkout = {
+      workout: { title: "Upper A", exercises: [{}] },
+      phaseInfo: { name: "Phase 1" },
+    };
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-start-workout"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/p1/workout/0?phase=0",
+    );
+  });
+
+  it("Calendar opens the calendar screen", async () => {
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-open-calendar")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-open-calendar"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
+  });
+
+  it("still opens settings from the gear — the store's deletion path", async () => {
+    // storeReadiness.test.tsx (webapp) string-matches this wiring, because it
+    // is the only way to Delete account in a store build.
+    const { getByTestId } = render(<DashboardRoute />);
+    await waitFor(() => {
+      expect(getByTestId("dashboard-open-settings")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("dashboard-open-settings"));
+
+    expect(mockPush).toHaveBeenCalledWith("/settings");
   });
 });

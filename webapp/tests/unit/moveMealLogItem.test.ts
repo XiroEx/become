@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/moveMealLogItem.test.ts
+// Run with: npm run test:file tests/unit/moveMealLogItem.test.ts
 //
 // A logged-food row could edit its amount and macros, but not the meal tag it
 // belonged to. The only workaround was delete + re-log. These tests pin both

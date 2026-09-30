@@ -34,7 +34,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import VerifyRoute, { VerifyScreen } from "../app/verify";
+import VerifyRoute, { VerifyScreen } from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -55,7 +55,12 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
       mode: "login" | "register",
     ) => Promise<{ token: string }>;
     const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
-    expect(getByTestId("verify-spinner")).toBeTruthy();
+    // NP-124: the spinner is hidden from assistive technology (an unlabelled
+    // ActivityIndicator announces nothing; the text beside it says everything),
+    // so the query has to ask for hidden elements to see it at all.
+    expect(
+      getByTestId("verify-spinner", { includeHiddenElements: true }),
+    ).toBeTruthy();
     expect(getByTestId("verify-working-text")).toBeTruthy();
   });
 
@@ -71,7 +76,7 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalledWith("new-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("shows an error when the token is missing", () => {
@@ -149,7 +154,31 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     await waitFor(() => {
       expect(mockSetToken).toHaveBeenCalledWith("persisted-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("clears any pending magic-link session on successful verify", async () => {
+    mockParams = { token: "real-token-1234", mode: "register" };
+    const verifyFn = jest.fn(async () => ({ token: "new-jwt" }));
+    const mockClear = jest.fn(async () => {});
+    const pendingStore = {
+      get: jest.fn(async () => null),
+      set: jest.fn(async () => {}),
+      clear: mockClear,
+    };
+    render(
+      <VerifyScreen
+        verifyFn={verifyFn}
+        pendingSessionStore={pendingStore}
+      />,
+    );
+    await waitFor(() => {
+      expect(verifyFn).toHaveBeenCalledWith("real-token-1234", "register");
+    });
+    await waitFor(() => {
+      expect(mockClear).toHaveBeenCalled();
+    });
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("does not persist a token when verify fails", async () => {

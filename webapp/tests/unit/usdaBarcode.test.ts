@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/usdaBarcode.test.ts
+// Run with: npm run test:file tests/unit/usdaBarcode.test.ts
 //
 // USDA stores gtinUpc zero-padded to 14 digits and its search matches the
 // stored string, so a scanned 12-digit UPC-A finds nothing. Swanson Sipping

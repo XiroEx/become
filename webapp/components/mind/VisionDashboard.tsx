@@ -22,6 +22,8 @@ import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 const ACCENT = '#10b981' // emerald — vision / future-self system color
 const DONE_TEXT = 'The future, coming into focus.'
@@ -130,6 +132,7 @@ export default function VisionDashboard() {
   const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(PROTOCOLS, reps)
   const [aiLoading, setAiLoading] = useState(false)
   const [aligning, setAligning] = useState(false)
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VisionForm>(EMPTY_FORM)
@@ -188,7 +191,13 @@ export default function VisionDashboard() {
     try {
       const res = await fetch('/api/mind/vision', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
       if (res.ok) { showToast('That’s your vision. Now live toward it. 🔭', 'success'); setEditing(false); load() }
-      else showToast('Could not save', 'error')
+      else {
+        // Belt and braces: TierGate already keeps a locked member out of this
+        // screen, but the server is the gate and this is what it says.
+        const g = gateFrom(res.status, await res.json().catch(() => null))
+        if (g) setGate(g)
+        else showToast('Could not save', 'error')
+      }
     } catch { showToast('Could not save', 'error') }
   }
 
@@ -200,7 +209,12 @@ export default function VisionDashboard() {
     try {
       const tz = new Date().getTimezoneOffset()
       const r = await fetch('/api/mind/vision', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ action: 'align', score, tz }) })
-      if (r.ok) { const d = await r.json(); if (d.alignment) setAlign(d.alignment) }
+      if (r.ok) {
+        const d = await r.json(); if (d.alignment) setAlign(d.alignment)
+      } else {
+        const g = gateFrom(r.status, await r.json().catch(() => null))
+        if (g) { setGate(g); setAligning(false); return }
+      }
       showToast(score >= 4 ? 'Aligned. Keep pointing at it. 🔭' : 'Noted. Tomorrow, aim one hour at the vision.', 'success')
     } catch { /* ignore */ }
     setAligning(false)
@@ -241,6 +255,7 @@ export default function VisionDashboard() {
 
   return (
     <div className="space-y-5">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-emerald-500" />
       <SystemHero
         Icon={Telescope}

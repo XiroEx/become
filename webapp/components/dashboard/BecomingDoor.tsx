@@ -15,6 +15,7 @@ import type { Suggestion } from '@/lib/goals/suggestions'
 import type { MindSummary } from '@/components/dashboard/MindsetCard'
 import { PILLAR } from '@/lib/pillarColors'
 import { fmtUnit } from '@/lib/goals/pace'
+import { readReached } from '@/lib/goals/status'
 
 const RANK: Record<Suggestion['severity'], number> = { warn: 0, nudge: 1, info: 2, good: 3 }
 
@@ -77,12 +78,17 @@ export default function BecomingDoor({ goals, mind }: { goals: GoalProgress | nu
   // and not yet opened.
   const loud = useUnread()
 
+  // "Reached ✓" is the confirmed goal; a weigh-in that happens to be inside
+  // the band today is "At goal" until the hold is confirmed (lib/goals/status).
+  const reached = readReached(n?.status, n?.pace?.status)
+
   const mindChip = mind
     ? { value: `Lv ${mind.level}`, sub: `Ch ${mind.chapter}${mind.chapterName ? ` · ${mind.chapterName}` : ''}` }
     : { value: '—', sub: undefined }
   const nutritionChip = !n ? { value: '—', sub: undefined }
     : !n.target.weight ? { value: 'Set a target', sub: undefined }
-    : n.status === 'achieved' || n.pace?.status === 'done' ? { value: 'Reached ✓', sub: undefined }
+    : reached === 'reached' ? { value: 'Reached ✓', sub: undefined }
+    : reached === 'at-goal' ? { value: 'At goal', sub: 'hold a week' }
     : n.pace?.status === 'behind' ? { value: `${fmtUnit(n.pace.behindByKg, n.unit)} behind`, sub: `→ ${Math.round(n.target.weight)} ${n.unit}` }
     : n.pace?.status === 'ahead' ? { value: 'Ahead', sub: n.pace.eta ? `${n.pace.eta} to ${Math.round(n.target.weight)}` : undefined }
     : n.pace?.status === 'on' ? { value: 'On pace', sub: n.pace.eta ? `${n.pace.eta} to ${Math.round(n.target.weight)}` : undefined }

@@ -79,6 +79,10 @@ export async function logQuickSession(input: QuickLogInput): Promise<{ done: boo
       completed: done,
       ...(done && { duration: Math.max(1, Math.round(totalSets * 1.5)) }),
       performedAt: input.date,
+      // Backfilling a past/today session (`done`) is real activity; planning
+      // a future one is not — it must not appear "in progress" the moment
+      // that date arrives (see IWorkoutLog.startedAt).
+      started: done,
       tz: new Date().getTimezoneOffset(),
     }),
   })

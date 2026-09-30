@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/recentSessions.test.ts
+// Run with: npm run test:file tests/unit/quickSession/recentSessions.test.ts
 //
 // Locks the "Workout Now" sheet's My Sessions cap: it must show only kind:'quick'
 // logs, and only the 3 most recent of them.

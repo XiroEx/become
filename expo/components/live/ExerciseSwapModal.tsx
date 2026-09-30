@@ -1,6 +1,8 @@
-import { Modal, View, Text, Pressable, ScrollView } from "react-native";
+import { Modal, View, Pressable, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import type { AlternativeCandidate } from "@become/api-client";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface ExerciseSwapModalProps {
   visible: boolean;
@@ -26,6 +28,10 @@ export function ExerciseSwapModal({
   onClose,
   testID = "swap-modal",
 }: ExerciseSwapModalProps) {
+  // A sheet is an ELEVATED surface, so it is `card` and not `background` — in
+  // light mode a #fafafa sheet on a #fafafa page has no edge at all (NP-123).
+  const { colors, scrim } = useThemeTokens();
+
   return (
     <Modal
       visible={visible}
@@ -35,11 +41,11 @@ export function ExerciseSwapModal({
     >
       <View
         testID={testID}
-        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "#0008" }}
+        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: scrim }}
       >
         <View
           style={{
-            backgroundColor: "#0a0a0a",
+            backgroundColor: colors.card,
             padding: 16,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

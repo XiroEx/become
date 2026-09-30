@@ -15,7 +15,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mongoose from 'mongoose'
 import connectDB from '@/lib/mongodb'
-import Food from '@/models/Food'
+import Food, { IFood } from '@/models/Food'
+import { createStrict } from '@/lib/strictCreate'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 
 async function unauthorized(req: NextRequest): Promise<NextResponse | null> {
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    const food = await Food.create({
+    const food = await createStrict<IFood>(Food, {
       name: 'E2E Scaling Fixture',
       slug,
       category: 'Other',

@@ -1,3 +1,6 @@
+import type { VideoFramingOverride } from '@/lib/videoFraming';
+import type { VideoTrimOverride } from '@/lib/videoTrim';
+
 // Exercise category (maps from Exercise model's `category`)
 export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'cooldown'
   | 'power' | 'cardio' | 'plyometric' | 'calisthenics' | 'olympic'
@@ -5,6 +8,10 @@ export type ExerciseType = 'strength' | 'conditioning' | 'warmup' | 'abs' | 'coo
 
 // Exercise Grouping Types (supersets, circuits, etc.)
 export type ExerciseGroupType = 'superset' | 'circuit' | 'triset' | 'giant_set' | 'emom' | 'amrap';
+
+// Review flags attached to a freshly-imported exercise (see lib/workout/importProgram.ts).
+// Client-only annotation — never persisted (dehydrateProgram only copies known fields).
+export type ImportFlag = 'new' | 'broken' | 'grouped';
 
 // Target User Levels
 export type TargetUserLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Beginner to Intermediate' | 'Intermediate to Advanced';
@@ -19,12 +26,23 @@ export interface Exercise {
   details?: string;              // Additional instructions (tempo, etc.)
   videoUrl?: string;             // Hydrated from exercises collection
   thumbnailUrl?: string;         // Hydrated from exercises collection
+  // The rest of the video display record, also denormalized by
+  // lib/hydrateExercises.ts. These have always been on the wire; they were
+  // simply absent from this interface, so the preview surfaces that read a
+  // program through it could not see the admin's framing or trim and played
+  // every clip raw and full-length.
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
   // Exercise grouping — exercises sharing the same groupId are performed together
   groupId?: string;              // Shared ID linking grouped exercises
   groupType?: ExerciseGroupType; // Type of grouping
   groupLabel?: string;           // Display label: "Superset A", "Circuit 1", "EMOM 12 min"
   groupRest?: string;            // Rest between full rounds of the group
   groupRounds?: number;          // Number of rounds through the group
+  // Set only on a just-imported program, before the user reviews it.
+  importFlags?: ImportFlag[];
 }
 
 export interface Workout {

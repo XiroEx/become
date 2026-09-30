@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/engagement.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/engagement.test.ts
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { engagementBoost, rankedRotationKeys, type TileEngagement } from '../../../lib/dashboardTiles/smartRotation'
@@ -12,7 +12,7 @@ function ctx(over: Partial<DashboardTileContext> = {}): DashboardTileContext {
     data: { weightData: [], bmiData: [], moodData: [], currentProgram: null,
       stats: { streakDays: 0, totalWorkouts: 0, thisWeekWorkouts: 0, goalProgress: 0 } },
     streakData: null, nutritionData: null, weeklyAvailability: 4, weightUnit: 'lbs',
-    todaysMood: 4, isMoodUpdating: false, onMoodChange: () => {}, onOpenWeightSheet: () => {}, ...over,
+    todaysMood: 4, isMoodUpdating: false, onMoodChange: () => {}, onOpenWeightSheet: () => {}, onOpenQuickSession: () => {}, ...over,
   }
 }
 

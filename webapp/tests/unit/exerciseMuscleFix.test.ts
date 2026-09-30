@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseMuscleFix.test.ts
+// Run with: npm run test:file tests/unit/exerciseMuscleFix.test.ts
 //
 // Covers the pure helpers used by scripts/fix-exercise-muscles.ts:
 //   - muscleArrayEqual (order-independent set equality)

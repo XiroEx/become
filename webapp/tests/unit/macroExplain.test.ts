@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/macroExplain.test.ts
+// Run with: npm run test:file tests/unit/macroExplain.test.ts
 //
 // Pinned to two real members: the one on the onboarding screenshot, and the one
 // who picked High Protein and was handed 348 g. The second is the reason this

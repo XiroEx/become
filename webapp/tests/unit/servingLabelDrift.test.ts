@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/servingLabelDrift.test.ts
+// Run with: npm run test:file tests/unit/servingLabelDrift.test.ts
 //
 // The reported bug, verbatim: logged 95 g of chicken breast, the food's own
 // serving is "3 oz (85 g)" (a stored USDA-style displayLabel), and the item's

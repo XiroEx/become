@@ -51,9 +51,12 @@ A Next.js 16 application delivering client onboarding, authentication, and coach
 
 | Route | Method | Description |
 | ----- | ------ | ----------- |
-| `/api/auth/register` | POST | Create user, hash password, return JWT. |
-| `/api/auth/login` | POST | Validate credentials with [`models/User.comparePassword`](models/User.ts), return JWT. |
+| `/api/auth/send-link` | POST | Start passwordless magic-link sign-in (login + register). |
 | `/api/auth/me` | GET | Verify token extracted by [`lib/auth.getTokenFromRequest`](lib/auth.ts) and return profile. |
+
+`/api/auth/login` and `/api/auth/register` are **retired** and return `410 Gone`.
+They minted a full session JWT with no proof of address ownership; sign-in is
+magic-link only.
 
 ## Available Scripts
 

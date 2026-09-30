@@ -3,6 +3,7 @@ import mongoose from 'mongoose'
 import dbConnect from '@/lib/mongodb'
 import Meal, { IMealItem } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import {
   parsePlannedDateToUtcMidnight,
   todayUtcKey,
@@ -90,7 +91,9 @@ export async function POST(request: NextRequest) {
     }
     // Access policy mirrors /api/meals/[id]/log: public/verified/owner/admin.
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Same admin-only widening as /api/meals/[id]/log, and confirmed the same
+    // way — against the database, never off the token claim.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!meal.isPublic && !meal.isVerified && !isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Meal template not found' }, { status: 404 })
     }

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/layout-route.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/layout-route.test.ts
 //
 // Auth + body-validation branches of /api/dashboard/layout. The 200 paths
 // (GET migration/persist, PATCH persist) touch MongoDB and are covered by the

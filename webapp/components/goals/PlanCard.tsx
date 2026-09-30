@@ -11,6 +11,7 @@ import { Target, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import { Card } from '@/components/ui'
 import PacePicker from '@/components/goals/PacePicker'
 import { fmtUnit } from '@/lib/goals/pace'
+import { readReached } from '@/lib/goals/status'
 import type { GoalProgress } from '@/lib/goals/progress'
 
 function authHeaders(): HeadersInit {
@@ -91,7 +92,11 @@ export default function PlanCard({ className = '', onPaceChange }: PlanCardProps
   const unit = n.unit
   const DirIcon = n.direction === 'lose' ? TrendingDown : n.direction === 'gain' ? TrendingUp : Minus
   const p = n.pace
-  const status = n.status === 'achieved' || p?.status === 'done' ? 'Reached' : p?.status === 'behind' ? `${fmtUnit(p.behindByKg, unit)} behind` : p?.status === 'ahead' ? `${fmtUnit(p.aheadByKg, unit)} ahead` : p?.status === 'on' ? 'On pace' : null
+  // "Reached" is the confirmed goal; inside the band today but not yet held for
+  // a week is "At goal" (lib/goals/status) — the same distinction the Becoming
+  // surfaces draw, so no two screens claim different things about one goal.
+  const reached = readReached(n.status, p?.status)
+  const status = reached === 'reached' ? 'Reached' : reached === 'at-goal' ? 'At goal' : p?.status === 'behind' ? `${fmtUnit(p.behindByKg, unit)} behind` : p?.status === 'ahead' ? `${fmtUnit(p.aheadByKg, unit)} ahead` : p?.status === 'on' ? 'On pace' : null
 
   return (
     <Card className={className} data-testid="plan-card">

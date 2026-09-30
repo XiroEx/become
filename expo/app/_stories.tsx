@@ -1,4 +1,5 @@
-import { View, ScrollView, Text } from "react-native";
+import { View, ScrollView } from "react-native";
+import { Text } from "@/components/Text";
 import { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Badge } from "@/components/Badge";
@@ -8,8 +9,19 @@ import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { Toggle } from "@/components/Toggle";
+import { PermissionDeniedNotice } from "@/components/media/PermissionDeniedNotice";
+import { permissionDeniedMessage } from "@/lib/media/capture";
+import { devOnlyRoute } from "@/lib/dev/devOnlyRoute";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
-export default function StoriesScreen() {
+/**
+ * The component gallery. `_stories` is not a private filename to expo-router —
+ * it ignores only `+api`, `+html` and `+native-intent` — so this shipped as a
+ * live route reachable at `become://_stories`. `devOnlyRoute` (below) sends it
+ * to Home in anything but a development build.
+ */
+export function StoriesGallery() {
+  const { colors } = useThemeTokens();
   const [text, setText] = useState("");
   const [toggleOn, setToggleOn] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -18,7 +30,7 @@ export default function StoriesScreen() {
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="stories-screen"
     >
       <ScrollView
@@ -93,6 +105,24 @@ export default function StoriesScreen() {
             </Button>
           </View>
         </Card>
+
+        {/*
+          The one thing a member sees when they refuse the camera or their
+          photos (NP-059). It is here because it is the hardest state to reach
+          on purpose — you have to deny the permission first — and because a
+          sentence that has to be read under stress is worth looking at.
+        */}
+        <Card testID="card-media" title="Permission denied">
+          <PermissionDeniedNotice
+            testID="media-permission-denied"
+            denial={{
+              status: "permission-denied",
+              source: "camera",
+              canAskAgain: false,
+              message: permissionDeniedMessage("camera", false),
+            }}
+          />
+        </Card>
       </ScrollView>
 
       <Modal
@@ -125,3 +155,5 @@ export default function StoriesScreen() {
     </SafeAreaView>
   );
 }
+
+export default devOnlyRoute(StoriesGallery);

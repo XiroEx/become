@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/slotDateKey.test.ts
+// Run with: npm run test:file tests/unit/slotDateKey.test.ts
 //
 // Pinned to the real 2026-08-12 miss: the dashboard said "Today: Day 3 · Legs"
 // and the 7:17am push said "Day 4 · Chest, Back". Same schedule, two different

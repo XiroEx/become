@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseUniversalReview.test.ts
+// Run with: npm run test:file tests/unit/exerciseUniversalReview.test.ts
 //
 // "Submit to Universal": a member can ask admins to publish one of their
 // custom exercises into the shared catalog so anyone can find and use it.

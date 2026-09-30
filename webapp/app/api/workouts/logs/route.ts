@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
-import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import type { IWorkoutLog } from '@/models/UserProgress'
@@ -29,6 +29,7 @@ type RawLog = {
   sessionId?: string
   completed: boolean
   skipped?: boolean
+  favorite?: boolean
   date: Date
   duration?: number
   exercises?: Array<{
@@ -200,10 +201,11 @@ export async function GET(request: NextRequest) {
     const withExercises = searchParams.get('withExercises') === 'true'
 
     const userProgress = await UserProgress.findOne({ userId: payload.userId })
-      .select('workoutLogs activePrograms')
+      .select('workoutLogs activePrograms favoriteSessionOrder')
       .lean<{
         workoutLogs?: RawLog[]
         activePrograms?: Array<{ programId: string; programName: string }>
+        favoriteSessionOrder?: string[]
       } | null>()
 
     const programNames = new Map<string, string>()
@@ -215,6 +217,13 @@ export async function GET(request: NextRequest) {
     // session reopened from history comes back with its weight column intact.
     const trackingMap = withExercises
       ? await trackingBySlug(
+          (userProgress?.workoutLogs ?? [])
+            .filter((l) => l.kind === 'quick' || !l.programId)
+            .flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)),
+        )
+      : {}
+    const bellMap = withExercises
+      ? await bellFieldsBySlug(
           (userProgress?.workoutLogs ?? [])
             .filter((l) => l.kind === 'quick' || !l.programId)
             .flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)),
@@ -259,6 +268,7 @@ export async function GET(request: NextRequest) {
                   // hand-edited log so the row can't render blank.
                   name: ex.name || 'Exercise',
                   trackingType: trackingFor(ex, trackingMap),
+                  ...bellFieldsFor(ex, bellMap),
                   sets: p?.sets ?? (ex.sets?.length || 1),
                   reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
                   ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
@@ -284,6 +294,7 @@ export async function GET(request: NextRequest) {
           sessionId: log.sessionId,
           completed: log.completed,
           skipped: !!log.skipped,
+          favorite: !!log.favorite,
           date: new Date(log.date).toISOString(),
           duration: log.duration,
           exerciseCount,
@@ -293,7 +304,10 @@ export async function GET(request: NextRequest) {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    return NextResponse.json({ logs })
+    // Manual drag order for favorited quick sessions in the Sessions list.
+    // History/Calendar/etc. ignore this field and keep the date-desc sort
+    // above; only the Sessions tab re-groups favorites to the top with it.
+    return NextResponse.json({ logs, favoriteSessionOrder: userProgress?.favoriteSessionOrder ?? [] })
   } catch (error) {
     console.error('Error fetching workout logs:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

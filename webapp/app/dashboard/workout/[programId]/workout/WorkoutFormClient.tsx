@@ -10,7 +10,7 @@ import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModa
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary from "@/components/WorkoutSummary";
 import ShareButton from "@/components/share/ShareButton";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoDisplay, resolveExerciseVideo } from "@/lib/data/exerciseVideos";
 import { groupExercises, type ExerciseGroup } from "@/lib/workoutUtils";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import FramedVideo from "@/components/FramedVideo";
@@ -18,15 +18,20 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { readQuickSession, clearQuickSession, updateQuickSession, QUICK_PROGRAM_ID, quickSessionLiveHref, quickSessionTrackHref, swapQuickSessionExercise } from "@/lib/quickSession/store";
+import { hydrateQuickSessionVideos } from "@/lib/quickSession/hydrateVideos";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled } from "@/lib/workout/tracking";
+import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
+import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
+import { trackColumnSpans, colSpan } from "@/lib/workout/trackColumns";
+import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
-import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -67,11 +72,15 @@ function VideoPlayer({
   videoFraming?: VideoFramingOverride | null;
   videoTrim?: VideoTrimOverride | null;
 }) {
-  // The exercise's own record wins. The name-keyed cache is only consulted for
-  // legacy rows whose video never got denormalized onto the Exercise — going
-  // to it first is what made a video an admin had removed keep playing.
-  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = exerciseThumbnailUrl?.trim() || getExerciseThumbnail(exerciseName);
+  // The exercise's own record wins; the name-keyed cache is only consulted for
+  // legacy rows whose video never got denormalized onto the Exercise. Framing
+  // and trim follow whichever of the two supplied the file — see
+  // resolveExerciseVideo.
+  const resolved = resolveExerciseVideo(
+    { videoUrl: exerciseVideoUrl, thumbnailUrl: exerciseThumbnailUrl, videoWidth, videoHeight, videoFraming, videoTrim },
+    getExerciseVideoDisplay(exerciseName)
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
 
   // No video at all — say so rather than playing an unrelated placeholder clip.
   if (!videoUrl) {
@@ -91,11 +100,10 @@ function VideoPlayer({
       <FramedVideo
         src={videoUrl}
         surface="form"
-        videoWidth={videoWidth}
-        videoHeight={videoHeight}
-        videoFraming={videoFraming}
-        videoTrim={videoTrim}
-        showMuteToggle
+        videoWidth={resolved.videoWidth}
+        videoHeight={resolved.videoHeight}
+        videoFraming={resolved.videoFraming}
+        videoTrim={resolved.videoTrim}
         showFullscreenToggle
         onDimensions={(w, h) => {
           // Self-heal: first time a user plays a video with no persisted dims,
@@ -242,6 +250,9 @@ interface Exercise {
   videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -334,6 +345,11 @@ export default function WorkoutFormPage() {
   const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
   const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+  // Display unit for each exercise's duration column — keyed by exerciseIndex
+  // since the Track view lists every exercise at once (unlike the Live view's
+  // single active exercise). Stored sets always stay in seconds; this only
+  // controls what the input shows and how a typed value gets converted back.
+  const [durationUnits, setDurationUnits] = useState<Record<number, DurationUnit>>({});
 
   // Fetch contextual nudges for this workout's exercises (once per slug set).
   const workoutSlugKey = (workout?.exercises ?? [])
@@ -395,6 +411,9 @@ export default function WorkoutFormPage() {
             reps: d.reps,
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
+            ...(d.equipment && { equipment: d.equipment }),
+            ...(d.laterality && { laterality: d.laterality }),
+            ...(d.movementPatterns && { movementPatterns: d.movementPatterns }),
             // Supersets made mid-session live in the stash — without these the
             // Track view would draw a circuit as four unrelated exercises.
             ...(d.groupId && { groupId: d.groupId }),
@@ -406,7 +425,11 @@ export default function WorkoutFormPage() {
           }));
           const title = stored?.title || "Quick Session";
           setQuickNeedsName(shouldPromptForQuickSessionName(stored));
-          const wd: WorkoutData = { day: title, title, exercises: exs.length ? exs : fallbackWorkout.exercises };
+          // Mirrors LiveWorkoutClient: a quick session has no program to
+          // denormalize videoUrl/thumbnailUrl/etc through, so resolve them by
+          // slug here or this view falls back to the legacy by-name lookup.
+          const hydratedExs = await hydrateQuickSessionVideos(exs, localStorage.getItem("token"));
+          const wd: WorkoutData = { day: title, title, exercises: hydratedExs.length ? hydratedExs : fallbackWorkout.exercises };
           setWorkout(wd);
 
           // "Last session: 185 lbs × 8" — a quick session has no program to ask
@@ -543,7 +566,8 @@ export default function WorkoutFormPage() {
                   // This exercise was swapped — restore the swapped identity.
                   // Clear the video fields so the resolver looks up by the
                   // NEW name, otherwise the original exercise's video would
-                  // keep playing.
+                  // keep playing — and its trim window would clip the
+                  // replacement's video to bounds set for a different file.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
@@ -552,6 +576,7 @@ export default function WorkoutFormPage() {
                     videoWidth: null,
                     videoHeight: null,
                     videoFraming: null,
+                    videoTrim: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -575,25 +600,38 @@ export default function WorkoutFormPage() {
                   savedEx.originalExerciseSlug ||
                   savedEx.swappedFromName
                 );
+                const tracking = normalizeTracking(ex.trackingType);
+                if (!isMatch || !savedEx) {
+                  return {
+                    exerciseIndex: exIdx,
+                    sets: Array.from({ length: ex.sets || 3 }, () => ({
+                      reps: "",
+                      weight: "",
+                      completed: false,
+                      duration: "",
+                      distance: "",
+                      speed: "",
+                    })),
+                  };
+                }
+                const restoredSets = savedEx.sets.map(s => ({
+                  reps: s.reps > 0 ? s.reps.toString() : "",
+                  weight: s.weight > 0 ? s.weight.toString() : "",
+                  completed: s.completed,
+                  duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
+                  distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
+                  speed: s.speed != null && s.speed > 0 ? s.speed.toString() : "",
+                }));
+                // Two or more of this exercise's incomplete sets sharing the exact
+                // same numbers is the old "seeded from last time" bug's fingerprint,
+                // not something normal typing produces — blank those before display
+                // instead of resurfacing them on every future resume.
+                const phantomIndices = new Set(findPhantomPrefilledSets(tracking, restoredSets));
                 return {
                   exerciseIndex: exIdx,
-                  sets: isMatch && savedEx
-                    ? savedEx.sets.map(s => ({
-                        reps: s.reps > 0 ? s.reps.toString() : "",
-                        weight: s.weight > 0 ? s.weight.toString() : "",
-                        completed: s.completed,
-                        duration: s.duration != null && s.duration > 0 ? s.duration.toString() : "",
-                        distance: s.distance != null && s.distance > 0 ? s.distance.toString() : "",
-                        speed: s.speed != null && s.speed > 0 ? s.speed.toString() : "",
-                      }))
-                    : Array.from({ length: ex.sets || 3 }, () => ({
-                        reps: "",
-                        weight: "",
-                        completed: false,
-                        duration: "",
-                        distance: "",
-                        speed: "",
-                      }))
+                  sets: restoredSets.map((s, i) =>
+                    phantomIndices.has(i) ? { ...s, reps: "", weight: "", duration: "", distance: "", speed: "" } : s
+                  ),
                 };
               });
 
@@ -723,6 +761,7 @@ export default function WorkoutFormPage() {
               title: options.quickTitle ?? workout.title,
               needsName: false,
               ...(stored?.focus && { focus: stored.focus }),
+              ...(stored?.favorite && { favorite: true }),
               exercises: exercisesToSave,
               completed: true,
               duration: Math.max(1, Math.round(total * 1.5)),
@@ -798,6 +837,11 @@ export default function WorkoutFormPage() {
           day: workout.day,
           exercises,
           completed: isComplete,
+          // This attempt's id, on every save of it (see the live view): it is
+          // what lets the server recognise a retried or queued save as a
+          // REPLAY rather than a second workout. Shared with the live view
+          // through storage, so flipping Track↔Live stays one attempt.
+          attemptId: workoutAttemptId(programId, workout.day),
           tz: new Date().getTimezoneOffset(),
           ...(scheduledDate && { scheduledDate }),
           ...(workoutNotes.trim() && { notes: workoutNotes.trim() })
@@ -809,6 +853,9 @@ export default function WorkoutFormPage() {
           setProgramCompleted(true);
           setCompletedProgramName(data.programName || "");
         }
+        // The workout is done — the next one on this day label is a new
+        // attempt and must mint its own id.
+        clearWorkoutAttemptId(programId, workout.day);
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
@@ -844,6 +891,15 @@ export default function WorkoutFormPage() {
       setIsCompleting(false);
     }
   }, [autoSave, exerciseProgress, isQuick]);
+
+  // Finish under a name, whether the member typed one or exited the prompt and
+  // took the day it was done. Either way the workout completes and the summary
+  // follows — the prompt is a naming step, never a gate that can strand a
+  // finished session.
+  const finishNamedQuickSession = useCallback(async (title: string) => {
+    const saved = await finishWorkout(title);
+    if (!saved) throw new Error("Could not finish the workout. Try again.");
+  }, [finishWorkout]);
 
   // Debounced auto-save for text input changes
   const debouncedAutoSave = useCallback((progress: ExerciseProgress[]) => {
@@ -894,6 +950,9 @@ export default function WorkoutFormPage() {
           ...(e.rest && { rest: e.rest }),
           ...(e.duration && { duration: e.duration }),
           ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.equipment && { equipment: e.equipment }),
+          ...(e.laterality && { laterality: e.laterality }),
+          ...(e.movementPatterns && { movementPatterns: e.movementPatterns }),
           ...(e.groupId && { groupId: e.groupId }),
           ...(e.groupType && { groupType: e.groupType }),
           ...(e.groupLabel && { groupLabel: e.groupLabel }),
@@ -915,6 +974,7 @@ export default function WorkoutFormPage() {
           title: workout?.title ?? stored?.title ?? "Quick Session",
           needsName: shouldPromptForQuickSessionName(stored),
           ...(stored?.focus && { focus: stored.focus }),
+          ...(stored?.favorite && { favorite: true }),
           exercises: next.map((ex, i) => {
             const ep = nextProgress.find((p) => p.exerciseIndex === i);
             const isTimeBased = tracksTime(ex.trackingType);
@@ -1179,7 +1239,7 @@ export default function WorkoutFormPage() {
     setShowSwapModal(true);
   };
 
-  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
     if (!workout) return;
 
     const oldExercise = workout.exercises[exerciseIndex];
@@ -1195,7 +1255,9 @@ export default function WorkoutFormPage() {
     // Replace the exercise in the workout, preserving sets/reps/rest
     // prescription. Clear any video-specific fields from the original so
     // the video lookup resolves by the NEW exercise name on next render
-    // (otherwise the prior exercise's URL/dimensions/framing would play).
+    // (otherwise the prior exercise's URL/dimensions/framing/trim would play).
+    // Trim especially: an in/out window belongs to one file, so leaving it
+    // behind clips the replacement's video to the previous one's bounds.
     const updatedExercises = [...workout.exercises];
     updatedExercises[exerciseIndex] = {
       ...oldExercise,
@@ -1203,10 +1265,14 @@ export default function WorkoutFormPage() {
       name: alternative.name,
       type: alternative.category,
       trackingType: alternative.trackingType,
+      equipment: alternative.equipment,
+      laterality: alternative.laterality,
+      movementPatterns: alternative.movementPatterns,
       videoUrl: undefined,
       videoWidth: null,
       videoHeight: null,
       videoFraming: null,
+      videoTrim: null,
     };
 
     setWorkout({ ...workout, exercises: updatedExercises });
@@ -1217,6 +1283,9 @@ export default function WorkoutFormPage() {
         name: alternative.name,
         exerciseSlug: alternative.slug,
         trackingType: alternative.trackingType,
+        equipment: alternative.equipment,
+        laterality: alternative.laterality,
+        movementPatterns: alternative.movementPatterns,
       });
     }
 
@@ -1561,6 +1630,12 @@ export default function WorkoutFormPage() {
                             const isTimeBased = tracksTime(tracking)
                             const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
+                            const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
+                            const isFloorsInput = isFloorsExercise(exercise.name)
+                            // Box widths, shared with the set rows below so the
+                            // labels stay over the boxes they name.
+                            const cols = trackColumnSpans(tracking)
+                            const bellInfo = getBellWeightInfo(exercise)
                             const prescription = [
                               exercise.duration && `${exercise.duration}`,
                               exercise.tempo && `Tempo ${exercise.tempo}`,
@@ -1594,12 +1669,23 @@ export default function WorkoutFormPage() {
                                 {isNone && (
                                   <p className="text-xs text-zinc-500 dark:text-zinc-400">No tracking needed — just mark complete.</p>
                                 )}
+                                {/* Per-DB/KB weight convention — see lib/workout/dumbbellWeight.ts */}
+                                {showWeight && bellInfo.style && (
+                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                    Enter the weight of one {bellInfo.style === 'dumbbell' ? 'dumbbell' : 'kettlebell'}
+                                    {bellInfo.showTotal ? ' — not the combined total.' : '.'}
+                                  </p>
+                                )}
                                 {/* Exercise history hint */}
                                 {exerciseHistory[exercise.name] && (() => {
                                   const h = exerciseHistory[exercise.name]
+                                  const lastSeconds = h.duration || h.reps
+                                  const bellSuffix = bellInfo.style === 'dumbbell' ? ' per DB' : bellInfo.style === 'kettlebell' ? ' per KB' : ''
                                   const label = isTimeBased
-                                    ? (h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : 'completed')
-                                    : h.weight > 0 ? `${h.weight} lbs × ${h.reps} reps`
+                                    ? (lastSeconds
+                                        ? (durationUnit === "min" ? `${secondsToUnitDisplay(lastSeconds, "min")}m` : `${lastSeconds}s`)
+                                        : 'completed')
+                                    : h.weight > 0 ? `${h.weight} lbs${bellSuffix} × ${h.reps} reps`
                                     : h.reps > 0 ? `${h.reps} reps` : null
                                   return label ? (
                                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -1608,17 +1694,38 @@ export default function WorkoutFormPage() {
                                   ) : null
                                 })()}
                                 {/* Column headers */}
-                                <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                                  <div className="col-span-2">{setUnitLabel(tracking, 1)}</div>
-                                  {showWeight && <div className="col-span-3">Weight</div>}
-                                  {!isNone && (
-                                    <div className={showWeight ? "col-span-3" : "col-span-6"}>
-                                      {isTimeBased ? (tracking === "time_distance" ? "Sec" : "Sec") : "Reps"}
+                                <div className="mt-2 grid grid-cols-12 items-center gap-2 text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                                  <div className={colSpan(cols.set)}>{setUnitLabel(tracking, 1)}</div>
+                                  {showWeight && (
+                                    <div className={colSpan(cols.weight)}>
+                                      {bellInfo.style === 'dumbbell' ? 'Wt/DB' : bellInfo.style === 'kettlebell' ? 'Wt/KB' : 'Weight'}
                                     </div>
                                   )}
-                                  {tracking === "time_distance" && <div className="col-span-2">Dist (m)</div>}
-                                  {showSpeed && <div className="col-span-2">mph</div>}
-                                  <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} text-center`}>Done</div>
+                                  {!isNone && (
+                                    <div className={`${colSpan(cols.main)} flex items-center gap-1`}>
+                                      {isTimeBased ? durationUnit.charAt(0).toUpperCase() + durationUnit.slice(1) : "Reps"}
+                                      {isTimeBased && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            setDurationUnits((prev) => ({
+                                              ...prev,
+                                              [exerciseIndex]: durationUnit === "sec" ? "min" : "sec",
+                                            }))
+                                          }}
+                                          className="normal-case rounded-full bg-zinc-200 px-1.5 py-0.5 text-[9px] font-semibold tracking-normal text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+                                        >
+                                          {durationUnit === "sec" ? "min" : "sec"}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {tracking === "time_distance" && (
+                                    <div className={colSpan(cols.distance)}>{isFloorsInput ? "Floors" : "Dist (m)"}</div>
+                                  )}
+                                  {showSpeed && <div className={colSpan(cols.speed)}>mph</div>}
+                                  <div className={`${colSpan(cols.done)} text-center`}>Done</div>
                                 </div>
                               </div>
                             )
@@ -1631,6 +1738,9 @@ export default function WorkoutFormPage() {
                             const isTimeBased = tracksTime(tracking)
                             const showSpeed = tracksSpeed(tracking)
                             const isNone = tracking === "none"
+                            const durationUnit = durationUnits[exerciseIndex] ?? defaultDurationUnit(tracking)
+                            const isFloorsInput = isFloorsExercise(exercise.name)
+                            const cols = trackColumnSpans(tracking)
                             const repPlaceholder = isTimeBased
                               ? (exercise.duration?.replace(/[^0-9]/g, "") || "30")
                               : (exercise.reps?.split("-")[0] || "0")
@@ -1648,14 +1758,14 @@ export default function WorkoutFormPage() {
                                         : "bg-white dark:bg-zinc-800"
                                     }`}
                                   >
-                                    <div className="col-span-2">
+                                    <div className={colSpan(cols.set)}>
                                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-sm font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
                                         {setIndex + 1}
                                       </span>
                                     </div>
                                     {/* Weight input — only for reps_weight */}
                                     {showWeight && (
-                                      <div className="col-span-3">
+                                      <div className={colSpan(cols.weight)}>
                                         <input
                                           type="number"
                                           inputMode="decimal"
@@ -1666,25 +1776,43 @@ export default function WorkoutFormPage() {
                                         />
                                       </div>
                                     )}
-                                    {/* Reps / Duration input */}
+                                    {/* Reps / Duration input. The duration case is
+                                        uncontrolled + remounted on unit toggle: a
+                                        controlled value re-derived through the
+                                        seconds↔unit round trip on every keystroke
+                                        would eat a trailing decimal point as it's
+                                        typed. */}
                                     {!isNone && (
-                                      <div className={showWeight ? "col-span-3" : "col-span-6"}>
-                                        <input
-                                          type="number"
-                                          inputMode="decimal"
-                                          placeholder={repPlaceholder}
-                                          value={isTimeBased ? set.duration : set.reps}
-                                          onChange={(e) => updateSet(exerciseIndex, setIndex, isTimeBased ? "duration" : "reps", e.target.value)}
-                                          className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
-                                        />
+                                      <div className={colSpan(cols.main)}>
+                                        {isTimeBased ? (
+                                          <input
+                                            key={`duration-${exerciseIndex}-${setIndex}-${durationUnit}`}
+                                            type="number"
+                                            inputMode="decimal"
+                                            placeholder={repPlaceholder}
+                                            defaultValue={secondsToUnitDisplay(set.duration, durationUnit)}
+                                            onChange={(e) => updateSet(exerciseIndex, setIndex, "duration", unitDisplayToSeconds(e.target.value, durationUnit))}
+                                            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                          />
+                                        ) : (
+                                          <input
+                                            type="number"
+                                            inputMode="decimal"
+                                            placeholder={repPlaceholder}
+                                            value={set.reps}
+                                            onChange={(e) => updateSet(exerciseIndex, setIndex, "reps", e.target.value)}
+                                            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm font-medium focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white"
+                                          />
+                                        )}
                                       </div>
                                     )}
-                                    {/* Distance input — time_distance only */}
+                                    {/* Distance input — time_distance only. Stairmaster-style
+                                        exercises measure floors climbed, not meters. */}
                                     {tracking === "time_distance" && (
-                                      <div className="col-span-2">
+                                      <div className={colSpan(cols.distance)}>
                                         <input
                                           type="number"
-                                          inputMode="decimal"
+                                          inputMode={isFloorsInput ? "numeric" : "decimal"}
                                           placeholder="0"
                                           value={set.distance}
                                           onChange={(e) => updateSet(exerciseIndex, setIndex, "distance", e.target.value)}
@@ -1697,7 +1825,7 @@ export default function WorkoutFormPage() {
                                         this one did not, so flipping views threw
                                         the number away. */}
                                     {showSpeed && (
-                                      <div className="col-span-2">
+                                      <div className={colSpan(cols.speed)}>
                                         <input
                                           type="number"
                                           inputMode="decimal"
@@ -1710,7 +1838,7 @@ export default function WorkoutFormPage() {
                                       </div>
                                     )}
                                     {/* Actions */}
-                                    <div className={`${showWeight ? "col-span-4" : isNone ? "col-span-10" : tracking === "time_distance" ? "col-span-2" : showSpeed ? "col-span-2" : "col-span-4"} flex justify-center gap-1`}>
+                                    <div className={`${colSpan(cols.done)} flex justify-center gap-1`}>
                                       {!set.completed && !set.weight && !set.reps && !isNone && showWeight && (
                                         <button
                                           onClick={() => openSkipModal(exerciseIndex, setIndex)}
@@ -1921,8 +2049,9 @@ export default function WorkoutFormPage() {
                                         </div>
                                       )
                                     }
+                                    const gBell = getBellWeightInfo(exercise).style
                                     const fields: Array<{ key: keyof SetData; label: string; placeholder: string; span: string }> = []
-                                    if (gWeight) fields.push({ key: "weight", label: "lbs", placeholder: "0", span: "col-span-4" })
+                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? "lbs/DB" : gBell === 'kettlebell' ? "lbs/KB" : "lbs", placeholder: "0", span: "col-span-4" })
                                     fields.push(
                                       gTimed
                                         ? { key: "duration", label: "sec", placeholder: exercise.duration?.replace(/[^0-9]/g, "") || "30", span: gWeight ? "col-span-4" : gSpeed ? "col-span-3" : "col-span-8" }
@@ -2098,10 +2227,11 @@ export default function WorkoutFormPage() {
         <QuickSessionNamePrompt
           initialName={workout.title}
           confirmLabel="Save name & finish"
-          onConfirm={async (title) => {
-            const saved = await finishWorkout(title);
-            if (!saved) throw new Error("Could not finish the workout. Try again.");
-          }}
+          // This screen sends no performedAt, so the server dates the log now —
+          // the fallback name is today, with no argument to disagree with.
+          fallbackName={fallbackQuickSessionName()}
+          onConfirm={finishNamedQuickSession}
+          onSkip={finishNamedQuickSession}
           onCancel={() => setShowQuickNamePrompt(false)}
         />
       )}

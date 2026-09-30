@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/noIntermediateRounding.test.ts
+// Run with: npm run test:file tests/unit/noIntermediateRounding.test.ts
 //
 // The rule, and the reason for it:
 //

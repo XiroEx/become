@@ -5,7 +5,7 @@ import type {
 } from "@/components/programs/ProgramDetail";
 import type { WorkoutOverviewViewModel } from "@/components/programs/WorkoutOverview";
 
-const TARGET_USERS: ReadonlyArray<ProgramDetailViewModel["targetUser"]> = [
+const TARGET_USERS: readonly ProgramDetailViewModel["targetUser"][] = [
   "Beginner",
   "Intermediate",
   "Advanced",

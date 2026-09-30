@@ -1,0 +1,167 @@
+import { useEffect, useState } from "react";
+import { View, ActivityIndicator } from "react-native";
+import { Text } from "@/components/Text";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import { useAuth } from "@/lib/auth/useAuth";
+import type { VerifyMode } from "@/lib/auth";
+import {
+  defaultPendingSessionStore,
+  type PendingSessionStore,
+} from "@/lib/auth/pendingAuthSession";
+
+export interface VerifyScreenProps {
+  /** DI hook for tests — sends the verify-link request. */
+  verifyFn?: (
+    token: string,
+    mode: VerifyMode,
+  ) => Promise<{ token: string }>;
+  onSuccess?: (jwt: string) => void | Promise<void>;
+  onFailure?: (error: unknown) => void;
+  pendingSessionStore?: PendingSessionStore;
+}
+
+/**
+ * Default verify-link caller: POSTs the magic-link token to the real webapp
+ * backend. The server reads only `{ token }` (mode is implied by the link), and
+ * returns `{ token, user }`.
+ */
+function defaultVerifyFn(token: string): Promise<{ token: string }> {
+  return apiFetch("/api/auth/verify-link", VerifyLinkResponseSchema, {
+    method: "POST",
+    body: { token },
+    baseUrl: WEBAPP_BASE_URL,
+  });
+}
+
+export function VerifyScreen({
+  verifyFn,
+  onSuccess,
+  onFailure,
+  pendingSessionStore,
+}: VerifyScreenProps = {}) {
+  const { colors } = useThemeTokens();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ token?: string; mode?: string }>();
+  const [status, setStatus] = useState<"working" | "success" | "error">(
+    "working",
+  );
+  const [error, setError] = useState<string | null>(null);
+  const pendingStore = pendingSessionStore ?? defaultPendingSessionStore;
+
+  useEffect(() => {
+    const rawToken = params.token;
+    const rawMode = params.mode;
+    // Effect drives the entire verify-link request lifecycle. The setStates
+    // below transition between working / success / error tri-state — this is
+    // the canonical mount-time data-fetch pattern; the lint rule guards
+    // against unnecessary cascades, not necessary ones.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    if (typeof rawToken !== "string" || rawToken.length < 8) {
+      setStatus("error");
+      setError("Missing or malformed token");
+      return;
+    }
+    if (rawMode !== "login" && rawMode !== "register") {
+      setStatus("error");
+      setError("Missing or invalid mode");
+      return;
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const fn =
+      verifyFn ?? ((token: string, _mode: VerifyMode) => defaultVerifyFn(token));
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fn(rawToken, rawMode);
+        if (cancelled) return;
+        setStatus("success");
+        // Clear any pending magic-link session and complete sign-in
+        await pendingStore.clear();
+        await Promise.resolve(onSuccess?.(result.token));
+        // After sign-in, go through the guards (consent, onboarding) instead
+        // of straight to the dashboard.
+        router.replace("/");
+      } catch (err) {
+        if (cancelled) return;
+        setStatus("error");
+        setError(err instanceof Error ? err.message : "Verify failed");
+        onFailure?.(err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    params.token,
+    params.mode,
+    verifyFn,
+    onSuccess,
+    onFailure,
+    pendingStore,
+    router,
+  ]);
+
+  return (
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      testID="verify-screen"
+    >
+      {/* This screen is three states and no controls, so the only thing a
+          VoiceOver user has to go on is what it SAYS — a live region, so each
+          state is read as it arrives instead of on the next swipe. */}
+      <View
+        className="flex-1 items-center justify-center px-6"
+        accessibilityLiveRegion="polite"
+      >
+        {status === "working" ? (
+          <>
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+              testID="verify-spinner"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+            <Text className="text-foreground mt-3" testID="verify-working-text">
+              Signing you in…
+            </Text>
+          </>
+        ) : status === "success" ? (
+          <Text className="text-foreground" testID="verify-success-text">
+            Signed in. Loading your account…
+          </Text>
+        ) : (
+          <View testID="verify-error">
+            <Text
+              accessibilityRole="alert"
+              className="text-destructive text-center"
+            >
+              {error ?? "Something went wrong"}
+            </Text>
+          </View>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+/**
+ * Route entry point. Binds onSuccess to useAuth().setToken so a successful
+ * verify persists the JWT to SecureStore (and hydrates the user) — previously
+ * the route rendered VerifyScreen with no onSuccess, dropping the token.
+ */
+export default function VerifyRoute() {
+  const { setToken } = useAuth();
+  return (
+    <VerifyScreen
+      onSuccess={async (jwt) => {
+        await setToken(jwt);
+      }}
+    />
+  );
+}

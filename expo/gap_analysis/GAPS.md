@@ -1,3 +1,5 @@
+> **Superseded on 2026-09-28** by [`PARITY_GAP_ANALYSIS.md`](./PARITY_GAP_ANALYSIS.md), the parity gap analysis audited against commit `82f8b4bc`. Most URLs below no longer exist; section 7 of that document folds this list in with the current routes and decisions. This file stays only until NP-116 retires it together with its format test (`expo/__tests__/gaps.test.ts`).
+
 # Native gap analysis
 
 Heavy editor surfaces stay web-only via Tier-3 "Edit in browser" deep links per
@@ -15,7 +17,7 @@ revisit date (or `permanent` when there's no plan to port).
 | **Admin user / cohort tooling** | `https://become.redbtn.io/dashboard/admin/users` | User search, role management, cohort assignment. Coach-only, low-frequency. | Tier 3 | permanent |
 | **Onboarding coach setup** | `https://become.redbtn.io/dashboard/admin/onboarding` | Configures the user-facing onboarding questionnaire. Coach-only, used once per question revision. | Tier 3 | permanent |
 | **Framing editor (video)** | `https://become.redbtn.io/dashboard/admin/exercises/[slug]/framing` | Per-surface video framing override; requires canvas / pointer-precision drawing. Could revisit when Skia ships an N-handle framing widget. | Tier 2 | when Skia ships |
-| **HealthKit / Health Connect smoke test** | n/a (native module) | Real `react-native-health` (iOS) and `react-native-health-connect` (Android) bridges aren't shipped in Expo Go — jest tests use injected fakes that exercise the adapter shape only. End-to-end behaviour needs a dev build and a physical device with sample weight + step data. | Tier 1 (deferred) | when dev build ships (P21) |
+| **HealthKit / Health Connect smoke test** | n/a (native module) | `react-native-health-connect` IS installed now (NP-199) and the Android bridge, both directions and the switches are unit-tested against a fake module; iOS still has no module at all (`react-native-health`, NP-185 / NP-186). Neither can run in Expo Go, so the end-to-end check — a weigh-in crossing both ways, and each direction stopping at the next launch — needs a dev build and a physical phone with a real weight sample. | Tier 1 (deferred) | when the next Android dev build ships (NP-199 sign-off) |
 
 ## How to add a gap
 

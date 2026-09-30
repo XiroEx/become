@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/progress-get-prs.test.ts
+// Run with: npm run test:file tests/unit/progress-get-prs.test.ts
 //
 // Locks in the GET /api/progress?detailed=1 read-path contract for the `pbs`
 // field:

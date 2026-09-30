@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/servingAsUnit.test.ts
+// Run with: npm run test:file tests/unit/servingAsUnit.test.ts
 //
 // The product owner: "I'm having 4 servings of this broccoli. I like that when I
 // click the serving, it prefills the input and select as proper grams. But I need

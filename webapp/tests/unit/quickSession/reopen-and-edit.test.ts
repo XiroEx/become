@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/reopen-and-edit.test.ts
+// Run with: npm run test:file tests/unit/quickSession/reopen-and-edit.test.ts
 //
 // Covers the "saved session opens a random unrelated session" bug and the edit
 // path that fixes it:
@@ -117,6 +117,10 @@ test('overview href carries saved and started state independently', () => {
   assert.equal(
     quickSessionOverviewHref('abc', { saved: true, started: true }),
     '/dashboard/workout/quick-session?session=abc&saved=1&started=1',
+  )
+  assert.equal(
+    quickSessionOverviewHref('abc', { date: '2026-08-30' }),
+    '/dashboard/workout/quick-session?session=abc&date=2026-08-30',
   )
 })
 

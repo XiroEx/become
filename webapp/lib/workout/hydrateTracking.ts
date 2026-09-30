@@ -41,3 +41,40 @@ export function trackingFor(ex: LoggedLike, bySlug: Record<string, string>): Tra
   if (ex.prescription?.trackingType) return normalizeTracking(ex.prescription.trackingType)
   return inferTracking(ex.sets, ex.exerciseSlug ? bySlug[ex.exerciseSlug] : undefined)
 }
+
+export interface BellFields {
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
+}
+
+/**
+ * equipment/laterality/movementPatterns per slug, for the slugs that exist in
+ * the catalog. A saved workout log only ever kept the slug, not these catalog
+ * fields — so rebuilding a session FROM a log (continue / resume-planned) has
+ * to look them up the same way it already looks up trackingType, or a resumed
+ * dumbbell exercise loses its per-DB weight convention and falls back to
+ * plain "Weight (lbs)". See lib/workout/dumbbellWeight.ts.
+ */
+export async function bellFieldsBySlug(slugs: Array<string | undefined>): Promise<Record<string, BellFields>> {
+  const wanted = [...new Set(slugs.filter((s): s is string => !!s))]
+  if (wanted.length === 0) return {}
+  try {
+    const docs = await Exercise.find({ slug: { $in: wanted } })
+      .select('slug equipment laterality movementPatterns')
+      .lean<Array<{ slug: string; equipment?: string[]; laterality?: string; movementPatterns?: string[] }>>()
+    const out: Record<string, BellFields> = {}
+    for (const d of docs) {
+      if (!d.slug) continue
+      out[d.slug] = { equipment: d.equipment, laterality: d.laterality, movementPatterns: d.movementPatterns }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+/** The bell fields to hand back for one logged exercise. */
+export function bellFieldsFor(ex: { exerciseSlug?: string }, bySlug: Record<string, BellFields>): BellFields {
+  return (ex.exerciseSlug && bySlug[ex.exerciseSlug]) || {}
+}

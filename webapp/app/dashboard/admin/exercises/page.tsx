@@ -3,13 +3,19 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, Search, Video, VideoOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, Video, VideoOff, AlertTriangle } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import { describeExerciseIssues, type ExerciseIssue } from '@/lib/exerciseAudit'
 
 interface ExerciseListItem {
   _id?: string
   slug: string
   name: string
+  /** The other names this exercise answers to. Shown on the row because the
+   *  name a member sees on a program card is often one of these and not the
+   *  catalog's own — "Leg Curl Machine" is Seated Leg Curl. Without them the
+   *  search finds the row and the admin still can't tell it is the right one. */
+  aliases?: string[]
   category: string
   mechanics?: string
   primaryMuscles?: string[]
@@ -18,7 +24,33 @@ interface ExerciseListItem {
   movementPatterns?: string[]
   isActive?: boolean
   videoUrl?: string | null
+  instructions?: string[]
 }
+
+type IssueFilter = '' | 'duplicate' | 'noVideo' | 'broken'
+
+/**
+ * Row-level "why is this flagged" reasons, computed from the fields the
+ * list already fetched — no extra request. On the Duplicates tab every row
+ * is a duplicate by definition (that's what put it in the response), but
+ * the list doesn't know the colliding name without a full-catalog
+ * cross-reference (that's what /api/admin/exercises/[slug]/issues is for,
+ * shown on the edit page instead).
+ */
+function rowIssues(ex: ExerciseListItem, activeIssueTab: IssueFilter): ExerciseIssue[] {
+  const issues = describeExerciseIssues(ex)
+  if (activeIssueTab === 'duplicate' && !issues.some((i) => i.type === 'duplicate')) {
+    issues.push({ type: 'duplicate', message: 'Duplicate name — matches another exercise in the catalog' })
+  }
+  return issues
+}
+
+const ISSUE_TABS: { key: IssueFilter; label: string }[] = [
+  { key: '', label: 'All' },
+  { key: 'duplicate', label: 'Duplicates' },
+  { key: 'noVideo', label: 'No Video' },
+  { key: 'broken', label: 'Broken' },
+]
 
 const CATEGORIES = [
   '',
@@ -82,12 +114,22 @@ export default function AdminExercisesPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [pendingReviewCount, setPendingReviewCount] = useState(0)
+  const [issue, setIssue] = useState<IssueFilter>('')
+  const [issueCounts, setIssueCounts] = useState<{ duplicate: number; noVideo: number; broken: number }>({
+    duplicate: 0,
+    noVideo: 0,
+    broken: 0,
+  })
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     fetch('/api/admin/exercises/review', { headers: { Authorization: `Bearer ${token}` } })
       .then(res => (res.ok ? res.json() : null))
       .then(data => { if (data) setPendingReviewCount(data.submissions?.length ?? 0) })
+      .catch(() => {})
+    fetch('/api/admin/exercises/audit-counts', { headers: { Authorization: `Bearer ${token}` } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (data) setIssueCounts(data) })
       .catch(() => {})
   }, [])
 
@@ -115,6 +157,7 @@ export default function AdminExercisesPage() {
         if (search) params.set('q', search)
         if (category) params.set('category', category)
         if (movement) params.set('movement', movement)
+        if (issue) params.set('issue', issue)
         const res = await fetch(`/api/exercises?${params.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         })
@@ -136,7 +179,7 @@ export default function AdminExercisesPage() {
     return () => {
       cancelled = true
     }
-  }, [page, search, category, movement])
+  }, [page, search, category, movement, issue])
 
   useEffect(() => {
     if (!toast) return
@@ -278,6 +321,38 @@ export default function AdminExercisesPage() {
         </select>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ISSUE_TABS.map((tab) => {
+          const count = tab.key ? issueCounts[tab.key] : null
+          const active = issue === tab.key
+          return (
+            <button
+              key={tab.key || 'all'}
+              onClick={() => {
+                setIssue(tab.key)
+                setPage(1)
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                active
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+              }`}
+            >
+              {tab.label}
+              {count !== null && count > 0 && (
+                <span
+                  className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
+                    active ? 'bg-white/20' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
       {loading ? (
         <div className="flex flex-col gap-2">
           {[0, 1, 2, 3].map((i) => (
@@ -290,7 +365,9 @@ export default function AdminExercisesPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          {exercises.map((ex, i) => (
+          {exercises.map((ex, i) => {
+            const issues = rowIssues(ex, issue)
+            return (
             <div
               key={ex.slug}
               className={`flex items-center gap-3 px-3 py-3 ${
@@ -342,8 +419,26 @@ export default function AdminExercisesPage() {
                     ? ` · ${ex.equipment.join(', ')}`
                     : ''}
                 </p>
+                {ex.aliases && ex.aliases.length > 0 && (
+                  <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                    also: {ex.aliases.join(', ')}
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
+                {issues.length > 0 && (
+                  <button
+                    onClick={() =>
+                      router.push(
+                        `/dashboard/admin/exercises/${encodeURIComponent(ex.slug)}/edit`
+                      )
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-amber-600 transition-colors hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950"
+                    title={`Flagged: ${issues.map((iss) => iss.message).join('; ')} — click to edit`}
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                  </button>
+                )}
                 <button
                   onClick={() =>
                     router.push(
@@ -364,7 +459,8 @@ export default function AdminExercisesPage() {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

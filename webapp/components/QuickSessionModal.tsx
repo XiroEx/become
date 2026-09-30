@@ -23,17 +23,25 @@ import {
   type DraftExercise,
 } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionOverviewHref } from "@/lib/quickSession/store";
+import { curatedGlutesSession } from "@/lib/quickSession/curatedGlutes";
 import { SESSIONS_HUB_HREF, BUILD_SESSION_HREF } from "@/lib/quickSession/hubLinks";
 import { pickRecentQuickSessions } from "@/lib/quickSession/recentSessions";
+import { logPlanAvailability, localDateStr } from "@/lib/quickSession/logPlanDate";
 import { runAiTask } from "@/lib/ai/runClient";
 import { resolveAiExercises, MIN_RESOLVED_EXERCISES } from "@/lib/ai/resolveExercises";
 import ShareButton from "@/components/share/ShareButton";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
+import { invalidateEntitlements } from "@/hooks/useEntitlements";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface QuickSessionModalProps {
   open: boolean;
   onClose: () => void;
+  /** Local YYYY-MM-DD to pre-fill the resulting session's Log/Plan date with —
+   *  set when opened from a specific Calendar day rather than "workout now". */
+  date?: string;
 }
 
 // ─── Fetch response shapes ──────────────────────────────────────────────────────
@@ -118,10 +126,17 @@ async function resolveAiSession(
 
 // ─── Component ──────────────────────────────────────────────────────────────────
 
-export default function QuickSessionModal({ open, onClose }: QuickSessionModalProps) {
+export default function QuickSessionModal({ open, onClose, date }: QuickSessionModalProps) {
   const router = useRouter();
 
   const [error, setError] = useState<string | null>(null);
+  // A tier/allowance refusal, kept as the whole payload so the upgrade sheet
+  // can name the real limit rather than a hand-written string.
+  const [gate, setGate] = useState<GatePayload | null>(null);
+  // An AI refusal the member walked away from WITH a session: the unmetered
+  // deterministic builder ran instead. Shown inline, never as the upgrade
+  // sheet — there is a preview underneath it.
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
 
   // My Sessions (recent quick logs)
   const [recentQuick, setRecentQuick] = useState<WorkoutLog[]>([]);
@@ -143,6 +158,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
   useEffect(() => {
     if (!open) {
       setError(null);
+      setFallbackNote(null);
       setRecentQuick([]);
       setSelectedFocus(null);
       setPreview(null);
@@ -176,10 +192,23 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
     };
   }, [open]);
 
+  // Raise the upgrade sheet for a refusal money fixes. It drops the fallback
+  // note first, and that is the point: the note says a session IS on screen,
+  // so a modal sheet over one would read as a failure. Every caller reaches
+  // here only after failing to produce a session, which makes the two states
+  // mutually exclusive rather than merely unlikely to coincide.
+  const raiseGate = useCallback((g: GatePayload) => {
+    setFallbackNote(null);
+    setGate(g);
+  }, []);
+
   // ── Generate a preview for a focus (does NOT start it) ──
   const generateFor = useCallback(
     async (focus: FocusKey) => {
       setError(null);
+      // A sheet left over from the last attempt must not survive into this one.
+      setGate(null);
+      setFallbackNote(null);
       setSelectedFocus(focus);
       setPreview(null);
       setAiUsed(false);
@@ -187,12 +216,30 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
       const genId = ++activeGenRef.current;
       const headers = authHeaders();
 
+      // ── Coach-curated fixed session (bypasses AI + the algorithmic generator) ──
+      if (focus === "glutes") {
+        setPreview(curatedGlutesSession());
+        setGenerating(false);
+        return;
+      }
+
       // ── AI path ────────────────────────────────────────────────────────────
       if (useAi) {
         try {
           // Async run: POST returns a runId, runAiTask polls until the session lands.
           const r = await runAiTask("/api/ai/workout/session", { focus: FOCUS_DEFS[focus].label });
           if (genId !== activeGenRef.current) return; // stale
+          // Out of AI generations for the week. Fall THROUGH to the
+          // deterministic route: /api/generate/session is unmetered by design
+          // (it is the fallback every AI route degrades to), so the member
+          // still gets a session and the refusal is a note rather than a dead
+          // end. Refetching is left to the next entitlements reader.
+          if (r.gate) {
+            setFallbackNote(
+              `${r.gate.error} Built you a standard session instead — switch AI off to keep generating without using one.`,
+            );
+            invalidateEntitlements();
+          }
           const aiSession = r.result as AiSessionResponse["session"] | undefined;
           if (r.ok && aiSession) {
             const resolved = await resolveAiSession(aiSession, focus, headers);
@@ -220,29 +267,45 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         if (genId !== activeGenRef.current) return;
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          // The note was written a moment ago, on the assumption that this call
+          // always works. It didn't, so retract it rather than leave an amber
+          // "built you a standard session instead" above a red error and an
+          // empty preview.
+          setFallbackNote(null);
+          const g = gateFrom(res.status, data);
+          if (g) {
+            raiseGate(g);
+            return;
+          }
           setError(data.error || "Couldn't build that session. Try again.");
           return;
         }
         const data = (await res.json()) as GenerateSessionResponse;
         if (genId !== activeGenRef.current) return;
+        if (!data?.session) {
+          setFallbackNote(null);
+          setError("Couldn't build that session. Try again.");
+          return;
+        }
         setPreview(data.session);
       } catch {
         if (genId !== activeGenRef.current) return;
+        setFallbackNote(null);
         setError("Network error. Try again.");
       } finally {
         if (genId === activeGenRef.current) setGenerating(false);
       }
     },
-    [useAi],
+    [useAi, raiseGate],
   );
 
   // ── Start the previewed session ──
   const startPreview = useCallback(() => {
     if (!preview) return;
     const id = stashQuickSession(preview, { needsName: true });
-    router.push(quickSessionOverviewHref(id));
+    router.push(quickSessionOverviewHref(id, { date }));
     onClose();
-  }, [preview, router, onClose]);
+  }, [preview, router, onClose, date]);
 
   // ── Repeat a recent session ──
   // Genuinely repeats it: same title, same exercises. It used to re-GENERATE
@@ -263,7 +326,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
           },
           { needsName: false, ...(log.sessionId ? { sourceSessionId: log.sessionId } : {}) },
         );
-        router.push(quickSessionOverviewHref(id));
+        router.push(quickSessionOverviewHref(id, { date }));
         onClose();
         return;
       }
@@ -279,12 +342,17 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as ErrorResponse;
+          const g = gateFrom(res.status, data);
+          if (g) {
+            raiseGate(g);
+            return;
+          }
           setError(data.error || "Couldn't rebuild that session. Try again.");
           return;
         }
         const data = (await res.json()) as GenerateSessionResponse;
         const id = stashQuickSession(data.session, { needsName: true });
-        router.push(quickSessionOverviewHref(id));
+        router.push(quickSessionOverviewHref(id, { date }));
         onClose();
       } catch {
         setError("Network error. Try again.");
@@ -292,10 +360,18 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
         setRepeating(false);
       }
     },
-    [router, onClose],
+    [router, onClose, date, raiseGate],
   );
 
   const busy = generating || repeating;
+
+  // Heading reflects the target day when opened from a specific Calendar date
+  // rather than the default "right now" flow.
+  const modalTitle = (() => {
+    if (!date || date === localDateStr()) return "Workout Now";
+    const { canLog, canPlan } = logPlanAvailability(date, localDateStr());
+    return canPlan && !canLog ? "Schedule a Workout" : "Log a Workout";
+  })();
 
   return (
     <AnimatePresence>
@@ -330,7 +406,7 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
                   <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-purple-500 text-white">
                     <Sparkles className="h-4 w-4" />
                   </span>
-                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">Workout Now</h2>
+                  <h2 className="text-lg font-bold text-zinc-900 dark:text-white">{modalTitle}</h2>
                 </div>
                 <button
                   onClick={onClose}
@@ -345,6 +421,15 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
             <div className="space-y-6 px-5 pt-2">
               {/* Inline error */}
               {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+
+              {/* AI allowance spent, session built anyway. Non-blocking on
+                  purpose: a modal over a working preview reads as a failure. */}
+              {fallbackNote && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{fallbackNote}</span>
+                </div>
+              )}
 
               {/* ── 1. My Sessions ── */}
               <section>
@@ -542,6 +627,8 @@ export default function QuickSessionModal({ open, onClose }: QuickSessionModalPr
               </section>
             </div>
           </motion.div>
+
+          <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
         </>
       )}
     </AnimatePresence>

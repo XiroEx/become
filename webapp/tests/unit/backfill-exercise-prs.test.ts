@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/backfill-exercise-prs.test.ts
+// Run with: npm run test:file tests/unit/backfill-exercise-prs.test.ts
 //
 // Tests the pure replay logic used by scripts/migrate-backfill-exercise-prs.ts.
 // The DB-touching parts of the script are exercised manually with --dry-run in

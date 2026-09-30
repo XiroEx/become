@@ -5,8 +5,9 @@
 // ritual) is THE thing on screen; a quiet "More →" leads to the Arsenal of
 // unlocked tools. Begin → launches the immersive SessionPlayer.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
@@ -22,10 +23,13 @@ import { precomposeMindSession } from '@/lib/mind/precompose'
 import { suggestActions } from '@/lib/mind/suggestActions'
 import { getPathSession } from '@/lib/mind/sessionPath'
 import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
+import { shouldAutoStartMindSession } from '@/lib/mind/autoStart'
 import { runAiTask } from '@/lib/ai/runClient'
 import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
 
 interface LevelProgress { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
 
@@ -91,6 +95,12 @@ const SUGG_CACHE_KEY = 'mind-suggested-next'
 const SUGG_CACHE_TTL = 12 * 60 * 60 * 1000
 
 export default function MindJourney() {
+  // The home dashboard's Mindset tile links here with ?start=1 to jump
+  // straight into today's session instead of just onto this page.
+  const searchParams = useSearchParams()
+  const autoStart = searchParams?.get('start') === '1'
+  const autoStartedRef = useRef(false)
+
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
@@ -117,6 +127,10 @@ export default function MindJourney() {
   // refetch; suggFetching drives the "tuning…" hint ONLY during a real fetch.
   const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
   const [suggFetching, setSuggFetching] = useState(false)
+  // Free members get main sessions 1-10; the server reports the wall on GET so
+  // the lock is drawn BEFORE Begin rather than after a whole session.
+  const [sessionLock, setSessionLock] = useState<{ limit: number } | null>(null)
+  const [gate, setGate] = useState<GatePayload | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -158,6 +172,9 @@ export default function MindJourney() {
         if (s.resume?.plan && typeof s.resume?.seed === 'number') {
           setResumable({ seed: s.resume.seed, plan: s.resume.plan as MindSessionPlan })
         }
+        setSessionLock(
+          s.locked === true && typeof s.sessionsLimit === 'number' ? { limit: s.sessionsLimit } : null,
+        )
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
@@ -261,10 +278,32 @@ export default function MindJourney() {
       fetch('/api/mind/session', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ seed, plan: planToStore, tzOffset: new Date().getTimezoneOffset() }),
+        // `tz`, not `tzOffset`: the route (and every other date-scoped route)
+        // reads `tz`. Sending the other spelling dated the stored session with
+        // the UTC day, and the next GET dropped it as a new day — an evening
+        // session in New York never survived the walk away.
+        body: JSON.stringify({ seed, plan: planToStore, tz: new Date().getTimezoneOffset() }),
       }).catch(() => {})
     }
   }, [resumable, aiPlan, plan])
+
+  // Auto-begin for the dashboard tile's ?start=1. Fires at most once, and
+  // only once there's an actual session to jump into — during onboarding or
+  // the post-session cooldown it silently no-ops and the page renders as
+  // normal instead of forcing a session that doesn't exist.
+  useEffect(() => {
+    if (!shouldAutoStartMindSession({
+      autoStart,
+      alreadyStarted: autoStartedRef.current,
+      loading,
+      playing,
+      onboarded,
+      available: progress?.mainSessionAvailable ?? true,
+      hasPlan: !!effectivePlan,
+    })) return
+    autoStartedRef.current = true
+    begin()
+  }, [autoStart, loading, playing, onboarded, progress, effectivePlan, begin])
 
   // Deterministic suggested actions — shown instantly (and the fallback if the AI
   // drifts). The AI upgrade replaces them when it resolves.
@@ -458,7 +497,47 @@ export default function MindJourney() {
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}
-      {available && effectivePlan ? (
+      {sessionLock ? (
+        // Out of free main sessions. Distinct from the 20h cooldown below,
+        // which lifts on its own — this one never does, so it says so and
+        // offers the only thing that changes it.
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <button
+            onClick={() =>
+              // sessionLock IS the server's own answer (locked + sessionsLimit
+              // off GET /api/mind/session), so the sheet can state the cap
+              // instead of refusing with no number. mind-sessions is a
+              // milestone: at the cap, remaining is 0 and stays 0.
+              setGate(
+                syntheticGate('mind-sessions', 'plus', {
+                  limit: sessionLock.limit,
+                  remaining: 0,
+                  resetsAt: null,
+                  window: 'lifetime',
+                }),
+              )
+            }
+            className="group w-full rounded-3xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-zinc-400" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Session {sessionLock.limit + 1}
+              </p>
+            </div>
+            <h2 className="mt-2 text-2xl font-extrabold text-zinc-700 dark:text-zinc-200">
+              You&apos;ve finished your first {sessionLock.limit} sessions
+            </h2>
+            <p className="mt-2 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+              Every chapter after this one, plus Vision, comes with Plus.
+            </p>
+            <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3.5 text-base font-bold text-white transition-transform group-active:scale-95 dark:bg-white dark:text-zinc-900">
+              See Plus
+              <ArrowRight className="h-5 w-5" />
+            </span>
+          </button>
+        </motion.div>
+      ) : available && effectivePlan ? (
         // Main session available (first ever, or 20h since the last one).
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
@@ -524,6 +603,8 @@ export default function MindJourney() {
         </div>
       )}
       </div>
+
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
     </PageTransition>
   )
 }

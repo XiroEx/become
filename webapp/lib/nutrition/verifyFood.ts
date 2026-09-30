@@ -28,6 +28,7 @@ import { gatherEvidence, type EvidenceBundle, type EvidenceValues } from './evid
 import { runStructuredTask } from '@/lib/ai/becomeGraph'
 import { getBlobStore } from '@/lib/blobStorage'
 import { escalateFlagToHuman, shouldEscalate } from '@/lib/nutrition/escalateFlag'
+import { verificationBudgetFor, type VerificationBudget } from '@/lib/nutrition/flagPolicy'
 
 /**
  * Below this, a correction is recorded but NOT written to the shared record.
@@ -314,8 +315,25 @@ export async function verifyFood(
     /** What the reporter actually ticked, and what they wrote. */
     reportedKinds?: string[]
     reportedNote?: string
+    /**
+     * What this round may spend (lib/nutrition/flagPolicy.ts). Defaults to a
+     * first round, so every existing caller and test keeps today's behaviour
+     * exactly. A RELAUNCH passes a reduced budget and loses the grounded
+     * search, which is the expensive dispatch here.
+     *
+     * No allowance is charged inside this function — the two calling routes own
+     * that, because they are the ones that know whether a dispatch is actually
+     * going to happen.
+     */
+    budget?: VerificationBudget
   } = {},
 ): Promise<VerificationOutcome> {
+  const budget = opts.budget ?? verificationBudgetFor(1)
+  // Counted, not merely asserted: a fourth dispatch added to this function
+  // later cannot escape the ceiling by forgetting to check a flag.
+  let spent = 0
+  const mayDispatch = () => spent < budget.maxDispatches
+
   const food = await Food.findById(foodId)
     .select('name brand barcode variants verification')
     .lean<FoodLike | null>()
@@ -333,7 +351,11 @@ export async function verifyFood(
     // 0. Read the reporter's photo, if they sent one. Typed values still win:
     //    someone who bothered to enter the numbers read them off the same
     //    package, and their transcription beats ours.
-    const label = opts.userPhotoUrl ? await readLabelPhoto(opts.userPhotoUrl) : null
+    let label: LabelRead | null = null
+    if (opts.userPhotoUrl && budget.allowLabelRead && mayDispatch()) {
+      spent += 1
+      label = await readLabelPhoto(opts.userPhotoUrl)
+    }
 
     // 1. Deterministic.
     const bundle = await gatherEvidence({
@@ -347,23 +369,33 @@ export async function verifyFood(
     })
 
     // 2. Grounded search. Best-effort: the deterministic sources alone can
-    //    still carry a verdict, so a search failure degrades rather than aborts.
-    const search = await runStructuredTask<SearchResult>(
-      'nutritionFoodEvidence',
-      {
-        // Barcode first: it is the only identifier that cannot be confused
-        // between product lines, and the searcher is told to resolve it before
-        // it reaches for the name.
-        barcode: food.barcode,
-        name: food.name,
-        brand: food.brand,
-        storedPer100: stored,
-        storedServing: stored.servingLabel,
-      },
-      { timeoutMs: SEARCH_TIMEOUT_MS },
-    )
+    //    still carry a verdict, so a search failure degrades rather than aborts
+    //    — and that is exactly why a relaunch can skip it. `search: null` is a
+    //    path canWrite() already handles (searchIsIndependent goes false;
+    //    bundle.hasIndependentSource can still carry a write).
+    let search: SearchResult | null = null
+    if (budget.allowSearch && mayDispatch()) {
+      spent += 1
+      search = await runStructuredTask<SearchResult>(
+        'nutritionFoodEvidence',
+        {
+          // Barcode first: it is the only identifier that cannot be confused
+          // between product lines, and the searcher is told to resolve it before
+          // it reaches for the name.
+          barcode: food.barcode,
+          name: food.name,
+          brand: food.brand,
+          storedPer100: stored,
+          storedServing: stored.servingLabel,
+        },
+        { timeoutMs: SEARCH_TIMEOUT_MS },
+      )
+    }
 
     // 3. Review. No internet — it sees only what stages 1 and 2 collected.
+    //    Never skipped: it is the stage that produces the verdict, and a round
+    //    that cannot reach a verdict has spent its other dispatches for nothing.
+    spent += 1
     const review = await runStructuredTask<ReviewVerdict>(
       'nutritionFoodReview',
       {

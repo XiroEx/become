@@ -3,8 +3,9 @@ import dbConnect from '@/lib/mongodb'
 import MealLog from '@/models/MealLog'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
-import { hasFeature, loadUserEntitlement } from '@/lib/entitlements'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { bustTilesCache } from '@/lib/redis'
+import { createStrict } from '@/lib/strictCreate'
 import mongoose from 'mongoose'
 
 /**
@@ -54,14 +55,13 @@ export async function POST(request: NextRequest) {
     await dbConnect()
 
     // Saving a reusable meal is the gated half; combining the day's rows is not.
+    // Goes through requireQuota rather than a hand-rolled hasFeature check so
+    // this path honours the ENTITLEMENTS_ENFORCED kill-switch and the 3-meal
+    // free allowance like every other create route — a raw hasFeature call here
+    // was the one gate that bypassed the switch entirely.
     if (saveAsMeal) {
-      const { role, tier } = await loadUserEntitlement(auth.userId)
-      if (!hasFeature(role, tier, 'custom-meals')) {
-        return NextResponse.json(
-          { error: 'Saving a meal requires Plus', requiresTier: 'plus' },
-          { status: 403 },
-        )
-      }
+      const gate = await requireQuota(request, 'custom-meals')
+      if (!gate.ok) return gate.response
     }
 
     const logIds = [...new Set(picks.map(p => String(p.logId)))]
@@ -109,10 +109,18 @@ export async function POST(request: NextRequest) {
     )
     const tags = [...new Set(sources.flatMap(l => l.tags ?? []))]
 
+    // `createdBy`, NOT `user`. This create used to name the MealLog owner field
+    // on the Meal schema, where it does not exist, so Mongoose dropped it and
+    // every meal saved here landed with no owner: uncounted by the 3-meal
+    // allowance (five combine-saves from 0/3 all returned 201 with used still
+    // 0), absent from GET /api/meals?mine=true, and undeletable by the member
+    // who made it. createStrict is what makes that impossible to repeat — a key
+    // that is not a schema path throws instead of being silently discarded.
+    // See lib/strictCreate.ts.
     let meal: { _id: mongoose.Types.ObjectId } | null = null
     if (saveAsMeal) {
-      meal = await Meal.create({
-        user: auth.userId,
+      meal = await createStrict<{ _id: mongoose.Types.ObjectId }>(Meal, {
+        createdBy: auth.userId,
         name: mealName,
         items,
         totalNutrition: computeTotalNutrition(items as never),
@@ -120,7 +128,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 1) Write the merged log.
-    const combined = await MealLog.create({
+    const combined = await createStrict(MealLog, {
       user: auth.userId,
       loggedAt,
       items,

@@ -42,6 +42,9 @@ describe("WorkoutOverview", () => {
             { slug: "ohp", name: "Overhead Press", sets: 3, repsLabel: "8-10" },
           ],
         }}
+        // Required: the component no longer defaults it to a no-op, which is
+        // what let the route render a Start button that did nothing.
+        onStartLive={jest.fn()}
       />,
     );
     expect(getByTestId("workout-overview-title").props.children).toBe("Push A");

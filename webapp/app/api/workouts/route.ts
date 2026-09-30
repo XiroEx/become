@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
+import { peekQuota, type GatePayload } from '@/lib/entitlementGuards'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
-import { calculateNextDay } from '@/app/api/programs/current-workout/route'
+import { calculateNextDay } from '@/lib/workout/dayOrder'
 import { recordStreakActivity } from '@/lib/streak'
 import { bustTilesCache } from '@/lib/redis'
-import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, readZoneFromBody, localDateKey, localDayWindowForKey, dateKey } from '@/lib/dayWindow'
+import { readTzOffset, readTzOffsetFromBody, readOptionalTzOffsetFromBody, readZoneFromBody, localDateKey, localDayWindowForKey, dateKey, IN_PROGRESS_WINDOW_MS } from '@/lib/dayWindow'
+import { slotDateKey } from '@/lib/notifications/cronNotify'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
@@ -50,6 +52,27 @@ interface WorkoutSaveRequest {
   tz?: number
   /** ISO date of the exact Schedule slot this log fulfills (gap 3). */
   scheduledDate?: string
+  /**
+   * Optional explicit day to log this workout under — ISO string / YYYY-MM-DD.
+   * Lets a member who crossed midnight mid-workout choose which calendar day
+   * it counts as, instead of it silently landing on whichever day the first
+   * autosave happened to fire on. Autosaves omit it, so they never disturb
+   * the log's date.
+   */
+  performedAt?: string
+  /**
+   * Client-generated id for ONE attempt at this program day, sent on EVERY
+   * save of that attempt — the program-workout analogue of a quick session's
+   * `sessionId`. It is what makes a save safe to replay: an offline queue (or
+   * a slow retry) can send the same completing save again hours later, after
+   * local midnight, and the route recognises it instead of inserting a second
+   * completed log and running the completion side effects twice.
+   *
+   * Optional: a client that sends none falls through to exactly the window
+   * rules that have always applied. An `Idempotency-Key` header is honoured as
+   * an equivalent, for queues that key writes at the transport level.
+   */
+  attemptId?: string
 }
 
 interface QuickSessionSaveRequest {
@@ -66,6 +89,24 @@ interface QuickSessionSaveRequest {
   tz?: number
   /** Optional backdate — ISO string / YYYY-MM-DD for a workout performed earlier. */
   performedAt?: string
+  /**
+   * Carried over from a favorited session's client-side draft when it is
+   * repeated (a repeat gets a new sessionId, so without this the star is
+   * silently lost on the new log). Only honored on the FIRST save for a
+   * sessionId — an update never touches an existing log's favorite, that is
+   * the dedicated PATCH /api/workouts/session toggle's job.
+   */
+  favorite?: boolean
+  /**
+   * True when this save represents genuinely engaging with the workout (the
+   * live view opening, or a subsequent autosave from it) — as opposed to the
+   * "Plan it" screen merely writing a placeholder for a future/today session
+   * nobody has started yet. Only ever `false` from the plan-only save path;
+   * every other caller either omits it (an edit to an existing plan, which
+   * must not resurrect it as "started") or sends `true`. Gates `startedAt`
+   * (see below) — never stored directly.
+   */
+  started?: boolean
 }
 
 /**
@@ -86,6 +127,23 @@ function resolvePerformedAt(performedAt: string | undefined, _tzOffset: number):
   if (d.getTime() < now.getTime() - YEAR) return now   // absurdly old → now
   if (d.getTime() > now.getTime() + YEAR) return now   // absurdly far ahead → now
   return d
+}
+
+/**
+ * The attempt id this program save carries, or null when it carries none.
+ *
+ * Read from the body (`attemptId`) first, then from an `Idempotency-Key`
+ * header so a queue that keys its writes at the transport level works without
+ * rewriting the body it stored. Trimmed and length-capped; anything that is
+ * not a usable string reads as ABSENT, which leaves the save on the
+ * pre-existing open-log / local-day window rules and changes nothing.
+ */
+function readAttemptId(body: { attemptId?: unknown }, request: NextRequest): string | null {
+  const fromBody = typeof body?.attemptId === 'string' ? body.attemptId : ''
+  const raw = fromBody.trim() ? fromBody : (request.headers.get('Idempotency-Key') ?? '')
+  const id = typeof raw === 'string' ? raw.trim() : ''
+  if (!id || id.length > 128) return null
+  return id
 }
 
 // GET: Fetch today's workout progress for a program
@@ -175,14 +233,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Find today's workout for this program/day
+    // Find today's workout for this program/day. An INCOMPLETE log gets a
+    // rolling window (IN_PROGRESS_WINDOW_MS), not today's exact calendar
+    // window — a workout opened right before midnight is still "the one
+    // you're resuming" a few minutes later, not a stale log from "yesterday"
+    // that pops the separate unfinished-workout prompt below. A COMPLETED
+    // log still matches only within today's calendar day, unchanged: that's
+    // what tells the rest of this route "today's attempt is already done."
+    const inProgressCutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
     const todayWorkout = userProgress.workoutLogs.find(
       (log: { programId: string; day: string; date: Date; completed: boolean }) => {
+        if (log.programId !== programId || (day && log.day !== day)) return false
         const logDate = new Date(log.date)
-        return log.programId === programId &&
-               (!day || log.day === day) &&
-               logDate >= today &&
-               logDate <= tomorrow
+        return log.completed ? (logDate >= today && logDate <= tomorrow) : logDate >= inProgressCutoff
       }
     )
 
@@ -202,7 +265,12 @@ export async function GET(request: NextRequest) {
       ).catch(() => {})
     }
 
-    // Find most recent incomplete workout from a previous day (stale, within cutoff window)
+    // Find most recent incomplete workout old enough to need a decision
+    // (older than the in-progress rolling window above, but within the
+    // 30-day cutoff). Bounded by inProgressCutoff rather than `today` so a
+    // log the in-progress window above already claims for silent resume is
+    // never also flagged here — otherwise it would surface both as "today's
+    // workout" AND as a stale prompt in the same response.
     type WorkoutLog = { programId: string; day: string; phase: number; date: Date; completed: boolean; kind?: string; exercises: Array<{ sets: Array<{ completed: boolean }> }> }
     let staleLog: WorkoutLog | null = (userProgress.workoutLogs as WorkoutLog[])
       .filter(log =>
@@ -211,7 +279,7 @@ export async function GET(request: NextRequest) {
         log.kind !== 'quick' &&
         log.programId === programId &&
         !log.completed &&
-        new Date(log.date) < today &&
+        new Date(log.date) < inProgressCutoff &&
         new Date(log.date) >= staleCutoff
       )
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0] ?? null
@@ -271,10 +339,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// DELETE /api/workouts?programId=&day=&tz= — hard-delete TODAY's open
-// (incomplete) log for a program+day. This is what the Resume pill's
-// hold-to-delete uses — the counterpart to DELETE /api/workouts/session for
-// quick sessions, scoped to today the same way GET/in-progress finds it.
+// DELETE /api/workouts?programId=&day= — hard-delete the open (incomplete)
+// log for a program+day. This is what the Resume pill's hold-to-delete uses —
+// the counterpart to DELETE /api/workouts/session for quick sessions, scoped
+// to the same rolling window GET/in-progress uses to find it (see
+// IN_PROGRESS_WINDOW_MS) rather than the caller's local calendar day — a log
+// opened right before midnight must still be deletable a few minutes later,
+// not 404 because "today" moved on without it.
 //
 // Schedule is deliberately left untouched: an in-progress program day has no
 // distinct schedule status to begin with (only 'scheduled'), so removing the
@@ -297,9 +368,7 @@ export async function DELETE(request: NextRequest) {
 
     await dbConnect()
 
-    const tzOffset = readTzOffset(searchParams)
-    const todayKey = localDateKey(null, tzOffset)
-    const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
+    const cutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
 
     // `modifiedCount` is NOT a reliable "did the pull match anything" signal
     // here — the schema's `timestamps: true` writes `updatedAt` on every call,
@@ -311,7 +380,7 @@ export async function DELETE(request: NextRequest) {
       { userId: authResult.userId },
       {
         $pull: {
-          workoutLogs: { programId, day, completed: false, date: { $gte: today, $lte: tomorrow } },
+          workoutLogs: { programId, day, completed: false, date: { $gte: cutoff } },
         },
       },
       { returnDocument: 'before', lean: true }
@@ -322,12 +391,11 @@ export async function DELETE(request: NextRequest) {
         log.programId === programId &&
         log.day === day &&
         !log.completed &&
-        new Date(log.date) >= today &&
-        new Date(log.date) <= tomorrow
+        new Date(log.date) >= cutoff
     )
 
     if (!existed) {
-      return NextResponse.json({ error: 'No in-progress workout found for today' }, { status: 404 })
+      return NextResponse.json({ error: 'No in-progress workout found' }, { status: 404 })
     }
 
     return NextResponse.json({ success: true })
@@ -366,21 +434,6 @@ export async function POST(request: NextRequest) {
     let programCompleted = false
     let programName = ''
 
-    // Create workout log entry
-    const workoutLog = {
-      date: new Date(),
-      programId,
-      phase,
-      day,
-      ...(scheduledDate && { scheduledDate: new Date(scheduledDate) }),
-      completed,
-      duration,
-      startedAt: new Date(),
-      activeSeconds: activeSeconds ?? 0,
-      ...(notes && { notes }),
-      exercises
-    }
-
     // Find today's date range in the user's local timezone
     const tzOffset = readTzOffsetFromBody(body)
     // Only persist a genuinely-reported offset — a MISSING `tz` must not be
@@ -391,13 +444,113 @@ export async function POST(request: NextRequest) {
     const todayKey = localDateKey(null, tzOffset)
     const { start: today, end: tomorrow } = localDayWindowForKey(todayKey, tzOffset)
 
-    // Atomic update-if-exists: returns the document state BEFORE this update
-    // so we can read wasAlreadyComplete without a separate findOne round-trip.
-    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean }> }
-    const docBefore = await UserProgress.findOneAndUpdate(
+    // Explicit day override (a member choosing which calendar day a
+    // midnight-crossing workout counts as). Undefined unless the client sent
+    // one — autosaves never do, so they never disturb the log's date.
+    const explicitLogDate = body.performedAt ? resolvePerformedAt(body.performedAt, tzOffset) : null
+
+    // The client's id for THIS attempt at this program day (see attemptId on
+    // WorkoutSaveRequest). Null when the client sends none.
+    const attemptId = readAttemptId(body, request)
+
+    // Create workout log entry
+    const workoutLog = {
+      date: explicitLogDate ?? new Date(),
+      programId,
+      phase,
+      day,
+      ...(attemptId && { attemptId }),
+      ...(scheduledDate && { scheduledDate: new Date(scheduledDate) }),
+      completed,
+      duration,
+      startedAt: new Date(),
+      activeSeconds: activeSeconds ?? 0,
+      ...(notes && { notes }),
+      exercises
+    }
+
+    type ProgressDoc = { workoutLogs: Array<{ programId: string; day: string; date: Date; completed: boolean; attemptId?: string }> }
+
+    let wasAlreadyComplete = false
+    // Did this save land on the log its OWN attemptId already wrote? Then it
+    // is a replay (or simply a later save) of an attempt the server has
+    // already recorded, and none of the window rules below may run — they are
+    // what inserted the duplicate.
+    let matchedAttempt = false
+
+    // ── 1. The attempt's own log, matched by the client's attemptId ────────
+    // Checked BEFORE the window rules and deliberately with NO date bound:
+    // that is the whole point. A completing save replayed from an offline
+    // queue (or a slow retry) after local midnight is neither inside the
+    // rolling open-log window — the log it wrote is completed — nor dated
+    // "today" any more, so the route found neither and inserted a SECOND
+    // completed log, running the completion side effects a second time: the
+    // program's completed count and day advance again, and another schedule
+    // slot with the same day label is marked completed.
+    //
+    // Replaying a save must be a no-op beyond rewriting the same log with the
+    // same content, so this update is content-only: it never touches
+    // programId/phase/day, and `wasAlreadyComplete` (read from the BEFORE
+    // document, the same trick the window path uses) is what keeps the
+    // completion side effects to exactly once per attempt.
+    if (attemptId) {
+      const attemptDocBefore = await UserProgress.findOneAndUpdate(
+        {
+          userId: payload.userId,
+          workoutLogs: { $elemMatch: { programId, attemptId } }
+        },
+        {
+          $set: {
+            'workoutLogs.$[elem].exercises': exercises,
+            'workoutLogs.$[elem].completed': completed,
+            'workoutLogs.$[elem].duration': duration,
+            ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
+            ...(explicitLogDate && { 'workoutLogs.$[elem].date': explicitLogDate }),
+            updatedAt: new Date()
+          }
+        },
+        {
+          // A replayed AUTOSAVE must never un-complete a finished log, so an
+          // incomplete save only rewrites an element that is still open. The
+          // window path below gets that rule for free by matching
+          // completed:false; here it has to be said out loud.
+          arrayFilters: [{
+            'elem.programId': programId,
+            'elem.attemptId': attemptId,
+            ...(completed ? {} : { 'elem.completed': false })
+          }],
+          returnDocument: 'before',
+          lean: true
+        }
+      ) as ProgressDoc | null
+
+      if (attemptDocBefore) {
+        matchedAttempt = true
+        const prior = attemptDocBefore.workoutLogs?.find(
+          (log) => log.programId === programId && log.attemptId === attemptId
+        )
+        wasAlreadyComplete = prior?.completed === true
+      }
+    }
+
+    // ── 2. Otherwise, the window rules, exactly as they always were ────────
+    // Prefer the OPEN log for this exact program/day within the same rolling
+    // in-progress window GET/in-progress uses (IN_PROGRESS_WINDOW_MS) —
+    // regardless of which calendar day it carries. A log opened right before
+    // midnight must still be the one a later save (even one after midnight)
+    // continues, or the session silently forks into an orphaned original plus
+    // an empty "new" entry for today (reported as "my workout was gone").
+    // Matching by calendar-day window here is exactly the bug: "today" moves
+    // on at midnight even though the open log did not. Bounded rather than
+    // unbounded so this can never reach back and silently absorb a genuinely
+    // abandoned attempt from days ago — that log is surfaced instead via the
+    // separate stale-workout prompt (staleIncomplete, further below in GET),
+    // which asks the member to explicitly resolve it first.
+    const openLogCutoff = new Date(Date.now() - IN_PROGRESS_WINDOW_MS)
+    const docBefore = matchedAttempt ? null : await UserProgress.findOneAndUpdate(
       {
         userId: payload.userId,
-        workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } }
+        workoutLogs: { $elemMatch: { programId, day, completed: false, date: { $gte: openLogCutoff } } }
       },
       {
         $set: {
@@ -405,36 +558,60 @@ export async function POST(request: NextRequest) {
           'workoutLogs.$[elem].completed': completed,
           'workoutLogs.$[elem].duration': duration,
           ...(activeSeconds !== undefined && { 'workoutLogs.$[elem].activeSeconds': activeSeconds }),
+          ...(explicitLogDate && { 'workoutLogs.$[elem].date': explicitLogDate }),
+          // Adopt the id of the attempt now continuing this log, so every
+          // later save of it (and every replay of those) matches by id above
+          // instead of depending on the windows. Covers a log opened by a
+          // client that sent none — a queued write from an older build, say.
+          ...(attemptId && { 'workoutLogs.$[elem].attemptId': attemptId }),
           updatedAt: new Date()
         }
       },
       {
-        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.date': { $gte: today, $lte: tomorrow } }],
+        arrayFilters: [{ 'elem.programId': programId, 'elem.day': day, 'elem.completed': false, 'elem.date': { $gte: openLogCutoff } }],
         returnDocument: 'before',
         lean: true
       }
     ) as ProgressDoc | null
 
-    let wasAlreadyComplete = false
-
-    if (docBefore) {
-      const oldLog = docBefore.workoutLogs?.find(
-        (log) => log.programId === programId && log.day === day && log.date >= today && log.date <= tomorrow
-      )
-      wasAlreadyComplete = oldLog?.completed === true
-    } else {
-      // No entry for today — insert only if still absent (guards against concurrent double-tap)
-      await UserProgress.updateOne(
+    if (!matchedAttempt && !docBefore) {
+      // No recent OPEN log for this program/day. Either today already has a
+      // COMPLETED entry (a retried save — don't double the completion side
+      // effects below) or there is truly nothing yet (a fresh start).
+      const existing = await UserProgress.findOne(
         {
           userId: payload.userId,
-          workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } }
+          workoutLogs: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } }
         },
-        {
-          $push: { workoutLogs: workoutLog },
-          $set: { updatedAt: new Date() }
-        },
-        { upsert: true }
+        { workoutLogs: 1 }
+      ).lean<ProgressDoc | null>()
+
+      const todayLog = existing?.workoutLogs?.find(
+        (log) => log.programId === programId && log.day === day && log.date >= today && log.date <= tomorrow
       )
+
+      if (todayLog) {
+        wasAlreadyComplete = todayLog.completed === true
+      } else {
+        // Insert only if still absent (guards against concurrent double-tap).
+        // With an attemptId the guard covers that too, so two replays landing
+        // at once can never both insert: the first wins, the second matches
+        // it by id on its next attempt-check — or fails this filter outright.
+        await UserProgress.updateOne(
+          {
+            userId: payload.userId,
+            $and: [
+              { workoutLogs: { $not: { $elemMatch: { programId, day, date: { $gte: today, $lte: tomorrow } } } } },
+              ...(attemptId ? [{ workoutLogs: { $not: { $elemMatch: { programId, attemptId } } } }] : [])
+            ]
+          },
+          {
+            $push: { workoutLogs: workoutLog },
+            $set: { updatedAt: new Date() }
+          },
+          { upsert: true }
+        )
+      }
     }
 
     // Handle completion logic once (shared between both branches)
@@ -504,14 +681,23 @@ export async function POST(request: NextRequest) {
             // catch up); it must never steal credit from the day you actually
             // trained. Note the entry points don't all send `scheduledDate`, so
             // this ordering — not `exact` — is what has to be correct.
+            //
+            // A slot's `date` is a day MARKER at 00:00Z, so it is read with
+            // slotDateKey (the UTC date part) and NOT through the member's
+            // offset: `dateKey(new Date(w.date), tzOffset)` turned today's
+            // marker into YESTERDAY for everyone west of UTC, which dropped
+            // today's slot into `overdue` behind an older one — the same bug,
+            // back again, for exactly the members it always hits. The
+            // `completedAt` read in the guard above is an INSTANT and keeps
+            // the offset.
             const todaySlot = candidates.find(
-              (w) => dateKey(new Date(w.date), tzOffset) === todayKey
+              (w) => slotDateKey(w.date) === todayKey
             )
             const overdue = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) < todayKey)
+              .filter((w) => slotDateKey(w.date) < todayKey)
               .sort(byDateAsc)
             const upcoming = candidates
-              .filter((w) => dateKey(new Date(w.date), tzOffset) > todayKey)
+              .filter((w) => slotDateKey(w.date) > todayKey)
               .sort(byDateAsc)
             const match = exact ?? todaySlot ?? overdue[0] ?? upcoming[0]
 
@@ -654,7 +840,7 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes } = body
+  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, started, favorite } = body
 
   if (!sessionId || !Array.isArray(exercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -693,10 +879,10 @@ async function handleQuickSessionSave(
         ...(notes !== undefined && { 'workoutLogs.$[elem].notes': notes }),
         // Backdate only when the client explicitly sends performedAt — autosaves
         // omit it, so they never disturb the log's date.
-        ...(body.performedAt && {
-          'workoutLogs.$[elem].date': workoutDate,
-          'workoutLogs.$[elem].startedAt': workoutDate,
-        }),
+        ...(body.performedAt && { 'workoutLogs.$[elem].date': workoutDate }),
+        // Stamp startedAt only on real engagement (`started: true`). A plan
+        // edit sends neither flag and must leave it untouched — see `started`.
+        ...(started === true && { 'workoutLogs.$[elem].startedAt': workoutDate }),
         updatedAt: new Date(),
       },
     },
@@ -708,11 +894,26 @@ async function handleQuickSessionSave(
   ) as QuickProgressDoc | null
 
   let wasAlreadyComplete = false
+  // A star carried in on the insert (repeating an already-starred session)
+  // would otherwise slip past the PATCH toggle's quota gate. The check here is
+  // SOFT on purpose: a workout save must NEVER fail — logging is history, and
+  // history is not a paid feature. At the cap the session still saves and only
+  // the star is dropped, with `favoriteDenied` telling the client why so it can
+  // raise the upsell.
+  let favoriteDenied: GatePayload | null = null
 
   if (docBefore) {
     const oldLog = docBefore.workoutLogs?.find((log) => log.sessionId === sessionId)
     wasAlreadyComplete = oldLog?.completed === true
   } else {
+    let carryFavorite = favorite === true
+    if (carryFavorite) {
+      const q = await peekQuota(payload.userId, 'custom-sessions')
+      if (!q.allowed) {
+        carryFavorite = false
+        favoriteDenied = q.gate
+      }
+    }
     // First save for this session — insert only if still absent (guards a
     // concurrent double-save from inserting two logs for the same sessionId).
     await UserProgress.updateOne(
@@ -731,9 +932,11 @@ async function handleQuickSessionSave(
             ...(focus && { focus }),
             completed,
             duration,
-            startedAt: workoutDate,
+            // Absent for a plan nobody has started yet — see `started` above.
+            ...(started !== false && { startedAt: workoutDate }),
             activeSeconds: activeSeconds ?? 0,
             ...(notes && { notes }),
+            ...(carryFavorite && { favorite: true }),
             exercises,
           },
         },
@@ -772,6 +975,9 @@ async function handleQuickSessionSave(
   return NextResponse.json({
     message: 'Quick session saved successfully',
     completed,
+    // Present only when the star was soft-dropped at the free cap. The save
+    // itself succeeded — this is an upsell hook, not an error.
+    ...(favoriteDenied && { favoriteDenied }),
     ...(newPRsAchieved.length > 0 && { newPRsAchieved }),
     ...(streakResult && {
       streak: {

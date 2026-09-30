@@ -22,8 +22,12 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import AdminExercisesRoute from "../app/admin/exercises/index";
-import AdminFoodsRoute from "../app/admin/foods/index";
+// The SCREENS, not the routes' default exports: the defaults are wrapped in
+// `devOnlyRoute`, which redirects to Home outside `__DEV__`. That wrapper is
+// tested by `__tests__/dev-only-routes.test.tsx`; this file is about the role
+// gate and the fetches behind it.
+import { AdminExercisesScreen as AdminExercisesRoute } from "../app/(app)/admin/exercises/index";
+import { AdminFoodsScreen as AdminFoodsRoute } from "../app/(app)/admin/foods/index";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

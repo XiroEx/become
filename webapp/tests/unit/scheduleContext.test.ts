@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/scheduleContext.test.ts
+// Run with: npm run test:file tests/unit/scheduleContext.test.ts
 //
 // Pinned to the real 2026-08-12 session: the Mind coach closed with "as you
 // tackle your Chest and Back workout today" while the member's calendar said

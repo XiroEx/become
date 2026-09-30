@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/guided-ask.test.ts
+// Run with: npm run test:file tests/unit/guided-ask.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'

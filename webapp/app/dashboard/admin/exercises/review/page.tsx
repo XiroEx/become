@@ -26,6 +26,7 @@ interface Submission {
   videoTrim?: VideoTrimOverride | null
   submittedAt?: string | null
   submittedBy: { name: string | null; email: string | null } | null
+  reviewNote?: string | null
 }
 
 export default function ExerciseReviewQueuePage() {
@@ -84,7 +85,7 @@ export default function ExerciseReviewQueuePage() {
         <div>
           <h1 className="text-2xl font-extrabold text-zinc-900 dark:text-white">Universal Submissions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Custom exercises members submitted for the shared catalog. Approve to make one visible to everyone.
+            Custom exercises members submitted, plus any auto-flagged as a likely duplicate. Approve to make one visible to everyone.
           </p>
         </div>
       </div>
@@ -131,6 +132,12 @@ export default function ExerciseReviewQueuePage() {
                   </p>
                 </div>
               </div>
+
+              {s.reviewNote && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                  ⚠ {s.reviewNote}
+                </p>
+              )}
 
               {rejectingSlug === s.slug ? (
                 <div className="mt-3 space-y-2">

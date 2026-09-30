@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/prsTimeline.test.ts
+// Run with: npm run test:file tests/unit/metrics/prsTimeline.test.ts
 //
 // Covers the prs-timeline metric:
 //   - valueForDimension (per-dimension scalar extraction, e1RM fallback)

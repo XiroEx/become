@@ -274,6 +274,9 @@ export default function FoodLogSheet({
       } else {
         // No time picker — when the user picks a date, project to that day
         // with the current wall-clock time; otherwise stamp "now" as today.
+        // Either way the clock reading is never a deliberate choice, so the
+        // entry is untimed: the day view places it by its tag's anchor
+        // instead of the wall clock (see MealLog.untimed).
         const loggedAt = customDate
           ? combineDateWithNowTime(customDate)
           : new Date().toISOString()
@@ -285,6 +288,7 @@ export default function FoodLogSheet({
             items: [item],
             tags: [activeTag],
             loggedAt,
+            untimed: true,
           }),
         })
         if (res.ok) {

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, categoryForTracking, DEFAULT_TRACKING } from '@/lib/workout/tracking'
+import { normalizeTracking, tracksWeight, tracksTime, tracksSpeed, inferTracking, isSetFilled, categoryForTracking, blankSet, findPhantomPrefilledSets, DEFAULT_TRACKING } from '@/lib/workout/tracking'
 
 test('the vocabulary passes through untouched', () => {
   for (const t of ['reps_weight', 'reps_bodyweight', 'reps_only', 'time', 'time_distance', 'intervals', 'none'] as const) {
@@ -85,4 +85,65 @@ test('a custom cardio machine gets a cardio category, not strength', () => {
   assert.equal(categoryForTracking('reps_bodyweight'), 'strength')
   assert.equal(categoryForTracking('time'), 'strength')
   assert.equal(categoryForTracking(undefined), 'strength')
+})
+
+test('REGRESSION: a fresh set never carries last time\'s weight or reps', () => {
+  // The live workout used to seed every set of an exercise from the member's
+  // last-completed performance, so a set they never touched still had real
+  // numbers in it and could be marked done without them ever typing anything.
+  // blankSet() is what a fresh set must always be, regardless of history.
+  assert.deepEqual(blankSet(), { reps: '', weight: '', speed: '', completed: false })
+  // Calling it twice must not hand back the same object — each set gets its
+  // own, or editing one set's weight would edit every set's.
+  assert.notEqual(blankSet(), blankSet())
+})
+
+test('REGRESSION: a Track resume flags sets stamped with the same stale numbers', () => {
+  // The exact shape from the bug report: set 1 really done at 225x10, sets 2
+  // and 3 left over from the old "seed every set" bug at 150x10, never
+  // completed. Both stale sets share one signature and must be flagged.
+  const sets = [
+    { reps: '10', weight: '225', completed: true },
+    { reps: '10', weight: '150', completed: false },
+    { reps: '10', weight: '150', completed: false },
+  ]
+  assert.deepEqual(findPhantomPrefilledSets('reps_weight', sets), [1, 2])
+})
+
+test('a lone filled-but-incomplete set is left alone', () => {
+  // Unchecking DONE on a set you want to redo is a legitimate, single-set way
+  // to end up with real numbers sitting in an incomplete set — it must not be
+  // treated as stale prefill just because it is filled in.
+  const sets = [
+    { reps: '10', weight: '225', completed: false },
+    { reps: '', weight: '', completed: false },
+  ]
+  assert.deepEqual(findPhantomPrefilledSets('reps_weight', sets), [])
+})
+
+test('completed sets and differently-valued sets are never flagged', () => {
+  assert.deepEqual(
+    findPhantomPrefilledSets('reps_weight', [
+      { reps: '10', weight: '150', completed: true },
+      { reps: '10', weight: '150', completed: true },
+    ]),
+    [],
+    'both done — not a resume bug, just two matching real sets',
+  )
+  assert.deepEqual(
+    findPhantomPrefilledSets('reps_weight', [
+      { reps: '10', weight: '150', completed: false },
+      { reps: '8', weight: '135', completed: false },
+    ]),
+    [],
+    'different numbers — normal independent typing, not a stamped duplicate',
+  )
+  assert.deepEqual(
+    findPhantomPrefilledSets('reps_weight', [
+      { reps: '', weight: '150', completed: false },
+      { reps: '', weight: '150', completed: false },
+    ]),
+    [],
+    'weight alone never satisfies isSetFilled for reps_weight, so neither counts',
+  )
 })

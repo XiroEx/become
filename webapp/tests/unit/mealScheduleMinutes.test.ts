@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mealScheduleMinutes.test.ts
+// Run with: npm run test:file tests/unit/mealScheduleMinutes.test.ts
 //
 // `Number(null)` is 0, not NaN. That one fact silently broke every save on the
 // Meal Schedule screen: an UNSCHEDULED tag (null start, null end) came through

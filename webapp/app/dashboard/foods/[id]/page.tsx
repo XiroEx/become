@@ -19,6 +19,8 @@ import FoodThumbnail from '@/components/nutrition/FoodThumbnail'
 import FoodLogSheet from '@/components/meals/FoodLogSheet'
 import BridgeFieldGroup, { type BridgeValues } from '@/components/nutrition/BridgeFieldGroup'
 import { scalePerServingNutrition } from '@/lib/foodMath'
+import { isFoodOwner } from '@/lib/nutrition/foodOwnership'
+import { invalidateEntitlements } from '@/hooks/useEntitlements'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -61,14 +63,23 @@ interface FoodResponse {
   nutrition: Variant['nutrition']
   variants?: Variant[]
   createdBy?: string
+  /**
+   * The member who deliberately authored this row, and the id the free
+   * custom-foods slot is charged on. `flattenFoodForResponse` serializes it for
+   * exactly this reason: `createdBy` alone is provenance (see below), so a
+   * client that hid its controls behind `createdBy === me` offered Edit and
+   * Delete on catalogue rows the server answers 403 on.
+   */
+  authoredBy?: string
   externalDataType?: string
 }
 
 interface MeResponse {
-  user?: { _id?: string; id?: string; userId?: string }
+  user?: { _id?: string; id?: string; userId?: string; role?: string }
   _id?: string
   id?: string
   userId?: string
+  role?: string
 }
 
 interface TagsResp {
@@ -103,6 +114,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [bookmarking, setBookmarking] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -110,7 +122,8 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
   const [logSheetOpen, setLogSheetOpen] = useState(false)
   const [tagsResp, setTagsResp] = useState<TagsResp>({ defaults: [], userTags: [] })
   const { toast, showToast } = useToast(2200)
-  // Saved-bridge values keyed by variant index. Only the owner sees the edit UI.
+  // Saved-bridge values keyed by variant index. Only an owner (or an admin) sees
+  // the edit UI — see canMutate below.
   const [savingBridge, setSavingBridge] = useState<number | null>(null)
 
   const getHeaders = useCallback((): HeadersInit => {
@@ -150,6 +163,11 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         const data: MeResponse = await meRes.json()
         const uid = data.user?._id || data.user?.id || data.user?.userId || data._id || data.id || data.userId || null
         setCurrentUserId(uid ? String(uid) : null)
+        // The role comes from the DATABASE row /api/auth/me loads, not from the
+        // token's claim, so a demoted admin loses these controls on their next
+        // load. It only decides what is SHOWN — the route re-confirms admin
+        // through isVerifiedAdmin before it writes anything.
+        setIsAdmin((data.user?.role || data.role) === 'admin')
       }
       if (savedRes.ok) {
         const data = await savedRes.json()
@@ -180,7 +198,19 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
     fetchTags()
   }, [fetchFood, fetchMeAndSavedStatus, fetchTags])
 
-  const isOwner = Boolean(currentUserId && food?.createdBy && String(food.createdBy) === currentUserId)
+  // THE SAME PREDICATE THE SERVER USES — literally the same function, imported
+  // from lib/nutrition/foodOwnership.ts, which PATCH and DELETE on
+  // /api/nutrition/foods/[id] both call. `createdBy === me` was the old rule and
+  // it is provenance, not ownership: the food search route's background import
+  // stamps it with whoever's search pulled a USDA/OpenFoodFacts row in, so
+  // merely searching for "chicken breast" put Edit and Delete on screen for
+  // every catalogue row it materialised — both of which the route now 403s.
+  // Ownership is `authoredBy`, OR `createdBy` on a `source: 'manual'` row.
+  //
+  // Admin stays a SEPARATE disjunct here exactly as it is on the route: a role
+  // question does not belong inside an ownership predicate.
+  const isOwner = isFoodOwner(food, currentUserId)
+  const canMutate = isAdmin || isOwner
 
   const handleBookmarkToggle = async () => {
     if (!food || bookmarking) return
@@ -282,6 +312,13 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         headers: getHeaders(),
       })
       if (res.ok) {
+        // This is the route that actually frees a `custom-foods` inventory slot
+        // (the favorites delete on the meals page only unbookmarks, and
+        // correctly frees nothing). Mark the entitlements snapshot stale so the
+        // next gated surface re-reads instead of showing the lock this delete
+        // just cleared for up to the 60s TTL. Invalidate rather than refresh:
+        // this page renders no gate and must not start fetching entitlements.
+        invalidateEntitlements()
         router.push('/dashboard/meals?tab=foods')
       } else {
         showToast('Failed to delete', 'error')
@@ -368,7 +405,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
             {bookmarking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bookmark className={`h-3.5 w-3.5 ${isSaved ? 'fill-current' : ''}`} />}
             {isSaved ? 'Saved' : 'Save'}
           </button>
-          {isOwner && (
+          {canMutate && (
             <button
               onClick={() => setConfirmDelete(true)}
               className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
@@ -493,7 +530,7 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
                     {Math.round(vn.calories)} cal
                   </p>
                 </div>
-                {isOwner && (
+                {canMutate && (
                   <div className="mt-2">
                     <BridgeFieldGroup
                       value={{ gramsPerServing: v.gramsPerServing, mlPerServing: v.mlPerServing }}
@@ -515,8 +552,8 @@ export default function FoodDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       )}
 
-      {/* Single-variant bridge editor (only for owners) */}
-      {isOwner && variants.length === 1 && (
+      {/* Single-variant bridge editor (owners and admins only) */}
+      {canMutate && variants.length === 1 && (
         <div className="sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900">
           <h2 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Bridge values

@@ -1,7 +1,8 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Check } from "lucide-react-native";
 import { Input } from "@/components/Input";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   type BellStyle,
   totalWeightHelper,
@@ -50,6 +51,7 @@ export function LiveSetRow({
   onChange,
   testID,
 }: LiveSetRowProps) {
+  const { colors } = useThemeTokens();
   const tid = testID ?? `live-set-${setIndex}`;
   const inputs: SetInputs = setInputsForTrackingType(trackingType);
   const helper = totalWeightHelper(bellStyle, state.weight ?? prefill?.weight);
@@ -168,8 +170,8 @@ export function LiveSetRow({
         <Check
           color={
             state.completed
-              ? resolveToken("primary-foreground", "dark")
-              : resolveToken("muted-foreground", "dark")
+              ? colors["primary-foreground"]
+              : colors["muted-foreground"]
           }
           size={20}
           strokeWidth={1.5}

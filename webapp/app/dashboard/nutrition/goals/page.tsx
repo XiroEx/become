@@ -19,9 +19,13 @@ import {
   calcTdee,
   calorieAdjustment,
   computeNutritionTargets,
-  splitForPreset,
+  deliveredSplit,
+  gramsFromPercent,
+  percentFromGrams,
+  splitFromGrams,
   MACRO_PRESET_LABELS,
   type MacroPreset,
+  type MacroSplit,
   type ActivityLevel,
   type NutritionDirection,
 } from '@/lib/nutrition/tdee'
@@ -72,11 +76,23 @@ function goalCardAdjustment(type: GoalType, tdee: number | null, paceLbPerWeek?:
  *  different grams than the identical preset picked in the wizard. */
 const MACRO_PRESET_KEYS: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb', 'custom']
 
-function presetLabel(key: MacroPreset, direction: NutritionDirection): string {
+/**
+ * The percentages an option advertises are the percentages the Daily Targets
+ * card below will show once it is picked — never a table lookup.
+ *
+ * This label used to call splitForPreset() with no member context, so "Custom
+ * (from your stats)" read the static RECOMMENDED_SPLITS row and announced
+ * 35/35/30 while the targets it had just written were 29/41/30. The static row
+ * is a fallback for screens that don't have the member's body stats; this
+ * screen does, and every preset it offers resolves through
+ * computeNutritionTargets() anyway. So the caller passes the split those grams
+ * actually work out to (see presetSplits) and this only formats it.
+ */
+function presetLabel(key: MacroPreset, split: MacroSplit | null): string {
   if (key === 'custom') return MACRO_PRESET_LABELS.custom
-  const s = splitForPreset(key, direction)
   const suffix = key === 'recommended' ? ' (from your stats)' : ''
-  return `${MACRO_PRESET_LABELS[key]}${suffix} — ${s.protein}/${s.carbs}/${s.fats}`
+  const name = `${MACRO_PRESET_LABELS[key]}${suffix}`
+  return split ? `${name} — ${split.protein}/${split.carbs}/${split.fats}` : name
 }
 
 export default function NutritionGoalsPage() {
@@ -99,6 +115,10 @@ export default function NutritionGoalsPage() {
   // 'recommended' matches the onboarding wizard's math — the default so a
   // member who never touches this screen keeps the numbers they were shown.
   const [macroPreset, setMacroPreset] = useState<MacroPreset>('recommended')
+  /** Manual (custom) split can be hand-typed as grams or as a percent of
+   *  Calories — this only changes how the three inputs below are read/shown,
+   *  goals.protein/carbs/fats stay grams either way. */
+  const [macroInputMode, setMacroInputMode] = useState<'g' | '%'>('g')
   /** Latest LOGGED weight, in the member's display unit (see weightUnit). */
   const [userWeight, setUserWeight] = useState<number | null>(null)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs')
@@ -195,6 +215,35 @@ export default function NutritionGoalsPage() {
       fats: targets.fats,
     }))
   }, [effectiveStats, userFitnessGoals, paceForDirection])
+
+  /**
+   * What each option in the picker will actually deliver, as the percentages
+   * the Daily Targets card renders.
+   *
+   * Runs the same computeNutritionTargets() call applyMacroPreset() makes, with
+   * the same stats, direction, activity and pace, then reads the percentages
+   * back off the grams — so whichever option is selected, its label and the
+   * targets underneath it are the same numbers by construction. It also picks
+   * up anything the pipeline does AFTER the split, like the low-calorie carb
+   * floor, which a percentage table could never know about.
+   *
+   * Falls back to the static table when body stats are too sparse to compute
+   * targets at all: an approximate ratio still describes the choice, and the
+   * targets are empty in that state anyway.
+   */
+  const presetSplits = useMemo(() => {
+    const splits = {} as Record<MacroPreset, MacroSplit | null>
+    for (const key of MACRO_PRESET_KEYS) {
+      splits[key] = deliveredSplit(key, {
+        ...effectiveStats,
+        goals: userFitnessGoals,
+        direction: goals.goalType,
+        activityLevel: goals.activityLevel,
+        paceKgPerWeek: paceForDirection(goals.goalType),
+      })
+    }
+    return splits
+  }, [effectiveStats, userFitnessGoals, goals.goalType, goals.activityLevel, paceForDirection])
 
   useEffect(() => {
     async function fetchData() {
@@ -369,14 +418,32 @@ export default function NutritionGoalsPage() {
     applyTargets(macroPreset, goals.goalType, goals.activityLevel, nextTdee ?? undefined, nextStats)
   }
 
-  const getMacroPercentages = () => {
-    const totalCals = (goals.protein * 4) + (goals.carbs * 4) + (goals.fats * 9)
-    if (totalCals === 0) return { protein: 0, carbs: 0, fats: 0 }
-    return {
-      protein: Math.round((goals.protein * 4 / totalCals) * 100),
-      carbs: Math.round((goals.carbs * 4 / totalCals) * 100),
-      fats: Math.round((goals.fats * 9 / totalCals) * 100)
-    }
+  // Shared with the picker's labels (see presetSplits) so an option can never
+  // advertise a ratio the card below it then contradicts.
+  const getMacroPercentages = () => splitFromGrams(goals.protein, goals.carbs, goals.fats)
+
+  // The %-entry toggle only makes sense once the member is hand-typing
+  // numbers (macroPreset 'custom' — labelled "Manual"). Every other preset
+  // already IS a percentage split; its grams come from computeNutritionTargets().
+  const isPercentMode = macroPreset === 'custom' && macroInputMode === '%'
+
+  const MACRO_KCAL_PER_G = { protein: 4, carbs: 4, fats: 9 } as const
+
+  /** Reads a macro field in whichever unit is currently showing. */
+  const macroFieldValue = (key: keyof typeof MACRO_KCAL_PER_G) =>
+    isPercentMode
+      ? percentFromGrams(goals.calories, goals[key], MACRO_KCAL_PER_G[key])
+      : goals[key]
+
+  /** Writes a macro field from whichever unit is currently showing — grams
+   *  stay the value actually persisted, so switching the toggle never loses
+   *  precision or needs a separate save path. */
+  const handleMacroFieldChange = (key: keyof typeof MACRO_KCAL_PER_G, rawValue: number) => {
+    const grams = isPercentMode
+      ? gramsFromPercent(goals.calories, rawValue, MACRO_KCAL_PER_G[key])
+      : rawValue
+    setGoals(prev => ({ ...prev, [key]: grams }))
+    setMacroPreset('custom')
   }
 
   const handleSave = async () => {
@@ -723,14 +790,37 @@ export default function NutritionGoalsPage() {
           className="w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
         >
           {MACRO_PRESET_KEYS.map((key) => (
-            <option key={key} value={key}>{presetLabel(key, goals.goalType)}</option>
+            <option key={key} value={key}>{presetLabel(key, presetSplits[key])}</option>
           ))}
         </select>
       </Card>
 
       {/* Calorie & Macro Inputs */}
       <Card className="mb-4 sm:mb-6" data-tour="goals-macros">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
+          {/* Only Manual has numbers worth re-entering as a percent — every
+              other preset already resolves from percentages via
+              computeNutritionTargets(). */}
+          {macroPreset === 'custom' && (
+            <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+              {(['g', '%'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setMacroInputMode(mode)}
+                  className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
+                    macroInputMode === mode
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  {mode === 'g' ? 'Grams' : 'Percent'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Calories */}
         <div className="mb-4">
@@ -751,17 +841,17 @@ export default function NutritionGoalsPage() {
         {/* Protein */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Protein (g)</label>
-            <span className="text-xs text-blue-600 dark:text-blue-400">{percentages.protein}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Protein {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-blue-600 dark:text-blue-400">
+              {isPercentMode ? `${goals.protein}g` : `${percentages.protein}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.protein}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, protein: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('protein')}
+            onChange={(e) => handleMacroFieldChange('protein', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>
@@ -769,17 +859,17 @@ export default function NutritionGoalsPage() {
         {/* Carbs */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Carbs (g)</label>
-            <span className="text-xs text-green-600 dark:text-green-400">{percentages.carbs}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Carbs {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-green-600 dark:text-green-400">
+              {isPercentMode ? `${goals.carbs}g` : `${percentages.carbs}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.carbs}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, carbs: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('carbs')}
+            onChange={(e) => handleMacroFieldChange('carbs', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>
@@ -787,17 +877,17 @@ export default function NutritionGoalsPage() {
         {/* Fats */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fats (g)</label>
-            <span className="text-xs text-yellow-600 dark:text-yellow-400">{percentages.fats}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fats {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-yellow-600 dark:text-yellow-400">
+              {isPercentMode ? `${goals.fats}g` : `${percentages.fats}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.fats}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, fats: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('fats')}
+            onChange={(e) => handleMacroFieldChange('fats', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>

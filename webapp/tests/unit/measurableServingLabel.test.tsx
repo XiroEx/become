@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/measurableServingLabel.test.tsx
+// Run with: npm run test:file tests/unit/measurableServingLabel.test.tsx
 //
 // The reported bug, verbatim: a food whose own serving is "3/4 cup" shows
 // "1 cup" in the serving picker — the countable-serving collapse (see

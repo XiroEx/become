@@ -17,6 +17,7 @@
 //   S3_FORCE_PATH_STYLE     'true' for MinIO; unset/false for R2 + AWS.
 // ---------------------------------------------------------------------------
 
+import type { Readable } from 'node:stream'
 import {
   S3Client,
   PutObjectCommand,
@@ -25,12 +26,21 @@ import {
   HeadObjectCommand,
   type PutObjectCommandInput,
 } from '@aws-sdk/client-s3'
+import { Upload } from '@aws-sdk/lib-storage'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
 
 export interface BlobPutInput {
   key: string
   body: Buffer | Uint8Array
+  contentType: string
+  cacheControl?: string
+}
+
+export interface BlobPutStreamInput {
+  key: string
+  /** Readable of unknown total length — `Upload` chunks it into multipart parts as needed. */
+  body: Readable
   contentType: string
   cacheControl?: string
 }
@@ -54,6 +64,14 @@ export interface BlobGetResult {
 
 export interface BlobStore {
   put(input: BlobPutInput): Promise<{ key: string; publicUrl: string }>
+  /**
+   * Streaming counterpart to `put` — writes as bytes arrive instead of
+   * requiring the full object in memory first. Use this for anything sourced
+   * from a client upload, where the alternative is buffering the whole
+   * request body (and every copy the app makes of it) before the first byte
+   * ever reaches storage.
+   */
+  putStream(input: BlobPutStreamInput): Promise<{ key: string; publicUrl: string }>
   get(key: string, options?: BlobGetOptions): Promise<BlobGetResult>
   delete(key: string): Promise<void>
   exists(key: string): Promise<boolean>
@@ -97,6 +115,22 @@ class S3BlobStore implements BlobStore {
       CacheControl: cacheControl ?? 'public, max-age=31536000, immutable',
     }
     await this.client!.send(new PutObjectCommand(params))
+    return { key, publicUrl: this.publicUrl(key) }
+  }
+
+  async putStream({ key, body, contentType, cacheControl }: BlobPutStreamInput) {
+    await this.ensureInitialized()
+    const upload = new Upload({
+      client: this.client!,
+      params: {
+        Bucket: this.bucket,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        CacheControl: cacheControl ?? 'public, max-age=31536000, immutable',
+      },
+    })
+    await upload.done()
     return { key, publicUrl: this.publicUrl(key) }
   }
 

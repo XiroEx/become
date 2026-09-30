@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dayStatus.test.ts
+// Run with: npm run test:file tests/unit/dayStatus.test.ts
 //
 // Card: "Make is so that if any workout is completed for the day make the
 // calendar reflect that. Rather than prioritizing just programs."

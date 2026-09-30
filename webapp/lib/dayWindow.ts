@@ -12,6 +12,51 @@
 const TZ_CLAMP_MIN = -840 // ±14h
 const TZ_CLAMP_MAX = 840
 
+/**
+ * How long an incomplete workout log stays "in progress" (the dashboard's
+ * pulsing Resume pill, and the live view's silent same-session resume) rather
+ * than falling back to the separate stale-workout prompt.
+ *
+ * Deliberately a ROLLING window, not a calendar-day one: a workout started at
+ * 11:58pm and still open at 12:10am is two minutes old, not "yesterday's."
+ * Scoping resumability to the caller's local calendar day discarded a log the
+ * instant midnight passed, even though nothing about it had gone stale — the
+ * member saw the pill vanish and the workout looked lost.
+ */
+export const IN_PROGRESS_WINDOW_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Does `d` count as "in progress right now"? Bounded on BOTH sides of `now`:
+ * not so old it's gone stale (the rolling IN_PROGRESS_WINDOW_MS), and not
+ * dated in the future.
+ *
+ * The upper bound matters because a quick session PLANNED for a future date
+ * (Calendar → "Plan it") writes an incomplete workout-log row immediately,
+ * dated on that future day — a lower-bound-only check (`d >= cutoff`) is
+ * satisfied by any future date, which surfaced a session the member had only
+ * scheduled as if they were mid-workout in it right now.
+ */
+export function isWithinInProgressWindow(d: Date | string, now: Date = new Date()): boolean {
+  const at = new Date(d)
+  if (Number.isNaN(at.getTime())) return false
+  const cutoff = now.getTime() - IN_PROGRESS_WINDOW_MS
+  return at.getTime() >= cutoff && at.getTime() <= now.getTime()
+}
+
+/**
+ * Does `d` fall on the caller's LOCAL calendar day, right now? Unlike
+ * isWithinInProgressWindow (a rolling 24h window), this is the actual
+ * caller-local calendar day boundary — used to find a quick session PLANNED
+ * for today (Calendar/"Plan it", see resolvePerformedAt) that has not been
+ * started (no startedAt) so it can be offered honestly as "today's workout"
+ * instead of disappearing entirely once it stops qualifying as in-progress.
+ */
+export function isOnLocalToday(d: Date | string, tzOffsetMinutes: number, now: Date = new Date()): boolean {
+  const at = new Date(d)
+  if (Number.isNaN(at.getTime())) return false
+  return dateKey(at, tzOffsetMinutes) === localDateKey(null, tzOffsetMinutes, now)
+}
+
 /** Read `tz` from URL search params, clamped to ±14h. Defaults to 0 (UTC). */
 export function readTzOffset(searchParams: URLSearchParams): number {
   const raw = searchParams.get('tz')
@@ -25,6 +70,30 @@ export function readTzOffset(searchParams: URLSearchParams): number {
 export function readTzOffsetFromBody(body: unknown): number {
   if (!body || typeof body !== 'object') return 0
   const raw = (body as Record<string, unknown>).tz
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, raw))
+}
+
+/**
+ * Read `tz` from a JSON body, falling back to a numeric `tzOffset`. Clamped to
+ * ±14h, 0 (= UTC) when neither is a finite number.
+ *
+ * `tz` is the only spelling this app sends and the only one a new client may
+ * use — see readTzOffsetFromBody. The fallback exists for one narrow reason:
+ * a client still running an OLD BUNDLE that spells it `tzOffset`, whose
+ * request would otherwise be silently dated at UTC. PUT /api/mind/session is
+ * the case that made it matter — `MindJourney.begin` sent `tzOffset`, the
+ * route read `tz`, and the session a member began at 9pm in New York was
+ * stamped with tomorrow's UTC day, so the very next GET called it `new_day`
+ * and threw it away.
+ *
+ * Use this ONLY where an old bundle is genuinely in the field. Everywhere else
+ * `readTzOffsetFromBody` is the contract: one spelling, documented in AGENTS.md.
+ */
+export function readTzOffsetFromBodyCompat(body: unknown): number {
+  if (!body || typeof body !== 'object') return 0
+  const rec = body as Record<string, unknown>
+  const raw = typeof rec.tz === 'number' && Number.isFinite(rec.tz) ? rec.tz : rec.tzOffset
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
   return Math.max(TZ_CLAMP_MIN, Math.min(TZ_CLAMP_MAX, raw))
 }
@@ -123,6 +192,123 @@ export function utcMidnightDateKey(dateKey: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey)
   if (!m) return new Date(dateKey + 'T00:00:00.000Z')
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))
+}
+
+/**
+ * How far back a day-keyed write may be BACK-DATED by default.
+ *
+ * Sized for the native offline queue: a member logs a weigh-in on a plane, the
+ * queue holds it until the phone reconnects, and the replay must land on the
+ * day it was made on rather than the day it was delivered. A week is the
+ * outer edge of "this is the same trip"; anything older is a data import, not
+ * a delayed write, and those routes pass their own `maxBackdateDays` (see
+ * NP-184 for Health imports).
+ */
+export const BACKDATE_WINDOW_DAYS = 7
+
+export type ResolvedEntryDay =
+  | {
+      ok: true
+      /** The LOCAL day (YYYY-MM-DD) the entry belongs to. */
+      dayKey: string
+      /** `dayKey` as the 00:00Z day marker rows are stored under. */
+      date: Date
+      /** When the member actually made the entry (an INSTANT). */
+      loggedAt: Date
+      /** True when `dayKey` is earlier than the caller's local today. */
+      backdated: boolean
+    }
+  | { ok: false; error: string }
+
+/**
+ * Which local day a write belongs to, from an optional `date` (YYYY-MM-DD) and
+ * `loggedAt` (ISO instant) on the request body.
+ *
+ * Without `date` this is exactly today in the caller's offset — the behaviour
+ * every existing client gets, unchanged. With one, the client is telling us the
+ * day it was made on, which is the only way an offline replay sent after
+ * midnight can land on the day before it.
+ *
+ * Refused, all with a 400 rather than a silent fallback to today (a write
+ * quietly filed on the wrong day is the bug this exists to stop):
+ *   - a malformed key, or one that is not a real calendar day (2026-02-31)
+ *   - a day in the FUTURE of the caller's own today
+ *   - a day older than `maxBackdateDays` before it
+ *
+ * `loggedAt` orders replays of the SAME day against each other (see
+ * isStaleReplay). It defaults to now, and a value in the future is clamped to
+ * now: a client whose clock runs fast must not be able to pin a day's value
+ * against every later write.
+ */
+export function resolveEntryDay(
+  body: unknown,
+  tzOffsetMinutes: number,
+  opts: { now?: Date; maxBackdateDays?: number } = {}
+): ResolvedEntryDay {
+  const now = opts.now ?? new Date()
+  const maxBackdateDays = opts.maxBackdateDays ?? BACKDATE_WINDOW_DAYS
+  const rec = body && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+
+  let loggedAt = now
+  const rawLoggedAt = rec.loggedAt
+  if (rawLoggedAt != null && rawLoggedAt !== '') {
+    if (typeof rawLoggedAt !== 'string' && typeof rawLoggedAt !== 'number') {
+      return { ok: false, error: 'Invalid loggedAt' }
+    }
+    const at = new Date(rawLoggedAt)
+    if (Number.isNaN(at.getTime())) return { ok: false, error: 'Invalid loggedAt' }
+    loggedAt = at.getTime() > now.getTime() ? now : at
+  }
+
+  const todayKey = localDateKey(null, tzOffsetMinutes, now)
+  const rawDate = rec.date
+
+  if (rawDate == null || rawDate === '') {
+    return { ok: true, dayKey: todayKey, date: utcMidnightDateKey(todayKey), loggedAt, backdated: false }
+  }
+
+  if (typeof rawDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    return { ok: false, error: 'Invalid date: expected YYYY-MM-DD' }
+  }
+
+  const marker = utcMidnightDateKey(rawDate)
+  // `Date.UTC(2026, 1, 31)` happily rolls over into March, so a well-formed key
+  // is not yet a real day. Round-tripping it is what says so.
+  if (Number.isNaN(marker.getTime()) || dateKey(marker, 0) !== rawDate) {
+    return { ok: false, error: 'Invalid date: not a calendar day' }
+  }
+
+  const daysBack = Math.round(
+    (utcMidnightDateKey(todayKey).getTime() - marker.getTime()) / 86_400_000
+  )
+  if (daysBack < 0) {
+    return { ok: false, error: 'date is in the future' }
+  }
+  if (daysBack > maxBackdateDays) {
+    return { ok: false, error: `date is more than ${maxBackdateDays} days old` }
+  }
+
+  return { ok: true, dayKey: rawDate, date: marker, loggedAt, backdated: daysBack > 0 }
+}
+
+/**
+ * Is an incoming write for a day OLDER than the one already stored for it?
+ *
+ * The offline queue can deliver the same day twice — once from the phone that
+ * was offline, once from the device that was online — and the last delivery is
+ * not necessarily the last thing the member did. Rows written before entries
+ * carried a `loggedAt` (and requests that send none, which are stamped `now`)
+ * lose to the incoming write, which is the last-write-wins behaviour every
+ * client has today.
+ */
+export function isStaleReplay(
+  storedLoggedAt: Date | string | null | undefined,
+  incomingLoggedAt: Date
+): boolean {
+  if (!storedLoggedAt) return false
+  const stored = new Date(storedLoggedAt)
+  if (Number.isNaN(stored.getTime())) return false
+  return stored.getTime() > incomingLoggedAt.getTime()
 }
 
 /**

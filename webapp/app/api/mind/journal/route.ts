@@ -6,6 +6,12 @@ import mongoose from 'mongoose'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindJournal from '@/models/MindJournal'
+import { requireQuotaForUser } from '@/lib/entitlementGuards'
+
+/** Journal systems that belong to a paid feature. Everything absent from this
+ *  map is free — the arsenal tools, and the main session's own reflection
+ *  ('session'), which is what every completed Mind session writes. */
+const GATED_SYSTEMS = { vision: 'vision' } as const
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,6 +48,21 @@ export async function POST(request: NextRequest) {
     const title = String(body.title || '').slice(0, 200)
     if (!system || !kind || !title) {
       return NextResponse.json({ error: 'system, kind, title required' }, { status: 400 })
+    }
+
+    // A journal entry under a paid system is a write INTO that feature, so it
+    // takes the feature's gate. POST /api/mind/vision was gated and this was
+    // not, which left the whole Vision workspace — every protocol a member runs
+    // there saves through here — open to a member whose entitlements said
+    // vision { allowed: false }.
+    //
+    // GET stays open, and so does every other system: reading back what you
+    // wrote is never gated, and gating 'session' would break the free member's
+    // own session reflection.
+    const gated = GATED_SYSTEMS[system as keyof typeof GATED_SYSTEMS]
+    if (gated) {
+      const gate = await requireQuotaForUser(auth.userId!, gated)
+      if (!gate.ok) return gate.response
     }
     const lines = Array.isArray(body.lines)
       ? body.lines.slice(0, 12).map((l: { prompt?: unknown; answer?: unknown }) => ({

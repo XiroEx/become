@@ -40,11 +40,25 @@ npm run typecheck
 npm run lint
 npm test
 
+# 2b. Run the accessibility device pass — ACCESSIBILITY.md's checklist. The
+#     suite cannot lay text out or speak: VoiceOver / TalkBack over sign-in to
+#     Home, the largest Dynamic Type size and Reduce Motion are checked on one
+#     iPhone and one Android device, by hand, on the candidate build.
+
 # 3. Build for both platforms. Production builds use the `production` profile
 #    declared in eas.json — bundles app-bundle (.aab) for Android, .ipa for iOS.
 eas build --platform all --profile production
 # This kicks the build off in EAS cloud. Output: signed .ipa + .aab artifacts.
 ```
+
+**The build needs `../shared`, and it gets it.** `@become/api-client` is linked
+into `node_modules` from outside this directory
+(`"@become/api-client": "file:../shared/api-client"`), so a build that uploaded
+only `expo/` could not install, let alone bundle. `eas build` archives from the
+ROOT of the git repository and builds in the project subdirectory, and
+`shared/` is tracked git content with no `.easignore` excluding it — so it
+travels with every build. Keep it that way: an `.easignore` added later must
+not exclude `shared/`.
 
 ## Submitting
 
@@ -64,10 +78,12 @@ Submit defaults:
 
 | Step | Where | Notes |
 |---|---|---|
+| Accessibility device pass | One iPhone + one Android device | `ACCESSIBILITY.md` → Device QA checklist: VoiceOver / TalkBack from sign-in to Home, largest Dynamic Type, 44-point targets, Reduce Motion |
 | Build appears in TestFlight | App Store Connect → TestFlight tab | Usually 10-30 min after `eas submit` |
 | Internal testers added | TestFlight → Internal Testing group | Up to 100 internal testers — no Apple review |
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
 | Privacy form filled | App Store Connect → App Privacy | See "Apple App Privacy form" below |
+| **Demo account filled in** | App Store Connect → App Review Information → Sign-in required | **Blocking.** See "Reviewer demo account" below — an app the reviewer cannot sign in to is rejected under Guideline 2.1 |
 | Submit for App Review | App Store Connect → Distribution | When ready to go GA |
 
 ## Play Console (Android) checklist
@@ -78,6 +94,69 @@ Submit defaults:
 | Promote to Closed Testing | Play Console → Closed Testing | Adds Google review (~hours) |
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
+| Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
+| **Demo account in the release notes** | Play Console → App content → App access | **Blocking.** All functionality is behind sign-in; give the same demo email + review code. See "Reviewer demo account" below |
+
+## Reviewer demo account
+
+Become is passwordless, so there is no password to hand a reviewer and they
+cannot read the inbox a magic link lands in. Both stores are given the SAME
+thing: the demo email and a review code, typed on the normal sign-in screen
+behind **"App reviewer? Use a review code"**.
+
+What to put in the form:
+
+```
+Email: <review.email from BECOME_RUNTIME_CONFIG>
+Password: <review.code from BECOME_RUNTIME_CONFIG>
+Notes: Passwordless app. On the sign-in screen tap "App reviewer? Use a
+       review code", enter the email above and the code above. The account is
+       a demo account with sample data and a Plus subscription already
+       applied; no purchase is required to see any screen.
+```
+
+Three things to check before you submit, all of them in
+`webapp/RUNTIME_SECRETS.md` → `review`:
+
+1. `review.enabled` is `true` in the production payload. It defaults to OFF, so
+   a payload that has never had this section makes the code answer 404.
+2. The code you paste is the code in the payload. Nothing caches it for more
+   than a minute, so a rotation takes effect without a deploy — including
+   mid-review, which is how you close the door the day the app goes live.
+3. Sign in with it yourself, on the candidate build, on both platforms. That is
+   the only check that covers the whole path; the suites cover the rest
+   (`webapp/tests/unit/auth/reviewSignIn*.test.ts`,
+   `__tests__/reviewSignIn.test.tsx`).
+
+## What the build already answers for you
+
+Two questions an iOS upload normally stops to ask are answered in `app.json`,
+so `eas submit` does not need a person:
+
+- **Export compliance.** `ios.infoPlist.ITSAppUsesNonExemptEncryption: false` —
+  HTTPS only, no crypto of our own, which is exempt. Without it App Store
+  Connect asks on every build.
+- **Privacy manifest.** `ios.privacyManifests` ships `PrivacyInfo.xcprivacy`
+  with the four required-reason API categories the bundled modules use
+  (file timestamp `C617.1`, user defaults `CA92.1`, system boot time `35F9.1`,
+  disk space `E174.1`), `NSPrivacyTracking: false`, and the same three
+  collected data types as the App Privacy answers below. Without it the upload
+  comes back with ITMS-91053.
+
+Both are asserted by `__tests__/iosConfig.test.ts`. If a new native module
+touches another required-reason API, add its category there with the module.
+
+**Permission usage strings** live in one place, `expo.ios.infoPlist` in
+`app.json`, and `__tests__/permissionStrings.test.ts` fails the build when a
+permission-bearing module arrives without one (ITMS-90683 otherwise). See
+`IOS_QUIRKS.md` → "Permission usage strings".
+
+**Icons and the launch screen** are generated, not hand-exported:
+`node scripts/generate-app-assets.mjs` writes `assets/icon.png` (1024 px,
+opaque — App Store Connect rejects an icon with an alpha channel),
+`assets/adaptive-icon.png` and `assets/splash-icon.png` from
+`webapp/public/logo.png`. Re-run it when the real store icon replaces the
+stand-in, and check `npx expo-doctor` still passes 21/21.
 
 ## Apple App Privacy form
 
@@ -104,11 +183,60 @@ Mirror image:
 | **Personal info** | User IDs | Yes | No | Authentication |
 | **App activity** | In-app actions | Yes | No | Workout / mood / weight logs synced to backend |
 | **Device or other IDs** | Push token | Yes | Yes (notifications off) | Push reminders |
-| **Health & fitness** | Weight | Yes | Yes (HealthKit opt-in) | Sync from Apple Health / Health Connect |
+| **Health & fitness** | Weight | Yes | Yes (health sync is opt-in, per direction) | Weigh-ins imported from Apple Health / Health Connect, stored with the member's weight history |
+| **Health & fitness** | Exercise (workout sessions) | No — written out only | Yes (health sync is opt-in, per direction) | Workouts finished in Become are written to Health Connect; none are read back |
 
 We do NOT collect: precise location, financial info, photos, audio, contacts,
 calendar, files, advertising IDs. Data is encrypted in transit (HTTPS). Users
 can request deletion via in-app account → delete.
+
+## Play health apps declaration (Health Connect)
+
+Play Console → **App content → Health apps**. Required, and BLOCKING, because
+the manifest requests Health Connect permissions (NP-199). Answer it with
+exactly this; the three permissions below are the whole list, and
+`__tests__/androidHealthConnect.test.ts` fails the build if the manifest, the
+code or this table drift apart.
+
+**App type / category:** fitness and wellness coaching app. Health Connect is
+used for the member's own weight and workout data, inside the app, at their
+request.
+
+| Permission | Data type | Access | Why Become asks | Where it is used |
+|---|---|---|---|---|
+| `android.permission.health.READ_WEIGHT` | Weight | Read | So a weigh-in recorded by the member's scale or another app appears in Become without being typed twice, on the day it was recorded | `lib/health/sync.ts` → `POST /api/weight` with `source: "health-connect"` |
+| `android.permission.health.WRITE_WEIGHT` | Weight | Write | So a weigh-in logged in Become is available to the member's other health apps | `lib/health/sync.ts` → `exportWeighInToHealth` |
+| `android.permission.health.WRITE_EXERCISE` | Exercise (session) | Write | So a workout finished in Become shows up as an exercise session alongside the rest of the member's activity | `lib/health/sync.ts` → `exportWorkoutToHealth` |
+
+Declaration answers, in the words the form asks for:
+
+- **Is Health Connect data shared with third parties?** No. It is not sold, not
+  shared with third parties, and never used for advertising, marketing,
+  profiling or any automated decision about the member. It is stored against
+  their own account and shown back to them.
+- **Is it used for anything other than the feature the member enabled?** No.
+  Weight read from Health Connect appears in their own weight history and the
+  targets computed from it; a written weigh-in or session is their own data
+  going back out.
+- **Is it processed on a server?** Weight is, yes: an imported weigh-in is sent
+  to Become's own API (`POST /api/weight`) and stored with the member's history,
+  tagged `source: "health-connect"` and de-duplicated on the sample's own id.
+  Workouts written to Health Connect come FROM that API and are not re-read.
+- **Is it retained after the member turns the feature off?** Weigh-ins already
+  imported stay in their Become history (it is their weight log, and they can
+  delete their account or the entry). Nothing further is read or written: each
+  direction has its own switch in Settings and both are off by default.
+- **Health permissions requested but not used?** None — see the table.
+- **Privacy policy URL:** https://become.redbtn.io/privacy
+- **Health data policy URL (the one the declaration and the Health Connect
+  rationale link to):** https://become.redbtn.io/health-data
+- **Where the rationale screen comes from:** the
+  `react-native-health-connect` config plugin writes the
+  `androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE` intent-filter and the
+  Android 14+ `ViewPermissionUsageActivity` alias, so the "learn more" link in
+  Health Connect's permission sheet has somewhere to land.
+- **Minimum SDK:** 26, raised in `app.json` via `expo-build-properties` because
+  the Health Connect client requires it.
 
 ## Rollback
 

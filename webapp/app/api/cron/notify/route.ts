@@ -31,8 +31,13 @@ import {
   MIND_REMINDER_END_HOUR,
   CHECK_IN_REMINDER_START_HOUR,
   CHECK_IN_REMINDER_END_HOUR,
+  MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION,
+  DAILY_GLANCE_START_HOUR,
+  DAILY_GLANCE_END_HOUR,
 } from '@/lib/notifications/cronNotify'
 import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
+import { loadWidgetFeed } from '@/lib/widgets/load'
+import { buildDailyGlance } from '@/lib/widgets/glance'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,6 +116,7 @@ export async function GET(request: NextRequest) {
     goalNudge: tally(),
     superStreakAtRisk: tally(),
     checkInReminder: tally(),
+    dailyGlance: tally(),
   }
   const results = {
     missedSlotsSynced: 0,
@@ -142,6 +148,72 @@ export async function GET(request: NextRequest) {
     results.errors++
   }
 
+  // ── 0.5 Daily glance (6am-9am LOCAL, OPT-IN) ─────────────────────────────
+  // The lock-screen half of the widgets Jon asked for. A web app cannot draw a
+  // lock-screen widget — that is a WidgetKit / App Widget surface and only
+  // expo/ can ship one — but it can put one card there, so this renders the
+  // widget feed as a notification: streak, today's session, calories left, and
+  // whether the Mind session is waiting.
+  //
+  // Three things make it different from every other push in this route:
+  //
+  //  - **It is opt-in.** `dailyGlance: true`, not `{ $ne: false }`. Everything
+  //    else here fires because something is wrong or owed and reasonably
+  //    defaults on; this is a standing daily card, in a morning that already
+  //    has the workout and Mind nudges in it. Nobody gets a third push without
+  //    asking for one.
+  //  - **It goes first**, in an earlier window, so it reads as the day's
+  //    summary rather than a fourth reminder.
+  //  - **It carries `badgeCount`**, which is what lights the app-icon badge on
+  //    a phone that has not opened Become since yesterday (see
+  //    lib/widgets/badge.ts — on iOS the service worker applies it, and on
+  //    Android the unread notification badges the icon by itself).
+  //
+  // This is the heaviest section (one widget-feed load per qualifying member),
+  // which is exactly why the window is narrow, the gate is opt-in and the whole
+  // thing is wrapped: a slow or throwing glance must not cost anyone a nudge.
+  try {
+    const glanceCandidates = await UserProgress.find({
+      'notificationPrefs.dailyGlance': true,
+      // Either clock will do. `localHourForUser` prefers the IANA zone, so a
+      // member who has one but no captured offset can still be placed in their
+      // own morning — the other sweeps' `timezoneOffset`-only filter would
+      // drop them.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of glanceCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < DAILY_GLANCE_START_HOUR || userLocalHour > DAILY_GLANCE_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.dailyGlance
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      // No requested offset: the member's stored zone decides their day, which
+      // is the same resolution an installed widget with no clock of its own gets.
+      const feed = await loadWidgetFeed(String(progress.userId), null, now)
+      const glance = buildDailyGlance(feed)
+
+      await deliver(t.dailyGlance, String(progress.userId), {
+        title: glance.title,
+        body: glance.body,
+        url: '/dashboard',
+        tag: 'daily-glance',
+        badgeCount: glance.badgeCount,
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.dailyGlance': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('daily-glance sweep failed:', err)
+    results.errors++
+  }
+
   // ── 1. Streak at-risk (any hour — urgent) ─────────────────────────────────
   // lastActivityDate 23-47h ago means their streak expires within the next 24h.
   // Gate: skip if we already sent this notification within the last 20h (prevents
@@ -152,7 +224,7 @@ export async function GET(request: NextRequest) {
   const streakRateLimitCutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000)
 
   const atRiskUsers = await UserProgress.find({
-    streakDays: { $gte: 1 },
+    streakDays: { $gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION },
     lastActivityDate: { $gte: atRiskExpiry, $lte: atRiskCutoff },
     'notificationPrefs.streakAtRisk': { $ne: false },
     $or: [
@@ -404,11 +476,15 @@ export async function GET(request: NextRequest) {
       // Respect the 20h main-session cooldown — nudging toward a locked session
       // would send them to Training Grounds, not the session.
       const mind = await MindProgress.findOne({ userId: progress.userId })
-        .select('lastMainSessionAt mainSessionCount')
-        .lean<{ lastMainSessionAt?: Date; mainSessionCount?: number } | null>()
+        .select('lastMainSessionAt completedMainSessions')
+        .lean<{ lastMainSessionAt?: Date; completedMainSessions?: number } | null>()
       if (!mainSessionAvailable(mind?.lastMainSessionAt, now.getTime())) continue
 
-      const started = (mind?.mainSessionCount ?? 0) > 0
+      // "Have they ever done one?" is a question about sessions, so it reads the
+      // session counter. mainSessionCount is chapter progress and is seeded from
+      // the intake answer, so it told someone who had never opened a session
+      // that "today's module is ready".
+      const started = (mind?.completedMainSessions ?? 0) > 0
       await deliver(t.mindReminder, String(progress.userId), {
         title: started ? "Today's mindset module is ready 🧠" : 'Start your first session 🧠',
         body: started

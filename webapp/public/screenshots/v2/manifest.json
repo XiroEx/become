@@ -83,6 +83,60 @@
       "width": 780,
       "height": 1688,
       "notes": "Real charts: 'Training Log - 11 workouts, 221.6K lbs lifted all-time', Weekly Volume bar chart across 6 weeks, Workout History list with a PR badge, Personal Records below the fold. DEVIATION: /dashboard/progress is the Training Log and contains NO weight-trend chart. The weight/BMI/mood trend chart lives on /dashboard and is below the fold there; it currently holds a single data point, so it was deliberately kept out of frame."
+    },
+    {
+      "file": "workout-hub-dark.webp",
+      "page": "/dashboard/workout",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of workout-hub-light, same account state, captured 2026-08-24T22:02-04:00 (same day, so no re-seeding was needed). Identical content: Workouts/Programs/Generate tabs, This Week strip with Mon 24 completed (green check), 'Strength & Size 2.0 - Phase 1 Day 2, 50%, 8/16 sessions', Recommended for You (12 Week Fat-Loss Foundation, 30-Day Shred)."
+    },
+    {
+      "file": "generate-dark.webp",
+      "page": "/dashboard/workout -> Generate sheet",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of generate-light: same selections, filled but NOT submitted (no AI generation burned). Session tab, Focus=Pull, Difficulty=Intermediate, Equipment=Barbell+Dumbbell+Cable, 5 exercises, Cardio finisher off, 'Generate session' CTA. NIT: the EXERCISES range input keeps a white unfilled track in dark mode (light-mode track color); readable, but see knownIssues."
+    },
+    {
+      "file": "nutrition-day-dark.webp",
+      "page": "/dashboard/nutrition",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of nutrition-day-light, byte-for-byte the same day (Mon Aug 24, TODAY): ring at 263 remaining of 2000, protein 156/150 (+6g), carbs 145/200 (21g fiber), fats 61/65, 'holding at 172 lbs' line, Breakfast 466 cal starting below the ring."
+    },
+    {
+      "file": "nutrition-meal-dark.webp",
+      "page": "/dashboard/nutrition (scrolled to meal list)",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of nutrition-meal-light at the same scroll offset: Breakfast (Eggs 216 / Oatmeal 166 / Blueberries 84, P26 C51 F18, 466 cal), Lunch (Chicken Breast 280 / White Rice 205 / Broccoli 31, 516 cal), Snack (Greek Yogurt / Almonds, 262 cal). Same as the light shot, the app header is off-screen because the meal list sits below the fold."
+    },
+    {
+      "file": "mind-dark.webp",
+      "page": "/dashboard/mind",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of mind-light: Lv 1 with XP bar, 1-day flame streak, Ch.1 Reset, Training Grounds with State Shift / Self-Image / Mission unlocked and Chapter-2+ modules as locked dashed cards at the bottom fold. The 'Suggested Next' carousel auto-rotates, so it was clicked back to slide 2 (Self-Image - 'Kill the Old Version') to match the light shot; only difference from light is the session cooldown counter reading 'Next in 14h 55m' instead of '19h 41m'."
+    },
+    {
+      "file": "progress-dark.webp",
+      "page": "/dashboard/progress",
+      "account": "playwright-test-mobile1@become.test",
+      "theme": "dark",
+      "width": 780,
+      "height": 1688,
+      "notes": "Dark twin of progress-light: 'Training Log - 11 workouts, 221.6K lbs lifted all-time', Weekly Volume bars for Jul 20 - Aug 24, Workout History (Day 1 with PR badge, Lower A, Upper A, Lower A, Upper A), Personal Records below the fold. The Weekly Volume bars had to be recolored at capture time because the app hardcodes a near-black bar fill that is invisible on the dark card - see knownIssues."
     }
   ],
   "skipped": [],
@@ -109,6 +163,15 @@
     {
       "where": "weight / mood history",
       "issue": "POST /api/weight and POST /api/mood always stamp 'today' and the tz offset is clamped to +/-14h, so no app API can write a backdated weight or mood row. Trend charts on this account are single-point until real days accumulate."
+    },
+    {
+      "where": "webapp/app/dashboard/progress/ProgressClient.tsx:560",
+      "issue": "The Weekly Volume <Bar> uses a hardcoded fill=\"#18181b\" (zinc-900) with no dark variant. On the dark card (bg #0a0a0a) the bars are effectively invisible, so the chart reads as an empty axis even with 6 weeks of real data. Real dark-mode bug, present on production become.redbtn.io.",
+      "impactOnCapture": "For progress-dark the 6 rendered bar rects were recolored to #e4e4e7 in the DOM at capture time (mirroring the light shot's black-on-white contrast). No app code was changed and no other element was touched."
+    },
+    {
+      "where": "Generate sheet — EXERCISES count slider",
+      "issue": "The <input type=range> unfilled track stays white in dark mode (light-mode track color), so it is the brightest element on an otherwise dark sheet. Cosmetic only; captured as-is in generate-dark, not patched."
     }
   ]
 }

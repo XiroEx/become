@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NotificationOptIn from '@/components/NotificationOptIn'
+import LegalLinks from '@/components/legal/LegalLinks'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
@@ -9,17 +10,22 @@ import { useTutorialMaybe } from '@redbtn/redtutorial'
 import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
 import WeightLogSheet from '@/components/WeightLogSheet'
+import QuickSessionModal from '@/components/QuickSessionModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
 import GoalAchievedModal from '@/components/GoalAchievedModal'
 import type { GoalReached } from '@/lib/goals/reached'
 import ProgramNudgeModal, {
   NUDGE_KEY,
-  type NudgeState,
+  nudgeShowings,
   shouldShowNudge,
+  recordNudgeShown,
   recordNudgeDismiss,
+  recordNudgeDismissForever,
+  parseLegacyNudgeState,
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
 import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
+import PlanCard from '@/components/dashboard/PlanCard'
 import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
 import BecomingDoor from '@/components/dashboard/BecomingDoor'
 import type { GoalProgress } from '@/lib/goals/progress'
@@ -115,12 +121,23 @@ export default function DashboardClient() {
   const [showNudge, setShowNudge] = useState(false)
   // Queued like the check-in — waits its turn behind the onboarding tour.
   const [nudgeDue, setNudgeDue] = useState(false)
+  // How many times the nudge has already been SHOWN, not counting this one —
+  // drives whether the "don't show this again" opt-out is offered. Showings,
+  // because a member who leaves the modal without pressing either button has
+  // still been asked, and counting only dismissals left them at zero forever.
+  const [nudgeShowingsSoFar, setNudgeShowingsSoFar] = useState(0)
+  // One recorded showing per page load, however many times the effect below
+  // re-runs while the tour settles.
+  const nudgeShowingRecorded = useRef(false)
   const [layout, setLayout] = useState<DashboardTile[] | null>(
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
   const [showCustomize, setShowCustomize] = useState(false)
   // The Weight tile opens this in place instead of navigating to Progress.
   const [weightSheetOpen, setWeightSheetOpen] = useState(false)
+  // The Workout Now tile opens this in place instead of navigating to the
+  // Workout hub first.
+  const [quickSessionOpen, setQuickSessionOpen] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -345,14 +362,54 @@ export default function DashboardClient() {
     // queued here — a brand-new member has no program, so this fires on exactly
     // the load where the onboarding tour is also starting, and an ungated open
     // covers the tour the same way the check-in did.
-    function checkProgramNudge(hasProgram: boolean) {
+    //
+    // The dismissal record is the ACCOUNT's, not this browser's. It used to be
+    // read straight out of localStorage, which is why the permanent opt-out
+    // never worked — see lib/programNudge.ts. localStorage is still read once,
+    // to carry a pre-existing record onto the account, and is still the
+    // fallback if the request fails so a network blip cannot start the backoff
+    // over.
+    async function checkProgramNudge(hasProgram: boolean) {
       if (hasProgram) return // already enrolled — never show
+
+      const local = (() => {
+        try {
+          return parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+        } catch {
+          return null
+        }
+      })()
+
       try {
-        const raw = localStorage.getItem(NUDGE_KEY)
-        const state: NudgeState | null = raw ? JSON.parse(raw) : null
-        if (shouldShowNudge(state)) setNudgeDue(true)
+        const token = localStorage.getItem('token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+        const res = await fetch('/api/program-nudge', { headers })
+        if (!res.ok) throw new Error('program nudge status failed')
+        let status = await res.json()
+
+        // First load since this moved server-side: adopt whatever this browser
+        // already knew, so a member who has been dismissing it for weeks keeps
+        // that credit (and an existing "don't show again" is never undone).
+        if (!status.hasServerState && local) {
+          const adopt = await fetch('/api/program-nudge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
+            body: JSON.stringify({ action: 'adopt', ...local }),
+          })
+          if (adopt.ok) status = await adopt.json()
+        }
+
+        if (status.due) {
+          setNudgeDue(true)
+          setNudgeShowingsSoFar(status.showings ?? status.dismissCount ?? 0)
+        }
       } catch {
-        setNudgeDue(true) // on parse error, just show it
+        // Offline or the route is unhappy — fall back to this browser's copy
+        // rather than either spamming the modal or suppressing it outright.
+        if (shouldShowNudge(local)) {
+          setNudgeDue(true)
+          setNudgeShowingsSoFar(nudgeShowings(local))
+        }
       }
     }
 
@@ -369,19 +426,47 @@ export default function DashboardClient() {
         fetchMind(),
         fetchGoals(),
       ])
-      checkProgramNudge(!!progressData?.currentProgram)
+      await checkProgramNudge(!!progressData?.currentProgram)
     }
 
     init()
   }, [])
 
+  // Record a showing or a dismissal on the ACCOUNT, and mirror it locally so
+  // the fallback path above still throttles the modal if the member is offline.
+  function recordNudgeAction(action: 'shown' | 'dismiss' | 'dismiss_forever') {
+    try {
+      const current = parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+      const next =
+        action === 'dismiss_forever'
+          ? recordNudgeDismissForever(current)
+          : action === 'dismiss'
+            ? recordNudgeDismiss(current)
+            : recordNudgeShown(current)
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(next))
+      // The next showing is days away, so this does not need to be awaited —
+      // but it does need to be sent, and a failure must not throw into the
+      // click handler and leave the modal open.
+      const token = localStorage.getItem('token')
+      fetch('/api/program-nudge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      }).catch(() => {})
+    } catch {}
+  }
+
   function handleNudgeDismiss() {
     setShowNudge(false)
-    try {
-      const raw = localStorage.getItem(NUDGE_KEY)
-      const current: NudgeState | null = raw ? JSON.parse(raw) : null
-      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
-    } catch {}
+    recordNudgeAction('dismiss')
+  }
+
+  function handleNudgeDismissForever() {
+    setShowNudge(false)
+    recordNudgeAction('dismiss_forever')
   }
 
   // Hold the daily check-in behind the onboarding tour.
@@ -435,10 +520,20 @@ export default function DashboardClient() {
   // The program nudge is the other first-run modal that used to open straight
   // over the tour: a brand-new member has no program, so it fires on exactly the
   // load where onboarding is starting.
+  //
+  // Opening it is itself the thing worth recording. Until it was, the only way
+  // to count a sighting was for the member to press one of the two buttons — so
+  // anyone who backgrounded the PWA or reloaded instead stayed at zero
+  // showings, got the modal again on the very next load, and was never offered
+  // the way out. A ref keeps one page load to one recorded showing.
   useEffect(() => {
     if (nudgeDue && !tutorialBusy) {
       setShowNudge(true)
       setNudgeDue(false)
+      if (!nudgeShowingRecorded.current) {
+        nudgeShowingRecorded.current = true
+        recordNudgeAction('shown')
+      }
     }
   }, [nudgeDue, tutorialBusy])
 
@@ -593,6 +688,7 @@ export default function DashboardClient() {
     isMoodUpdating,
     onMoodChange: handleMoodCardChange,
     onOpenWeightSheet: () => setWeightSheetOpen(true),
+    onOpenQuickSession: () => setQuickSessionOpen(true),
     // Stat tiles render a shimmer instead of zeros/dashes while the first
     // progress load is in flight. A cache hit clears `loading` synchronously on
     // mount, so reopens never show the skeleton.
@@ -635,7 +731,9 @@ export default function DashboardClient() {
       <ProgramNudgeModal
         open={showNudge}
         fitnessGoal={fitnessGoal ?? null}
+        priorShowings={nudgeShowingsSoFar}
         onExplore={handleNudgeDismiss}
+        onDismissForever={handleNudgeDismissForever}
       />
 
       <WeightLogSheet
@@ -644,6 +742,11 @@ export default function DashboardClient() {
         onLogged={handleWeightLogged}
         lastWeight={data.weightData.length ? data.weightData[data.weightData.length - 1].value : undefined}
         targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+      />
+
+      <QuickSessionModal
+        open={quickSessionOpen}
+        onClose={() => setQuickSessionOpen(false)}
       />
 
       <PageTransition className="space-y-4 sm:space-y-6">
@@ -801,6 +904,11 @@ export default function DashboardClient() {
         <MindsetCard summary={mindSummary} todaysMood={todaysMood} />
       </div>
 
+      {/* Plan + remaining allowances. Renders NOTHING while
+          ENTITLEMENTS_ENFORCED is off, which is what keeps launch day a
+          zero-change deploy — see components/dashboard/PlanCard.tsx. */}
+      <PlanCard />
+
       {/* Quick Links — 2×2 on every width so the row costs half the height it
           used to (four stacked full-width cards). Card primitive, hover swap on
           border (not shadow elevation). */}
@@ -850,6 +958,11 @@ export default function DashboardClient() {
           </Card>
         ))}
       </div>
+
+      {/* The in-app footer. Apple wants the privacy policy reachable from
+          inside the app, not only from a marketing page a member installing to
+          the home screen never returns to. */}
+      <LegalLinks className="pt-2" showCopyright />
     </PageTransition>
     <NotificationOptIn />
     </>

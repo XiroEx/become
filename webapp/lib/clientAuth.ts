@@ -1,22 +1,10 @@
 import { clearAllCache } from '@/lib/clientCache'
+import { clearAppBadge } from '@/lib/widgets/badge'
 
-export async function register(payload: { name: string; email: string; password: string }) {
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return res.json()
-}
-
-export async function login(payload: { email: string; password: string }) {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
-  return res.json()
-}
+// NOTE: the credential-less `register()` / `login()` helpers that used to live
+// here were deleted alongside the retirement of POST /api/auth/register and
+// POST /api/auth/login (both now 410 Gone). Sign-in is passwordless magic link
+// only — see app/login and lib/authBridge.ts.
 
 export function getToken() {
   if (typeof window === 'undefined') return null
@@ -28,4 +16,8 @@ export function logout() {
   localStorage.removeItem('token')
   // Wipe cached dashboard data so the next user on this device can't see it.
   clearAllCache()
+  // Same reason, on the home-screen icon: the badge is a count of ONE member's
+  // unfinished day and must not outlive their session. Fire-and-forget — the
+  // badge is decoration and sign-out must not wait on it, or fail with it.
+  void clearAppBadge()
 }

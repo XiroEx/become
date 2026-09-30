@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseVisibility.test.ts
+// Run with: npm run test:file tests/unit/exerciseVisibility.test.ts
 //
 // Before this, GET /api/exercises/alternatives (the "Swap Exercise" modal's
 // candidate list) loaded every isActive exercise with NO isCustom filter at

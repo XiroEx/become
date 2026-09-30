@@ -6,8 +6,20 @@ name: CI
 #
 # This does NOT gate the deploy — RedRun builds on merge to main and does not
 # consult GitHub. It tells you a merge broke something; it cannot stop it. To
-# actually block a bad merge, turn on a branch protection rule requiring this
-# check on `main` and `beta`.
+# actually block a bad merge, turn on a branch protection rule requiring these
+# checks (`verify`, `expo`, `shared-api-client`, `shared-core`) on `main` and `beta`.
+#
+# Four jobs, because the repo is four packages with four lockfiles:
+#   verify            — webapp/ (always; it is what ships to production)
+#   expo              — expo/ (only when expo/ or shared/ changed)
+#   shared-api-client — shared/api-client/ (same condition)
+#   shared-core       — shared/core/ (same condition)
+#
+# `expo`, `shared-api-client` and `shared-core` are gated by the `changes` job below rather
+# than a workflow-level `paths:` filter, because a workflow that is filtered
+# out never reports at all and a REQUIRED check that never reports blocks the
+# merge forever. A job skipped by `if:` reports as skipped, which branch
+# protection accepts.
 
 on:
   push:
@@ -21,12 +33,76 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which halves of the repo this ref touched. Computed with git rather than a
+  # third-party action so the workflow keeps using first-party actions only.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.filter.outputs.native }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff needs the base commit, which a shallow clone does not have.
+          fetch-depth: 0
+
+      - name: Did expo/ or shared/ change?
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -uo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            base="${BASE_SHA}"
+          else
+            base="${BEFORE_SHA}"
+          fi
+          # A new branch, a force-push or a squashed base leaves us without a
+          # commit to diff against. Run the jobs rather than skip a check we
+          # cannot rule out: a false positive costs three minutes, a false
+          # negative ships an unchecked native build.
+          if [ -z "${base}" ] \
+            || [ "${base}" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "No usable base commit ('${base}') — running the native jobs."
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "${base}" HEAD)"
+          echo "Changed files:"
+          printf '%s\n' "${changed}"
+          # The workflow file itself counts: a change to these jobs must be
+          # exercised by the PR that makes it.
+          if printf '%s\n' "${changed}" \
+            | grep -Eq '^(expo/|shared/|\.github/workflows/ci\.yml$)'; then
+            echo "native=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "native=false" >> "$GITHUB_OUTPUT"
+          fi
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
         working-directory: webapp
+
+    # A real MongoDB, so a test is allowed to exercise Mongo semantics —
+    # strict-mode drops, unique-index E11000s, validators — instead of every
+    # such test having to fake the driver. Loopback and disposable: the runner
+    # is destroyed with the job. No test may EVER point anywhere else; that is
+    # enforced by webapp/tests/unit/_guard.ts, not by convention.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
 
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +129,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Install and build shared/core
+        working-directory: shared/core
+        run: |
+          npm ci
+          npm run build
+
       # The webapp's tsconfig reaches into ../shared/api-client, which is its own
       # package with its own lockfile. Locally that typechecks only because those
       # modules already sit on the machine; a clean checkout has nothing there and
@@ -61,12 +143,30 @@ jobs:
         working-directory: shared/api-client
         run: npm ci
 
+      # The shared client is what the NATIVE app sends, and nothing ran its own
+      # suite — a person remembering to, again. It needs no database and no
+      # network, and it is the only place the `tz` wire format (minutes west of
+      # UTC, never an IANA zone) is pinned from the sending side.
+      - name: Shared api-client typecheck
+        working-directory: shared/api-client
+        run: npm run typecheck
+
+      - name: Shared api-client tests
+        working-directory: shared/api-client
+        run: npm test
+
       # Typecheck and tests are reported separately so a failure names itself.
       - name: Typecheck
         run: npx tsc --noEmit
 
       - name: Unit tests
         run: npm test
+        env:
+          # `test:unit` pins this same value inline, so this line changes
+          # nothing today. It is here so the pin is visible at the job level: if
+          # the script's inline assignment is ever dropped, the fallback is
+          # still the loopback service above and never an inherited remote.
+          MONGODB_URI: mongodb://127.0.0.1:27017/become-test
 
       # Runs last: it is the slowest and the least likely to be the thing you
       # broke, so failing fast on the two above gets you a useful answer sooner.
@@ -77,3 +177,140 @@ jobs:
           # for want of a credential, that is a finding about the build, not a
           # reason to put production values here.
           NEXT_TELEMETRY_DISABLED: '1'
+
+  # The native app. Until now the only thing CI knew about expo/ was
+  # webapp/tests/unit/account/storeReadiness.test.tsx, which reads a handful of
+  # expo sources as TEXT — it cannot see a type error, a broken test or a
+  # dependency on a version the installed Expo SDK does not support.
+  #
+  # No private-registry step: expo/ has no `@redbtn/*` dependency, so `npm ci`
+  # here needs nothing but the public registry.
+  expo:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: expo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: expo/package-lock.json
+
+      # tsc follows expo's `@become/api-client` path mapping into
+      # ../shared/api-client/src, which imports `zod` from ITS OWN node_modules.
+      # Without this install the typecheck fails with "Cannot find module 'zod'"
+      # on a clean runner (a dev box that once installed shared/ hides it).
+      - name: Install shared/api-client
+        working-directory: shared/api-client
+        run: npm ci
+
+      - name: Install and build shared/core
+        working-directory: shared/core
+        run: |
+          npm ci
+          npm run build
+
+      - run: npm ci
+
+      # Each step is named so a failure names itself, and each one fails the job:
+      # there is no `continue-on-error` here on purpose.
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Unit tests
+        run: npx jest --ci --maxWorkers=2
+
+      # The version-drift check Expo does at `expo start`, which CI never runs:
+      # it fails when a dependency is pinned outside the range the installed SDK
+      # supports. That is a class of break the typecheck cannot see, and the one
+      # that turns into a store build that will not bundle.
+      #
+      # EXPO_OFFLINE: check against the versions bundled with the installed
+      # `expo` package instead of asking Expo's servers for the latest patch
+      # releases. Online, this step went red every time Expo shipped a patch
+      # (#1256), and Become uses no Expo-hosted services (George, 2026-09-30).
+      - name: Expo dependency check
+        env:
+          EXPO_OFFLINE: '1'
+        run: npx expo install --check
+
+      # The only step here that actually BUILDS the app, and the reason it
+      # exists: tsc reaches `@become/api-client` through tsconfig `paths` and
+      # Jest through `moduleNameMapper`, so both were green while Metro — which
+      # uses neither — could not resolve it at all and no build of any kind
+      # could be produced. An export walks the whole module graph, so an import
+      # Metro cannot resolve fails this step (and therefore the job: no
+      # `continue-on-error` here either). Runs last because it is the slowest.
+      - name: Bundle (iOS export)
+        run: npx expo export --platform ios --output-dir "$RUNNER_TEMP/bundle"
+
+  # The wire contract the native app sends. `verify` installs this package (the
+  # webapp's tsconfig reaches into it) and runs its suite from webapp's job;
+  # this job runs it on its OWN lockfile, which is the thing that actually
+  # changes when someone edits it. No private registry here either.
+  shared-api-client:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: shared/api-client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: shared/api-client/package-lock.json
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  # The shared pure logic. TypeScript sources built into ESM/CJS and .d.ts,
+  # imported by both webapp and expo.
+  shared-core:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: shared/core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: shared/core/package-lock.json
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck

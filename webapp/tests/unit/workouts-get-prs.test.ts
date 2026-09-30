@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workouts-get-prs.test.ts
+// Run with: npm run test:file tests/unit/workouts-get-prs.test.ts
 //
 // Locks in the GET /api/workouts read-path contract:
 //   - When includeHistory=true, exercisePRs is the formatter projection of the

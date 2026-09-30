@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
-import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
+import { requireQuota } from '@/lib/entitlementGuards'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/session?id=<sessionId> — the full quick (kind:'quick') log
 // for one session: exercises with their logged sets. Powers the calendar/history
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
     // What each exercise asks you to log — from the log itself, else the
     // catalog. Without it a resumed session came back untyped and unloggable.
     const bySlug = await trackingBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
+    const bellBySlug = await bellFieldsBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
 
     return NextResponse.json({
       session: {
@@ -66,6 +68,7 @@ export async function GET(request: NextRequest) {
           name: ex.name,
           exerciseSlug: ex.exerciseSlug || '',
           trackingType: trackingFor(ex, bySlug),
+          ...bellFieldsFor(ex, bellBySlug),
           sets: (ex.sets ?? []).map((s) => ({
             setNumber: s.setNumber,
             reps: s.reps ?? null,
@@ -119,6 +122,8 @@ export async function DELETE(request: NextRequest) {
 //   { id, skipped: true }   → mark the planned session skipped
 //   { id, skipped: false }  → un-skip (back to planned)
 //   { id, title }           → rename without altering the recorded workout
+//   { id, favorite: true }  → star the session for quick access from the list
+//   { id, favorite: false } → unstar
 // Fields can be sent together or separately.
 export async function PATCH(request: NextRequest) {
   try {
@@ -129,14 +134,32 @@ export async function PATCH(request: NextRequest) {
       date?: string
       skipped?: boolean
       title?: unknown
+      favorite?: boolean
     }
     const id = body.id
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    if (body.date === undefined && body.skipped === undefined && body.title === undefined) {
-      return NextResponse.json({ error: 'date, skipped, or title is required' }, { status: 400 })
+    if (body.date === undefined && body.skipped === undefined && body.title === undefined && body.favorite === undefined) {
+      return NextResponse.json({ error: 'date, skipped, title, or favorite is required' }, { status: 400 })
     }
     if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) {
       return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
+    }
+
+    // ONE boolean decides both the gate and the write. `body` is unvalidated
+    // JSON — the `favorite?: boolean` annotation is erased at compile time — so
+    // reading `=== true` for the gate while writing `!!body.favorite` left a
+    // one-character bypass: `{"favorite": 1}` skipped requireQuota and still
+    // starred the session. Derive it once and there is no shape to disagree on.
+    const wantsFavorite = body.favorite !== undefined && !!body.favorite
+
+    // A STARRED quick session is what "custom session" means for the free
+    // allowance: the SessionBuilder's output only becomes a durable, reusable
+    // artifact once it is starred. The workout log itself is history and is
+    // never capped — see handleQuickSessionSave. UNstarring is always free, so
+    // a member at 3/3 always has a way back under the cap.
+    if (wantsFavorite) {
+      const gate = await requireQuota(request, 'custom-sessions')
+      if (!gate.ok) return gate.response
     }
 
     const set: Record<string, unknown> = {}
@@ -145,13 +168,23 @@ export async function PATCH(request: NextRequest) {
       const d = new Date(raw)
       if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
       set['workoutLogs.$[elem].date'] = d
-      set['workoutLogs.$[elem].startedAt'] = d
+      // startedAt is deliberately left untouched: it's the "has this session
+      // actually been engaged" signal GET /api/workouts/in-progress gates on
+      // (see IWorkoutLog.startedAt), and this is a re-date, not an engagement.
+      // Stamping it here would make dragging a never-started planned session
+      // onto today/a past day show it as "in progress" — the same bug this
+      // gate exists to prevent, just reached from the calendar instead of
+      // "Plan it". A log that was already started keeps its real startedAt;
+      // one that wasn't stays that way after moving days.
     }
     if (body.skipped !== undefined) {
       set['workoutLogs.$[elem].skipped'] = !!body.skipped
     }
     if (typeof body.title === 'string') {
       set['workoutLogs.$[elem].title'] = body.title.trim()
+    }
+    if (body.favorite !== undefined) {
+      set['workoutLogs.$[elem].favorite'] = wantsFavorite
     }
     set.updatedAt = new Date()
 

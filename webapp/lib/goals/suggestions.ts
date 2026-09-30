@@ -87,7 +87,7 @@ export function suggestTraining(i: TrainingSuggestInput): Suggestion {
   // Structural before tactical: someone averaging 2 a week against 5 should not
   // be told "4 more by Saturday" every single week.
   if (i.avgLast4 != null && i.avgLast4 < i.target - 1) {
-    return { key: 'training.consistency', title: `Averaging ${i.avgLast4}/wk against ${i.target}`, sub: 'The target may be too high for this season, or the schedule needs protecting. Either fix is fine.', severity: 'nudge', url: '/dashboard/settings' }
+    return { key: 'training.consistency', title: `Averaging ${i.avgLast4}/wk against ${i.target}`, sub: 'The target may be too high for this season, or the schedule needs protecting. Either fix is fine.', severity: 'nudge', url: '/dashboard/settings?tab=training#weekly-availability' }
   }
   if (nearLift) {
     return { key: `training.lift.${nearLift.slug}`, title: `${nearLift.name}: ${nearLift.remaining} from your target`, sub: `${nearLift.now} → ${nearLift.target}. It's right there.`, severity: 'nudge', url: '/dashboard/progress' }

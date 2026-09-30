@@ -7,7 +7,7 @@ import Exercise from '@/models/Exercise'
 import { FOCUS_DEFS, type CandidateExercise, type FocusKey } from './types'
 
 const CANDIDATE_PROJECTION =
-  'slug name category role mechanics movementPatterns primaryMuscles equipment difficulty trackingType bodyRegion defaultSets defaultReps defaultRest defaultDuration'
+  'slug name category role mechanics movementPatterns primaryMuscles equipment laterality difficulty trackingType bodyRegion defaultSets defaultReps defaultRest defaultDuration'
 
 interface CandidateExerciseDoc {
   slug: string
@@ -18,6 +18,7 @@ interface CandidateExerciseDoc {
   movementPatterns?: string[]
   primaryMuscles?: string[]
   equipment?: string[]
+  laterality?: string
   difficulty?: string
   trackingType?: string
   bodyRegion?: string
@@ -37,6 +38,7 @@ function toCandidateExercise(d: CandidateExerciseDoc): CandidateExercise {
     movementPatterns: d.movementPatterns ?? [],
     primaryMuscles: d.primaryMuscles ?? [],
     equipment: d.equipment ?? [],
+    laterality: d.laterality,
     difficulty: d.difficulty ?? 'intermediate',
     trackingType: d.trackingType ?? 'reps_weight',
     bodyRegion: d.bodyRegion ?? 'full_body',

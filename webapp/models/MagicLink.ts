@@ -6,7 +6,32 @@ export interface IMagicLink extends Document {
   token: string
   sessionId: string
   mode: 'login' | 'register'
+  /** LEGACY, READ-ONLY. Sign-up stopped asking for a name (onboarding does), so
+   *  nothing writes this any more. verify-link still READS it so that a link
+   *  minted by the previous build — they live 15 minutes, so a handful are
+   *  always in flight across a deploy — still lands the name its owner typed. */
   name?: string
+  /** Set when the sign-up form's consent box was ticked: the LEGAL_VERSION the
+   *  member agreed to at that moment. Carried on the link so the agreement
+   *  lands on the User row at the instant the row is created (verify-link),
+   *  not on some later screen. Register mode only. */
+  consentTermsVersion?: string
+  /**
+   * SIGN IN WITH APPLE, "Already a member? Link your email" (lib/appleLink.ts).
+   *
+   * Set to the id of the account Apple's relay address created. The link is an
+   * ordinary sign-in link to the member's REAL address — control of that inbox
+   * is the proof that the two accounts are one person — and this field is the
+   * intent riding on it: when verify-link consumes a link carrying it, the
+   * Apple subject moves onto the account that owns the address and the
+   * throwaway row is purged.
+   *
+   * It lives on the link rather than in a table of its own because the link
+   * already has the right lifetime (15 minutes, TTL-swept), the right
+   * single-use semantics (`used`) and the right polling machinery — and
+   * because a second store would be a second thing that can be left behind.
+   */
+  appleLinkUserId?: string
   expiresAt: Date
   used: boolean
   authToken?: string  // JWT stored after verification
@@ -43,6 +68,12 @@ const MagicLinkSchema = new Schema<IMagicLink, MagicLinkModel>({
     type: String,
     trim: true,
   },
+  consentTermsVersion: {
+    type: String,
+  },
+  appleLinkUserId: {
+    type: String,
+  },
   expiresAt: {
     type: Date,
     required: true,
@@ -73,7 +104,13 @@ export function generateSessionId(): string {
 }
 
 // Create a magic link with 15 minute expiration
-export async function createMagicLink(email: string, mode: 'login' | 'register', name?: string): Promise<IMagicLink> {
+export async function createMagicLink(
+  email: string,
+  mode: 'login' | 'register',
+  consentTermsVersion?: string,
+  /** Extra intent carried by this link. See IMagicLink.appleLinkUserId. */
+  options?: { appleLinkUserId?: string },
+): Promise<IMagicLink> {
   const MagicLink = mongoose.models.MagicLink || mongoose.model<IMagicLink, MagicLinkModel>('MagicLink', MagicLinkSchema)
   
   // Invalidate any existing unused tokens for this email
@@ -91,7 +128,8 @@ export async function createMagicLink(email: string, mode: 'login' | 'register',
     token,
     sessionId,
     mode,
-    name,
+    consentTermsVersion,
+    appleLinkUserId: options?.appleLinkUserId,
     expiresAt,
     used: false,
   })

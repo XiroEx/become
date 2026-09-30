@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/repTrend.test.ts
+// Run with: npm run test:file tests/unit/metrics/repTrend.test.ts
 //
 // Covers the rep-trend metric:
 //   - collectQualifyingSets (filters bodyweight/incomplete/zero-rep; tags week)

@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
-import { Input } from "@/components/Input";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
-import { Toggle } from "@/components/Toggle";
 import {
   DAY_LABELS,
   validateScheduleSettings,
@@ -23,18 +22,18 @@ export function ScheduleSettingsForm({
   testID = "schedule-settings",
 }: ScheduleSettingsFormProps) {
   const [trainingDays, setTrainingDays] = useState<number[]>(initial.trainingDays);
-  const [startDate, setStartDate] = useState<string>(initial.startDate);
-  const [autoAdvance, setAutoAdvance] = useState<boolean>(initial.autoAdvance);
   const [error, setError] = useState<string | null>(null);
 
   const toggleDay = (day: number) => {
     setTrainingDays((cur) =>
-      cur.includes(day) ? cur.filter((d) => d !== day) : [...cur, day].sort(),
+      cur.includes(day)
+        ? cur.filter((d) => d !== day)
+        : [...cur, day].sort((a, b) => a - b),
     );
   };
 
   const handleSubmit = async () => {
-    const next: ScheduleSettings = { trainingDays, startDate, autoAdvance };
+    const next: ScheduleSettings = { trainingDays };
     const v = validateScheduleSettings(next);
     if (!v.ok) {
       setError(`Fix: ${v.errors.join(", ")}`);
@@ -67,25 +66,6 @@ export function ScheduleSettingsForm({
             </Pressable>
           ))}
         </View>
-      </View>
-      <Input
-        testID={`${testID}-start-date`}
-        label="Start date (YYYY-MM-DD)"
-        value={startDate}
-        onChangeText={setStartDate}
-        autoCapitalize="none"
-      />
-      <View
-        testID={`${testID}-auto-advance-row`}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-      >
-        <Text className="text-foreground">Auto-advance to next phase</Text>
-        <Toggle
-          testID={`${testID}-auto-advance`}
-          value={autoAdvance}
-          onValueChange={setAutoAdvance}
-          accessibilityLabel="Auto-advance to next phase"
-        />
       </View>
       {error ? (
         <Text testID={`${testID}-error`} className="text-destructive text-sm">

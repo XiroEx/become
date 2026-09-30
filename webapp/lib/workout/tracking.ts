@@ -130,6 +130,28 @@ export interface TypedSet {
   speed?: string
 }
 
+/** A freshly opened set: nothing typed, nothing done. */
+export interface BlankSet {
+  reps: string
+  weight: string
+  speed: string
+  completed: boolean
+}
+
+/**
+ * A set with nothing in it, for seeding a workout's inputs when it opens.
+ *
+ * Sets used to be seeded from the member's last-completed performance for
+ * that exercise, so "confirm" was one tap away — but a set the member never
+ * touched then carried the previous session's weight/reps into today's log
+ * if they tapped Done without double-checking the numbers. Last time's
+ * performance is only ever shown as a "Last: X lbs × Y reps" reference now;
+ * it is never written into an editable field.
+ */
+export function blankSet(): BlankSet {
+  return { reps: '', weight: '', speed: '', completed: false }
+}
+
 /**
  * Is this set filled in enough to tick itself off?
  *
@@ -167,4 +189,38 @@ export function isSetFilled(tracking: string | null | undefined, set: TypedSet):
       // Nothing to type: the member ticks it themselves.
       return false
   }
+}
+
+/**
+ * Finds the old "every set seeded from the last-completed-set" bug pattern in
+ * one exercise's sets as restored from a saved log: two or more INCOMPLETE
+ * sets sharing the exact same non-zero numbers.
+ *
+ * A single filled-but-incomplete set is not by itself a red flag — the Track
+ * view auto-ticks DONE the moment its fields satisfy isSetFilled, but a
+ * member can manually *uncheck* a set to redo it, which legitimately leaves
+ * real numbers sitting in an incomplete set. What normal use never produces
+ * is two DIFFERENT sets landing on the identical reps/weight/duration —
+ * that's the fingerprint of the old bug, which stamped every set of an
+ * exercise with the same last-time value. Returns the indices (into `sets`)
+ * that should be blanked before display.
+ */
+export function findPhantomPrefilledSets(
+  tracking: string | null | undefined,
+  sets: Array<TypedSet & { completed: boolean }>,
+): number[] {
+  const keyOf = (s: TypedSet) => JSON.stringify([s.reps ?? '', s.weight ?? '', s.duration ?? '', s.distance ?? '', s.speed ?? ''])
+  const bySignature = new Map<string, number[]>()
+  sets.forEach((s, i) => {
+    if (s.completed || !isSetFilled(tracking, s)) return
+    const key = keyOf(s)
+    const indices = bySignature.get(key) ?? []
+    indices.push(i)
+    bySignature.set(key, indices)
+  })
+  const phantom: number[] = []
+  for (const indices of bySignature.values()) {
+    if (indices.length >= 2) phantom.push(...indices)
+  }
+  return phantom
 }

@@ -14,6 +14,7 @@ import {
 } from '@/lib/foodReview'
 import { plausibleOffKcal } from '@/lib/offEnergy'
 import { assessFoodImportQuality, foodQualityErrorMessage } from '@/lib/nutrition/foodQuality'
+import { createStrict } from '@/lib/strictCreate'
 
 const VALID_CATEGORIES: FoodCategory[] = [
   'Protein', 'Grain', 'Fruit', 'Vegetable', 'Dairy',
@@ -510,7 +511,7 @@ export async function importFromUSDA(
     variants: [variant],
   } as FoodForReview, { origin: 'import' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: finalName,
     slug,
     brand: mapped.brand,
@@ -938,7 +939,7 @@ export async function importFromOpenFoodFacts(
     variants: [variant],
   } as FoodForReview, { origin: 'import' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: off.product_name,
     slug,
     brand: off.brands || undefined,
@@ -1010,15 +1011,62 @@ export interface ManualFoodInput {
   }
 }
 
+export interface ManualFoodOptions {
+  /**
+   * The caller is a GATED "create a custom food" surface and this really is
+   * the member authoring an item — stamp `authoredBy` so it counts against
+   * their custom-foods allowance (models/Food.ts#authoredBy).
+   *
+   * Off by default and NEVER read from the request body: this function also
+   * materialises USDA/OpenFoodFacts hits (POST /api/nutrition/foods/import
+   * with `source: 'manual'`, and the barcode scanner's live-OFF path), which
+   * are ungated on purpose so free members keep food logging. If a client
+   * could set it, it could also unset it on the gated path and mint unlimited
+   * uncounted foods.
+   */
+  authored?: boolean
+
+  /**
+   * `input.barcode` came from the SERVER, not from a request body — the caller
+   * resolved this code against OpenFoodFacts or USDA and is materialising the
+   * product it actually got back.
+   *
+   * Off by default, and for the same reason `authored` is: `input` is
+   * `body.data` on POST /api/nutrition/foods/import and `body` on
+   * POST /api/nutrition/foods, so a client can put anything in it. `barcode` is
+   * unique+sparse and is the FIRST thing GET /api/nutrition/foods/barcode
+   * resolves — `Food.findOne({ barcode })` ahead of OFF and USDA, with no check
+   * on `source` — so a client-supplied barcode is a claim on a global namespace:
+   * plant one on a real UPC and every member who scans that product gets your
+   * row. Untrusted values are DROPPED rather than rejected, matching
+   * `pickFoodFields`; the row is still created, just without a squatted key.
+   *
+   * Admins may pass it through (they curate the catalogue), but the real admin
+   * surface for this is PATCH /api/admin/foods/[id].
+   */
+  trustedBarcode?: boolean
+}
+
 export async function importManualFood(
   input: ManualFoodInput,
   createdBy?: mongoose.Types.ObjectId | string,
+  opts: ManualFoodOptions = {},
 ): Promise<{ food: IFood; created: boolean }> {
   if (!input.name) throw new Error('name is required')
 
+  // Same value the create below writes to `createdBy`; spelled out there rather
+  // than reused so the two attribution lines stay literal and greppable —
+  // tests/unit/allowance/customFoods.test.ts pins both.
+  const ownerId = createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined
+
+  // A barcode is only honoured when the CALLER resolved it server-side (see
+  // ManualFoodOptions#trustedBarcode). Dropped, never rejected — the row is
+  // still worth creating, it just does not get to claim a global UPC.
+  const barcode = opts.trustedBarcode ? input.barcode : undefined
+
   // If barcode supplied and a Food with that barcode exists, reuse it
-  if (input.barcode) {
-    const byBarcode = await Food.findOne({ barcode: input.barcode })
+  if (barcode) {
+    const byBarcode = await Food.findOne({ barcode })
     if (byBarcode) return { food: byBarcode, created: false }
   }
 
@@ -1027,9 +1075,22 @@ export async function importManualFood(
   // saved list with duplicates. baseSlug encodes both name and brand, so an
   // exact base-slug match on a manual food represents the same conceptual
   // item.
-  {
+  //
+  // SCOPED TO THE CALLER. Unscoped, `{ slug: base, source: 'manual' }` handed
+  // the SECOND member to save a "Protein Shake" the FIRST member's document:
+  // `created: false`, so no allowance slot was charged and no `authoredBy`
+  // stamped, leaving them with a food they could not edit or delete and a
+  // stranger who could — including deleting it out from under their meal logs.
+  // Recipe save-as-food then wrote `recipeId` onto that stranger's row. A
+  // member may only be handed back a row they created or authored; anyone else
+  // gets their own, with `generateUniqueFoodSlug` suffixing the collision.
+  if (ownerId) {
     const base = baseSlug(input.name, input.brand)
-    const candidate = await Food.findOne({ slug: base, source: 'manual' })
+    const candidate = await Food.findOne({
+      slug: base,
+      source: 'manual',
+      $or: [{ createdBy: ownerId }, { authoredBy: ownerId }],
+    })
     if (candidate) return { food: candidate, created: false }
   }
 
@@ -1096,7 +1157,7 @@ export async function importManualFood(
     variants,
   } as FoodForReview, { origin: 'rules' })
 
-  const food = await Food.create({
+  const food = await createStrict<IFood>(Food, {
     name: input.name,
     slug,
     brand: input.brand,
@@ -1108,10 +1169,16 @@ export async function importManualFood(
     externalDataType: undefined,
     isFirstClass: false,
     isVerified: false,
-    barcode: input.barcode,
+    barcode,
     imageUrl: input.imageUrl,
     usageCount: 0,
     createdBy: createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
+    // Only stamped on the branch that actually mints a row, and only for a
+    // gated create surface. Both dedupe branches above return early with
+    // `created: false`, so re-saving a food that already exists never claims
+    // an allowance slot for something the member did not create.
+    authoredBy:
+      opts.authored && createdBy ? new mongoose.Types.ObjectId(String(createdBy)) : undefined,
     needsReview: automaticReview.needsReview,
     reviewFlag: automaticReview.reviewFlag,
     groupKey: baseGroupKey(input.name) || undefined,
@@ -1158,6 +1225,12 @@ export function flattenFoodForResponse(food: IFood & { _id: mongoose.Types.Objec
     variants: food.variants,
     aliases: food.aliases,
     createdBy: food.createdBy,
+    // Ownership is `authoredBy`, OR `createdBy` on a `source: 'manual'` row —
+    // see lib/nutrition/foodOwnership.ts. `createdBy` alone is provenance and
+    // names whoever's search pulled a USDA/OFF row in, so a client that hides
+    // its Edit/Delete controls behind `createdBy === me` shows them on
+    // catalogue rows the server will 403.
+    authoredBy: food.authoredBy,
     needsReview: food.needsReview,
     // Never serialize the internal admin identifier stored in updatedBy.
     reviewFlag: food.reviewFlag ? {

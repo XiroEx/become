@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/tilesCacheInvalidation.test.ts
+// Run with: npm run test:file tests/unit/tilesCacheInvalidation.test.ts
 //
 // GET /api/dashboard/tiles serves a per-user payload (nutrition suggestions
 // among it) from a 60s Redis cache (see lib/redis.ts tilesCacheKey /

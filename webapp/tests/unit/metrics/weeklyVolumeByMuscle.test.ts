@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/weeklyVolumeByMuscle.test.ts
+// Run with: npm run test:file tests/unit/metrics/weeklyVolumeByMuscle.test.ts
 //
 // Covers the weekly-volume-by-muscle metric:
 //   - isoWeekStart (ISO-week boundary math, including Sunday edge case)

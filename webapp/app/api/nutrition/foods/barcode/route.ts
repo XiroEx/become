@@ -238,7 +238,16 @@ export async function GET(request: NextRequest) {
                   : [],
                 gramsPerServing: altQty ?? undefined,
                 nutrition,
-              }, userId)
+              }, userId, {
+                // The one path allowed to write a barcode from a member
+                // request: `candidate` is not taken on trust, it is the code
+                // the live OpenFoodFacts API just answered `status: 1` for,
+                // and every field above comes from THAT product. Everywhere
+                // else a client-supplied barcode is dropped
+                // (ManualFoodOptions#trustedBarcode) because the field is a
+                // unique global key this route resolves ahead of OFF and USDA.
+                trustedBarcode: true,
+              })
               return NextResponse.json({
                 food: {
                   ...flattenFoodForResponse(imported as Parameters<typeof flattenFoodForResponse>[0]),

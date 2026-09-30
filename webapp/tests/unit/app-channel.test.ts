@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/app-channel.test.ts
+// Run with: npm run test:file tests/unit/app-channel.test.ts
 //
 // Production and beta run the same code off the same database, so the build has
 // to say which one it is. Without it, an installed PWA from beta is

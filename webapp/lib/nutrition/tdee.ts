@@ -68,16 +68,25 @@ const MAX_SURPLUS_PCT = 0.15
 const CAL_PER_LB = 3500
 
 /**
- * The calorie delta for this member: the smaller of a cap and either their
- * chosen pace (converted from lb/week) or, absent one, the flat default. Large
- * members are unaffected by the cap (their percentage exceeds it); small
- * members stop being handed a 30% cut.
+ * The calorie delta for this member: either their chosen pace (converted from
+ * lb/week), or, absent one, the flat default capped to a sane share of TDEE.
  *
  * `paceLbPerWeek` is what makes this respond to the member's own choice
  * instead of always landing on the same -500/+300 regardless of whether they
  * picked 0.5, 1 or 1.5 lb a week — see the Goal's target.paceKgPerWeek. Omit it
  * (no active weight Goal yet, e.g. mid-onboarding) to get the historical flat
  * default.
+ *
+ * An explicit pace is NOT run through the percentage cap. It used to be —
+ * "1.5 lb/week says -566 for some reason" was that cap quietly rewriting a
+ * 750 cal deficit (1.5 * 3500 / 7) down to 20% of a 2,828 cal TDEE. The pace
+ * picker already bounds the choice to 0.5-1.5 lb/week, well inside what
+ * George/Jon Don agreed was reasonable ("above 2lb weekly" is the line, and
+ * "the math is the math" below it) — the cap was protecting against a flat
+ * default nobody chose, not against this. The 1,200 cal floor in
+ * computeNutritionTargets() is what still catches a small member on an
+ * aggressive pace; capping the delta itself just produced a number that
+ * didn't match the pace they picked.
  */
 export function calorieAdjustment(
   tdee: number,
@@ -85,9 +94,11 @@ export function calorieAdjustment(
   paceLbPerWeek?: number,
 ): number {
   if (direction === 'maintain') return 0
-  const base = paceLbPerWeek && paceLbPerWeek > 0
-    ? Math.round((paceLbPerWeek * CAL_PER_LB) / 7)
-    : Math.abs(DIRECTION_ADJUSTMENT[direction])
+  if (paceLbPerWeek && paceLbPerWeek > 0) {
+    const chosen = Math.round((paceLbPerWeek * CAL_PER_LB) / 7)
+    return direction === 'lose' ? -chosen : chosen
+  }
+  const base = Math.abs(DIRECTION_ADJUSTMENT[direction])
   const capPct = direction === 'lose' ? MAX_DEFICIT_PCT : MAX_SURPLUS_PCT
   const capped = Math.min(base, Math.round(tdee * capPct))
   return direction === 'lose' ? -capped : capped
@@ -220,11 +231,14 @@ const RECOMMENDED_CARB_PCT = { min: 25, max: 50 }
  *      (Goal.target.paceKgPerWeek) instead of always being the flat
  *      -500/+300 default, so 0.5/1/1.5 lb a week actually produce different
  *      targets
+ *   4  a chosen pace is no longer run through the flat-default percentage
+ *      cap, so 1.5 lb/week means -750 (the real math) instead of being
+ *      quietly rewritten to -566 by a cap meant for the unchosen default
  *
  * Targets are computed once at onboarding and persisted, so without this a fix
  * only ever reaches new signups.
  */
-export const MACRO_CALC_VERSION = 3
+export const MACRO_CALC_VERSION = 4
 
 export type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
 
@@ -501,6 +515,62 @@ export function computeNutritionTargets(input: TargetsInput): NutritionTargets |
   }
 
   return { tdee, calories, protein, carbs, fats, direction, activityLevel, split }
+}
+
+/**
+ * What a preset will ACTUALLY deliver for this member, as the percentages the
+ * Daily Targets card shows — which is what the picker has to advertise.
+ *
+ * The honest answer is only available on the far side of the pipeline: the
+ * split a preset names is an input, and computeNutritionTargets() rounds it
+ * into grams and can move it afterwards (the low-calorie carb floor). So this
+ * runs the pipeline and reads the percentages back off the grams.
+ *
+ * Returns null for 'custom' — Manual is hand-typed numbers, so there is no
+ * ratio to promise before they are typed. Falls back to the preset's own split
+ * when body stats are too sparse to compute targets at all.
+ */
+export function deliveredSplit(preset: MacroPreset, input: TargetsInput): MacroSplit | null {
+  if (preset === 'custom') return null
+  const targets = computeNutritionTargets({ ...input, macroPreset: preset })
+  if (targets) return splitFromGrams(targets.protein, targets.carbs, targets.fats)
+  const direction = input.direction ?? directionForGoal(input.goals?.[0])
+  return splitForPreset(preset, direction)
+}
+
+/** Grams of a macro that make up `percent`% of a calorie target — the same
+ *  math computeNutritionTargets() applies to a preset's split, exposed so the
+ *  Manual macro split can accept a typed percentage instead of only grams. */
+export function gramsFromPercent(calories: number, percent: number, kcalPerGram: number): number {
+  if (!(calories > 0) || !(kcalPerGram > 0)) return 0
+  return Math.round((calories * percent) / 100 / kcalPerGram)
+}
+
+/** The split a set of gram targets ACTUALLY represents — each macro's share of
+ *  the calories those grams add up to.
+ *
+ * This is what the Daily Targets card renders, so it is also what the macro
+ * picker has to advertise. The two used to be worked out in different places
+ * from different inputs: the picker read the static per-direction table while
+ * the targets came from the member's own bodyweight and calories, so "Custom
+ * (from your stats)" promised 35/35/30 above targets that read 29/41/30. One
+ * function now answers "what percentages is this member on", and both the
+ * label and the bar below it call it. */
+export function splitFromGrams(protein: number, carbs: number, fats: number): MacroSplit {
+  const totalCals = protein * 4 + carbs * 4 + fats * 9
+  if (!(totalCals > 0)) return { protein: 0, carbs: 0, fats: 0 }
+  return {
+    protein: Math.round(((protein * 4) / totalCals) * 100),
+    carbs: Math.round(((carbs * 4) / totalCals) * 100),
+    fats: Math.round(((fats * 9) / totalCals) * 100),
+  }
+}
+
+/** Inverse of gramsFromPercent — what share of the calorie target a gram
+ *  figure represents. Used to show the Manual split in percent form. */
+export function percentFromGrams(calories: number, grams: number, kcalPerGram: number): number {
+  if (!(calories > 0)) return 0
+  return Math.round((grams * kcalPerGram / calories) * 100)
 }
 
 /** Water target in oz — bodyweight-scaled, which is closer than a flat 96. */

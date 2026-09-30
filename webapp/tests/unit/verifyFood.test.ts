@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/verifyFood.test.ts
+// Run with: npm run test:file tests/unit/verifyFood.test.ts
 //
 // The write gate is the whole safety story of the verification pipeline, so it
 // is tested as a pure function. Everything else in verifyFood.ts is I/O.

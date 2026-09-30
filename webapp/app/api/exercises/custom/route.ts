@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/auth";
 import { requireFeature } from "@/lib/entitlements";
+import { requireQuota } from "@/lib/entitlementGuards";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
 import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/customExerciseFields";
 import { getBlobStore } from "@/lib/blobStorage";
 import { invalidateExerciseCache } from "@/lib/hydrateExercises";
+import { findDuplicateOf } from "@/lib/exerciseAudit";
 
 type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
@@ -54,8 +56,13 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/exercises/custom ───────────────────────────────────────────────
 
+// CREATE is quota-gated (free tier: 3 owned custom exercises, counted live).
+// Every other verb on a custom exercise — PATCH, DELETE, submit, video, trim —
+// stays on requireFeature so a member sitting at 3/3 can still fix, re-record
+// and delete what they already have. Capping edits would lock them out of
+// their own data with no way back under the cap.
 export async function POST(req: NextRequest) {
-  const gate = await requireFeature(req, "custom-exercises");
+  const gate = await requireQuota(req, "custom-exercises");
   if (!gate.ok) return gate.response;
   const auth = { userId: gate.userId };
 
@@ -88,6 +95,19 @@ export async function POST(req: NextRequest) {
   const namePart = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   const userPart = auth.userId.toString().slice(-6);
   const slug = `custom-${userPart}-${namePart}-${Date.now()}`;
+
+  // Audit against the shared catalog (canonical + admin-approved universal
+  // exercises) before saving. A member creating a custom exercise almost
+  // always means the real one didn't surface in search — so instead of
+  // waiting on the member to notice and hit "Submit to Universal" (most
+  // won't), a likely duplicate goes straight into the admin review queue
+  // with a note explaining why. Non-duplicate customs are unaffected and
+  // stay owner-private as before.
+  const catalog = await Exercise.find(
+    { isActive: true, $or: [{ isCustom: { $ne: true } }, { isCustom: true, isUniversal: true }] },
+    { slug: 1, name: 1 }
+  ).lean<{ slug: string; name: string }[]>();
+  const duplicateOf = findDuplicateOf(name.trim(), catalog);
 
   const exercise = new Exercise({
     slug,
@@ -128,7 +148,9 @@ export async function POST(req: NextRequest) {
     isCustom: true,
     createdBy: auth.userId.toString(),
     isUniversal: false,
-    reviewStatus: "none",
+    reviewStatus: duplicateOf ? "pending" : "none",
+    submittedAt: duplicateOf ? new Date() : null,
+    reviewNote: duplicateOf ? `Auto-flagged: possible duplicate of "${duplicateOf.name}" (${duplicateOf.slug})` : null,
     ...(defaultSets && { defaultSets: parseInt(defaultSets) }),
     ...(defaultReps && { defaultReps: String(defaultReps) }),
   });

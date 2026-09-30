@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import Meal from '@/models/Meal'
 import MealPlan from '@/models/MealPlan'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { requireFeature } from '@/lib/entitlements'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 
@@ -27,7 +28,10 @@ export async function GET(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Confirmed against the database, not read off the token claim: a demoted
+    // admin must stop seeing other members' private meals immediately. Costs an
+    // extra read only for a caller whose token actually claims admin.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!meal.isPublic && !meal.isVerified && !isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Meal not found' }, { status: 404 })
     }
@@ -47,7 +51,6 @@ export async function PATCH(
   try {
     const gate = await requireFeature(request, 'custom-meals')
     if (!gate.ok) return gate.response
-    const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 
     await dbConnect()
 
@@ -57,8 +60,13 @@ export async function PATCH(
       return NextResponse.json({ error: 'Meal not found' }, { status: 404 })
     }
 
-    const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    const isOwner = meal.createdBy?.toString() === gate.userId
+    // gate.role comes from loadUserEntitlement(), which reads the User row — it
+    // is already database truth, so there is nothing to re-confirm here. Using
+    // it directly (rather than through a hand-rolled `authResult` shim) keeps
+    // `authResult.role === 'admin'` out of the tree entirely, which is what the
+    // regression grep in tests/unit/security/admin-revocation.test.ts keys on.
+    const isAdmin = gate.role === 'admin'
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to update this meal' }, { status: 403 })
     }
@@ -85,7 +93,7 @@ export async function PATCH(
     // uses this to offer "update the planned copies too?" after an edit.
     const plannedCount = await MealPlan.countDocuments({
       mealId: meal._id,
-      user: authResult.userId,
+      user: gate.userId,
       status: 'active',
     })
 
@@ -116,7 +124,9 @@ export async function DELETE(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Deleting someone else's meal is admin-only, so the claim is confirmed
+    // against the database before it can authorise the delete.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to delete this meal' }, { status: 403 })
     }

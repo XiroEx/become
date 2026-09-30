@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseLibraryShowMore.test.ts
+// Run with: npm run test:file tests/unit/exerciseLibraryShowMore.test.ts
 //
 // The reported bug: "Show more" on the My Exercises library said "Show more
 // (N remaining)" but tapping it sometimes collapsed the list back to 5 instead

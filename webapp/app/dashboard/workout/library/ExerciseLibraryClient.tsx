@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
-import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Pencil, ChevronDown, Dumbbell, Globe2, Clock, ArrowDownAZ, Lock } from "lucide-react";
 import { Card } from "@/components/ui";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import AdminVideoPreview from "@/app/dashboard/admin/exercises/_form/AdminVideoPreview";
@@ -13,9 +13,13 @@ import VideoTrimEditor from "@/components/admin/VideoTrimEditor";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
 import { inferCustomExerciseMuscleGroup, inferCustomExerciseCategory } from "@/lib/customExerciseFields";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { CUSTOM_TAG } from "@/lib/customExerciseTags";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, syntheticGate, type GatePayload } from "@/lib/entitlementsClient";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -127,8 +131,26 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   const [exercises, setExercises] = useState<CustomExercise[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [gate, setGate] = useState<GatePayload | null>(null);
+  const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
+    useEntitlements();
+  // canCreate, not allowed: DELETE and edit stay enabled at the cap on purpose
+  // — deleting one is the only way back under an inventory limit.
+  const canCreate =
+    !entitlements ||
+    entitlements.enforced === false ||
+    entitlementFor("custom-exercises")?.canCreate !== false;
+  // The entitlement rides along so the sheet can say "3 of 3" and "delete one
+  // to free a slot" — this is the PROACTIVE path, where no 403 supplied them.
+  const openCreate = () =>
+    canCreate
+      ? setShowForm(true)
+      : setGate(syntheticGate("custom-exercises", "plus", entitlementFor("custom-exercises")));
   const [form, setForm] = useState<CreateForm>(EMPTY_FORM);
   const [deletingSlug, setDeletingSlug] = useState<string | null>(null);
+  // A refused delete (someone else's row, a stale slug, a network blip). Not a
+  // gate: an inventory cap never blocks a delete, so this is never an upsell.
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(EXERCISES_PAGE);
   // Which row's dropdown is open — collapsed rows just show name + subtitle;
@@ -196,12 +218,20 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       });
       const data = await res.json();
       if (!res.ok) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setForm(p => ({ ...p, submitting: false }));
+          setGate(g);
+          void refreshEntitlements();
+          return;
+        }
         setForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
         return;
       }
       setExercises(prev => [...prev, data.exercise]);
       setForm(EMPTY_FORM);
       setShowForm(false);
+      void refreshEntitlements();
     } catch {
       setForm(p => ({ ...p, submitting: false, error: "Network error" }));
     }
@@ -215,15 +245,31 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
 
   const handleDelete = async (slug: string) => {
     setDeletingSlug(slug);
+    setDeleteError(null);
     try {
       const token = localStorage.getItem("token");
-      await fetch(`/api/exercises/custom?slug=${encodeURIComponent(slug)}`, {
+      const res = await fetch(`/api/exercises/custom?slug=${encodeURIComponent(slug)}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      // A refused delete leaves the row on the server. Dropping it from the
+      // list anyway showed the member a delete that never happened, and the
+      // re-read below then returned the same count: the item vanished, the
+      // lock stayed, and nothing said why.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.error || "Could not delete that exercise. Try again.");
+        return;
+      }
       setExercises(prev => prev.filter(e => e.slug !== slug));
       if (expandedSlug === slug) setExpandedSlug(null);
       if (editingSlug === slug) setEditingSlug(null);
+      // A delete frees an inventory slot server-side straight away. Re-read the
+      // snapshot now, or the 60s TTL keeps the create button locked at a cap
+      // the member just cleared — and deleting is the only way back under one.
+      void refreshEntitlements();
+    } catch {
+      setDeleteError("Network error. Try again.");
     } finally {
       setDeletingSlug(null);
     }
@@ -331,9 +377,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
   };
 
   const filteredExercises = exercises
+    // Name, alias, muscle — and the gym shorthand the catalog search already
+    // understands, so "RDL" finds a Romanian Deadlift here too.
     .filter(e => !search.trim() || (
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.primaryMuscles.some(m => m.toLowerCase().includes(search.toLowerCase())) ||
+      matchesExerciseQuery(e, search) ||
       e.category.toLowerCase().includes(search.toLowerCase())
     ))
     .filter(e => !bodyPartFilter || inferCustomExerciseMuscleGroup(e.primaryMuscles) === bodyPartFilter)
@@ -347,22 +394,75 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
       return bt - at;
     });
 
-  const content = (
-    <>
-      {/* Header */}
-      {embedded ? (
-        !showForm && (
-          <div className="mb-4 flex justify-end">
+  const addButton = !showForm && (
+    <button
+      onClick={openCreate}
+      className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+    >
+      {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+      Add
+    </button>
+  );
+
+  const createForm = (
+    <AnimatePresence>
+      {showForm && (
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.18 }}
+          className="mb-6 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>
             <button
-              onClick={() => setShowForm(true)}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+              onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
-              <Plus className="h-4 w-4" />
-              Add
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
-        )
-      ) : (
+
+          <div className="space-y-4">
+            <CustomExerciseFields
+              values={form}
+              onChange={(next) => setForm(p => ({ ...p, ...next }))}
+              nameAutoFocus
+              namePlaceholder="e.g. Seated Leg Curl"
+            />
+
+            {form.error && <p className="text-xs text-red-500 dark:text-red-400">{form.error}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+                className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={form.submitting || !form.name.trim()}
+                className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
+              >
+                {form.submitting ? "Creating..." : "Create Exercise"}
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const content = (
+    <>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
+      {/* Header — embedded (Hub tab) skips the Add button here; it renders
+          below the search bar instead so this row doesn't sit empty. */}
+      {embedded ? null : (
         <div className="mb-6 flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -378,69 +478,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
               Your custom exercises — use them in any workout or program.
             </p>
           </div>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Add
-            </button>
-          )}
+          {addButton}
         </div>
       )}
 
-      {/* Create Form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.div
-            initial={{ opacity: 0, y: -12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.18 }}
-            className="mb-6 sm:rounded-xl sm:border sm:border-zinc-200 sm:bg-white sm:p-4 dark:sm:border-zinc-800 dark:sm:bg-zinc-900"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">New Custom Exercise</h2>
-              <button
-                onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <CustomExerciseFields
-                values={form}
-                onChange={(next) => setForm(p => ({ ...p, ...next }))}
-                nameAutoFocus
-                namePlaceholder="e.g. Seated Leg Curl"
-              />
-
-              {form.error && <p className="text-xs text-red-500 dark:text-red-400">{form.error}</p>}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-                  className="flex-1 rounded-xl border border-zinc-300 py-2.5 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreate}
-                  disabled={form.submitting || !form.name.trim()}
-                  className="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-green-700 active:bg-green-800 disabled:opacity-50"
-                >
-                  {form.submitting ? "Creating..." : "Create Exercise"}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Create Form (non-embedded: right under the header, next to the button that opens it) */}
+      {!embedded && createForm}
 
       {/* Search */}
       {!loading && exercises.length > 0 && (
@@ -462,6 +505,12 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
           )}
         </div>
       )}
+
+      {/* Add button (embedded: below the search bar, reclaiming the empty header row above it) */}
+      {embedded && (
+        <div className="mb-4 flex justify-end">{addButton}</div>
+      )}
+      {embedded && createForm}
 
       {/* Sort + filter tabs */}
       {!loading && exercises.length > 0 && (
@@ -538,6 +587,14 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
         </div>
       )}
 
+      {/* A delete that did not happen. Plain error, never the upgrade sheet —
+          deleting is the way back under a cap, so it is never a paywall. */}
+      {deleteError && (
+        <div className="mb-3 rounded-xl border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
+          {deleteError}
+        </div>
+      )}
+
       {/* Exercise List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -553,10 +610,10 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
             Tap &quot;Add&quot; to create your first exercise.
           </p>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={openCreate}
             className="mt-4 flex items-center gap-1.5 rounded-full bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
             Create Exercise
           </button>
         </div>

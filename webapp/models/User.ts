@@ -2,7 +2,18 @@ import mongoose, { Schema, Model } from 'mongoose';
 import bcrypt from 'bcrypt';
 
 export type UserRole = 'user' | 'trainer' | 'admin';
-export type Tier = 'free' | 'plus' | 'premium' | 'pro';
+/** Collapsed from free|plus|premium|pro. A 'coach' tier is planned but not
+ *  implemented; legacy 'premium'/'pro' rows are promoted by
+ *  scripts/migrate-tiers.mjs and read as 'free' until they are. */
+export type Tier = 'free' | 'plus';
+/** Mirrors Stripe's subscription statuses, plus 'none' for "never subscribed".
+ *  'incomplete_expired' and 'paused' are real statuses Stripe emits — they are
+ *  listed because the mongoose enum below REJECTS anything absent from it, and
+ *  a rejected write means the webhook 500s and Stripe retries the same event
+ *  forever. Both derive to `free` (deriveTier's default branch). */
+export type SubscriptionStatus =
+  | 'none' | 'trialing' | 'active' | 'past_due' | 'canceled'
+  | 'incomplete' | 'incomplete_expired' | 'unpaid' | 'paused';
 export type FitnessGoal = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_performance' | 'general_health';
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type BiologicalSex = 'male' | 'female' | 'prefer_not_to_say';
@@ -57,13 +68,171 @@ export interface IUserProfile {
   planPromoteMode?: PlanPromoteMode;
 }
 
+export interface IUserSubscription {
+  status: SubscriptionStatus;
+  /** End of the paid period. Used only to expire a stale 'active' and to honor
+   *  a 'canceled' sub through the period the member already paid for. */
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd?: boolean;
+  stripeCustomerId?: string | null;
+  stripeTestCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  priceId?: string | null;
+  /** Which configured price this maps to. Cosmetic — the UI's plan label. May
+   *  be absent for an unrecognised price; `status` is what decides tier. */
+  plan?: 'monthly' | 'annual' | null;
+  /** Which Stripe account wrote this state. Production and beta share ONE
+   *  database, so without it a test-mode event on beta is indistinguishable
+   *  from a live one and would overwrite a real subscription. See
+   *  lib/billing/mode.ts#canApplyMode. */
+  mode?: 'test' | 'live' | null;
+  /** Stamped by invoice.payment_failed, for dunning copy only. It does NOT set
+   *  tier — the customer.subscription.updated → past_due event does that. */
+  paymentFailedAt?: Date | null;
+  /** Last webhook event applied. Guards out-of-order webhook delivery. */
+  lastEventId?: string | null;
+  /** `event.created` (epoch SECONDS) of the last event applied — STRIPE's clock,
+   *  which is the only thing an incoming `event.created` may be compared
+   *  against. Comparing it to `updatedAt` (ours) dropped every event in a burst
+   *  but the first, because delivery latency is always positive. See
+   *  lib/billing/apply.ts#isStaleEvent. */
+  lastEventCreated?: number | null;
+  updatedAt?: Date;
+}
+
+/**
+ * The record that a member agreed to the Terms and Privacy Policy and said
+ * they were old enough to. ONE record, overwritten on each re-consent: the
+ * current agreement is the evidence that matters, and the version + timestamp
+ * say which text it was. Absent on every row written before 2026-09-13 —
+ * nobody had agreed to anything — which is exactly what the in-app gate
+ * (components/ConsentGate.tsx) exists to repair.
+ */
+export interface IUserConsent {
+  /** LEGAL_VERSION at the moment of agreement. */
+  termsVersion: string
+  acceptedAt: Date
+  /** LEGAL_MINIMUM_AGE as it stood — the age the member attested to. */
+  minimumAge: number
+  /** Where the tick happened: the sign-up form, the in-app gate, or a Stripe
+   *  checkout (Stripe's own consent_collection, mirrored here on session end). */
+  source: 'signup' | 'gate' | 'checkout'
+}
+
+/**
+ * The record of whether this member lets Become send what they submit to the
+ * third-party AI provider (App Store Guideline 5.1.2(i)).
+ *
+ * SEPARATE FROM `consent` ON PURPOSE. That one is "I am old enough and I agree
+ * to the Terms", which every member must give to hold an account at all. This
+ * one is a permission that may be REFUSED and may be WITHDRAWN, and the app
+ * keeps working either way — so it carries its own version, its own timestamp
+ * and its own answer.
+ *
+ * A REFUSAL IS A RECORD, NOT AN ABSENCE. `granted: false` with a `decidedAt`
+ * means "asked, said no": the ask is not repeated on every app open, and the
+ * member can turn it on later in Settings. Absent means never asked.
+ */
+export interface IUserAiConsent {
+  /** AI_CONSENT_VERSION at the moment of the decision. */
+  version: string
+  /** The answer. False is a decision, not a missing one. */
+  granted: boolean
+  /** When the answer was given (grant or refusal). */
+  decidedAt: Date
+  /** When a previously granted permission was withdrawn, if it was. Kept
+   *  alongside `granted: false` because "they allowed it until this date" is
+   *  the fact that matters afterwards. */
+  revokedAt?: Date
+  /** Where the answer came from: the consent gate, the sheet raised when an AI
+   *  surface was refused, or the Settings toggle. */
+  source: 'gate' | 'prompt' | 'settings'
+}
+
+/**
+ * A pending account-deletion request (lib/accountDeletion.ts).
+ *
+ * PRESENT MEANS PENDING. There is no `status` field and no `cancelled` flag:
+ * cancelling unsets the whole sub-document, which is also what invalidates
+ * every restore link minted for it (they are signed over `requestedAt` — see
+ * lib/accountRestoreToken.ts). A boolean would have left a cancelled request's
+ * link working.
+ *
+ * `purgeAfter` is STORED rather than derived from `requestedAt` at read time,
+ * so changing the restore window never moves a date a member was already told.
+ */
+export interface IUserDeletion {
+  requestedAt: Date
+  /** The instant the irreversible purge becomes due. */
+  purgeAfter: Date
+  /** Which surface the request came from — web, or one of the store builds. */
+  requestedFrom: 'web' | 'ios' | 'android' | 'unknown'
+}
+
+/**
+ * A linked Sign in with Apple identity (lib/apple/*, app/api/auth/apple).
+ *
+ * `sub` IS THE JOIN KEY, AND IT HAS TO BE. With "Hide My Email" Apple hands us
+ * a per-app relay address, so an account matched by email alone would be a
+ * SECOND account for a member who already has one — the exact duplicate this
+ * whole path exists to avoid. The subject is stable for (this member, this
+ * Apple team) and never changes, including after the member hides or reveals
+ * their address. Unique, partially indexed, for the same reason `authId` is.
+ *
+ * `refreshToken` is stored for ONE purpose: Apple requires an app that offers
+ * Sign in with Apple to revoke its tokens when the account is deleted, and
+ * this is the only handle it gives us. It is `select: false` — a third-party
+ * credential must not ride along on a `select('-password')` read — so the two
+ * places that need it (the purge sweep, and the email-link merge that moves
+ * the identity to another row) ask for it by name.
+ */
+export interface IUserApple {
+  sub: string
+  /** Apple's refresh token from the authorization-code exchange. */
+  refreshToken?: string
+  /** The address Apple gave at sign-in was a private relay one. */
+  isPrivateEmail?: boolean
+  linkedAt?: Date
+}
+
+/** Email categories a member can opt out of. Absent = ON, same convention as
+ *  UserProgress.notificationPrefs. `engagement` is the streak / milestone mail
+ *  (lib/email.ts), the only non-transactional email Become sends; sign-in
+ *  links are transactional and carry no opt-out. Set to false by the
+ *  unsubscribe link in every engagement email (app/api/email/unsubscribe) and
+ *  by the toggle in Settings. */
+export interface IUserEmailPreferences {
+  engagement?: boolean
+}
+
 export interface IUser {
   _id?: string
   email: string
   password: string
   name: string
   role: UserRole
+  consent?: IUserConsent
+  /** Explicit permission to share inputs with the third-party AI. Absent =
+   *  never asked = nothing may be sent. See lib/aiConsent.ts. */
+  aiConsent?: IUserAiConsent
+  emailPreferences?: IUserEmailPreferences
+  /** Set when the member asks for their account to be deleted; unset when they
+   *  restore it. Absent is the normal state. See lib/accountDeletion.ts. */
+  deletion?: IUserDeletion
+  /** DERIVED, persisted. Only admin tooling, scripts/migrate-tiers.mjs, or the
+   *  billing webhook may write this — never derived at request time, because
+   *  that would grandfather members automatically. Readers use
+   *  loadUserEntitlement(), which reads this stored value. */
   tier: Tier
+  /** Raw billing truth. Separate from `tier` on purpose: tier is the
+   *  projection, this is the source. past_due deliberately does NOT project to
+   *  plus. See lib/subscription.ts#deriveTier. */
+  subscription?: IUserSubscription
+  /** Legacy member promoted by the offline migration, not by a payment. */
+  grandfathered?: boolean
+  /** When scripts/notify-grandfathered.mjs told this member what they hold.
+   *  The script skips anyone who has it, so a rerun cannot email twice. */
+  grandfatheredNotifiedAt?: Date
   trainerId?: mongoose.Types.ObjectId | string
   savedPrograms?: ISavedProgram[];
   savedFoods?: ISavedFood[];
@@ -74,6 +243,35 @@ export interface IUser {
    *  redauth-backed login (Google / passkey); backfilled by email for existing
    *  magic-link/password users. */
   authId?: string;
+  /** The linked Sign in with Apple identity, if there is one. See IUserApple:
+   *  Apple's `sub` is the join key, not the email. */
+  apple?: IUserApple;
+  /** Revocation counter for the read-only widgets token (lib/widgets/token.ts).
+   *  Every `widgets`-scoped token carries the value it was minted at, and
+   *  GET /api/widgets/summary refuses any token that does not match — so
+   *  incrementing this is how a stateless, long-lived token is killed. Bumped
+   *  on sign-out and on an account-deletion request. Absent === 0: the field
+   *  is missing on every row written before this shipped, and `$inc` turns
+   *  absent into 1. */
+  widgetTokenVersion?: number;
+  /**
+   * THE DESIGNATED REVIEWER DEMO ACCOUNT, and the reason the review code
+   * cannot open anybody else's account (lib/reviewSignIn.ts).
+   *
+   * The code is checked against a configured email, but a configured value is
+   * a value someone can get wrong — and getting it wrong must not mean signing
+   * a real member in. So the flag is the second half of the door:
+   * `POST /api/auth/review-sign-in` refuses an existing row that does not
+   * carry `true`, and `lib/reviewSeed.ts` refuses to write to one. It is set
+   * only when the route CREATES the demo account, never by any other path.
+   *
+   * Absent (the normal state) means "an ordinary member" — which is why the
+   * check is `=== true` and never `!== false`.
+   */
+  isReviewAccount?: boolean;
+  /** When the demo account's data was last written (lib/reviewSeed.ts). Only
+   *  ever set on the row above. */
+  reviewSeededAt?: Date;
   /** Profile picture from a social provider (e.g. Google) or a custom upload. */
   avatarUrl?: string;
   /** Equipped profile icon: a PRESET_ICONS id, or 'custom' to use avatarUrl.
@@ -117,6 +315,64 @@ const UserProfileSchema = new Schema({
   planPromoteMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
 }, { _id: false });
 
+const UserSubscriptionSchema = new Schema<IUserSubscription>({
+  status: {
+    type: String,
+    enum: [
+      'none', 'trialing', 'active', 'past_due', 'canceled',
+      'incomplete', 'incomplete_expired', 'unpaid', 'paused',
+    ],
+    default: 'none',
+  },
+  currentPeriodEnd: { type: Date, default: null },
+  cancelAtPeriodEnd: { type: Boolean, default: false },
+  stripeCustomerId: { type: String, default: null },
+  stripeTestCustomerId: { type: String, default: null },
+  stripeSubscriptionId: { type: String, default: null },
+  priceId: { type: String, default: null },
+  plan: { type: String, enum: ['monthly', 'annual', null], default: null },
+  mode: { type: String, enum: ['test', 'live', null], default: null },
+  paymentFailedAt: { type: Date, default: null },
+  lastEventId: { type: String, default: null },
+  lastEventCreated: { type: Number, default: null },
+  updatedAt: { type: Date },
+}, { _id: false });
+
+const UserConsentSchema = new Schema<IUserConsent>({
+  termsVersion: { type: String, required: true },
+  acceptedAt: { type: Date, required: true },
+  minimumAge: { type: Number, required: true },
+  source: { type: String, enum: ['signup', 'gate', 'checkout'], required: true },
+}, { _id: false });
+
+const UserAiConsentSchema = new Schema<IUserAiConsent>({
+  version: { type: String, required: true },
+  granted: { type: Boolean, required: true },
+  decidedAt: { type: Date, required: true },
+  revokedAt: { type: Date, default: undefined },
+  source: { type: String, enum: ['gate', 'prompt', 'settings'], required: true },
+}, { _id: false });
+
+const UserEmailPreferencesSchema = new Schema<IUserEmailPreferences>({
+  engagement: { type: Boolean },
+}, { _id: false });
+
+const UserAppleSchema = new Schema<IUserApple>({
+  sub: { type: String, required: true },
+  // NOT returned by default: `select('-password')` (the admin read) would
+  // otherwise put a live Apple credential on the wire. The purge sweep and the
+  // email-link merge ask for it with `+apple.refreshToken`.
+  refreshToken: { type: String, select: false },
+  isPrivateEmail: { type: Boolean },
+  linkedAt: { type: Date },
+}, { _id: false });
+
+const UserDeletionSchema = new Schema<IUserDeletion>({
+  requestedAt: { type: Date, required: true },
+  purgeAfter: { type: Date, required: true },
+  requestedFrom: { type: String, enum: ['web', 'ios', 'android', 'unknown'], default: 'unknown' },
+}, { _id: false });
+
 const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
   email: {
     type: String,
@@ -136,13 +392,50 @@ const UserSchema = new Schema<IUser, UserModel, IUserMethods>({
     trim: true,
   },
   role: { type: String, enum: ['user', 'trainer', 'admin'], default: 'user' },
-  tier: { type: String, enum: ['free', 'plus', 'premium', 'pro'], default: 'pro' },
+  consent: { type: UserConsentSchema, default: undefined },
+  // Absent is the SAFE state and the default: no record, no permission, and
+  // lib/aiConsent.ts#aiConsentGranted answers false, so nothing is dispatched.
+  aiConsent: { type: UserAiConsentSchema, default: undefined },
+  emailPreferences: { type: UserEmailPreferencesSchema, default: undefined },
+  // Absent = no deletion pending, which is the state every row is in until a
+  // member asks. Never defaulted to an object: `deletion.requestedAt` being
+  // present is the whole predicate the purge selector runs on.
+  deletion: { type: UserDeletionSchema, default: undefined },
+  // New users land on 'free'. Existing members are promoted to 'plus' ONCE,
+  // offline, by scripts/migrate-tiers.mjs — never automatically at request
+  // time. Legacy 'premium'/'pro' values still on disk are not rejected on read
+  // (Mongoose only validates writes) and read as 'free' until migrated.
+  //
+  // WRITES ARE THE TRAP, AND THEY SHIP WITH THE ENUM, NOT WITH THE
+  // KILL-SWITCH. save() validates every INITIALIZED path, so touching ANY
+  // field on a hydrated legacy user throws `tier: 'pro' is not a valid enum
+  // value` — an admin PATCH with runValidators, and (verified against mongoose
+  // 9.6.3) a plain save() too. Run scripts/migrate-tiers.mjs BEFORE the
+  // deploy, not merely before flipping ENTITLEMENTS_ENFORCED, and pass
+  // { validateModifiedOnly: true } on any save() of a pre-existing user
+  // document (see lib/authBridge.ts).
+  tier: { type: String, enum: ['free', 'plus'], default: 'free' },
+  subscription: { type: UserSubscriptionSchema, default: undefined },
+  grandfathered: { type: Boolean, default: false },
+  grandfatheredNotifiedAt: { type: Date, default: undefined },
   trainerId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
   savedPrograms: [SavedProgramSchema],
   savedFoods: [SavedFoodSchema],
   profile: { type: UserProfileSchema, default: {} },
   onboardingCompleted: { type: Boolean, default: false },
   authId: { type: String, default: null },
+  // Absent is the normal state, and `default: undefined` keeps it absent: the
+  // partial unique index below indexes only rows where `apple.sub` is a
+  // string, so a defaulted empty object would put every member in it.
+  apple: { type: UserAppleSchema, default: undefined },
+  // No `default`: absent must stay absent so `$inc` (0 → 1 on the first bump)
+  // and normalizeWidgetTokenVersion (absent → 0) agree, and so the field is not
+  // written onto every legacy row the first time anything saves one.
+  widgetTokenVersion: { type: Number },
+  // No `default`: absent must stay absent, so an ordinary member's row is
+  // never written with a review flag on it, and every read is `=== true`.
+  isReviewAccount: { type: Boolean },
+  reviewSeededAt: { type: Date },
   avatarUrl: { type: String },
   profileIcon: { type: String },
 }, {
@@ -159,6 +452,68 @@ UserSchema.index({ 'savedFoods.foodId': 1 })
 UserSchema.index(
   { authId: 1 },
   { unique: true, partialFilterExpression: { authId: { $type: 'string' } } }
+)
+// Sign in with Apple's join key. PARTIAL + UNIQUE for exactly the reasons
+// authId is (a sparse index would still index present-but-null rows), and
+// unique is not a nicety here: two rows holding one Apple subject means the
+// next Apple sign-in opens whichever document Mongo happens to return — one
+// member's phone signing into another member's account, with nothing in the
+// logs to say so. Unique makes that unrepresentable rather than undetectable.
+UserSchema.index(
+  { 'apple.sub': 1 },
+  { unique: true, partialFilterExpression: { 'apple.sub': { $type: 'string' } } }
+)
+// Webhook lookup by Stripe customer. PARTIAL for the same reason authId is:
+// every user defaults the field to null, so a sparse index would still index
+// them all and a unique constraint would E11000 on the second signup. The
+// partial filter excludes those nulls, which is what makes UNIQUE safe here.
+//
+// And unique is not a nicety: findUserIdByRef() resolves an event with a single
+// findOne() on these fields. Two users holding one customer id means the
+// webhook updates whichever document Mongo happens to return — one member's
+// payment silently granting or revoking another's access, with nothing in the
+// logs to say so. Unique makes that state unrepresentable instead of
+// undetectable. (Zero subscription documents exist today, so the build is free.)
+UserSchema.index(
+  { 'subscription.stripeCustomerId': 1 },
+  { unique: true, partialFilterExpression: { 'subscription.stripeCustomerId': { $type: 'string' } } }
+)
+UserSchema.index(
+  { 'subscription.stripeTestCustomerId': 1 },
+  { unique: true, partialFilterExpression: { 'subscription.stripeTestCustomerId': { $type: 'string' } } }
+)
+// invoice.payment_failed carries a subscription, not always a resolvable
+// customer — this is the fallback lookup path for it. Partial + unique for the
+// same reasons as the two above.
+UserSchema.index(
+  { 'subscription.stripeSubscriptionId': 1 },
+  { unique: true, partialFilterExpression: { 'subscription.stripeSubscriptionId': { $type: 'string' } } }
+)
+// ONE-TIME, BEFORE THE FIRST DEPLOY THAT CARRIES THIS FILE: if the three
+// indexes above already exist as NON-unique (they were created that way), Mongo
+// refuses to redefine them in place. autoIndex's createIndex comes back
+// IndexKeySpecsConflict (86), Mongoose reports it on the model's 'error' event,
+// nothing crashes, and the constraint silently does not exist. Drop them once
+// and let autoIndex rebuild them:
+//
+//   db.users.dropIndex('subscription.stripeCustomerId_1')
+//   db.users.dropIndex('subscription.stripeTestCustomerId_1')
+//   db.users.dropIndex('subscription.stripeSubscriptionId_1')
+//
+// Safe while there are zero subscription documents, which is the state today.
+// Once money is flowing, a drop leaves the webhook's lookup on a collection
+// scan for as long as the rebuild takes.
+
+// Admin/ops: "who is on what".
+UserSchema.index({ tier: 1, grandfathered: 1 })
+
+// The daily purge sweep (app/api/cron/purge-deletions) selects on this and on
+// nothing else. PARTIAL, because the field is absent on essentially every row:
+// a plain index would carry an entry per member to serve a query that matches
+// a handful a week.
+UserSchema.index(
+  { 'deletion.purgeAfter': 1 },
+  { partialFilterExpression: { 'deletion.purgeAfter': { $type: 'date' } } }
 )
 
 // Hash password before saving

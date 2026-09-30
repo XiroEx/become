@@ -1,7 +1,8 @@
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { ExternalLink } from "lucide-react-native";
 import { Card } from "@/components/Card";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   adminExerciseEditUrl,
   openInBrowser,
@@ -26,6 +27,7 @@ export function AdminExerciseList({
   browserLauncher,
   testID = "admin-exercises",
 }: AdminExerciseListProps) {
+  const { colors } = useThemeTokens();
   if (exercises.length === 0) {
     return (
       <View testID={`${testID}-empty`} style={{ padding: 16 }}>
@@ -58,7 +60,7 @@ export function AdminExerciseList({
             className="flex-row items-center gap-2 py-2"
           >
             <ExternalLink
-              color={resolveToken("muted-foreground", "dark")}
+              color={colors["muted-foreground"]}
               size={14}
               strokeWidth={1.5}
             />

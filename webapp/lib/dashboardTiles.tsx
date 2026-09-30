@@ -9,6 +9,9 @@ import {
   Scale,
   Dumbbell,
   Utensils,
+  Brain,
+  UtensilsCrossed,
+  Zap,
 } from 'lucide-react'
 import { Card, StatTile, type StatTileAccent, type StatTileSize } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -31,6 +34,9 @@ export type DashboardTileId =
   | 'water'
   | 'weight'
   | 'workouts'
+  | 'mindset'
+  | 'nutrition'
+  | 'workoutNow'
 
 export interface UserProgressData {
   weightData: MetricData[]
@@ -100,6 +106,10 @@ export interface DashboardTileContext {
   /** Opens the Log Weight bottom sheet in place — the Weight tile logs here
    *  instead of navigating to Progress. */
   onOpenWeightSheet: () => void
+  /** Opens the "Workout Now" quick-session sheet in place — the Workout Now
+   *  tile jumps straight into starting a session instead of navigating to
+   *  the Workout hub first. */
+  onOpenQuickSession: () => void
   /**
    * True while the backing data for stat tiles is still loading for the first
    * time (no value has arrived yet and there's no cached value to show). When
@@ -512,6 +522,57 @@ function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
   )
 }
 
+function renderMindset(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      // ?start=1 tells MindJourney to compose + begin today's session the
+      // moment it's ready — the tile jumps straight past the Mind home
+      // screen into the session itself, not just onto the page.
+      href="/dashboard/mind?start=1"
+      accent="purple"
+      icon={<Brain className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Mindset"
+      value="Begin"
+      footer={<PlaceholderFooter label="Jump into today's session" />}
+    />
+  )
+}
+
+function renderNutritionAction(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      href="/dashboard/nutrition"
+      accent="red"
+      icon={<UtensilsCrossed className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Nutrition"
+      value="Log"
+      footer={<PlaceholderFooter label="Add today's meals" />}
+    />
+  )
+}
+
+function renderWorkoutNow(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      // Opens the "Workout Now" sheet in place (same pattern as the Weight
+      // tile's onOpenWeightSheet) rather than navigating to the Workout hub
+      // first — the tile IS the shortcut.
+      onClick={ctx.onOpenQuickSession}
+      accent="green"
+      icon={<Zap className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Workout Now"
+      value="Start"
+      footer={<PlaceholderFooter label="Jump into a session now" />}
+    />
+  )
+}
+
 /* -------------------------------------------------------------------------- */
 /* Registry                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -581,6 +642,30 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
     Icon: Dumbbell,
     render: renderWorkouts,
   },
+  mindset: {
+    id: 'mindset',
+    label: 'Mindset',
+    description: "Jump straight into today's session",
+    accent: 'purple',
+    Icon: Brain,
+    render: renderMindset,
+  },
+  nutrition: {
+    id: 'nutrition',
+    label: 'Nutrition',
+    description: 'Jump straight into logging food',
+    accent: 'red',
+    Icon: UtensilsCrossed,
+    render: renderNutritionAction,
+  },
+  workoutNow: {
+    id: 'workoutNow',
+    label: 'Workout Now',
+    description: 'Jump straight into starting a workout',
+    accent: 'green',
+    Icon: Zap,
+    render: renderWorkoutNow,
+  },
 }
 
 export const ALL_TILE_IDS: DashboardTileId[] = [
@@ -592,6 +677,9 @@ export const ALL_TILE_IDS: DashboardTileId[] = [
   'water',
   'weight',
   'workouts',
+  'mindset',
+  'nutrition',
+  'workoutNow',
 ]
 
 export const DEFAULT_TILE_IDS: DashboardTileId[] = ['streak', 'mood', 'weekly', 'goal']

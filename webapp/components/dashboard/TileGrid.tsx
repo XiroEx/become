@@ -75,6 +75,7 @@ export interface TileGridProps {
 
 const STAT_IDS = new Set<DashboardTileId>([
   'streak', 'mood', 'weekly', 'goal', 'calories', 'water', 'weight', 'workouts',
+  'mindset', 'nutrition', 'workoutNow',
 ])
 
 function isStatId(id: string): id is DashboardTileId {

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/smartRotation.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/smartRotation.test.ts
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { scoreStatTile, rankedRotationKeys } from '../../../lib/dashboardTiles/smartRotation'
@@ -21,6 +21,7 @@ function ctx(over: Partial<DashboardTileContext> = {}): DashboardTileContext {
     isMoodUpdating: false,
     onMoodChange: () => {},
     onOpenWeightSheet: () => {},
+    onOpenQuickSession: () => {},
     ...over,
   }
 }

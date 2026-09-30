@@ -7,6 +7,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityGroup, getToken } from '@/components/community/types'
+import FeatureGuard from '@/components/FeatureGuard'
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState<CommunityGroup[]>([])
@@ -42,6 +43,11 @@ export default function GroupsPage() {
   }
 
   return (
+    <FeatureGuard
+      feature="Groups"
+      description="Focused community spaces for shared goals and accountability. Coming soon."
+      icon={<Users className="h-10 w-10" />}
+    >
     <PageTransition>
       <div className="mb-5">
         <div className="flex items-center gap-3">
@@ -96,5 +102,6 @@ export default function GroupsPage() {
       )}
       </div>
     </PageTransition>
+    </FeatureGuard>
   )
 }

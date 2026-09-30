@@ -16,13 +16,22 @@ import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt"
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
+import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
 import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
+import { implementLabel } from "@/lib/workout/equipmentVariant";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 interface SearchExercise {
   slug: string;
   name: string;
   trackingType: string;
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
 }
 
 interface SearchResponse {
@@ -41,6 +50,14 @@ export interface SessionBuilderProps {
   /** Fired right before navigating to the live session (e.g. close a modal). */
   onLaunch?: () => void;
   className?: string;
+  /** Pre-seeds the draft — e.g. from ImportSessionFlow's paste/upload import.
+   *  Applied once, on mount, same as a fresh initial value. */
+  initialDraft?: {
+    title: string;
+    exercises: DraftExercise[];
+    /** Parsed names that couldn't be matched to a real exercise — surfaced as a dismissible notice. */
+    unresolved?: string[];
+  };
 }
 
 function authHeaders(): HeadersInit {
@@ -50,19 +67,22 @@ function authHeaders(): HeadersInit {
   };
 }
 
-export default function SessionBuilder({ onLaunch, className }: SessionBuilderProps) {
+export default function SessionBuilder({ onLaunch, className, initialDraft }: SessionBuilderProps) {
   const router = useRouter();
 
-  const [title, setTitle] = useState("Quick Session");
-  const [titleWasEdited, setTitleWasEdited] = useState(false);
+  const [title, setTitle] = useState(() => initialDraft?.title || "Quick Session");
+  const [titleWasEdited, setTitleWasEdited] = useState(() => !!initialDraft?.title);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchExercise[]>([]);
   const [searching, setSearching] = useState(false);
-  const [chosen, setChosen] = useState<DraftExercise[]>([]);
+  const [chosen, setChosen] = useState<DraftExercise[]>(() => initialDraft?.exercises ?? []);
+  const [unresolved, setUnresolved] = useState<string[]>(() => initialDraft?.unresolved ?? []);
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
   const [creatingError, setCreatingError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — the upgrade sheet, not inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES);
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
@@ -89,8 +109,8 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       try {
         const res = await fetch("/api/exercises/custom", { headers: authHeaders() });
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { exercises?: Array<{ slug: string; name: string; trackingType: string }> };
-        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType })));
+        const data = (await res.json()) as { exercises?: SearchExercise[] };
+        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })));
       } catch { /* customs stay empty */ }
     })();
     return () => { cancelled = true };
@@ -196,6 +216,9 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         trackingType: r.trackingType,
         sets: 3,
         reps: r.trackingType.startsWith("time") ? "" : "8-12",
+        ...(r.equipment && { equipment: r.equipment }),
+        ...(r.laterality && { laterality: r.laterality }),
+        ...(r.movementPatterns && { movementPatterns: r.movementPatterns }),
       };
       return [...prev, exercise];
     });
@@ -292,13 +315,18 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         headers: authHeaders(),
         body: JSON.stringify(customForm),
       });
-      const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string }; error?: string };
+      const data = (await res.json()) as { exercise?: SearchExercise; error?: string };
       if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setGate(g);
+          return;
+        }
         setCreatingError(data.error || "Failed to create exercise");
         return;
       }
-      setCustoms((prev) => [...prev, { slug: data.exercise!.slug, name: data.exercise!.name, trackingType: data.exercise!.trackingType }]);
-      addExercise({ slug: data.exercise.slug, name: data.exercise.name, trackingType: data.exercise.trackingType });
+      setCustoms((prev) => [...prev, data.exercise!]);
+      addExercise(data.exercise);
       setShowCreateForm(false);
       setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
     } catch {
@@ -348,7 +376,9 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
 
   // Search shows catalog matches + your matching customs (deduped by slug).
   const q = query.trim().toLowerCase();
-  const customMatches = q.length >= 2 ? customs.filter((c) => c.name.toLowerCase().includes(q)) : [];
+  // Shorthand-aware, like the catalog search these rows are merged with:
+  // "RDL" finds your own "Romanian Deadlift" — see lib/exerciseAbbreviations.
+  const customMatches = q.length >= 2 ? customs.filter((c) => matchesExerciseQuery(c, q)) : [];
   // `isCustom` is attached here, not read off the wire: /api/exercises/search
   // deliberately excludes customs (they are fetched separately above), so this
   // merge is the only place that knows which rows are the user's own.
@@ -361,6 +391,28 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
 
   return (
     <div className={className}>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
+      {/* Imported exercises that couldn't be matched to the library — the user
+          adds them by hand via the search box below, same as any other exercise. */}
+      {unresolved.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Couldn&apos;t match {unresolved.length} {unresolved.length === 1 ? "exercise" : "exercises"} to your library</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+              Search above to add: {unresolved.join(", ")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUnresolved([])}
+            aria-label="Dismiss"
+            className="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-200"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Title */}
       <input
         type="text"
@@ -431,7 +483,12 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                       <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
                       {r.isCustom && <CustomExerciseBadge variant="inline" />}
                     </div>
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">{r.trackingType.replace(/_/g, " ")}</p>
+                    {/* Which implement this entry is, so "Rear Delt Fly" and
+                        "Rear Delt Fly Machine" are told apart BEFORE the live
+                        screen picks a weight convention off one of them. */}
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      {[implementLabel(r.equipment), r.trackingType.replace(/_/g, " ")].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                   <Plus className="ml-2 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
                 </button>
@@ -475,6 +532,9 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {implementLabel(ex.equipment) && (
+                    <span className="mr-1">{implementLabel(ex.equipment)} ·</span>
+                  )}
                   {ex.reps ? `${ex.reps} reps` : ex.trackingType.replace(/_/g, " ")}
                   {ex.groupId && <span className="ml-1 font-semibold text-purple-500 dark:text-purple-400">· {ex.groupLabel || "Superset"}</span>}
                 </p>
@@ -615,7 +675,11 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         <QuickSessionNamePrompt
           initialName={title}
           confirmLabel="Save name & log"
+          // The prompt only opens for a past/today log, so logDate is always
+          // the day the work was actually done.
+          fallbackName={fallbackQuickSessionName(logDate)}
           onConfirm={saveLogOrPlan}
+          onSkip={saveLogOrPlan}
           onCancel={() => setShowNamePrompt(false)}
         />
       )}

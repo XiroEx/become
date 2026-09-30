@@ -21,11 +21,8 @@ import Exercise from '@/models/Exercise'
 import { requireFeature } from '@/lib/entitlements'
 import { getBlobStore, customExerciseVideoKey } from '@/lib/blobStorage'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
-import {
-  MAX_VIDEO_BYTES,
-  isValidationFailure,
-  validateVideoFile,
-} from '@/lib/videoUpload'
+import { MAX_VIDEO_BYTES } from '@/lib/videoUpload'
+import { parseVideoUpload, isStreamingValidationFailure } from '@/lib/streamingVideoUpload'
 
 interface RouteParams {
   params: Promise<{ slug: string }>
@@ -37,8 +34,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
   const { slug } = await params
 
-  // Cheap pre-buffer guard — `formData()` reads the whole body into memory.
-  // The reverse proxy is the real cap; this just avoids the obvious case.
+  // Cheap early reject when Content-Length is present. The upload itself
+  // streams (see parseVideoUpload), which also caps bytes retained via
+  // busboy's `limits.fileSize` for chunked requests with no Content-Length —
+  // the reverse proxy remains the outermost backstop.
   const contentLengthRaw = request.headers.get('content-length')
   if (contentLengthRaw) {
     const contentLength = Number(contentLengthRaw)
@@ -47,23 +46,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  let formData: FormData
+  let parsed: Awaited<ReturnType<typeof parseVideoUpload>>
   try {
-    formData = await request.formData()
+    parsed = await parseVideoUpload(request)
   } catch {
     return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
   }
-
-  const file = formData.get('video')
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'Missing "video" file field' }, { status: 400 })
+  if (isStreamingValidationFailure(parsed)) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   }
-
-  const validated = validateVideoFile(file)
-  if (isValidationFailure(validated)) {
-    return NextResponse.json({ error: validated.error }, { status: validated.status })
-  }
-  const { mimeType } = validated
+  const { stream, mimeType, done } = parsed
 
   try {
     await connectDB()
@@ -73,13 +65,27 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       createdBy: gate.userId.toString(),
     })
     if (!exercise) {
+      stream.resume()
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
     const store = getBlobStore()
     const key = customExerciseVideoKey(gate.userId.toString(), slug, mimeType)
-    const { publicUrl } = await store.put({ key, body: buffer, contentType: mimeType })
+    const { publicUrl } = await store.putStream({ key, body: stream, contentType: mimeType })
+
+    const { bytes, truncated } = await done
+    if (truncated) {
+      await store.delete(key).catch(() => {})
+      const mb = Math.round(MAX_VIDEO_BYTES / (1024 * 1024))
+      return NextResponse.json({ error: `That video is too large (max ${mb} MB).` }, { status: 413 })
+    }
+    if (bytes === 0) {
+      await store.delete(key).catch(() => {})
+      return NextResponse.json(
+        { error: 'That file is empty — try picking the video again.' },
+        { status: 400 }
+      )
+    }
 
     // Reap the object this one replaces. Non-fatal: an orphan costs bytes, a
     // failed upload costs the user their video.

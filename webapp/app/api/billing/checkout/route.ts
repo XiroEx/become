@@ -1,0 +1,238 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { verifyAuth } from '@/lib/auth'
+import dbConnect from '@/lib/mongodb'
+import User from '@/models/User'
+import { IS_BETA } from '@/lib/appChannel'
+import {
+  billingNotConfigured,
+  getBillingConfig,
+  isPlan,
+  priceIdForPlan,
+  type BillingPlan,
+} from '@/lib/billing/config'
+import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
+import { ensureStripeCustomer } from '@/lib/billing/customer'
+import { readCustomerId, writeCustomerIdIfAbsent } from '@/lib/billing/mongoDeps'
+import { checkoutCancelUrl, checkoutSuccessUrl, parseReturnTarget } from '@/lib/billing/urls'
+import {
+  CHECKOUT_CONSENT_COLLECTION,
+  TERMS_URL_MISSING_LOG,
+  isTermsUrlMissingError,
+  type CheckoutSessionParams,
+} from '@/lib/billing/consentCollection'
+import { reportedGrandfathered } from '@/lib/entitlements'
+import type { IUserConsent, IUserSubscription, UserRole } from '@/models/User'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+/**
+ * POST /api/billing/checkout — start a Stripe Checkout session.
+ *
+ * Body: `{ plan?: 'monthly' | 'annual', returnTo?: 'web' | 'app' }`. The plan is
+ * OPTIONAL and defaults to monthly, because the shipped UpgradeSheet posts
+ * `{ feature, tier }` with no plan at all — a required field here would 400 the
+ * only caller in the app. An explicitly wrong value is still a 400; a missing
+ * one is not.
+ *
+ * `returnTo` is the NATIVE app's flag and defaults to 'web', so every browser
+ * caller keeps returning to /dashboard/plan exactly as before. 'app' swaps the
+ * success and cancel URLs for the PUBLIC pages, because Stripe returns a native
+ * buyer to Safari — a browser with no session, where middleware.ts would bounce
+ * them to /login seconds after paying. See lib/billing/urls.ts.
+ *
+ * Every refusal is a distinct status the client already distinguishes:
+ *   401 unauthenticated · 400 invalid_plan · 400 invalid_return_to
+ *   503 billing_not_configured · 409 already_subscribed · 409 fix_payment_method
+ *   409 already_plus · 502 checkout_failed
+ *
+ * The three 409s are all "you cannot buy this", for three different reasons,
+ * and each one is a bill somebody would otherwise pay twice. All three are
+ * MODE-SCOPED: a refusal that ignores the mode also refuses the test-mode
+ * checkout beta exists to rehearse.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body: unknown = await request.json().catch(() => ({}))
+    const rawPlan = (body as { plan?: unknown } | null)?.plan
+    if (rawPlan !== undefined && rawPlan !== null && !isPlan(rawPlan)) {
+      return NextResponse.json({ error: 'invalid_plan' }, { status: 400 })
+    }
+    const plan: BillingPlan = isPlan(rawPlan) ? rawPlan : 'monthly'
+
+    // Absent is 'web'. An unknown value is a 400 rather than a quiet fall back,
+    // because a typo'd 'App' would return a native buyer to /dashboard/plan in
+    // Safari — the exact bug the public pages exist to fix — and say nothing.
+    const returnTo = parseReturnTarget((body as { returnTo?: unknown } | null)?.returnTo)
+    if (!returnTo) {
+      return NextResponse.json({ error: 'invalid_return_to' }, { status: 400 })
+    }
+
+    const cfg = await getBillingConfig()
+    const priceId = priceIdForPlan(cfg, plan)
+    if (!cfg.configured || !priceId) return billingNotConfigured()
+
+    const stripe = await getStripe()
+    if (!stripe) return billingNotConfigured()
+
+    await dbConnect()
+    const user = await User.findById(auth.userId)
+      .select('email name role tier grandfathered subscription consent')
+      .lean<{
+        email?: string
+        name?: string
+        role?: UserRole
+        tier?: string
+        grandfathered?: boolean
+        subscription?: IUserSubscription
+        consent?: IUserConsent
+      } | null>()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Already paying IN THIS MODE. Checking the mode matters: a live subscriber
+    // testing on beta must still be able to run a test checkout, and a test
+    // subscription must never block a real purchase.
+    const sub = user.subscription
+    const sameMode = !sub?.mode || sub.mode === cfg.mode
+    if (sameMode && (sub?.status === 'active' || sub?.status === 'trialing')) {
+      return NextResponse.json({ error: 'already_subscribed' }, { status: 409 })
+    }
+
+    // Mid-dunning. This one LOOKS like a member who should be allowed to buy —
+    // past_due/unpaid/incomplete all derive to `free`, so the upgrade CTA is
+    // showing and nothing above stops them — and letting them through opens a
+    // SECOND live subscription on the same Stripe customer. Both then bill; and
+    // when dunning finally gives up on the first, its terminal event downgrades
+    // a member the second one is charging every month. The way out of a failed
+    // payment is a working card, which is the portal, not another purchase.
+    if (
+      sameMode &&
+      (sub?.status === 'past_due' || sub?.status === 'unpaid' || sub?.status === 'incomplete')
+    ) {
+      return NextResponse.json(
+        { error: 'fix_payment_method', status: sub.status, portal: '/api/billing/portal' },
+        { status: 409 },
+      )
+    }
+
+    // Nothing to sell: they already hold Plus for a reason no payment improves.
+    // `grandfathered` is the founding-members promise the tier migration wrote
+    // (64 of 66 members today), and `admin` is pinned to Plus by deriveTier.
+    // Charging either is taking money for access the account already has.
+    //
+    // The flag is read THROUGH reportedGrandfathered, the same way
+    // GET /api/me/entitlements and GET /api/billing/status read it, because the
+    // raw flag is not a claim of access — the gates read `tier` and nothing
+    // else. A row that is grandfathered but stored on the free tier is being
+    // gated as free, so every surface correctly shows it an upgrade CTA; the raw
+    // flag here then refused the purchase behind that CTA with `already_plus`
+    // and left the member with no way to pay for what they are being denied.
+    const grandfathered = reportedGrandfathered(
+      user.tier === 'plus' ? 'plus' : 'free',
+      user.grandfathered === true,
+    )
+    const holdsPlusWithoutPaying = grandfathered || user.role === 'admin'
+
+    // ...and the refusal is MODE-SCOPED, for the same reason every other guard
+    // in this file is. Unscoped, no admin and none of the 64 grandfathered
+    // members could run a TEST checkout on beta, which is the whole team: there
+    // was nobody left who could walk the Stripe flow end to end before billing
+    // is switched on. A test-mode session spends no money and writes only
+    // `subscription.stripeTestCustomerId`, which live state never reads.
+    // Live mode still refuses — that is where the double-charge lives.
+    if (holdsPlusWithoutPaying && cfg.mode === 'live') {
+      return NextResponse.json(
+        { error: 'already_plus', reason: user.role === 'admin' ? 'admin' : 'grandfathered' },
+        { status: 409 },
+      )
+    }
+
+    const appChannel = IS_BETA ? 'beta' : 'prod'
+    const customerId = await ensureStripeCustomer({
+      userId: auth.userId,
+      email: user.email ?? auth.email ?? '',
+      name: user.name,
+      mode: cfg.mode,
+      appChannel,
+      stripe,
+      readCustomerId,
+      writeCustomerIdIfAbsent,
+    })
+
+    // The version of the Terms this member agreed to in the app, on the
+    // session's metadata: a dispute can then cite the exact text. 'none' is
+    // reachable only by calling this route directly — the plan page sits
+    // behind the consent gate — and is worth seeing in the Stripe dashboard.
+    const termsVersion = user.consent?.termsVersion ?? 'none'
+
+    const params: CheckoutSessionParams = {
+        mode: 'subscription',
+        customer: customerId,
+        line_items: [{ price: priceId, quantity: 1 }],
+        // Promo codes are created in the Stripe dashboard, never in code.
+        allow_promotion_codes: true,
+        client_reference_id: auth.userId,
+        // `returnTo` rides along so a support question — "did this purchase come
+        // from the app?" — is answerable from the Stripe dashboard alone.
+        metadata: { userId: auth.userId, plan, termsVersion, returnTo },
+        // Stripe's own "I agree to the terms" box, stored on the session.
+        // See lib/billing/consentCollection.ts for why it may be retried off.
+        consent_collection: CHECKOUT_CONSENT_COLLECTION,
+        // Copied onto the subscription, so every later subscription event and
+        // every invoice snapshot can attribute itself without a customer lookup.
+        subscription_data: { metadata: { userId: auth.userId, plan, appChannel } },
+        // ORIGIN-AWARE. The app answers on both become.redbtn.io and
+        // becomeurbest.com, and a session belongs to ONE host — so returning a
+        // becomeurbest.com buyer to NEXT_PUBLIC_APP_URL lands them signed out
+        // and middleware.ts bounces them to /login moments after being charged.
+        // The headers are validated against an allow-list inside; an unknown
+        // host falls back rather than being reflected. `returnTo` picks the PATH
+        // on that origin: /dashboard/plan for a browser, the public pages for the
+        // app, which lands in Safari with no session.
+        success_url: checkoutSuccessUrl(request.headers, returnTo),
+        cancel_url: checkoutCancelUrl(request.headers, returnTo),
+    }
+
+    // A 1-minute bucket collapses a double-click into one session without
+    // pinning the member to a single expired session forever.
+    //
+    // `returnTo` is part of the key because Stripe replays the FIRST session for
+    // a repeated key and ignores the new params: without it, a member who
+    // abandoned the app's checkout and bought on the web within the same minute
+    // would be handed the session whose return URLs point at the public pages.
+    const idempotencyKey = `become:checkout:${auth.userId}:${plan}:${cfg.mode}:${returnTo}:${Math.floor(
+      Date.now() / 60_000,
+    )}`
+
+    let session: { id: string; url: string | null }
+    try {
+      session = await stripe.checkout.sessions.create(params, { idempotencyKey })
+    } catch (err) {
+      if (!isTermsUrlMissingError(err)) throw err
+      console.error(TERMS_URL_MISSING_LOG)
+      // A different key: Stripe replays an idempotent request's ERROR for the
+      // same key regardless of the new params, so the retry needs its own.
+      const { consent_collection: _dropped, ...withoutConsent } = params
+      void _dropped
+      session = await stripe.checkout.sessions.create(withoutConsent, {
+        idempotencyKey: `${idempotencyKey}:noconsent`,
+      })
+    }
+
+    if (!session.url) {
+      console.error('[billing] checkout session created without a url')
+      return NextResponse.json({ error: 'checkout_failed' }, { status: 502 })
+    }
+
+    return NextResponse.json({ url: session.url, sessionId: session.id, mode: cfg.mode })
+  } catch (error) {
+    // Never the message: a Stripe error can echo request params back.
+    console.error('[billing] checkout failed:', describeStripeError(error))
+    return NextResponse.json({ error: 'checkout_failed' }, { status: 502 })
+  }
+}

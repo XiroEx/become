@@ -36,7 +36,7 @@ export function BackButton({ fallbackHref = '/dashboard', href, className = '' }
       type="button"
       onClick={handleBack}
       aria-label="Back"
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 ${className}`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 transition hover:bg-zinc-200 active:scale-90 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 ${className}`}
     >
       <ArrowLeft className="h-4 w-4" />
     </button>

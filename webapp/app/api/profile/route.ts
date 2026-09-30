@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb';
 import User from '@/models/User';
 import { verifyAuth } from '@/lib/auth';
 import type { IUserProfile } from '@/models/User';
+import { LEGAL_MINIMUM_AGE } from '@/lib/legal';
 
 // GET /api/profile — returns the current user's profile
 export async function GET(request: NextRequest) {
@@ -91,6 +92,17 @@ export async function PATCH(request: NextRequest) {
       update['avatarUrl'] = body.avatarUrl;
     }
     if (body.profile !== undefined) {
+      // The age gate, on the one field that states an age outright. The
+      // sign-up tick attests to the minimum; a profile that then says
+      // otherwise is refused, not silently stored. Onboarding's input carries
+      // the same floor as its `min`, so a real member never meets this.
+      const age = body.profile.age;
+      if (typeof age === 'number' && Number.isFinite(age) && age < LEGAL_MINIMUM_AGE) {
+        return NextResponse.json(
+          { error: 'age_below_minimum', minimumAge: LEGAL_MINIMUM_AGE },
+          { status: 400 },
+        );
+      }
       for (const [key, value] of Object.entries(body.profile)) {
         if (!ALLOWED_PROFILE_KEYS.includes(key as keyof IUserProfile)) continue;
         update[`profile.${key}`] = value;

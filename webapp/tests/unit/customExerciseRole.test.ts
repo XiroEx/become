@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/customExerciseRole.test.ts
+// Run with: npm run test:file tests/unit/customExerciseRole.test.ts
 //
 // The "filter by compound/secondary/accessory" tabs the My Exercises library
 // now offers only mean anything if a custom exercise can actually carry one

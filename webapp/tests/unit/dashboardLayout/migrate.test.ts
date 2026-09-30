@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardLayout/migrate.test.ts
+// Run with: npm run test:file tests/unit/dashboardLayout/migrate.test.ts
 //
 // Pure migration / default-synthesis logic for GET /api/dashboard/layout.
 // Fully covers the "migrate exactly once, second GET is stable" contract; the

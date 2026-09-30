@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/plateScanServingFraction.test.ts
+// Run with: npm run test:file tests/unit/plateScanServingFraction.test.ts
 //
 // Bug report: a food whose real serving is "3/4 cup" was logged/displayed as
 // "1 cup" instead. Root cause — the AI plate-scan review's serving parser

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/devFixtures.test.ts
+// Run with: npm run test:file tests/unit/metrics/devFixtures.test.ts
 import { test, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import {

@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { readFileSync } from 'fs'
-import jwt from 'jsonwebtoken'
+import { BASE_URL, E2E_USER, signToken } from './test-auth'
 
 // Verifies the fix for "the save button is completely blocked by the main nav
 // on Meal Schedule page". The autosave status pill was positioned with the
@@ -12,14 +11,13 @@ import jwt from 'jsonwebtoken'
 // uses the CDP Emulation.setSafeAreaInsetsOverride hook to simulate that
 // inset in a real browser and asserts the two elements no longer overlap.
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io'
 const IPHONE_HOME_INDICATOR_INSET = 34 // px — iPhone with a home indicator (e.g. 14/15 series)
 
 async function signIn(page: Page) {
-  const env = readFileSync('.env.local', 'utf8')
-  const secret = env.match(/^JWT_SECRET=(.*)$/m)![1].trim().replace(/^["']|["']$/g, '')
-  const userId = env.match(/^PLAYWRIGHT_TEST_USER_ID=(.*)$/m)?.[1]?.trim() || '693adca9073978ec812b601a'
-  const token = jwt.sign({ userId, email: 'e2e-meal-schedule@become.local' }, secret)
+  // Was: a PLAYWRIGHT_TEST_USER_ID lookup that fell back to a real member's id,
+  // signed with a hand-parsed JWT_SECRET and NO expiry claim (AuthGuard treats
+  // an expiry-less token as expired). Both are handled by test-auth now.
+  const token = signToken(E2E_USER.id, E2E_USER.email)
   const u = new URL(BASE_URL)
   await page.context().addCookies([{ name: 'auth_token', value: token, domain: u.hostname, path: '/', httpOnly: false, secure: u.protocol === 'https:', sameSite: 'Lax' }])
   await page.goto(`${BASE_URL}/login`)

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/onboarding-no-skip.test.ts
+// Run with: npm run test:file tests/unit/onboarding-no-skip.test.ts
 //
 // "You should not be able to skip any of the onboarding (back & forth is
 // fine)" — the wizard used to have a "Skip for now" link that called

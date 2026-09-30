@@ -19,11 +19,15 @@ export interface StoredQuickSession extends DraftSession {
   /** Server log this repeat was copied from. Kept separate from sessionId so
    *  completing the repeat cannot overwrite the historical workout. */
   sourceSessionId?: string
+  /** Carried over from a favorited source session so repeating it doesn't
+   *  silently drop the star — see openQuickSession call sites. */
+  favorite?: boolean
 }
 
 interface StashQuickSessionOptions {
   sourceSessionId?: string
   needsName?: boolean
+  favorite?: boolean
 }
 
 function genId(): string {
@@ -50,6 +54,7 @@ export function stashQuickSession(session: DraftSession, options?: StashQuickSes
     sessionId,
     ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
     ...(options?.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}),
+    ...(options?.favorite ? { favorite: true } : {}),
   }
   try {
     // localStorage (not sessionStorage) so a generated session survives closing
@@ -93,7 +98,19 @@ export function stashQuickSessionWithId(
 export function swapQuickSessionExercise(
   sessionId: string,
   exIdx: number,
-  next: { name: string; exerciseSlug?: string; trackingType?: string; primaryMuscles?: string[] },
+  next: {
+    name: string
+    exerciseSlug?: string
+    trackingType?: string
+    primaryMuscles?: string[]
+    /** Always passed by the caller (possibly []) so a swap fully replaces the
+     *  old exercise's catalog metadata rather than leaving stale values —
+     *  e.g. swapping a dumbbell row for a bodyweight one must drop `equipment`,
+     *  not just skip setting the new one. */
+    equipment?: string[]
+    laterality?: string
+    movementPatterns?: string[]
+  },
 ): void {
   const s = readQuickSession(sessionId)
   if (!s || !Array.isArray(s.exercises) || !s.exercises[exIdx]) return
@@ -103,6 +120,9 @@ export function swapQuickSessionExercise(
     if (next.exerciseSlug !== undefined) patched.exerciseSlug = next.exerciseSlug
     if (next.trackingType) patched.trackingType = next.trackingType
     if (next.primaryMuscles) patched.primaryMuscles = next.primaryMuscles
+    if (next.equipment !== undefined) patched.equipment = next.equipment
+    if (next.laterality !== undefined) patched.laterality = next.laterality
+    if (next.movementPatterns !== undefined) patched.movementPatterns = next.movementPatterns
     return patched
   })
   stashQuickSessionWithId({ ...(s as DraftSession), exercises }, sessionId)
@@ -162,15 +182,20 @@ export function clearQuickSession(sessionId: string): void {
  * sessionId (a planned session). The overview uses it to decide whether editing
  * should write back to that log — for an unsaved draft it must not, or the edit
  * would insert a stray log nobody asked for.
+ *
+ * `date` (a local YYYY-MM-DD) pre-fills the overview's Log/Plan date — used
+ * when the session was started from a specific day on the Calendar, so the
+ * user isn't left to re-pick a date the app already knew.
  */
 export function quickSessionOverviewHref(
   sessionId: string,
-  opts?: { saved?: boolean; started?: boolean },
+  opts?: { saved?: boolean; started?: boolean; date?: string },
 ): string {
   const q = [
     `session=${encodeURIComponent(sessionId)}`,
     ...(opts?.saved ? ['saved=1'] : []),
     ...(opts?.started ? ['started=1'] : []),
+    ...(opts?.date ? [`date=${encodeURIComponent(opts.date)}`] : []),
   ].join('&')
   return `/dashboard/workout/quick-session?${q}`
 }

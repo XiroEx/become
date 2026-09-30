@@ -17,24 +17,27 @@ import Exercise from '@/models/Exercise'
 import ExerciseVideo from '@/models/ExerciseVideo'
 import { getBlobStore, exerciseVideoKey } from '@/lib/blobStorage'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
-import {
-  MAX_VIDEO_BYTES as MAX_BYTES,
-  isValidationFailure,
-  validateVideoFile,
-} from '@/lib/videoUpload'
+import { upsertRetryingStaleIndex } from '@/lib/exerciseVideoIndex'
+import { MAX_VIDEO_BYTES as MAX_BYTES } from '@/lib/videoUpload'
+import { parseVideoUpload, isStreamingValidationFailure } from '@/lib/streamingVideoUpload'
 
 // NOTE: Next.js App Router does not honor `export const config = { api: ... }`
 // — that's a Pages Router relic. There is no app-level streaming hook here,
 // so we lean on:
 //   1. an early `Content-Length` check below (cheap DoS guard),
-//   2. the reverse-proxy `client_max_body_size` / equivalent on the edge
-//      (the only real hard cap — the app server can still be fed a chunked
-//      request with no Content-Length).
+//   2. busboy's own `limits.fileSize` in `lib/streamingVideoUpload.ts`, which
+//      caps bytes retained even when Content-Length is absent (chunked
+//      transfer),
+//   3. the reverse-proxy `client_max_body_size` / equivalent on the edge as
+//      the outermost backstop.
 //
-// TODO(uploads): replace this whole post-to-app-server flow with the
-// direct-to-S3 path via `BlobStore.presignedPutUrl` in `lib/blobStorage.ts`.
-// That removes the app server from the byte path entirely and turns this
-// route into a small "register the URL" handler.
+// The upload streams straight into blob storage (see `parseVideoUpload` +
+// `BlobStore.putStream`) instead of buffering the whole file into memory
+// first, so the client-to-app and app-to-MinIO transfers overlap instead of
+// happening back-to-back. A presigned direct-to-S3 PUT (the original plan
+// here) isn't reachable from outside the LAN, since MinIO sits at a private
+// address (see `app/api/blob/[...key]/route.ts`) — this is the closest
+// equivalent that a public client can actually use.
 
 interface RouteParams {
   params: Promise<{ slug: string }>
@@ -63,26 +66,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
   }
 
-  let formData: FormData
+  // Parses the multipart body incrementally and hands back a stream for the
+  // `video` field the instant its headers are known — no full-body buffering,
+  // including for the size/type validation this used to need a materialized
+  // `File` for (busboy resolves MIME + filename from the field headers, and
+  // enforces MAX_BYTES as bytes arrive rather than after the fact).
+  let parsed: Awaited<ReturnType<typeof parseVideoUpload>>
   try {
-    formData = await request.formData()
+    parsed = await parseVideoUpload(request)
   } catch {
     return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
   }
-
-  const file = formData.get('video')
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'Missing "video" file field' }, { status: 400 })
+  if (isStreamingValidationFailure(parsed)) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status })
   }
-
-  // Size + type checks, including the extension fallback for pickers that
-  // report an empty or octet-stream MIME (common when choosing straight from
-  // the iOS Photo Library).
-  const validated = validateVideoFile(file)
-  if (isValidationFailure(validated)) {
-    return NextResponse.json({ error: validated.error }, { status: validated.status })
-  }
-  const { mimeType } = validated
+  const { stream, mimeType, done } = parsed
 
   try {
     await connectDB()
@@ -92,17 +90,31 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // custom exercise video by guessing the slug pattern.
     const exercise = await Exercise.findOne({ slug, isCustom: { $ne: true } })
     if (!exercise) {
+      stream.resume() // drain so the client's connection isn't left hanging
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
     const store = getBlobStore()
     const key = exerciseVideoKey(slug, mimeType)
-    const { publicUrl } = await store.put({
+    const { publicUrl } = await store.putStream({
       key,
-      body: buffer,
+      body: stream,
       contentType: mimeType,
     })
+
+    const { bytes, truncated } = await done
+    if (truncated) {
+      await store.delete(key).catch(() => {})
+      const mb = Math.round(MAX_BYTES / (1024 * 1024))
+      return NextResponse.json({ error: `That video is too large (max ${mb} MB).` }, { status: 413 })
+    }
+    if (bytes === 0) {
+      await store.delete(key).catch(() => {})
+      return NextResponse.json(
+        { error: 'That file is empty — try picking the video again.' },
+        { status: 400 }
+      )
+    }
 
     // Best-effort cleanup of the previous object so we don't accrete dead
     // bytes when an admin replaces a video. Failure here is non-fatal —
@@ -131,26 +143,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // each other's video metadata. Slug is unique on Exercise, so it's the
     // correct join key. `exerciseName` is still written for display + legacy
     // readers that haven't been switched to slug lookups yet.
-    await ExerciseVideo.findOneAndUpdate(
-      { slug },
-      {
-        $set: {
-          slug,
-          exerciseName: exercise.name,
-          videoUrl: publicUrl,
-          isPlaceholder: false,
-          storageKey: key,
-          status: 'active',
-          sizeBytes: file.size,
-          mimeType,
-          uploadedBy: gate.userId,
-          // Reset dims + framing — see Exercise block above for rationale.
-          videoWidth: null,
-          videoHeight: null,
+    //
+    // Wrapped in `upsertRetryingStaleIndex`: some environments still carry a
+    // stale UNIQUE index on `exerciseName` from before this route switched to
+    // slug-keying (see lib/exerciseVideoIndex.ts) — two exercises sharing a
+    // display name (e.g. "Leg Press") hit E11000 here on every attempt. The
+    // wrapper self-heals that index on first collision and retries once.
+    await upsertRetryingStaleIndex(() =>
+      ExerciseVideo.findOneAndUpdate(
+        { slug },
+        {
+          $set: {
+            slug,
+            exerciseName: exercise.name,
+            videoUrl: publicUrl,
+            isPlaceholder: false,
+            storageKey: key,
+            status: 'active',
+            sizeBytes: bytes,
+            mimeType,
+            uploadedBy: gate.userId,
+            // Reset dims + framing — see Exercise block above for rationale.
+            videoWidth: null,
+            videoHeight: null,
+          },
+          $unset: { framing: '', trim: '' },
         },
-        $unset: { framing: '', trim: '' },
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      )
     )
 
     invalidateExerciseCache()
@@ -158,7 +178,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({
       videoUrl: publicUrl,
       storageKey: key,
-      sizeBytes: file.size,
+      sizeBytes: bytes,
       mimeType,
     })
   } catch (error) {
@@ -203,19 +223,23 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     // Key on slug (canonical join). The name fallback used to fail closed
     // for unmigrated rows; we tack on a $or so the delete still finds a
     // legacy row that only has `exerciseName`.
-    await ExerciseVideo.findOneAndUpdate(
-      { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
-      {
-        // `status: 'retired'` rather than `videoUrl: ''`: the field is
-        // `required` on the schema, so blanking it only slipped through
-        // because findOneAndUpdate skips validators by default — and it
-        // destroyed the only record of what the video had been. Retiring keeps
-        // the URL readable in the admin list while excluding the row from the
-        // name-keyed fallback that would otherwise re-surface the video we
-        // just deleted.
-        $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
-        $unset: { framing: '', trim: '' },
-      }
+    // Wrapped for the same reason as the POST upsert above — setting
+    // `exerciseName` here can also collide with the stale unique index.
+    await upsertRetryingStaleIndex(() =>
+      ExerciseVideo.findOneAndUpdate(
+        { $or: [{ slug }, { slug: { $exists: false }, exerciseName: exercise.name }] },
+        {
+          // `status: 'retired'` rather than `videoUrl: ''`: the field is
+          // `required` on the schema, so blanking it only slipped through
+          // because findOneAndUpdate skips validators by default — and it
+          // destroyed the only record of what the video had been. Retiring keeps
+          // the URL readable in the admin list while excluding the row from the
+          // name-keyed fallback that would otherwise re-surface the video we
+          // just deleted.
+          $set: { slug, exerciseName: exercise.name, isPlaceholder: true, storageKey: null, status: 'retired' },
+          $unset: { framing: '', trim: '' },
+        }
+      )
     )
 
     invalidateExerciseCache()

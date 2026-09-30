@@ -69,6 +69,7 @@ async function runOnboarding(page: Page, b: Body) {
   await page.getByTestId('onboarding-next').click()
 
   // 2 — background
+  await page.getByTestId('onboarding-name').fill('E2E Tester')
   await page.getByTestId('experience-intermediate').click()
   await page.getByTestId('onboarding-next').click()
 
@@ -124,6 +125,7 @@ test.describe('onboarding macro sanity', () => {
     await page.goto('/onboarding')
     await page.getByTestId('goal-gain_muscle').click()
     await page.getByTestId('onboarding-next').click()
+    await page.getByTestId('onboarding-name').fill('E2E Tester')
     await page.getByTestId('experience-intermediate').click()
     await page.getByTestId('onboarding-next').click()
 

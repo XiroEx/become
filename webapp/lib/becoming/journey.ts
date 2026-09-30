@@ -16,6 +16,7 @@ import { localDateKey, dateKey } from '@/lib/dayWindow'
 import { shiftDay } from '@/lib/streaks/pillars'
 import { buildWeeks, emptyDay, applyCredits, type DayEvents, type WeekSnapshot, type MindState } from '@/lib/becoming/weeks'
 import { computeGoalProgress } from '@/lib/goals/progress'
+import type { Suggestion } from '@/lib/goals/suggestions'
 import { kgToUnit, unitToKg } from '@/lib/goals/pace'
 
 export interface JourneyPayload {
@@ -26,8 +27,12 @@ export interface JourneyPayload {
   target: { weight: number | null; direction: 'lose' | 'maintain' | 'gain' | null; pace: string | null; eta: string | null }
   weeklyTarget: number | null
   weeks: WeekSnapshot[]
-  /** For the live card's "what's next". */
-  next: { nutrition: { title: string; sub: string; url: string }; training: { title: string; sub: string; url: string } } | null
+  /**
+   * The per-pillar goal suggestions, whole — the live card ranks them into
+   * "what to work on" and needs the severity to do it. These are the same
+   * objects `/api/goals` returns and the nudge cron sends.
+   */
+  next: { nutrition: Suggestion; training: Suggestion } | null
   becomingScore: number
   chapter: number
   /** Every weigh-in, by the member's LOCAL day key — the weight chart needs

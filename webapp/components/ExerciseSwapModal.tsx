@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoDisplay, resolveExerciseVideo } from "@/lib/data/exerciseVideos";
 import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
@@ -40,6 +42,21 @@ interface AlternativeExercise {
   /** A custom exercise keeps its demo on the Exercise doc, not in
    *  exercise_videos, so it has to travel with the row. */
   videoUrl?: string | null;
+}
+
+interface CatalogSearchResult {
+  slug: string;
+  name: string;
+  trackingType: string;
+  equipment?: string[];
+  primaryMuscles?: string[];
+  movementPatterns?: string[];
+  category?: string;
+  bodyRegion?: string;
+  role?: string;
+  difficulty?: string;
+  videoUrl?: string | null;
+  isCustom?: boolean;
 }
 
 interface SourceExercise {
@@ -187,6 +204,8 @@ export default function ExerciseSwapModal({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — shown as an upsell, not a form error.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({
     equipment: null,
@@ -306,6 +325,64 @@ export default function ExerciseSwapModal({
     }
   }, [isOpen, fetchAlternatives, exerciseSlug]);
 
+  // Full-catalog name search, merged into the scored alternatives below. The
+  // alternatives list is a similarity-scored shortlist relative to the
+  // exercise being replaced (movement pattern, muscles, equipment, etc.) — an
+  // exact-name match that scores too low (or was never fetched at all)
+  // couldn't be found by typing its name, which is exactly what pushed
+  // members to create duplicate custom exercises the real one already
+  // covered. This fetches the same full-catalog endpoint the "Add exercise"
+  // flow already uses, so a search here can never come up empty just because
+  // a candidate wasn't "similar enough".
+  const [catalogMatches, setCatalogMatches] = useState<AlternativeExercise[] | null>(null);
+  const catalogSeq = useRef(0);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setCatalogMatches(null);
+      return;
+    }
+    const mySeq = ++catalogSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=30`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (mySeq !== catalogSeq.current) return;
+        if (!res.ok) { setCatalogMatches([]); return; }
+        const data = (await res.json()) as { exercises?: CatalogSearchResult[] };
+        if (mySeq !== catalogSeq.current) return;
+        const excluded = new Set([exerciseSlugRef.current, ...workoutSlugsRef.current]);
+        const mapped: AlternativeExercise[] = (data.exercises ?? [])
+          .filter((e) => !excluded.has(e.slug))
+          .map((e) => ({
+            slug: e.slug,
+            name: e.name,
+            score: 0,
+            reasons: ["Matches your search"],
+            equipment: e.equipment ?? [],
+            primaryMuscles: e.primaryMuscles ?? [],
+            movementPatterns: e.movementPatterns ?? [],
+            difficulty: e.difficulty ?? "intermediate",
+            category: e.category ?? "strength",
+            bodyRegion: e.bodyRegion ?? "full_body",
+            role: e.role ?? "accessory",
+            trackingType: e.trackingType,
+            isExplicitAlternative: false,
+            isCustom: e.isCustom ?? false,
+            videoUrl: e.videoUrl ?? null,
+          }));
+        setCatalogMatches(mapped);
+      } catch {
+        if (mySeq === catalogSeq.current) setCatalogMatches([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Fetch variations when a card is expanded (cached per slug)
   useEffect(() => {
     if (!selectedSlug || variationsCache[selectedSlug] !== undefined) return;
@@ -341,12 +418,29 @@ export default function ExerciseSwapModal({
     }
   }, [searchQuery, filters]);
 
+  // Merge the similarity-scored shortlist with any full-catalog name match
+  // not already in it, so a search never comes up empty just because the
+  // target exercise wasn't "similar enough" to score into the top 30.
+  const searchCandidates = useMemo(() => {
+    if (!catalogMatches) return alternatives;
+    const bySlug = new Map(alternatives.map((alt) => [alt.slug, alt]));
+    for (const match of catalogMatches) {
+      if (!bySlug.has(match.slug)) bySlug.set(match.slug, match);
+    }
+    return [...bySlug.values()];
+  }, [alternatives, catalogMatches]);
+
   // Filter & search
-  const filteredAlternatives = alternatives.filter((alt) => {
+  const filteredAlternatives = searchCandidates.filter((alt) => {
     // Search query
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      // A full-catalog match was already matched server-side (name or
+      // alias) — don't re-run the client substring check against it, since
+      // an alias match wouldn't necessarily contain `q` in the name field.
+      const isCatalogMatch = catalogMatches?.some((m) => m.slug === alt.slug) ?? false;
       if (
+        !isCatalogMatch &&
         !alt.name.toLowerCase().includes(q) &&
         !alt.equipment.some((e) => formatEquipment(e).toLowerCase().includes(q)) &&
         !alt.primaryMuscles.some((m) => formatMuscle(m).toLowerCase().includes(q))
@@ -379,10 +473,10 @@ export default function ExerciseSwapModal({
   });
 
   // Collect unique values for filter options
-  const equipmentOptions = [...new Set(alternatives.flatMap((a) => a.equipment))].sort();
-  const bodyRegionOptions = [...new Set(alternatives.map((a) => a.bodyRegion))].sort();
-  const difficultyOptions = [...new Set(alternatives.map((a) => a.difficulty))].sort();
-  const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
+  const equipmentOptions = [...new Set(searchCandidates.flatMap((a) => a.equipment))].sort();
+  const bodyRegionOptions = [...new Set(searchCandidates.map((a) => a.bodyRegion))].sort();
+  const difficultyOptions = [...new Set(searchCandidates.map((a) => a.difficulty))].sort();
+  const categoryOptions = [...new Set(searchCandidates.map((a) => a.category))].sort();
 
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
@@ -427,6 +521,12 @@ export default function ExerciseSwapModal({
       });
       const data = await res.json();
       if (!res.ok) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setCustomForm(p => ({ ...p, submitting: false }));
+          setGate(g);
+          return;
+        }
         setCustomForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
         return;
       }
@@ -449,6 +549,7 @@ export default function ExerciseSwapModal({
 
   return (
     <AnimatePresence>
+      <UpgradeSheet key="swap-upgrade" open={!!gate} gate={gate} onClose={() => setGate(null)} />
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -703,7 +804,7 @@ export default function ExerciseSwapModal({
 
                 {!loading && !error && (
                   <CollapsibleSection
-                    title="Top Suggestions"
+                    title={searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
                     items={filteredAlternatives}
                     key={sectionResetKey}
                     keyFor={(alt) => alt.slug}
@@ -1045,8 +1146,11 @@ function ExerciseVideoPreview({
   /** The video denormalized onto the exercise — authoritative when present. */
   exerciseVideoUrl?: string | null;
 }) {
-  const videoUrl = exerciseVideoUrl?.trim() || getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+  const resolved = resolveExerciseVideo(
+    { videoUrl: exerciseVideoUrl },
+    getExerciseVideoDisplay(exerciseName)
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
 
   // Nothing to show. Previously a hash-picked placeholder clip played here, so
   // every swap candidate looked like it had a demo.
@@ -1057,7 +1161,14 @@ function ExerciseVideoPreview({
   if (DIRECT_VIDEO_FILE.test(videoUrl)) {
     return (
       <div className="mb-3">
-        <FramedVideo src={videoUrl} surface="preview" />
+        <FramedVideo
+          src={videoUrl}
+          surface="preview"
+          videoWidth={resolved.videoWidth}
+          videoHeight={resolved.videoHeight}
+          videoFraming={resolved.videoFraming}
+          videoTrim={resolved.videoTrim}
+        />
       </div>
     );
   }

@@ -8,6 +8,8 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import type { IMealItem, IMealRecipe } from '@/models/Meal'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 export interface MealFormInitial {
   name: string
@@ -61,6 +63,9 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
+  // Saved-meal slots are full. Only reachable on CREATE — editing a meal you
+  // already own is never gated.
+  const [gate, setGate] = useState<GatePayload | null>(null)
 
   useEffect(() => {
     if (initial) {
@@ -324,7 +329,12 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
         }
       } else {
         const d = await res.json().catch(() => ({}))
-        setError(d.error || 'Failed to save meal.')
+        const g = gateFrom(res.status, d)
+        if (g) {
+          setGate(g)
+        } else {
+          setError(d.error || 'Failed to save meal.')
+        }
       }
     } catch {
       setError('Network error. Please try again.')
@@ -336,6 +346,7 @@ export default function MealForm({ mealId, initial, availableTags }: MealFormPro
 
   return (
     <>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <div className="space-y-5 pb-24">
         {/* Top bar */}
         <div className="flex items-center justify-between">

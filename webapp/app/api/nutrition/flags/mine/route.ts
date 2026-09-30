@@ -3,6 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import { verifyAuth } from '@/lib/auth'
 import FoodFlag from '@/models/FoodFlag'
 import Food from '@/models/Food'
+import { MAX_VERIFICATION_ROUNDS, roundsExhausted } from '@/lib/nutrition/flagPolicy'
 import mongoose from 'mongoose'
 
 /**
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
 
       // "Resolved but nothing changed" is the state that needs the member back.
       const settled = f.status === 'confirmed' || f.status === 'insufficient'
+      const rounds = (f.rounds as number) ?? 1
+      const spent = roundsExhausted(rounds)
 
       return {
         id: String(f._id),
@@ -65,11 +68,20 @@ export async function GET(request: NextRequest) {
         resolvedAt: f.resolvedAt,
         createdAt: f.createdAt,
         photoCount: photos.length,
-        rounds: f.rounds ?? 1,
+        rounds,
+        /** Automatic rounds left. 0 means the next step is a person, not a re-run. */
+        roundsRemaining: Math.max(0, MAX_VERIFICATION_ROUNDS - rounds),
         escalated: !!f.escalatedAt,
         unread: settled && !f.seenAt,
-        /** Nothing changed and we still disagree — they can send better evidence. */
-        canAddEvidence: settled,
+        /**
+         * Nothing changed and we still disagree — they can send better
+         * evidence, but only while automatic rounds remain. Offering it
+         * forever is what made the relaunch loop unbounded: the member kept
+         * being invited to spend a grounded search that could not tell them
+         * anything new. The route is still the gate; this only stops the UI
+         * from promising something it will refuse.
+         */
+        canAddEvidence: settled && !spent,
       }
     })
 

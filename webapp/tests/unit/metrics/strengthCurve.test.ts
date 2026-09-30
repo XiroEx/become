@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/strengthCurve.test.ts
+// Run with: npm run test:file tests/unit/metrics/strengthCurve.test.ts
 //
 // Covers the strength-curve metric: pure aggregator (bestSetForSession,
 // aggregateStrengthCurve), the rich computeStrengthCurve() with an injected

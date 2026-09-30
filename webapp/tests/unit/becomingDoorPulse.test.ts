@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/becomingDoorPulse.test.ts
+// Run with: npm run test:file tests/unit/becomingDoorPulse.test.ts
 //
 // The Becoming doorway turns purple when a new week has been written (the
 // week rolls over on Sunday, see localWeekKey in BecomingDoor.tsx) and has

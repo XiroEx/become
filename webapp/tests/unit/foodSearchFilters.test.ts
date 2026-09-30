@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/foodSearchFilters.test.ts
+// Run with: npm run test:file tests/unit/foodSearchFilters.test.ts
 //
 // The filter row in the food search sheet. Four rules, all of them things the
 // row got wrong:

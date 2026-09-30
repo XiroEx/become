@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/exerciseMuscleAudit.test.ts
+// Run with: npm run test:file tests/unit/exerciseMuscleAudit.test.ts
 //
 // Covers the three classifier helpers used by scripts/audit-exercise-muscles.ts:
 //   - isMissingPrimary

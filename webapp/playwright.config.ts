@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+// Resolving the base URL THROWS at config load when it points at a
+// production-backed host without PLAYWRIGHT_ALLOW_PROD=1, so `npm run test:e2e`
+// cannot reach a real member's account by default. See tests/e2e/base-url.ts.
+import { BASE_URL } from './tests/e2e/base-url';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -7,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: '../playwright-report', open: 'never' }]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io',
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -21,12 +25,6 @@ export default defineConfig({
       testMatch: '**/checkin-tutorial-gate.spec.ts',
       timeout: 120_000,
       use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'only-on-failure' },
-    },
-    {
-      name: 'nudge',
-      testMatch: '**/nudge-visibility.spec.ts',
-      timeout: 120_000,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'off' },
     },
     {
       name: 'swap-collapse',
@@ -52,18 +50,6 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },
         video: 'off', trace: 'off', screenshot: 'only-on-failure',
-      },
-    },
-    {
-      name: 'estimate-barcode',
-      testMatch: '**/estimate-barcode.spec.ts',
-      timeout: 240_000,
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 390, height: 844 },
-        video: 'off',
-        trace: 'off',
-        screenshot: 'only-on-failure',
       },
     },
     {

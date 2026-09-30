@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
-import { trackingBySlug, trackingFor } from '@/lib/workout/hydrateTracking'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/planned — upcoming PLANNED quick sessions: future-dated,
 // incomplete, kind:'quick' workout logs. Returns each with a reconstructed
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
     const upcoming = (up?.workoutLogs ?? [])
       .filter((l) => l.kind === 'quick' && !l.completed && !!l.sessionId && new Date(l.date).getTime() > now)
     const bySlug = await trackingBySlug(upcoming.flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)))
+    const bellBySlug = await bellFieldsBySlug(upcoming.flatMap((l) => (l.exercises ?? []).map((ex) => ex.exerciseSlug)))
 
     const planned = (up?.workoutLogs ?? [])
       .filter((l) => l.kind === 'quick' && !l.completed && !!l.sessionId && new Date(l.date).getTime() > now)
@@ -70,6 +71,7 @@ export async function GET(request: NextRequest) {
             exerciseSlug: ex.exerciseSlug || '',
             name: ex.name,
             trackingType: trackingFor(ex, bySlug),
+            ...bellFieldsFor(ex, bellBySlug),
             sets: p?.sets ?? (ex.sets?.length || 1),
             reps: p?.reps ?? (!isTime && first?.reps != null ? String(first.reps) : ''),
             ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),

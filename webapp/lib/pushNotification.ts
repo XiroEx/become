@@ -19,9 +19,19 @@ export interface PushPayload {
   title: string
   body: string
   icon?: string
-  badge?: string
+  badge?: string          // the small monochrome NOTIFICATION icon, not a count
   url?: string            // notificationclick navigates here
   tag?: string            // replaces existing notification with same tag
+  /**
+   * Count to draw on the app ICON when this push lands (Badging API, applied by
+   * the service worker). Distinct from `badge` above, which is an image.
+   *
+   * Only set it on a push whose sender genuinely knows the whole answer — the
+   * daily glance, which has the widget feed in hand. A push that omits it
+   * leaves the badge untouched, which is right: a nudge about one missing
+   * pillar is not a statement about the other two.
+   */
+  badgeCount?: number
 }
 
 export interface PushSendResult {
@@ -46,6 +56,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     badge: payload.badge ?? '/icons/icon-96x96.png',
     url: payload.url ?? '/dashboard',
     tag: payload.tag,
+    badgeCount: payload.badgeCount,
   })
 
   const staleIds: string[] = []

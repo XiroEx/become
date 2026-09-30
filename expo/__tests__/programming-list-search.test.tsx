@@ -27,8 +27,8 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { toProgramSummary } from "@/lib/programs/programSummary";
-import ProgrammingIndexRoute from "../app/(tabs)/programming/index";
-import ProgramsSearchRoute from "../app/(tabs)/programming/search";
+import ProgrammingIndexRoute from "../app/(app)/(tabs)/programming/index";
+import ProgramsSearchRoute from "../app/(app)/(tabs)/programming/search";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -132,6 +132,61 @@ describe("ProgrammingIndexRoute", () => {
     const { getByTestId } = render(<ProgrammingIndexRoute />);
     await waitFor(() => {
       expect(getByTestId("programming-index-error")).toBeTruthy();
+    });
+  });
+
+  // THE ENTRY POINTS. `programming/search`, `programming/saved` and the hidden
+  // `calendar` tab were pushed from nowhere: three finished screens that no
+  // member could open. The header is the web's Workout page in native form —
+  // search and saved live on that page, and the week strip links the calendar.
+  describe("the header entry points", () => {
+    beforeEach(() => {
+      mockApiFetch.mockResolvedValue([]);
+    });
+
+    it.each([
+      ["programming-open-search", "/(tabs)/programming/search"],
+      ["programming-open-saved", "/(tabs)/programming/saved"],
+      ["programming-open-calendar", "/(tabs)/calendar"],
+    ])("%s pushes %s", async (testID, href) => {
+      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      await waitFor(() => {
+        expect(getByTestId(testID)).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId(testID));
+
+      expect(mockPush).toHaveBeenCalledWith(href);
+    });
+
+    it("labels all three for a screen reader", async () => {
+      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      await waitFor(() => {
+        expect(getByTestId("programming-open-search")).toBeTruthy();
+      });
+      expect(
+        getByTestId("programming-open-search").props.accessibilityLabel,
+      ).toBe("Search programs");
+      expect(
+        getByTestId("programming-open-saved").props.accessibilityLabel,
+      ).toBe("Saved programs");
+      expect(
+        getByTestId("programming-open-calendar").props.accessibilityLabel,
+      ).toBe("Calendar");
+    });
+
+    it("keeps them on screen while the catalog is still loading", async () => {
+      // The entry points are the header, not part of the list: a slow or
+      // failed programs fetch must not take Search, Saved and the calendar
+      // with it.
+      mockApiFetch.mockReturnValue(new Promise(() => {}));
+      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      await waitFor(() => {
+        expect(getByTestId("programming-index-loading")).toBeTruthy();
+      });
+      expect(getByTestId("programming-open-search")).toBeTruthy();
+      expect(getByTestId("programming-open-saved")).toBeTruthy();
+      expect(getByTestId("programming-open-calendar")).toBeTruthy();
     });
   });
 });

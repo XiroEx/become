@@ -21,6 +21,9 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { isFallbackName } from '@/lib/displayName'
+import ConsentGate from '@/components/ConsentGate'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
 import PacePicker from '@/components/goals/PacePicker'
 import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@/lib/goals/pace'
@@ -147,7 +150,11 @@ const DIRECTION_OPTIONS: { value: NutritionDirection; label: string; sub: string
 
 const TOTAL_STEPS = 5
 
-const STEP_TITLES = ['Goals', 'Background', 'Body & nutrition', 'Equipment', 'Review'] as const
+const STEP_TITLES = ['Goals', 'About you', 'Body & nutrition', 'Equipment', 'Review'] as const
+
+/** Every text box in the wizard, so a new step cannot invent its own. */
+const INPUT_CLS =
+  'w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white'
 
 /** Plain-English activity descriptions — the multiplier alone means nothing to a member. */
 const ACTIVITY_BLURBS: Record<ActivityLevel, string> = {
@@ -238,6 +245,13 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(1)
   const [profile, setProfile] = useState<ProfileData>({})
+  /** What the member wants to be called. Sign-up no longer asks — it takes an
+   *  email and nothing else — so this is where the name is collected, and step
+   *  2 will not advance without one. An account created before that always
+   *  carries SOMETHING (verify-link invents the email's local part), so the box
+   *  starts empty unless the stored name is a real answer; prefilling
+   *  "george8794" is how you get a member called george8794. */
+  const [name, setName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
   /** Once the member picks a calorie direction themselves we stop re-deriving
@@ -342,6 +356,9 @@ export default function OnboardingPage() {
             router.replace('/dashboard')
             return
           }
+          // A name from Google, or one typed on a previous run through this
+          // flow, is a real answer worth keeping. The invented one is not.
+          if (!isFallbackName(data.name, data.email)) setName(String(data.name))
         }
       } catch {
         // If profile fetch fails, still show onboarding
@@ -430,6 +447,9 @@ export default function OnboardingPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          // Only when there is one: User.name is required, so writing an empty
+          // string here would replace the placeholder with nothing at all.
+          ...(name.trim() ? { name: name.trim() } : {}),
           profile: {
             ...Object.fromEntries(Object.entries(payload).filter(([k]) => k !== 'paceKgPerWeek')),
             // fitnessGoal stays the single primary goal — the dashboard, nudge
@@ -545,6 +565,9 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      {/* A member created by Google or a passkey has no agreement on record
+          yet. Ask here, before a single health field is typed, not after. */}
+      <ConsentGate />
       {/* Progress bar */}
       <div className="fixed top-0 left-0 right-0 z-20 h-1 bg-zinc-200 dark:bg-zinc-800">
         <motion.div
@@ -587,6 +610,8 @@ export default function OnboardingPage() {
               )}
               {step === 2 && (
                 <Step2
+                  name={name}
+                  onNameChange={setName}
                   experienceLevel={profile.experienceLevel}
                   weeklyAvailability={profile.weeklyAvailability}
                   onExperienceChange={(v) => setProfile((p) => ({ ...p, experienceLevel: v }))}
@@ -612,17 +637,29 @@ export default function OnboardingPage() {
                 />
               )}
               {step === 5 && (
-                <Step5Review
-                  profile={profile}
-                  goals={goals}
-                  direction={effectiveDirection}
-                  targets={targets}
-                  rec={rec}
-                  onEdit={goToStep}
-                  enrolled={enrolled}
-                  enrolling={enrolling}
-                  onEnroll={enrolInRecommended}
-                />
+                <>
+                  <Step5Review
+                    name={name}
+                    profile={profile}
+                    goals={goals}
+                    direction={effectiveDirection}
+                    targets={targets}
+                    rec={rec}
+                    onEdit={goToStep}
+                    enrolled={enrolled}
+                    enrolling={enrolling}
+                    onEnroll={enrolInRecommended}
+                  />
+                  {/* The health disclaimer, at the one moment the member is
+                      about to receive calorie targets and a program. Section 1
+                      of the Terms in one paragraph; never more than it says. */}
+                  <p
+                    data-testid="onboarding-health-disclaimer"
+                    className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                  >
+                    {HEALTH_DISCLAIMER_SHORT}
+                  </p>
+                </>
               )}
             </motion.div>
           </AnimatePresence>
@@ -647,7 +684,11 @@ export default function OnboardingPage() {
             <button
               onClick={goNext}
               data-testid="onboarding-next"
-              disabled={(step === 1 && goals.length === 0) || (step === 3 && !canComputeTargets)}
+              disabled={
+                (step === 1 && goals.length === 0) ||
+                (step === 2 && !name.trim()) ||
+                (step === 3 && !canComputeTargets)
+              }
               className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               Next
@@ -850,14 +891,18 @@ function Step1({
   )
 }
 
-// ── Step 2 — Background ───────────────────────────────────────────────────────
+// ── Step 2 — Name + background ────────────────────────────────────────────────
 
 function Step2({
+  name,
+  onNameChange,
   experienceLevel,
   weeklyAvailability,
   onExperienceChange,
   onAvailabilityChange,
 }: {
+  name: string
+  onNameChange: (v: string) => void
   experienceLevel?: ExperienceLevel
   weeklyAvailability?: number
   onExperienceChange: (v: ExperienceLevel) => void
@@ -868,15 +913,33 @@ function Step2({
   return (
     <div>
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-        Your background
+        A bit about you
       </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        This sets the difficulty of the program we match you with, and how active
-        we assume you are when we work out your calories.
+        Your name is how the app greets you. The rest sets the difficulty of the
+        program we match you with, and how active we assume you are when we work
+        out your calories.
       </p>
 
-      {/* Experience level */}
+      {/* Name — the one thing sign-up deliberately does not ask for. */}
       <div className="mt-6">
+        <label htmlFor="onboarding-name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          What should we call you?
+        </label>
+        <input
+          id="onboarding-name"
+          data-testid="onboarding-name"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="First name or full name"
+          autoComplete="name"
+          maxLength={80}
+          className={`mt-3 ${INPUT_CLS}`}
+        />
+      </div>
+
+      {/* Experience level */}
+      <div className="mt-8">
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Experience level
         </label>
@@ -1117,7 +1180,7 @@ function Step3({
     }
   }
 
-  const inputCls = "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
+  const inputCls = INPUT_CLS
 
   // What's still missing before we can compute an honest TDEE.
   const missing = [
@@ -1172,7 +1235,7 @@ function Step3({
             <input
               type="number"
               inputMode="numeric"
-              min={10}
+              min={LEGAL_MINIMUM_AGE}
               max={100}
               placeholder="e.g. 28"
               data-testid="stat-age"
@@ -1688,6 +1751,7 @@ function ReviewSection({
 }
 
 function Step5Review({
+  name,
   profile,
   goals,
   direction,
@@ -1698,6 +1762,7 @@ function Step5Review({
   enrolling,
   onEnroll,
 }: {
+  name: string
   profile: ProfileData
   goals: FitnessGoal[]
   direction: NutritionDirection
@@ -1757,6 +1822,9 @@ function Step5Review({
           onEdit={onEdit}
           why={`We treat ${days} sessions a week as "${activity.replace('_', ' ')}" when calculating your calories, and we only surface programs that fit that schedule.`}
         >
+          {/* The review plays back every answer, and the name is one now —
+              sign-up stopped asking for it. */}
+          <ReviewRow label="Name" value={name.trim() || 'Not set'} />
           <ReviewRow
             label="Experience"
             value={profile.experienceLevel

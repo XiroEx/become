@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/VideoFilmstripTrimmer.test.tsx
+// Run with: npm run test:file tests/unit/VideoFilmstripTrimmer.test.tsx
 //
 // Rendered via JSX + renderToStaticMarkup, same pattern as MacroBar.test.tsx.
 // Frame extraction (canvas/video) only happens inside a useEffect, which

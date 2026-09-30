@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/pushEnsureSubscription.test.ts
+// Run with: npm run test:file tests/unit/pushEnsureSubscription.test.ts
 //
 // The pure decision logic behind lib/push/ensureSubscription.ts. The bug it
 // exists to fix: every path that could create a push subscription was gated on

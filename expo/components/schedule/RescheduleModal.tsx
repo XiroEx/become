@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { Modal, View, Text } from "react-native";
+import { useState } from "react";
+import { Modal, View } from "react-native";
+import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import type { ScheduledSlot } from "@/lib/schedule/slotStatus";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface RescheduleModalProps {
   visible: boolean;
@@ -14,7 +16,17 @@ export interface RescheduleModalProps {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Move a scheduled workout to a new YYYY-MM-DD date. */
+/**
+ * Move a scheduled workout to a new YYYY-MM-DD date.
+ *
+ * The form seeds from `slot` on mount and is NEVER re-seeded by an effect. The
+ * caller gives this element a `key` derived from the slot
+ * (`app/(tabs)/calendar/index.tsx`), so swapping the slot remounts the modal and
+ * `useState` picks up the new date. Resetting in an effect instead — which is
+ * what `react-hooks/set-state-in-effect` reports — renders one frame of the
+ * previous slot's date before correcting itself, and races anything the member
+ * has already typed.
+ */
 export function RescheduleModal({
   visible,
   slot,
@@ -22,23 +34,21 @@ export function RescheduleModal({
   onClose,
   testID = "reschedule-modal",
 }: RescheduleModalProps) {
+  // `card`, not `background`: a sheet is elevated, and in light mode a #fafafa
+  // sheet on a #fafafa page has no edge (NP-123).
+  const { colors, scrim } = useThemeTokens();
   const [date, setDate] = useState<string>(slot?.date ?? "");
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setDate(slot?.date ?? "");
-    setError(null);
-  }, [slot]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View
         testID={testID}
-        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "#0008" }}
+        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: scrim }}
       >
         <View
           style={{
-            backgroundColor: "#0a0a0a",
+            backgroundColor: colors.card,
             padding: 16,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,

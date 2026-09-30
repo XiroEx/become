@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/activeSession.test.ts
+// Run with: npm run test:file tests/unit/activeSession.test.ts
 //
 // The rule, as the product owner stated it: "if you generated a session and
 // never finished it, it stays till you finish. If a new day comes or if you log

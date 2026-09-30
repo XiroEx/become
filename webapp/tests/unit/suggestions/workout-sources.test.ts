@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/workout-sources.test.ts
+// Run with: npm run test:file tests/unit/suggestions/workout-sources.test.ts
 import { beforeEach, test } from 'node:test'
 import assert from 'node:assert/strict'
 import {

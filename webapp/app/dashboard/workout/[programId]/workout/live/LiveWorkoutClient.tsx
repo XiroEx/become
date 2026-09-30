@@ -4,26 +4,37 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Dumbbell, X, Plus, Layers, Unlink, Trash2, ChevronUp, ChevronDown } from "lucide-react";
-import { getExerciseVideoUrlAsync } from "@/lib/data/exerciseVideos";
+import {
+  getExerciseVideoDisplayAsync,
+  resolveExerciseVideo,
+  type ExerciseVideoDisplay,
+} from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
+import EquipmentAssumptionRow from "@/components/workout/EquipmentAssumptionRow";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
 import WorkoutSummary, { ConfettiBurst, WORKOUT_QUOTES, GOAL_CLOSINGS, getDayOfYear, type SummaryProps } from "@/components/WorkoutSummary";
 import FramedVideo from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { readQuickSession, clearQuickSession, stashQuickSessionWithId, updateQuickSession, quickSessionOverviewHref, quickSessionTrackHref, quickSessionLiveHref, swapQuickSessionExercise, QUICK_PROGRAM_ID } from "@/lib/quickSession/store";
+import { hydrateQuickSessionVideos } from "@/lib/quickSession/hydrateVideos";
 import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
-import { normalizeTracking, tracksTime, setUnitLabel } from "@/lib/workout/tracking";
+import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
+import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
+import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
-import { shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
+import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import WorkoutViewToggle from "@/components/workout/WorkoutViewToggle";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import DayChoiceModal from "@/components/workout/DayChoiceModal";
+import { dateKey } from "@/lib/dayWindow";
+import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
 
 interface SetData {
   reps: string;
@@ -60,6 +71,7 @@ interface SavedWorkout {
   exercises: SavedExercise[];
   completed: boolean;
   activeSeconds?: number;
+  date?: string;
   startedAt?: string;
 }
 
@@ -84,6 +96,9 @@ interface Exercise {
   videoTrim?: VideoTrimOverride | null;
   primaryMuscles?: string[];
   difficulty?: string;
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
   groupId?: string;
   groupType?: string;
   groupLabel?: string;
@@ -123,7 +138,7 @@ export default function LiveWorkoutPage() {
   // plumbing entirely and save with kind:'quick'.
   const quickSessionId = searchParams.get("session");
   const isQuick = programId === QUICK_PROGRAM_ID || !!quickSessionId;
-  const [quickMeta, setQuickMeta] = useState<{ title: string; focus?: string } | null>(null);
+  const [quickMeta, setQuickMeta] = useState<{ title: string; focus?: string; favorite?: boolean } | null>(null);
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [exercises, setExercises] = useState<Exercise[]>(fallbackExercises);
   const [currentPhase, setCurrentPhase] = useState(1);
@@ -170,6 +185,12 @@ export default function LiveWorkoutPage() {
   const [currentReps, setCurrentReps] = useState("");
   const [currentWeight, setCurrentWeight] = useState("");
   const [currentSpeed, setCurrentSpeed] = useState("");
+  // Display unit for the duration input only — currentReps (the value that's
+  // actually saved) always stays in seconds underneath. Defaults per-exercise
+  // (minutes for time+distance cardio, seconds otherwise) and resets whenever
+  // the active exercise changes so a previous exercise's toggle choice can't
+  // leak into the next one.
+  const [durationUnit, setDurationUnit] = useState<DurationUnit>("sec");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [showEditConfirmModal, setShowEditConfirmModal] = useState(false);
@@ -177,7 +198,29 @@ export default function LiveWorkoutPage() {
   // Newly-created sessions keep their default product copy until the first
   // completed save. Sessions named during creation never enter this flow.
   const [quickNeedsName, setQuickNeedsName] = useState(false);
-  const [pendingQuickCompletion, setPendingQuickCompletion] = useState<SetData[][] | null>(null);
+  // The finished set data held back at the naming gate, together with the local
+  // day the resulting log will be attributed to. The day is captured HERE
+  // rather than read at render time because saveWorkout consumes and clears
+  // logDateOverrideRef on the completing save, and the fallback name has to
+  // survive a failed save and a retry.
+  const [pendingQuickCompletion, setPendingQuickCompletion] = useState<{ data: SetData[][]; dayKey: string } | null>(null);
+  // Which local calendar day this workout's log is currently attributed to.
+  // Defaults to today (a fresh session has nothing to cross); a resumed
+  // session overwrites it with the server-confirmed date once loaded. Used
+  // only to detect a midnight crossing at finish time — see
+  // requestDayChoiceIfNeeded below.
+  const [workoutOriginKey, setWorkoutOriginKey] = useState<string>(
+    () => dateKey(new Date(), new Date().getTimezoneOffset()),
+  );
+  const [pendingDayChoice, setPendingDayChoice] = useState<{
+    data: SetData[][];
+    originalKey: string;
+    todayKey: string;
+  } | null>(null);
+  // Set by resolveDayChoice, read once by saveWorkout on the completing save,
+  // then cleared — a ref (not state) so saveWorkout's already-large dependency
+  // list doesn't need to grow to pick it up.
+  const logDateOverrideRef = useRef<string | null>(null);
   const [programCompleted, setProgramCompleted] = useState(false);
   const [completedProgramName, setCompletedProgramName] = useState("");
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -274,17 +317,19 @@ export default function LiveWorkoutPage() {
   const showSpeedInput = tracking === "time_distance" || tracking === "intervals";
   const setUnit = setUnitLabel(tracking, 1);
   const setUnitPlural = setUnitLabel(tracking, totalSets);
+  const isFloorsInput = isFloorsExercise(currentExercise?.name);
 
-  // Per-bell weight convention: when the exercise name implies a dumbbell or
-  // kettlebell, the user logs the per-bell weight (e.g. "90" for a pair of
-  // 90s — saying "I dumbbell benched 180" is awkward). We surface this by
-  // adjusting the label and showing a small "= total" helper below the input.
-  const bellStyle: 'dumbbell' | 'kettlebell' | null = (() => {
-    const n = (currentExercise?.name || '').toLowerCase()
-    if (/\bkettlebell|\bkb\b/.test(n)) return 'kettlebell'
-    if (/\bdumbbell|\bdb\b/.test(n)) return 'dumbbell'
-    return null
-  })()
+  // Reset the duration unit toggle to this exercise's sane default whenever
+  // the active exercise changes (not on every set, which would flip it back
+  // mid-exercise).
+  useEffect(() => {
+    setDurationUnit(defaultDurationUnit(currentExercise?.trackingType));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentExerciseIndex]);
+
+  // Per-bell weight convention — see lib/workout/dumbbellWeight.ts.
+  const bellInfo = getBellWeightInfo(currentExercise);
+  const bellStyle = bellInfo.style;
 
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
@@ -297,10 +342,11 @@ export default function LiveWorkoutPage() {
     }
   };
 
-  // Initialize exercises and build flow helper. Optional `prefill` map seeds
-  // reps/weight/speed from the user's last completed set per exercise slug —
-  // so opening a fresh workout starts with last-time's numbers ready to
-  // confirm, NOT marked complete.
+  // Initialize exercises and build flow helper. Sets always start blank —
+  // last-time's numbers are shown separately as a "Last: X lbs × Y reps"
+  // reference (see exerciseHistory below), never written into the editable
+  // fields. Writing them in silently logged weight/reps the member never
+  // actually entered if they tapped Done without looking closely.
   type PerformanceEntry = {
     reps?: number;
     weight?: number;
@@ -309,36 +355,15 @@ export default function LiveWorkoutPage() {
     distance?: number;
     date?: string;
   };
-  const initializeExercises = (
-    exList: Exercise[],
-    prefill?: Record<string, PerformanceEntry | null>,
-  ) => {
-    const data = exList.map((ex) => {
-      // Match either by direct slug or by name-normalized slug — same logic
-      // the endpoint uses on its side.
-      const directSlug = ex.exerciseSlug?.toLowerCase();
-      const nameSlug = ex.name
-        ?.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-      const prior =
-        (directSlug && prefill?.[directSlug]) ||
-        (nameSlug && prefill?.[nameSlug]) ||
-        null;
-      return Array.from({ length: ex.sets || 3 }, () => ({
-        reps: prior?.reps != null ? String(prior.reps) : '',
-        weight: prior?.weight != null ? String(prior.weight) : '',
-        speed: prior?.speed != null ? String(prior.speed) : '',
-        completed: false,
-      }));
-    });
+  const initializeExercises = (exList: Exercise[]) => {
+    const data = exList.map((ex) => Array.from({ length: ex.sets || 3 }, () => blankSet()));
     const flow = buildWorkoutFlow(exList);
     return { data, flow };
   };
 
-  // Fetch the user's last-completed-set per exercise so the live workout can
-  // prefill inputs. Best-effort — failure returns an empty map and we fall
-  // back to empty inputs.
+  // Fetch the user's last-completed-set per exercise, for the "Last: X lbs ×
+  // Y reps" reference and PR display. Best-effort — failure returns an empty
+  // map and the reference simply doesn't show.
   const fetchLastPerformance = async (
     token: string,
     exList: Exercise[],
@@ -457,6 +482,9 @@ export default function LiveWorkoutPage() {
             ...(d.rest && { rest: d.rest }),
             ...(d.duration && { duration: d.duration }),
             ...(d.primaryMuscles && { primaryMuscles: d.primaryMuscles }),
+            ...(d.equipment && { equipment: d.equipment }),
+            ...(d.laterality && { laterality: d.laterality }),
+            ...(d.movementPatterns && { movementPatterns: d.movementPatterns }),
             // A superset made mid-session lives in the stash — carry it back in
             // or the flow stops interleaving the moment the view reloads.
             ...(d.groupId && { groupId: d.groupId }),
@@ -467,7 +495,7 @@ export default function LiveWorkoutPage() {
             ...(d.addedAdHoc && { addedAdHoc: true }),
           }));
           const title = stored?.title || "Quick Session";
-          setQuickMeta({ title, focus: stored?.focus });
+          setQuickMeta({ title, focus: stored?.focus, favorite: stored?.favorite });
           setQuickNeedsName(shouldPromptForQuickSessionName(stored));
 
           if (exs.length === 0) {
@@ -483,20 +511,28 @@ export default function LiveWorkoutPage() {
             return;
           }
 
-          const wd: WorkoutData = { day: title, title, exercises: exs };
+          // Programs get videoUrl/thumbnailUrl/etc denormalized server-side
+          // (see /api/programs/current-workout); a quick session has no
+          // program to hydrate through, so its exercises never carry them —
+          // resolve by slug here or the live view falls back to the
+          // legacy by-name lookup, which rarely has anything for a modern
+          // exercise.
+          const token = localStorage.getItem("token");
+          const hydratedExs = await hydrateQuickSessionVideos(exs, token);
+
+          const wd: WorkoutData = { day: title, title, exercises: hydratedExs };
           setWorkout(wd);
-          setExercises(exs);
+          setExercises(hydratedExs);
           setCurrentPhase(1);
 
           // Prefill last-time numbers (slug-based — works without a program).
-          const token = localStorage.getItem("token");
-          const lastPerformance = token ? await fetchLastPerformance(token, exs) : {};
+          const lastPerformance = token ? await fetchLastPerformance(token, hydratedExs) : {};
           // "Last session: 185 lbs × 8" and the summary's PR count both read
           // exerciseHistory, keyed by NAME. Programs get it from the workouts
           // endpoint; a quick session had nothing, so it never celebrated a PR
           // it had just watched you set.
           const quickHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
-          for (const ex of exs) {
+          for (const ex of hydratedExs) {
             const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || '').toLowerCase();
             const prior = slug ? lastPerformance[slug] : null;
             if (prior) {
@@ -509,14 +545,14 @@ export default function LiveWorkoutPage() {
             }
           }
           setExerciseHistory(quickHistory);
-          const { data, flow } = initializeExercises(exs, lastPerformance);
+          const { data, flow } = initializeExercises(hydratedExs);
           // Restore shared progress from the Track view (reps/weight/completed) so
           // flipping the Track|Live tab never loses entered sets.
           const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
           const restored = savedQP?.exercises?.length
             ? data.map((sets, i) => {
                 const savedEx = savedQP.exercises[i];
-                const timed = tracksTime(exs[i]?.trackingType);
+                const timed = tracksTime(hydratedExs[i]?.trackingType);
                 return sets.map((s, si) => {
                   const ss = savedEx?.sets?.[si];
                   if (!ss) return s;
@@ -550,6 +586,25 @@ export default function LiveWorkoutPage() {
             setCurrentSpeed(startSet.speed ?? "");
           }
           setLoading(false);
+
+          // The stashed draft carries no timestamp, so a resumed quick
+          // session's true start day can only come from its server log — ask
+          // for it in the background (best-effort; a brand-new session with
+          // no log yet just 404s and workoutOriginKey keeps its "today"
+          // default, which is already correct). Not awaited: this only
+          // matters at finish time, well after the workout is usable.
+          if (quickSessionId && token) {
+            fetch(`/api/workouts/session?id=${encodeURIComponent(quickSessionId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((b: { session?: { date?: string } } | null) => {
+                if (b?.session?.date) {
+                  setWorkoutOriginKey(dateKey(new Date(b.session.date), new Date().getTimezoneOffset()));
+                }
+              })
+              .catch(() => { /* best-effort — day-choice just won't offer if this fails */ });
+          }
           return;
         }
 
@@ -579,14 +634,15 @@ export default function LiveWorkoutPage() {
           setExercises(workoutData.exercises);
           setCurrentPhase(data.phase || 1);
 
-          // Prefill from last completed set per exercise — kicked off in
-          // parallel with the resume-progress lookup below so we don't add
-          // latency in the resume path. Results are used only on fresh
-          // start (resume / draft override entirely).
+          // Kicked off in parallel with the resume-progress lookup below so we
+          // don't add latency in the resume path. Sets in exerciseHistory
+          // (from the resume lookup) still show a "Last: X lbs × Y reps"
+          // hint; this call's only remaining job is populating exercisePRs
+          // as a side effect (see fetchLastPerformance).
           const prefillPromise = fetchLastPerformance(token, workoutData.exercises);
-          const lastPerformance = await prefillPromise;
+          await prefillPromise;
 
-          let { data: initialData, flow } = initializeExercises(workoutData.exercises, lastPerformance);
+          let { data: initialData, flow } = initializeExercises(workoutData.exercises);
           setExerciseData(initialData);
           setWorkoutFlow(flow);
 
@@ -612,6 +668,14 @@ export default function LiveWorkoutPage() {
             if (progressData.workout && progressData.isResume) {
               const savedWorkout = progressData.workout as SavedWorkout;
 
+              // The server-confirmed day this log actually started on — a
+              // resumed workout can be picking up after midnight, so "today"
+              // (the default above) would be wrong for detecting that at
+              // finish time.
+              if (savedWorkout.date) {
+                setWorkoutOriginKey(dateKey(new Date(savedWorkout.date), new Date().getTimezoneOffset()));
+              }
+
               // Restore swapped exercises from saved workout, and bring back
               // anything added mid-session: a program workout rebuilds its
               // exercise list from the program on every load, so without this
@@ -626,9 +690,11 @@ export default function LiveWorkoutPage() {
               savedWorkout.exercises?.forEach((savedEx, idx) => {
                 if (idx < updatedExercises.length && savedEx.originalExerciseSlug) {
                   // Clear video fields too: the program data still has the
-                  // ORIGINAL exercise's video URL/dimensions, which would
-                  // play the wrong video for the swap. Falling them back to
-                  // undefined makes the resolver look up by the new name.
+                  // ORIGINAL exercise's video URL/dimensions/trim, which would
+                  // play the wrong video for the swap — and clip the right one
+                  // to an in/out window set for different footage. Falling them
+                  // back to undefined makes the resolver look up by the new
+                  // name, trim included.
                   updatedExercises[idx] = {
                     ...updatedExercises[idx],
                     name: savedEx.name,
@@ -637,6 +703,7 @@ export default function LiveWorkoutPage() {
                     videoWidth: null,
                     videoHeight: null,
                     videoFraming: null,
+                    videoTrim: null,
                   };
                   restoredSwaps[idx] = {
                     originalSlug: savedEx.originalExerciseSlug,
@@ -1037,6 +1104,10 @@ export default function LiveWorkoutPage() {
       // Snapshot active seconds now so the server stores the time at the
       // moment of save, not the time the request lands.
       const activeSecondsAtSave = activeSecondsBaseline + Math.floor((Date.now() - sessionStartTime) / 1000);
+      // Which day the member picked for a workout that crossed midnight (set
+      // by resolveDayChoice). Only ever sent on the completing save. Read here
+      // but NOT cleared here — see the consume below.
+      const logDateOverride = isComplete ? logDateOverrideRef.current : null;
       // Quick sessions post a kind:'quick' body (matched server-side by
       // sessionId); program sessions post the program/phase/day body.
       const saveBody = isQuick && quickSessionId
@@ -1046,10 +1117,17 @@ export default function LiveWorkoutPage() {
             title: quickTitleOverride ?? workout.title,
             needsName: isComplete ? false : quickNeedsName,
             ...(quickMeta?.focus && { focus: quickMeta.focus }),
+            ...(quickMeta?.favorite && { favorite: true }),
             exercises: exercisesToSave,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            ...(logDateOverride && { performedAt: logDateOverride }),
+            // Reaching this save means the live view is genuinely open —
+            // stamps/refreshes startedAt server-side (see IWorkoutLog.startedAt),
+            // which is what turns a same-day "Plan it" placeholder into a real
+            // in-progress workout the moment it's actually started.
+            started: true,
             tz: new Date().getTimezoneOffset(),
             // The zone name, not just the offset: an offset is wrong for half
             // the year the moment daylight saving moves.
@@ -1064,6 +1142,12 @@ export default function LiveWorkoutPage() {
             activeSeconds: activeSecondsAtSave,
             ...(scheduledDate && { scheduledDate }),
             ...(isComplete && { duration: Math.max(1, Math.round(activeSecondsAtSave / 60)) }),
+            ...(logDateOverride && { performedAt: logDateOverride }),
+            // This attempt's id, on every save of it — quick sessions send
+            // `sessionId` for the same reason. It is what lets the server tell
+            // a REPLAY (a retry, or a queued write flushed after midnight)
+            // from a genuinely new workout, instead of logging it twice.
+            attemptId: workoutAttemptId(programId, workout.day),
             tz: new Date().getTimezoneOffset(),
           };
       const res = await fetch("/api/workouts", {
@@ -1083,10 +1167,27 @@ export default function LiveWorkoutPage() {
         invalidateMindSession();
         // Clear the draft — workout is done, no need to resume
         try { localStorage.removeItem(`live_draft_${programId}_${workout.day}`); } catch { /* ignore */ }
+        // …and the attempt id with it: the next workout on this day label is a
+        // NEW attempt, and reusing this one's id would have the server read
+        // its first save as a replay of the workout just finished.
+        if (!isQuick) clearWorkoutAttemptId(programId, workout.day);
         clearPosition(isQuick && quickSessionId ? quickScope(quickSessionId) : programScope(programId, workout.day));
         // Activity changed → next Mind load composes a fresh session.
         invalidateMindSession();
       }
+      // The day choice is consumed only now, once the server has actually
+      // accepted the completing save. Clearing it at request-build time meant a
+      // save that failed left the retry with nothing to send: no performedAt,
+      // so the server dated the log to whenever the retry happened. A session
+      // finished after midnight and assigned to yesterday came back named
+      // "9/9/26 workout" and filed under 9/10 — and the naming prompt, which
+      // stays open on a failed save so it CAN be retried, is the surface that
+      // made that retry easy to hit.
+      //
+      // Holding it cannot leak into a later save: only a completing save reads
+      // it, and any later completion re-opens the day-choice modal (the
+      // workout still belongs to an earlier day), whose answer overwrites this.
+      if (isComplete) logDateOverrideRef.current = null;
       return true;
     } catch (error) {
       console.error("Error saving workout:", error);
@@ -1192,11 +1293,30 @@ export default function LiveWorkoutPage() {
     return parseRestTime(exercise?.rest || getSmartRestDefault(exercise));
   };
 
+  // A workout that started on one local calendar day and is finishing on
+  // another (crossed midnight) needs an explicit choice of which day it
+  // counts toward — silently picking one, either way, is what the member
+  // reported as "lost" data actually being real but mis-dated. Purely
+  // client-side: workoutOriginKey is already resolved (server-confirmed for
+  // a resume, "today" for a fresh start), so no network round-trip needed
+  // here.
+  const requestDayChoiceIfNeeded = useCallback((updatedData: SetData[][]): boolean => {
+    const todayKeyNow = dateKey(new Date(), new Date().getTimezoneOffset());
+    if (workoutOriginKey === todayKeyNow) return false;
+    setPendingDayChoice({ data: updatedData, originalKey: workoutOriginKey, todayKey: todayKeyNow });
+    return true;
+  }, [workoutOriginKey]);
+
   const requestQuickNameBeforeCompletion = useCallback((updatedData: SetData[][]): boolean => {
     if (!isQuick || !quickSessionId || !quickNeedsName) return false;
-    setPendingQuickCompletion(updatedData);
+    // Which day this log lands on: the one picked in the day-choice modal if it
+    // was asked, otherwise the day the workout already belongs to.
+    setPendingQuickCompletion({
+      data: updatedData,
+      dayKey: logDateOverrideRef.current ?? workoutOriginKey,
+    });
     return true;
-  }, [isQuick, quickSessionId, quickNeedsName]);
+  }, [isQuick, quickSessionId, quickNeedsName, workoutOriginKey]);
 
   // Advance to next step with appropriate rest
   const advanceStep = useCallback((updatedData: SetData[][], isComplete: boolean) => {
@@ -1225,6 +1345,20 @@ export default function LiveWorkoutPage() {
     setCurrentStepIndex(prev => prev + 1);
   }, [currentStepIndex, workoutFlow, exercises, isQuick, quickSessionId]);
 
+  // Resolves the day-choice modal: stash which day the member picked (read
+  // once by saveWorkout, then cleared), then fall through to the same
+  // naming-gate + finalize sequence completeSet/skipSet/skipExercise use.
+  const resolveDayChoice = useCallback((chosenKey: string) => {
+    if (!pendingDayChoice) return;
+    const { data, originalKey } = pendingDayChoice;
+    logDateOverrideRef.current = chosenKey === originalKey ? null : chosenKey;
+    setPendingDayChoice(null);
+    if (requestQuickNameBeforeCompletion(data)) return;
+    setExerciseData(data);
+    saveWorkout(data, true);
+    advanceStep(data, true);
+  }, [pendingDayChoice, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+
   const completeSet = useCallback(async () => {
     if (!currentStep) return;
 
@@ -1241,13 +1375,16 @@ export default function LiveWorkoutPage() {
     // Clear auto-save timeout since we're doing an immediate save
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
-    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (isLastStep) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
 
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, currentReps, currentWeight, currentSpeed, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+  }, [currentStep, currentReps, currentWeight, currentSpeed, isLastStep, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipRest = () => {
     setIsResting(false);
@@ -1271,13 +1408,16 @@ export default function LiveWorkoutPage() {
 
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
-    if (isLastStep && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (isLastStep) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
 
     saveWorkout(updatedData, isLastStep);
     advanceStep(updatedData, isLastStep);
-  }, [currentStep, isLastStep, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
+  }, [currentStep, isLastStep, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, advanceStep]);
 
   const skipExercise = useCallback(async () => {
     if (!currentStep) return;
@@ -1312,7 +1452,10 @@ export default function LiveWorkoutPage() {
 
     const allDone = nextIdx >= workoutFlow.length;
 
-    if (allDone && requestQuickNameBeforeCompletion(updatedData)) return;
+    if (allDone) {
+      if (requestDayChoiceIfNeeded(updatedData)) return;
+      if (requestQuickNameBeforeCompletion(updatedData)) return;
+    }
 
     setExerciseData(updatedData);
     saveWorkout(updatedData, allDone);
@@ -1338,14 +1481,14 @@ export default function LiveWorkoutPage() {
     }
 
     setCurrentStepIndex(nextIdx);
-  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, requestQuickNameBeforeCompletion, saveWorkout, exercises, isQuick, quickSessionId]);
+  }, [currentStep, currentStepIndex, workoutFlow, exerciseData, requestDayChoiceIfNeeded, requestQuickNameBeforeCompletion, saveWorkout, exercises, isQuick, quickSessionId]);
 
   const finishNamedQuickSession = useCallback(async (title: string) => {
     if (!quickSessionId || !pendingQuickCompletion) {
       throw new Error("This workout is no longer ready to finish");
     }
 
-    const saved = await saveWorkout(pendingQuickCompletion, true, undefined, title);
+    const saved = await saveWorkout(pendingQuickCompletion.data, true, undefined, title);
     if (!saved) throw new Error("Could not finish the workout. Try again.");
 
     // Keep the local model and completion summary in sync with the name that
@@ -1353,7 +1496,7 @@ export default function LiveWorkoutPage() {
     updateQuickSession(quickSessionId, { title });
     setWorkout((current) => current ? { ...current, day: title, title } : current);
     setQuickMeta((current) => current ? { ...current, title } : { title });
-    setExerciseData(pendingQuickCompletion);
+    setExerciseData(pendingQuickCompletion.data);
     setQuickNeedsName(false);
     setPendingQuickCompletion(null);
     clearQuickProgress(quickSessionId);
@@ -1361,7 +1504,7 @@ export default function LiveWorkoutPage() {
     setShowSummary(true);
   }, [pendingQuickCompletion, quickSessionId, saveWorkout]);
 
-  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
     const exIdx = currentExerciseIndex;
     const oldExercise = exercises[exIdx];
     if (!oldExercise) return;
@@ -1378,7 +1521,8 @@ export default function LiveWorkoutPage() {
     // Replace the exercise, preserving programming prescription. CRITICAL:
     // clear any video-specific fields from the prior exercise so the video
     // resolver looks up by the NEW exercise name instead of replaying the
-    // stale URL/dimensions/framing of the original.
+    // stale URL/dimensions/framing/trim of the original. An in/out window
+    // belongs to one file; left behind, it clips the replacement's video.
     const updatedExercises = [...exercises];
     updatedExercises[exIdx] = {
       ...oldExercise,
@@ -1386,10 +1530,14 @@ export default function LiveWorkoutPage() {
       name: alternative.name,
       type: alternative.category,
       trackingType: alternative.trackingType,
+      equipment: alternative.equipment,
+      laterality: alternative.laterality,
+      movementPatterns: alternative.movementPatterns,
       videoUrl: undefined,
       videoWidth: null,
       videoHeight: null,
       videoFraming: null,
+      videoTrim: null,
     };
     setExercises(updatedExercises);
 
@@ -1400,6 +1548,9 @@ export default function LiveWorkoutPage() {
         name: alternative.name,
         exerciseSlug: alternative.slug,
         trackingType: alternative.trackingType,
+        equipment: alternative.equipment,
+        laterality: alternative.laterality,
+        movementPatterns: alternative.movementPatterns,
       });
     }
 
@@ -1488,6 +1639,9 @@ export default function LiveWorkoutPage() {
           ...(e.rest && { rest: e.rest }),
           ...(e.duration && { duration: e.duration }),
           ...(e.primaryMuscles && { primaryMuscles: e.primaryMuscles }),
+          ...(e.equipment && { equipment: e.equipment }),
+          ...(e.laterality && { laterality: e.laterality }),
+          ...(e.movementPatterns && { movementPatterns: e.movementPatterns }),
           ...(e.groupId && { groupId: e.groupId }),
           ...(e.groupType && { groupType: e.groupType }),
           ...(e.groupLabel && { groupLabel: e.groupLabel }),
@@ -1694,24 +1848,42 @@ export default function LiveWorkoutPage() {
     return exerciseData[exIdx]?.every(s => s.completed) ?? false;
   };
 
-  // Get video URL for current exercise
-  // `null` = this exercise has no demo. It used to default to a placeholder
-  // clip, which meant a video an admin had removed was replaced by an
-  // unrelated one rather than by an honest empty state.
-  const [currentVideo, setCurrentVideo] = useState<string | null>(null);
+  // Get video URL for current exercise.
+  //
+  // The name-keyed legacy row for the current exercise, once resolved. Only
+  // consulted when the exercise carries no video of its own — which is every
+  // swapped-in exercise, since a swap clears the programmed one's video fields
+  // on purpose. `resolveExerciseVideo` decides which row the framing and trim
+  // come from.
+  const [legacyVideo, setLegacyVideo] = useState<ExerciseVideoDisplay | null>(null);
 
   useEffect(() => {
     if (exercises.length > 0 && currentExerciseIndex < exercises.length) {
       const exercise = exercises[currentExerciseIndex];
       if (exercise.videoUrl) {
-        setCurrentVideo(exercise.videoUrl);
-      } else {
-        // Legacy fallback for exercises whose video was never denormalized.
-        setCurrentVideo(null);
-        getExerciseVideoUrlAsync(exercise.name).then(setCurrentVideo);
+        setLegacyVideo(null);
+        return;
       }
+      // Legacy fallback for exercises whose video was never denormalized.
+      // `cancelled` matters now that the lookup carries a trim window: a late
+      // resolve for the previous exercise would otherwise clip the one on
+      // screen to bounds set for another clip.
+      let cancelled = false;
+      setLegacyVideo(null);
+      getExerciseVideoDisplayAsync(exercise.name).then((display) => {
+        if (!cancelled) setLegacyVideo(display);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, [exercises, currentExerciseIndex]);
+
+  // `null` = this exercise has no demo. It used to default to a placeholder
+  // clip, which meant a video an admin had removed was replaced by an
+  // unrelated one rather than by an honest empty state.
+  const currentVideoDisplay = resolveExerciseVideo(currentExercise ?? {}, legacyVideo);
+  const currentVideo = currentVideoDisplay.videoUrl;
 
   // Show loading state
   if (loading || !workout || exercises.length === 0 || workoutFlow.length === 0) {
@@ -1756,7 +1928,13 @@ export default function LiveWorkoutPage() {
         onClick={handleVideoTap}
       >
         {!currentVideo ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-white/5 backdrop-blur-sm">
+          // A real video fills this same full-screen area, framed so its
+          // subject sits above the exercise info panel (`absolute bottom-0`,
+          // transparent at its own top edge — see below). Centering this
+          // placeholder on the full height instead would land it behind that
+          // panel, where the icon/text visibly bled through the Swap/Add
+          // Exercise buttons. Anchoring near the top keeps it clear.
+          <div className="flex h-full w-full flex-col items-center justify-start gap-3 bg-white/5 pt-28 backdrop-blur-sm">
             <Dumbbell className="h-12 w-12 text-white/30" />
             <span className="text-sm font-medium text-white/40">No video available</span>
           </div>
@@ -1764,10 +1942,10 @@ export default function LiveWorkoutPage() {
           <FramedVideo
             src={currentVideo}
             surface="live"
-            videoWidth={currentExercise?.videoWidth}
-            videoHeight={currentExercise?.videoHeight}
-            videoFraming={currentExercise?.videoFraming}
-            videoTrim={currentExercise?.videoTrim}
+            videoWidth={currentVideoDisplay.videoWidth}
+            videoHeight={currentVideoDisplay.videoHeight}
+            videoFraming={currentVideoDisplay.videoFraming}
+            videoTrim={currentVideoDisplay.videoTrim}
             onDimensions={(w, h) => {
               // Back-write dims to the server the first time this video is
               // played by anyone. Fire-and-forget — workout flow keeps moving
@@ -2185,6 +2363,18 @@ export default function LiveWorkoutPage() {
                   </button>
                 )}
               </div>
+              {/* What implement this is being logged as, when the name does not
+                  say so — see components/workout/EquipmentAssumptionRow. A
+                  disclosure, not a picker: the other-equipment chips that used
+                  to sit here offered a goblet squat on a barbell and a hack
+                  squat machine mid-set. Changing the exercise lives in "Swap
+                  Exercise" above, and picking a variation lives where an
+                  exercise is added. */}
+              <EquipmentAssumptionRow
+                dark
+                name={currentExercise?.name}
+                equipment={currentExercise?.equipment}
+              />
               {/* Tip / cue */}
               {currentExercise?.tip && (
                 <p className="mt-1 text-sm text-green-400">{currentExercise.tip}</p>
@@ -2222,7 +2412,11 @@ export default function LiveWorkoutPage() {
                         {(() => {
                           const h = exerciseHistory[currentExercise.name]
                           if (isIntervalExercise || showTimeInput) {
-                            return h.duration ? `${h.duration}s` : h.reps ? `${h.reps}s` : "completed"
+                            const lastSeconds = h.duration || h.reps
+                            if (!lastSeconds) return "completed"
+                            return durationUnit === "min"
+                              ? `${secondsToUnitDisplay(lastSeconds, "min")}m`
+                              : `${lastSeconds}s`
                           }
                           if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
                           return h.reps > 0 ? `${h.reps} reps` : "completed"
@@ -2282,20 +2476,28 @@ export default function LiveWorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div data-tour="live-inputs" className="relative flex gap-3 mb-6">
+                  {/* Every label row here is exactly h-5 tall, and that is
+                      load-bearing. The time column carries a unit toggle
+                      beside its label; that pair does not fit a third of a
+                      phone's width once cardio also asks for distance and
+                      speed, so the label wrapped onto a second line and shoved
+                      the time box half a row below the two next to it. A fixed
+                      label-row height keeps every input on the same line
+                      whatever its label does — and the label itself is short
+                      enough ("Time", not "Duration") that it no longer wants
+                      to wrap in the first place. */}
+                  <div data-tour="live-inputs" className="relative flex items-start gap-3 mb-6">
                     {/* Weight input — only for reps_weight */}
                     {showWeightInput && (
                       <div className="flex-1">
-                        <div className="mb-1 flex items-center justify-between">
-                          <label className="text-xs text-white/60">
-                            {bellStyle === 'dumbbell' ? 'Weight per DB (lbs)'
-                              : bellStyle === 'kettlebell' ? 'Weight per KB (lbs)'
-                              : 'Weight (lbs)'}
+                        <div className="mb-1 flex h-5 items-center justify-between gap-1 overflow-hidden">
+                          <label className="min-w-0 truncate text-xs text-white/60">
+                            {bellWeightLabel(bellStyle)}
                           </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
                             Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
-                            <span className="text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
+                            <span className="shrink-0 text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
                           )}
                         </div>
                         <input
@@ -2307,7 +2509,7 @@ export default function LiveWorkoutPage() {
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
-                        {bellStyle === 'dumbbell' && Number(currentWeight) > 0 && (
+                        {bellInfo.showTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
                             = {Number(currentWeight) * 2} lbs total
                           </div>
@@ -2317,7 +2519,7 @@ export default function LiveWorkoutPage() {
                     {/* Reps input — for reps_weight, reps_bodyweight, reps_only */}
                     {showRepsInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Reps</label>
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">Reps</label>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -2331,26 +2533,53 @@ export default function LiveWorkoutPage() {
                     {/* Duration input — for time, time_distance, intervals */}
                     {showTimeInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">
-                          {isIntervalExercise ? 'Duration (sec) — optional' : 'Duration (sec)'}
-                        </label>
+                        <div className="mb-1 flex h-5 items-center justify-between gap-1 overflow-hidden">
+                          {/* "Time", not "Duration", and no "— optional"
+                              tacked on: this label sits beside the unit
+                              toggle in a third of a phone's width when the
+                              exercise also tracks distance and speed. That an
+                              interval's time is optional is said by the hint
+                              under the row, which shows exactly while nothing
+                              has been typed. */}
+                          <label className="min-w-0 truncate text-xs text-white/60">
+                            {`Time (${durationUnit})`}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setDurationUnit((u) => (u === "sec" ? "min" : "sec"))}
+                            className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/70 hover:bg-white/20"
+                          >
+                            {durationUnit === "sec" ? "min" : "sec"}
+                          </button>
+                        </div>
                         <input
+                          // Uncontrolled + remounted on step/unit change: a
+                          // controlled value re-derived from the seconds↔unit
+                          // round trip on every keystroke would eat a
+                          // trailing decimal point ("2." collapses back to
+                          // "2" the instant it's typed). defaultValue only
+                          // resyncs when the key changes; while it doesn't,
+                          // the browser owns exactly what was typed.
+                          key={`duration-${currentStepIndex}-${durationUnit}`}
                           type="number"
-                          inputMode="numeric"
-                          value={currentReps}
-                          onChange={(e) => updateCurrentInput("reps", e.target.value)}
+                          inputMode="decimal"
+                          defaultValue={secondsToUnitDisplay(currentReps, durationUnit)}
+                          onChange={(e) => updateCurrentInput("reps", unitDisplayToSeconds(e.target.value, durationUnit))}
                           placeholder={currentExercise?.duration?.replace(/[^0-9]/g, "") || currentExercise?.reps || "30"}
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
                       </div>
                     )}
-                    {/* Distance input — time_distance only */}
+                    {/* Distance input — time_distance only. Stairmaster-style
+                        exercises measure floors climbed, not meters. */}
                     {tracking === "time_distance" && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Distance (m)</label>
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">
+                          {isFloorsInput ? "Floors" : "Distance (m)"}
+                        </label>
                         <input
                           type="number"
-                          inputMode="decimal"
+                          inputMode={isFloorsInput ? "numeric" : "decimal"}
                           value={currentWeight}
                           onChange={(e) => updateCurrentInput("weight", e.target.value)}
                           placeholder="0"
@@ -2361,7 +2590,7 @@ export default function LiveWorkoutPage() {
                     {/* Speed input — time_distance and intervals */}
                     {showSpeedInput && (
                       <div className="flex-1">
-                        <label className="mb-1 block text-xs text-white/60">Speed (mph)</label>
+                        <label className="mb-1 block h-5 truncate text-xs leading-5 text-white/60">Speed (mph)</label>
                         <input
                           type="number"
                           inputMode="decimal"
@@ -2382,7 +2611,7 @@ export default function LiveWorkoutPage() {
                   {/* Quick weight buttons — only for weighted exercises */}
                   {showWeightInput && (
                     <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                      {[45, 95, 135, 185, 225].map((weight) => (
+                      {weightQuickPicks(bellStyle).map((weight) => (
                         <button
                           key={weight}
                           onClick={() => updateCurrentInput("weight", weight.toString())}
@@ -2656,12 +2885,22 @@ export default function LiveWorkoutPage() {
         )}
       </AnimatePresence>
 
+      {pendingDayChoice && (
+        <DayChoiceModal
+          originalKey={pendingDayChoice.originalKey}
+          todayKey={pendingDayChoice.todayKey}
+          onChoose={resolveDayChoice}
+        />
+      )}
+
       {pendingQuickCompletion && workout && (
         <QuickSessionNamePrompt
           initialName={workout.title}
           confirmLabel="Save name & finish"
           tone="dark"
+          fallbackName={fallbackQuickSessionName(pendingQuickCompletion.dayKey)}
           onConfirm={finishNamedQuickSession}
+          onSkip={finishNamedQuickSession}
           onCancel={() => setPendingQuickCompletion(null)}
         />
       )}
@@ -2698,7 +2937,9 @@ export default function LiveWorkoutPage() {
         onClose={() => setShowAddExercise(false)}
         onAdd={handleAddExercise}
         anchorName={currentExercise?.name}
+        anchorSlug={currentExercise?.exerciseSlug}
         anchorInGroup={!!currentExercise?.groupId}
+        workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         tone="dark"
       />
 

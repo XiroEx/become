@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { View, Text, ScrollView, RefreshControl } from "react-native";
+import { View, ScrollView, RefreshControl, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Settings } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StreakBanner } from "@/components/StreakBanner";
@@ -8,6 +10,9 @@ import {
   CheckInModal,
   type CheckInPayload,
 } from "@/components/CheckInModal";
+import { LegalLinks } from "@/components/legal/LegalLinks";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface TodayWorkoutSummary {
   programName: string;
@@ -16,12 +21,34 @@ export interface TodayWorkoutSummary {
   exerciseCount: number;
 }
 
+/**
+ * Today's workout as one sentence, for the grouped summary below. Reads the way
+ * the card reads, in the order it reads: what, which program and phase, how big.
+ */
+export function todayWorkoutSummaryLabel(w: TodayWorkoutSummary): string {
+  const exercises = `${w.exerciseCount} exercise${w.exerciseCount === 1 ? "" : "s"}`;
+  const where = [w.programName, w.phaseLabel].filter(Boolean).join(", ");
+  return `${w.workoutTitle}. ${where}. ${exercises}.`;
+}
+
 export interface DashboardScreenProps {
   userName?: string | null;
   streakDays: number;
   freezeAvailable?: boolean;
   todayWorkout: TodayWorkoutSummary | null;
-  onStartWorkout?: () => void;
+  /**
+   * Opens today's workout. REQUIRED, and deliberately not defaulted: it shipped
+   * as `onStartWorkout ?? (() => {})` and the dashboard route never passed one,
+   * so the button rendered, pressed, and did nothing. A required prop is what
+   * makes `tsc` fail the next time a route forgets it.
+   */
+  onStartWorkout: () => void;
+  /**
+   * Opens the calendar. Calendar is a hidden route in the (tabs) tree
+   * (`href: null`), so — like the settings gear — a screen has to offer the way
+   * in or the month view is unreachable from the UI.
+   */
+  onOpenCalendar: () => void;
   onSubmitCheckIn: (payload: CheckInPayload) => Promise<void> | void;
   submittingCheckIn?: boolean;
   /** Controls modal externally for testability. Defaults to internal state. */
@@ -34,6 +61,13 @@ export interface DashboardScreenProps {
   /** Pull-to-refresh wiring. */
   refreshing?: boolean;
   onRefresh?: () => void;
+  /**
+   * Opens the settings screen. THE ONLY ENTRY POINT TO IT in a store build:
+   * settings is a hidden route in the (tabs) tree with no tab of its own, so
+   * without this button the screen — and with it the account-deletion path
+   * both app stores require — is unreachable by a member or a reviewer.
+   */
+  onOpenSettings?: () => void;
 }
 
 export function DashboardScreen({
@@ -42,6 +76,7 @@ export function DashboardScreen({
   freezeAvailable = false,
   todayWorkout,
   onStartWorkout,
+  onOpenCalendar,
   onSubmitCheckIn,
   submittingCheckIn = false,
   checkInOpen,
@@ -50,7 +85,9 @@ export function DashboardScreen({
   errorText,
   refreshing = false,
   onRefresh,
+  onOpenSettings,
 }: DashboardScreenProps) {
+  const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
   const open = isControlled ? checkInOpen : internalOpen;
@@ -63,13 +100,18 @@ export function DashboardScreen({
     return (
       <SafeAreaView
         edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+        style={{ flex: 1, backgroundColor: colors.background }}
         testID="dashboard-screen"
       >
         <View
           testID="dashboard-skeleton"
           style={{ padding: 16, gap: 16 }}
+          // Three grey rectangles are nothing at all to a screen reader unless
+          // they are one element that says what is happening.
+          accessible
+          accessibilityRole="progressbar"
           accessibilityLabel="Loading your dashboard"
+          accessibilityLiveRegion="polite"
         >
           {[0, 1, 2].map((i) => (
             <View
@@ -77,7 +119,7 @@ export function DashboardScreen({
               style={{
                 height: i === 0 ? 32 : 96,
                 borderRadius: 12,
-                backgroundColor: "#1a1a1a",
+                backgroundColor: colors.muted,
               }}
             />
           ))}
@@ -89,7 +131,7 @@ export function DashboardScreen({
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#0a0a0a" }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       testID="dashboard-screen"
     >
       <ScrollView
@@ -108,25 +150,64 @@ export function DashboardScreen({
         {errorText ? (
           <View
             testID="dashboard-error"
+            accessibilityLiveRegion="polite"
             style={{
               padding: 12,
               borderRadius: 12,
-              backgroundColor: "#3a1212",
+              backgroundColor: tint("destructive", 0.18),
+              gap: 8,
             }}
           >
-            <Text className="text-destructive text-sm">{errorText}</Text>
+            <Text accessibilityRole="alert" className="text-destructive text-sm">
+              {errorText}
+            </Text>
+            {onRefresh ? (
+              <Button
+                testID="dashboard-retry-button"
+                variant="secondary"
+                size="sm"
+                onPress={onRefresh}
+                accessibilityLabel="Retry"
+              >
+                Retry
+              </Button>
+            ) : null}
           </View>
         ) : null}
-        <View>
-          <Text
-            testID="dashboard-greeting"
-            className="text-foreground text-2xl font-bold"
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
+          <View style={{ flexShrink: 1 }}>
+            <Text
+              testID="dashboard-greeting"
+              accessibilityRole="header"
+              className="text-foreground text-2xl font-bold"
+            >
+              {userName ? `Hey, ${userName}` : "Welcome"}
+            </Text>
+            <Text className="text-muted-foreground text-sm">
+              Here&apos;s your day
+            </Text>
+          </View>
+          {/* The way into Settings — and therefore the way to Delete account,
+              which both stores check is reachable from inside the app. */}
+          <Pressable
+            testID="dashboard-open-settings"
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            onPress={onOpenSettings}
+            disabled={!onOpenSettings}
+            // A 20-point icon in 8 points of padding is a 36-point target. The
+            // border grows to 44 x 44 and the icon stays centred in it.
+            style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+            className="rounded-xl border border-border p-2"
           >
-            {userName ? `Hey, ${userName}` : "Welcome"}
-          </Text>
-          <Text className="text-muted-foreground text-sm">
-            Here&apos;s your day
-          </Text>
+            <Settings color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+          </Pressable>
         </View>
 
         <StreakBanner
@@ -137,28 +218,39 @@ export function DashboardScreen({
 
         {todayWorkout ? (
           <Card testID="dashboard-today" title="Today's workout">
-            <Text
-              testID="dashboard-today-workout"
-              className="text-foreground text-lg font-semibold mb-1"
+            {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
+                count are one fact about today, so they are one accessibility
+                element that reads as a sentence; the button after it is the
+                thing to act on. */}
+            <View
+              testID="dashboard-today-summary"
+              accessible
+              accessibilityLabel={todayWorkoutSummaryLabel(todayWorkout)}
             >
-              {todayWorkout.workoutTitle}
-            </Text>
-            <Text
-              testID="dashboard-today-program"
-              className="text-muted-foreground text-sm mb-1"
-            >
-              {todayWorkout.programName} · {todayWorkout.phaseLabel}
-            </Text>
-            <Text
-              testID="dashboard-today-exercises"
-              className="text-muted-foreground text-sm mb-3"
-            >
-              {todayWorkout.exerciseCount} exercise
-              {todayWorkout.exerciseCount === 1 ? "" : "s"}
-            </Text>
+              <Text
+                testID="dashboard-today-workout"
+                className="text-foreground text-lg font-semibold mb-1"
+              >
+                {todayWorkout.workoutTitle}
+              </Text>
+              <Text
+                testID="dashboard-today-program"
+                className="text-muted-foreground text-sm mb-1"
+              >
+                {todayWorkout.programName} · {todayWorkout.phaseLabel}
+              </Text>
+              <Text
+                testID="dashboard-today-exercises"
+                className="text-muted-foreground text-sm mb-3"
+              >
+                {todayWorkout.exerciseCount} exercise
+                {todayWorkout.exerciseCount === 1 ? "" : "s"}
+              </Text>
+            </View>
             <Button
               testID="dashboard-start-workout"
-              onPress={onStartWorkout ?? (() => {})}
+              accessibilityLabel={`Start workout: ${todayWorkout.workoutTitle}`}
+              onPress={onStartWorkout}
             >
               Start workout
             </Button>
@@ -171,6 +263,17 @@ export function DashboardScreen({
           </Card>
         )}
 
+        {/* The way into the calendar — a hidden route in the (tabs) tree, so
+            the month view has no entry point of its own. */}
+        <Button
+          testID="dashboard-open-calendar"
+          variant="secondary"
+          accessibilityLabel="Calendar"
+          onPress={onOpenCalendar}
+        >
+          Calendar
+        </Button>
+
         <Button
           testID="dashboard-open-checkin"
           variant="secondary"
@@ -178,6 +281,16 @@ export function DashboardScreen({
         >
           Check in
         </Button>
+
+        {/* The in-app footer. Apple wants the privacy policy reachable from
+            inside the app, not only from a marketing page a member installing to
+            the home screen never returns to. Mirrors web's DashboardClient.tsx:965. */}
+        <View
+          testID="dashboard-legal-footer"
+          className="border-t border-border pt-4 mt-4"
+        >
+          <LegalLinks showCopyright />
+        </View>
       </ScrollView>
 
       <CheckInModal

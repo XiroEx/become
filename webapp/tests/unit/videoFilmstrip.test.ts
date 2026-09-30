@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/videoFilmstrip.test.ts
+// Run with: npm run test:file tests/unit/videoFilmstrip.test.ts
 //
 // The filmstrip trimmer drags a start/end handle directly on top of frame
 // thumbnails (side-to-side, like the reference iOS trim UI from the card).

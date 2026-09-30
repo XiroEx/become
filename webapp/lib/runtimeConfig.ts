@@ -2,6 +2,7 @@
 // by a client component or bundled into browser code.
 import { MongoClient } from 'mongodb'
 import { SecretsClient } from '@redbtn/redsecrets'
+import { resolveStripeMode, type StripeMode } from './billing/mode'
 
 const APP_NAME = 'become'
 const RUNTIME_SECRET_NAME = 'BECOME_RUNTIME_CONFIG'
@@ -42,6 +43,77 @@ export interface RuntimeConfig {
   push: { publicKey?: string; privateKey?: string; email?: string }
   admin: { bootstrapToken?: string; cronSecret?: string; adminKey?: string }
   external: { usdaApiKey?: string; giphyApiKey?: string }
+  /**
+   * Stripe. EVERY field is optional and resolved with optional(), never
+   * required(): an unconfigured billing section must mean "checkout is not
+   * available yet", not "getRuntimeConfig() throws". A throw here 401s every
+   * authenticated route while AuthGuard still renders the page, so the app
+   * looks fine and every list is silently empty.
+   *
+   * `stripeMode` is the one field always present — it defaults to 'test'.
+   */
+  billing: {
+    stripeSecretKey?: string
+    stripeWebhookSecret?: string
+    stripePricePlusMonthly?: string
+    stripePricePlusAnnual?: string
+    stripeMode: StripeMode
+  }
+  /**
+   * The reviewer demo sign-in (lib/reviewSignIn.ts).
+   *
+   * OFF unless `enabled` is explicitly true, and useless without both an email
+   * and a code — so an absent section means the door does not exist. It lives
+   * in the runtime payload rather than the container environment because it is
+   * a secret AND a switch someone may need to throw without a deploy; read it
+   * with `getRuntimeConfig({ maxAgeMs: REVIEW_CONFIG_MAX_AGE_MS })` so a flip
+   * lands on running instances.
+   */
+  review: {
+    enabled: boolean
+    email?: string
+    code?: string
+  }
+  /**
+   * Sign in with Apple (lib/apple/*).
+   *
+   * `bundleId` is the ONLY field with a default, and it is not a secret: it is
+   * the audience an identity token minted for the iOS app carries, so a wrong
+   * value refuses every sign-in rather than accepting a token meant for
+   * somebody else's app. The other three are the Apple Developer key that
+   * signs the client secret (Team ID, Key ID, the .p8 contents) and they are
+   * needed for ONE thing only — exchanging the authorization code for a
+   * refresh token and revoking it again at deletion, which Apple requires of
+   * every app that offers Sign in with Apple. Unset means "sign-in works,
+   * revocation is logged as unconfigured": token verification needs no
+   * credential of ours at all, and an app that cannot sign anybody in because
+   * a .p8 was not pasted would be the worse failure.
+   */
+  apple: {
+    bundleId: string
+    /** A web Services ID, for the day the web offers the button too. */
+    serviceId?: string
+    teamId?: string
+    keyId?: string
+    /** PKCS#8 PEM. A value carrying literal `\n` escapes is normalised on use. */
+    privateKey?: string
+  }
+  /**
+   * App version configuration for native minimum-version gating and store updates (NP-041).
+   * Every field is resolved with optional(), so an unset value never breaks the app.
+   */
+  app: {
+    ios: {
+      minVersion?: string
+      latestVersion?: string
+      storeUrl?: string
+    }
+    android: {
+      minVersion?: string
+      latestVersion?: string
+      storeUrl?: string
+    }
+  }
 }
 
 type RuntimePayload = Partial<{
@@ -54,6 +126,13 @@ type RuntimePayload = Partial<{
   push: RuntimeConfig['push']
   admin: RuntimeConfig['admin']
   external: RuntimeConfig['external']
+  billing: Partial<RuntimeConfig['billing']>
+  review: Partial<RuntimeConfig['review']>
+  apple: Partial<RuntimeConfig['apple']>
+  app: Partial<{
+    ios: Partial<RuntimeConfig['app']['ios']>
+    android: Partial<RuntimeConfig['app']['android']>
+  }>
 }>
 
 export class RuntimeConfigError extends Error {
@@ -64,7 +143,10 @@ export class RuntimeConfigError extends Error {
 }
 
 let cachedConfig: RuntimeConfig | null = null
+/** When `cachedConfig` was resolved — only a maxAgeMs caller reads it. */
+let cachedAt = 0
 let inFlight: Promise<RuntimeConfig> | null = null
+let refreshInFlight: Promise<void> | null = null
 let secretsClient: SecretsClient | null = null
 let secretsMongoClient: MongoClient | null = null
 
@@ -153,6 +235,17 @@ async function getSecretsClient(): Promise<SecretsClient | null> {
 }
 
 async function readRuntimePayload(): Promise<RuntimePayload> {
+  // A test run resolves NOTHING from the shared secret store.
+  //
+  // The bootstrap below fires in non-production as soon as REDSECRETS_MONGODB_URI
+  // is present alongside any of SECRETS_ENCRYPTION_KEY / ENCRYPTION_KEY /
+  // JWT_SECRET — and the test script always sets JWT_SECRET. So in a shell that
+  // exports REDSECRETS_MONGODB_URI (developers here do), the payload's
+  // MONGODB_URI silently outranked the loopback database the script pins, and
+  // the suite ran against whatever that payload named. A test never needs a
+  // secret; returning {} makes the script's own env the only source.
+  if (process.env.NODE_ENV === 'test') return {}
+
   const hasStoreBootstrap = Boolean(
     isProduction()
       ? process.env.REDSECRETS_MONGODB_URI && process.env.SECRETS_ENCRYPTION_KEY
@@ -196,6 +289,14 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
   const push = payload.push ?? {}
   const admin = payload.admin ?? {}
   const external = payload.external ?? {}
+  const billing = payload.billing ?? {}
+  const review = payload.review ?? {}
+  const apple = payload.apple ?? {}
+  const app = payload.app ?? {}
+  const appIos = app.ios ?? {}
+  const appAndroid = app.android ?? {}
+
+  const stripeSecretKey = optional(billing.stripeSecretKey, localEnv('STRIPE_SECRET_KEY'))
 
   return {
     auth: {
@@ -243,6 +344,51 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
       usdaApiKey: optional(external.usdaApiKey, localEnv('USDA_API_KEY')),
       giphyApiKey: optional(external.giphyApiKey, localEnv('GIPHY_API_KEY')),
     },
+    billing: {
+      stripeSecretKey,
+      stripeWebhookSecret: optional(billing.stripeWebhookSecret, localEnv('STRIPE_WEBHOOK_SECRET')),
+      stripePricePlusMonthly: optional(
+        billing.stripePricePlusMonthly,
+        localEnv('STRIPE_PRICE_PLUS_MONTHLY'),
+      ),
+      stripePricePlusAnnual: optional(
+        billing.stripePricePlusAnnual,
+        localEnv('STRIPE_PRICE_PLUS_ANNUAL'),
+      ),
+      // The key wins over the declaration — see resolveStripeMode.
+      stripeMode: resolveStripeMode(
+        billing.stripeMode ?? localEnv('STRIPE_MODE'),
+        stripeSecretKey,
+      ),
+    },
+    review: {
+      // Default FALSE, and only an explicit true opens it: a door for app
+      // reviewers must never be open because a field was forgotten.
+      enabled: booleanValue(review.enabled, localEnv('REVIEW_SIGN_IN_ENABLED')) === true,
+      email: optional(review.email, localEnv('REVIEW_DEMO_EMAIL')),
+      code: optional(review.code, localEnv('REVIEW_DEMO_CODE')),
+    },
+    apple: {
+      // Not a secret and not optional: a token audienced to anything else is
+      // not ours. The default is the iOS bundle id in expo/app.json.
+      bundleId: optional(apple.bundleId, localEnv('APPLE_BUNDLE_ID')) || 'io.redbtn.become',
+      serviceId: optional(apple.serviceId, localEnv('APPLE_SERVICE_ID')),
+      teamId: optional(apple.teamId, localEnv('APPLE_TEAM_ID')),
+      keyId: optional(apple.keyId, localEnv('APPLE_KEY_ID')),
+      privateKey: optional(apple.privateKey, localEnv('APPLE_PRIVATE_KEY')),
+    },
+    app: {
+      ios: {
+        minVersion: optional(appIos.minVersion, localEnv('APP_IOS_MIN_VERSION'), localEnv('APP_MIN_VERSION')),
+        latestVersion: optional(appIos.latestVersion, localEnv('APP_IOS_LATEST_VERSION'), localEnv('APP_LATEST_VERSION')),
+        storeUrl: optional(appIos.storeUrl, localEnv('APP_IOS_STORE_URL'), localEnv('APP_STORE_URL')),
+      },
+      android: {
+        minVersion: optional(appAndroid.minVersion, localEnv('APP_ANDROID_MIN_VERSION'), localEnv('APP_MIN_VERSION')),
+        latestVersion: optional(appAndroid.latestVersion, localEnv('APP_ANDROID_LATEST_VERSION'), localEnv('APP_LATEST_VERSION')),
+        storeUrl: optional(appAndroid.storeUrl, localEnv('APP_ANDROID_STORE_URL'), localEnv('APP_STORE_URL')),
+      },
+    },
   }
 }
 
@@ -250,12 +396,55 @@ async function resolveRuntimeConfig(): Promise<RuntimeConfig> {
   return buildConfig(await readRuntimePayload())
 }
 
-export async function getRuntimeConfig(): Promise<RuntimeConfig> {
-  if (cachedConfig) return cachedConfig
+export interface GetRuntimeConfigOptions {
+  /**
+   * Re-resolve from the secret store when the cached value is older than this.
+   *
+   * OMITTED IS THE DEFAULT AND MEANS "FOREVER", which is right for a database
+   * URI or a signing key: those do not change under a running process, and a
+   * read per request would put redsecrets on the hot path of every route.
+   *
+   * It is wrong for a KILL SWITCH. The reviewer demo sign-in has to be
+   * closeable from config without a deploy and without a restart, so that
+   * route asks for a value no older than REVIEW_CONFIG_MAX_AGE_MS. A refresh
+   * that fails keeps the cached config — a secret store that is briefly
+   * unreachable must not take the app down.
+   */
+  maxAgeMs?: number
+}
+
+export async function getRuntimeConfig(
+  options?: GetRuntimeConfigOptions,
+): Promise<RuntimeConfig> {
+  if (cachedConfig) {
+    const maxAgeMs = options?.maxAgeMs
+    const isStale = typeof maxAgeMs === 'number'
+      && maxAgeMs >= 0
+      && Date.now() - cachedAt > maxAgeMs
+    if (!isStale) return cachedConfig
+    if (!refreshInFlight) {
+      refreshInFlight = resolveRuntimeConfig()
+        .then((config) => {
+          cachedConfig = config
+          cachedAt = Date.now()
+        })
+        .catch((err) => {
+          // Keep serving the cached value, but do not retry on every call.
+          cachedAt = Date.now()
+          console.error('[Become runtime config] refresh failed; keeping the cached value', err)
+        })
+        .finally(() => {
+          refreshInFlight = null
+        })
+    }
+    await refreshInFlight
+    return cachedConfig
+  }
   if (!inFlight) {
     inFlight = resolveRuntimeConfig()
       .then((config) => {
         cachedConfig = config
+        cachedAt = Date.now()
         return config
       })
       .finally(() => {
@@ -279,7 +468,9 @@ export function requireRuntimeSecret(value: string | undefined, name: string): s
 
 export function __resetRuntimeConfigForTests(): void {
   cachedConfig = null
+  cachedAt = 0
   inFlight = null
+  refreshInFlight = null
   secretsClient = null
   secretsMongoClient = null
 }

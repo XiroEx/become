@@ -17,9 +17,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Plus, X, Loader2, Layers, Minus, ArrowLeft } from 'lucide-react'
 import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
+import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/ExerciseVariationPicker'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
 import type { GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
+import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
+import { matchesExerciseQuery } from '@/lib/exerciseSearchRanking'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 export type Placement = 'end' | 'group'
 
@@ -34,6 +39,10 @@ interface SearchExercise {
   slug: string
   name: string
   trackingType: string
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
 }
 
 export interface AddExerciseSheetProps {
@@ -42,8 +51,14 @@ export interface AddExerciseSheetProps {
   onAdd: (result: AddExerciseResult) => void | Promise<void>
   /** The exercise the member is standing in, if any — the superset anchor. */
   anchorName?: string
+  /** Slug of the anchor exercise. Drives the "Suggested" list shown before
+   *  the member types anything — omit it and the sheet falls back to the
+   *  plain "search for what you are about to do" empty state. */
+  anchorSlug?: string
   /** True when the anchor already belongs to a group, so we say "add into it". */
   anchorInGroup?: boolean
+  /** Exercise slugs already in this workout, so suggestions don't repeat one. */
+  workoutExerciseSlugs?: string[]
   tone?: 'dark' | 'app'
   title?: string
 }
@@ -60,16 +75,23 @@ export default function AddExerciseSheet({
   onClose,
   onAdd,
   anchorName,
+  anchorSlug,
   anchorInGroup = false,
+  workoutExerciseSlugs = [],
   tone = 'app',
   title = 'Add an exercise',
 }: AddExerciseSheetProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchExercise[]>([])
   const [customs, setCustoms] = useState<SearchExercise[]>([])
+  const [suggested, setSuggested] = useState<SearchExercise[]>([])
+  const [loadingSuggested, setLoadingSuggested] = useState(false)
   const [searching, setSearching] = useState(false)
   const [creating, setCreating] = useState(false)
   const [creatingError, setCreatingError] = useState<string | null>(null)
+  // Custom-exercise slots are full — a price, not a validation error, so it
+  // gets the upgrade sheet rather than the inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
   const [picked, setPicked] = useState<SearchExercise | null>(null)
@@ -96,6 +118,32 @@ export default function AddExerciseSheet({
     return () => clearTimeout(t)
   }, [open])
 
+  // What to add next, guessed from the exercise you're standing in — shown
+  // before you type anything, so the sheet isn't just a naked search box.
+  const workoutSlugsKey = workoutExerciseSlugs.join(',')
+  useEffect(() => {
+    if (!open || !anchorSlug) { setSuggested([]); return }
+    let cancelled = false
+    setLoadingSuggested(true)
+    ;(async () => {
+      try {
+        const params = new URLSearchParams({ slug: anchorSlug, limit: '12' })
+        if (workoutSlugsKey) params.set('workoutSlugs', workoutSlugsKey)
+        const res = await fetch(`/api/exercises/alternatives?${params}`, { headers: authHeaders() })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { alternatives?: SearchExercise[] }
+        if (!cancelled) {
+          setSuggested(buildSuggestedExercises(data.alternatives ?? [], workoutSlugsKey ? workoutSlugsKey.split(',') : []))
+        }
+      } catch {
+        if (!cancelled) setSuggested([])
+      } finally {
+        if (!cancelled) setLoadingSuggested(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [open, anchorSlug, workoutSlugsKey])
+
   // Your custom exercises, so a machine you named yourself is one search away.
   useEffect(() => {
     if (!open || customs.length) return
@@ -105,7 +153,7 @@ export default function AddExerciseSheet({
         const res = await fetch('/api/exercises/custom', { headers: authHeaders() })
         if (!res.ok || cancelled) return
         const data = (await res.json()) as { exercises?: SearchExercise[] }
-        if (!cancelled) setCustoms((data.exercises ?? []).map(e => ({ slug: e.slug, name: e.name, trackingType: e.trackingType })))
+        if (!cancelled) setCustoms((data.exercises ?? []).map(e => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })))
       } catch { /* customs stay empty */ }
     })()
     return () => { cancelled = true }
@@ -125,6 +173,7 @@ export default function AddExerciseSheet({
     const t = setTimeout(async () => {
       try {
         const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=8`, { headers: authHeaders() })
+        if (!res.ok) { if (mine === seq.current) setResults([]); return }
         const data = (await res.json()) as { exercises?: SearchExercise[] }
         if (mine === seq.current) setResults(data.exercises ?? [])
       } catch {
@@ -143,6 +192,18 @@ export default function AddExerciseSheet({
     setResults([])
   }, [])
 
+  // Switching to a sibling variation (e.g. Machine Chest Press → Dumbbell
+  // Chest Press) keeps the prescription, only resetting reps/seconds when
+  // the tracking type actually changes category.
+  const selectVariation = useCallback((v: ExerciseVariation) => {
+    setPicked(prev => {
+      if (isTimed(v.trackingType) !== isTimed(prev?.trackingType)) {
+        setReps(isTimed(v.trackingType) ? '' : '8-12')
+      }
+      return { slug: v.slug, name: v.name, trackingType: v.trackingType, equipment: v.equipment, laterality: v.laterality }
+    })
+  }, [])
+
   // The machine in front of you is not always in the catalog — same detailed
   // fields the program editor offers, not just a name and a tracking type.
   const createCustom = useCallback(async () => {
@@ -157,6 +218,11 @@ export default function AddExerciseSheet({
       })
       const data = (await res.json()) as { exercise?: SearchExercise; error?: string }
       if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data)
+        if (g) {
+          setGate(g)
+          return
+        }
         setCreatingError(data.error || 'Failed to create exercise')
         return
       }
@@ -181,6 +247,9 @@ export default function AddExerciseSheet({
       sets,
       reps: timed ? '' : reps.trim() || '8-12',
       ...(timed ? { duration: `${seconds} sec` } : {}),
+      ...(picked.equipment && { equipment: picked.equipment }),
+      ...(picked.laterality && { laterality: picked.laterality }),
+      ...(picked.movementPatterns && { movementPatterns: picked.movementPatterns }),
     }
     try {
       await onAdd({ exercise, placement, groupKind })
@@ -193,7 +262,9 @@ export default function AddExerciseSheet({
   if (!open) return null
 
   const q = query.trim().toLowerCase()
-  const customMatches = q.length >= 2 ? customs.filter(c => c.name.toLowerCase().includes(q)) : []
+  // Same match rule as the catalog search this list sits next to, shorthand
+  // included — "RDL" has to find your own "Romanian Deadlift" too.
+  const customMatches = q.length >= 2 ? customs.filter(c => matchesExerciseQuery(c, q)) : []
   // Tag the merged rows so the list can mark which ones are yours. The catalog
   // search endpoint excludes customs by design, so `isCustom` has to be
   // attached here rather than coming off the wire.
@@ -216,8 +287,9 @@ export default function AddExerciseSheet({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" data-testid="add-exercise-sheet">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div className={`relative max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:max-w-md sm:rounded-3xl ${surface}`}>
+      <div className={`relative min-h-[60vh] max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:min-h-0 sm:max-w-md sm:rounded-3xl ${surface}`}>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-bold">{title}</h2>
           <button onClick={onClose} aria-label="Close" className={`rounded-full p-1.5 ${rowIdle}`}>
@@ -255,7 +327,36 @@ export default function AddExerciseSheet({
                   <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
                 </button>
               ))}
-              {q.length >= 2 && !searching && merged.length === 0 && !showCreateForm && (
+              {q.length < 2 && anchorSlug && (
+                <div data-testid="add-exercise-suggested">
+                  {suggested.length > 0 ? (
+                    <>
+                      <p className={`px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Suggested</p>
+                      {suggested.map(s => (
+                        <button
+                          key={s.slug}
+                          onClick={() => choose(s)}
+                          data-testid="add-exercise-suggested-result"
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
+                        >
+                          <span className="truncate font-medium">{s.name}</span>
+                          <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
+                        </button>
+                      ))}
+                    </>
+                  ) : loadingSuggested ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
+                    </div>
+                  ) : (
+                    <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>
+                  )}
+                </div>
+              )}
+              {q.length < 2 && !anchorSlug && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
+              {/* Always available, not just when a search comes up empty — a
+                  misspelling shouldn't be the only way to reach this. */}
+              {!showCreateForm && (
                 <button
                   onClick={() => {
                     setCustomForm(prev => ({ ...prev, name: query.trim() }))
@@ -266,7 +367,7 @@ export default function AddExerciseSheet({
                 >
                   <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
                   <span className="text-sm font-semibold text-green-600 dark:text-green-400">
-                    Create &ldquo;{query.trim()}&rdquo; as a new exercise
+                    {query.trim() ? <>Create &ldquo;{query.trim()}&rdquo; as a new exercise</> : 'Create an exercise'}
                   </span>
                 </button>
               )}
@@ -301,7 +402,6 @@ export default function AddExerciseSheet({
                   </button>
                 </div>
               )}
-              {q.length < 2 && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
             </div>
           </>
         ) : (
@@ -310,6 +410,14 @@ export default function AddExerciseSheet({
               <p className="text-sm font-semibold">{picked.name}</p>
               <button onClick={() => setPicked(null)} className={`mt-0.5 text-xs underline ${muted}`}>pick a different one</button>
             </div>
+
+            <ExerciseVariationPicker
+              slug={picked.slug}
+              selectedSlug={picked.slug}
+              onSelect={selectVariation}
+              dark={dark}
+              className="mb-4"
+            />
 
             <div className="grid grid-cols-2 gap-3">
               <Stepper label={setUnitLabel(picked?.trackingType, sets)} value={sets} onChange={v => setSets(Math.max(1, Math.min(10, v)))} dark={dark} testid="add-exercise-sets" />

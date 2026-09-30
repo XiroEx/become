@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/mind/sessionGuards.test.ts
+// Run with: npm run test:file tests/unit/mind/sessionGuards.test.ts
 //
 // Guard rails for the main Mind session. Every case here is a real defect that
 // shipped to a user (reported 2026-07-28 with screenshots) and is now impossible

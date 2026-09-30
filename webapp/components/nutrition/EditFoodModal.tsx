@@ -15,6 +15,7 @@ import QuantityPicker, {
 } from './QuantityPicker'
 import BridgeFieldGroup, { type BridgeValues } from './BridgeFieldGroup'
 import { mealLogTimeInputValue, mealLogTimePatch } from '@/lib/nutrition/logTime'
+import { nutritionForQuantity, scalingFactor } from '@/lib/foodMath'
 
 interface EditFoodModalProps {
   isOpen: boolean
@@ -147,6 +148,38 @@ export default function EditFoodModal({
   // Fresh derive on each item change so the picker opens with the right state.
   const derived = useMemo(() => (item ? deriveVariantAndInitial(item) : null), [item])
 
+  // Fallback selection representing "the amount as already logged" — computed
+  // synchronously from `derived`, not from a QuantityPicker `onChange`. The
+  // picker only emits once its own mount effect runs, and that effect races
+  // this component's item-change reset effect (children commit their effects
+  // before parents, so the reset below can fire right after and null the
+  // picker's first emission back out). Without this fallback, `selection`
+  // could stay null — and Save stay disabled — until the member happened to
+  // touch the amount picker, even when all they changed was the meal tag.
+  const derivedSelection = useMemo<QuantityPickerSelection | null>(() => {
+    if (!derived) return null
+    try {
+      const { quantity, unit } = derived.initial
+      const multiplier = scalingFactor(derived.variant, quantity, unit)
+      if (!Number.isFinite(multiplier) || multiplier <= 0) return null
+      return {
+        quantity,
+        unit,
+        multiplier,
+        nutrition: nutritionForQuantity(derived.variant, quantity, unit),
+        gramsPerServing: derived.variant.gramsPerServing,
+        mlPerServing: derived.variant.mlPerServing,
+      }
+    } catch {
+      return null
+    }
+  }, [derived])
+
+  // The picker's own live edit wins once it emits one; until then (or when the
+  // member never touches amount at all) this is what submit and the Save
+  // button's enabled-state see.
+  const effectiveSelection = selection ?? derivedSelection
+
   useEffect(() => {
     if (item) {
       setSelection(null)
@@ -178,21 +211,22 @@ export default function EditFoodModal({
   // Live preview: the selection itself carries the scaled nutrition. A pending
   // correction is per storage basis, so it scales by the same multiplier.
   const preview = useMemo(() => {
-    if (!selection) return undefined
-    if (!nutritionOverride) return selection.nutrition
-    const f = selection.multiplier > 0 ? selection.multiplier : 1
+    if (!effectiveSelection) return undefined
+    if (!nutritionOverride) return effectiveSelection.nutrition
+    const f = effectiveSelection.multiplier > 0 ? effectiveSelection.multiplier : 1
     return {
-      ...selection.nutrition,
+      ...effectiveSelection.nutrition,
       calories: nutritionOverride.calories * f,
       protein: nutritionOverride.protein * f,
       carbs: nutritionOverride.carbs * f,
       fats: nutritionOverride.fats * f,
     }
-  }, [selection, nutritionOverride])
+  }, [effectiveSelection, nutritionOverride])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!item || !item._id || !selection) return
+    if (!item || !item._id || !effectiveSelection) return
+    const selection = effectiveSelection
     // Guard quantity AND multiplier: plan-mode below divides per-serving
     // nutrition by selection.multiplier — a 0/invalid multiplier would write
     // Infinity/NaN macros to the plan.
@@ -512,7 +546,7 @@ export default function EditFoodModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !selection || selection.quantity <= 0}
+                  disabled={saving || !effectiveSelection || effectiveSelection.quantity <= 0}
                   className="flex-1 rounded-xl bg-zinc-900 py-3 font-semibold text-white transition-colors hover:bg-black disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                 >
                   {saving ? 'Saving…' : 'Save'}
@@ -547,8 +581,8 @@ export default function EditFoodModal({
             label: item.servingLabel
               || (item.loggedQuantity != null && item.loggedUnit
                 ? `${item.loggedQuantity} ${item.loggedUnit}`
-                : selection ? `${selection.quantity} ${selection.unit}` : 'this entry'),
-            factor: selection?.multiplier ?? item.servings ?? 1,
+                : effectiveSelection ? `${effectiveSelection.quantity} ${effectiveSelection.unit}` : 'this entry'),
+            factor: effectiveSelection?.multiplier ?? item.servings ?? 1,
           }}
           // Correcting an ALREADY-LOGGED entry was impossible: this sheet was
           // mounted without onApplyToLog, so it could only file a report. The

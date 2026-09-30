@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/servingQuantityRounding.test.tsx
+// Run with: npm run test:file tests/unit/servingQuantityRounding.test.tsx
 //
 // Follow-up ask on the fractional-serving card: round the AI plate-scan
 // review row's Quantity box to the nearest 1000th instead of the nearest

@@ -8,6 +8,9 @@
 // "On pace" / "At target" instead of congratulating them — which is the
 // lackluster experience this fixes. Goal.reachedTargetAt tracks the crossing
 // separately and fires the congratulations screen once, on the first cross.
+// Once, per crossing: when a goal that was achieved drifts back out of the band
+// and re-opens (lib/goals/ensure.ts), the stamp is cleared with it, so earning
+// the line back is celebrated again rather than passed over in silence.
 
 import Goal from '@/models/Goal'
 import { ensureGoals } from '@/lib/goals/ensure'

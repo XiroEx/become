@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import {
@@ -17,6 +18,13 @@ export interface ServingPickerProps {
   defaultAmount?: number;
   /** Optional named servings the food supports (e.g. "1 medium" → 100g). */
   customUnits?: { label: string; gramsPerUnit: number }[];
+  /**
+   * Whether the food has a weight at all. A count-native food with no
+   * grams-per-serving bridge ("1 scoop") is picked in servings, so the gram
+   * units and the gram caption would both be inventions — hidden rather than
+   * shown as a number that is not true.
+   */
+  showGrams?: boolean;
   testID?: string;
 }
 
@@ -26,6 +34,7 @@ export function ServingPicker({
   defaultUnit = "g",
   defaultAmount = 100,
   customUnits = [],
+  showGrams = true,
   testID = "serving-picker",
 }: ServingPickerProps) {
   const [unit, setUnit] = useState<ServingUnit>(defaultUnit);
@@ -64,7 +73,7 @@ export function ServingPicker({
       <Text className="text-foreground font-semibold mb-1">Serving</Text>
       <View style={{ flexDirection: "row", gap: 8 }}>
         {(["g", "oz", "custom"] as ServingUnit[])
-          .filter((u) => u !== "custom" || customUnits.length > 0)
+          .filter((u) => (u === "custom" ? customUnits.length > 0 : showGrams))
           .map((u) => (
             <Pressable
               key={u}
@@ -117,9 +126,11 @@ export function ServingPicker({
         <Text className="text-muted-foreground text-xs">
           {Math.round(macros.protein * 10) / 10}P · {Math.round(macros.carbs * 10) / 10}C · {Math.round(macros.fat * 10) / 10}F
         </Text>
-        <Text testID={`${testID}-preview-grams`} className="text-muted-foreground text-xs">
-          {Math.round(grams)} g
-        </Text>
+        {showGrams ? (
+          <Text testID={`${testID}-preview-grams`} className="text-muted-foreground text-xs">
+            {Math.round(grams)} g
+          </Text>
+        ) : null}
       </View>
       <Button
         testID={`${testID}-submit`}

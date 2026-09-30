@@ -5,6 +5,10 @@
 //   { kind: 'program',  programId }
 //   { kind: 'workout',  programId, phase?, day }
 //   { kind: 'session',  session: { title, focus?, exercises[] } }  // one-off/AI
+//
+// A share is PUBLIC and permanent, so 'program'/'workout' may only snapshot a
+// program the caller can open: catalogue, their own, or one shared with them
+// (lib/programVisibility.ts).
 import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import ProgramModel from '@/models/Program'
@@ -13,6 +17,7 @@ import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
 import { hydrateProgram } from '@/lib/hydrateExercises'
 import { genShareId, sanitizeWorkout } from '@/lib/share'
+import { canMemberOpenProgram } from '@/lib/programVisibility'
 import type { Program, Phase, Workout } from '@/lib/data/programs'
 
 export async function POST(request: NextRequest) {
@@ -41,6 +46,13 @@ export async function POST(request: NextRequest) {
       if (!programId) return NextResponse.json({ error: 'programId required' }, { status: 400 })
       const raw = await ProgramModel.findOne({ program_id: programId }).lean()
       if (!raw) return NextResponse.json({ error: 'Program not found' }, { status: 404 })
+      // A member can share only what they can open: catalogue programs, their
+      // own custom ones, and the ones shared with them. Same rule and same 404
+      // as GET /api/programs/[programId] — see lib/programVisibility.ts. This
+      // route used to publish ANY program the caller could name an id for.
+      if (!canMemberOpenProgram(raw, auth.userId)) {
+        return NextResponse.json({ error: 'Program not found' }, { status: 404 })
+      }
       const hydrated = JSON.parse(JSON.stringify(await hydrateProgram(raw))) as Program
       sourceProgramId = hydrated.program_id
 

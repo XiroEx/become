@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
-import { readTzOffset, localDateKey, localDayWindowForKey } from '@/lib/dayWindow'
+import { isWithinInProgressWindow, isOnLocalToday, readTzOffset } from '@/lib/dayWindow'
 
 /**
  * The workout the member is in the middle of RIGHT NOW, if any.
@@ -22,8 +22,33 @@ import { readTzOffset, localDateKey, localDayWindowForKey } from '@/lib/dayWindo
  *      for any other day was invisible even with a healthy enrolment.
  *
  * The open LOG is the source of truth for "you are mid-workout", so this asks it
- * directly. Scoped to the member's local day, because a log left open from last
- * week is stale, not resumable.
+ * directly. Scoped to a rolling 24h window (not the member's local calendar
+ * day) so a workout started shortly before midnight is still "in progress"
+ * a few minutes later, once the day has technically rolled over. A log left
+ * open from last week remains genuinely stale — that's handled separately,
+ * further out, by the 30-day auto-cleanup in GET /api/workouts.
+ *
+ * That window is bounded on both sides (see isWithinInProgressWindow): a
+ * quick session PLANNED for a future date (Calendar → "Plan it") writes an
+ * incomplete log dated on that future day immediately, and without the upper
+ * bound it would satisfy "not stale" and show up here as if the member were
+ * mid-workout in a session they only scheduled, not started.
+ *
+ * That still isn't enough for a session planned for TODAY: its date already
+ * satisfies the window (it's today, not the future), so a member who used
+ * "Plan it" for later this same day — never having opened the live view —
+ * saw the pill anyway, worded "Get back into the workout" as if they were
+ * already mid-session. `startedAt` is the real "has this been engaged"
+ * signal (see IWorkoutLog.startedAt): it's only written once the live view
+ * is actually opened, so requiring it here excludes a same-day plan that was
+ * never started while still surfacing one the member genuinely began.
+ *
+ * Excluding it here doesn't mean it has nothing to say about it, though: a
+ * quick session planned for TODAY and never started is real information —
+ * "you have this scheduled" — just not "you're mid-workout". When there's no
+ * genuinely active workout, `planned` carries that same log honestly, so the
+ * dashboard can offer a "Start Workout" CTA instead of one worded as if the
+ * member were already in it (see ResumeWorkoutButton).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -38,36 +63,59 @@ export async function GET(request: NextRequest) {
       .lean<{ workoutLogs?: Array<Record<string, unknown>> } | null>()
 
     const logs = progress?.workoutLogs ?? []
-    if (logs.length === 0) return NextResponse.json({ workout: null })
+    if (logs.length === 0) return NextResponse.json({ workout: null, planned: null })
 
-    const tz = readTzOffset(request.nextUrl.searchParams)
-    const { start, end } = localDayWindowForKey(localDateKey(null, tz), tz)
-
-    // Newest first: if a member somehow has two open logs today, the one they
-    // are actually in is the one they started last.
+    // Newest first: if a member somehow has two open logs, the one they are
+    // actually in is the one they started last.
     const open = logs
-      .filter((w) => {
-        if (w.completed) return false
-        const at = new Date(w.date as string)
-        return at >= start && at < end
-      })
+      .filter((w) => !w.completed && isWithinInProgressWindow(w.date as string) && w.startedAt != null)
       .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())[0]
 
-    if (!open) return NextResponse.json({ workout: null })
+    if (open) {
+      // Quick sessions are workouts too: they are the ones you built yourself,
+      // and leaving them out meant the pill only ever came back for a program.
+      const kind = open.kind === 'quick' || !open.programId ? 'quick' : 'program'
+      return NextResponse.json({
+        workout: {
+          kind,
+          programId: open.programId ? String(open.programId) : null,
+          day: open.day ? String(open.day) : null,
+          phase: typeof open.phase === 'number' ? open.phase : null,
+          sessionId: open.sessionId ? String(open.sessionId) : null,
+          title: open.title ? String(open.title) : null,
+          exerciseCount: Array.isArray(open.exercises) ? open.exercises.length : 0,
+          startedAt: open.date,
+        },
+        planned: null,
+      })
+    }
 
-    // Quick sessions are workouts too: they are the ones you built yourself,
-    // and leaving them out meant the pill only ever came back for a program.
-    const kind = open.kind === 'quick' || !open.programId ? 'quick' : 'program'
+    // Nothing genuinely in progress. Look for a quick session planned for the
+    // caller's local TODAY (completed:false, no startedAt — a "Plan it" save)
+    // so it can still be surfaced, just not as "in progress". Program days
+    // aren't looked up here: the calendar/schedule already offers an
+    // honestly-worded "Today: <day>" card for those (see UpcomingWorkouts).
+    const tz = readTzOffset(new URL(request.url).searchParams)
+    const planned = logs
+      .filter(
+        (w) =>
+          w.kind === 'quick' &&
+          !w.completed &&
+          w.startedAt == null &&
+          !!w.sessionId &&
+          isOnLocalToday(w.date as string, tz),
+      )
+      .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())[0]
+
+    if (!planned) return NextResponse.json({ workout: null, planned: null })
+
     return NextResponse.json({
-      workout: {
-        kind,
-        programId: open.programId ? String(open.programId) : null,
-        day: open.day ? String(open.day) : null,
-        phase: typeof open.phase === 'number' ? open.phase : null,
-        sessionId: open.sessionId ? String(open.sessionId) : null,
-        title: open.title ? String(open.title) : null,
-        exerciseCount: Array.isArray(open.exercises) ? open.exercises.length : 0,
-        startedAt: open.date,
+      workout: null,
+      planned: {
+        kind: 'quick' as const,
+        sessionId: String(planned.sessionId),
+        title: planned.title ? String(planned.title) : null,
+        exerciseCount: Array.isArray(planned.exercises) ? planned.exercises.length : 0,
       },
     })
   } catch (error) {

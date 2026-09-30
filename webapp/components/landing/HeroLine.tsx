@@ -41,11 +41,14 @@ export function HeroLine() {
       focusable="false"
     >
       <defs>
+        {/* stop-color via class, not the presentation attribute: attributes
+            cannot hold var(), and these follow the theme tokens (identical
+            values in light, brighter variants on dark). */}
         <linearGradient id="becomeHeroLine" x1="0" y1="1" x2="1" y2="0">
-          <stop offset="0%" stopColor="#7c3aed" />
-          <stop offset="34%" stopColor="#ef4444" />
-          <stop offset="68%" stopColor="#22c55e" />
-          <stop offset="100%" stopColor="#d97706" />
+          <stop offset="0%" className={styles.heroLineStopViolet} />
+          <stop offset="34%" className={styles.heroLineStopRed} />
+          <stop offset="68%" className={styles.heroLineStopGreen} />
+          <stop offset="100%" className={styles.heroLineStopGold} />
         </linearGradient>
       </defs>
       <path d={PATH} className={styles.heroLineGhost} />

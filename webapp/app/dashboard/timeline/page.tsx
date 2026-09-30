@@ -741,6 +741,7 @@ function TimelineClient() {
     tag?: string,
     loggedAtIso?: string,
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
+    untimed?: boolean,
   ) => {
     if (!addFoodFor) return
     const useTag = tag || addFoodFor.tag
@@ -818,7 +819,7 @@ function TimelineClient() {
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ items: [item], tags: [useTag], loggedAt: iso }),
+        body: JSON.stringify({ items: [item], tags: [useTag], loggedAt: iso, untimed: untimed === true }),
       })
       if (!res.ok) {
         showErrorToast('Failed to log food.')
@@ -1326,7 +1327,7 @@ function TimelineClient() {
         viewedDate={addFoodFor?.date}
         mode={pickerMode}
         onClose={() => setAddFoodFor(null)}
-        onSelectFood={(entry, tag, loggedAt, planOptions) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt, planOptions)}
+        onSelectFood={(entry, tag, loggedAt, planOptions, untimed) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt, planOptions, untimed)}
       />
 
       {/* Edit Food Modal — log mode */}

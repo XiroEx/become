@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/goals.test.ts
+// Run with: npm run test:file tests/unit/goals.test.ts
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -154,6 +154,14 @@ test('training suggestion: tight week, lost week, near lift, consistency', () =>
   assert.equal(near.key, 'training.lift.bench')
   assert.equal(suggestTraining({ target: 5, thisWeek: 1, remainingThisWeek: 4, chancesLeft: 5, weekLost: false, avgLast4: 2, lifts: [] }).key, 'training.consistency')
   assert.equal(suggestTraining({ target: null, thisWeek: 0, remainingThisWeek: 0, chancesLeft: 0, weekLost: false, avgLast4: null, lifts: [] }).key, 'training.set-days')
+})
+
+test('training consistency nudge links to the training tab of settings, not profile', () => {
+  const s = suggestTraining({ target: 5, thisWeek: 1, remainingThisWeek: 4, chancesLeft: 5, weekLost: false, avgLast4: 2, lifts: [] })
+  assert.equal(s.key, 'training.consistency')
+  // Regression: this used to be a bare '/dashboard/settings', which lands on
+  // the Profile tab — the weekly training number lives under Training.
+  assert.equal(s.url, '/dashboard/settings?tab=training#weekly-availability')
 })
 
 test('nudge pick: actionable only, warn first, no repeat inside cooldown', () => {

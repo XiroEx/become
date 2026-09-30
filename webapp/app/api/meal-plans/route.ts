@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import MealPlan, { IMealPlan, MealPlanStatus } from '@/models/MealPlan'
 import Meal, { IMealItem } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
+import { canReadMealFor } from '@/lib/mealAccess'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
 import {
   addDaysToKey,
@@ -149,6 +150,16 @@ export async function POST(request: NextRequest) {
     if (isObjectIdLike(body.mealId)) {
       const meal = await Meal.findById(body.mealId).lean()
       if (!meal) {
+        return NextResponse.json({ error: 'Meal template not found' }, { status: 404 })
+      }
+      // A meal is private unless its author published it or staff verified it.
+      // Without this, planning a meal by id snapshotted ANY member's private
+      // meal — name and full per-item nutrition — straight into the caller's
+      // own plan, which they can then read back from GET /api/meal-plans. Same
+      // rule, same wording and the same deliberate 404 as
+      // /api/meal-plans/bulk-from-meal and /api/meals/[id]/log: "not found" and
+      // "not yours" must be indistinguishable.
+      if (!(await canReadMealFor(meal, authResult))) {
         return NextResponse.json({ error: 'Meal template not found' }, { status: 404 })
       }
       mealId = meal._id

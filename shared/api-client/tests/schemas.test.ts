@@ -2,13 +2,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ActiveProgramsResponseSchema,
+  ActiveProgramsApiResponseSchema,
   ProgramListResponseSchema,
   ProgramSearchResponseSchema,
   SavedProgramsResponseSchema,
   SaveToggleResponseSchema,
   ProgramDetailResponseSchema,
-  ProgramMutationResponseSchema,
+  ProgramAbandonResponseSchema,
+  ProgramStartDateResponseSchema,
   CheckSessionRequestSchema,
   CheckSessionResponseSchema,
   LogMoodRequestSchema,
@@ -17,31 +18,48 @@ import {
   ProfileResponseSchema,
   WeightCheckResponseSchema,
   WeightPostRequestSchema,
-  MoodHistoryResponseSchema,
-  SaveWorkoutResponseSchema,
-  ScheduleResponseSchema,
+  ReviewSignInRequestSchema,
+  ReviewSignInResponseSchema,
   SendLinkRequestSchema,
   SendLinkResponseSchema,
   UserSchema,
   VerifyLinkRequestSchema,
   VerifyLinkResponseSchema,
-  WeightHistoryResponseSchema,
-  WorkoutLogSchema,
-  WorkoutsListResponseSchema,
-  WorkoutSaveRequestSchema,
-  WorkoutSaveResponseSchema,
   ExerciseAlternativesResponseSchema,
-  ScheduleApiResponseSchema,
   ProgressMoodResponseSchema,
+  // NP-024 nutrition. One recorded fixture per route lives below; the REAL
+  // responses are parsed with these same schemas by
+  // webapp/tests/unit/contract/np024Nutrition.test.ts.
+  MealLogsDayResponseSchema,
+  MealLogsRangeResponseSchema,
+  MealLogCreateRequestSchema,
+  MealLogCreateResponseSchema,
+  NutritionLogDayResponseSchema,
   MealLogResponseSchema,
+  NutritionSummaryResponseSchema,
   FoodSearchResponseSchema,
   FoodDetailResponseSchema,
+  FoodOverviewResponseSchema,
+  RecentFoodsResponseSchema,
+  FrequentFoodsResponseSchema,
+  SavedFoodsResponseSchema,
+  FoodBarcodeResponseSchema,
+  FoodImportRequestSchema,
+  FoodImportResponseSchema,
+  MealsListResponseSchema,
+  TagsResponseSchema,
+  NutritionGoalsResponseSchema,
+  NutritionGoalsRequestSchema,
+  NutritionGoalsWriteResponseSchema,
+  MealScheduleResponseSchema,
+  MealScheduleWriteRequestSchema,
   RecipesListResponseSchema,
   RecipeDetailResponseSchema,
   ConversationsResponseSchema,
   UnreadResponseSchema,
   PostMessageResponseSchema,
 } from '../src/index';
+import * as nutritionFixtures from './nutritionFixtures';
 
 test('MeResponseSchema: accepts a real /api/auth/me payload', () => {
   const result = MeResponseSchema.safeParse({
@@ -76,16 +94,6 @@ test('UserSchema: ignores extra fields via passthrough', () => {
   assert.equal(result.success, true);
 });
 
-test('WeightHistoryResponseSchema: parses an array of entries', () => {
-  const result = WeightHistoryResponseSchema.safeParse({
-    history: [
-      { date: '2026-05-01', weight: 180 },
-      { date: '2026-05-02', weight: null, skipped: true },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
 test('LogWeightRequestSchema: rejects negative weight', () => {
   const result = LogWeightRequestSchema.safeParse({ weight: -10 });
   assert.equal(result.success, false);
@@ -112,95 +120,25 @@ test('LogMoodRequestSchema: accepts mood=3 with optional notes', () => {
   assert.equal(result.success, true);
 });
 
-test('MoodHistoryResponseSchema: parses array with mood scale enum', () => {
-  const result = MoodHistoryResponseSchema.safeParse({
-    history: [{ date: '2026-05-01', mood: 5 }],
-  });
-  assert.equal(result.success, true);
-});
+// The speculative `WorkoutLogSchema` / `WorkoutsListResponseSchema` /
+// `SaveWorkoutResponseSchema` trio that used to be checked here described a
+// `{ workouts: [ { phaseIndex, workoutIndex } ] }` API no handler has ever
+// answered with. It was deleted with NP-018; the real /api/workouts surface is
+// covered by tests/workoutsSchemas.test.ts and by the webapp contract harness.
 
-test('WorkoutLogSchema: accepts a minimal completed workout', () => {
-  const result = WorkoutLogSchema.safeParse({
-    programId: 'p1',
-    phaseIndex: 0,
-    workoutIndex: 0,
-    date: '2026-05-01',
-    exercises: [{ exerciseSlug: 'bench-press', sets: [] }],
-    completed: true,
-  });
-  assert.equal(result.success, true);
-});
+// The speculative `{ schedule: [ { phaseIndex, workoutIndex } ] }` envelope
+// that used to be checked here described a response no route has ever sent. It
+// was deleted with NP-021; the real GET /api/schedule is covered by
+// tests/scheduleSchemas.test.ts and by the webapp contract harness.
 
-test('WorkoutLogSchema: rejects negative phaseIndex', () => {
-  const result = WorkoutLogSchema.safeParse({
-    programId: 'p1',
-    phaseIndex: -1,
-    workoutIndex: 0,
-    date: '2026-05-01',
-    exercises: [],
-    completed: false,
-  });
-  assert.equal(result.success, false);
-});
-
-test('WorkoutsListResponseSchema: parses a list of workouts', () => {
-  const result = WorkoutsListResponseSchema.safeParse({
-    workouts: [
+test('ActiveProgramsApiResponseSchema: parses minimal response and accepts extras (passthrough)', () => {
+  const result = ActiveProgramsApiResponseSchema.safeParse({
+    activePrograms: [
       {
         programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        date: '2026-05-01',
-        exercises: [],
-        completed: false,
-      },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
-test('SaveWorkoutResponseSchema: parses success-only response', () => {
-  const result = SaveWorkoutResponseSchema.safeParse({ success: true });
-  assert.equal(result.success, true);
-});
-
-test('ScheduleResponseSchema: parses array of slots', () => {
-  const result = ScheduleResponseSchema.safeParse({
-    schedule: [
-      {
-        date: '2026-05-01',
-        programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        status: 'scheduled',
-      },
-    ],
-  });
-  assert.equal(result.success, true);
-});
-
-test('ScheduleResponseSchema: rejects an unknown status enum value', () => {
-  const result = ScheduleResponseSchema.safeParse({
-    schedule: [
-      {
-        date: '2026-05-01',
-        programId: 'p1',
-        phaseIndex: 0,
-        workoutIndex: 0,
-        status: 'mystery',
-      },
-    ],
-  });
-  assert.equal(result.success, false);
-});
-
-test('ActiveProgramsResponseSchema: parses minimal response and accepts extras (passthrough)', () => {
-  const result = ActiveProgramsResponseSchema.safeParse({
-    programs: [
-      {
-        programId: 'p1',
-        status: 'active',
-        startedAt: '2026-04-01',
+        programName: 'Foundation',
+        status: 'in-progress',
+        startDate: '2026-04-01T00:00:00.000Z',
       },
     ],
     extra: 'allowed',
@@ -308,24 +246,27 @@ test('ProgramDetailResponseSchema: defaults phases to [] when absent', () => {
   }
 });
 
-test('ProgramMutationResponseSchema: parses enroll/abandon {success, message}', () => {
-  const r = ProgramMutationResponseSchema.safeParse({
+test('ProgramAbandonResponseSchema: parses {success, message}', () => {
+  const r = ProgramAbandonResponseSchema.safeParse({
     success: true,
-    message: 'Program saved',
+    message: 'Program abandoned successfully',
   });
   assert.equal(r.success, true);
 });
 
-test('ProgramMutationResponseSchema: parses start-date {message, startDate}', () => {
-  const r = ProgramMutationResponseSchema.safeParse({
+test('ProgramStartDateResponseSchema: parses {message, startDate}', () => {
+  const r = ProgramStartDateResponseSchema.safeParse({
     message: 'Start date updated',
     startDate: '2026-06-01',
   });
   assert.equal(r.success, true);
 });
 
-test('ProgramMutationResponseSchema: rejects a non-string message', () => {
-  const r = ProgramMutationResponseSchema.safeParse({ message: 42 });
+test('ProgramStartDateResponseSchema: rejects a non-string message', () => {
+  const r = ProgramStartDateResponseSchema.safeParse({
+    message: 42,
+    startDate: '2026-06-01',
+  });
   assert.equal(r.success, false);
 });
 
@@ -445,53 +386,50 @@ test('VerifyLinkResponseSchema: rejects a response missing the token', () => {
   assert.equal(result.success, false);
 });
 
-test('WorkoutSaveRequestSchema: parses the live-workout save payload', () => {
-  const r = WorkoutSaveRequestSchema.safeParse({
-    programId: 'prog-1',
-    phase: 1,
-    day: 'Day 1',
-    completed: true,
-    activeSeconds: 600,
-    duration: 10,
-    exercises: [
-      {
-        name: 'Bench',
-        exerciseSlug: 'bench',
-        sets: [{ setNumber: 1, reps: 5, weight: 135, completed: true }],
-      },
-    ],
-  });
-  assert.equal(r.success, true);
+// ---------------------------------------------------------------------------
+// The reviewer demo sign-in. One designated account, a fixed code from the
+// runtime config, typed on the normal sign-in screen — the store builds' only
+// way past a magic link they cannot receive.
+// ---------------------------------------------------------------------------
+
+test('ReviewSignInRequestSchema: an email and a code, both required', () => {
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({
+      email: 'app-review@become.redbtn.io',
+      code: 'become-review-2026-a1b2',
+    }).success,
+    true,
+  );
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({ email: 'app-review@become.redbtn.io' }).success,
+    false,
+  );
+  assert.equal(
+    ReviewSignInRequestSchema.safeParse({ email: 'not-an-email', code: 'x' }).success,
+    false,
+  );
 });
 
-test('WorkoutSaveRequestSchema: rejects a missing day', () => {
-  const r = WorkoutSaveRequestSchema.safeParse({
-    programId: 'p',
-    phase: 1,
-    completed: true,
-    exercises: [],
-  });
-  assert.equal(r.success, false);
+test('ReviewSignInResponseSchema: the same envelope verify-link answers with', () => {
+  // Deliberately identical in shape: the app stores a review session exactly
+  // as it stores a magic-link one.
+  const body = {
+    token: 'jwt.token.value',
+    user: { id: '67000000abc', name: 'Alex Reviewer', email: 'app-review@become.redbtn.io' },
+  };
+  assert.equal(ReviewSignInResponseSchema.safeParse(body).success, true);
+  assert.equal(VerifyLinkResponseSchema.safeParse(body).success, true);
+  // A refusal carries no token, and must not parse as a session.
+  assert.equal(
+    ReviewSignInResponseSchema.safeParse({ message: 'That review code is not valid' }).success,
+    false,
+  );
 });
 
-test('WorkoutSaveResponseSchema: parses a save response with PRs', () => {
-  const r = WorkoutSaveResponseSchema.safeParse({
-    message: 'Workout saved successfully',
-    completed: true,
-    newPRsAchieved: [
-      { exerciseSlug: 'bench', exerciseName: 'Bench', dimensions: ['weight', 'e1rm'] },
-    ],
-  });
-  assert.equal(r.success, true);
-});
-
-test('WorkoutSaveResponseSchema: rejects a malformed PR entry', () => {
-  const r = WorkoutSaveResponseSchema.safeParse({
-    newPRsAchieved: [{ exerciseSlug: 'bench' }],
-  });
-  assert.equal(r.success, false);
-});
-
+// The POST /api/workouts save body and its response moved to
+// tests/workoutsSchemas.test.ts with NP-018, where they are checked against
+// the body LiveWorkoutClient actually builds for both a program day and a
+// quick session.
 
 test('ExerciseAlternativesResponseSchema: parses alternatives list', () => {
   const r = ExerciseAlternativesResponseSchema.safeParse({
@@ -512,30 +450,8 @@ test('ExerciseAlternativesResponseSchema: rejects a candidate missing name', () 
 });
 
 
-test('ScheduleApiResponseSchema: parses nested schedules with scheduledWorkouts', () => {
-  const r = ScheduleApiResponseSchema.safeParse({
-    schedules: [
-      {
-        _id: 's1',
-        programId: 'prog-1',
-        programName: 'Strength',
-        programStatus: 'active',
-        scheduledWorkouts: [
-          { date: '2026-06-01T00:00:00.000Z', dayLabel: 'Day 1', status: 'scheduled', phase: 1 },
-        ],
-      },
-    ],
-  });
-  assert.equal(r.success, true);
-});
-
-test('ScheduleApiResponseSchema: defaults schedules to [] and a workout requires date+status', () => {
-  assert.equal(ScheduleApiResponseSchema.safeParse({}).success, true);
-  const bad = ScheduleApiResponseSchema.safeParse({
-    schedules: [{ programId: 'p', scheduledWorkouts: [{ dayLabel: 'Day 1' }] }],
-  });
-  assert.equal(bad.success, false);
-});
+// GET /api/schedule and the PATCH/POST/PUT writes moved to
+// tests/scheduleSchemas.test.ts with NP-021.
 
 
 test('ProgressMoodResponseSchema: parses moodData points', () => {
@@ -552,72 +468,223 @@ test('ProgressMoodResponseSchema: defaults moodData to [] and rejects mood out o
 });
 
 
-test('MealLogResponseSchema: parses meals with foods + goals', () => {
-  const r = MealLogResponseSchema.safeParse({
-    date: '2026-06-01',
-    meals: [
-      { mealType: 'breakfast', foods: [{ id: 'f1', name: 'Oats', servings: 1, nutrition: { calories: 300, protein: 10, carbs: 50, fats: 5 } }] },
+// ═══════════════════════════════════════════════════════════════════════════
+// NUTRITION (NP-024) — one recorded fixture per route the v1 food log calls.
+//
+// `tests/nutritionFixtures.ts` holds the bodies; this block is the assertion
+// that each schema still accepts the response the web actually sends, plus the
+// negative cases that encode the four rules at the top of
+// src/schemas/nutrition.ts. The REAL handlers are parsed with these same
+// schemas by webapp/tests/unit/contract/np024Nutrition.test.ts — a fixture
+// agrees with a schema by construction, so it can only ever catch a change made
+// on THIS side.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Every fixture parses with the schema its route is read through. */
+const NUTRITION_ROUTE_FIXTURES: ReadonlyArray<
+  [string, { safeParse(v: unknown): { success: boolean; error?: unknown } }, unknown]
+> = [
+  ['GET /api/meal-logs?date=', MealLogsDayResponseSchema, nutritionFixtures.MEAL_LOGS_DAY],
+  ['GET /api/meal-logs?from=&to=', MealLogsRangeResponseSchema, nutritionFixtures.MEAL_LOGS_RANGE],
+  ['POST /api/meal-logs (request)', MealLogCreateRequestSchema, nutritionFixtures.MEAL_LOG_CREATE_REQUEST],
+  ['POST /api/meal-logs', MealLogCreateResponseSchema, nutritionFixtures.MEAL_LOG_CREATE],
+  ['GET /api/nutrition/log', NutritionLogDayResponseSchema, nutritionFixtures.NUTRITION_LOG_DAY],
+  ['GET /api/nutrition/summary', NutritionSummaryResponseSchema, nutritionFixtures.NUTRITION_SUMMARY_WEEK],
+  ['GET /api/nutrition/foods', FoodSearchResponseSchema, nutritionFixtures.FOOD_SEARCH],
+  ['GET /api/nutrition/foods/[id]', FoodDetailResponseSchema, nutritionFixtures.FOOD_DETAIL],
+  ['GET /api/nutrition/foods/overview', FoodOverviewResponseSchema, nutritionFixtures.FOOD_OVERVIEW],
+  ['GET /api/nutrition/foods/recent', RecentFoodsResponseSchema, nutritionFixtures.FOODS_RECENT],
+  ['GET /api/nutrition/foods/frequent', FrequentFoodsResponseSchema, nutritionFixtures.FOODS_FREQUENT],
+  ['GET /api/nutrition/foods/barcode', FoodBarcodeResponseSchema, nutritionFixtures.FOOD_BARCODE],
+  ['GET /api/nutrition/foods/barcode (miss)', FoodBarcodeResponseSchema, nutritionFixtures.FOOD_BARCODE_MISS],
+  ['GET /api/nutrition/foods/barcode (preview)', FoodBarcodeResponseSchema, nutritionFixtures.FOOD_BARCODE_PREVIEW],
+  ['POST /api/nutrition/foods/import (request)', FoodImportRequestSchema, nutritionFixtures.FOOD_IMPORT_REQUEST],
+  ['POST /api/nutrition/foods/import', FoodImportResponseSchema, nutritionFixtures.FOOD_IMPORT],
+  ['GET /api/me/foods', SavedFoodsResponseSchema, nutritionFixtures.SAVED_FOODS],
+  ['GET /api/meals', MealsListResponseSchema, nutritionFixtures.MEALS_LIST],
+  ['GET /api/nutrition/recipes', RecipesListResponseSchema, nutritionFixtures.RECIPES_LIST],
+  ['GET /api/nutrition/recipes/[id]', RecipeDetailResponseSchema, nutritionFixtures.RECIPE_ROW],
+  ['GET /api/tags', TagsResponseSchema, nutritionFixtures.TAGS],
+  ['GET /api/nutrition/goals', NutritionGoalsResponseSchema, nutritionFixtures.NUTRITION_GOALS],
+  ['GET /api/nutrition/goals (default)', NutritionGoalsResponseSchema, nutritionFixtures.NUTRITION_GOALS_DEFAULT],
+  ['POST /api/nutrition/goals (request)', NutritionGoalsRequestSchema, nutritionFixtures.NUTRITION_GOALS_REQUEST],
+  ['POST /api/nutrition/goals', NutritionGoalsWriteResponseSchema, nutritionFixtures.NUTRITION_GOALS_WRITE],
+  ['GET /api/nutrition/meal-schedule', MealScheduleResponseSchema, nutritionFixtures.MEAL_SCHEDULE],
+  ['PUT /api/nutrition/meal-schedule (request)', MealScheduleWriteRequestSchema, nutritionFixtures.MEAL_SCHEDULE_WRITE_REQUEST],
+];
+
+for (const [label, schema, body] of NUTRITION_ROUTE_FIXTURES) {
+  test(`nutrition contract: the recorded ${label} body parses`, () => {
+    const result = schema.safeParse(body);
+    assert.equal(result.success, true, `${label}: ${JSON.stringify(result.error)}`);
+  });
+}
+
+test('nutrition: every route the v1 food log calls has a recorded fixture', () => {
+  // The 20 routes NP-024 covers, some recorded more than once (a barcode miss,
+  // a never-saved goals row) and five with their request body beside the
+  // response. The webapp harness holds the same list as a manifest and fails if
+  // one of them is never CALLED.
+  const routes = new Set(
+    NUTRITION_ROUTE_FIXTURES.map(([label]) =>
+      label.replace(/ \((request|miss|preview|default)\)$/, '').replace(/\?.*$/, ''),
+    ),
+  );
+  assert.equal(routes.size, 20, [...routes].sort().join('\n'));
+});
+
+test('Rule 1: a Food carries its SERVING BASIS, not a bare per-100 block', () => {
+  const parsed = FoodDetailResponseSchema.parse(nutritionFixtures.FOOD_DETAIL);
+  const variant = parsed.food.variants.find((v) => v.isDefault);
+  assert.ok(variant, 'the default variant is on the wire');
+  // "1 each" with a 60 g bridge: the stored macros are for ONE BAR. Treating
+  // them as per-100-g logs 1/100th of a bar, which is the bug this closes.
+  assert.equal(variant.servingSize, 1);
+  assert.equal(variant.servingUnit, 'each');
+  assert.equal(variant.gramsPerServing, 60);
+  assert.equal(variant.nutrition.calories, 210);
+  // And the top level mirrors THAT variant, so a flattened row is usable too.
+  assert.equal(parsed.food.servingSize, variant.servingSize);
+  assert.equal(parsed.food.gramsPerServing, variant.gramsPerServing);
+});
+
+test('Rule 1: a log item is per serving, and `servings` is how much was eaten', () => {
+  const day = MealLogsDayResponseSchema.parse(nutritionFixtures.MEAL_LOGS_DAY);
+  const item = day.logs[0]!.items[0]!;
+  assert.equal(item.servings, 2);
+  assert.equal(item.nutrition.calories, 210);
+  // The server totals a log as nutrition × servings.
+  assert.equal(day.logs[0]!.totalNutrition.calories, item.nutrition.calories * item.servings);
+});
+
+test('Rule 2: Food `source` is usda | openfoodfacts | manual — `off` is rejected', () => {
+  for (const source of ['usda', 'openfoodfacts', 'manual']) {
+    assert.equal(
+      FoodDetailResponseSchema.safeParse({ food: { _id: 'f1', name: 'X', source } }).success,
+      true,
+      source,
+    );
+  }
+  assert.equal(
+    FoodDetailResponseSchema.safeParse({ food: { _id: 'f1', name: 'X', source: 'off' } }).success,
+    false,
+    'there is no `off` source — the OpenFoodFacts value is spelled in full',
+  );
+});
+
+test('Rule 3: a Recipe carries `totalsPerServing`, and `nutrition` is not enough', () => {
+  const recipe = RecipeDetailResponseSchema.parse(nutritionFixtures.RECIPE_ROW);
+  assert.equal(recipe.totalsPerServing.calories, 210);
+  assert.equal(recipe.totalsPerServing.protein, 17);
+  assert.equal(recipe.totalsPerServing.carbs, 26.5);
+  assert.equal(recipe.totalsPerServing.fats, 3.5);
+  // The shape the schema used to describe. Native read `nutrition` and got 0
+  // for every recipe ever published; that must now fail loudly instead.
+  const renamed = { ...nutritionFixtures.RECIPE_ROW } as Record<string, unknown>;
+  delete renamed.totalsPerServing;
+  renamed.nutrition = { calories: 450, protein: 30, carbs: 50, fats: 12 };
+  assert.equal(RecipeDetailResponseSchema.safeParse(renamed).success, false);
+});
+
+test('Rule 4: the canonical day answers `logs`, the legacy one answers `meals`', () => {
+  const canonical = MealLogsDayResponseSchema.parse(nutritionFixtures.MEAL_LOGS_DAY);
+  // An untimed log under a custom tag — the legacy shape cannot express either.
+  const untimed = canonical.logs.find((l) => l.untimed === true);
+  assert.ok(untimed, 'an untimed log survives the canonical day');
+  assert.deepEqual(untimed.tags, ['before work']);
+
+  const legacy = NutritionLogDayResponseSchema.parse(nutritionFixtures.NUTRITION_LOG_DAY);
+  // Water, quick adds and goals live ONLY here.
+  assert.equal(legacy.water?.current, 64);
+  assert.equal(legacy.quickAdds[0]?.calories, 150);
+  assert.equal(legacy.goals?.calories, 2400);
+  // …and its totals include the quick add, which the canonical day's do not.
+  assert.equal(legacy.dailyTotals?.calories, 734);
+  assert.equal(canonical.dailyTotals.calories, 584);
+  // Every custom tag collapses into one of four buckets on the way out.
+  assert.deepEqual(legacy.meals.map((m) => m.mealType), ['lunch', 'snack']);
+});
+
+test('the deprecated names still resolve to the new shapes', () => {
+  // Kept until the screens move. The SAME object, so importing the old name
+  // cannot hand a caller a stale contract.
+  assert.equal(MealLogResponseSchema, NutritionLogDayResponseSchema);
+  assert.equal(
+    MealLogResponseSchema.safeParse(nutritionFixtures.NUTRITION_LOG_DAY).success,
+    true,
+  );
+});
+
+test('a renamed or dropped field fails the schema, not the screen', () => {
+  // Each of these is a field a native screen reads. A rename used to sail
+  // through `.passthrough()` as an unknown extra.
+  const dayNoTotals = { ...nutritionFixtures.MEAL_LOGS_DAY } as Record<string, unknown>;
+  delete dayNoTotals.dailyTotals;
+  assert.equal(MealLogsDayResponseSchema.safeParse(dayNoTotals).success, false);
+
+  const itemNoBasis = {
+    ...nutritionFixtures.MEAL_LOGS_DAY,
+    logs: [
+      {
+        ...nutritionFixtures.MEAL_LOGS_DAY.logs[0],
+        items: [{ name: 'X', servings: 1, nutrition: { calories: 1, protein: 0, carbs: 0, fats: 0 } }],
+      },
     ],
-    goals: { calories: 2200, protein: 150, carbs: 200, fats: 65 },
-  });
-  assert.equal(r.success, true);
+  };
+  assert.equal(
+    MealLogsDayResponseSchema.safeParse(itemNoBasis).success,
+    false,
+    'an item with no servingSize/servingUnit can be neither scaled nor re-edited',
+  );
+
+  const summaryThinDay = {
+    ...nutritionFixtures.NUTRITION_SUMMARY_WEEK,
+    days: [{ date: '2026-09-28' }],
+  };
+  assert.equal(NutritionSummaryResponseSchema.safeParse(summaryThinDay).success, false);
+
+  assert.equal(TagsResponseSchema.safeParse({ defaults: ['lunch'] }).success, true);
+  assert.equal(TagsResponseSchema.safeParse({ userTags: 'lunch' }).success, false);
 });
 
-test('MealLogResponseSchema: defaults meals to [] and a food requires nutrition', () => {
-  assert.equal(MealLogResponseSchema.safeParse({}).success, true);
-  const bad = MealLogResponseSchema.safeParse({
-    meals: [{ mealType: 'lunch', foods: [{ name: 'X' }] }],
-  });
-  assert.equal(bad.success, false);
+test('a null-ended meal-time window is data, and a wrapping one is legal', () => {
+  const parsed = MealScheduleResponseSchema.parse(nutritionFixtures.MEAL_SCHEDULE);
+  const unscheduled = parsed.windows.find((w) => w.tag === 'before work');
+  assert.ok(unscheduled);
+  assert.equal(unscheduled.startMinutes, null);
+  const bed = parsed.windows.find((w) => w.tag === 'bed');
+  assert.ok(bed);
+  // 23:00 → 02:00. end <= start is a WRAP, not bad data.
+  assert.equal(bed.startMinutes, 1380);
+  assert.equal(bed.endMinutes, 120);
+  // Array order IS the member's meal order, so it must survive the parse.
+  assert.deepEqual(
+    parsed.windows.map((w) => w.tag),
+    ['breakfast', 'lunch', 'before work', 'bed'],
+  );
 });
 
-
-test('FoodSearchResponseSchema: parses three-source foods list', () => {
-  const r = FoodSearchResponseSchema.safeParse({
-    foods: [
-      { _id: 'db1', name: 'Oats', source: 'manual', nutrition: { calories: 380 } },
-      { id: 'usda-9', name: 'Banana', brand: null, source: 'usda', calories: 89 },
-    ],
-    total: 2,
-  });
-  assert.equal(r.success, true);
+test('a barcode miss is `{ food: null }`, and a preview is not persistable', () => {
+  assert.equal(FoodBarcodeResponseSchema.parse(nutritionFixtures.FOOD_BARCODE_MISS).food, null);
+  const preview = FoodBarcodeResponseSchema.parse(nutritionFixtures.FOOD_BARCODE_PREVIEW);
+  assert.equal(preview.food?.persistable, false);
+  assert.equal(preview.food?._id.startsWith('preview-off-'), true);
 });
 
-test('FoodSearchResponseSchema: defaults foods to [] and requires a name', () => {
+test('list schemas default their array to [] and still require a name', () => {
+  assert.equal(
+    MealLogsDayResponseSchema.safeParse({
+      date: '2026-09-28',
+      dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+    }).success,
+    true,
+  );
   assert.equal(FoodSearchResponseSchema.safeParse({}).success, true);
-  assert.equal(FoodSearchResponseSchema.safeParse({ foods: [{ source: 'usda' }] }).success, false);
-});
-
-test('FoodDetailResponseSchema: parses { food } with nullable nutrition', () => {
-  const r = FoodDetailResponseSchema.safeParse({
-    food: { _id: 'usda-9', name: 'Banana', category: 'fruit', source: 'usda', nutrition: { calories: 89, fats: null } },
-  });
-  assert.equal(r.success, true);
-});
-
-test('FoodDetailResponseSchema: rejects a missing food key', () => {
-  assert.equal(FoodDetailResponseSchema.safeParse({}).success, false);
-});
-
-
-test('RecipesListResponseSchema: parses recipes list', () => {
-  const r = RecipesListResponseSchema.safeParse({
-    recipes: [
-      { _id: 'r1', name: 'Protein Oats', servings: 2, nutrition: { calories: 450, protein: 30, carbs: 50, fats: 12 }, ingredients: [{ name: 'Oats', amount: 80, unit: 'g', nutrition: { calories: 300, protein: 10, carbs: 50, fats: 5 } }], instructions: ['Mix'] },
-    ],
-    total: 1,
-  });
-  assert.equal(r.success, true);
-});
-
-test('RecipesListResponseSchema: defaults recipes to [] and requires a name', () => {
+  assert.equal(FoodSearchResponseSchema.safeParse({ foods: [{ _id: 'a', source: 'usda' }] }).success, false);
   assert.equal(RecipesListResponseSchema.safeParse({}).success, true);
   assert.equal(RecipesListResponseSchema.safeParse({ recipes: [{ servings: 1 }] }).success, false);
-});
-
-test('RecipeDetailResponseSchema: parses an unwrapped recipe doc', () => {
-  const r = RecipeDetailResponseSchema.safeParse({ _id: 'r1', name: 'X', ingredients: [], instructions: [] });
-  assert.equal(r.success, true);
+  assert.equal(MealsListResponseSchema.safeParse({}).success, true);
+  assert.equal(FoodDetailResponseSchema.safeParse({}).success, false);
 });
 
 
@@ -648,8 +715,11 @@ test('PostMessageResponseSchema: rejects an unwrapped (bare) message', () => {
 });
 
 
+// The profile contract itself lives in tests/accountSchemas.test.ts, next to
+// the rest of the account area. `fitnessGoal` is the server's key — `goal` was
+// the May one, and PATCH /api/profile drops it.
 test('ProfileResponseSchema: parses GET/PATCH profile shape', () => {
-  const r = ProfileResponseSchema.safeParse({ profile: { goal: 'strength' }, name: 'Jon', onboardingCompleted: true, email: 'jon@example.com' });
+  const r = ProfileResponseSchema.safeParse({ profile: { fitnessGoal: 'gain_muscle' }, name: 'Jon', onboardingCompleted: true, email: 'jon@example.com' });
   assert.equal(r.success, true);
   assert.equal(ProfileResponseSchema.safeParse({ profile: null, name: null }).success, true);
 });

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/videoTrim.test.ts
+// Run with: npm run test:file tests/unit/videoTrim.test.ts
 //
 // `resolveTrim` is the one place that decides which slice of a demo clip
 // plays. It runs in three contexts with different amounts of information —

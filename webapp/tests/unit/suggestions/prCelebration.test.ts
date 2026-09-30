@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/prCelebration.test.ts
+// Run with: npm run test:file tests/unit/suggestions/prCelebration.test.ts
 //
 // Covers the pr-celebration source:
 //   - prSetAtDate (latest dimension date)

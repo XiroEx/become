@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Recipe from '@/models/Recipe'
 import { verifyAuth } from '@/lib/auth'
+import { pickRecipeFields } from '@/lib/nutrition/recipeFields'
 
 // GET: List recipes (public + user's private)
 export async function GET(request: NextRequest) {
@@ -134,8 +135,11 @@ export async function POST(request: NextRequest) {
       fiber: Math.round((totals.fiber / servings) * 10) / 10
     }
 
+    // Allowlisted (lib/nutrition/recipeFields.ts) — the body is never spread
+    // whole into the model, so createdBy/usageCount/savedFoodId stay
+    // server-owned no matter what the client sends.
     const recipe = await Recipe.create({
-      ...body,
+      ...pickRecipeFields(body),
       createdBy: authResult.userId,
       totalsPerServing: body.totalsPerServing || totalsPerServing,
       // Optional per-serving bridge values (UNITS_AND_SERVINGS_PLAN §10.8).

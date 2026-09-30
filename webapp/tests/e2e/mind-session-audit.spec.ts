@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { BASE_URL, signToken } from './test-auth'
+import { BASE_URL, signToken, usingHumanAccount } from './test-auth'
 import fs from 'fs'
 
 /**
@@ -26,7 +26,20 @@ const USER = { id: '69324119a28a8ac3b78750b9', email: 'jondon27500@gmail.com' }
 const SHOTS = 'tests/e2e/screenshots/mind-audit'
 const FEELING = 'Grateful' // the member's real check-in that day
 
+// This one CANNOT be retargeted: it asserts on a specific member's real
+// check-in (FEELING above) and walks their daily session, which has a 20h
+// cooldown — running it burns that member's day, which is exactly what the
+// header says must not happen. Note the id above is the LIVE account, not the
+// become_mind_audit clone the header claims. Until it is repointed at a scratch
+// account it is opt-in only, so `npm run test:e2e` can never fire it.
+const canRun = usingHumanAccount
+
 test('walk every scene of the daily session', async ({ page, context }) => {
+  test.skip(
+    !canRun,
+    'Pinned to a real member and burns their 20h session cooldown. ' +
+      'Set E2E_ALLOW_HUMAN_ACCOUNT=1 to run it deliberately.',
+  )
   fs.mkdirSync(SHOTS, { recursive: true })
   const token = signToken(USER.id, USER.email, 'user')
   const url = new URL(BASE_URL)
