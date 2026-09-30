@@ -19,6 +19,10 @@ import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
+import {
+  LayoutWireSchema,
+  LAYOUT_CACHE_KEY,
+} from "@/lib/dashboard/tileLayout";
 
 /**
  * Dashboard route — wires the first post-login screen to real data. Fetches the
@@ -44,6 +48,14 @@ export default function DashboardRoute() {
     "/api/programs/active",
     ActiveProgramsApiResponseSchema,
     fetchOpts,
+  );
+  const layout = useFetch(
+    ready ? "/api/dashboard/layout" : null,
+    LayoutWireSchema,
+    {
+      ...fetchOpts,
+      cacheKey: LAYOUT_CACHE_KEY,
+    },
   );
 
   const activeProgram = active.data?.activePrograms?.[0] ?? null;
@@ -96,6 +108,20 @@ export default function DashboardRoute() {
     router.push("/(tabs)/calendar");
   }, [router]);
 
+  const [workoutNowOpen, setWorkoutNowOpen] = useState(false);
+
+  const onOpenMind = useCallback(() => {
+    router.push("/(tabs)/mind?start=1" as never);
+  }, [router]);
+
+  const onOpenNutrition = useCallback(() => {
+    router.push("/(tabs)/nutrition" as never);
+  }, [router]);
+
+  const onOpenWorkoutNow = useCallback(() => {
+    setWorkoutNowOpen(true);
+  }, []);
+
   const initialLoading =
     ready && (me.loading || streak.loading || active.loading) && !me.data;
 
@@ -116,8 +142,9 @@ export default function DashboardRoute() {
       streak.refetch(),
       active.refetch(),
       workout.refetch(),
+      layout.refetch(),
     ]);
-  }, [active, me, streak, workout]);
+  }, [active, layout, me, streak, workout]);
 
   const initialTodayRef = useRef(today);
   // Refetch when the local day rolls over
@@ -201,6 +228,12 @@ export default function DashboardRoute() {
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
+      layout={layout.data?.layout ?? null}
+      onOpenMind={onOpenMind}
+      onOpenNutrition={onOpenNutrition}
+      onOpenWorkoutNow={onOpenWorkoutNow}
+      workoutNowOpen={workoutNowOpen}
+      onWorkoutNowOpenChange={setWorkoutNowOpen}
       // Settings lives in the (app) group, so this gear is the way a member —
       // or an App Store reviewer looking for "Delete account" — can get to it.
       onOpenSettings={() => {
