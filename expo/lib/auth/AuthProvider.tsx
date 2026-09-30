@@ -44,7 +44,8 @@ import {
   type User,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import { isJwtExpired } from "@/lib/auth/jwt";
+import { isJwtExpired, decodeJwtPayload } from "@/lib/auth/jwt";
+import { clearAll as clearAllLastKnownCache, setCacheMemberId } from "@/lib/cache/lastKnown";
 import { setUnauthorizedHandler } from "@/lib/auth/unauthorized";
 import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
 import {
@@ -287,6 +288,12 @@ export function AuthProvider({
       // Drop on-device caches: last-known cache / offline queue (NP-036),
       // the app icon badge, and any live workout drafts (NP-079).
       try {
+        await clearAllLastKnownCache();
+      } catch {
+        /* ignore */
+      }
+      setCacheMemberId(null);
+      try {
         await getOfflineWrites().clear();
       } catch {
         /* ignore */
@@ -342,6 +349,7 @@ export function AuthProvider({
       }
 
       if (!stored) {
+        setCacheMemberId(null);
         commit({
           status: "signed-out",
           token: null,
@@ -349,6 +357,11 @@ export function AuthProvider({
           signedOutReason: sessionRef.current.signedOutReason,
         });
         return;
+      }
+
+      const payload = decodeJwtPayload(stored);
+      if (payload?.userId) {
+        setCacheMemberId(String(payload.userId));
       }
 
       const nowMs = config.now ? config.now() : Date.now();
@@ -409,6 +422,9 @@ export function AuthProvider({
       } else if (outcome.token) {
         token = outcome.token;
       }
+      if (outcome.user?._id) {
+        setCacheMemberId(outcome.user._id);
+      }
       commit({
         status: "signed-in",
         token,
@@ -426,6 +442,10 @@ export function AuthProvider({
         return;
       }
       await configRef.current.store.set(value);
+      const payload = decodeJwtPayload(value);
+      if (payload?.userId) {
+        setCacheMemberId(String(payload.userId));
+      }
       // A freshly-minted token is trusted immediately: sign-in must not wait
       // on a second round trip, and must not fail because of one.
       commit({
@@ -454,6 +474,9 @@ export function AuthProvider({
         }
       } else if (outcome.token) {
         token = outcome.token;
+      }
+      if (outcome.user?._id) {
+        setCacheMemberId(outcome.user._id);
       }
       commit({
         status: "signed-in",

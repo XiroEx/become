@@ -16,6 +16,7 @@ import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
+import { ScreenState } from "@/components/ScreenState";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { localDateKey } from "@/lib/nutrition/localDay";
@@ -56,6 +57,7 @@ export default function HealthSettingsRoute() {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !token,
+    useCache: true,
   };
 
   const profile = useFetch("/api/profile", ProfileResponseSchema, fetchOpts);
@@ -88,6 +90,14 @@ export default function HealthSettingsRoute() {
     WeightCheckResponseSchema,
     fetchOpts,
   );
+
+  const hasData = !!(profile.data || weightCheck.data);
+  const fetchError = profile.error || weightCheck.error;
+  const initialLoading = (profile.loading || weightCheck.loading) && !hasData;
+
+  const onRetry = useCallback(async () => {
+    await Promise.all([profile.refetch(), weightCheck.refetch()]);
+  }, [profile, weightCheck]);
 
   // THE SKIP ONLY. A skip is a TODAY event — it answers today's prompt and
   // moves the skip counter (`webapp/app/api/weight/route.ts`) — so it is never
@@ -150,12 +160,20 @@ export default function HealthSettingsRoute() {
   const daysSince = weightCheck.data?.daysSinceLastEntry;
 
   return (
-    <SafeAreaView
-      edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: colors.background }}
-      testID="health-settings-route"
+    <ScreenState
+      loading={initialLoading}
+      error={fetchError}
+      hasData={hasData}
+      onRetry={onRetry}
+      offlineNote="You're offline. Showing last-saved profile."
+      testID="health-settings-screen-state"
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <SafeAreaView
+        edges={["top", "bottom"]}
+        style={{ flex: 1, backgroundColor: colors.background }}
+        testID="health-settings-route"
+      >
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
         <Text
           accessibilityRole="header"
           className="text-foreground text-2xl font-bold"
@@ -257,5 +275,6 @@ export default function HealthSettingsRoute() {
         </View>
       </ScrollView>
     </SafeAreaView>
+  </ScreenState>
   );
 }
