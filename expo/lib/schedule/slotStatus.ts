@@ -1,9 +1,11 @@
-export type SlotStatus =
-  | "scheduled"
-  | "completed"
-  | "missed"
-  | "skipped"
-  | "rest";
+import type { ScheduledWorkoutStatus } from "@become/api-client";
+
+/**
+ * The five statuses a schedule slot can carry, taken from the schema every
+ * response is parsed with instead of being hand-copied beside it — a second
+ * copy of a wire enum is what drifts in silence (NP-021).
+ */
+export type SlotStatus = ScheduledWorkoutStatus;
 
 export interface ScheduledSlot {
   date: string;

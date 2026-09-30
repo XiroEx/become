@@ -1,3 +1,4 @@
+import { ScheduleApiResponseSchema } from "@become/api-client";
 import {
   toScheduledSlots,
   workoutIndexFromDayLabel,
@@ -53,8 +54,31 @@ describe("toScheduledSlots", () => {
     });
   });
 
-  it("narrows an unknown status to 'scheduled' and tolerates empty input", () => {
+  it("reads the slot date as a DAY MARKER, never through the device offset", () => {
+    // A slot date is written at 00:00Z and denotes a calendar day. Anyone west
+    // of UTC reading it as a local instant lands on the day before — which is
+    // what put today's session on yesterday's square.
     const slots = toScheduledSlots({
+      schedules: [
+        {
+          programId: "p",
+          scheduledWorkouts: [
+            { date: "2026-06-01T00:00:00.000Z", status: "scheduled" },
+          ],
+        },
+      ],
+    });
+    expect(slots[0]!.date).toBe("2026-06-01");
+    expect(new Date("2026-06-01T00:00:00.000Z").getTime()).toBe(
+      Date.UTC(2026, 5, 1),
+    );
+  });
+
+  it("narrows an unknown status to 'scheduled' and tolerates empty input", () => {
+    // The narrowing lives in the shared schema now, which is where the response
+    // is parsed — so this goes through the parse the app itself does rather
+    // than handing toScheduledSlots a shape no response can have.
+    const parsed = ScheduleApiResponseSchema.parse({
       schedules: [
         {
           programId: "p",
@@ -64,7 +88,7 @@ describe("toScheduledSlots", () => {
         },
       ],
     });
-    expect(slots[0]!.status).toBe("scheduled");
+    expect(toScheduledSlots(parsed)[0]!.status).toBe("scheduled");
     expect(toScheduledSlots(null)).toEqual([]);
     expect(toScheduledSlots({ schedules: [] })).toEqual([]);
   });

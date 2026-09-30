@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScheduleApiResponseSchema } from "@become/api-client";
+import { ScheduleApiResponseSchema, slotDateKey } from "@become/api-client";
 import { ScheduleSettingsForm } from "@/components/schedule/ScheduleSettingsForm";
 import type { ScheduleSettings } from "@/lib/schedule/scheduleSettings";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -28,15 +28,20 @@ export default function CalendarSettingsRoute() {
   });
 
   const doc = data?.schedules?.[0] ?? null;
-  const settings = (doc?.settings ?? {}) as {
-    trainingDays?: number[];
-    startDate?: string;
-    autoAdvance?: boolean;
-  };
+  // `settings` is typed by the shared schema now (it was `z.unknown()`, which
+  // is why this used to cast). `startDate` is a 00:00Z DAY MARKER, so its day
+  // is the date part — never a timezone conversion. `autoAdvance` is the form's
+  // own state: webapp/models/Schedule.ts persists trainingDays and startDate
+  // and nothing else, so the server never sends it.
+  const settings = doc?.settings;
   const initial: ScheduleSettings = {
-    trainingDays: settings.trainingDays ?? [1, 3, 5],
-    startDate: settings.startDate?.slice(0, 10) ?? today,
-    autoAdvance: settings.autoAdvance ?? true,
+    trainingDays: settings?.trainingDays?.length
+      ? settings.trainingDays
+      : [1, 3, 5],
+    startDate: settings?.startDate
+      ? slotDateKey(settings.startDate)
+      : today,
+    autoAdvance: true,
   };
 
   const mutations = useScheduleMutations({

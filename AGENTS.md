@@ -1298,6 +1298,10 @@ Four things about it:
   `np019Programs.test.ts` is the programs domain: 22 routes, its OWN fixture
   members (`@np019.contract.test`) rather than the shared np015 pair, because
   the runner executes test files in parallel and two files sharing a row race.
+  `np021Schedule.test.ts` is the schedule domain: four routes, plus a second
+  gate that every one of the eight PATCH actions was actually sent — one
+  manifest entry for `PATCH /api/schedule` would otherwise pass for coverage of
+  a single action.
 
 The programs contract carries three rules, stated at the top of
 `shared/api-client/src/schemas/programs.ts` and asserted by that file:
@@ -1310,6 +1314,24 @@ because abandoning REMOVES the enrolment. The hydrated exercise
 current-workout responses; `groupType` is an enum whose wire spelling is
 `giant_set`, while `trackingType` stays a plain string so a catalog that grows
 a new tracking type cannot make a shipped store build drop a whole workout.
+
+The schedule contract (NP-021) carries four rules, stated at the top of
+`shared/api-client/src/schemas/schedule.ts`: **a slot `date` is a day MARKER at
+00:00Z**, read with `slotDateKey` and never through a timezone offset (the
+`completedAt` beside it is an INSTANT and does take one); **`GET /api/schedule`
+answers `{ schedules: [ … ] }`** — plural and nested, one document per enrolled
+program, never a flat slot array; **a slot names its session with `phase`
+(1-based) and `dayLabel`**, not with indices; and **every write carries a numeric
+`tz`**, which `apiFetch` merges into the body from the device clock. The eight
+PATCH actions (`skip`, `unskip`, `uncomplete`, `reschedule`, `swap`, `shift`,
+`pause`, `resume`) are ONE discriminated union on `action`, so `reschedule`
+without a `newDate` stops compiling instead of coming back as a 400 from a
+device, and they answer with TWO shapes: the five slot-level actions return the
+program's slots, the three program-level ones return counters and no slots.
+`swap` is typed and called by nobody — the server has always accepted it and no
+screen sends it. The speculative `ScheduleSlotSchema` / `ScheduleResponseSchema`
+(a `{ schedule: [ … ] }` envelope with `phaseIndex`/`workoutIndex`) described a
+response no handler has ever sent and are gone.
 
 ### Information security program (go-live item 17)
 
