@@ -37,6 +37,16 @@
  *
  * Idempotent. A second run finds nothing to do, and says so.
  *
+ * THIS SCRIPT IS NO LONGER WHAT APPLIES THE CHANGE. The first round of this
+ * card shipped a script and nobody ran it, so from the coach's side the pull
+ * request changed nothing ("You didn't change anything. The exercises still
+ * read with a DB."). The writer in production is now
+ * `app/api/cron/sync-exercise-catalog`, called by
+ * `.github/workflows/sync-exercise-catalog.yml` on every push to `main` and
+ * daily after that. The database half of this script calls the same function
+ * that route does (lib/dumbbellCatalogSync.ts), so it stays useful for a dry
+ * run from a laptop and cannot drift from what production does.
+ *
  * Run from webapp/:
  *   FIXTURE:  npx tsx scripts/dumbbell-catalog.ts --fixture
  *             rewrites ../data/exercises.json and ../data/programs.json,
@@ -54,19 +64,21 @@ import fs from 'fs'
 import path from 'path'
 import mongoose from 'mongoose'
 import * as dotenv from 'dotenv'
-import Exercise from '../models/Exercise'
-import Program from '../models/Program'
 import {
+  buildDumbbellExerciseDoc,
   describeDumbbellCatalogPlan,
   isDumbbellCatalogSettled,
-  normalizeAliases,
+  isDumbbellProgramsSettled,
   planDumbbellCatalog,
   planDumbbellDetailSpellOuts,
   planDumbbellProgramRepoints,
+  planDumbbellProgramTextSpellOuts,
+  planDumbbellProtocolLabels,
   type CatalogRow,
   type DumbbellCatalogPlan,
   type ProgramLike,
 } from '../lib/dumbbellCatalogPlan'
+import { syncDumbbellCatalog } from '../lib/dumbbellCatalogSync'
 
 dotenv.config({ path: path.join(__dirname, '../.env.local') })
 
@@ -116,58 +128,12 @@ async function resolveUri(): Promise<string> {
   return uri
 }
 
-/**
- * The document body for one of the table's new rows. Keys are ordered the way
- * `data/exercises.json` orders them (slug first, then alphabetical) so the
- * fixture this also writes stays readable next to the rows already in it.
- *
- * No `videoUrl`, on purpose, unless the table names a demo that was already
- * recorded for this exact movement (`create.video`). An exercise with no video
- * is what the admin portal's "No Video" tab lists, and that tab is the queue of
- * exercises waiting for a recording (see lib/exerciseAutoCatalog.ts).
- */
-function buildRow(slug: string, create: AnyRow): AnyRow {
-  return {
-    slug,
-    aliases: normalizeAliases(create.name, create.aliases ?? []),
-    alternatives: [],
-    bodyRegion: create.bodyRegion,
-    cardioMetrics: null,
-    category: create.category,
-    commonMistakes: create.commonMistakes ?? [],
-    cues: create.cues ?? [],
-    defaultDuration: null,
-    defaultReps: create.defaultReps ?? null,
-    defaultRest: create.defaultRest ?? null,
-    defaultSets: create.defaultSets ?? null,
-    defaultTempo: null,
-    description: create.description ?? '',
-    difficulty: create.difficulty,
-    equipment: create.equipment ?? [],
-    instructions: create.instructions ?? [],
-    isActive: true,
-    laterality: create.laterality,
-    mechanics: create.mechanics,
-    movementPatterns: create.movementPatterns ?? [],
-    name: create.name,
-    optionalEquipment: [],
-    prerequisites: [],
-    primaryMuscles: create.primaryMuscles ?? [],
-    role: create.role,
-    secondaryMuscles: create.secondaryMuscles ?? [],
-    stabilizers: create.stabilizers ?? [],
-    tags: create.tags ?? [],
-    ...(create.video ? { thumbnailUrl: create.video.thumbnailUrl } : {}),
-    trackingType: create.trackingType,
-    variations: create.variations ?? [],
-    ...(create.video ? { videoUrl: create.video.videoUrl } : {}),
-  }
-}
-
 function printPlan(
   plan: DumbbellCatalogPlan,
   repoints: ReturnType<typeof planDumbbellProgramRepoints>,
   details: ReturnType<typeof planDumbbellDetailSpellOuts>,
+  texts: ReturnType<typeof planDumbbellProgramTextSpellOuts>,
+  labels: ReturnType<typeof planDumbbellProtocolLabels>,
 ): void {
   const lines = describeDumbbellCatalogPlan(plan)
   console.log(`\n── CATALOG (${lines.length} change${lines.length === 1 ? '' : 's'}) ──`)
@@ -180,12 +146,21 @@ function printPlan(
   }
   if (repoints.length === 0) console.log('  (nothing — already applied)')
 
-  console.log(`\n── PROGRAM TEXT (${details.length} protocol block${details.length === 1 ? '' : 's'}) ──`)
+  const textCount = details.length + texts.length + labels.length
+  console.log(`\n── PROGRAM TEXT (${textCount} change${textCount === 1 ? '' : 's'}) ──`)
+  for (const t of texts) {
+    console.log(`  ${t.programId}.${t.field}  "${t.from}"`)
+    console.log(`    → "${t.to}"`)
+  }
   for (const d of details) {
     console.log(`  ${d.programName ?? d.programId}  "${d.from}"`)
     console.log(`    → "${d.to}"`)
   }
-  if (details.length === 0) console.log('  (nothing — already applied)')
+  for (const l of labels) {
+    console.log(`  ${l.programName ?? l.programId}  ${l.slug}`)
+    console.log(`    → name "${l.to}"`)
+  }
+  if (textCount === 0) console.log('  (nothing — already applied)')
 }
 
 /** Rewrite the repo's snapshot of the catalog and the programs. */
@@ -199,7 +174,9 @@ function runFixture(): void {
   const plan = planDumbbellCatalog(catalog as CatalogRow[])
   const repoints = planDumbbellProgramRepoints(programs as ProgramLike[])
   const details = planDumbbellDetailSpellOuts(programs as ProgramLike[])
-  printPlan(plan, repoints, details)
+  const texts = planDumbbellProgramTextSpellOuts(programs as ProgramLike[])
+  const labels = planDumbbellProtocolLabels(programs as ProgramLike[])
+  printPlan(plan, repoints, details, texts, labels)
 
   if (plan.missingSlugs.length > 0) {
     throw new Error(`the table names slugs the catalog does not hold: ${plan.missingSlugs.join(', ')}`)
@@ -208,7 +185,7 @@ function runFixture(): void {
   const bySlug = new Map(catalog.map((row) => [row.slug as string, row]))
 
   for (const create of plan.creates) {
-    catalog.push(buildRow(create.slug, create.create))
+    catalog.push(buildDumbbellExerciseDoc(create.slug, create.create))
   }
   for (const edit of plan.hostEdits) {
     const row = bySlug.get(edit.slug)
@@ -244,15 +221,24 @@ function runFixture(): void {
     if (entry && entry.details === d.from) entry.details = d.to
   }
 
+  for (const l of labels) {
+    const program = programs.find((p) => p.program_id === l.programId)
+    const entry = program?.phases?.[l.phaseIndex]?.workouts?.[l.workoutIndex]?.exercises?.[l.exerciseIndex]
+    if (entry && entry.exerciseSlug === l.slug) entry.name = l.to
+  }
+
+  for (const t of texts) {
+    const program = programs.find((p) => p.program_id === t.programId)
+    if (program && program[t.field] === t.from) program[t.field] = t.to
+  }
+
   // Same shape the reconcile dump writes: two-space indent, no trailing
   // newline, rows left in the order they are already in.
   fs.writeFileSync(exercisesFile, JSON.stringify(catalog, null, 2))
   fs.writeFileSync(programsFile, JSON.stringify(programs, null, 2))
 
   const after = planDumbbellCatalog(catalog as CatalogRow[])
-  const afterRepoints = planDumbbellProgramRepoints(programs as ProgramLike[])
-  const afterDetails = planDumbbellDetailSpellOuts(programs as ProgramLike[])
-  if (!isDumbbellCatalogSettled(after) || afterRepoints.length > 0 || afterDetails.length > 0) {
+  if (!isDumbbellCatalogSettled(after) || !isDumbbellProgramsSettled(programs as ProgramLike[])) {
     throw new Error('the fixture is still not settled after one pass — the plan is not a fixed point')
   }
   console.log('\nwrote data/exercises.json and data/programs.json — re-planning finds nothing left.')
@@ -263,111 +249,39 @@ async function runDatabase(): Promise<void> {
   await mongoose.connect(uri)
   console.log(`connected to ${mongoose.connection.name} — ${APPLY ? 'APPLY' : 'DRY RUN'}`)
 
-  const catalog = await Exercise.find(
-    {},
-    { slug: 1, name: 1, aliases: 1, variations: 1, optionalEquipment: 1, _id: 0 },
-  ).sort({ slug: 1 }).lean() as unknown as CatalogRow[]
-  const programs = await Program.find({}).lean() as unknown as AnyRow[]
-  console.log(`${catalog.length} catalog exercises, ${programs.length} programs`)
+  // The SAME function app/api/cron/sync-exercise-catalog runs, so a dry run
+  // from a laptop and the scheduled production run can never disagree about
+  // what is outstanding.
+  const report = await syncDumbbellCatalog({ apply: APPLY })
+  console.log(`${report.exercises} catalog exercises, ${report.programs} programs`)
 
-  const plan = planDumbbellCatalog(catalog)
-  const repoints = planDumbbellProgramRepoints(programs as ProgramLike[])
-  const details = planDumbbellDetailSpellOuts(programs as ProgramLike[])
-  printPlan(plan, repoints, details)
+  console.log(`\n── CATALOG (${report.plan.length} change${report.plan.length === 1 ? '' : 's'}) ──`)
+  for (const line of report.plan) console.log(`  ${line}`)
+  if (report.plan.length === 0) console.log('  (nothing — already applied)')
 
-  if (plan.missingSlugs.length > 0) {
-    console.error(`\n!! the table names slugs the catalog does not hold: ${plan.missingSlugs.join(', ')}`)
+  console.log(`\n── PROGRAMS (${report.repoints.length} reference${report.repoints.length === 1 ? '' : 's'}) ──`)
+  for (const line of report.repoints) console.log(`  ${line}`)
+  if (report.repoints.length === 0) console.log('  (nothing — already applied)')
+
+  console.log(`\n── PROGRAM TEXT (${report.programText.length} change${report.programText.length === 1 ? '' : 's'}) ──`)
+  for (const line of report.programText) console.log(`  ${line}`)
+  if (report.programText.length === 0) console.log('  (nothing — already applied)')
+
+  if (report.missingSlugs.length > 0) {
+    console.error(`\n!! the table names slugs the catalog does not hold: ${report.missingSlugs.join(', ')}`)
   }
 
-  if (isDumbbellCatalogSettled(plan) && repoints.length === 0 && details.length === 0) {
-    console.log('\nNothing to do.')
-    await mongoose.disconnect()
-    return
-  }
-
-  if (!APPLY) {
-    console.log('\nDRY RUN — nothing written. Re-run with --apply.')
-    await mongoose.disconnect()
-    return
-  }
-
-  console.log('\n── applying ──')
-
-  for (const create of plan.creates) {
-    try {
-      await Exercise.create(buildRow(create.slug, create.create))
-      console.log(`  created ${create.slug} ("${create.create.name}")`)
-    } catch (error) {
-      // A concurrent run got there first; the unique index on `slug` settles it.
-      if ((error as { code?: number })?.code !== 11000) throw error
-      console.log(`  ${create.slug} already there`)
+  if (APPLY) {
+    console.log('\n── written ──')
+    for (const [what, slugs] of Object.entries(report.wrote)) {
+      if (slugs.length > 0) console.log(`  ${what}: ${slugs.join(', ')}`)
     }
+  } else if (!report.settled) {
+    console.log('\nDRY RUN — nothing written. Re-run with --apply, or just merge: the')
+    console.log('workflow .github/workflows/sync-exercise-catalog.yml applies it on push to main.')
   }
 
-  for (const edit of plan.hostEdits) {
-    const pull: AnyRow = {}
-    if (edit.removeAliases.length > 0) pull.aliases = { $in: edit.removeAliases }
-    if (edit.removeOptionalEquipment.length > 0) pull.optionalEquipment = { $in: edit.removeOptionalEquipment }
-    const update: AnyRow = {}
-    if (Object.keys(pull).length > 0) update.$pull = pull
-    if (edit.addVariations.length > 0) update.$addToSet = { variations: { $each: edit.addVariations } }
-    await Exercise.updateOne({ slug: edit.slug }, update)
-    console.log(
-      `  ${edit.slug}: -${edit.removeAliases.length} alias, -${edit.removeOptionalEquipment.length} optionalEquipment, +${edit.addVariations.length} variation`,
-    )
-  }
-
-  for (const rename of plan.renames) {
-    await Exercise.updateOne(
-      { slug: rename.slug },
-      { $set: { name: rename.to }, ...(rename.addAliases.length ? { $addToSet: { aliases: { $each: rename.addAliases } } } : {}) },
-    )
-    console.log(`  ${rename.slug}: "${rename.from}" → "${rename.to}"`)
-  }
-
-  for (const spell of plan.spellOuts) {
-    const set: AnyRow = {}
-    if (spell.name) set.name = spell.name.to
-    if (spell.aliases) set.aliases = spell.aliases.to
-    await Exercise.updateOne({ slug: spell.slug }, { $set: set })
-    console.log(`  ${spell.slug}: spelled out`)
-  }
-
-  // Programs: the whole `phases` array is written back per program — the
-  // entries are three levels deep and a positional update cannot reach them.
-  const touched = new Set<string>()
-  for (const r of repoints) {
-    const program = programs.find((p) => p.program_id === r.programId)
-    const entry = program?.phases?.[r.phaseIndex]?.workouts?.[r.workoutIndex]?.exercises?.[r.exerciseIndex]
-    if (!program || !entry || entry.exerciseSlug !== r.from) continue
-    entry.exerciseSlug = r.to
-    touched.add(String(program.program_id))
-  }
-  for (const d of details) {
-    const program = programs.find((p) => p.program_id === d.programId)
-    const entry = program?.phases?.[d.phaseIndex]?.workouts?.[d.workoutIndex]?.exercises?.[d.exerciseIndex]
-    if (!program || !entry || entry.details !== d.from) continue
-    entry.details = d.to
-    touched.add(String(program.program_id))
-  }
-  for (const programId of touched) {
-    const program = programs.find((p) => String(p.program_id) === programId)
-    if (!program) continue
-    await Program.updateOne({ _id: program._id }, { $set: { phases: program.phases } })
-    console.log(`  rewrote ${String(program.name)}`)
-  }
-
-  // Re-plan against what is now in the database: the run is only done if a
-  // second pass would find nothing.
-  const after = await Exercise.find(
-    {},
-    { slug: 1, name: 1, aliases: 1, variations: 1, optionalEquipment: 1, _id: 0 },
-  ).sort({ slug: 1 }).lean() as unknown as CatalogRow[]
-  const afterPrograms = await Program.find({}).lean() as unknown as ProgramLike[]
-  const settled = isDumbbellCatalogSettled(planDumbbellCatalog(after))
-    && planDumbbellProgramRepoints(afterPrograms).length === 0
-    && planDumbbellDetailSpellOuts(afterPrograms).length === 0
-  console.log(settled ? '\nDone — a second run would find nothing.' : '\n!! still not settled — re-run and read the plan.')
+  console.log(report.settled ? '\nDone — a second run would find nothing.' : '\n!! still not settled — re-run and read the plan.')
 
   await mongoose.disconnect()
 }

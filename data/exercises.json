@@ -2634,8 +2634,6 @@
     "_id": "699fbd44751d9854c0799331",
     "slug": "dumbbell-row",
     "aliases": [
-      "Dumbbell Bent-Over Row",
-      "Dumbbell Bent Over Row",
       "Dumbbell Single-Arm Row",
       "Single-Arm Row"
     ],
@@ -2690,7 +2688,8 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [
-      "barbell-row"
+      "barbell-row",
+      "dumbbell-bent-over-row"
     ],
     "videoUrl": "/exercises/db-single-arm-row.mov"
   },
@@ -7863,6 +7862,79 @@
       "reverse-lunge",
       "split-squat",
       "squat-jump"
+    ]
+  },
+  {
+    "slug": "dumbbell-bent-over-row",
+    "aliases": [
+      "Dumbbell Bent-Over Rows",
+      "Bent-Over Dumbbell Row",
+      "Two-Arm Dumbbell Row",
+      "Dumbbell Bent Over Row"
+    ],
+    "alternatives": [],
+    "bodyRegion": "upper_body",
+    "cardioMetrics": null,
+    "category": "strength",
+    "commonMistakes": [
+      "Standing up a little on every rep, which turns it into a shrug.",
+      "Rounding the lower back to chase heavier dumbbells.",
+      "Jerking the weight with the hips instead of pulling with the back."
+    ],
+    "cues": [
+      "Set the torso angle before the first rep and do not let it rise as the set gets hard.",
+      "Elbows past the ribs, not out wide — that is the difference between back work and rear-delt work.",
+      "Let the arms hang fully at the bottom. A row that never straightens is half a rep."
+    ],
+    "defaultDuration": null,
+    "defaultReps": "8-12",
+    "defaultRest": "90 sec",
+    "defaultSets": 4,
+    "defaultTempo": null,
+    "description": "Both dumbbells rowed at the same time from a hinged-over torso, elbows driving back past the ribs. The two-arm half of the pair — the one-arm-at-a-time version, braced on a bench, is Dumbbell Row.",
+    "difficulty": "intermediate",
+    "equipment": [
+      "dumbbell"
+    ],
+    "instructions": [
+      "Stand with feet hip width, a dumbbell in each hand, knees slightly soft.",
+      "Hinge at the hips until your torso is somewhere near 45° or lower, back flat, arms hanging straight down.",
+      "Row both dumbbells to the sides of your ribcage, leading with the elbows.",
+      "Squeeze the shoulder blades together at the top, then lower under control until the arms are straight again."
+    ],
+    "isActive": true,
+    "laterality": "bilateral",
+    "mechanics": "compound",
+    "movementPatterns": [
+      "horizontal_pull"
+    ],
+    "name": "Dumbbell Bent-Over Row",
+    "optionalEquipment": [],
+    "prerequisites": [],
+    "primaryMuscles": [
+      "lats",
+      "mid_back"
+    ],
+    "role": "compound",
+    "secondaryMuscles": [
+      "biceps",
+      "rear_delts"
+    ],
+    "stabilizers": [
+      "abs",
+      "erector_spinae",
+      "grip"
+    ],
+    "tags": [
+      "pull",
+      "back",
+      "dumbbell"
+    ],
+    "trackingType": "reps_weight",
+    "variations": [
+      "dumbbell-row",
+      "barbell-row",
+      "dumbbell-underhand-row"
     ]
   }
 ]

@@ -45,22 +45,28 @@ import {
   DUMBBELL_ONLY_PROGRAM_IDS,
   DUMBBELL_RENAMES,
   DUMBBELL_SPLITS,
+  isPerSidePrescription,
+  protocolLabelFromSlug,
   spellOutDumbbell,
   usesDumbbellShorthand,
   type DumbbellExerciseCreate,
 } from '../../lib/dumbbellCatalog'
 import {
   isDumbbellCatalogSettled,
+  isDumbbellProgramsSettled,
   normalizeAliases,
   planDumbbellCatalog,
   planDumbbellDetailSpellOuts,
   planDumbbellProgramRepoints,
+  planDumbbellProgramTextSpellOuts,
+  planDumbbellProtocolLabels,
   repointedProgramIds,
   type CatalogRow,
   type ProgramLike,
 } from '../../lib/dumbbellCatalogPlan'
 import { buildExerciseNameIndex, resolveExerciseSlug } from '../../lib/exerciseNameMatch'
 import { isBrokenExercise, matchesAuditSearch } from '../../lib/exerciseAudit'
+import { exerciseNameFromSlug } from '../../lib/exerciseAutoCatalog'
 
 const ROOT = path.join(__dirname, '../..')
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -72,6 +78,7 @@ function readSource(rel: string): string {
 interface FixtureExercise extends CatalogRow {
   equipment?: string[]
   trackingType?: string
+  laterality?: string
   videoUrl?: string | null
   instructions?: string[]
   primaryMuscles?: string[]
@@ -270,9 +277,72 @@ test('the two demos already recorded for a dumbbell version follow it onto its o
 
 test('every other new row has no video, so it sits in the upload queue', () => {
   const waiting = TABLE_ENTRIES.filter((e) => !e.create.video).map((e) => e.slug)
-  assert.equal(waiting.length, 10, 'ten of the twelve new rows are waiting for a recording')
+  assert.equal(waiting.length, TABLE_ENTRIES.length - 2, 'all but the two that inherit a recording are waiting for one')
   for (const slug of waiting) {
     assert.ok(!BY_SLUG.get(slug)?.videoUrl, `${slug} should have no video yet`)
+  }
+})
+
+test('a dumbbell row and a dumbbell bent-over row are two exercises', () => {
+  // Jon's follow-up, verbatim: "Ensure all of these exercises exist in the
+  // admin portal NOT AS ALIAS. ACTUAL EXERCISES. I need to upload the video.
+  // For example a dumbbell row is not a dumbbell bent over row."
+  const single = BY_SLUG.get('dumbbell-row')
+  const both = BY_SLUG.get('dumbbell-bent-over-row')
+  assert.ok(single && both, 'both rows exist')
+
+  // The row that already existed is the SINGLE-ARM one — that is what its
+  // recorded demo shows and what its default prescription says.
+  assert.equal(single!.laterality, 'unilateral')
+  assert.match(String(single!.videoUrl), /single-arm/)
+  assert.equal(both!.laterality, 'bilateral')
+  assert.ok(!both!.videoUrl, 'the new row is in the "No Video" queue, which is the point')
+
+  // Neither answers to the other's name, in either direction.
+  assert.equal(resolveExerciseSlug('Dumbbell Row', NAME_INDEX), 'dumbbell-row')
+  assert.equal(resolveExerciseSlug('Dumbbell Bent-Over Row', NAME_INDEX), 'dumbbell-bent-over-row')
+  assert.equal(resolveExerciseSlug('Dumbbell Bent Over Row', NAME_INDEX), 'dumbbell-bent-over-row')
+  assert.equal(resolveExerciseSlug('DB Bent Over Row', NAME_INDEX), 'dumbbell-bent-over-row')
+  // The single-arm wording still lands on the row that has the demo for it.
+  assert.equal(resolveExerciseSlug('Dumbbell Single-Arm Row', NAME_INDEX), 'dumbbell-row')
+  // And the portal search separates them.
+  assert.equal(matchesAuditSearch(single!, 'bent over'), false, 'searching for the two-arm row must not return the single-arm one')
+})
+
+test('the dumbbell-only programs prescribe each row where the reps say they do', () => {
+  // The only split whose host is also a dumbbell exercise, so the prescription
+  // is the only evidence: "12 per arm" / "12/side" is the single-arm row,
+  // plain reps are the two-arm one.
+  const seen: Array<{ slug: string; reps: string }> = []
+  for (const program of PROGRAMS) {
+    if (!DUMBBELL_ONLY_PROGRAM_IDS.includes(program.program_id ?? '')) continue
+    for (const phase of program.phases ?? []) {
+      for (const workout of phase.workouts ?? []) {
+        for (const entry of workout.exercises ?? []) {
+          if (entry.exerciseSlug !== 'dumbbell-row' && entry.exerciseSlug !== 'dumbbell-bent-over-row') continue
+          seen.push({ slug: String(entry.exerciseSlug), reps: String(entry.reps ?? '') })
+        }
+      }
+    }
+  }
+  assert.equal(seen.length, 6, 'the two programs name a dumbbell row six times between them')
+  for (const { slug, reps } of seen) {
+    assert.equal(
+      slug === 'dumbbell-row',
+      isPerSidePrescription(reps),
+      `"${reps}" is on ${slug}, which is the wrong one of the pair`,
+    )
+  }
+  assert.equal(seen.filter((s) => s.slug === 'dumbbell-bent-over-row').length, 3)
+  assert.equal(seen.filter((s) => s.slug === 'dumbbell-row').length, 3)
+})
+
+test('isPerSidePrescription reads the wordings the programs actually use', () => {
+  for (const reps of ['12 per arm', '10/side', '12/side', '12 per leg', '10 each side', '8-12 per side']) {
+    assert.equal(isPerSidePrescription(reps), true, reps)
+  }
+  for (const reps of ['8', '12', '15-20', '20 total', '', undefined, null, 12]) {
+    assert.equal(isPerSidePrescription(reps), false, String(reps))
   }
 })
 
@@ -290,6 +360,42 @@ test('the movements the program only names inside a protocol block have rows too
   assert.equal(resolveExerciseSlug('Jumping Lunges', NAME_INDEX), 'jumping-lunge')
   // ...and the kettlebell swing is still its own exercise.
   assert.equal(resolveExerciseSlug('Kettlebell Swing', NAME_INDEX), 'kettlebell-swing')
+})
+
+test('every movement a protocol block names in free text resolves to a real row', () => {
+  // "Please make sure all exercises are accounted for." An EMOM / AMRAP /
+  // complex block names its movements inside `details`, which is a JSON array
+  // of bullets and not an exercise reference — so nothing in the app would ever
+  // have minted a row for one, and nothing would have reported it missing.
+  const unresolved: string[] = []
+  for (const program of PROGRAMS) {
+    if (!DUMBBELL_ONLY_PROGRAM_IDS.includes(program.program_id ?? '')) continue
+    for (const phase of program.phases ?? []) {
+      for (const workout of phase.workouts ?? []) {
+        for (const entry of workout.exercises ?? []) {
+          if (typeof entry.details !== 'string') continue
+          let bullets: string[]
+          try {
+            const parsed: unknown = JSON.parse(entry.details)
+            bullets = Array.isArray(parsed) ? parsed.map(String) : [entry.details]
+          } catch {
+            bullets = [entry.details]
+          }
+          for (const bullet of bullets) {
+            // "Minute 1: 12 Dumbbell Push Press" → "12 Dumbbell Push Press",
+            // and "10 Jumping Lunges or Reverse Lunges" is two movements.
+            const body = bullet.replace(/^\s*Minute\s+\d+\s*:\s*/i, '')
+            for (const part of body.split(/\s+or\s+/i)) {
+              if (!resolveExerciseSlug(part, NAME_INDEX)) {
+                unresolved.push(`${program.program_id}: "${part}"`)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.deepEqual(unresolved, [], 'these protocol movements have no exercise in the admin portal')
 })
 
 test('nothing in the catalog still says "DB"', () => {
@@ -504,6 +610,80 @@ test('the repo programs are settled too', () => {
     [],
     'protocol blocks still written in shorthand',
   )
+  assert.deepEqual(
+    planDumbbellProgramTextSpellOuts(PROGRAMS).map((t) => `${t.programId}.${t.field}`),
+    [],
+    'program titles still written in shorthand',
+  )
+  assert.deepEqual(
+    planDumbbellProtocolLabels(PROGRAMS).map((l) => l.slug),
+    [],
+    'protocol blocks still headed with shorthand',
+  )
+  assert.equal(isDumbbellProgramsSettled(PROGRAMS), true)
+})
+
+test('no program still calls itself "DB"', () => {
+  // "The exercises still read with a DB." The single most-read one was the
+  // library card itself: "DB Only: Total Transformation".
+  const shorthand: string[] = []
+  for (const program of PROGRAMS) {
+    for (const [field, text] of Object.entries({
+      name: program.name,
+      description: program.description,
+      goal: program.goal,
+    })) {
+      if (typeof text === 'string' && usesDumbbellShorthand(text)) {
+        shorthand.push(`${program.program_id}.${field}: "${text}"`)
+      }
+    }
+  }
+  assert.deepEqual(shorthand, [])
+  const dbOnly = PROGRAMS.find((p) => p.program_id === 'db-only-total-transformation')
+  assert.equal(dbOnly?.name, 'Dumbbell Only: Total Transformation')
+})
+
+test('a protocol block is never headed with shorthand either', () => {
+  // `__protocol__db-complex-5-rounds` has no catalog row by design, so its
+  // heading is derived from the slug — "Db Complex 5 Rounds". The slug is NOT
+  // rewritten (it is the key a stored set is filed under); the entry gets an
+  // explicit `name`, which hydrateExercise prefers.
+  const headings: string[] = []
+  for (const program of PROGRAMS) {
+    for (const phase of program.phases ?? []) {
+      for (const workout of phase.workouts ?? []) {
+        for (const entry of workout.exercises ?? []) {
+          const slug = entry.exerciseSlug
+          if (!slug?.startsWith('__protocol__')) continue
+          const heading = typeof entry.name === 'string' && entry.name ? entry.name : protocolLabelFromSlug(slug)
+          if (usesDumbbellShorthand(heading)) headings.push(`${program.program_id}: ${heading}`)
+        }
+      }
+    }
+  }
+  assert.deepEqual(headings, [])
+
+  const complex = (PROGRAMS.find((p) => p.program_id === 'db-only-total-transformation')?.phases ?? [])
+    .flatMap((phase) => phase.workouts ?? [])
+    .flatMap((workout) => workout.exercises ?? [])
+    .find((entry) => entry.exerciseSlug === '__protocol__db-complex-5-rounds')
+  assert.ok(complex, 'the DB complex block is still in the program')
+  assert.equal(complex!.name, 'Dumbbell Complex 5 Rounds')
+  assert.equal(complex!.exerciseSlug, '__protocol__db-complex-5-rounds', 'the slug is a stored key and must not move')
+})
+
+test('protocolLabelFromSlug is exerciseNameFromSlug, kept apart from the Mongoose model', () => {
+  // lib/dumbbellCatalogPlan.ts stays free of anything that imports a model, so
+  // the rule is duplicated. This is what stops the two drifting.
+  for (const slug of [
+    '__protocol__db-complex-5-rounds',
+    '__protocol__emom-8-minutes',
+    '__protocol__amrap-6-minutes',
+    '__protocol__tabata-4-minutes',
+    'leg-curl-machine',
+  ]) {
+    assert.equal(protocolLabelFromSlug(slug), exerciseNameFromSlug(slug), slug)
+  }
 })
 
 test('the protocol bullets a member reads say "Dumbbell" too', () => {
@@ -574,8 +754,88 @@ test('the migration is idempotent by construction and never touches member histo
   assert.match(src, /planDumbbellProgramRepoints/)
   // And it re-plans afterwards rather than claiming success.
   assert.match(src, /isDumbbellCatalogSettled/)
+  // The database half is the SAME function the production route runs, so a dry
+  // run from a laptop cannot disagree with what ships.
+  assert.match(src, /import \{ syncDumbbellCatalog \} from '\.\.\/lib\/dumbbellCatalogSync'/)
+  assert.match(src, /await syncDumbbellCatalog\(\{ apply: APPLY \}\)/)
   // A split is NOT a relink of a dangling slug: the host is a real exercise
   // six other programs still prescribe, so logs and PRs stay where they are.
   assert.doesNotMatch(src, /UserProgress/)
   assert.doesNotMatch(src, /exercisePRs/)
+})
+
+// ─── The part the first round got wrong: something has to APPLY it ──────────
+
+test('the live catalog has a writer, and it is not a script somebody has to remember', () => {
+  // "You didn't change anything. The exercises still read with a DB. The
+  // exercises still don't exist in the admin portal." — which was true: round
+  // one shipped a table, a fixture and a script, and the admin portal reads
+  // MongoDB. This is the route that reconciles the two.
+  const src = readSource('app/api/cron/sync-exercise-catalog/route.ts')
+
+  // The shared cron secret is the auth, exactly like the other three crons.
+  assert.match(src, /request\.headers\.get\('x-cron-secret'\)/)
+  assert.match(src, /secret !== admin\.cronSecret/)
+  assert.match(src, /status: 401/)
+
+  // POST applies, GET is a dry run by construction.
+  assert.match(src, /export async function POST/)
+  assert.match(src, /export async function GET/)
+  assert.match(src, /return await handle\(request, true\)/)
+
+  // It runs the reconciliation, not a copy of it.
+  assert.match(src, /import \{ syncDumbbellCatalog \} from '@\/lib\/dumbbellCatalogSync'/)
+  assert.match(src, /syncDumbbellCatalog\(\{ apply: !dryRun \}\)/)
+
+  // A write leaves the in-process hydration cache stale.
+  assert.match(src, /invalidateExerciseCache\(\)/)
+})
+
+test('the reconciliation is convergent, re-plans, and leaves member history alone', () => {
+  const src = readSource('lib/dumbbellCatalogSync.ts')
+  // Nothing is written unless asked, and nothing at all when there is nothing
+  // to do — which is what makes it safe on a schedule.
+  assert.match(src, /if \(!apply \|\| report\.settled\) return report/)
+  // "Done" is a re-plan, not an assumption.
+  assert.match(src, /isDumbbellCatalogSettled\(afterPlan\)/)
+  assert.match(src, /isDumbbellProgramsSettled\(afterPrograms\)/)
+  // A duplicate create is the unique index answering, not an error.
+  assert.match(src, /!== 11000/)
+  // Logs and PRs stay where they are.
+  assert.doesNotMatch(src, /UserProgress/)
+  assert.doesNotMatch(src, /exercisePRs/)
+})
+
+test('a workflow calls that route, on the promotion and on a schedule', () => {
+  const yml = fs.readFileSync(path.join(ROOT, '..', '.github', 'workflows', 'sync-exercise-catalog.yml'), 'utf8')
+
+  // Merging IS applying: the deploy branch's push fires it.
+  assert.match(yml, /push:\s*\n\s*branches: \[main\]/)
+  // ...and a schedule is the backstop for a push that does not trigger
+  // workflows, or a workflow GitHub disabled for inactivity.
+  assert.match(yml, /schedule:/)
+  assert.match(yml, /cron: '23 5 \* \* \*'/)
+  assert.match(yml, /workflow_dispatch:/)
+
+  // Production only — beta and production share one database.
+  assert.match(yml, /BASE_URL: https:\/\/become\.redbtn\.io/)
+  assert.match(yml, /\/api\/cron\/sync-exercise-catalog/)
+  // The same repository secret the other two schedules use; no new secret to
+  // provision, and it fails loudly when it is missing.
+  assert.match(yml, /secrets\.BECOME_CRON_SECRET/)
+  assert.match(yml, /BECOME_CRON_SECRET is missing/)
+  // POST, always: the route's GET is a dry run, so a link in a log is inert.
+  assert.match(yml, /-X POST/)
+  assert.match(yml, /x-cron-secret: \$\{CRON_SECRET\}/)
+  // And it fails the run rather than reporting a green tick over a half-applied
+  // catalog.
+  assert.match(yml, /a second pass still finds work/)
+
+  // Only one schedule for this job in the repo (AGENTS.md: two schedules over
+  // one database is the failure the other two workflows warn about).
+  const workflows = fs.readdirSync(path.join(ROOT, '..', '.github', 'workflows'))
+  const callers = workflows.filter((f) =>
+    fs.readFileSync(path.join(ROOT, '..', '.github', 'workflows', f), 'utf8').includes('/api/cron/sync-exercise-catalog'),
+  )
+  assert.deepEqual(callers, ['sync-exercise-catalog.yml'])
 })
