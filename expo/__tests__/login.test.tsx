@@ -8,6 +8,7 @@ jest.mock("expo-router", () => ({
     push: jest.fn(),
     back: jest.fn(),
   }),
+  useLocalSearchParams: () => ({}),
 }));
 
 const mockSetToken = jest.fn(async () => {});
@@ -82,7 +83,7 @@ describe("LoginScreen", () => {
     mockAuth = { ...baseAuth(), status: "signed-in", isAuthed: true, token: "jwt" };
     render(<LoginScreen />);
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard"),
+      expect(mockReplace).toHaveBeenCalledWith("/"),
     );
   });
 
@@ -138,7 +139,7 @@ describe("LoginScreen", () => {
     await waitFor(() => expect(checkSessionFn).toHaveBeenCalledWith("sess-poll"));
     await waitFor(() => expect(mockSetToken).toHaveBeenCalledWith("jwt-123"));
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard"),
+      expect(mockReplace).toHaveBeenCalledWith("/"),
     );
   });
 

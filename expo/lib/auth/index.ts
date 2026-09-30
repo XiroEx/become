@@ -6,3 +6,4 @@ export * from "./unauthorized";
 export * from "./AuthProvider";
 export * from "./useAuth";
 export * from "./AuthGuard";
+export * from "./pendingAuthSession";

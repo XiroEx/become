@@ -21,6 +21,8 @@ import * as SecureStore from "expo-secure-store";
 export const SECURE_STORE_KEYS = {
   /** The session JWT. Written by useAuth, cleared by logout and delete-account. */
   session: "become.session",
+  /** Pending magic link auth session: { sessionId, email, mode, startedAt }. */
+  pendingAuthSession: "become.auth.pending_session",
   /** "Sync from Health" opt-in — `"yes"` when on, absent when off. */
   healthOptIn: "become.optin.health",
   /**
@@ -90,6 +92,11 @@ export function createSecureStore(key: SecureStoreKey): TokenStore {
 /** The session JWT, on `become.session`. Nothing but the session uses it. */
 export const sessionStore: TokenStore = createSecureStore(
   SECURE_STORE_KEYS.session,
+);
+
+/** The pending magic-link session, on `become.auth.pending_session`. */
+export const pendingAuthSessionSecureStore: TokenStore = createSecureStore(
+  SECURE_STORE_KEYS.pendingAuthSession,
 );
 
 /** The Health opt-in flag, on `become.optin.health`. */
