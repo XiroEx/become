@@ -8,29 +8,29 @@ import {
   ActiveProgramsApiResponseSchema,
   ProgramWorkoutLogsResponseSchema,
   WorkoutResumeResponseSchema,
-  ProgramEnrollResponseSchema,
   ProgramStartDateResponseSchema,
   ProgramAbandonResponseSchema,
   SavedProgramsResponseSchema,
   SaveToggleResponseSchema,
+  ScheduleApiResponseSchema,
   type ProgramAbandonRequest,
   type ProgramAbandonResponse,
-  type ProgramEnrollRequest,
-  type ProgramEnrollResponse,
   type ProgramStartDateRequest,
   type ProgramStartDateResponse,
   type SaveProgramRequest,
   type SaveToggleResponse,
 } from "@become/api-client";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
+import { EnrollmentModal } from "@/components/programs/EnrollmentModal";
 import type { ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
+import { enrollProgram, suggestStartDate } from "@/lib/programs/enrollment";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
-import { localDateKey } from "@/lib/time/localDay";
+import { localDateKey, withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** Local YYYY-MM-DD for the start-date mutation default. */
@@ -45,10 +45,13 @@ export default function ProgramDetailRoute() {
   const id = typeof params.id === "string" ? params.id : "";
   const { token } = useAuth();
 
-  const fetchOpts = {
-    baseUrl: WEBAPP_BASE_URL,
-    getToken: () => token ?? undefined,
-  };
+  const fetchOpts = useMemo(
+    () => ({
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    }),
+    [token],
+  );
 
   const { data, error } = useFetch(
     id ? `/api/programs/${encodeURIComponent(id)}` : null,
@@ -63,6 +66,18 @@ export default function ProgramDetailRoute() {
     ActiveProgramsApiResponseSchema,
     { ...fetchOpts, skip: !token },
   );
+
+  const schedulesFetch = useFetch(
+    token ? withTz("/api/schedule?view=all") : null,
+    ScheduleApiResponseSchema,
+    { ...fetchOpts, skip: !token },
+  );
+
+  const suggestedStartDate = useMemo(() => {
+    return suggestStartDate(schedulesFetch.data?.schedules);
+  }, [schedulesFetch.data?.schedules]);
+
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
 
   const activeProgram = useMemo(() => {
     return (
@@ -138,11 +153,7 @@ export default function ProgramDetailRoute() {
     },
   };
 
-  const enrollMut = useMutation<ProgramEnrollRequest, ProgramEnrollResponse>(
-    "/api/programs/enroll",
-    ProgramEnrollResponseSchema,
-    { method: "POST", ...mutOpts },
-  );
+
   const startDateMut = useMutation<
     ProgramStartDateRequest,
     ProgramStartDateResponse
@@ -191,9 +202,25 @@ export default function ProgramDetailRoute() {
     }
   }, []);
 
-  const onEnroll = useCallback(
-    () => runAction(() => enrollMut.mutate({ programId: id })),
-    [runAction, enrollMut, id],
+  const onEnroll = useCallback(() => {
+    setShowEnrollModal(true);
+  }, []);
+
+  const onConfirmEnroll = useCallback(
+    async (startDate: string) => {
+      setActionPending(true);
+      try {
+        await enrollProgram(fetchOpts, { programId: id, startDate });
+        setShowEnrollModal(false);
+        await active.refetch();
+        router.push(`/(tabs)/programming/${encodeURIComponent(id)}/schedule`);
+      } catch {
+        // Surface nothing for now; the action buttons re-enable below.
+      } finally {
+        setActionPending(false);
+      }
+    },
+    [fetchOpts, id, active, router],
   );
   const onSetStartDate = useCallback(
     () =>
@@ -391,6 +418,17 @@ export default function ProgramDetailRoute() {
         isSaved={isSaved}
         onToggleSave={onToggleSave}
         actionPending={actionPending}
+      />
+      <EnrollmentModal
+        key={suggestedStartDate}
+        visible={showEnrollModal}
+        programName={program.name}
+        durationWeeks={data?.duration_weeks ?? 4}
+        initialDate={suggestedStartDate}
+        onConfirm={onConfirmEnroll}
+        onClose={() => setShowEnrollModal(false)}
+        loading={actionPending}
+        testID="enroll-modal"
       />
     </SafeAreaView>
   );
