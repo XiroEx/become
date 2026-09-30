@@ -10,8 +10,8 @@
 // CLOSED: a field that does not pass is dropped, and the blueprint's authored copy
 // is used instead. Nothing half-valid reaches a scene.
 
-import { stripMarkdown, clampTitle, stripQuotes } from '@/lib/ai/sanitize'
-import type { MindState } from '@/lib/mindContent'
+import { stripMarkdown, clampTitle, stripQuotes } from '../ai/sanitize'
+import type { MindState } from '../mindContent'
 import type { MoveKind } from './moves'
 
 /** Kinds whose statement the user has to SAY or TYPE, word for word.

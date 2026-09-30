@@ -9,7 +9,7 @@
 // and personalizes — with NO changes to the player or scenes. Keep this module
 // pure + client-safe (no server/DOM imports) so both engines and the UI share it.
 
-import type { MindState } from '@/lib/mindContent'
+import type { MindState } from '../mindContent'
 import type { PathSession } from './sessionPath'
 
 export type MoveKind =
