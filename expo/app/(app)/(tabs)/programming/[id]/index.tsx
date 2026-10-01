@@ -22,21 +22,21 @@ import {
 } from "@become/api-client";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
 import { EnrollmentModal } from "@/components/programs/EnrollmentModal";
+import { AbandonModal } from "@/components/programs/AbandonModal";
+import { ChangeStartDateModal } from "@/components/programs/ChangeStartDateModal";
+import { ShiftScheduleModal } from "@/components/programs/ShiftScheduleModal";
 import type { ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
+import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
+import { notifyProgramUpdated } from "@/lib/programs/programEvents";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
 import { enrollProgram, suggestStartDate } from "@/lib/programs/enrollment";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
-import { localDateKey, withTz } from "@/lib/time/localDay";
+import { withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-
-/** Local YYYY-MM-DD for the start-date mutation default. */
-function todayIso(): string {
-  return localDateKey();
-}
 
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
@@ -78,6 +78,9 @@ export default function ProgramDetailRoute() {
   }, [schedulesFetch.data?.schedules]);
 
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [showStartDateModal, setShowStartDateModal] = useState(false);
+  const [showShiftModal, setShowShiftModal] = useState(false);
+  const [showAbandonModal, setShowAbandonModal] = useState(false);
 
   const activeProgram = useMemo(() => {
     return (
@@ -150,9 +153,19 @@ export default function ProgramDetailRoute() {
     getToken: () => token ?? undefined,
     onSuccess: () => {
       void active.refetch();
+      void schedulesFetch.refetch();
+      notifyProgramUpdated();
     },
   };
 
+  const scheduleMutations = useScheduleMutations({
+    getToken: () => token ?? undefined,
+    onSuccess: () => {
+      void active.refetch();
+      void schedulesFetch.refetch();
+      notifyProgramUpdated();
+    },
+  });
 
   const startDateMut = useMutation<
     ProgramStartDateRequest,
@@ -213,6 +226,7 @@ export default function ProgramDetailRoute() {
         await enrollProgram(fetchOpts, { programId: id, startDate });
         setShowEnrollModal(false);
         await active.refetch();
+        notifyProgramUpdated();
         router.push(`/(tabs)/programming/${encodeURIComponent(id)}/schedule`);
       } catch {
         // Surface nothing for now; the action buttons re-enable below.
@@ -222,16 +236,68 @@ export default function ProgramDetailRoute() {
     },
     [fetchOpts, id, active, router],
   );
-  const onSetStartDate = useCallback(
-    () =>
-      runAction(() =>
-        startDateMut.mutate({ programId: id, startDate: todayIso() }),
-      ),
-    [runAction, startDateMut, id],
+
+  const onSetStartDate = useCallback(() => {
+    setShowStartDateModal(true);
+  }, []);
+
+  const onConfirmStartDate = useCallback(
+    async (startDate: string) => {
+      await runAction(async () => {
+        await startDateMut.mutate({ programId: id, startDate });
+        setShowStartDateModal(false);
+        await Promise.allSettled([active.refetch(), schedulesFetch.refetch()]);
+        notifyProgramUpdated();
+      });
+    },
+    [runAction, startDateMut, id, active, schedulesFetch],
   );
-  const onAbandon = useCallback(
-    () => runAction(() => abandonMut.mutate({ programId: id })),
-    [runAction, abandonMut, id],
+
+  const onAbandon = useCallback(() => {
+    setShowAbandonModal(true);
+  }, []);
+
+  const onConfirmAbandon = useCallback(async () => {
+    await runAction(async () => {
+      await abandonMut.mutate({ programId: id });
+      setShowAbandonModal(false);
+      await Promise.allSettled([active.refetch(), schedulesFetch.refetch()]);
+      notifyProgramUpdated();
+      router.push("/(tabs)/programming");
+    });
+  }, [runAction, abandonMut, id, active, schedulesFetch, router]);
+
+  const onPauseResume = useCallback(async () => {
+    if (!activeProgram) return;
+    const isPaused = activeProgram.status === "paused";
+    await runAction(async () => {
+      await scheduleMutations.patch({
+        programId: id,
+        action: isPaused ? "resume" : "pause",
+      });
+      await Promise.allSettled([active.refetch(), schedulesFetch.refetch()]);
+      notifyProgramUpdated();
+    });
+  }, [activeProgram, runAction, scheduleMutations, id, active, schedulesFetch]);
+
+  const onShift = useCallback(() => {
+    setShowShiftModal(true);
+  }, []);
+
+  const onConfirmShift = useCallback(
+    async (days: number) => {
+      await runAction(async () => {
+        await scheduleMutations.patch({
+          programId: id,
+          action: "shift",
+          days,
+        });
+        setShowShiftModal(false);
+        await Promise.allSettled([active.refetch(), schedulesFetch.refetch()]);
+        notifyProgramUpdated();
+      });
+    },
+    [runAction, scheduleMutations, id, active, schedulesFetch],
   );
 
   const onToggleSave = useCallback(async () => {
@@ -415,6 +481,8 @@ export default function ProgramDetailRoute() {
         onResumeLive={onResumeLive}
         onSetStartDate={onSetStartDate}
         onAbandon={onAbandon}
+        onPauseResume={onPauseResume}
+        onShift={onShift}
         isSaved={isSaved}
         onToggleSave={onToggleSave}
         actionPending={actionPending}
@@ -429,6 +497,32 @@ export default function ProgramDetailRoute() {
         onClose={() => setShowEnrollModal(false)}
         loading={actionPending}
         testID="enroll-modal"
+      />
+      <ChangeStartDateModal
+        key={`start-date-${activeProgram?.startDate ?? ""}-${showStartDateModal}`}
+        visible={showStartDateModal}
+        initialDate={activeProgram?.startDate}
+        onConfirm={onConfirmStartDate}
+        onClose={() => setShowStartDateModal(false)}
+        loading={actionPending}
+        testID="change-start-date-modal"
+      />
+      <ShiftScheduleModal
+        visible={showShiftModal}
+        onConfirm={onConfirmShift}
+        onClose={() => setShowShiftModal(false)}
+        loading={actionPending}
+        testID="shift-schedule-modal"
+      />
+      <AbandonModal
+        visible={showAbandonModal}
+        hasProgress={Boolean(
+          activeProgram && (activeProgram.completedWorkouts ?? 0) > 0,
+        )}
+        onConfirm={onConfirmAbandon}
+        onClose={() => setShowAbandonModal(false)}
+        loading={actionPending}
+        testID="abandon-modal"
       />
     </SafeAreaView>
   );

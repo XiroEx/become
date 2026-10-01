@@ -346,7 +346,7 @@ describe("ProgramDetailRoute mutations", () => {
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/prog-1/schedule");
   });
 
-  it("start-date PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
+  it("start-date opens dialog, PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() =>
       expect(getByTestId("program-detail-set-start-date")).toBeTruthy(),
@@ -355,6 +355,14 @@ describe("ProgramDetailRoute mutations", () => {
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-set-start-date"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("change-start-date-save")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("change-start-date-save"));
     });
 
     await waitFor(() => {
@@ -375,13 +383,54 @@ describe("ProgramDetailRoute mutations", () => {
     });
   });
 
-  it("abandon POSTs /api/programs/abandon {programId} and refetches active", async () => {
+  it("(id: e015c92f) Abandon asks for confirmation, requires typing 'abandon' when progress exists, POSTs /api/programs/abandon and routes to workout tab", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() => expect(getByTestId("program-detail-abandon")).toBeTruthy());
     const activeBefore = getsTo("/api/programs/active").length;
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-abandon"));
+    });
+
+    // Confirmation dialog opens and requires typing "abandon" because completedWorkouts: 1
+    await waitFor(() => {
+      expect(getByTestId("abandon-confirm-input")).toBeTruthy();
+    });
+
+    // Trying to press confirm before typing should not trigger POST
+    const initialPostCount = callsByPathMethod("/api/programs/abandon", "POST").length;
+    await act(async () => {
+      fireEvent.press(getByTestId("abandon-confirm"));
+    });
+    expect(callsByPathMethod("/api/programs/abandon", "POST").length).toBe(initialPostCount);
+
+    // Type "abandon" to enable confirmation
+    await act(async () => {
+      fireEvent.changeText(getByTestId("abandon-confirm-input"), "abandon");
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("abandon-confirm"));
     });
 
     await waitFor(() => {
@@ -397,6 +446,108 @@ describe("ProgramDetailRoute mutations", () => {
     );
     await waitFor(() => {
       expect(getsTo("/api/programs/active").length).toBeGreaterThan(activeBefore);
+    });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
+  });
+
+  it("(id: e015c930) Pausing natively calls PATCH /api/schedule {action: 'pause'}, shows paused state, and resuming reverses it", async () => {
+    let programStatus: "in-progress" | "paused" = "in-progress";
+    mockApiFetch.mockImplementation((path: string, schema: unknown, opts: { method?: string; body?: { action?: string } }) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: programStatus,
+            },
+          ],
+        });
+      }
+      if (path === "/api/schedule" && opts?.method === "PATCH") {
+        if (opts.body?.action === "pause") {
+          programStatus = "paused";
+          return Promise.resolve({ message: "Program paused", programId: "prog-1" });
+        }
+        if (opts.body?.action === "resume") {
+          programStatus = "in-progress";
+          return Promise.resolve({ message: "Program resumed", programId: "prog-1" });
+        }
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, queryByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-pause-resume")).toBeTruthy());
+    expect(queryByTestId("program-detail-paused-banner")).toBeNull();
+
+    // 1. Pause
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-pause-resume"));
+    });
+
+    await waitFor(() => {
+      const pauseCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "pause",
+      );
+      expect(pauseCalls.length).toBeGreaterThan(0);
+    });
+
+    // Now paused: paused banner visible
+    await waitFor(() => {
+      expect(getByTestId("program-detail-paused-banner")).toBeTruthy();
+    });
+
+    // 2. Resume
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-pause-resume"));
+    });
+
+    await waitFor(() => {
+      const resumeCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "resume",
+      );
+      expect(resumeCalls.length).toBeGreaterThan(0);
+    });
+
+    // Resumed: paused banner gone
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-paused-banner")).toBeNull();
+    });
+  });
+
+  it("(id: e015c931) Shifting by 3 days opens dialog, calls PATCH /api/schedule with action: 'shift' and days: 3, and refetches active", async () => {
+    const { getByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-shift")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-shift"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("shift-confirm")).toBeTruthy();
+      expect(getByTestId("shift-days-input").props.value).toBe("3");
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("shift-confirm"));
+    });
+
+    await waitFor(() => {
+      const shiftCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "shift",
+      );
+      expect(shiftCalls.length).toBeGreaterThan(0);
+      const call = shiftCalls[0]!;
+      const opts = call[2] as { body?: { programId?: string; action?: string; days?: number } };
+      expect(opts.body?.programId).toBe("prog-1");
+      expect(opts.body?.action).toBe("shift");
+      expect(opts.body?.days).toBe(3);
     });
   });
 
