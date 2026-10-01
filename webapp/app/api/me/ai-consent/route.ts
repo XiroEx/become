@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'accepted_required' }, { status: 400 })
     }
     const raw = (body as { source?: unknown } | null)?.source
-    const source = raw === 'settings' ? 'settings' : 'prompt'
+    const source = raw === 'settings' ? 'settings' : raw === 'gate' ? 'gate' : 'prompt'
 
     await dbConnect()
     return NextResponse.json(aiConsentStatus(await recordAiConsent(auth.userId, accepted, source)))
