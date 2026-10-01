@@ -84,6 +84,10 @@ export interface ProgramDetailProps {
   onSetStartDate?: () => void;
   /** Abandon the program. Button renders only when provided. */
   onAbandon?: () => void;
+  /** Pause or resume the program. Button renders only when provided. */
+  onPauseResume?: () => void;
+  /** Shift the schedule. Button renders only when provided. */
+  onShift?: (days?: number) => void;
   /** Disables the action buttons while a mutation is in flight. */
   actionPending?: boolean;
   /** Whether this program is saved by the user. */
@@ -120,6 +124,8 @@ export function ProgramDetail({
   onResumeLive,
   onSetStartDate,
   onAbandon,
+  onPauseResume,
+  onShift,
   actionPending = false,
   isSaved = false,
   onToggleSave,
@@ -438,6 +444,41 @@ export function ProgramDetail({
             </View>
           ) : null}
         </View>
+      ) : null}
+
+      {/* Paused indicator matching web */}
+      {activeProgram?.status === "paused" ? (
+        <View
+          testID={`${testID}-paused-banner`}
+          className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-1"
+        >
+          <Text className="text-amber-600 dark:text-amber-400 text-xs font-semibold">
+            Program is paused. Workouts are frozen until you resume.
+          </Text>
+        </View>
+      ) : null}
+
+      {/* Program Management Actions */}
+      {onPauseResume ? (
+        <Button
+          testID={`${testID}-pause-resume`}
+          variant="secondary"
+          onPress={onPauseResume}
+          disabled={actionPending}
+        >
+          {activeProgram?.status === "paused" ? "Resume Program" : "Pause Program"}
+        </Button>
+      ) : null}
+
+      {onShift ? (
+        <Button
+          testID={`${testID}-shift`}
+          variant="secondary"
+          onPress={() => onShift(3)}
+          disabled={actionPending}
+        >
+          Delay Schedule
+        </Button>
       ) : null}
 
       {onSetStartDate ? (

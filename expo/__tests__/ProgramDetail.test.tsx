@@ -270,4 +270,109 @@ describe("ProgramDetail", () => {
       "Unsave program Strength Foundation",
     );
   });
+
+  it("renders Pause/Resume button, toggles label based on status, and calls onPauseResume", () => {
+    const onPauseResume = jest.fn();
+    const activeProg = {
+      programId: "prog-1",
+      programName: "Strength Foundation",
+      currentPhase: 1,
+      currentDay: "Day 1",
+      completedWorkouts: 0,
+      totalWorkouts: 4,
+      status: "in-progress" as const,
+    };
+
+    const { getByTestId, getByText, rerender, queryByTestId } = render(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={activeProg}
+        onPauseResume={onPauseResume}
+      />,
+    );
+
+    const btn = getByTestId("program-detail-pause-resume");
+    expect(btn).toBeTruthy();
+    expect(getByText("Pause Program")).toBeTruthy();
+    expect(queryByTestId("program-detail-paused-banner")).toBeNull();
+
+    fireEvent.press(btn);
+    expect(onPauseResume).toHaveBeenCalledTimes(1);
+
+    // When paused: button says Resume Program and banner is visible
+    rerender(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={{ ...activeProg, status: "paused" }}
+        onPauseResume={onPauseResume}
+      />,
+    );
+    expect(getByText("Resume Program")).toBeTruthy();
+    expect(getByTestId("program-detail-paused-banner")).toBeTruthy();
+  });
+
+  it("renders Delay Schedule button and calls onShift", () => {
+    const onShift = jest.fn();
+    const activeProg = {
+      programId: "prog-1",
+      programName: "Strength Foundation",
+      currentPhase: 1,
+      currentDay: "Day 1",
+      completedWorkouts: 0,
+      totalWorkouts: 4,
+      status: "in-progress" as const,
+    };
+
+    const { getByTestId, getByText } = render(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={activeProg}
+        onShift={onShift}
+      />,
+    );
+
+    const shiftBtn = getByTestId("program-detail-shift");
+    expect(shiftBtn).toBeTruthy();
+    expect(getByText("Delay Schedule")).toBeTruthy();
+
+    fireEvent.press(shiftBtn);
+    expect(onShift).toHaveBeenCalledWith(3);
+  });
+
+  it("renders Change start date and Abandon program buttons and calls handlers", () => {
+    const onSetStartDate = jest.fn();
+    const onAbandon = jest.fn();
+    const activeProg = {
+      programId: "prog-1",
+      programName: "Strength Foundation",
+      currentPhase: 1,
+      currentDay: "Day 1",
+      completedWorkouts: 0,
+      totalWorkouts: 4,
+      status: "in-progress" as const,
+    };
+
+    const { getByTestId } = render(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={activeProg}
+        onSetStartDate={onSetStartDate}
+        onAbandon={onAbandon}
+      />,
+    );
+
+    const dateBtn = getByTestId("program-detail-set-start-date");
+    expect(dateBtn).toBeTruthy();
+    fireEvent.press(dateBtn);
+    expect(onSetStartDate).toHaveBeenCalledTimes(1);
+
+    const abandonBtn = getByTestId("program-detail-abandon");
+    expect(abandonBtn).toBeTruthy();
+    fireEvent.press(abandonBtn);
+    expect(onAbandon).toHaveBeenCalledTimes(1);
+  });
 });

@@ -19,6 +19,8 @@ import {
 } from "@/lib/live/liveWorkoutCache";
 import { ConfirmModal } from "@/components/workout/ConfirmModal";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 
 export interface ResumeWorkoutPillProps {
   className?: string;
@@ -80,6 +82,21 @@ export function ResumeWorkoutPill({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchInProgress();
   }, [initialData, fetchInProgress]);
+
+  useEffect(() => {
+    if (initialData !== undefined) return;
+    return subscribeProgramUpdates(() => {
+      void fetchInProgress();
+    });
+  }, [initialData, fetchInProgress]);
+
+  useScreenFocus(
+    useCallback(() => {
+      if (initialData === undefined) {
+        void fetchInProgress();
+      }
+    }, [initialData, fetchInProgress]),
+  );
 
   const workout = data?.workout;
   const planned = data?.planned;
