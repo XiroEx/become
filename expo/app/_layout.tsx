@@ -24,6 +24,8 @@ import type { PlanGateError } from "@become/api-client";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
 import { UpgradeSheetHost } from "@/components/entitlements/UpgradeSheetHost";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import { AiConsentPromptHost } from "@/components/ai/AiConsentPromptHost";
+import { raiseAiConsentPrompt } from "@/lib/ai/aiConsentPrompt";
 import { followSystemColorScheme } from "@/lib/theme/colorScheme";
 import {
   useThemeTokens,
@@ -169,7 +171,10 @@ export default function RootLayout() {
             `requiresTier`. A 429 spend ceiling is `rate-limited` and never
             arrives; an ownership 403 is `forbidden` and never arrives either.
           */}
-          <ApiErrorHandlerProvider onPlanGate={raiseUpgradeSheet}>
+          <ApiErrorHandlerProvider
+            onPlanGate={raiseUpgradeSheet}
+            onAiConsent={raiseAiConsentPrompt}
+          >
             {/*
               ABOVE EVERY ROUTE, and above the Stack rather than inside it: the
               connection can go while any screen is open, and the writes it
@@ -189,6 +194,12 @@ export default function RootLayout() {
                 has gone.
               */}
               <UpgradeSheetHost />
+              {/*
+                THE AI consent prompt, mounted once at the root (NP-046). It renders
+                nothing until an AI refusal routes to `raiseAiConsentPrompt` or
+                `showAiConsentPrompt()` is called.
+              */}
+              <AiConsentPromptHost />
               <VersionGate>
                 <Stack
                   screenOptions={{

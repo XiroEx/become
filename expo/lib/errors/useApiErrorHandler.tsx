@@ -60,7 +60,19 @@ export interface ApiErrorRoutes {
   /** Raise the upgrade sheet for this gate (NP-052). */
   onPlanGate?: (error: PlanGateError) => void;
   /** Ask for the AI permission (NP-046). */
-  onAiConsent?: (error: AiConsentError) => void;
+  onAiConsent?: (
+    error: AiConsentError,
+    options?: AiConsentPromptOptions,
+  ) => void;
+}
+
+export interface AiConsentPromptOptions {
+  /** Callback / action to retry once upon agreement */
+  onRetry?: () => void | Promise<void>;
+  /** Alias for onRetry */
+  onAgree?: () => void | Promise<void>;
+  /** Callback if the member declines (leaves non-AI path working) */
+  onDecline?: () => void | Promise<void>;
 }
 
 export interface HandledApiError {
@@ -133,6 +145,7 @@ export function sessionExpiryFired(session: string | null = null): boolean {
 export function routeApiError(
   err: unknown,
   routes: ApiErrorRoutes = {},
+  options?: AiConsentPromptOptions,
 ): HandledApiError {
   const classification = classifyApiError(err);
 
@@ -167,7 +180,7 @@ export function routeApiError(
     }
     case "ai-consent": {
       if (!routes.onAiConsent) break;
-      routes.onAiConsent(classification);
+      routes.onAiConsent(classification, options);
       return { classification, kind: classification.kind, handled: true, message: "" };
     }
     default:
@@ -235,7 +248,18 @@ export function ApiErrorHandlerProvider({
  * `const { handled, message } = handleApiError(err)` wherever a request can
  * fail — and show `message` only when `handled` is false.
  */
-export function useApiErrorHandler(): (err: unknown) => HandledApiError {
+export function useApiErrorHandler(
+  perCallRoutes: Partial<ApiErrorRoutes> = {},
+): (err: unknown, options?: AiConsentPromptOptions) => HandledApiError {
   const routes = useContext(ApiErrorRoutesContext);
-  return useCallback((err: unknown) => routeApiError(err, routes), [routes]);
+  return useCallback(
+    (err: unknown, options?: AiConsentPromptOptions) => {
+      const merged: ApiErrorRoutes = {
+        ...routes,
+        ...perCallRoutes,
+      };
+      return routeApiError(err, merged, options);
+    },
+    [routes, perCallRoutes],
+  );
 }
