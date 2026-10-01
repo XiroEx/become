@@ -1,5 +1,6 @@
 import React from "react";
-import { Text, type StyleProp, type TextStyle } from "react-native";
+import type { StyleProp, TextStyle } from "react-native";
+import { Text } from "@/components/Text";
 
 export interface FireNumberProps {
   children: React.ReactNode;

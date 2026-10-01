@@ -1,13 +1,13 @@
 import React, { useRef, useState } from "react";
 import {
   View,
-  Text,
   Pressable,
   StyleSheet,
   type GestureResponderEvent,
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { Text } from "@/components/Text";
 import { useRouter } from "expo-router";
 import {
   Flame,
@@ -46,37 +46,6 @@ const ICON: Record<StreakPageId, typeof Flame> = {
   mindset: Brain,
 };
 
-const INK: Record<
-  StreakPageId,
-  { icon: string; badge: string; bar: string }
-> = {
-  super: {
-    icon: "#ea580c",
-    badge: "rgba(234, 88, 12, 0.15)",
-    bar: "#ea580c",
-  },
-  overall: {
-    icon: "#f59e0b",
-    badge: "rgba(245, 158, 11, 0.15)",
-    bar: "#f59e0b",
-  },
-  workout: {
-    icon: "#16a34a",
-    badge: "rgba(22, 163, 74, 0.15)",
-    bar: "#16a34a",
-  },
-  nutrition: {
-    icon: "#dc2626",
-    badge: "rgba(220, 38, 38, 0.15)",
-    bar: "#dc2626",
-  },
-  mindset: {
-    icon: "#9333ea",
-    badge: "rgba(147, 51, 234, 0.15)",
-    bar: "#9333ea",
-  },
-};
-
 export function StreakTile({
   tile,
   streaks,
@@ -88,8 +57,39 @@ export function StreakTile({
   testID,
   style,
 }: StreakTileProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
+
+  const inkMap: Record<
+    StreakPageId,
+    { icon: string; badge: string; bar: string }
+  > = {
+    super: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+    overall: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+    workout: {
+      icon: colors.success,
+      badge: tint("success", 0.15),
+      bar: colors.success,
+    },
+    nutrition: {
+      icon: colors.primary,
+      badge: tint("primary", 0.15),
+      bar: colors.primary,
+    },
+    mindset: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+  };
 
   // Every streak, one page at a time — super first when there is one. Falls
   // back to the day streak alone while /api/streaks is still in flight.
@@ -184,11 +184,12 @@ export function StreakTile({
   };
 
   const wide = size === "2x1" || tile?.size === "2x1";
+  const effectiveTestId = testID ?? (tile ? `tile-${tile.id}` : "streak-tile");
 
   if (loading || !fallback || pages.length === 0) {
     return (
       <View
-        testID={testID ? `${testID}-loading` : "streak-tile-loading"}
+        testID={effectiveTestId}
         style={[
           styles.card,
           {
@@ -235,8 +236,7 @@ export function StreakTile({
 
   const p = pages[i]!;
   const IconComponent = ICON[p.id] ?? Flame;
-  const ink = INK[p.id] ?? INK.overall;
-  const effectiveTestId = testID ?? (tile ? `tile-${tile.id}` : "streak-tile");
+  const ink = inkMap[p.id] ?? inkMap.overall;
 
   const accessibilityLabel = `${p.fullLabel}: ${p.value} ${p.unit ?? ""}. ${p.footer}`;
 
@@ -352,7 +352,7 @@ export function StreakTile({
                       backgroundColor:
                         idx === i
                           ? pg.id === "super"
-                            ? "#ea580c"
+                            ? colors.accent
                             : colors["muted-foreground"]
                           : colors.border,
                     }}
@@ -437,7 +437,7 @@ export function StreakTile({
                       backgroundColor:
                         idx === i
                           ? pg.id === "super"
-                            ? "#ea580c"
+                            ? colors.accent
                             : colors["muted-foreground"]
                           : colors.border,
                     }}

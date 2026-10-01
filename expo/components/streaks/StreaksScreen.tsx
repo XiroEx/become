@@ -1,12 +1,12 @@
 import React from "react";
 import {
   View,
-  Text,
   ScrollView,
   Pressable,
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
+import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import {
@@ -107,6 +107,7 @@ function BuildBar({
   current: number;
   barColor?: string;
 }) {
+  const { colors } = useThemeTokens();
   const d = streakDisplay(current);
   if (d.visible) return null;
   const pct = Math.round(
@@ -116,7 +117,7 @@ function BuildBar({
     <View className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
       <View
         className="h-full rounded-full"
-        style={{ width: `${pct}%`, backgroundColor: barColor ?? "#f59e0b" }}
+        style={{ width: `${pct}%`, backgroundColor: barColor ?? colors.accent }}
       />
     </View>
   );
@@ -127,14 +128,14 @@ function TodayDot({ done, label }: { done: boolean; label: string }) {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
       {done ? (
-        <Check size={14} color="#16a34a" />
+        <Check size={14} color={colors.success} />
       ) : (
         <Circle size={12} color={colors["muted-foreground"]} />
       )}
       <Text
         style={{
           fontSize: 12,
-          color: done ? "#16a34a" : colors["muted-foreground"],
+          color: done ? colors.success : colors["muted-foreground"],
         }}
       >
         {label}
@@ -155,7 +156,7 @@ export function StreaksScreen({
   freezing = false,
   freezeError,
 }: StreaksScreenProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
 
   const handleBack = () => {
@@ -241,13 +242,13 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: "rgba(245, 158, 11, 0.15)",
+                backgroundColor: tint("accent", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
                 opacity: overall?.activeToday ? 1 : 0.6,
               }}
             >
-              <Flame size={22} color="#f59e0b" />
+              <Flame size={22} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
               <View
@@ -263,7 +264,7 @@ export function StreaksScreen({
                 </Text>
                 {overall && overall.freezes > 0 ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Snowflake size={14} color="#3b82f6" />
+                    <Snowflake size={14} color={colors.accent} />
                     <Text className="text-xs text-blue-500 font-medium">
                       {overall.freezes} freeze{overall.freezes === 1 ? "" : "s"}
                     </Text>
@@ -275,7 +276,7 @@ export function StreaksScreen({
                 <>
                   <View className="mt-1">
                     <StreakValue current={overall.current} unit="days" />
-                    <BuildBar current={overall.current} barColor="#f59e0b" />
+                    <BuildBar current={overall.current} barColor={colors.accent} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     Any activity keeps it alive: a workout, a meal, a weigh-in or a mood check-in.
@@ -319,12 +320,12 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: "rgba(22, 163, 74, 0.15)",
+                backgroundColor: tint("success", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Dumbbell size={22} color="#16a34a" />
+              <Dumbbell size={22} color={colors.success} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -335,7 +336,7 @@ export function StreaksScreen({
                   <>
                     <View className="mt-1">
                       <StreakValue current={p.workout.current} unit="days" />
-                      <BuildBar current={p.workout.current} barColor="#16a34a" />
+                      <BuildBar current={p.workout.current} barColor={colors.success} />
                     </View>
                     <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                       Days in a row your training week stayed on track. You train {p.workout.target}× a week —{" "}
@@ -398,12 +399,12 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: "rgba(220, 38, 38, 0.15)",
+                backgroundColor: tint("primary", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <UtensilsCrossed size={22} color="#dc2626" />
+              <UtensilsCrossed size={22} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -413,7 +414,7 @@ export function StreaksScreen({
                 <>
                   <View className="mt-1">
                     <StreakValue current={p.nutrition.current} unit="days" />
-                    <BuildBar current={p.nutrition.current} barColor="#dc2626" />
+                    <BuildBar current={p.nutrition.current} barColor={colors.primary} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     Days in a row you logged food.
@@ -453,12 +454,12 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: "rgba(147, 51, 234, 0.15)",
+                backgroundColor: tint("accent", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Brain size={22} color="#9333ea" />
+              <Brain size={22} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -468,7 +469,7 @@ export function StreaksScreen({
                 <>
                   <View className="mt-1">
                     <StreakValue current={p.mindset.current} unit="days" />
-                    <BuildBar current={p.mindset.current} barColor="#9333ea" />
+                    <BuildBar current={p.mindset.current} barColor={colors.accent} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     Days in a row with a mood check-in, a Mind check-in, a session or a journal entry.
@@ -508,12 +509,12 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: "rgba(234, 88, 12, 0.15)",
+                backgroundColor: tint("accent", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Flame size={22} color="#ea580c" />
+              <Flame size={22} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -528,7 +529,7 @@ export function StreaksScreen({
                       tone="text-orange-500 dark:text-orange-400"
                       fire
                     />
-                    <BuildBar current={p.super.current} barColor="#ea580c" />
+                    <BuildBar current={p.super.current} barColor={colors.accent} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     All three pillars, every day: food logged, mindset checked in, and trained (a scheduled rest day counts) — with the training week on track.
@@ -566,14 +567,7 @@ export function StreaksScreen({
                   {p.super.freeze ? (
                     <View
                       testID="super-freeze"
-                      style={{
-                        marginTop: 12,
-                        padding: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: "rgba(56, 189, 248, 0.3)",
-                        backgroundColor: "rgba(56, 189, 248, 0.08)",
-                      }}
+                      className="mt-3 p-3 rounded-xl border border-sky-200 bg-sky-50/70 dark:border-sky-900/50 dark:bg-sky-950/30"
                     >
                       <View
                         style={{
@@ -584,7 +578,7 @@ export function StreaksScreen({
                       >
                         <Snowflake
                           size={16}
-                          color={p.super.freeze.available ? "#0ea5e9" : colors["muted-foreground"]}
+                          color={p.super.freeze.available ? colors.accent : colors["muted-foreground"]}
                           style={{ marginTop: 2 }}
                         />
                         <View style={{ flex: 1 }}>
@@ -623,24 +617,15 @@ export function StreaksScreen({
                             accessibilityLabel="Use super streak freeze"
                             disabled={freezing}
                             onPress={onUseFreeze}
+                            className="flex-row items-center justify-center gap-1.5 bg-sky-500 px-3 py-1.5 rounded-lg min-h-[44px] min-w-[44px]"
                             style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 6,
-                              backgroundColor: "#0ea5e9",
-                              paddingHorizontal: 12,
-                              paddingVertical: 6,
-                              borderRadius: 8,
                               opacity: freezing ? 0.6 : 1,
-                              minHeight: 44,
-                              minWidth: 44,
-                              justifyContent: "center",
                             }}
                           >
                             {freezing ? (
-                              <ActivityIndicator size="small" color="#ffffff" />
+                              <ActivityIndicator size="small" color={colors["primary-foreground"]} />
                             ) : (
-                              <Snowflake size={14} color="#ffffff" />
+                              <Snowflake size={14} color={colors["primary-foreground"]} />
                             )}
                             <Text className="text-xs font-bold text-white">
                               Use it

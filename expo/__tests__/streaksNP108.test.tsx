@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent, waitFor, within } from "@testing-library/react-native";
+import { render, fireEvent, within } from "@testing-library/react-native";
 import { StreaksScreen } from "@/components/streaks/StreaksScreen";
 import { StreakTile } from "@/components/dashboard/StreakTile";
 import StreaksRoute from "@/app/(app)/(tabs)/dashboard/streaks";
