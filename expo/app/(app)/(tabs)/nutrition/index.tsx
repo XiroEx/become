@@ -9,8 +9,15 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  Camera,
+  ChefHat,
+  ChevronDown,
+  Clock,
+  History,
   MoreVertical,
+  Plus,
   Search,
+  Upload,
   X,
 } from "lucide-react-native";
 import { z } from "zod";
@@ -391,8 +398,64 @@ export default function NutritionIndexRoute() {
   };
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [timelineMenuOpen, setTimelineMenuOpen] = useState(false);
+  const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
+  const [copyingYesterday, setCopyingYesterday] = useState(false);
+
+  const handleEditGoals = useCallback(() => {
+    // TODO(NP-148): Nutrition goals editor screen (/dashboard/nutrition/goals) is NP-148.
+    router.push("/(tabs)/nutrition/goals" as any);
+  }, [router]);
+
+  const copyYesterday = useCallback(async () => {
+    if (copyingYesterday) return;
+    setCopyingYesterday(true);
+    try {
+      const yest = new Date(activeDateObj);
+      yest.setDate(yest.getDate() - 1);
+      const yestKey = localDateKey(yest);
+      const res = await apiFetch(
+        withTz(`/api/meal-logs?date=${yestKey}`, tzOffset),
+        MealLogsDayResponseSchema,
+        {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+        },
+      );
+      const logs = (res?.logs ?? []).filter((l) => (l.items?.length ?? 0) > 0);
+      if (logs.length === 0) {
+        return;
+      }
+      const base = new Date(activeDateObj);
+      base.setHours(12, 0, 0, 0);
+      let i = 0;
+      for (const log of logs) {
+        await apiFetch(
+          withTz("/api/meal-logs", tzOffset),
+          z.any(),
+          {
+            method: "POST",
+            body: {
+              items: log.items,
+              tags: log.tags ?? [],
+              loggedAt: new Date(base.getTime() + i * 60_000).toISOString(),
+            },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        i++;
+      }
+      await refetchMealLogs();
+    } catch {
+      // ignore
+    } finally {
+      setCopyingYesterday(false);
+    }
+  }, [activeDateObj, copyingYesterday, refetchMealLogs, tzOffset, token]);
 
   const openSearch = (tagToUse?: string) => {
     setSearchTag(tagToUse ?? currentDefaultTag);
@@ -416,8 +479,62 @@ export default function NutritionIndexRoute() {
           paddingBottom: 8,
         }}
       >
-        <Text className="text-foreground text-2xl font-bold">Nutrition</Text>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+          <Text className="text-foreground text-2xl font-bold">Nutrition</Text>
+          <Text className="text-muted-foreground text-xs mt-0.5" numberOfLines={1}>
+            Track your food, macros, and hydration
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          {/* My Stuff header action */}
+          <Pressable
+            testID="nutrition-my-stuff-button"
+            accessibilityRole="button"
+            accessibilityLabel="My Stuff"
+            onPress={() => {
+              // TODO(NP-142): My Stuff (meals, recipes, saved foods tabs) is NP-142. Currently wired to existing recipes screen.
+              router.push("/(tabs)/nutrition/recipes");
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <ChefHat size={16} color={colors.foreground} />
+            <Text className="text-xs font-semibold text-foreground">My Stuff</Text>
+          </Pressable>
+
+          {/* Timeline toggle header action */}
+          <Pressable
+            testID="nutrition-timeline-button"
+            accessibilityRole="button"
+            accessibilityLabel="Timeline"
+            onPress={() => setTimelineMenuOpen((o) => !o)}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 8,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+            }}
+          >
+            <Clock size={16} color={colors.foreground} />
+            <Text className="text-xs font-semibold text-foreground">Timeline</Text>
+            <ChevronDown size={14} color={colors["muted-foreground"]} />
+          </Pressable>
+
+          {/* Kebab Menu */}
           <Pressable
             testID="nutrition-menu-button"
             accessibilityLabel="Nutrition menu"
@@ -444,30 +561,73 @@ export default function NutritionIndexRoute() {
         onTouchEnd={onTouchEnd}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
-          {/* Search bar */}
-          <Pressable
-            testID="nutrition-search-bar"
-            accessibilityRole="button"
-            accessibilityLabel="Search foods"
-            onPress={() => openSearch()}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              borderWidth: 1,
-              borderRadius: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-            }}
-          >
-            <Search size={16} color={colors["muted-foreground"]} />
-            <Text className="text-muted-foreground text-sm ml-2.5">
-              Search foods…
-            </Text>
-          </Pressable>
+          {/* Search row: input + camera + upload */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Pressable
+              testID="nutrition-search-bar"
+              accessibilityRole="button"
+              accessibilityLabel="Search foods"
+              onPress={() => openSearch()}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+              }}
+            >
+              <Search size={16} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-sm ml-2.5">
+                Search foods…
+              </Text>
+            </Pressable>
+
+            {/* Camera button (photo log) */}
+            <Pressable
+              testID="nutrition-camera-button"
+              accessibilityRole="button"
+              accessibilityLabel="Camera options"
+              onPress={() => setCameraMenuOpen((o) => !o)}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Camera size={18} color={colors.foreground} />
+            </Pressable>
+
+            {/* Upload button */}
+            <Pressable
+              testID="nutrition-upload-button"
+              accessibilityRole="button"
+              accessibilityLabel="Upload options"
+              onPress={() => setUploadMenuOpen((o) => !o)}
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Upload size={18} color={colors.foreground} />
+            </Pressable>
+          </View>
 
           {/* Date Navigator */}
           <DateNav
@@ -476,6 +636,7 @@ export default function NutritionIndexRoute() {
             onPrev={() => shiftDay(-1)}
             onNext={() => shiftDay(1)}
             onToday={() => setExplicitDate(null)}
+            onSelectDate={(newDateKey) => setExplicitDate(newDateKey)}
           />
 
           {/* Calorie Ring & Macro Bars */}
@@ -487,6 +648,7 @@ export default function NutritionIndexRoute() {
             fats={{ current: totalFats, goal: goalFats }}
             fiber={totalFiber}
             goalLine={goalLineText}
+            onEditGoals={handleEditGoals}
           />
 
           {/* Quick Adds (only on today / past dates; disabled on future dates) */}
@@ -577,11 +739,56 @@ export default function NutritionIndexRoute() {
 
           {/* Empty State when nothing logged */}
           {sections.length === 0 && quickAdds.length === 0 && (
-            <View style={{ alignItems: "center", paddingVertical: 24 }}>
-              <Text className="text-muted-foreground text-base mb-4">
-                {isFuture ? "Nothing planned yet" : "No foods logged yet"}
-              </Text>
-            </View>
+            <Card testID="nutrition-empty-state">
+              <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
+                <Text className="text-foreground text-lg font-bold text-center">
+                  {isFuture ? "Nothing planned yet" : "Nothing logged yet"}
+                </Text>
+                <Text className="text-muted-foreground text-sm text-center px-4">
+                  {isFuture
+                    ? "Plan ahead — schedule meals for this day so they're ready when it arrives."
+                    : "Add your first food of the day to start tracking."}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginTop: 4,
+                  }}
+                >
+                  {!isFuture && (
+                    <>
+                      <Button
+                        testID="nutrition-empty-add-food"
+                        size="sm"
+                        onPress={() => openSearch()}
+                      >
+                        Add food
+                      </Button>
+                      <Button
+                        testID="nutrition-copy-yesterday"
+                        variant="secondary"
+                        size="sm"
+                        disabled={copyingYesterday}
+                        onPress={copyYesterday}
+                      >
+                        {copyingYesterday ? "Copying…" : "Copy yesterday"}
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    testID="nutrition-empty-browse-my-stuff"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => router.push("/(tabs)/nutrition/recipes")}
+                  >
+                    Browse My Stuff
+                  </Button>
+                </View>
+              </View>
+            </Card>
           )}
 
           {/* Action buttons */}
@@ -592,6 +799,16 @@ export default function NutritionIndexRoute() {
             >
               Find a food
             </Button>
+            {!isFuture && (
+              <Button
+                testID="nutrition-action-copy-yesterday"
+                variant="secondary"
+                disabled={copyingYesterday}
+                onPress={copyYesterday}
+              >
+                {copyingYesterday ? "Copying…" : "Copy yesterday"}
+              </Button>
+            )}
             <Button
               testID="nutrition-add-tag-button"
               variant="ghost"
@@ -634,52 +851,285 @@ export default function NutritionIndexRoute() {
             }}
           >
             <View
+              testID="nutrition-menu-sheet"
+              style={{
+                gap: 14,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text className="text-foreground text-lg font-bold">Nutrition</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close menu"
+                  onPress={() => setMenuOpen(false)}
+                >
+                  <X size={20} color={colors.foreground} />
+                </Pressable>
+              </View>
+              <Button
+                testID="nutrition-menu-search"
+                variant="ghost"
+                onPress={() => {
+                  setMenuOpen(false);
+                  openSearch();
+                }}
+              >
+                Find a food
+              </Button>
+              <Button
+                testID="nutrition-menu-recipes"
+                variant="ghost"
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/(tabs)/nutrition/recipes");
+                }}
+              >
+                Recipes
+              </Button>
+              <Button
+                testID="nutrition-menu-meal-schedule"
+                variant="ghost"
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/(tabs)/nutrition/meal-schedule");
+                }}
+              >
+                Meal Schedule
+              </Button>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Timeline Dropdown Menu */}
+      <Modal
+        visible={timelineMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTimelineMenuOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close timeline menu backdrop"
+          style={{
+            flex: 1,
+            backgroundColor: scrim,
+            justifyContent: "flex-start",
+            alignItems: "flex-end",
+            paddingTop: 60,
+            paddingRight: 16,
+          }}
+          onPress={() => setTimelineMenuOpen(false)}
+        >
+          <Pressable
+            testID="nutrition-timeline-menu"
+            accessibilityRole="none"
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              minWidth: 180,
+              overflow: "hidden",
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Pressable
+              testID="nutrition-timeline-item"
+              accessibilityRole="button"
+              accessibilityLabel="Timeline"
               style={{
                 flexDirection: "row",
-                justifyContent: "space-between",
                 alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
+              onPress={() => {
+                setTimelineMenuOpen(false);
+                // TODO(NP-177): Eating timeline (day, week and month views) is NP-177.
+                router.push("/(tabs)/calendar");
               }}
             >
-              <Text className="text-foreground text-lg font-bold">Nutrition</Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close menu"
-                onPress={() => setMenuOpen(false)}
-              >
-                <X size={20} color={colors.foreground} />
-              </Pressable>
-            </View>
-            <Button
-              testID="nutrition-menu-search"
-              variant="ghost"
-              onPress={() => {
-                setMenuOpen(false);
-                openSearch();
+              <Clock size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Timeline</Text>
+            </Pressable>
+            <Pressable
+              testID="nutrition-timeline-meal-schedule"
+              accessibilityRole="button"
+              accessibilityLabel="Meal Schedule"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
               }}
-            >
-              Find a food
-            </Button>
-            <Button
-              testID="nutrition-menu-recipes"
-              variant="ghost"
               onPress={() => {
-                setMenuOpen(false);
-                router.push("/(tabs)/nutrition/recipes");
-              }}
-            >
-              Recipes
-            </Button>
-            <Button
-              testID="nutrition-menu-meal-schedule"
-              variant="ghost"
-              onPress={() => {
-                setMenuOpen(false);
+                setTimelineMenuOpen(false);
                 router.push("/(tabs)/nutrition/meal-schedule");
               }}
             >
-              Meal Schedule
+              <Clock size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Meal Schedule</Text>
+            </Pressable>
+            <Pressable
+              testID="nutrition-timeline-scans"
+              accessibilityRole="button"
+              accessibilityLabel="Estimate history"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
+              onPress={() => {
+                setTimelineMenuOpen(false);
+                // TODO(NP-140): Estimate history (/dashboard/nutrition/scans) is NP-140.
+                router.push("/(tabs)/nutrition/recipes");
+              }}
+            >
+              <History size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Estimate history</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Camera Options Modal */}
+      <Modal
+        visible={cameraMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCameraMenuOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close camera menu backdrop"
+          style={{
+            flex: 1,
+            backgroundColor: scrim,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+          onPress={() => setCameraMenuOpen(false)}
+        >
+          <Pressable
+            testID="nutrition-camera-menu"
+            accessibilityRole="none"
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 20,
+              width: "100%",
+              maxWidth: 300,
+              gap: 10,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text className="text-foreground text-base font-bold mb-1">
+              Camera options
+            </Text>
+            <Button
+              testID="nutrition-camera-take-photo"
+              variant="secondary"
+              onPress={() => {
+                setCameraMenuOpen(false);
+                // TODO(NP-060, NP-089): AI meal photo capture & estimation flow is NP-060/NP-089.
+                router.push("/(tabs)/nutrition/recipes");
+              }}
+            >
+              Take photo
             </Button>
-          </View>
+            <Button
+              testID="nutrition-camera-scan-barcode"
+              variant="secondary"
+              onPress={() => {
+                setCameraMenuOpen(false);
+                // TODO(NP-059, NP-088): Barcode scanner is NP-059/NP-088.
+                openSearch();
+              }}
+            >
+              Scan barcode
+            </Button>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Upload Options Modal */}
+      <Modal
+        visible={uploadMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUploadMenuOpen(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close upload menu backdrop"
+          style={{
+            flex: 1,
+            backgroundColor: scrim,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+          onPress={() => setUploadMenuOpen(false)}
+        >
+          <Pressable
+            testID="nutrition-upload-menu"
+            accessibilityRole="none"
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 20,
+              width: "100%",
+              maxWidth: 300,
+              gap: 10,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text className="text-foreground text-base font-bold mb-1">
+              Upload options
+            </Text>
+            <Button
+              testID="nutrition-upload-photo"
+              variant="secondary"
+              onPress={() => {
+                setUploadMenuOpen(false);
+                // TODO(NP-059): Photo upload and blob intake is NP-059.
+                router.push("/(tabs)/nutrition/recipes");
+              }}
+            >
+              Upload photo
+            </Button>
+            <Button
+              testID="nutrition-upload-describe"
+              variant="secondary"
+              onPress={() => {
+                setUploadMenuOpen(false);
+                // TODO(NP-089): Describe meal estimation flow is NP-089.
+                openSearch();
+              }}
+            >
+              Describe
+            </Button>
+          </Pressable>
         </Pressable>
       </Modal>
 
@@ -761,6 +1211,33 @@ export default function NutritionIndexRoute() {
         currentTag={searchTag}
         activeDate={activeDate}
       />
+
+      {/* Floating Add Food Button (FAB) */}
+      <Pressable
+        testID="nutrition-fab-add"
+        accessibilityRole="button"
+        accessibilityLabel={isFuture ? "Schedule food" : "Add food"}
+        onPress={() => openSearch()}
+        style={{
+          position: "absolute",
+          bottom: 24,
+          right: 20,
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          backgroundColor: colors.foreground,
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: colors.foreground,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 6,
+          elevation: 6,
+          zIndex: 40,
+        }}
+      >
+        <Plus size={28} color={colors.background} />
+      </Pressable>
     </SafeAreaView>
   );
 }
