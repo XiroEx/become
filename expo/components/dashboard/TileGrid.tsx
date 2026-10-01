@@ -6,10 +6,13 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
-import type { DashboardTile } from "@become/api-client";
+import type { DashboardTile, DashboardTilesResponse } from "@become/api-client";
 import { TileErrorBoundary } from "./TileErrorBoundary";
 import { StatActionTile } from "./StatActionTile";
 import { PlaceholderTile } from "./PlaceholderTile";
+import { StatTile } from "./StatTile";
+import { SuggestionTile } from "./SuggestionTile";
+import type { DashboardStatData } from "@/lib/dashboard/types";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { apiFetch } from "@become/api-client";
@@ -27,9 +30,14 @@ export interface TileGridProps {
    * the grid renders this layout and does not self-fetch.
    */
   layout?: DashboardTile[] | null;
+  statData?: DashboardStatData | null;
+  tilesData?: DashboardTilesResponse | null;
+  onDismissSuggestion?: (id: string) => Promise<void> | void;
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
   onOpenWorkoutNow?: () => void;
+  onOpenCalendar?: () => void;
+  onOpenCheckIn?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -50,9 +58,14 @@ function useSafeAuth() {
 
 export function TileGrid({
   layout: layoutProp,
+  statData,
+  tilesData,
+  onDismissSuggestion,
   onOpenMind,
   onOpenNutrition,
   onOpenWorkoutNow,
+  onOpenCalendar,
+  onOpenCheckIn,
   testID,
   style,
 }: TileGridProps) {
@@ -188,6 +201,43 @@ export function TileGrid({
           isWide ? "100%" : col1Width > 0 ? col1Width : "48.5%";
         const key = `${tile.kind}-${tile.id}-${idx}`;
 
+        let tileContent: React.ReactNode = null;
+
+        if (tile.kind === "stat" && isActionTileId(tile.id)) {
+          tileContent = (
+            <StatActionTile
+              tile={tile}
+              onOpenMind={onOpenMind}
+              onOpenNutrition={onOpenNutrition}
+              onOpenWorkoutNow={onOpenWorkoutNow}
+            />
+          );
+        } else if (tile.kind === "stat") {
+          tileContent = (
+            <StatTile
+              tile={tile}
+              statData={statData}
+              onOpenCalendar={onOpenCalendar}
+              onOpenNutrition={onOpenNutrition}
+              onOpenCheckIn={onOpenCheckIn}
+            />
+          );
+        } else if (tile.kind === "smart-rotating") {
+          tileContent = (
+            <SuggestionTile
+              tile={tile}
+              tilesData={tilesData}
+              statData={statData}
+              onDismissSuggestion={onDismissSuggestion}
+              onOpenCalendar={onOpenCalendar}
+              onOpenNutrition={onOpenNutrition}
+              onOpenCheckIn={onOpenCheckIn}
+            />
+          );
+        } else {
+          tileContent = <PlaceholderTile tile={tile} />;
+        }
+
         return (
           <View
             key={key}
@@ -201,16 +251,7 @@ export function TileGrid({
               label={tile.id}
               testID={`tile-error-${tile.id}`}
             >
-              {tile.kind === "stat" && isActionTileId(tile.id) ? (
-                <StatActionTile
-                  tile={tile}
-                  onOpenMind={onOpenMind}
-                  onOpenNutrition={onOpenNutrition}
-                  onOpenWorkoutNow={onOpenWorkoutNow}
-                />
-              ) : (
-                <PlaceholderTile tile={tile} />
-              )}
+              {tileContent}
             </TileErrorBoundary>
           </View>
         );
