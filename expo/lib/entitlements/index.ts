@@ -60,3 +60,11 @@ export type {
 
 export * from "./store";
 export * from "./useEntitlements";
+// `showUpgradeSheet(gate)` — the one handle every gated screen raises the sheet
+// with (NP-052). Exported from here rather than from the component so a screen
+// does not import a sheet to open one.
+export * from "./upgradeSheet";
+// The checkout state machine and the two calls behind it. The CTA leaves the app
+// through `Linking.openURL` and never `expo-web-browser`: Plus is sold from the
+// iOS app only through an external link (decision 9/20).
+export * from "./billing";
