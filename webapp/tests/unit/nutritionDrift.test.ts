@@ -104,11 +104,37 @@ export const NUTRITION_MODULES: ModuleSpec[] = [
     sharedRelative: 'nutrition/goalLine.ts',
     rewrite: s => s,
   },
+  {
+    name: 'plateReview',
+    webRelative: 'nutrition/plateReview.ts',
+    sharedRelative: 'nutrition/plateReview.ts',
+    rewrite: s =>
+      s
+        .replace("from '@/lib/units'", "from '../units'")
+        .replace("from '@/lib/foodMath'", "from '../foodMath'")
+        .replace("from '@/lib/nutrition/servingOptions'", "from './servingOptions'")
+        .replace(
+          "import type { ServingUnit } from '@/models/Food'",
+          "import type { ServingUnit } from './types'"
+        )
+        .replace(
+          "import type { PlateEstimate, EstimatedPlateItem } from '@/lib/nutrition/aiSeams'",
+          "import type { PlateEstimate, EstimatedPlateItem } from './types'"
+        )
+        .replace(
+          "import type { IFoodEntry } from '@/lib/nutritionTypes'",
+          "import type { IFoodEntry } from './types'"
+        )
+        .replace(
+          "import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'",
+          "import type { QuantityPickerVariant } from './types'"
+        ),
+  },
 ]
 
 describe('nutrition lockstep drift (NP-017 / NP-061)', () => {
-  it('covers all 10 pure nutrition modules', () => {
-    assert.equal(NUTRITION_MODULES.length, 10)
+  it('covers all 11 pure nutrition modules', () => {
+    assert.equal(NUTRITION_MODULES.length, 11)
   })
 
   for (const mod of NUTRITION_MODULES) {
@@ -143,6 +169,21 @@ describe('nutrition lockstep drift (NP-017 / NP-061)', () => {
       sharedContent,
       expected,
       'Drift check must catch differences between web source and shared core'
+    )
+  })
+
+  it('fails when any synthetic modification is introduced into plateReview', () => {
+    const mod = NUTRITION_MODULES.find(m => m.name === 'plateReview')!
+    const webPath = path.join(WEBAPP_LIB, mod.webRelative)
+    const webContent = fs.readFileSync(webPath, 'utf8')
+    const driftedContent = webContent + '\n// drifted change\n'
+    const expected = mod.rewrite(driftedContent)
+    const sharedContent = fs.readFileSync(path.join(SHARED_CORE_SRC, mod.sharedRelative), 'utf8')
+
+    assert.notEqual(
+      sharedContent,
+      expected,
+      'Drift check must catch differences between web source and shared core for plateReview'
     )
   })
 })

@@ -24,6 +24,7 @@
  *   - nutrition/mealSchedule: windows, tags, and scheduling
  *   - nutrition/logTagMatch: smart-append matching for meal logs
  *   - nutrition/goalLine: summary line under calorie ring
+ *   - nutrition/plateReview: AI plate estimate review maths and DB matching
  *   - nutrition/types: pure food model types
  *   - mindXP: chapters, levels, XP maths and the main-session cooldown
  *   - mindContent: the 30-protocol content library and MindState
@@ -55,6 +56,7 @@ export * from './nutrition/dayOrder'
 export * from './nutrition/mealSchedule'
 export * from './nutrition/logTagMatch'
 export { nutritionGoalLine, type GoalLineInput } from './nutrition/goalLine'
+export * from './nutrition/plateReview'
 export * from './nutrition/types'
 export * from './mindXP'
 export * from './mindContent'
