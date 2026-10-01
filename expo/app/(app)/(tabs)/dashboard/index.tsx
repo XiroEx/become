@@ -23,12 +23,13 @@ import {
   DashboardScreen,
   type TodayWorkoutSummary,
 } from "@/components/DashboardScreen";
-import type { CheckInPayload } from "@/components/CheckInModal";
+import type { CheckInPayload, MoodLevel } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useLocalDay, useOnForeground, tzOffsetMinutes } from "@/lib/time/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { useUnits } from "@/lib/hooks/useUnits";
 import type { WeightUnit } from "@become/core";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
@@ -118,12 +119,14 @@ export default function DashboardRoute() {
   // ONE weight unit for the whole screen: the check-in and weigh-in writes
   // (NP-105) and the stat tiles (NP-210). The member's explicit profile setting
   // wins; otherwise the goal's unit from /api/progress or /api/goals; else lbs.
-  const profileWeightUnit = user?.profile?.weightUnit;
+  const { weightUnit: hookWeightUnit } = useUnits();
+  const profileWeightUnit = user?.profile?.weightUnit ?? hookWeightUnit;
   const weightUnit: WeightUnit =
     profileWeightUnit === "kg" || profileWeightUnit === "lbs"
       ? profileWeightUnit
       : ((progress.data?.goal?.weightUnit as WeightUnit | undefined) ??
         (goals.data?.nutrition?.unit as WeightUnit | undefined) ??
+        hookWeightUnit ??
         "lbs");
 
   const [checkInOpen, setCheckInOpen] = useState(false);
@@ -366,6 +369,20 @@ export default function DashboardRoute() {
     [checkin, goals, progress, streak, today, weightUnit],
   );
 
+  const onSubmitMood = useCallback(
+    async (moodVal: MoodLevel) => {
+      const writes = getOfflineWrites();
+      const status = await writes.logMood(moodVal);
+      if (status === "sent") {
+        await streak.refetch();
+        await checkin.refetch();
+        await goals.refetch();
+        await progress.refetch();
+      }
+    },
+    [checkin, goals, progress, streak],
+  );
+
   const targetWeight = goals.data?.nutrition?.target?.weight ?? null;
   const checkInInfo = {
     daysSinceMood: checkin.data?.daysSinceMood ?? 0,
@@ -400,9 +417,10 @@ export default function DashboardRoute() {
     progress.data?.stats?.thisWeekWorkouts ??
     0;
   const weeklyTarget =
-    goals.data?.training?.target?.daysPerWeek ??
+    progress.data?.goal?.weeklyAvailability ??
     progress.data?.weeklyAvailability ??
-    3;
+    goals.data?.training?.target?.daysPerWeek ??
+    null;
 
   const weightPoints = progress.data?.weightData ?? [];
   const latestWeight =
@@ -586,6 +604,7 @@ export default function DashboardRoute() {
       checkInInfo={checkInInfo}
       weightUnit={weightUnit}
       onSubmitWeight={onSubmitWeight}
+      onSubmitMood={onSubmitMood}
       layout={layout.data?.layout ?? null}
       statData={statData}
       tilesData={tiles.data ?? null}

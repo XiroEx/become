@@ -692,4 +692,251 @@ describe("DashboardRoute navigation", () => {
       });
     });
   });
+
+  describe("Dashboard stat tiles parity (NP-107)", () => {
+    it("(id: e015c916) Each tile shows the same number as the web for the same member at the same moment", async () => {
+      wireApiFetch();
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+          });
+        }
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({ due: false, reason: "complete" });
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({
+            layout: [
+              { id: "mood", kind: "stat", size: "1x1" },
+              { id: "weekly", kind: "stat", size: "1x1" },
+              { id: "goal", kind: "stat", size: "1x1" },
+              { id: "calories", kind: "stat", size: "1x1" },
+              { id: "water", kind: "stat", size: "1x1" },
+              { id: "weight", kind: "stat", size: "1x1" },
+              { id: "workouts", kind: "stat", size: "1x1" },
+            ],
+          });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            moodData: [{ date: "Oct 1", value: 4 }],
+            weightData: [{ date: "Oct 1", value: 175.2 }],
+            stats: { thisWeekWorkouts: 2, totalWorkouts: 42, streakDays: 5 },
+            weeklyAvailability: 4,
+            goal: {
+              fitnessGoal: "gain_muscle",
+              nutritionDirection: "gain",
+              targetWeightKg: 82.1,
+              startWeightKg: 79.5,
+              weightUnit: "lbs",
+              pace: { status: "on", eta: "~12 wks", behindByKg: 0 },
+            },
+          });
+        }
+        if (path.startsWith("/api/nutrition/log")) {
+          return Promise.resolve({
+            dailyTotals: { calories: 1850 },
+            goals: { calories: 2000 },
+            water: { current: 48, goal: 64 },
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("tile-mood-value").props.children).toBe("Pretty Good");
+        expect(getByTestId("tile-weekly-value").props.children).toBe("2/4");
+        expect(getByTestId("tile-goal-value").props.children).toContain("5.8 lbs to go");
+        expect(getByTestId("tile-calories-value").props.children).toBe("1850/2000");
+        expect(getByTestId("tile-water-value").props.children).toBe("48/64 oz");
+        expect(getByTestId("tile-weight-value").props.children).toBe("175.2 lbs");
+        expect(getByTestId("tile-workouts-value").props.children).toBe("42");
+      });
+    });
+
+    it("(id: e015c917) Changing mood on the mood tile updates the web's check-in state for today", async () => {
+      wireApiFetch();
+      let checkinFetchCount = 0;
+      mockApiFetch.mockImplementation((path: string, _schema, init) => {
+        const method = (init as { method?: string } | undefined)?.method;
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+          });
+        }
+        if (path.startsWith("/api/checkin") && (!method || method === "GET")) {
+          checkinFetchCount += 1;
+          return Promise.resolve({
+            due: false,
+            reason: "complete",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+          });
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({
+            layout: [{ id: "mood", kind: "stat", size: "1x1" }],
+          });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            moodData: [{ date: "Oct 1", value: 3 }],
+            stats: { streakDays: 5, thisWeekWorkouts: 2 },
+          });
+        }
+        if (path === "/api/mood" && method === "POST") {
+          return Promise.resolve({
+            success: true,
+            mood: 4,
+            date: "2026-10-01",
+            applied: true,
+            streak: { streakDays: 6, streakExtended: true },
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("tile-mood")).toBeTruthy();
+      });
+
+      const initialCheckinCalls = checkinFetchCount;
+
+      // Tap the mood tile to open MoodLogSheet
+      fireEvent.press(getByTestId("tile-mood"));
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-mood-sheet-option-4")).toBeTruthy();
+      });
+
+      // Pick Pretty Good (4)
+      await act(async () => {
+        fireEvent.press(getByTestId("dashboard-mood-sheet-option-4"));
+      });
+
+      // Verify POST /api/mood was called with the selected mood
+      await waitFor(() => {
+        const moodCall = mockApiFetch.mock.calls.find(
+          (c) =>
+            c[0] === "/api/mood" &&
+            (c[2] as { method?: string })?.method === "POST",
+        );
+        expect(moodCall).toBeTruthy();
+        const body = (moodCall![2] as { body: { mood: number } }).body;
+        expect(body.mood).toBe(4);
+      });
+
+      // Verify check-in was refetched (updating today's check-in state)
+      await waitFor(() => {
+        expect(checkinFetchCount).toBeGreaterThan(initialCheckinCalls);
+      });
+    });
+
+    it("(id: e015c918) A member with no weekly target sees 'Set a weekly target', never a fraction against an invented number", async () => {
+      wireApiFetch();
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+          });
+        }
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({ due: false, reason: "complete" });
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({
+            layout: [{ id: "weekly", kind: "stat", size: "1x1" }],
+          });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            stats: { thisWeekWorkouts: 2 },
+            // No weeklyAvailability and no goal.weeklyAvailability
+            weeklyAvailability: null,
+          });
+        }
+        if (path.startsWith("/api/goals")) {
+          return Promise.resolve({
+            // No training target
+            training: { target: null },
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("tile-weekly-value").props.children).toBe("2");
+        expect(getByTestId("tile-weekly-footer").props.children).toBe("Set a weekly target");
+        expect(getByTestId("tile-weekly-value").props.children).not.toContain("/");
+        expect(getByTestId("tile-weekly-value").props.children).not.toContain("3");
+      });
+    });
+
+    it("(id: e015c919) A kg member sees kg on the weight and goal tiles", async () => {
+      wireApiFetch();
+      mockUser = {
+        _id: "u1",
+        email: "jon@example.com",
+        name: "Jon",
+        profile: { weightUnit: "kg" },
+      };
+
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: mockUser,
+          });
+        }
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({ due: false, reason: "complete" });
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({
+            layout: [
+              { id: "weight", kind: "stat", size: "1x1" },
+              { id: "goal", kind: "stat", size: "1x1" },
+            ],
+          });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            weightData: [{ date: "Oct 1", value: 75.4 }],
+            goal: {
+              targetWeightKg: 70.0,
+              startWeightKg: 78.0,
+              weightUnit: "kg",
+              fitnessGoal: "lose_weight",
+              nutritionDirection: "lose",
+            },
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        const weightVal = getByTestId("tile-weight-value").props.children;
+        expect(weightVal).toBe("75.4 kg");
+        expect(weightVal).not.toContain("lbs");
+
+        const goalVal = getByTestId("tile-goal-value").props.children;
+        expect(goalVal).toContain("5.4 kg to go");
+        expect(goalVal).not.toContain("lbs");
+
+        const goalFoot = getByTestId("tile-goal-footer").props.children;
+        expect(goalFoot).toContain("70 kg");
+        expect(goalFoot).not.toContain("lbs");
+      });
+
+      mockUser = null;
+    });
+  });
 });

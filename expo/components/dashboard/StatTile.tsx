@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -16,6 +16,10 @@ import {
   Smile,
 } from "lucide-react-native";
 import { describeGoal } from "@become/core";
+import { useUnits } from "@/lib/hooks/useUnits";
+import { MoodLogSheet } from "./MoodLogSheet";
+import type { MoodLevel } from "@/components/CheckInModal";
+import { MOOD_LABELS } from "@/components/CheckInModal";
 import type { DashboardStatData } from "@/lib/dashboard/types";
 
 export interface StatTileProps {
@@ -27,16 +31,13 @@ export interface StatTileProps {
   onOpenCheckIn?: () => void;
   /** Opens the weigh-in sheet (NP-105). The weight tile falls back to onOpenCheckIn. */
   onOpenWeight?: () => void;
+  /** Opens the mood sheet (NP-107). Falls back to internal sheet or onOpenCheckIn. */
+  onOpenMood?: () => void;
+  onMoodChange?: (mood: MoodLevel) => Promise<void> | void;
+  /** Opens weekly target settings (NP-127). */
+  onOpenSettings?: () => void;
   onPress?: () => void;
 }
-
-const MOOD_LABELS: Record<number, string> = {
-  1: "Bad",
-  2: "Not Great",
-  3: "Okay",
-  4: "Pretty Good",
-  5: "Great",
-};
 
 export function StatTile({
   tile,
@@ -46,10 +47,16 @@ export function StatTile({
   onOpenNutrition,
   onOpenCheckIn,
   onOpenWeight,
+  onOpenMood,
+  onMoodChange,
+  onOpenSettings,
   onPress,
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
+  const { weightUnit: userWeightUnit } = useUnits();
+  const unit = statData?.weightUnit ?? userWeightUnit ?? "lbs";
   const wide = tile.size === "2x1";
+  const [internalMoodOpen, setInternalMoodOpen] = useState(false);
 
   // Loading skeleton
   if (loading && !statData) {
@@ -142,10 +149,13 @@ export function StatTile({
     IconComponent = Smile;
     iconColor = colors.accent;
     badgeBg = tint("accent", 0.15);
-    handlePress = handlePress ?? onOpenCheckIn;
+    handlePress =
+      handlePress ??
+      onOpenMood ??
+      (onMoodChange ? () => setInternalMoodOpen(true) : onOpenCheckIn);
 
     const currentMood = statData?.todaysMood;
-    value = currentMood && MOOD_LABELS[currentMood] ? MOOD_LABELS[currentMood] : "Set";
+    value = currentMood && MOOD_LABELS[currentMood as MoodLevel] ? MOOD_LABELS[currentMood as MoodLevel] : "Set";
 
     const recent = statData?.recentMoods ?? [];
     const last7 = recent.slice(-7);
@@ -165,19 +175,22 @@ export function StatTile({
     iconColor = colors.success;
     badgeBg = tint("success", 0.15);
     barColor = colors.success;
-    handlePress = handlePress ?? onOpenCalendar;
 
-    const target = statData?.weeklyTarget ?? 3;
+    const target = statData?.weeklyTarget ?? null;
     const done = statData?.thisWeekWorkouts ?? 0;
-    value = target ? `${done}/${target}` : String(done);
 
-    if (target) {
+    if (!target) {
+      value = String(done);
+      pct = 0;
+      footer = "Set a weekly target";
+      // The link opens the weekly-target setting (NP-127), and is inert until that exists
+      handlePress = handlePress ?? onOpenSettings;
+    } else {
+      value = `${done}/${target}`;
       pct = Math.min(100, Math.round((done / target) * 100));
       const remaining = Math.max(0, target - done);
       footer = remaining === 0 ? "Weekly target hit 🎉" : `${remaining} to weekly target`;
-    } else {
-      pct = 0;
-      footer = "Set a weekly target";
+      handlePress = handlePress ?? onOpenCalendar;
     }
   } else if (tile.id === "goal") {
     IconComponent = Target;
@@ -191,14 +204,16 @@ export function StatTile({
       startWeightKg: statData?.startWeightKg,
       latestWeight: statData?.latestWeight,
       earliestWeight: statData?.earliestWeight,
-      weightUnit: statData?.weightUnit ?? "lbs",
+      weightUnit: unit,
       pace: statData?.pace ?? null,
       program: statData?.programProgress ?? null,
     });
 
     label = goalView.label;
     value = goalView.value;
-    footer = goalView.footer;
+    const arrow =
+      goalView.direction === "down" ? "↓ " : goalView.direction === "up" ? "↑ " : "";
+    footer = `${arrow}${goalView.footer}`;
     pct = goalView.pct;
     barColor = goalView.atTarget ? colors.success : colors.accent;
     handlePress = handlePress ?? onOpenNutrition;
@@ -210,7 +225,8 @@ export function StatTile({
     handlePress = handlePress ?? onOpenNutrition;
 
     const consumed = Math.round(statData?.caloriesConsumed ?? 0);
-    const goal = Math.round(statData?.caloriesGoal ?? 2000);
+    const hasGoal = statData?.caloriesGoal != null && statData.caloriesGoal > 0;
+    const goal = hasGoal ? Math.round(statData!.caloriesGoal!) : 0;
     value = !goal ? "0/--" : `${consumed}/${goal}`;
 
     if (goal > 0) {
@@ -233,7 +249,8 @@ export function StatTile({
     handlePress = handlePress ?? onOpenNutrition;
 
     const current = Math.round(statData?.waterCurrent ?? 0);
-    const goal = Math.round(statData?.waterGoal ?? 64);
+    const hasGoal = statData?.waterGoal != null && statData.waterGoal > 0;
+    const goal = hasGoal ? Math.round(statData!.waterGoal!) : 0;
     value = !goal ? "0/-- oz" : `${current}/${goal} oz`;
 
     if (goal > 0) {
@@ -252,7 +269,6 @@ export function StatTile({
     barColor = colors["muted-foreground"];
     handlePress = handlePress ?? onOpenWeight ?? onOpenCheckIn;
 
-    const unit = statData?.weightUnit ?? "lbs";
     const latest = statData?.latestWeight;
     value = latest != null ? `${latest.toFixed(1)} ${unit}` : "—";
     pct = 50;
@@ -294,54 +310,88 @@ export function StatTile({
   const accessibilityLabel = `${label}: ${value}${footer ? `, ${footer}` : ""}`;
 
   return (
-    <Pressable
-      testID={`tile-${tile.id}`}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={handlePress}
-      disabled={!handlePress}
-      style={({ pressed }) => [
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.8 : 1,
-        },
-      ]}
-    >
-      {wide ? (
-        <View style={styles.wideRow}>
-          <View style={styles.wideLeft}>
-            <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-              <IconComponent size={20} color={iconColor} />
+    <>
+      <Pressable
+        testID={`tile-${tile.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        onPress={handlePress}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        {wide ? (
+          <View style={styles.wideRow}>
+            <View style={styles.wideLeft}>
+              <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                <IconComponent size={20} color={iconColor} />
+              </View>
+              <View style={styles.wideMeta}>
+                <Text
+                  className="text-muted-foreground text-xs font-medium"
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+                <Text
+                  testID={`tile-${tile.id}-value`}
+                  className="text-foreground text-2xl font-bold"
+                  numberOfLines={1}
+                >
+                  {value}
+                </Text>
+                {footer ? (
+                  <Text
+                    testID={`tile-${tile.id}-footer`}
+                    className="text-muted-foreground text-[11px] mt-0.5"
+                    numberOfLines={1}
+                  >
+                    {footer}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            <View style={styles.wideMeta}>
+            <View style={styles.wideRight}>
+              <View style={[styles.barTrack, { backgroundColor: colors.muted, width: 80 }]}>
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      backgroundColor: barColor,
+                      width: `${Math.max(0, Math.min(100, pct))}%`,
+                    },
+                  ]}
+                />
+              </View>
+              <ChevronRight size={16} color={colors["muted-foreground"]} />
+            </View>
+          </View>
+        ) : (
+          <View style={styles.squareContent}>
+            <View style={styles.squareHeader}>
+              <View style={[styles.badgeSmall, { backgroundColor: badgeBg }]}>
+                <IconComponent size={16} color={iconColor} />
+              </View>
               <Text
-                className="text-muted-foreground text-xs font-medium"
+                className="text-muted-foreground text-xs font-medium flex-1 ml-2"
                 numberOfLines={1}
               >
                 {label}
               </Text>
-              <Text
-                testID={`tile-${tile.id}-value`}
-                className="text-foreground text-2xl font-bold"
-                numberOfLines={1}
-              >
-                {value}
-              </Text>
-              {footer ? (
-                <Text
-                  testID={`tile-${tile.id}-footer`}
-                  className="text-muted-foreground text-[11px] mt-0.5"
-                  numberOfLines={1}
-                >
-                  {footer}
-                </Text>
-              ) : null}
             </View>
-          </View>
-          <View style={styles.wideRight}>
-            <View style={[styles.barTrack, { backgroundColor: colors.muted, width: 80 }]}>
+            <Text
+              testID={`tile-${tile.id}-value`}
+              className="text-foreground text-2xl font-bold mt-2"
+              numberOfLines={1}
+            >
+              {value}
+            </Text>
+            {/* Progress bar */}
+            <View style={[styles.barTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
               <View
                 style={[
                   styles.barFill,
@@ -352,53 +402,29 @@ export function StatTile({
                 ]}
               />
             </View>
-            <ChevronRight size={16} color={colors["muted-foreground"]} />
+            {footer ? (
+              <Text
+                testID={`tile-${tile.id}-footer`}
+                className="text-muted-foreground text-[11px] mt-1"
+                numberOfLines={1}
+              >
+                {footer}
+              </Text>
+            ) : null}
           </View>
-        </View>
-      ) : (
-        <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
-            <View style={[styles.badgeSmall, { backgroundColor: badgeBg }]}>
-              <IconComponent size={16} color={iconColor} />
-            </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          </View>
-          <Text
-            testID={`tile-${tile.id}-value`}
-            className="text-foreground text-2xl font-bold mt-2"
-            numberOfLines={1}
-          >
-            {value}
-          </Text>
-          {/* Progress bar */}
-          <View style={[styles.barTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
-            <View
-              style={[
-                styles.barFill,
-                {
-                  backgroundColor: barColor,
-                  width: `${Math.max(0, Math.min(100, pct))}%`,
-                },
-              ]}
-            />
-          </View>
-          {footer ? (
-            <Text
-              testID={`tile-${tile.id}-footer`}
-              className="text-muted-foreground text-[11px] mt-1"
-              numberOfLines={1}
-            >
-              {footer}
-            </Text>
-          ) : null}
-        </View>
-      )}
-    </Pressable>
+        )}
+      </Pressable>
+
+      {tile.id === "mood" ? (
+        <MoodLogSheet
+          testID="tile-mood-sheet"
+          visible={internalMoodOpen}
+          onClose={() => setInternalMoodOpen(false)}
+          onSubmit={onMoodChange}
+          currentMood={statData?.todaysMood}
+        />
+      ) : null}
+    </>
   );
 }
 
