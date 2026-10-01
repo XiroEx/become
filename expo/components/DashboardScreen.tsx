@@ -23,8 +23,10 @@ import type {
 import {
   CheckInModal,
   type CheckInPayload,
+  type MoodLevel,
 } from "@/components/CheckInModal";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
+import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
 import type { WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -83,6 +85,11 @@ export interface DashboardScreenProps {
   weightSheetOpen?: boolean;
   onWeightSheetOpenChange?: (open: boolean) => void;
   onSubmitWeight?: (weight: number) => Promise<void> | void;
+  /** Mood log sheet wiring (Mood tile parity) */
+  onOpenMood?: () => void;
+  moodSheetOpen?: boolean;
+  onMoodSheetOpenChange?: (open: boolean) => void;
+  onSubmitMood?: (mood: MoodLevel) => Promise<void> | void;
   /** Initial-load skeleton (no data yet). Distinct from pull-to-refresh. */
   loading?: boolean;
   /** Inline error banner text; null/undefined hides it. */
@@ -140,6 +147,10 @@ export function DashboardScreen({
   weightSheetOpen,
   onWeightSheetOpenChange,
   onSubmitWeight,
+  onOpenMood,
+  moodSheetOpen,
+  onMoodSheetOpenChange,
+  onSubmitMood,
   loading = false,
   errorText,
   refreshing = false,
@@ -183,6 +194,25 @@ export function DashboardScreen({
       onOpenWeight();
     } else {
       setWeightSheetOpen(true);
+    }
+  };
+
+  const [internalMoodSheetOpen, setInternalMoodSheetOpen] =
+    useState<boolean>(false);
+  const isMoodSheetControlled = moodSheetOpen !== undefined;
+  const isMoodSheetOpen = isMoodSheetControlled
+    ? moodSheetOpen
+    : internalMoodSheetOpen;
+  const setMoodSheetOpen = (value: boolean) => {
+    if (isMoodSheetControlled) onMoodSheetOpenChange?.(value);
+    else setInternalMoodSheetOpen(value);
+  };
+
+  const handleOpenMood = () => {
+    if (onOpenMood) {
+      onOpenMood();
+    } else {
+      setMoodSheetOpen(true);
     }
   };
 
@@ -391,6 +421,9 @@ export function DashboardScreen({
           onOpenCalendar={onOpenCalendar}
           onOpenCheckIn={() => setOpen(true)}
           onOpenWeight={handleOpenWeight}
+          onOpenMood={handleOpenMood}
+          onMoodChange={onSubmitMood}
+          onOpenSettings={onOpenSettings}
         />
 
         {/* Up Next training card (NP-106) */}
@@ -458,6 +491,14 @@ export function DashboardScreen({
         lastWeight={checkInInfo?.lastWeight}
         targetWeight={checkInInfo?.targetWeight}
         weightUnit={weightUnit}
+      />
+
+      <MoodLogSheet
+        testID="dashboard-mood-sheet"
+        visible={isMoodSheetOpen}
+        onClose={() => setMoodSheetOpen(false)}
+        onSubmit={onSubmitMood}
+        currentMood={statData?.todaysMood}
       />
 
       <BottomSheet

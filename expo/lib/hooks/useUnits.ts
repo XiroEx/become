@@ -29,9 +29,17 @@ export interface UseUnitsResult {
   formatWeight: (amount: number) => string;
 }
 
+function useSafeAuth() {
+  try {
+    return useAuth();
+  } catch {
+    return null;
+  }
+}
+
 export function useUnits(): UseUnitsResult {
-  const { user } = useAuth();
-  const rawUnit = user?.profile?.weightUnit;
+  const auth = useSafeAuth();
+  const rawUnit = auth?.user?.profile?.weightUnit;
   const unit: WeightUnit = rawUnit === "kg" ? "kg" : "lbs";
 
   const format = useCallback(
