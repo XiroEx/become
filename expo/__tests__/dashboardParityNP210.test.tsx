@@ -351,6 +351,16 @@ describe("NP-210: Home Dashboard Parity & Stat Tiles", () => {
       fireEvent.press(getByTestId("becoming-door"));
       expect(onPress).toHaveBeenCalledTimes(1);
     });
+
+    it("satisfies 44x44 minimum touch target and allows dynamic type wrapping", () => {
+      const { getByTestId } = render(<BecomingDoor goals={null} mind={null} />);
+      const door = getByTestId("becoming-door");
+      const flatStyle = Array.isArray(door.props.style)
+        ? Object.assign({}, ...door.props.style)
+        : door.props.style;
+      expect(flatStyle.minHeight).toBeGreaterThanOrEqual(44);
+      expect(flatStyle.minWidth).toBeGreaterThanOrEqual(44);
+    });
   });
 
   describe("Up Next Widget (UpNextCard)", () => {

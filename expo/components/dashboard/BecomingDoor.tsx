@@ -15,6 +15,7 @@ import type {
   GoalProgressResponse,
   MindSummaryResponse,
 } from "@become/api-client";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
 // TODO: NP-192 owns full native Becoming screen and journey stage
 
@@ -112,6 +113,7 @@ export function BecomingDoor({
       accessibilityLabel="The Becoming. Then → now → next, across all three."
       onPress={handlePress}
       style={({ pressed }) => [
+        minTouchTarget,
         styles.card,
         {
           backgroundColor: colors.card,
@@ -160,17 +162,11 @@ export function BecomingDoor({
             <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
               Mind
             </Text>
-            <Text
-              className="text-foreground text-xs font-bold leading-tight"
-              numberOfLines={1}
-            >
+            <Text className="text-foreground text-xs font-bold leading-tight">
               {mindChip.value}
             </Text>
             {mindChip.sub ? (
-              <Text
-                style={[styles.chipSub, { color: colors["muted-foreground"] }]}
-                numberOfLines={1}
-              >
+              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
                 {mindChip.sub}
               </Text>
             ) : null}
@@ -189,17 +185,11 @@ export function BecomingDoor({
             <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
               Nutrition
             </Text>
-            <Text
-              className="text-foreground text-xs font-bold leading-tight"
-              numberOfLines={1}
-            >
+            <Text className="text-foreground text-xs font-bold leading-tight">
               {nutritionChip.value}
             </Text>
             {nutritionChip.sub ? (
-              <Text
-                style={[styles.chipSub, { color: colors["muted-foreground"] }]}
-                numberOfLines={1}
-              >
+              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
                 {nutritionChip.sub}
               </Text>
             ) : null}
@@ -218,17 +208,11 @@ export function BecomingDoor({
             <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
               Training
             </Text>
-            <Text
-              className="text-foreground text-xs font-bold leading-tight"
-              numberOfLines={1}
-            >
+            <Text className="text-foreground text-xs font-bold leading-tight">
               {trainingChip.value}
             </Text>
             {trainingChip.sub ? (
-              <Text
-                style={[styles.chipSub, { color: colors["muted-foreground"] }]}
-                numberOfLines={1}
-              >
+              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
                 {trainingChip.sub}
               </Text>
             ) : null}
@@ -239,16 +223,10 @@ export function BecomingDoor({
       {top ? (
         <View testID="becoming-door-next" style={styles.nextRow}>
           <Sparkles size={14} color={colors.accent} />
-          <Text
-            className="text-foreground text-xs font-semibold"
-            numberOfLines={1}
-          >
+          <Text className="text-foreground text-xs font-semibold">
             {top.title}
           </Text>
-          <Text
-            style={[styles.nextSub, { color: colors["muted-foreground"] }]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.nextSub, { color: colors["muted-foreground"] }]}>
             · {top.sub}
           </Text>
         </View>
@@ -259,6 +237,8 @@ export function BecomingDoor({
 
 const styles = StyleSheet.create({
   card: {
+    minHeight: 44,
+    minWidth: 44,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,

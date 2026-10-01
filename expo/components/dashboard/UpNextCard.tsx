@@ -104,14 +104,12 @@ export function UpNextCard({
           <Text
             testID="up-next-day"
             className="text-foreground text-sm font-semibold"
-            numberOfLines={1}
           >
             {dayText}
           </Text>
           <Text
             testID="up-next-title"
             className="text-muted-foreground text-xs mt-0.5"
-            numberOfLines={1}
           >
             {workout.workoutTitle}
             {workout.programName ? ` · ${workout.programName}` : ""}
@@ -138,8 +136,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   calendarLink: {
+    minHeight: 44,
+    minWidth: 44,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 2,
   },
   calendarText: {
@@ -147,6 +148,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   card: {
+    minHeight: 44,
+    minWidth: 44,
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 16,
