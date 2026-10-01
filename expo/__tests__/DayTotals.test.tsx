@@ -54,16 +54,14 @@ describe("CalorieRing", () => {
       />,
     );
 
-    expect(getByTestId("day-totals-target").props.children).toEqual([
-      "Goal ",
-      2400,
-      " - Food ",
-      800,
-      " = ",
+    expect(getByTestId("day-totals-target-remaining").props.children).toEqual([
       1600,
       " ",
       "remaining",
     ]);
+    expect(getByTestId("day-totals-target-remaining").props.className).toContain(
+      "text-emerald-600",
+    );
     expect(getByTestId("nutrition-goal-line").props.children).toBe(
       "2,400 cal/day, on track for 180 lbs",
     );

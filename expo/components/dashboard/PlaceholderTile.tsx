@@ -156,11 +156,7 @@ export function PlaceholderTile({ tile }: PlaceholderTileProps) {
               </Text>
             </View>
           </View>
-          <View style={styles.wideRight}>
-            <Text className="text-muted-foreground text-[11px]">
-              Coming soon
-            </Text>
-          </View>
+          <View style={styles.wideRight} />
         </View>
       ) : (
         <View style={styles.squareContent}>
