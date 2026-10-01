@@ -33,15 +33,13 @@
  *     wording names the website and the note under it says what comes back.
  *   • `returnTo: 'app'` (NP-051), so Stripe returns them to a public page that
  *     can reopen Become rather than to a signed-out `/dashboard/plan`.
- *   • there is NO "See everything in Plus" link. The web sheet links to
- *     `/dashboard/plan`; the native plan page is NP-050 and does not exist yet,
- *     and opening the web one in a browser would put a second buy button on a
- *     surface this card is deliberately keeping to one. Add the link with that
- *     screen, not before it.
+ *   • \"See everything in Plus\" links to `/plan` (NP-053), closing the sheet so it
+ *     is not left sitting over the page it navigated to.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
 import {
   AlertTriangle,
   Check,
@@ -321,6 +319,7 @@ export function UpgradeSheet({
   gate,
   deps = NO_DEPS,
 }: UpgradeSheetProps) {
+  const router = useRouter();
   const { colors } = useThemeTokens();
   const { data } = useEntitlements();
   const [checkout, setCheckout] = useState<CheckoutState>("checking");
@@ -481,6 +480,21 @@ export function UpgradeSheet({
           onStart={onStart}
           onOpenPortal={onOpenPortal}
         />
+
+        <View style={{ marginTop: 12 }}>
+          <Button
+            testID="upgrade-sheet-see-all"
+            onPress={() => {
+              onClose();
+              router.push("/plan");
+            }}
+            variant="ghost"
+            size="lg"
+            accessibilityLabel={`See everything in ${tierName}`}
+          >
+            {`See everything in ${tierName}`}
+          </Button>
+        </View>
 
         <View style={{ marginTop: 12 }}>
           <Button

@@ -25,7 +25,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { ExternalLink } from "lucide-react-native";
+import { ChevronRight, ExternalLink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
@@ -245,6 +245,28 @@ export default function SettingsScreen() {
               </Text>
             ) : null}
           </View>
+          <Pressable
+            testID="settings-plan-link"
+            accessibilityRole="link"
+            accessibilityLabel="Plan"
+            onPress={() => {
+              router.push("/plan");
+            }}
+            style={[
+              minTouchTarget,
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingVertical: 8,
+              },
+            ]}
+          >
+            <Text className="text-foreground text-sm font-medium">
+              Plan
+            </Text>
+            <ChevronRight size={16} color={colors["muted-foreground"]} />
+          </Pressable>
           {user?.role === "admin" ? (
             <Pressable
               testID="admin-tools-row"
