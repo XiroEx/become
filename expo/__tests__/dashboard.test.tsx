@@ -8,9 +8,10 @@ jest.mock("expo-router", () => ({
 }));
 
 const mockToken = "test-jwt";
+let mockUser: Record<string, unknown> | null = null;
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
-    user: null,
+    user: mockUser,
     token: mockToken,
     loading: false,
     isAuthed: true,
@@ -41,6 +42,7 @@ jest.mock("expo-secure-store", () => ({
 }));
 
 import NetInfo from "@react-native-community/netinfo";
+import { AppState } from "react-native";
 import { ApiError, apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { getOfflineWrites } from "@/lib/offline/writes";
@@ -96,6 +98,24 @@ function wireApiFetch() {
           { id: "nutrition", kind: "stat", size: "1x1" },
           { id: "workoutNow", kind: "stat", size: "2x1" },
         ],
+      });
+    }
+    if (path.startsWith("/api/checkin")) {
+      return Promise.resolve({
+        due: false,
+        reason: "complete",
+        daysSinceMood: 0,
+        daysSinceWeight: 0,
+        lastWeight: null,
+      });
+    }
+    if (path.startsWith("/api/goals")) {
+      return Promise.resolve({
+        todayKey: "2026-10-01",
+        nutrition: {
+          target: { weight: 175, pacePerWeek: 1 },
+          unit: "lbs",
+        },
       });
     }
     if (path === "/api/mood" || path === "/api/weight") {
@@ -490,6 +510,186 @@ describe("DashboardRoute navigation", () => {
       expect(getByTestId("tilegrid")).toBeTruthy();
       expect(getByTestId("tile-mindset")).toBeTruthy();
       expect(getByTestId("tile-workoutNow")).toBeTruthy();
+    });
+  });
+
+  describe("Daily check-in parity & server gating (NP-105)", () => {
+    it("(id: e015c909) auto-prompts when due: true and stamps { action: 'shown', tz }", async () => {
+      mockApiFetch.mockImplementation((path: string, _schema, init) => {
+        const method = (init as { method?: string } | undefined)?.method;
+        if (path.startsWith("/api/checkin") && (!method || method === "GET")) {
+          return Promise.resolve({
+            due: true,
+            reason: "due",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+          });
+        }
+        if (path === "/api/checkin" && method === "POST") {
+          return Promise.resolve({ success: true });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-checkin-modal")).toBeTruthy();
+      });
+
+      // Verify POST /api/checkin { action: 'shown', tz } was sent
+      await waitFor(() => {
+        const shownPost = mockApiFetch.mock.calls.find(
+          (c) =>
+            c[0] === "/api/checkin" &&
+            (c[2] as { method?: string })?.method === "POST" &&
+            (c[2] as { body?: { action?: string } })?.body?.action === "shown",
+        );
+        expect(shownPost).toBeTruthy();
+        const body = (shownPost![2] as { body: { tz?: number } }).body;
+        expect(typeof body.tz).toBe("number");
+      });
+    });
+
+    it("(id: e015c90a) Skip for Today natively posts { action: 'skip', tz } to /api/checkin", async () => {
+      mockApiFetch.mockImplementation((path: string, _schema, init) => {
+        const method = (init as { method?: string } | undefined)?.method;
+        if (path.startsWith("/api/checkin") && (!method || method === "GET")) {
+          return Promise.resolve({
+            due: true,
+            reason: "due",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+          });
+        }
+        if (path === "/api/checkin" && method === "POST") {
+          return Promise.resolve({ success: true });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-checkin-modal")).toBeTruthy();
+      });
+
+      // Press Skip for Today
+      fireEvent.press(getByTestId("dashboard-checkin-modal-skip"));
+
+      await waitFor(() => {
+        const skipPost = mockApiFetch.mock.calls.find(
+          (c) =>
+            c[0] === "/api/checkin" &&
+            (c[2] as { method?: string })?.method === "POST" &&
+            (c[2] as { body?: { action?: string } })?.body?.action === "skip",
+        );
+        expect(skipPost).toBeTruthy();
+        const body = (skipPost![2] as { body: { tz?: number } }).body;
+        expect(typeof body.tz).toBe("number");
+      });
+    });
+
+    it("(id: e015c90b) A kg member sees kg on the weight field and goal line", async () => {
+      mockUser = {
+        _id: "u1",
+        email: "jon@example.com",
+        name: "Jon",
+        profile: { weightUnit: "kg" },
+      };
+
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({
+            due: true,
+            reason: "due",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+            lastWeight: 75,
+          });
+        }
+        if (path.startsWith("/api/goals")) {
+          return Promise.resolve({
+            todayKey: "2026-10-01",
+            nutrition: {
+              target: { weight: 70 },
+              unit: "kg",
+            },
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId, getByText } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-checkin-modal")).toBeTruthy();
+      });
+
+      expect(getByText("Current Weight (kg)")).toBeTruthy();
+      const goalLine = getByTestId("checkin-goal-line");
+      expect(goalLine.props.children).toBe("Goal: 70 kg — 5 kg to go");
+
+      mockUser = null;
+    });
+
+    it("(id: e015c90c) The mood labels are the web's words", async () => {
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({
+            due: true,
+            reason: "due",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId, getByText } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-checkin-modal")).toBeTruthy();
+      });
+
+      expect(getByText("Bad")).toBeTruthy();
+      expect(getByText("Not Great")).toBeTruthy();
+      expect(getByText("Okay")).toBeTruthy();
+      expect(getByText("Pretty Good")).toBeTruthy();
+      expect(getByText("Great")).toBeTruthy();
+    });
+
+    it("(id: e015c909) Re-read GET /api/checkin on foreground return", async () => {
+      let checkinCalls = 0;
+      mockApiFetch.mockImplementation((path: string) => {
+        if (path.startsWith("/api/checkin")) {
+          checkinCalls += 1;
+          return Promise.resolve({
+            due: false,
+            reason: "complete",
+          });
+        }
+        return Promise.resolve({});
+      });
+
+      render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(checkinCalls).toBeGreaterThanOrEqual(1);
+      });
+      const initialCount = checkinCalls;
+
+      // Simulate app foregrounding
+      await act(async () => {
+        const changeListeners = AppState.addEventListener.mock.calls
+          .filter(([event]: [string]) => event === "change")
+          .map(([, listener]: [string, (status: string) => void]) => listener);
+        changeListeners.forEach((listener: (status: string) => void) => listener("active"));
+      });
+
+      await waitFor(() => {
+        expect(checkinCalls).toBeGreaterThan(initialCount);
+      });
     });
   });
 });

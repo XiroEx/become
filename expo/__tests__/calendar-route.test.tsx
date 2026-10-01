@@ -28,6 +28,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { localDateKey } from "@/lib/time/localDay";
 import CalendarIndexRoute from "../app/(app)/(tabs)/calendar/index";
 /* eslint-enable import/first */
 
@@ -351,9 +352,9 @@ describe("CalendarIndexRoute — Acceptance criteria & parity", () => {
   });
 
   it("(id: e015c924) At 21:00 Pacific today's slot shows as today, not missed", async () => {
-    // Pacific time 21:00 on 2026-09-30 (UTC is 2026-10-01 04:00Z)
-    // The device local day is 2026-09-30.
-    const todayLocal = "2026-09-30";
+    // Pacific time 21:00 on the local day (UTC is the next morning)
+    // The device local day:
+    const todayLocal = localDateKey();
     mockParams = { date: todayLocal };
 
     mockApiFetch.mockImplementation((path: string) => {

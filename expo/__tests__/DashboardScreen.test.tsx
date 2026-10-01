@@ -80,7 +80,9 @@ describe("DashboardScreen", () => {
     );
     fireEvent.press(getByTestId("dashboard-checkin-modal-submit"));
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({ mood: 5, weightLbs: 180 });
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ mood: 5, weight: 180, weightLbs: 180 }),
+      );
     });
   });
 
@@ -168,5 +170,57 @@ describe("DashboardScreen", () => {
     // Press start session in sheet
     fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onSkipCheckIn when skip button is pressed in check-in modal", async () => {
+    const onSkip = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onSkipCheckIn={onSkip}
+        checkInOpen
+        onCheckInOpenChange={() => {}}
+      />,
+    );
+    fireEvent.press(getByTestId("dashboard-checkin-modal-skip"));
+    await waitFor(() => {
+      expect(onSkip).toHaveBeenCalled();
+    });
+  });
+
+  it("opens weight log sheet from weight tile and submits through onSubmitWeight", async () => {
+    const onSubmitWeight = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onSubmitWeight={onSubmitWeight}
+        layout={[{ id: "weight", kind: "stat", size: "1x1" }]}
+      />,
+    );
+    // Tap weight tile
+    fireEvent.press(getByTestId("tile-weight"));
+
+    // Weight sheet is open
+    expect(getByTestId("dashboard-weight-sheet-input")).toBeTruthy();
+
+    fireEvent.changeText(getByTestId("dashboard-weight-sheet-input"), "178.5");
+    fireEvent.press(getByTestId("dashboard-weight-sheet-submit"));
+
+    await waitFor(() => {
+      expect(onSubmitWeight).toHaveBeenCalledWith(178.5);
+    });
+  });
+
+  it("renders with kg weightUnit on check-in modal and weight sheet", () => {
+    const { getByTestId, getByText } = render(
+      <DashboardScreen
+        {...baseProps}
+        checkInOpen
+        weightUnit="kg"
+        checkInInfo={{ targetWeight: 75, lastWeight: 78 }}
+      />,
+    );
+    expect(getByText("Current Weight (kg)")).toBeTruthy();
+    expect(getByTestId("checkin-goal-line")).toBeTruthy();
   });
 });

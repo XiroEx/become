@@ -30,11 +30,12 @@ export interface TileGridProps {
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
   onOpenWorkoutNow?: () => void;
+  onOpenWeight?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
 
-const ACTION_STAT_IDS = new Set(["mindset", "nutrition", "workoutNow"]);
+const ACTION_STAT_IDS = new Set(["mindset", "nutrition", "workoutNow", "weight"]);
 
 export function isActionTileId(id: string): boolean {
   return ACTION_STAT_IDS.has(id);
@@ -53,6 +54,7 @@ export function TileGrid({
   onOpenMind,
   onOpenNutrition,
   onOpenWorkoutNow,
+  onOpenWeight,
   testID,
   style,
 }: TileGridProps) {
@@ -207,6 +209,7 @@ export function TileGrid({
                   onOpenMind={onOpenMind}
                   onOpenNutrition={onOpenNutrition}
                   onOpenWorkoutNow={onOpenWorkoutNow}
+                  onOpenWeight={onOpenWeight}
                 />
               ) : (
                 <PlaceholderTile tile={tile} />

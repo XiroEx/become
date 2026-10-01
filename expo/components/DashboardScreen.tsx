@@ -13,6 +13,8 @@ import {
   CheckInModal,
   type CheckInPayload,
 } from "@/components/CheckInModal";
+import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
+import type { WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -53,10 +55,23 @@ export interface DashboardScreenProps {
    */
   onOpenCalendar: () => void;
   onSubmitCheckIn: (payload: CheckInPayload) => Promise<void> | void;
+  onSkipCheckIn?: () => Promise<void> | void;
   submittingCheckIn?: boolean;
   /** Controls modal externally for testability. Defaults to internal state. */
   checkInOpen?: boolean;
   onCheckInOpenChange?: (open: boolean) => void;
+  checkInInfo?: {
+    daysSinceMood?: number;
+    daysSinceWeight?: number;
+    lastWeight?: number | null;
+    targetWeight?: number | null;
+  };
+  weightUnit?: WeightUnit;
+  /** Weight log sheet wiring (Weight tile parity) */
+  onOpenWeight?: () => void;
+  weightSheetOpen?: boolean;
+  onWeightSheetOpenChange?: (open: boolean) => void;
+  onSubmitWeight?: (weight: number) => Promise<void> | void;
   /** Initial-load skeleton (no data yet). Distinct from pull-to-refresh. */
   loading?: boolean;
   /** Inline error banner text; null/undefined hides it. */
@@ -92,9 +107,16 @@ export function DashboardScreen({
   onStartWorkout,
   onOpenCalendar,
   onSubmitCheckIn,
+  onSkipCheckIn,
   submittingCheckIn = false,
   checkInOpen,
   onCheckInOpenChange,
+  checkInInfo,
+  weightUnit = "lbs",
+  onOpenWeight,
+  weightSheetOpen,
+  onWeightSheetOpenChange,
+  onSubmitWeight,
   loading = false,
   errorText,
   refreshing = false,
@@ -114,6 +136,25 @@ export function DashboardScreen({
   const setOpen = (value: boolean) => {
     if (isControlled) onCheckInOpenChange?.(value);
     else setInternalOpen(value);
+  };
+
+  const [internalWeightSheetOpen, setInternalWeightSheetOpen] =
+    useState<boolean>(false);
+  const isWeightSheetControlled = weightSheetOpen !== undefined;
+  const isWeightSheetOpen = isWeightSheetControlled
+    ? weightSheetOpen
+    : internalWeightSheetOpen;
+  const setWeightSheetOpen = (value: boolean) => {
+    if (isWeightSheetControlled) onWeightSheetOpenChange?.(value);
+    else setInternalWeightSheetOpen(value);
+  };
+
+  const handleOpenWeight = () => {
+    if (onOpenWeight) {
+      onOpenWeight();
+    } else {
+      setWeightSheetOpen(true);
+    }
   };
 
   const [internalWorkoutNowOpen, setInternalWorkoutNowOpen] =
@@ -308,6 +349,7 @@ export function DashboardScreen({
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
           onOpenWorkoutNow={handleWorkoutNow}
+          onOpenWeight={handleOpenWeight}
         />
 
         {/* The way into the calendar — a hidden route in the (tabs) tree, so
@@ -348,7 +390,26 @@ export function DashboardScreen({
           await onSubmitCheckIn(payload);
           setOpen(false);
         }}
+        onSkip={async () => {
+          await onSkipCheckIn?.();
+          setOpen(false);
+        }}
         submitting={submittingCheckIn}
+        daysSinceMood={checkInInfo?.daysSinceMood}
+        daysSinceWeight={checkInInfo?.daysSinceWeight}
+        lastWeight={checkInInfo?.lastWeight}
+        targetWeight={checkInInfo?.targetWeight}
+        weightUnit={weightUnit}
+      />
+
+      <WeightLogSheet
+        testID="dashboard-weight-sheet"
+        visible={isWeightSheetOpen}
+        onClose={() => setWeightSheetOpen(false)}
+        onSubmit={onSubmitWeight}
+        lastWeight={checkInInfo?.lastWeight}
+        targetWeight={checkInInfo?.targetWeight}
+        weightUnit={weightUnit}
       />
 
       <BottomSheet
