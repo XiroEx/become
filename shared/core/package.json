@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -126,6 +126,11 @@
       "types": "./dist/types/nutrition/goalLine.d.ts",
       "import": "./dist/esm/nutrition/goalLine.js",
       "require": "./dist/cjs/nutrition/goalLine.js"
+    },
+    "./nutrition/plateReview": {
+      "types": "./dist/types/nutrition/plateReview.d.ts",
+      "import": "./dist/esm/nutrition/plateReview.js",
+      "require": "./dist/cjs/nutrition/plateReview.js"
     },
     "./nutrition/types": {
       "types": "./dist/types/nutrition/types.d.ts",

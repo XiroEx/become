@@ -83,6 +83,31 @@ export const MODULE_MAPPINGS = [
     target: 'shared/core/src/nutrition/goalLine.ts',
     rewrite: (content) => content,
   },
+  {
+    source: 'webapp/lib/nutrition/plateReview.ts',
+    target: 'shared/core/src/nutrition/plateReview.ts',
+    rewrite: (content) =>
+      content
+        .replace("from '@/lib/units'", "from '../units'")
+        .replace("from '@/lib/foodMath'", "from '../foodMath'")
+        .replace("from '@/lib/nutrition/servingOptions'", "from './servingOptions'")
+        .replace(
+          "import type { ServingUnit } from '@/models/Food'",
+          "import type { ServingUnit } from './types'"
+        )
+        .replace(
+          "import type { PlateEstimate, EstimatedPlateItem } from '@/lib/nutrition/aiSeams'",
+          "import type { PlateEstimate, EstimatedPlateItem } from './types'"
+        )
+        .replace(
+          "import type { IFoodEntry } from '@/lib/nutritionTypes'",
+          "import type { IFoodEntry } from './types'"
+        )
+        .replace(
+          "import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'",
+          "import type { QuantityPickerVariant } from './types'"
+        ),
+  },
 ];
 
 export function vendorNutrition() {
