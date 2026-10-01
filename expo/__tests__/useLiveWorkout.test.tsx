@@ -397,4 +397,73 @@ describe("useLiveWorkout", () => {
     expect(set?.reps == null || set?.reps === 0).toBe(true);
     expect(set?.completed).toBe(false);
   });
+
+  it("hydrates video fields on exercises and clears them on swap", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            title: "Push Day",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench",
+                name: "Barbell Bench Press",
+                sets: 2,
+                reps: "5",
+                videoUrl: "https://cdn.example.com/bench.mp4",
+                videoTrim: { start: 2, end: 5 },
+                videoFraming: { fit: "cover" },
+              },
+            ],
+          },
+          phase: 1,
+          day: "Day 1",
+        });
+      }
+      if (url.startsWith("/api/workouts/last-performance")) {
+        return Promise.resolve({ performances: {}, prs: {} });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: false,
+          workout: null,
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() =>
+      useLiveWorkout("prog-1", "Day 1", null),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const ex = result.current.workout?.exercises[0];
+    expect(ex?.videoUrl).toBe("https://cdn.example.com/bench.mp4");
+    expect(ex?.videoTrim).toEqual({ start: 2, end: 5 });
+    expect(ex?.videoFraming).toEqual({ fit: "cover" });
+
+    // Request swap
+    act(() => {
+      result.current.onRequestSwap("bench");
+    });
+
+    // Swapping to candidate clears old trim and framing
+    act(() => {
+      result.current.onSelectAlternative({
+        slug: "incline-db",
+        name: "Incline DB Press",
+      });
+    });
+
+    const swappedEx = result.current.workout?.exercises[0];
+    expect(swappedEx?.slug).toBe("incline-db");
+    expect(swappedEx?.videoUrl).toBeNull();
+    expect(swappedEx?.videoTrim).toBeNull();
+    expect(swappedEx?.videoFraming).toBeNull();
+  });
 });

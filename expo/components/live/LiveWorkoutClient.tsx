@@ -17,6 +17,13 @@ import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { FramedVideo } from "@/components/FramedVideo";
+import {
+  getExerciseVideoDisplay,
+  resolveExerciseVideo,
+} from "@/lib/data/exerciseVideos";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -52,6 +59,12 @@ export interface LiveWorkoutExercise {
   addedAdHoc?: boolean;
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
 }
 
 export interface LiveWorkoutViewModel {
@@ -199,6 +212,8 @@ export function LiveWorkoutClient({
           // superset/circuit/triset members render contiguously under a label.
           const prevGroup = workout.exercises[exIdx - 1]?.groupId;
           const showGroupHeader = !!ex.groupId && ex.groupId !== prevGroup;
+          const legacy = getExerciseVideoDisplay(ex.name);
+          const resolved = resolveExerciseVideo(ex, legacy);
           return (
             <View key={ex.slug}>
               {showGroupHeader ? (
@@ -216,6 +231,19 @@ export function LiveWorkoutClient({
                   ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`
                 }
               >
+                <View className="mb-3">
+                  <FramedVideo
+                    src={resolved.videoUrl}
+                    surface="live"
+                    exerciseName={ex.name}
+                    thumbnailUrl={resolved.thumbnailUrl}
+                    videoWidth={resolved.videoWidth}
+                    videoHeight={resolved.videoHeight}
+                    videoFraming={resolved.videoFraming}
+                    videoTrim={resolved.videoTrim}
+                    testID={`${testID}-${ex.slug}-video`}
+                  />
+                </View>
                 {ex.notes ? (
                   <Text
                     testID={`${testID}-${ex.slug}-notes`}

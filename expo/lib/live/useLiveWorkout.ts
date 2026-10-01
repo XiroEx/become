@@ -472,6 +472,12 @@ export function useLiveWorkout(
         sets: oldEx.sets,
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
+        videoUrl: (candidate as any).videoUrl ?? null,
+        thumbnailUrl: (candidate as any).thumbnailUrl ?? null,
+        videoWidth: (candidate as any).videoWidth ?? null,
+        videoHeight: (candidate as any).videoHeight ?? null,
+        videoFraming: (candidate as any).videoFraming ?? null,
+        videoTrim: (candidate as any).videoTrim ?? null,
       };
 
       setSwappedExercises((prev) => ({
@@ -628,6 +634,12 @@ export function useLiveWorkout(
             groupType: ex.groupType,
             groupRounds: ex.groupRounds,
             restSec: ex.rest ? parseInt(ex.rest, 10) || 90 : 90,
+            videoUrl: ex.videoUrl ?? null,
+            thumbnailUrl: ex.thumbnailUrl ?? null,
+            videoWidth: ex.videoWidth ?? null,
+            videoHeight: ex.videoHeight ?? null,
+            videoFraming: ex.videoFraming ?? null,
+            videoTrim: ex.videoTrim ?? null,
           };
         },
       );
@@ -764,6 +776,12 @@ export function useLiveWorkout(
                   sets: targetEx.sets,
                   originalExerciseSlug: origSlug,
                   swappedFromName: origName,
+                  videoUrl: (savedEx as any).videoUrl ?? null,
+                  thumbnailUrl: (savedEx as any).thumbnailUrl ?? null,
+                  videoWidth: (savedEx as any).videoWidth ?? null,
+                  videoHeight: (savedEx as any).videoHeight ?? null,
+                  videoFraming: (savedEx as any).videoFraming ?? null,
+                  videoTrim: (savedEx as any).videoTrim ?? null,
                 };
                 restoredSwaps[idx] = {
                   originalSlug: origSlug,
