@@ -75,7 +75,7 @@ interchangeable:
 
 For a long time only the first two existed. The typecheck and the suite were
 green while **Metro could not resolve the package at all**, so `npx expo export`
-— and therefore every EAS build — failed on the first screen that imports it.
+— and therefore every store build — failed on the first screen that imports it.
 Three things fix that, and all three have to stay:
 
 1. **`"@become/api-client": "file:../shared/api-client"` in `package.json`.**
@@ -103,11 +103,12 @@ it. That is deliberate — the app declares everything it ships.
 that builds the app, and nothing else in the job can see a Metro resolution
 failure.
 
-**EAS builds get `../shared` for free.** `eas build` archives from the ROOT of
-the git repository (this project is a subdirectory of it, and `shared/` is
-tracked and not ignored — there is no `.easignore`), then installs and builds
-in `expo/`. The `file:` link therefore resolves on the builder exactly as it
-does here.
+**A store build must run inside the whole repository.** The `file:` links point
+OUT of this directory, so a build has to happen in a checkout that still has
+`../shared` next to it, with `npm install` already run here — which is what a
+local `npx expo prebuild` + Xcode/Gradle build is (there is no cloud builder
+archiving the repo for us; see `RELEASE.md`). Copying `expo/` somewhere on its
+own cannot install, let alone bundle.
 
 ## The shared pure logic: `@become/core`
 
@@ -198,6 +199,9 @@ npm run lint
 
 # Jest
 npm test
+
+# No OTA / no EAS guard (what the expo CI job runs first)
+node scripts/check-no-ota.mjs
 ```
 
 To run on a physical device with the **Expo Go** app:
@@ -205,6 +209,37 @@ To run on a physical device with the **Expo Go** app:
 2. Scan the QR code that appears in the terminal with Expo Go (iOS) or the camera app (Android, then tap to open in Expo Go).
 
 > Per the `nextjs-to-react-native` skill: stay on Expo Go as long as possible. We only move to a dev build (`expo-dev-client`) when a native module not in Expo Go's prebuilt set is required (e.g. `expo-health`, custom Swift/Kotlin modules).
+
+## Releasing a fix: store builds only, no OTA (NP-040)
+
+**No Expo-hosted service is used anywhere in this repo** (George, 2026-09-30):
+no EAS Build, no EAS Submit, no EAS Update, no Expo Push Service, no expo.dev
+project. Expo *libraries* and the *CLI* are fine — `expo prebuild`,
+`expo export`, expo-router, expo-notifications for permissions and local
+notifications. What follows from that is the thing to remember:
+
+**There are no over-the-air updates in v1.** The webapp is fixed by a merge;
+the native app is not. Every change — a one-line JS fix included — ships as a
+**store build** through TestFlight / App Store and Play Internal / Production,
+with store processing and review times attached.
+
+An urgent fix is therefore **a store build plus the minimum-version gate**
+(NP-041), which is the only lever that reaches an already-installed app:
+`minVersion` / `latestVersion` / `storeUrl` per platform in
+`BECOME_RUNTIME_CONFIG` → `GET /api/app/config` → `lib/version/versionGate.ts`.
+`latestVersion` shows a dismissible banner; `minVersion` shows the
+undismissable "Update required" screen. Set `minVersion` only once the new
+build is actually downloadable on that store — it is a hard block — and note
+that the gate fails open on any network or payload error, so it is not a kill
+switch. The full procedure is in
+[`RELEASE.md` → Releasing a fix](RELEASE.md#releasing-a-fix-there-is-no-ota).
+
+`eas.json` and `expo-updates` are both banned and the ban is enforced:
+`scripts/check-no-ota.mjs` runs as the first step of the `expo` CI job,
+`__tests__/storeDistribution.test.ts` exercises it in both directions, and
+`webapp/tests/unit/ci/nativeJobs.test.ts` repeats the file checks in the job
+that runs on every PR. A SELF-HOSTED server speaking the open expo-updates
+protocol stays a possible later card — only if George asks for OTA.
 
 ## Theme tokens
 

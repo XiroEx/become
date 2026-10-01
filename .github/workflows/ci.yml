@@ -203,6 +203,16 @@ jobs:
           cache: npm
           cache-dependency-path: expo/package-lock.json
 
+      # No over-the-air updates, and no Expo-hosted services (George,
+      # 2026-09-30): v1 ships through the App Store and Play Store only, with
+      # the minimum-version gate (NP-041) as the lever for an urgent fix. OTA
+      # does not come back as code — it comes back as `eas.json` plus
+      # `expo-updates` in the lockfile, after which a store build quietly
+      # starts fetching bundles from a server. This is the only thing that
+      # would notice. It needs no install, so it runs first and costs seconds.
+      - name: No OTA / no EAS guard
+        run: node scripts/check-no-ota.mjs
+
       # tsc follows expo's `@become/api-client` path mapping into
       # ../shared/api-client/src, which imports `zod` from ITS OWN node_modules.
       # Without this install the typecheck fails with "Cannot find module 'zod'"
