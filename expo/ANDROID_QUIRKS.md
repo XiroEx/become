@@ -217,8 +217,10 @@ signed-out tile taps to `/login`. `app.json`'s `scheme: "become"` is what makes
 the intent resolve to the app, cold start included.
 
 **It needs a dev build.** The native side is not in Expo Go's module set, and
-`expo/` still has no distribution (`eas.json`), so nobody has seen these on a
-phone yet — that is the outstanding half of NP-198's acceptance.
+nobody has run a local `expo prebuild` + Gradle build of this app yet
+(`RELEASE.md` is the procedure; there is no cloud builder and no OTA), so
+nobody has seen these on a phone — that is the outstanding half of NP-198's
+acceptance.
 
 **Known gap: no `previewImage`.** The plugin can point each provider at a
 drawable for the widget picker; without one Android falls back to

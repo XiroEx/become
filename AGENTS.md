@@ -55,6 +55,35 @@ reconciliation)". That is exactly what happened on 2026-07-29, and it was mistak
 for an infra flake. Merge and wait; only intervene if no build appears after a few
 minutes.
 
+## The native app: store builds only, and NO Expo-hosted services (NP-040)
+
+**A merge is the deploy for the webapp. It is not the deploy for `expo/`.**
+
+George, 2026-09-30: **no Expo-hosted service, ever** — no EAS Build, no EAS
+Submit, no EAS Update, no Expo Push Service, no expo.dev project. Expo
+*libraries* and the *CLI* are fine and are what we use (`expo prebuild`,
+`expo export`, expo-router, expo-notifications for permissions and local
+notifications). The consequence for v1 is **no over-the-air updates at all**:
+every native change AND every JS-only fix ships as a **store build**, built
+locally (`expo prebuild` → Xcode archive / `./gradlew bundleRelease`) and
+uploaded by hand. `expo/RELEASE.md` is the procedure.
+
+The only lever that reaches an app already installed on a phone is the
+**minimum-version gate** (NP-041): `minVersion` / `latestVersion` / `storeUrl`
+per platform in `BECOME_RUNTIME_CONFIG` → `GET /api/app/config` →
+`expo/lib/version/versionGate.ts`. `latestVersion` shows a dismissible banner,
+`minVersion` a full-screen block — so set `minVersion` only to a build that is
+actually downloadable on that store, and remember the gate fails open on any
+error (it is not a kill switch). "Releasing a fix" in `expo/RELEASE.md` has the
+whole sequence.
+
+`eas.json` and `expo-updates` are banned and the ban is enforced, not merely
+documented: `expo/scripts/check-no-ota.mjs` is the first step of CI's `expo`
+job, `expo/__tests__/storeDistribution.test.ts` runs it against fixtures in both
+directions, and `webapp/tests/unit/ci/nativeJobs.test.ts` repeats the file
+checks in `verify`, which runs on every PR. A SELF-HOSTED server speaking the
+open expo-updates protocol stays a possible later card — only if George asks.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -2133,10 +2162,11 @@ one for progress.
 **A widget is an OS surface, and the web app cannot draw one.** iOS widgets are
 a WidgetKit app extension and Android's are App Widgets; a PWA installed to the
 home screen gets an icon, not a widget, on either platform. So the widget
-surface itself can only ship from `expo/`, and `expo/` has no distribution yet
-(`eas.json` still holds `REPLACE_WITH_APPLE_ID` / no Play service-account key),
-which is the real blocker on a member ever seeing one. Nothing in `webapp/` can
-change that.
+surface itself can only ship from `expo/`, and `expo/` has not been built for a
+store yet (no Apple/Play app record wired up, and no OTA to shortcut it — see
+`expo/RELEASE.md`, which is a local `expo prebuild` + Xcode/Gradle build because
+no Expo-hosted service is used), which is the real blocker on a member ever
+seeing one. Nothing in `webapp/` can change that.
 
 What `webapp/` owns is the part every widget on every platform reads:
 
