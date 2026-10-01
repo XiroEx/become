@@ -534,7 +534,21 @@ describe("sign-in through to Home, by role and name only", () => {
     expect(onStartWorkout).toHaveBeenCalled();
     fireEvent.press(screen.getByRole("button", { name: "Settings" }));
     expect(onOpenSettings).toHaveBeenCalled();
-    fireEvent.press(screen.getByRole("button", { name: "Check in" }));
+    screen.unmount();
+
+    // Check-in modal when prompted (NP-211)
+    render(
+      <DashboardScreen
+        userName="Jon"
+        streakDays={3}
+        todayWorkout={null}
+        onStartWorkout={() => {}}
+        onOpenCalendar={() => {}}
+        onOpenSettings={() => {}}
+        onSubmitCheckIn={() => {}}
+        checkInOpen
+      />,
+    );
     expect(
       screen.getByRole("radio", { name: "Mood 3: Okay" }),
     ).toBeTruthy();

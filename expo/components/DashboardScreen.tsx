@@ -447,8 +447,7 @@ export function DashboardScreen({
         {/* Customize tiles link (NP-211 / NP-157) */}
         <View
           style={{
-            flexDirection: "row",
-            justifyContent: "flex-end",
+            alignItems: "flex-end",
             marginTop: -6,
             marginBottom: 4,
           }}
@@ -460,12 +459,15 @@ export function DashboardScreen({
             onPress={handleCustomizeTiles}
             style={[
               minTouchTarget,
-              { flexDirection: "row", alignItems: "center", gap: 4 },
+              { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
             ]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Sliders size={14} color={colors["muted-foreground"]} />
-            <Text className="text-muted-foreground text-xs font-medium">
+            <Text
+              style={{ flexShrink: 1 }}
+              className="text-muted-foreground text-xs font-medium"
+            >
               Customize tiles
             </Text>
           </Pressable>

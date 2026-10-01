@@ -230,13 +230,17 @@ export function ProgressChart({
       {/* Stats Summary Header */}
       <View style={styles.statsRow}>
         {activeChart === "mood" ? (
-          <Text testID="progress-chart-current" style={styles.currentMoodEmoji}>
+          <Text
+            testID="progress-chart-current"
+            style={[styles.currentMoodEmoji, { flexShrink: 1 }]}
+          >
             {moodLabels[Math.round(stats.current)] || "—"}
           </Text>
         ) : (
           <View style={styles.valueRow}>
             <Text
               testID="progress-chart-current"
+              style={{ flexShrink: 1 }}
               className="text-foreground text-3xl font-bold"
             >
               {stats.current.toFixed(1)}
@@ -244,6 +248,7 @@ export function ProgressChart({
             {config.unit ? (
               <Text
                 testID="progress-chart-unit"
+                style={{ flexShrink: 1 }}
                 className="text-muted-foreground text-sm font-medium ml-1.5 self-end mb-1"
               >
                 {config.unit}
@@ -547,14 +552,16 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
   },
-  tabsWrapper: {
-    flexDirection: "row",
-  },
+  tabsWrapper: {},
   tabsContainer: {
     flexDirection: "row",
     gap: 6,
   },
   tabButton: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -571,10 +578,12 @@ const styles = StyleSheet.create({
   valueRow: {
     flexDirection: "row",
     alignItems: "baseline",
+    flexShrink: 1,
   },
   currentMoodEmoji: {
     fontSize: 32,
     lineHeight: 38,
+    flexShrink: 1,
   },
   changeBadge: {
     flexDirection: "row",
@@ -583,18 +592,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    flexShrink: 1,
   },
   changeText: {
     fontSize: 12,
     fontWeight: "600",
+    flexShrink: 1,
   },
   emptyBox: {
-    height: 140,
+    minHeight: 140,
     borderWidth: 1,
     borderStyle: "dashed",
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+    padding: 16,
   },
   chartWrapper: {
     height: 180,
