@@ -70,7 +70,11 @@ describe("OnboardingRoute", () => {
     fireEvent.press(getByTestId("onboarding-experience-intermediate"));
     fireEvent.press(getByTestId("onboarding-next"));
 
-    // Step 3: Body & nutrition (frame)
+    // Step 3: Body & nutrition
+    fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+    fireEvent.changeText(getByTestId("stat-height-in"), "10");
+    fireEvent.changeText(getByTestId("stat-current-weight"), "180");
+    fireEvent.changeText(getByTestId("stat-target-weight"), "165");
     fireEvent.press(getByTestId("onboarding-next"));
 
     // Step 4: Equipment
@@ -114,16 +118,46 @@ describe("OnboardingRoute", () => {
     expect(opts.body?.name).toBe("Alex Smith");
     expect(opts.body?.onboardingCompleted).toBe(true);
     expect(opts.body?.profileIcon).toBe("strength");
-    expect(opts.body?.profile).toEqual({
-      fitnessGoals: ["gain_muscle", "lose_weight"],
-      fitnessGoal: "gain_muscle",
-      experienceLevel: "intermediate",
-      age: 25,
-      biologicalSex: "male",
-      equipmentAccess: ["dumbbells", "barbell"],
-      nutritionDirection: "gain",
-      weightUnit: "lbs",
-    });
+    expect(opts.body?.profile).toEqual(
+      expect.objectContaining({
+        fitnessGoals: ["gain_muscle", "lose_weight"],
+        fitnessGoal: "gain_muscle",
+        experienceLevel: "intermediate",
+        age: 25,
+        biologicalSex: "male",
+        equipmentAccess: ["dumbbells", "barbell"],
+        nutritionDirection: "gain",
+        weightUnit: "lbs",
+        currentWeightKg: expect.any(Number),
+        heightCm: expect.any(Number),
+      }),
+    );
+
+    // Verify seed writes
+    const weightPost = mockApiFetch.mock.calls.find(
+      (c) =>
+        String(c[0]) === "/api/weight" &&
+        (c[2] as { method?: string }).method === "POST",
+    );
+    expect(weightPost).toBeTruthy();
+    expect((weightPost![2] as any).body.weight).toBe(180);
+    expect(typeof (weightPost![2] as any).body.tz).toBe("number");
+
+    const nutritionPost = mockApiFetch.mock.calls.find(
+      (c) =>
+        String(c[0]) === "/api/nutrition/goals" &&
+        (c[2] as { method?: string }).method === "POST",
+    );
+    expect(nutritionPost).toBeTruthy();
+    expect(typeof (nutritionPost![2] as any).body.calories).toBe("number");
+
+    const goalsPut = mockApiFetch.mock.calls.find(
+      (c) =>
+        String(c[0]) === "/api/goals" &&
+        (c[2] as { method?: string }).method === "PUT",
+    );
+    expect(goalsPut).toBeTruthy();
+    expect((goalsPut![2] as any).body.pillar).toBe("nutrition");
 
     // Gate cleared: user refreshed, then routed to the dashboard.
     await waitFor(() => {
@@ -149,11 +183,17 @@ describe("OnboardingRoute", () => {
       fireEvent.press(getByTestId("onboarding-sex-female"));
       fireEvent.press(getByTestId("onboarding-next"));
 
+      // Step 3
+      fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+      fireEvent.changeText(getByTestId("stat-height-in"), "6");
+      fireEvent.changeText(getByTestId("stat-current-weight"), "140");
       fireEvent.press(getByTestId("onboarding-next"));
 
+      // Step 4
       fireEvent.press(getByTestId("onboarding-equipment-full_gym"));
       fireEvent.press(getByTestId("onboarding-next"));
 
+      // Step 5
       await act(async () => {
         fireEvent.press(getByTestId("onboarding-next"));
       });
@@ -179,6 +219,9 @@ describe("OnboardingRoute", () => {
       fireEvent.press(getByTestId("onboarding-next"));
 
       // Step 3: Body & nutrition
+      fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+      fireEvent.changeText(getByTestId("stat-height-in"), "8");
+      fireEvent.changeText(getByTestId("stat-current-weight"), "160");
       fireEvent.press(getByTestId("onboarding-next"));
 
       // Step 4: Equipment
@@ -215,7 +258,9 @@ describe("OnboardingRoute", () => {
     });
 
     it("(id: e015c7d8) An age under 13 cannot be submitted", async () => {
-      const { getByTestId, queryByTestId, queryByText } = render(<OnboardingRoute />);
+      const { getByTestId, queryByTestId, queryByText } = render(
+        <OnboardingRoute />,
+      );
 
       // Step 1: Goal
       fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
@@ -253,6 +298,135 @@ describe("OnboardingRoute", () => {
       // Successfully advance to step 3
       fireEvent.press(getByTestId("onboarding-next"));
       expect(getByTestId("onboarding-step-3")).toBeTruthy();
+    });
+  });
+
+  describe("Card NP-056 Acceptance Criteria", () => {
+    it("(id: e015c7de) Step 3 cannot advance natively until the targets can be computed, as on the web", () => {
+      const { getByTestId, queryByTestId } = render(<OnboardingRoute />);
+
+      // Step 1: Goal
+      fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 2: About you
+      fireEvent.changeText(getByTestId("onboarding-name"), "Sam");
+      fireEvent.changeText(getByTestId("onboarding-age"), "29");
+      fireEvent.press(getByTestId("onboarding-sex-male"));
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 3: Body & nutrition — initially no height or weight
+      expect(getByTestId("onboarding-step-3")).toBeTruthy();
+      expect(getByTestId("tdee-incomplete")).toBeTruthy();
+      expect(queryByTestId("tdee-preview")).toBeNull();
+
+      // Next button MUST be disabled
+      expect(
+        getByTestId("onboarding-next").props.accessibilityState?.disabled,
+      ).toBe(true);
+
+      // Attempting to advance anyway stays on Step 3
+      fireEvent.press(getByTestId("onboarding-next"));
+      expect(getByTestId("onboarding-step-3")).toBeTruthy();
+      expect(queryByTestId("onboarding-equipment-dumbbells")).toBeNull();
+
+      // Fill in height only
+      fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+      fireEvent.changeText(getByTestId("stat-height-in"), "11");
+      expect(
+        getByTestId("onboarding-next").props.accessibilityState?.disabled,
+      ).toBe(true);
+      fireEvent.press(getByTestId("onboarding-next"));
+      expect(queryByTestId("onboarding-equipment-dumbbells")).toBeNull();
+
+      // Now fill in weight
+      fireEvent.changeText(getByTestId("stat-current-weight"), "175");
+
+      // Targets can now be computed! Preview appears and Next button is enabled
+      expect(getByTestId("tdee-preview")).toBeTruthy();
+      expect(getByTestId("preview-calories")).toBeTruthy();
+      expect(
+        getByTestId("onboarding-next").props.accessibilityState?.disabled,
+      ).toBe(false);
+
+      // Advances cleanly to Step 4
+      fireEvent.press(getByTestId("onboarding-next"));
+      expect(getByTestId("onboarding-equipment-dumbbells")).toBeTruthy();
+    });
+
+    it("(id: e015c7dd) After native onboarding the web's nutrition goals page shows the targets and the first weigh-in shows the typed number and unit on the right day", async () => {
+      const { getByTestId } = render(<OnboardingRoute />);
+
+      // Step 1: Goal
+      fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 2: About you
+      fireEvent.changeText(getByTestId("onboarding-name"), "Chris Evans");
+      fireEvent.changeText(getByTestId("onboarding-age"), "32");
+      fireEvent.press(getByTestId("onboarding-sex-male"));
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 3: Body & nutrition
+      fireEvent.changeText(getByTestId("stat-height-ft"), "6");
+      fireEvent.changeText(getByTestId("stat-height-in"), "0");
+      // Type 195 lbs
+      fireEvent.changeText(getByTestId("stat-current-weight"), "195");
+      fireEvent.changeText(getByTestId("stat-target-weight"), "180");
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 4: Equipment
+      fireEvent.press(getByTestId("onboarding-equipment-full_gym"));
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 5: Finish
+      await act(async () => {
+        fireEvent.press(getByTestId("onboarding-next"));
+      });
+
+      await waitFor(() => {
+        expect(mockApiFetch).toHaveBeenCalled();
+      });
+
+      // 1. First weigh-in shows the TYPED number (195, not converted to kg) and numeric tz
+      const weightCall = mockApiFetch.mock.calls.find(
+        (c) =>
+          String(c[0]) === "/api/weight" &&
+          (c[2] as { method?: string }).method === "POST",
+      );
+      expect(weightCall).toBeTruthy();
+      const weightBody = (weightCall![2] as any).body;
+      expect(weightBody.weight).toBe(195);
+      expect(typeof weightBody.tz).toBe("number");
+
+      // 2. Nutrition goals show the computed targets and goalType is 'lose' (NutritionGoal enum)
+      const nutritionCall = mockApiFetch.mock.calls.find(
+        (c) =>
+          String(c[0]) === "/api/nutrition/goals" &&
+          (c[2] as { method?: string }).method === "POST",
+      );
+      expect(nutritionCall).toBeTruthy();
+      const nutritionBody = (nutritionCall![2] as any).body;
+      expect(nutritionBody.goalType).toBe("lose");
+      expect(typeof nutritionBody.calories).toBe("number");
+      expect(nutritionBody.calories).toBeGreaterThan(1200);
+      expect(typeof nutritionBody.protein).toBe("number");
+      expect(typeof nutritionBody.carbs).toBe("number");
+      expect(typeof nutritionBody.fats).toBe("number");
+      expect(typeof nutritionBody.waterGoal).toBe("number");
+      expect(typeof nutritionBody.tz).toBe("number");
+
+      // 3. Pace goal is written with numeric tz
+      const goalsCall = mockApiFetch.mock.calls.find(
+        (c) =>
+          String(c[0]) === "/api/goals" &&
+          (c[2] as { method?: string }).method === "PUT",
+      );
+      expect(goalsCall).toBeTruthy();
+      const goalsBody = (goalsCall![2] as any).body;
+      expect(goalsBody.pillar).toBe("nutrition");
+      expect(typeof goalsBody.paceKgPerWeek).toBe("number");
+      expect(typeof goalsBody.tz).toBe("number");
     });
   });
 
@@ -307,6 +481,9 @@ describe("OnboardingRoute", () => {
     fireEvent.press(getByTestId("onboarding-next"));
 
     // Step 3
+    fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+    fireEvent.changeText(getByTestId("stat-height-in"), "5");
+    fireEvent.changeText(getByTestId("stat-current-weight"), "130");
     fireEvent.press(getByTestId("onboarding-next"));
 
     // Step 4
