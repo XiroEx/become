@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -22,6 +22,8 @@ import {
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
+import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import {
   computeWeekStripDayStatus,
   DAY_LABELS,
@@ -93,53 +95,64 @@ export function UpcomingWeekStrip({
   );
   const [weekOffset, setWeekOffset] = useState<number>(0);
 
+  const fetchScheduleAndLogs = useCallback(async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const from = weekStartFor(-8, baseDate);
+      const to = weekStartFor(17, baseDate);
+      const tz = new Date().getTimezoneOffset();
+
+      const [schedulesRes, logsRes] = await Promise.allSettled([
+        apiFetch(
+          `/api/schedule?from=${from.toISOString()}&to=${to.toISOString()}&tz=${tz}`,
+          ScheduleApiResponseSchema,
+          { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+        ),
+        apiFetch(
+          `/api/workouts/logs?includeIncomplete=true`,
+          WorkoutHistoryResponseSchema,
+          { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+        ),
+      ]);
+
+      if (schedulesRes.status === "fulfilled") {
+        setScheduleData(schedulesRes.value);
+      }
+      if (logsRes.status === "fulfilled") {
+        setLogsData(logsRes.value);
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setLoading(false);
+    }
+  }, [token, baseDate]);
+
   useEffect(() => {
     if (initialSchedule !== undefined && initialLogs !== undefined) return;
-    let mounted = true;
-    void (async () => {
-      if (!token) {
-        if (mounted) setLoading(false);
-        return;
+    // Sync with external system: fetch week strip data on mount or auth/date change.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchScheduleAndLogs();
+  }, [initialSchedule, initialLogs, fetchScheduleAndLogs]);
+
+  useEffect(() => {
+    if (initialSchedule !== undefined && initialLogs !== undefined) return;
+    return subscribeProgramUpdates(() => {
+      void fetchScheduleAndLogs();
+    });
+  }, [initialSchedule, initialLogs, fetchScheduleAndLogs]);
+
+  useScreenFocus(
+    useCallback(() => {
+      if (initialSchedule === undefined || initialLogs === undefined) {
+        void fetchScheduleAndLogs();
       }
-      setLoading(true);
-      try {
-        const from = weekStartFor(-8, baseDate);
-        const to = weekStartFor(17, baseDate);
-        const tz = new Date().getTimezoneOffset();
-
-        const [schedulesRes, logsRes] = await Promise.allSettled([
-          apiFetch(
-            `/api/schedule?from=${from.toISOString()}&to=${to.toISOString()}&tz=${tz}`,
-            ScheduleApiResponseSchema,
-            { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
-          ),
-          apiFetch(
-            `/api/workouts/logs?includeIncomplete=true`,
-            WorkoutHistoryResponseSchema,
-            { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
-          ),
-        ]);
-
-        if (!mounted) return;
-        if (schedulesRes.status === "fulfilled") {
-          setScheduleData(schedulesRes.value);
-        }
-        if (logsRes.status === "fulfilled") {
-          setLogsData(logsRes.value);
-        }
-      } catch {
-        // non-fatal
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [initialSchedule, initialLogs, token, baseDate]);
+    }, [initialSchedule, initialLogs, fetchScheduleAndLogs]),
+  );
 
   const today = useMemo(() => {
     const d = baseDate ? new Date(baseDate) : new Date();

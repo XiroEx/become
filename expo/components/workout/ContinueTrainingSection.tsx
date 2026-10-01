@@ -15,6 +15,8 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { formatStartLabel } from "@/lib/workout/formatStartLabel";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 
 export interface ContinueTrainingSectionProps {
   className?: string;
@@ -67,6 +69,21 @@ export function ContinueTrainingSection({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchActive();
   }, [initialPrograms, fetchActive]);
+
+  useEffect(() => {
+    if (initialPrograms !== undefined) return;
+    return subscribeProgramUpdates(() => {
+      void fetchActive();
+    });
+  }, [initialPrograms, fetchActive]);
+
+  useScreenFocus(
+    useCallback(() => {
+      if (initialPrograms === undefined) {
+        void fetchActive();
+      }
+    }, [initialPrograms, fetchActive]),
+  );
 
   const handleWorkoutNow = () => {
     if (onWorkoutNow) {

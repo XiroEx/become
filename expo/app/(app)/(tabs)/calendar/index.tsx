@@ -30,6 +30,8 @@ import {
   tzOffsetMinutes,
 } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 
 const MONTH_NAMES = [
   "January",
@@ -183,6 +185,20 @@ export default function CalendarIndexRoute() {
     void refetch();
     void refetchLogs();
   });
+
+  useEffect(() => {
+    return subscribeProgramUpdates(() => {
+      void refetch();
+      void refetchLogs();
+    });
+  }, [refetch, refetchLogs]);
+
+  useScreenFocus(
+    useCallback(() => {
+      void refetch();
+      void refetchLogs();
+    }, [refetch, refetchLogs]),
+  );
 
   const slots = useMemo(() => toScheduledSlots(data), [data]);
   const rawLogs =
