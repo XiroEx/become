@@ -86,6 +86,7 @@ export const NATIVE_ROUTES = {
   nutrition: "/(tabs)/nutrition",
   nutritionSearch: "/(tabs)/nutrition/search",
   recipes: "/(tabs)/nutrition/recipes",
+  mealSchedule: "/(tabs)/nutrition/meal-schedule",
   calendar: "/(tabs)/calendar",
   scheduleSettings: "/(tabs)/calendar/settings",
   chat: "/(tabs)/chat",
@@ -383,7 +384,8 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
       return native(NATIVE_ROUTES.nutrition, params, "exact");
     }
     if (sub === "recipes") return native(NATIVE_ROUTES.recipes, params, "exact");
-    // goals, meal-schedule, scans — nothing native yet (NP-091 and friends).
+    if (sub === "meal-schedule") return native(NATIVE_ROUTES.mealSchedule, params, "exact");
+    // goals, scans — nothing native yet (NP-091 and friends).
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
   if (section === "recipes") {
