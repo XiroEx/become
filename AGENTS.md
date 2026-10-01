@@ -55,6 +55,35 @@ reconciliation)". That is exactly what happened on 2026-07-29, and it was mistak
 for an infra flake. Merge and wait; only intervene if no build appears after a few
 minutes.
 
+## The native app: store builds only, and NO Expo-hosted services (NP-040)
+
+**A merge is the deploy for the webapp. It is not the deploy for `expo/`.**
+
+George, 2026-09-30: **no Expo-hosted service, ever** — no EAS Build, no EAS
+Submit, no EAS Update, no Expo Push Service, no expo.dev project. Expo
+*libraries* and the *CLI* are fine and are what we use (`expo prebuild`,
+`expo export`, expo-router, expo-notifications for permissions and local
+notifications). The consequence for v1 is **no over-the-air updates at all**:
+every native change AND every JS-only fix ships as a **store build**, built
+locally (`expo prebuild` → Xcode archive / `./gradlew bundleRelease`) and
+uploaded by hand. `expo/RELEASE.md` is the procedure.
+
+The only lever that reaches an app already installed on a phone is the
+**minimum-version gate** (NP-041): `minVersion` / `latestVersion` / `storeUrl`
+per platform in `BECOME_RUNTIME_CONFIG` → `GET /api/app/config` →
+`expo/lib/version/versionGate.ts`. `latestVersion` shows a dismissible banner,
+`minVersion` a full-screen block — so set `minVersion` only to a build that is
+actually downloadable on that store, and remember the gate fails open on any
+error (it is not a kill switch). "Releasing a fix" in `expo/RELEASE.md` has the
+whole sequence.
+
+`eas.json` and `expo-updates` are banned and the ban is enforced, not merely
+documented: `expo/scripts/check-no-ota.mjs` is the first step of CI's `expo`
+job, `expo/__tests__/storeDistribution.test.ts` runs it against fixtures in both
+directions, and `webapp/tests/unit/ci/nativeJobs.test.ts` repeats the file
+checks in `verify`, which runs on every PR. A SELF-HOSTED server speaking the
+open expo-updates protocol stays a possible later card — only if George asks.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -878,6 +907,50 @@ member's tier straight back onto the next member's first screen.
 The rules that travel are the web's: read `canCreate`, never recompute it from
 `limit` and `used`; when `enforced` is false render no lock, counter or plan
 card; a delete frees its slot immediately, so force a read after one.
+
+#### The NATIVE upgrade sheet and tier gate (NP-052)
+
+Same arrangement as the web — one upsell surface, opened by every gate — with one
+structural difference: **the purchase leaves the app.** Plus may be sold from the
+iOS app only through an external link on the US storefront (decision 9/20, App
+Review 3.1.1(a)), so the CTA hands Stripe's URL to `Linking.openURL` (Safari on
+iOS, Chrome on Android) and **never to `expo-web-browser`** — an in-app browser is
+still inside the app for 3.1.1 purposes, and that is a store rejection rather than
+a bug. `expo/__tests__/upgradeSheet.test.tsx` reads the four native billing
+sources as text and fails on an import of `expo-web-browser`, `WebBrowser.*`,
+`browserLauncher` or `openWebSignedIn`.
+
+| Piece | Job |
+|---|---|
+| `expo/lib/entitlements/upgradeSheet.ts` | `showUpgradeSheet(gate)` — a module store, not a hook, because the callers are not all components. Refuses anything that is not a gate. |
+| `expo/components/entitlements/UpgradeSheetHost.tsx` | Mounted ONCE in `app/_layout.tsx`, above every route. The only thing that renders the sheet. |
+| `expo/components/entitlements/UpgradeSheet.tsx` | The sheet. Renders `gate.error` verbatim with `allowanceLine`, three `PLUS_BENEFITS` rows, and one action slot (`CheckoutAction`). |
+| `expo/components/entitlements/TierGate.tsx` | Wraps a surface a free member may see but not use (Vision). |
+| `expo/lib/entitlements/billing.ts` | `checkoutRefusalState`, `startCheckout`, `openBillingPortal`, `probeCheckoutAvailable`. Every URL leaves through `openExternally`. |
+
+Both POSTs send **`returnTo: 'app'`** (NP-051): Stripe returns a native buyer to
+Safari, which has never held their session, and `middleware.ts` would bounce them
+off `/dashboard/plan` to `/login` seconds after their card was charged. `'app'`
+swaps in the public `/billing/*` pages, which carry a `become://` button back.
+
+The state machine is the web's, ported rather than reinvented —
+`webapp/components/UpgradeSheet.tsx#checkoutRefusalState` cannot be imported from
+a Next.js client component, so `upgradeSheet.test.tsx` reads BOTH function bodies
+and fails if the five codes and two statuses ever drift. The distinction that
+matters is the one the web learned the hard way: a REFUSED checkout is not an
+ABSENT one. Only 404 / 503 / `billing_not_configured` are "nothing to buy";
+`fix_payment_method` offers the portal, `already_*` says so, and everything else
+is a retry that must never read as "not for sale".
+
+Three rules travel with it, and all three are asserted: no amount, trial or date
+is written in the sheet (a price in the app needs a store release to change, the
+server's needs a deploy); a 429 never opens it; a 403 without BOTH `feature` and
+`requiresTier` never opens it. The last two are `classifyApiError`'s job and
+`onPlanGate` in `app/_layout.tsx` is the only caller.
+
+Native does NOT yet carry the web sheet's "See everything in Plus" link: the
+native plan page is NP-050, and opening the web one in a browser would put a
+second buy button on a surface this card deliberately keeps to one.
 
 #### The plan page (`app/dashboard/plan`)
 
@@ -2089,10 +2162,11 @@ one for progress.
 **A widget is an OS surface, and the web app cannot draw one.** iOS widgets are
 a WidgetKit app extension and Android's are App Widgets; a PWA installed to the
 home screen gets an icon, not a widget, on either platform. So the widget
-surface itself can only ship from `expo/`, and `expo/` has no distribution yet
-(`eas.json` still holds `REPLACE_WITH_APPLE_ID` / no Play service-account key),
-which is the real blocker on a member ever seeing one. Nothing in `webapp/` can
-change that.
+surface itself can only ship from `expo/`, and `expo/` has not been built for a
+store yet (no Apple/Play app record wired up, and no OTA to shortcut it — see
+`expo/RELEASE.md`, which is a local `expo prebuild` + Xcode/Gradle build because
+no Expo-hosted service is used), which is the real blocker on a member ever
+seeing one. Nothing in `webapp/` can change that.
 
 What `webapp/` owns is the part every widget on every platform reads:
 

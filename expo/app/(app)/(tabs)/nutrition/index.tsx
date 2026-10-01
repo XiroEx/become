@@ -669,6 +669,16 @@ export default function NutritionIndexRoute() {
             >
               Recipes
             </Button>
+            <Button
+              testID="nutrition-menu-meal-schedule"
+              variant="ghost"
+              onPress={() => {
+                setMenuOpen(false);
+                router.push("/(tabs)/nutrition/meal-schedule");
+              }}
+            >
+              Meal Schedule
+            </Button>
           </View>
         </Pressable>
       </Modal>
