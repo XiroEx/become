@@ -43,10 +43,15 @@ export interface LiveWorkoutExercise {
   /** Grouping metadata — exercises sharing a groupId form a superset/circuit/etc. */
   groupId?: string;
   groupLabel?: string;
+  groupType?: string;
+  groupRounds?: number;
   /** Rest between sets in seconds (defaults to 90). */
   restSec?: number;
   /** Last completed performance per set, used as prefill. */
   prefill?: (LiveSetState | null)[];
+  addedAdHoc?: boolean;
+  originalExerciseSlug?: string;
+  swappedFromName?: string;
 }
 
 export interface LiveWorkoutViewModel {
@@ -96,11 +101,14 @@ function initialGrid(
       // phantom sets.
       const restoredSet = saved?.[i];
       if (restoredSet) return { ...restoredSet };
+      // Sets start blank; last time's numbers are a reference and are never
+      // written into the inputs (the web stopped pre-filling because members
+      // logged numbers they never lifted).
       return {
-        weight: ex.prefill?.[i]?.weight ?? null,
-        reps: ex.prefill?.[i]?.reps ?? null,
-        durationSec: ex.prefill?.[i]?.durationSec ?? null,
-        distance: ex.prefill?.[i]?.distance ?? null,
+        weight: null,
+        reps: null,
+        durationSec: null,
+        distance: null,
         completed: false,
       };
     });

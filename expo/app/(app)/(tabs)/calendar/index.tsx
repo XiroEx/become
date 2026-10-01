@@ -221,8 +221,11 @@ export default function CalendarIndexRoute() {
     (slot: ScheduledSlot) => {
       // Only future or today, still-scheduled slots are actionable.
       if (slot.status !== "scheduled" || slot.date < todayDate) return;
+      const dayParam = slot.dayLabel
+        ? `&day=${encodeURIComponent(slot.dayLabel)}`
+        : "";
       router.push(
-        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}?phase=${slot.phaseIndex}`,
+        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
       );
     },
     [router, todayDate],

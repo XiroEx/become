@@ -18,6 +18,8 @@ export default function WorkoutOverviewRoute() {
     id?: string;
     idx?: string;
     phase?: string;
+    day?: string;
+    sd?: string;
   }>();
   const id = typeof params.id === "string" ? params.id : "";
   const idx = Number(params.idx ?? -1);
@@ -29,10 +31,17 @@ export default function WorkoutOverviewRoute() {
   const phase = Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0;
 
   // Start live workout — the same program, phase and index this overview is
-  // showing, so the live screen slices the workout the member just read.
+  // showing, forwarding day and sd so the live workout has its day label and
+  // exact schedule slot date.
   const onStartLive = useCallback(() => {
-    router.push(`/(tabs)/programming/${id}/workout/${idx}/live?phase=${phase}`);
-  }, [router, id, idx, phase]);
+    const q: string[] = [];
+    if (Number.isFinite(phase)) q.push(`phase=${phase}`);
+    if (params.day) q.push(`day=${encodeURIComponent(params.day)}`);
+    if (params.sd) q.push(`sd=${encodeURIComponent(params.sd)}`);
+    router.push(
+      `/(tabs)/programming/${id}/workout/${idx}/live${q.length ? `?${q.join("&")}` : ""}`,
+    );
+  }, [router, id, idx, phase, params.day, params.sd]);
 
   const { data } = useFetch(
     valid ? `/api/programs/${encodeURIComponent(id)}` : null,
