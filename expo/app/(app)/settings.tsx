@@ -125,12 +125,15 @@ export default function SettingsScreen() {
 
   // AI features (NP-046) state
   const [savingAi, setSavingAi] = useState(false);
-  const aiAllowed = consent.data?.ai?.granted === true;
+  const [optimisticAi, setOptimisticAi] = useState<boolean | null>(null);
+  const aiAllowed = optimisticAi ?? (consent.data?.ai?.granted === true);
+  const aiProvider = consent.data?.ai?.provider ?? AI_PROVIDER;
 
   const onToggleAi = useCallback(
     async (value: boolean) => {
       if (!token) return;
       setSavingAi(true);
+      setOptimisticAi(value);
       try {
         if (value) {
           await fetch(`${WEBAPP_BASE_URL}/api/me/ai-consent`, {
@@ -150,8 +153,9 @@ export default function SettingsScreen() {
           });
         }
         await consent.refetch();
+        setOptimisticAi(null);
       } catch {
-        // ignore
+        setOptimisticAi(null);
       } finally {
         setSavingAi(false);
       }
@@ -366,7 +370,7 @@ export default function SettingsScreen() {
           >
             <View style={{ flex: 1, gap: 2 }}>
               <Text className="text-foreground font-medium text-sm">
-                Share my inputs with {AI_PROVIDER}
+                Share my inputs with {aiProvider}
               </Text>
               <Text className="text-muted-foreground text-xs">
                 Off means nothing you enter is sent to the AI, and AI features fall back to their non-AI versions.
@@ -374,7 +378,7 @@ export default function SettingsScreen() {
             </View>
             <Toggle
               testID="ai-consent-toggle"
-              accessibilityLabel={`Share my inputs with ${AI_PROVIDER}`}
+              accessibilityLabel={`Share my inputs with ${aiProvider}`}
               value={aiAllowed}
               onValueChange={(val) => {
                 void onToggleAi(val);
