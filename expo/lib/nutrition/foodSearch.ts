@@ -55,8 +55,22 @@ export function findFoodSearchRow(
  * document yet, so the row travels with it: the detail screen re-imports it as
  * `{ source: 'manual', data }` when the source import can't answer.
  */
-export function foodDetailHref(id: string, row?: unknown): string {
+export function foodDetailHref(
+  id: string,
+  row?: unknown,
+  extra?: { tag?: string; date?: string },
+): string {
   const path = `/(tabs)/nutrition/food/${encodeURIComponent(id)}`;
-  const param = row ? foodRowParam(row) : null;
-  return param ? `${path}?row=${encodeURIComponent(param)}` : path;
+  const queryParts: string[] = [];
+  if (row) {
+    const param = foodRowParam(row);
+    if (param) queryParts.push(`row=${encodeURIComponent(param)}`);
+  }
+  if (extra?.tag) {
+    queryParts.push(`tag=${encodeURIComponent(extra.tag)}`);
+  }
+  if (extra?.date) {
+    queryParts.push(`date=${encodeURIComponent(extra.date)}`);
+  }
+  return queryParts.length > 0 ? `${path}?${queryParts.join("&")}` : path;
 }

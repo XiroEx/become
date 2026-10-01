@@ -361,7 +361,12 @@ export function FoodSearchSheet({
     if (onPickFood) {
       onPickFood(targetFood);
     } else {
-      router.push(foodDetailHref(targetFood._id, targetFood));
+      router.push(
+        foodDetailHref(targetFood._id, targetFood, {
+          tag: currentTag,
+          date: activeDate,
+        }),
+      );
     }
   };
 

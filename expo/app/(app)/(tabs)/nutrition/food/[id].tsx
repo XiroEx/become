@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
@@ -8,41 +8,34 @@ import {
 } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FoodDetailResponseSchema } from "@become/api-client";
+import {
+  FoodDetailResponseSchema,
+  MealLogsDayResponseSchema,
+  TagsResponseSchema,
+} from "@become/api-client";
 import type { Food } from "@become/api-client";
-import { ServingPicker } from "@/components/nutrition/ServingPicker";
-import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
+import { QuantityPicker } from "@/components/nutrition/QuantityPicker";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import {
-  defaultVariantOf,
-  per100Units,
-  servingBasis,
-  servingsForAmount,
-} from "@/lib/nutrition/foodMath";
-import {
   importExternalFood,
-  isObjectIdString,
   parseExternalFoodId,
   parseFoodRowParam,
 } from "@/lib/nutrition/foodImport";
-import { useLocalDay } from "@/lib/time/localDay";
-import { useFoodLog } from "@/lib/nutrition/useFoodLog";
+import { useLocalDay, withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-
-const EMPTY_PICKER_FOOD = {
-  kcalPer100g: 0,
-  proteinPer100g: 0,
-  carbsPer100g: 0,
-  fatPer100g: 0,
-};
 
 export default function FoodDetailRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
   const { day: today } = useLocalDay();
-  const params = useLocalSearchParams<{ id?: string; row?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    row?: string;
+    tag?: string;
+    date?: string;
+  }>();
   const id = typeof params.id === "string" ? params.id : "";
   const { token } = useAuth();
 
@@ -89,61 +82,28 @@ export default function FoodDetailRoute() {
 
   const food = importedFood ?? data?.food ?? null;
 
-  // Nutrition is stored PER SERVING of the default variant, never per 100 g.
-  const variant = useMemo(() => defaultVariantOf(food), [food]);
-  const basis = useMemo(() => (variant ? servingBasis(variant) : null), [
-    variant,
-  ]);
-  const pickerFood = useMemo(
-    () =>
-      variant && basis
-        ? per100Units(variant.nutrition, basis.perServing)
-        : EMPTY_PICKER_FOOD,
-    [variant, basis],
+  const activeDate = params.date || today;
+  const tzOffset = new Date().getTimezoneOffset();
+  const mealLogsPath = withTz(`/api/meal-logs?date=${activeDate}`, tzOffset);
+
+  const { data: mealLogsData } = useFetch(
+    token ? mealLogsPath : null,
+    MealLogsDayResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
+    },
   );
 
-  // Until the member picks an amount, one real portion is the default — the
-  // same default the web's picker seeds.
-  const [amount, setAmount] = useState<number | null>(null);
-  const chosenAmount = amount ?? basis?.portion ?? 0;
-
-  const foodLog = useFoodLog({ getToken: () => token ?? undefined });
-
-  const onSave = useCallback(
-    async (mealType: string) => {
-      if (!food || !variant || !basis) return;
-      const servings = servingsForAmount(basis, chosenAmount);
-      if (servings <= 0) return;
-      const foodId = isObjectIdString(food._id)
-        ? food._id
-        : isObjectIdString(food.id)
-          ? food.id
-          : undefined;
-      await foodLog.addToLog({
-        mealType,
-        // The device's day, not UTC's.
-        date: today,
-        food: {
-          ...(foodId ? { foodId } : {}),
-          name: food.name,
-          ...(food.brand ? { brand: food.brand } : {}),
-          servingSize: variant.servingSize,
-          servingUnit: variant.servingUnit,
-          // Per-serving snapshot × servings is how the server totals an entry
-          // (models/Meal.ts#computeTotalNutrition) and what the web sends.
-          servings,
-          nutrition: variant.nutrition,
-          ...(basis.unit === "g"
-            ? { loggedQuantity: chosenAmount, loggedUnit: "g" }
-            : {}),
-          ...(variant.gramsPerServing != null
-            ? { loggedGramsPerServing: variant.gramsPerServing }
-            : {}),
-        },
-      });
-      router.back();
+  const { data: tagsData } = useFetch(
+    token ? "/api/tags" : null,
+    TagsResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
     },
-    [food, variant, basis, chosenAmount, foodLog, router, today],
   );
 
   if (!id) {
@@ -177,21 +137,22 @@ export default function FoodDetailRoute() {
           >
             {food?.name ?? "Food"}
           </Text>
-          {basis ? (
-            <ServingPicker
-              food={pickerFood}
-              defaultUnit="custom"
-              defaultAmount={1}
-              customUnits={[{ label: basis.label, gramsPerUnit: basis.portion }]}
-              showGrams={basis.unit === "g"}
-              onSubmit={({ grams }) => setAmount(grams)}
+
+          {food ? (
+            <QuantityPicker
+              food={food}
+              initialTag={params.tag}
+              initialDate={params.date || today}
+              existingLogs={mealLogsData?.logs ?? []}
+              availableTags={tagsData}
+              token={token}
+              onSuccess={() => router.back()}
             />
-          ) : importFailed || (food && !variant) ? (
+          ) : importFailed ? (
             <Text testID="nutrition-food-error" className="text-destructive">
               Could not load this food. Try searching for it again.
             </Text>
           ) : null}
-          {basis ? <SaveAsMealButton onSave={onSave} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
