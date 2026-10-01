@@ -154,20 +154,34 @@ describe("SessionPlayer (NP-098)", () => {
     );
     fireEvent.press(getByTestId("mind-state-check-continue"));
 
-    // Moves 2-4 — win, mission and speak are NOT ported yet (NP-103 / NP-099),
-    // so each plays as the web's hold-to-affirm rather than dead-ending.
-    for (const move of WEB_PLAN.moves.slice(1)) {
-      expect(getByTestId("mind-hold-affirm")).toBeTruthy();
-      expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-        affirmDisplayLine(move),
-      );
-      fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-      await flush(HOLD_MS);
-      expect(getByTestId("mind-hold-affirm-status")).toHaveTextContent(
-        "Locked in.",
-      );
-      await flush(HOLD_DONE_HOLD_MS);
-    }
+    // Moves 2-4 — win and mission are ported (NP-103); speak is not yet (NP-100)
+    // and plays as the web's hold-to-affirm.
+    expect(getByTestId("mind-win-scene")).toBeTruthy();
+    expect(getByTestId("mind-win-scene-title")).toHaveTextContent(
+      WEB_PLAN.moves[1]!.title,
+    );
+    fireEvent.changeText(
+      getByTestId("mind-win-scene-input"),
+      "Kept my word on the project",
+    );
+    fireEvent.press(getByTestId("mind-win-scene-bank-it"));
+    await flush();
+    await flush(1100);
+
+    expect(getByTestId("mind-mission-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-mission-scene-commit"));
+    await flush(900);
+
+    expect(getByTestId("mind-hold-affirm")).toBeTruthy();
+    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
+      affirmDisplayLine(WEB_PLAN.moves[3]!),
+    );
+    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
+    await flush(HOLD_MS);
+    expect(getByTestId("mind-hold-affirm-status")).toHaveTextContent(
+      "Locked in.",
+    );
+    await flush(HOLD_DONE_HOLD_MS);
 
     // Payoff.
     expect(getByTestId(`${P}-payoff`)).toBeTruthy();
@@ -183,7 +197,14 @@ describe("SessionPlayer (NP-098)", () => {
         { kind: "mission" },
         { kind: "speak" },
       ],
-      answers: [{ q: "How I checked in today", a: "Grateful" }],
+      answers: [
+        { q: "How I checked in today", a: "Grateful" },
+        {
+          q: WEB_PLAN.moves[1]!.prompt ?? WEB_PLAN.moves[1]!.title,
+          a: "Kept my word on the project",
+        },
+        { q: "What is your one move today?", a: "Ship the first draft" },
+      ],
       liveState: "locked_in",
     });
 
@@ -252,14 +273,19 @@ describe("SessionPlayer (NP-098)", () => {
     expect(getByTestId(`${P}-progress-3`)).toBeTruthy();
     expect(queryByTestId(`${P}-progress-4`)).toBeNull();
     fireEvent.press(getByTestId("mind-breath-skip"));
-    for (const move of webRealigned.slice(2)) {
-      expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-        affirmDisplayLine(move),
-      );
-      fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-      await flush(HOLD_MS);
-      await flush(HOLD_DONE_HOLD_MS);
-    }
+
+    // Move 3 — mission
+    expect(getByTestId("mind-mission-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-mission-scene-commit"));
+    await flush(900);
+
+    // Move 4 — speak fallback
+    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
+      affirmDisplayLine(webRealigned[3]!),
+    );
+    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
+    await flush(HOLD_MS);
+    await flush(HOLD_DONE_HOLD_MS);
 
     // What played is exactly the web's realigned chain.
     expect(onComplete.mock.calls[0]![0]).toEqual(
@@ -307,20 +333,25 @@ describe("SessionPlayer (NP-098)", () => {
 
     // A positive answer re-opens the session again — back to the composer's own
     // opening, so the second move is the win beat it chose.
-    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-      affirmDisplayLine(WEB_PLAN.moves[1]!),
-    );
+    expect(getByTestId("mind-win-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-win-scene-skip"));
 
-    for (let i = 1; i < WEB_PLAN.moves.length; i += 1) {
-      fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-      await flush(HOLD_MS);
-      await flush(HOLD_DONE_HOLD_MS);
-    }
+    expect(getByTestId("mind-mission-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-mission-scene-commit"));
+    await flush(900);
 
-    // ONE answer for the question, carrying the latest value.
+    expect(getByTestId("mind-hold-affirm")).toBeTruthy();
+    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
+    await flush(HOLD_MS);
+    await flush(HOLD_DONE_HOLD_MS);
+
+    // ONE answer for the check-in question, carrying the latest value.
     expect(onComplete.mock.calls[0]![0]).toEqual(
       expect.objectContaining({
-        answers: [{ q: "How I checked in today", a: "Grateful" }],
+        answers: [
+          { q: "How I checked in today", a: "Grateful" },
+          { q: "What is your one move today?", a: "Ship the first draft" },
+        ],
         moves: WEB_PLAN.moves.map((m) => ({ kind: m.kind })),
       }),
     );
@@ -346,13 +377,11 @@ describe("SessionPlayer (NP-098)", () => {
 
     // No forced breathing when they came in on.
     expect(queryByTestId("mind-breath-ready")).toBeNull();
-    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-      affirmDisplayLine(regulate.altPositive!),
-    );
+    expect(getByTestId("mind-choice-scene")).toBeTruthy();
 
-    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-    await flush(HOLD_MS);
-    await flush(HOLD_DONE_HOLD_MS);
+    fireEvent.press(getByTestId("mind-choice-scene-option-0"));
+    fireEvent.press(getByTestId("mind-choice-scene-continue"));
+    await flush();
 
     expect(onComplete.mock.calls[0]![0]).toEqual(
       expect.objectContaining({ moves: [{ kind: "acknowledge" }] }),
@@ -431,8 +460,9 @@ describe("SessionPlayer (NP-098)", () => {
 
     expect(queryByTestId(`${P}-realigned`)).toBeNull();
     expect(queryByTestId("mind-breath-ready")).toBeNull();
-    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-      affirmDisplayLine(WEB_PLAN.moves[1]!),
+    expect(getByTestId("mind-win-scene")).toBeTruthy();
+    expect(getByTestId("mind-win-scene-title")).toHaveTextContent(
+      WEB_PLAN.moves[1]!.title,
     );
   });
 

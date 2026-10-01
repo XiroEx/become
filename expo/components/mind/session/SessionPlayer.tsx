@@ -14,9 +14,21 @@ import {
   type SessionContext,
 } from "@become/core";
 import { Text } from "@/components/Text";
+import { AssembleScene } from "@/components/mind/session/scenes/AssembleScene";
 import { BreathScene } from "@/components/mind/session/scenes/BreathScene";
+import { ChallengeScene } from "@/components/mind/session/scenes/ChallengeScene";
+import { ChoiceScene } from "@/components/mind/session/scenes/ChoiceScene";
+import { ComposeScene } from "@/components/mind/session/scenes/ComposeScene";
+import { ContrastScene } from "@/components/mind/session/scenes/ContrastScene";
 import { HoldToAffirmScene } from "@/components/mind/session/scenes/HoldToAffirmScene";
+import { IdentityScene } from "@/components/mind/session/scenes/IdentityScene";
+import { MissionScene } from "@/components/mind/session/scenes/MissionScene";
+import { PatternScene } from "@/components/mind/session/scenes/PatternScene";
+import { SocialScene } from "@/components/mind/session/scenes/SocialScene";
 import { StateCheckScene } from "@/components/mind/session/scenes/StateCheckScene";
+import { TypeScene } from "@/components/mind/session/scenes/TypeScene";
+import { VisionScene } from "@/components/mind/session/scenes/VisionScene";
+import { WinScene } from "@/components/mind/session/scenes/WinScene";
 import { announce } from "@/lib/a11y/announce";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -397,9 +409,36 @@ export function SessionPlayer({
                   onDone={next}
                   preview={preview}
                 />
+              ) : move.kind === "identity" ? (
+                <IdentityScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "challenge" ? (
+                <ChallengeScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "win" ? (
+                <WinScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "mission" ? (
+                <MissionScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "vision" ? (
+                <VisionScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "antisabotage" ? (
+                <PatternScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "social" ? (
+                <SocialScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "choice" ||
+                move.kind === "acknowledge" ||
+                move.kind === "interrogative" ? (
+                <ChoiceScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "type" ? (
+                <TypeScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "assemble" ? (
+                <AssembleScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "compose" ? (
+                <ComposeScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "contrast" ? (
+                <ContrastScene move={move} onDone={next} preview={preview} />
               ) : (
-                // Not ported yet (NP-103 / NP-099 / NP-100): the web's
-                // hold-to-affirm, so the chain always plays to the end.
+                // Mirror (NP-099) and Speak (NP-100) are hardware/voice modalities
+                // not yet ported; they fall back to HoldToAffirmScene so the plan
+                // always plays through to completion.
                 <HoldToAffirmScene move={move} onDone={next} preview={preview} />
               )}
             </View>
