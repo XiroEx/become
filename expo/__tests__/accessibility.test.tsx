@@ -106,6 +106,9 @@ import * as path from "path";
 import { AccessibilityInfo, PixelRatio } from "react-native";
 import LoginScreen from "../app/(auth)/login";
 import HealthSettingsRoute from "../app/(app)/(tabs)/profile/health";
+import PlanScreen from "../app/(app)/plan";
+import type { BillingPlansResponse } from "@become/api-client";
+import type { EntitlementsSnapshot } from "@become/core";
 import { ConsentGate } from "@/components/auth/ConsentGate";
 import { DashboardScreen } from "@/components/DashboardScreen";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
@@ -142,6 +145,90 @@ interface Screen {
    */
   noControls?: boolean;
 }
+
+const A11Y_PLANS_BODY: BillingPlansResponse = {
+  currency: "USD",
+  plans: {
+    monthly: {
+      display: "15 USD",
+      per: "month",
+      billed: "Billed monthly.",
+      renewalLine: "Renews automatically.",
+    },
+    annual: {
+      display: "120 USD",
+      per: "year",
+      billed: "Billed once a year.",
+      renewalLine: "Renews automatically.",
+      perMonthDisplay: "10 USD",
+      savesDisplay: "60 USD",
+      savesPercentDisplay: "33%",
+      savingLine: "Save 33% off monthly.",
+    },
+  },
+  rows: [
+    {
+      feature: "ai-food-estimate",
+      label: "AI food scans",
+      free: "1 a day",
+      plus: "Unlimited",
+    },
+  ],
+  freeForever: [
+    {
+      label: "Logging training",
+      detail: "Every workout and rep.",
+    },
+  ],
+  freeForeverNote: "No plan needed.",
+  renewalTerms: ["Renews automatically."],
+};
+
+const A11Y_FREE_SNAPSHOT: EntitlementsSnapshot = {
+  role: "user",
+  tier: "free",
+  enforced: true,
+  grandfathered: false,
+  subscription: null,
+  checkoutAvailable: true,
+  features: {
+    "ai-food-estimate": {
+      allowed: true,
+      canCreate: true,
+      requiresTier: "free",
+      limit: 1,
+      used: 0,
+      remaining: 1,
+      resetsAt: "2026-10-02T00:00:00Z",
+      window: "day",
+    },
+  },
+};
+
+const A11Y_PLUS_SNAPSHOT: EntitlementsSnapshot = {
+  role: "user",
+  tier: "plus",
+  enforced: true,
+  grandfathered: false,
+  subscription: {
+    status: "active",
+    currentPeriodEnd: "2026-11-01T00:00:00Z",
+    cancelAtPeriodEnd: false,
+  },
+  checkoutAvailable: true,
+  features: {
+    "ai-food-estimate": {
+      allowed: true,
+      canCreate: true,
+      requiresTier: "plus",
+      limit: null,
+      used: 5,
+      remaining: null,
+      resetsAt: null,
+      window: "day",
+    },
+  },
+};
 
 const V1_SCREENS: Screen[] = [
   {
@@ -248,6 +335,36 @@ const V1_SCREENS: Screen[] = [
     },
     reveal: () => {
       fireEvent.press(screen.getByTestId("delete-account"));
+    },
+  },
+  {
+    name: "Plan",
+    render: () => {
+      render(
+        <PlanScreen
+          initialSnapshot={A11Y_FREE_SNAPSHOT}
+          initialPlans={A11Y_PLANS_BODY}
+          initialStatus={{
+            configured: true,
+            plans: { monthly: true, annual: true },
+          }}
+        />,
+      );
+    },
+  },
+  {
+    name: "Plan (plus)",
+    render: () => {
+      render(
+        <PlanScreen
+          initialSnapshot={A11Y_PLUS_SNAPSHOT}
+          initialPlans={A11Y_PLANS_BODY}
+          initialStatus={{
+            configured: true,
+            plans: { monthly: true, annual: true },
+          }}
+        />,
+      );
     },
   },
 ];
@@ -628,12 +745,7 @@ describe("the rule that travels, across every screen in the app", () => {
 });
 
 describe("the plan page", () => {
-  it("does not exist natively yet — when NP-053 lands it joins this walk", () => {
-    // The card lists the plan page among the screens to pass with VoiceOver.
-    // There is no native plan route: prices, the Free/Plus table and Manage
-    // billing are NP-050 and NP-053 (`gap_analysis/PARITY_GAP_ANALYSIS.md`,
-    // "Plan page, prices and Manage billing" → Missing). This fails the day a
-    // plan screen appears, which is the reminder to add it to V1_SCREENS above.
+  it("exists natively and joins this walk (NP-053)", () => {
     const routes: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -643,6 +755,7 @@ describe("the plan page", () => {
       }
     };
     walk(APP_DIR);
-    expect(routes).toEqual([]);
+    expect(routes.length).toBeGreaterThan(0);
+    expect(V1_SCREENS.some((s) => s.name === "Plan")).toBe(true);
   });
 });
