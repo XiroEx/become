@@ -38,12 +38,15 @@
 import { Linking } from "react-native";
 import {
   ApiError,
+  BillingPlansResponseSchema,
   BillingStatusResponseSchema,
   CheckoutResponseSchema,
   PortalResponseSchema,
   apiFetch,
   type BillingPlan,
+  type BillingPlansResponse,
   type BillingReturnTarget,
+  type BillingStatusResponse,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
@@ -93,6 +96,19 @@ export const PORTAL_PATH = "/api/billing/portal";
 
 export const CHECKOUT_PATH = "/api/billing/checkout";
 export const BILLING_STATUS_PATH = "/api/billing/status";
+export const BILLING_PLANS_PATH = "/api/billing/plans";
+
+/** Which billing periods actually have a price configured. */
+export interface PlanAvailability {
+  monthly: boolean;
+  annual: boolean;
+}
+
+export interface BillingStatusResult {
+  configured: boolean;
+  plans: PlanAvailability;
+  subscription?: BillingStatusResponse["subscription"];
+}
 
 /** Everything this module touches outside itself, so a test needs no device. */
 export interface BillingDeps {
@@ -105,6 +121,8 @@ export interface BillingDeps {
    * Safari / Chrome. NEVER `expo-web-browser` — see the file header.
    */
   openUrl?: (url: string) => Promise<unknown>;
+  /** Which plan to buy. Defaults to CHECKOUT_PLAN ('monthly'). */
+  plan?: BillingPlan;
 }
 
 function baseUrlOf(deps: BillingDeps): string {
@@ -222,6 +240,47 @@ export async function probeCheckoutAvailable(
   }
 }
 
+/**
+ * Query GET /api/billing/status for configured status, per-plan availability,
+ * and subscription details.
+ */
+export async function fetchBillingStatus(
+  deps: BillingDeps = {},
+): Promise<BillingStatusResult | null> {
+  try {
+    const body = await apiFetch(BILLING_STATUS_PATH, BillingStatusResponseSchema, {
+      method: "GET",
+      ...requestOptions(deps),
+    });
+    return {
+      configured: body.configured === true,
+      plans: {
+        monthly: body.plans?.monthly === true,
+        annual: body.plans?.annual === true,
+      },
+      subscription: body.subscription,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Query GET /api/billing/plans — the prices and the Free/Plus table from the API.
+ */
+export async function fetchBillingPlans(
+  deps: BillingDeps = {},
+): Promise<BillingPlansResponse | null> {
+  try {
+    return await apiFetch(BILLING_PLANS_PATH, BillingPlansResponseSchema, {
+      method: "GET",
+      ...requestOptions(deps),
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** What `startCheckout` came back with. */
 export type CheckoutStart =
   /** Stripe's hosted page. Open it with `openExternally`, never in-app. */
@@ -237,11 +296,21 @@ export type CheckoutStart =
  * `returnTo` as 'web' — and on a phone that second default is the bug NP-051
  * exists to fix.
  */
-export async function startCheckout(deps: BillingDeps = {}): Promise<CheckoutStart> {
+export async function startCheckout(
+  planOrDeps?: BillingPlan | BillingDeps,
+  maybeDeps?: BillingDeps,
+): Promise<CheckoutStart> {
+  const plan: BillingPlan =
+    typeof planOrDeps === "string"
+      ? planOrDeps
+      : planOrDeps?.plan ?? CHECKOUT_PLAN;
+  const deps: BillingDeps =
+    typeof planOrDeps === "string" ? maybeDeps ?? {} : planOrDeps ?? {};
+
   try {
     const body = await apiFetch(CHECKOUT_PATH, CheckoutResponseSchema, {
       method: "POST",
-      body: { plan: CHECKOUT_PLAN, returnTo: NATIVE_RETURN_TO },
+      body: { plan, returnTo: NATIVE_RETURN_TO },
       ...requestOptions(deps),
     });
     return { kind: "url", url: body.url };
