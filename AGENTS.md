@@ -1673,6 +1673,64 @@ carries a COPY of all 22 of those modules (`shared/core/src/mind*`,
   index reads. They erase at compile time and change no behaviour; keep them
   when you edit those files or the `expo` job fails.
 
+#### The Mind session player, natively (NP-098)
+
+`expo/components/mind/session/` plays a composed plan the way the web does: a
+full-screen modal with intro → the moves, one at a time, with back / exit → the
+payoff. `SessionPlayer.tsx` is the only file that sequences; the scenes are dumb
+and fulfil **the web's own `SceneProps`**, re-exported as `MindSceneProps` in
+`scenes/types.ts` — so there is one definition of what a scene is handed
+(`webapp/lib/mind/moves.ts`, vendored by NP-062) and `move`, `protocol`,
+`onDone`, `onState` and `preview` mean the same thing on both clients.
+
+Four rules travel with it, each of them web behaviour a native port silently
+loses:
+
+- **The check-in re-opens the OPENING only.** The plan was composed before it was
+  played (the AI plan is cached for hours), so it was built for the state they
+  felt LAST time. `realignOpening` swaps move 2 — the regulate beat — and the
+  path body, with every word the composer personalised into it, survives. No
+  `sessionContext` prop, no realignment: the plan plays exactly as composed.
+- **The check-in IS the first answer** (`"How I checked in today"`), recorded
+  before anything else, and **answers keep the latest value per question**, so
+  re-answering after a Back overwrites instead of duplicating.
+- **A `locked_in` check-in plays `altPositive`** instead of the breath, and the
+  SWAP is what the player reports — a locked-in session is never recorded as
+  having breathed.
+- **Breath timing is the protocol's, and the protocol is the web's.** Every
+  label, `durationMs` and round count comes from `BREATH_PROTOCOLS` /
+  `breathForState`; `'auto'` is resolved by the player, never by the scene.
+  Native adds one thing a browser cannot: **a light haptic per phase change**
+  (`expo-haptics`, through `lib/feedback/haptics.ts`, which swallows every
+  failure — a simulator has no engine and a missing buzz may not take a session
+  down). The in-phase clock is tagged with the phase instance it is counting,
+  because the stepper's timeout and the clock's tick come due on the same
+  millisecond and the outgoing phase's last tick was landing on the incoming one.
+
+**Any kind that is not ported yet renders as the web's hold-to-affirm**
+(`scenes/HoldToAffirmScene.tsx`, the identity beat's press-and-hold ring). That
+is not a placeholder for its own sake: a plan is a CHAIN, and a beat with no
+scene strands the member on it, so every plan recorded on the web plays through
+to the end. NP-103 (content scenes), NP-099 (speech) and NP-100 (mirror) each
+replace their kind by touching `SessionPlayer`'s dispatch alone.
+
+**The payoff here is the shortest honest close, and the player performs NO
+write.** XP, the two counters, the journal write and the AI reflection are
+NP-101; `onComplete` is the seam it hangs off and already carries the effective
+kinds, the answers and the live state.
+
+One platform fact shapes the shell: **a visible React Native `Modal` consumes the
+Android back press itself and delivers it as `onRequestClose`**, so there is no
+`BackHandler` subscription (a listener underneath fires as well and the session
+jumps back two beats). Back steps through the session, and only asks to leave
+when there is nowhere left to step — leaving is always confirmed, never silent.
+
+Tests: `expo/__tests__/mindSessionPlayer.test.tsx` plays a plan **composed by the
+web's own composer** from a fixed context and seed, and takes its realignment
+expectations from `realignOpening` rather than from a copy of its answer;
+`expo/__tests__/mindBreathScene.test.tsx` drives every phase of every protocol in
+fake time and reads the phases, counts and round totals out of the web tables.
+
 #### The contract test: what the native app is actually sent (NP-016)
 
 `webapp/tests/unit/contract/` calls the REAL route handlers against the
