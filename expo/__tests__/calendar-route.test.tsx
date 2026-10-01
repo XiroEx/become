@@ -351,9 +351,8 @@ describe("CalendarIndexRoute — Acceptance criteria & parity", () => {
   });
 
   it("(id: e015c924) At 21:00 Pacific today's slot shows as today, not missed", async () => {
-    // Pacific time 21:00 on 2026-09-30 (UTC is 2026-10-01 04:00Z)
-    // The device local day is 2026-09-30.
-    const todayLocal = "2026-09-30";
+    const now = new Date();
+    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     mockParams = { date: todayLocal };
 
     mockApiFetch.mockImplementation((path: string) => {

@@ -1,44 +1,30 @@
-import type {
-  MealLog,
-} from "@become/api-client";
-import { MealLogCreateResponseSchema, apiFetch } from "@become/api-client";
-import { WEBAPP_BASE_URL } from "@/lib/config";
+import { z } from "zod";
+import type { apiFetch as ApiFetchType } from "@become/api-client";
+import { scalingFactor } from "@/lib/nutrition/foodMath";
 import {
-  buildServingChoiceGroups,
-  findBestBridgeForUnit,
   type ServingChoice,
-  type ServingOptionVariant,
+  servingChoiceDisplayLabel,
+  variantForServingChoice,
 } from "@/lib/nutrition/servingOptions";
-import {
-  nutritionForQuantity,
-  scalingFactor,
-  type FoodMacros,
-  type VariantForMath,
-} from "@/lib/nutrition/foodMath";
 import type { Unit } from "@/lib/nutrition/units";
-import type { ServingUnit } from "@become/core/nutrition/types";
 import { findLogForTag } from "@/lib/nutrition/logTagMatch";
-import { buildLoggedAt } from "@become/core/mealPlanDates";
-import { localDateKey } from "@/lib/time/localDay";
+import { buildLoggedAt, todayLocalKey } from "@/lib/nutrition/mealPlanDates";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
-import { isObjectIdString } from "@/lib/nutrition/foodImport";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 
 export const DEFAULT_TAGS = ["breakfast", "lunch", "dinner", "snack"] as const;
 
-export type TimeMode = "none" | "now" | "custom";
+const PassthroughSchema = z.object({}).passthrough();
 
-export interface VariantLike {
-  _id?: string;
-  id?: string;
-  name?: string;
-  isDefault?: boolean;
-  servingSize: number;
-  servingUnit: string;
-  nutrition: FoodMacros;
-  gramsPerServing?: number;
-  mlPerServing?: number;
-  alternateServings?: { label: string; multiplier: number; [k: string]: unknown }[];
-  displayLabel?: string;
+export interface FoodMacros {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber?: number;
+  sugar?: number;
+  sodium?: number;
+  saturatedFat?: number;
 }
 
 export interface MealItemPayload {
@@ -58,137 +44,63 @@ export interface MealItemPayload {
   loggedMlPerServing?: number;
 }
 
-export function previewNutritionForChoice(
-  variant: VariantLike,
-  quantity: number,
-  unit: string,
-  choice?: ServingChoice | null,
-): FoodMacros {
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    return { calories: 0, protein: 0, carbs: 0, fats: 0 };
-  }
-  const optVariant: ServingOptionVariant = {
-    servingSize: variant.servingSize,
-    servingUnit: variant.servingUnit as ServingUnit,
-    displayLabel: variant.displayLabel,
-    alternateServings: variant.alternateServings?.map((a) => ({
-      label: a.label,
-      multiplier: a.multiplier,
-    })),
-    gramsPerServing: variant.gramsPerServing,
-    mlPerServing: variant.mlPerServing,
-  };
-  const choiceGroups = buildServingChoiceGroups(optVariant);
-  const activeBridge =
-    choice && (choice.gramsPerServing != null || choice.mlPerServing != null)
-      ? choice
-      : findBestBridgeForUnit(choiceGroups, unit as Unit);
-
-  const mathVariant: VariantForMath = {
-    servingSize: variant.servingSize,
-    servingUnit: variant.servingUnit as ServingUnit,
-    nutrition: variant.nutrition,
-    gramsPerServing: activeBridge?.gramsPerServing ?? variant.gramsPerServing,
-    mlPerServing: activeBridge?.mlPerServing ?? variant.mlPerServing,
-  };
-
-  try {
-    return nutritionForQuantity(mathVariant, quantity, unit as Unit);
-  } catch {
-    return { calories: 0, protein: 0, carbs: 0, fats: 0 };
-  }
-}
-
-export function buildMealItemPayload(options: {
+export interface BuildMealItemPayloadOptions {
   food: {
-    _id?: string;
-    id?: string;
-    name: string;
+    _id?: string | null;
+    id?: string | null;
+    name?: string | null;
     brand?: string | null;
     [k: string]: unknown;
   };
-  variant: VariantLike;
+  variant: any;
   quantity: number;
   unit: string;
+  servingChoice?: ServingChoice;
   servingLabel?: string;
-  choice?: ServingChoice | null;
-}): MealItemPayload {
-  const { food, variant, quantity, unit, servingLabel, choice } = options;
-  const optVariant: ServingOptionVariant = {
-    servingSize: variant.servingSize,
-    servingUnit: variant.servingUnit as ServingUnit,
-    displayLabel: variant.displayLabel,
-    alternateServings: variant.alternateServings?.map((a) => ({
-      label: a.label,
-      multiplier: a.multiplier,
-    })),
-    gramsPerServing: variant.gramsPerServing,
-    mlPerServing: variant.mlPerServing,
-  };
+}
 
-  const choiceGroups = buildServingChoiceGroups(optVariant);
-  const activeBridge =
-    choice && (choice.gramsPerServing != null || choice.mlPerServing != null)
-      ? choice
-      : findBestBridgeForUnit(choiceGroups, unit as Unit);
+/**
+ * Builds the canonical item payload emitted by the quantity picker,
+ * matching web's IFoodEntry / MealItemInput shape.
+ */
+export function buildMealItemPayload(
+  options: BuildMealItemPayloadOptions,
+): MealItemPayload {
+  const { food, variant, quantity, unit, servingChoice, servingLabel } = options;
 
-  const mathVariant: VariantForMath = {
-    servingSize: variant.servingSize,
-    servingUnit: variant.servingUnit as ServingUnit,
-    nutrition: variant.nutrition,
-    gramsPerServing: activeBridge?.gramsPerServing ?? variant.gramsPerServing,
-    mlPerServing: activeBridge?.mlPerServing ?? variant.mlPerServing,
-  };
+  const effectiveVariant = servingChoice
+    ? variantForServingChoice(variant, servingChoice)
+    : variant;
 
-  const multiplier = scalingFactor(mathVariant, quantity, unit as Unit);
+  const servings = scalingFactor(
+    effectiveVariant,
+    quantity,
+    unit as Unit,
+  );
 
-  if (!Number.isFinite(multiplier) || multiplier <= 0) {
-    throw new Error(`Invalid scaling multiplier for ${quantity} ${unit}`);
-  }
+  const effectiveGramsPerServing =
+    servingChoice?.gramsPerServing ?? variant.gramsPerServing;
+  const effectiveMlPerServing =
+    servingChoice?.mlPerServing ?? variant.mlPerServing;
 
-  const foodId = isObjectIdString(food._id)
-    ? food._id
-    : isObjectIdString(food.id)
-      ? food.id
-      : undefined;
+  const rawFoodId = food._id ?? food.id;
+  const foodId = rawFoodId ? String(rawFoodId) : undefined;
 
-  const variantId = isObjectIdString(variant._id)
-    ? variant._id
-    : isObjectIdString(variant.id)
-      ? variant.id
-      : undefined;
+  const effectiveServingLabel =
+    servingLabel ??
+    (servingChoice ? servingChoiceDisplayLabel(servingChoice) : undefined);
 
-  const effectiveGramsPerServing = mathVariant.gramsPerServing;
-  const effectiveMlPerServing = mathVariant.mlPerServing;
-
-  return {
+  const payload: MealItemPayload = {
     ...(foodId ? { foodId } : {}),
-    ...(variantId ? { variantId } : {}),
-    ...(variant.name ? { variantName: variant.name } : {}),
-    name: food.name,
-    ...(food.brand ? { brand: food.brand } : {}),
+    ...(variant._id ? { variantId: String(variant._id) } : {}),
+    ...(variant.name ? { variantName: String(variant.name) } : {}),
+    name: String(food.name ?? variant.name ?? "Food"),
+    ...(food.brand ? { brand: String(food.brand) } : {}),
     servingSize: variant.servingSize,
     servingUnit: variant.servingUnit,
-    servings: multiplier,
-    nutrition: {
-      calories: Math.round(variant.nutrition.calories * 10) / 10,
-      protein: Math.round(variant.nutrition.protein * 10) / 10,
-      carbs: Math.round(variant.nutrition.carbs * 10) / 10,
-      fats: Math.round(variant.nutrition.fats * 10) / 10,
-      ...(variant.nutrition.fiber != null
-        ? { fiber: Math.round(variant.nutrition.fiber * 10) / 10 }
-        : {}),
-      ...(variant.nutrition.sugar != null
-        ? { sugar: Math.round(variant.nutrition.sugar * 10) / 10 }
-        : {}),
-      ...(variant.nutrition.sodium != null
-        ? { sodium: Math.round(variant.nutrition.sodium * 1000) / 1000 }
-        : {}),
-      ...(variant.nutrition.saturatedFat != null
-        ? { saturatedFat: Math.round(variant.nutrition.saturatedFat * 10) / 10 }
-        : {}),
-    },
-    ...(servingLabel?.trim() ? { servingLabel: servingLabel.trim() } : {}),
+    servings,
+    nutrition: variant.nutrition,
+    ...(effectiveServingLabel ? { servingLabel: effectiveServingLabel } : {}),
     loggedQuantity: quantity,
     loggedUnit: unit,
     ...(effectiveGramsPerServing != null
@@ -198,132 +110,125 @@ export function buildMealItemPayload(options: {
       ? { loggedMlPerServing: effectiveMlPerServing }
       : {}),
   };
+
+  return payload;
 }
 
-export interface LogFoodEntryOptions {
-  food: {
-    _id?: string;
-    id?: string;
-    name: string;
-    brand?: string | null;
-    [k: string]: unknown;
-  };
-  variant: VariantLike;
-  quantity: number;
-  unit: string;
-  servingLabel?: string;
-  choice?: ServingChoice | null;
+export interface LogFoodItemOptions {
+  item: MealItemPayload;
   tag?: string;
-  date?: string; // YYYY-MM-DD
-  timeMode?: TimeMode;
-  customTime?: string | null; // e.g. "14:30"
-  existingLogs?: MealLog[];
-  defaultTags?: readonly string[];
+  date?: string;
+  timeMode?: "now" | "picked" | "none";
+  pickedTime?: string | null;
+  existingLogs?: {
+    _id: string;
+    tags?: string[];
+    mealName?: string;
+    untimed?: boolean;
+    loggedAt?: string | Date;
+  }[];
+  apiFetch: typeof ApiFetchType;
   token?: string | null;
   baseUrl?: string;
+  now?: Date;
 }
 
-export async function logFoodEntry(options: LogFoodEntryOptions): Promise<{
+export interface LogFoodItemResult {
   success: boolean;
-  log?: MealLog;
-  itemPayload: MealItemPayload;
-  endpoint: string;
-}> {
+  appended: boolean;
+  logId?: string;
+  data?: unknown;
+}
+
+/**
+ * Log food through /api/meal-logs, enforcing the travel rules:
+ * 1. A picked time always creates a new MealLog.
+ * 2. Smart-append only when the target log's untimed-ness matches (findLogForTag).
+ * 3. A non-today date with no time logs at YYYY-MM-DDT12:00:00.000Z.
+ * 4. Every log drops the cached AI Mind session (NP-102).
+ */
+export async function logFoodItem(
+  options: LogFoodItemOptions,
+): Promise<LogFoodItemResult> {
   const {
-    food,
-    variant,
-    quantity,
-    unit,
-    servingLabel,
-    choice,
-    tag,
+    item,
+    tag = "snack",
     date,
-    timeMode = "none",
-    customTime,
+    timeMode = "now",
+    pickedTime,
     existingLogs = [],
-    defaultTags = DEFAULT_TAGS,
+    apiFetch,
     token,
     baseUrl = WEBAPP_BASE_URL,
   } = options;
 
-  const itemPayload = buildMealItemPayload({
-    food,
-    variant,
-    quantity,
-    unit,
-    servingLabel,
-    choice,
-  });
-
-  const useTag = (tag || "snack").trim().toLowerCase();
-  const now = new Date();
-  const todayStr = localDateKey(now);
-  const activeDate = date || todayStr;
-  const isToday = activeDate === todayStr;
+  const now = options.now ?? new Date();
+  const dateParam = date ?? todayLocalKey(now);
+  const isToday = dateParam === todayLocalKey(now);
+  const useTag = tag.trim().toLowerCase() || "snack";
   const untimed = timeMode === "none";
+  const isPickedTime = timeMode === "picked";
 
-  let loggedAt: string;
-  let isCustomTime = false;
+  // A picked time always creates a new MealLog (never smart-appends).
+  const smartTarget = isPickedTime
+    ? undefined
+    : findLogForTag(existingLogs, useTag, DEFAULT_TAGS);
 
-  if (timeMode === "custom" && customTime) {
-    isCustomTime = true;
-    loggedAt = buildLoggedAt(activeDate, customTime, undefined, now);
-  } else if (timeMode === "none") {
-    if (!isToday) {
-      // Non-today date with no time logs at YYYY-MM-DDT12:00:00.000Z
-      loggedAt = `${activeDate}T12:00:00.000Z`;
+  // Smart-append only when target log's untimed-ness matches.
+  const canSmartAppend = Boolean(
+    smartTarget && Boolean(smartTarget.untimed) === untimed,
+  );
+
+  let resultData: unknown;
+  let targetLogId: string | undefined;
+
+  if (canSmartAppend && smartTarget) {
+    targetLogId = smartTarget._id;
+    resultData = await apiFetch(
+      `/api/meal-logs/${encodeURIComponent(smartTarget._id)}/items`,
+      PassthroughSchema,
+      {
+        method: "POST",
+        baseUrl,
+        getToken: () => token ?? undefined,
+        body: item,
+      },
+    );
+  } else {
+    // New MealLog: determine loggedAt
+    let loggedAt: string;
+    if (isPickedTime) {
+      loggedAt = buildLoggedAt(dateParam, pickedTime ?? null, undefined, now);
+    } else if (!isToday) {
+      // Non-today date with no time (or default time) logs at noon UTC
+      loggedAt = `${dateParam}T12:00:00.000Z`;
     } else {
       loggedAt = now.toISOString();
     }
-  } else {
-    // timeMode === 'now'
-    loggedAt = isToday ? now.toISOString() : `${activeDate}T12:00:00.000Z`;
-  }
 
-  // A picked time always creates a new MealLog.
-  // Otherwise smart-append only when target log's untimed-ness matches.
-  const smartTarget = isCustomTime
-    ? undefined
-    : findLogForTag(existingLogs, useTag, defaultTags);
-
-  const existing =
-    smartTarget && Boolean(smartTarget.untimed) === untimed
-      ? smartTarget
-      : undefined;
-
-  let res: { success: boolean; log: MealLog };
-  let endpoint: string;
-
-  if (existing?._id) {
-    endpoint = `/api/meal-logs/${encodeURIComponent(existing._id)}/items`;
-    res = await apiFetch(endpoint, MealLogCreateResponseSchema, {
+    resultData = await apiFetch("/api/meal-logs", PassthroughSchema, {
       method: "POST",
-      body: itemPayload,
       baseUrl,
       getToken: () => token ?? undefined,
-    });
-  } else {
-    endpoint = "/api/meal-logs";
-    res = await apiFetch(endpoint, MealLogCreateResponseSchema, {
-      method: "POST",
       body: {
-        items: [itemPayload],
+        items: [item],
         tags: [useTag],
         loggedAt,
         untimed,
       },
-      baseUrl,
-      getToken: () => token ?? undefined,
     });
+
+    const typedResult = resultData as { log?: { _id?: string } } | undefined;
+    targetLogId = typedResult?.log?._id;
   }
 
-  // Every log drops the cached AI Mind session (NP-102)
+  // Every log drops the cached AI Mind session (NP-102).
   await invalidateMindSession();
 
   return {
-    success: res.success,
-    log: res.log,
-    itemPayload,
-    endpoint,
+    success: true,
+    appended: canSmartAppend,
+    logId: targetLogId,
+    data: resultData,
   };
 }

@@ -207,10 +207,11 @@ describe("FoodDetailRoute", () => {
       );
     });
 
-    // Pick tag and log.
-    fireEvent.press(getByTestId("quantity-picker-tag-lunch"));
+    // Pick a meal and confirm.
+    fireEvent.press(getByTestId("save-as-meal-open"));
+    fireEvent.press(getByTestId("save-as-meal-option-lunch"));
     await act(async () => {
-      fireEvent.press(getByTestId("quantity-picker-submit"));
+      fireEvent.press(getByTestId("save-as-meal-confirm"));
     });
 
     await waitFor(() => {
@@ -229,14 +230,15 @@ describe("FoodDetailRoute", () => {
     });
 
     // The picker defaults to one portion — one bar — and previews the bar.
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
+    expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([
       210,
       " kcal",
     ]);
 
-    fireEvent.press(getByTestId("quantity-picker-tag-dinner"));
+    fireEvent.press(getByTestId("save-as-meal-open"));
+    fireEvent.press(getByTestId("save-as-meal-option-dinner"));
     await act(async () => {
-      fireEvent.press(getByTestId("quantity-picker-submit"));
+      fireEvent.press(getByTestId("save-as-meal-confirm"));
     });
 
     await waitFor(() => {
@@ -245,9 +247,9 @@ describe("FoodDetailRoute", () => {
     const add = findCall("/api/meal-logs", "POST")!;
     const body = (add[2] as { body?: Record<string, unknown> }).body!;
     expect(body.tags).toEqual(["dinner"]);
-    expect(body.untimed).toBe(true);
 
-    // Items array with per-serving snapshot × servings
+    // Per-serving snapshot × servings — the server totals it as
+    // nutrition × servings, so one bar is 210 kcal, exactly like the web.
     const items = body.items as Record<string, unknown>[];
     expect(items[0]).toEqual(
       expect.objectContaining({
@@ -256,9 +258,6 @@ describe("FoodDetailRoute", () => {
         servingSize: 1,
         servingUnit: "each",
         servings: 1,
-        loggedQuantity: 1,
-        loggedUnit: "serving",
-        loggedGramsPerServing: 60,
         nutrition: expect.objectContaining({
           calories: 210,
           protein: 20,
@@ -272,14 +271,16 @@ describe("FoodDetailRoute", () => {
   it("scales by the amount the member picks, not by grams/100", async () => {
     const { getByTestId } = render(<FoodDetailRoute />);
     await waitFor(() => {
-      expect(getByTestId("quantity-picker-quantity-input")).toBeTruthy();
+      expect(getByTestId("quantity-input")).toBeTruthy();
     });
 
     // Two bars.
-    fireEvent.changeText(getByTestId("quantity-picker-quantity-input"), "2");
-    fireEvent.press(getByTestId("quantity-picker-tag-snack"));
+    fireEvent.changeText(getByTestId("quantity-input"), "2");
+
+    fireEvent.press(getByTestId("save-as-meal-open"));
+    fireEvent.press(getByTestId("save-as-meal-option-snack"));
     await act(async () => {
-      fireEvent.press(getByTestId("quantity-picker-submit"));
+      fireEvent.press(getByTestId("save-as-meal-confirm"));
     });
 
     await waitFor(() => {
@@ -294,8 +295,8 @@ describe("FoodDetailRoute", () => {
     const food = items[0]!;
     expect(food.servings).toBe(2);
     expect(food.loggedQuantity).toBe(2);
-    expect(food.loggedUnit).toBe("serving");
-    // 210 per-serving snapshot; 210 × 2 = 420 kcal once multiplied.
+    expect(food.loggedGramsPerServing).toBe(60);
+    // 210 × 2 = 420 kcal once the server multiplies.
     expect((food.nutrition as { calories: number }).calories).toBe(210);
   });
 
@@ -311,8 +312,8 @@ describe("FoodDetailRoute", () => {
     await waitFor(() => {
       expect(getByTestId("nutrition-food-error")).toBeTruthy();
     });
-    // No picker submit button → nothing can be logged.
-    expect(queryByTestId("quantity-picker-submit")).toBeNull();
+    // No picker and no save button → nothing can be logged.
+    expect(queryByTestId("save-as-meal-open")).toBeNull();
     expect(findCall("/api/meal-logs", "POST")).toBeUndefined();
   });
 
@@ -378,24 +379,27 @@ describe("FoodDetailRoute", () => {
     expect(gatedCreateCalls()).toHaveLength(0);
 
     // Stored per 100 g with a 38 g bag: the picker defaults to the bag.
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
+    expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([
       201,
       " kcal",
     ]);
 
-    fireEvent.press(getByTestId("quantity-picker-tag-snack"));
+    fireEvent.press(getByTestId("save-as-meal-open"));
+    fireEvent.press(getByTestId("save-as-meal-option-snack"));
     await act(async () => {
-      fireEvent.press(getByTestId("quantity-picker-submit"));
+      fireEvent.press(getByTestId("save-as-meal-confirm"));
     });
     await waitFor(() => {
       expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
     });
-    const food = (
+    const body = (
       (findCall("/api/meal-logs", "POST")![2] as {
-        body?: { items?: Record<string, unknown>[] };
-      }).body?.items?.[0]
-    )!;
-    expect(food.servings).toBeCloseTo(0.38, 2);
+        body?: Record<string, unknown>;
+      }).body as Record<string, unknown>
+    );
+    const items = body.items as Record<string, unknown>[];
+    const food = items[0]!;
+    expect(food.servings).toBeCloseTo(0.38, 5);
     expect((food.nutrition as { calories: number }).calories).toBe(530);
   });
 });

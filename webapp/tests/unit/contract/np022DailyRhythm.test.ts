@@ -268,10 +268,11 @@ test('POST /api/streaks/freeze success outcome (200) matches FreezeSuccessRespon
   const objectId = new mongoose.Types.ObjectId(MEMBER.id)
   const tz = 240
   const now = new Date()
+  const localNowMs = now.getTime() - tz * 60_000
   const dayMs = 86_400_000
-  const d1 = new Date(now.getTime() - 1 * dayMs).toISOString().slice(0, 10)
-  const d2 = new Date(now.getTime() - 2 * dayMs).toISOString().slice(0, 10)
-  const d3 = new Date(now.getTime() - 3 * dayMs).toISOString().slice(0, 10)
+  const d1 = new Date(localNowMs - 1 * dayMs).toISOString().slice(0, 10)
+  const d2 = new Date(localNowMs - 2 * dayMs).toISOString().slice(0, 10)
+  const d3 = new Date(localNowMs - 3 * dayMs).toISOString().slice(0, 10)
 
   // Seed 3 consecutive completed days across all three pillars so super streak >= 3
   for (const dayKey of [d1, d2, d3]) {

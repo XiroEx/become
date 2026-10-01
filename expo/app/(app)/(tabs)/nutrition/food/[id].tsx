@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
@@ -9,27 +9,38 @@ import {
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  apiFetch,
   FoodDetailResponseSchema,
   MealLogsDayResponseSchema,
-  TagsResponseSchema,
 } from "@become/api-client";
 import type { Food } from "@become/api-client";
-import { QuantityPicker } from "@/components/nutrition/QuantityPicker";
+import {
+  QuantityPicker,
+  type QuantityPickerSelection,
+} from "@/components/nutrition/QuantityPicker";
+import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
+import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 import {
   importExternalFood,
   parseExternalFoodId,
   parseFoodRowParam,
 } from "@/lib/nutrition/foodImport";
-import { useLocalDay, withTz } from "@/lib/time/localDay";
+import { useLocalDay } from "@/lib/time/localDay";
+import { withTz } from "@/lib/nutrition/localDay";
+import {
+  buildMealItemPayload,
+  logFoodItem,
+  type MealItemPayload,
+} from "@/lib/nutrition/mealLogActions";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function FoodDetailRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
-  const { day: today } = useLocalDay();
+  const { day: today, tzOffset } = useLocalDay();
   const params = useLocalSearchParams<{
     id?: string;
     row?: string;
@@ -69,8 +80,8 @@ export default function FoodDetailRoute() {
       fallback: fallbackRow,
       getToken: () => token,
     })
-      .then((food) => {
-        if (!cancelled) setImportedFood(food);
+      .then((resFood) => {
+        if (!cancelled) setImportedFood(resFood);
       })
       .catch(() => {
         if (!cancelled) setImportFailed(true);
@@ -82,12 +93,11 @@ export default function FoodDetailRoute() {
 
   const food = importedFood ?? data?.food ?? null;
 
-  const activeDate = params.date || today;
-  const tzOffset = new Date().getTimezoneOffset();
+  // Fetch today's meal logs for smart-append
+  const activeDate = params.date ?? today;
   const mealLogsPath = withTz(`/api/meal-logs?date=${activeDate}`, tzOffset);
-
-  const { data: mealLogsData } = useFetch(
-    token ? mealLogsPath : null,
+  const { data: logsData } = useFetch(
+    mealLogsPath,
     MealLogsDayResponseSchema,
     {
       baseUrl: WEBAPP_BASE_URL,
@@ -95,15 +105,70 @@ export default function FoodDetailRoute() {
       skip: !token,
     },
   );
+  const existingLogs = useMemo(() => logsData?.logs ?? [], [logsData?.logs]);
 
-  const { data: tagsData } = useFetch(
-    token ? "/api/tags" : null,
-    TagsResponseSchema,
-    {
-      baseUrl: WEBAPP_BASE_URL,
-      getToken: () => token ?? undefined,
-      skip: !token,
+  const defaultVariant = useMemo(() => defaultVariantOf(food), [food]);
+
+  const [pickerSelection, setPickerSelection] = useState<QuantityPickerSelection | null>(null);
+
+  // Submit via QuantityPicker log button
+  const handleQuantityPickerSubmit = useCallback(
+    async (result: {
+      item: MealItemPayload;
+      tag: string;
+      date: string;
+      timeMode: "now" | "picked" | "none";
+      pickedTime?: string | null;
+    }) => {
+      if (!food) return;
+      await logFoodItem({
+        item: result.item,
+        tag: result.tag,
+        date: result.date,
+        timeMode: result.timeMode,
+        pickedTime: result.pickedTime,
+        existingLogs,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      router.back();
     },
+    [food, existingLogs, token, router],
+  );
+
+  // Submit via SaveAsMealButton
+  const onSaveMeal = useCallback(
+    async (mealType: string) => {
+      if (!food) return;
+      const activeVariant = pickerSelection?.variant ?? defaultVariant;
+      if (!activeVariant) return;
+
+      const quantity = pickerSelection?.quantity ?? 1;
+      const unit = pickerSelection?.unit ?? activeVariant.servingUnit ?? "g";
+
+      const item = buildMealItemPayload({
+        food,
+        variant: activeVariant,
+        quantity,
+        unit,
+        servingChoice: pickerSelection?.servingChoice,
+      });
+
+      await logFoodItem({
+        item,
+        tag: mealType,
+        date: pickerSelection?.date ?? activeDate,
+        timeMode: pickerSelection?.timeMode ?? "now",
+        pickedTime: pickerSelection?.pickedTime,
+        existingLogs,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      router.back();
+    },
+    [food, pickerSelection, defaultVariant, activeDate, existingLogs, token, router],
   );
 
   if (!id) {
@@ -137,22 +202,20 @@ export default function FoodDetailRoute() {
           >
             {food?.name ?? "Food"}
           </Text>
-
           {food ? (
             <QuantityPicker
               food={food}
               initialTag={params.tag}
-              initialDate={params.date || today}
-              existingLogs={mealLogsData?.logs ?? []}
-              availableTags={tagsData}
-              token={token}
-              onSuccess={() => router.back()}
+              initialDate={params.date ?? today}
+              onChange={setPickerSelection}
+              onSubmit={handleQuantityPickerSubmit}
             />
-          ) : importFailed ? (
+          ) : importFailed || (food && !defaultVariant) ? (
             <Text testID="nutrition-food-error" className="text-destructive">
               Could not load this food. Try searching for it again.
             </Text>
           ) : null}
+          {food ? <SaveAsMealButton onSave={onSaveMeal} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

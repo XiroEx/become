@@ -1,195 +1,175 @@
-import { render, fireEvent, act } from "@testing-library/react-native";
-import { QuantityPicker } from "@/components/nutrition/QuantityPicker";
-import type { Food } from "@become/api-client";
+import React from "react";
+import { fireEvent, render } from "@testing-library/react-native";
+import { QuantityPicker } from "../components/nutrition/QuantityPicker";
 
-const CHICKEN_BREAST: Food = {
-  _id: "chicken-1",
-  name: "Chicken Breast",
-  brand: "Farmer John",
-  servingSize: 100,
-  servingUnit: "g",
-  variants: [],
-  alternateServings: [
-    { label: "1 breast (172 g)", multiplier: 1.72 },
-    { label: "1 oz", multiplier: 0.283495 },
-  ],
-  nutrition: { calories: 165, protein: 31, carbs: 0, fats: 3.6, sodium: 74 },
-};
+describe("QuantityPicker", () => {
+  const multiVariantFood = {
+    _id: "food-whey-1",
+    name: "Whey Protein",
+    brand: "Optimum",
+    variants: [
+      {
+        _id: "var-choco",
+        name: "Chocolate",
+        isDefault: true,
+        servingSize: 1,
+        servingUnit: "scoop",
+        gramsPerServing: 32,
+        nutrition: { calories: 130, protein: 24, carbs: 3, fats: 2 },
+      },
+      {
+        _id: "var-vanilla",
+        name: "Vanilla",
+        isDefault: false,
+        servingSize: 1,
+        servingUnit: "scoop",
+        gramsPerServing: 30,
+        nutrition: { calories: 120, protein: 24, carbs: 2, fats: 1.5 },
+      },
+    ],
+  };
 
-const WHEY_PROTEIN: Food = {
-  _id: "whey-1",
-  name: "Whey Protein Powder",
-  brand: "Optimum",
-  servingSize: 1,
-  servingUnit: "scoop",
-  alternateServings: [],
-  nutrition: { calories: 120, protein: 24, carbs: 2, fats: 1.5 },
-  variants: [
-    {
-      _id: "v-choco",
-      name: "Chocolate",
-      isDefault: true,
-      servingSize: 1,
-      servingUnit: "scoop",
-      gramsPerServing: 32,
-      alternateServings: [{ label: "1 rounded scoop", multiplier: 1.1 }],
-      nutrition: { calories: 130, protein: 24, carbs: 3, fats: 2 },
-    },
-    {
-      _id: "v-vanilla",
-      name: "Vanilla",
-      isDefault: false,
-      servingSize: 1,
-      servingUnit: "scoop",
-      gramsPerServing: 30,
-      alternateServings: [],
-      nutrition: { calories: 120, protein: 24, carbs: 2, fats: 1.5 },
-    },
-  ],
-};
+  const bridgedFood = {
+    _id: "food-bar-1",
+    name: "Protein Bar",
+    brand: "Brandy",
+    servingSize: 1,
+    servingUnit: "each",
+    gramsPerServing: 60,
+    nutrition: { calories: 210, protein: 20, carbs: 24, fats: 7 },
+  };
 
-describe("QuantityPicker Component", () => {
-  it("renders food with serving choices and previews live macros", () => {
-    const { getByTestId } = render(<QuantityPicker food={CHICKEN_BREAST} />);
-
-    // Primary choice is 1 breast (172 g)
-    // 1.72 × 165 = 283.8 -> 284 kcal
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      284,
-      " kcal",
-    ]);
-    expect(getByTestId("quantity-picker-preview-protein").props.children).toEqual([
-      53.3,
-      "g",
-    ]);
-  });
-
-  it("stepper increments and decrements quantity according to servingQuantityStep", () => {
+  it("renders variant chips and switches variant on press", () => {
     const { getByTestId } = render(
-      <QuantityPicker
-        food={CHICKEN_BREAST}
-        initialQuantity={100}
-        initialUnit="g"
-      />,
+      <QuantityPicker food={multiVariantFood} />,
     );
 
-    // Initial 100g of chicken = 165 kcal
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      165,
-      " kcal",
-    ]);
+    expect(getByTestId("variant-chip-Chocolate")).toBeTruthy();
+    expect(getByTestId("variant-chip-Vanilla")).toBeTruthy();
 
-    // Step for "g" is 1
-    fireEvent.press(getByTestId("quantity-picker-stepper-increment"));
-    expect(getByTestId("quantity-picker-quantity-input").props.value).toBe("101");
+    // Default Chocolate: 130 kcal
+    expect(getByTestId("macro-preview-calories").props.children).toEqual([130, " kcal"]);
 
-    fireEvent.press(getByTestId("quantity-picker-stepper-decrement"));
-    expect(getByTestId("quantity-picker-quantity-input").props.value).toBe("100");
+    // Switch to Vanilla: 120 kcal
+    fireEvent.press(getByTestId("variant-chip-Vanilla"));
+    expect(getByTestId("macro-preview-calories").props.children).toEqual([120, " kcal"]);
   });
 
-  it("direct text input updates quantity and live macro preview", () => {
+  it("stepper increments and decrements by servingQuantityStep", () => {
     const { getByTestId } = render(
-      <QuantityPicker
-        food={CHICKEN_BREAST}
-        initialQuantity={100}
-        initialUnit="g"
-      />,
+      <QuantityPicker food={bridgedFood} initialQuantity={1} />,
     );
 
-    // Change to 200g -> 2 × 165 = 330 kcal, 2 × 31 = 62g protein
-    fireEvent.changeText(getByTestId("quantity-picker-quantity-input"), "200");
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      330,
-      " kcal",
-    ]);
-    expect(getByTestId("quantity-picker-preview-protein").props.children).toEqual([
-      62,
-      "g",
-    ]);
+    const input = getByTestId("quantity-input");
+    expect(input.props.value).toBe("1");
+
+    // Stepper for count ('each' or 'serving') has step 0.5
+    fireEvent.press(getByTestId("quantity-increment"));
+    expect(getByTestId("quantity-input").props.value).toBe("1.5");
+
+    fireEvent.press(getByTestId("quantity-decrement"));
+    expect(getByTestId("quantity-input").props.value).toBe("1");
   });
 
-  it("renders variant chips for multi-variant foods and switching variant recalculates macros", () => {
-    const { getByTestId } = render(<QuantityPicker food={WHEY_PROTEIN} />);
-
-    // Default variant is Chocolate with primary choice "1 rounded scoop" (1.1 × 130 = 143 kcal)
-    expect(getByTestId("quantity-picker-variant-Chocolate")).toBeTruthy();
-    expect(getByTestId("quantity-picker-variant-Vanilla")).toBeTruthy();
-
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      143,
-      " kcal",
-    ]);
-
-    // Switch to Vanilla variant (120 kcal per 30g scoop)
-    fireEvent.press(getByTestId("quantity-picker-variant-Vanilla"));
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      120,
-      " kcal",
-    ]);
-  });
-
-  it("opens serving choice bottom sheet and allows picking different units", () => {
-    const { getByTestId } = render(<QuantityPicker food={CHICKEN_BREAST} />);
-
-    fireEvent.press(getByTestId("quantity-picker-serving-button"));
-    expect(getByTestId("quantity-picker-serving-sheet")).toBeTruthy();
-
-    // Pick 1 oz (multiplier: 0.283495, 165 * 0.283495 = 46.8 -> 47 kcal)
-    fireEvent.press(getByTestId("quantity-picker-choice-serving-alt-1"));
-    expect(getByTestId("quantity-picker-preview-kcal").props.children).toEqual([
-      47,
-      " kcal",
-    ]);
-  });
-
-  it("defaults to No time (untimed: true) and allows picking Now or Picked time", () => {
-    const { getByTestId, queryByTestId } = render(
-      <QuantityPicker food={CHICKEN_BREAST} />,
+  it("live macro preview scales with quantity", () => {
+    const { getByTestId } = render(
+      <QuantityPicker food={bridgedFood} initialQuantity={1} />,
     );
 
-    // Default is "No time"
-    expect(getByTestId("quantity-picker-time-none").props.accessibilityState.selected).toBe(true);
-    expect(queryByTestId("quantity-picker-custom-time-input")).toBeNull();
+    // 1 bar = 210 kcal, 20g protein
+    expect(getByTestId("macro-preview-calories").props.children).toEqual([210, " kcal"]);
+    expect(getByTestId("macro-preview-protein").props.children).toEqual(["Protein: ", 20, "g"]);
 
-    // Tap "Picked time" -> shows custom time input
-    fireEvent.press(getByTestId("quantity-picker-time-custom"));
-    expect(getByTestId("quantity-picker-custom-time-input")).toBeTruthy();
-
-    // Tap "Now" -> hides custom time input
-    fireEvent.press(getByTestId("quantity-picker-time-now"));
-    expect(queryByTestId("quantity-picker-custom-time-input")).toBeNull();
+    // Change quantity to 2
+    fireEvent.changeText(getByTestId("quantity-input"), "2");
+    expect(getByTestId("macro-preview-calories").props.children).toEqual([420, " kcal"]);
+    expect(getByTestId("macro-preview-protein").props.children).toEqual(["Protein: ", 40, "g"]);
   });
 
-  it("submits the web's entry shape through onSubmit prop", async () => {
+  it("updates tag selection", () => {
     const onSubmit = jest.fn();
     const { getByTestId } = render(
-      <QuantityPicker
-        food={CHICKEN_BREAST}
-        initialQuantity={200}
-        initialUnit="g"
-        onSubmit={onSubmit}
-      />,
+      <QuantityPicker food={bridgedFood} onSubmit={onSubmit} />,
     );
 
-    fireEvent.press(getByTestId("quantity-picker-tag-lunch"));
-    await act(async () => {
-      fireEvent.press(getByTestId("quantity-picker-submit"));
-    });
+    fireEvent.press(getByTestId("tag-chip-dinner"));
+    fireEvent.press(getByTestId("log-food-button"));
 
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "Chicken Breast",
-        brand: "Farmer John",
-        servingSize: 100,
-        servingUnit: "g",
-        servings: 2,
-        loggedQuantity: 200,
-        loggedUnit: "g",
-        nutrition: expect.objectContaining({
-          calories: 165,
-          protein: 31,
-        }),
+        tag: "dinner",
       }),
     );
+  });
+
+  it("handles time modes (now, picked, none)", () => {
+    const onSubmit = jest.fn();
+    const { getByTestId } = render(
+      <QuantityPicker food={bridgedFood} onSubmit={onSubmit} />,
+    );
+
+    // Pick 'No time'
+    fireEvent.press(getByTestId("time-mode-none"));
+    fireEvent.press(getByTestId("log-food-button"));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeMode: "none",
+        pickedTime: null,
+      }),
+    );
+
+    // Pick 'Pick time'
+    fireEvent.press(getByTestId("time-mode-picked"));
+    fireEvent.changeText(getByTestId("picked-time-input"), "15:45");
+    fireEvent.press(getByTestId("log-food-button"));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeMode: "picked",
+        pickedTime: "15:45",
+      }),
+    );
+  });
+
+  it("submits the full item payload including loggedQuantity, loggedUnit, loggedGramsPerServing", () => {
+    const onSubmit = jest.fn();
+    const { getByTestId } = render(
+      <QuantityPicker food={bridgedFood} initialQuantity={2} onSubmit={onSubmit} />,
+    );
+
+    fireEvent.press(getByTestId("log-food-button"));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      item: expect.objectContaining({
+        foodId: "food-bar-1",
+        name: "Protein Bar",
+        brand: "Brandy",
+        servingSize: 1,
+        servingUnit: "each",
+        servings: 2,
+        loggedQuantity: 2,
+        loggedGramsPerServing: 60,
+      }),
+      tag: "snack",
+      date: expect.any(String),
+      timeMode: "now",
+      pickedTime: null,
+    });
+  });
+
+  it("renders serving choices when available", () => {
+    const { getByTestId } = render(
+      <QuantityPicker food={bridgedFood} />,
+    );
+
+    // bridged food has grams choice as well
+    const gramsChoice = getByTestId("serving-choice-weight-g");
+    expect(gramsChoice).toBeTruthy();
+
+    fireEvent.press(gramsChoice);
+    // Choosing 1 g -> 210 / 60 = 3.5 kcal
+    expect(getByTestId("quantity-input").props.value).toBe("1");
+    expect(getByTestId("macro-preview-calories").props.children).toEqual([4, " kcal"]);
   });
 });
