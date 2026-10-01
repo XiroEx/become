@@ -929,6 +929,7 @@ export default function NutritionIndexRoute() {
         >
           <Pressable
             testID="nutrition-timeline-menu"
+            accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
               borderRadius: 12,
@@ -1027,6 +1028,7 @@ export default function NutritionIndexRoute() {
         >
           <Pressable
             testID="nutrition-camera-menu"
+            accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
               borderRadius: 16,
@@ -1089,6 +1091,7 @@ export default function NutritionIndexRoute() {
         >
           <Pressable
             testID="nutrition-upload-menu"
+            accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
               borderRadius: 16,

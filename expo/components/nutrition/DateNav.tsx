@@ -243,6 +243,7 @@ export function DateNav({
         >
           <Pressable
             testID="nutrition-date-picker-dropdown"
+            accessibilityRole="none"
             style={{
               width: "100%",
               maxWidth: 340,
