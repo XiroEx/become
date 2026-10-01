@@ -10,6 +10,15 @@ import {
   RENEWAL_TERMS,
   renewalLine,
   counselTodos,
+  CONSENT_TITLE_TERMS,
+  CONSENT_TITLE_AI,
+  consentTitle,
+  CONSENT_STANDFIRST_TERMS,
+  CONSENT_STANDFIRST_AI,
+  consentStandfirst,
+  AI_CONSENT_SENDS_INTRO,
+  CONSENT_ERROR_SAVE,
+  consentButtonLabel,
 } from '../src/legal/index'
 import { TERMS } from '../src/legal/terms'
 import { PRIVACY } from '../src/legal/privacy'
@@ -39,6 +48,32 @@ describe('legal', () => {
     assert.ok(RENEWAL_TERMS.length >= 2)
     assert.ok(renewalLine('monthly').includes('$14.99'))
     assert.ok(renewalLine('annual').includes('$119.99'))
+  })
+
+  it('provides consent gate copy and titles matching web parity', () => {
+    assert.equal(CONSENT_TITLE_TERMS, 'Before you continue')
+    assert.equal(CONSENT_TITLE_AI, 'One thing about AI')
+    assert.equal(consentTitle(true), 'Before you continue')
+    assert.equal(consentTitle(false), 'One thing about AI')
+
+    assert.equal(
+      CONSENT_STANDFIRST_TERMS,
+      'We need one thing on record: that you are old enough to use Become and that you agree to how it works.'
+    )
+    assert.ok(CONSENT_STANDFIRST_AI.includes('Google Gemini'))
+    assert.equal(consentStandfirst(true), CONSENT_STANDFIRST_TERMS)
+    assert.equal(consentStandfirst(false), CONSENT_STANDFIRST_AI)
+
+    assert.equal(
+      AI_CONSENT_SENDS_INTRO,
+      'What gets sent to Google Gemini, through the redbtn platform:'
+    )
+    assert.equal(CONSENT_ERROR_SAVE, 'That did not save. Check your connection and try again.')
+
+    assert.equal(consentButtonLabel({ busy: true }), 'Saving…')
+    assert.equal(consentButtonLabel({ showTerms: true }), 'Agree and continue')
+    assert.equal(consentButtonLabel({ showTerms: false, aiChecked: true }), 'Allow and continue')
+    assert.equal(consentButtonLabel({ showTerms: false, aiChecked: false }), 'Save and continue')
   })
 
   it('documents have valid structure', () => {
