@@ -20,9 +20,8 @@ import { needsOnboarding } from "@/lib/auth/onboardingGate";
  *
  * Four destinations, in the order the web uses them:
  *
- *   loading      — the secure-store read. Show the launch spinner, decide
- *                  nothing: guessing here is what signs a member out on a
- *                  slow Keychain.
+ *   loading      — the secure-store read or the initial user fetch. Show the
+ *                  launch spinner, decide nothing until auth has settled.
  *   signed out   — `/login` (the sign-in screen says why, if there is a why).
  *   onboarding   — `onboardingCompleted === false`, strictly, so legacy rows
  *                  without the flag are never gated.
@@ -39,7 +38,7 @@ export default function LaunchRoute() {
   const { colors } = useThemeTokens();
   const { status, user } = useAuth();
 
-  if (status === "loading") {
+  if (status === "loading" || (status === "signed-in" && user === null)) {
     return (
       <SafeAreaView
         edges={["top", "bottom"]}

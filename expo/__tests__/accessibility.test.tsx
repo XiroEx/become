@@ -174,13 +174,22 @@ const V1_SCREENS: Screen[] = [
       render(<OnboardingFlow onComplete={() => {}} />);
     },
     reveal: () => {
-      // Answer each step by NAME, then advance: four steps, no testIDs.
-      const answers = ["Lose Weight", "Beginner", "Male"];
-      for (const answer of answers) {
-        fireEvent.press(screen.getByLabelText(answer));
-        fireEvent.press(screen.getByRole("button", { name: "Next" }));
-      }
+      // Step 1: Goals
+      fireEvent.press(screen.getByLabelText("Lose Weight"));
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
+      // Step 2: About you
+      fireEvent.changeText(
+        screen.getByLabelText("What should we call you?"),
+        "Jon",
+      );
+      fireEvent.changeText(screen.getByLabelText("Age"), "25");
+      fireEvent.press(screen.getByLabelText("Male"));
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
+      // Step 3: Body & nutrition
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
+      // Step 4: Equipment
       fireEvent.press(screen.getByLabelText("Full Gym"));
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
     },
   },
   {
@@ -443,7 +452,7 @@ describe("state changes are announced", () => {
     fireEvent.press(screen.getByLabelText("Lose Weight"));
     fireEvent.press(screen.getByRole("button", { name: "Next" }));
     expect(spoken).toHaveBeenCalledWith(
-      "Step 2 of 4. How experienced are you?",
+      "Step 2 of 5. A bit about you",
     );
     spoken.mockRestore();
   });
@@ -471,17 +480,27 @@ describe("sign-in through to Home, by role and name only", () => {
     expect(await screen.findByText("Check your inbox")).toBeTruthy();
     screen.unmount();
 
-    // A new member lands in onboarding, which is four questions and two
+    // A new member lands in onboarding, which is 5 steps and Next/Finish
     // buttons. Answer each by name.
     render(<OnboardingFlow onComplete={() => {}} />);
-    const answers = ["Lose Weight", "Beginner", "Male", "Full Gym"];
-    answers.forEach((answer, i) => {
-      fireEvent.press(screen.getByLabelText(answer));
-      const last = i === answers.length - 1;
-      fireEvent.press(
-        screen.getByRole("button", { name: last ? "Finish" : "Next" }),
-      );
-    });
+    // Step 1: Goals
+    fireEvent.press(screen.getByLabelText("Lose Weight"));
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 2: About you
+    fireEvent.changeText(
+      screen.getByLabelText("What should we call you?"),
+      "Jon",
+    );
+    fireEvent.changeText(screen.getByLabelText("Age"), "25");
+    fireEvent.press(screen.getByLabelText("Male"));
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 3: Body & nutrition
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 4: Equipment
+    fireEvent.press(screen.getByLabelText("Full Gym"));
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 5: Review
+    fireEvent.press(screen.getByRole("button", { name: "Finish" }));
     screen.unmount();
 
     // Home. The three things a member does from it are a button with a name.

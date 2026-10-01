@@ -304,12 +304,13 @@ describe("Card NP-036 Acceptance Criteria", () => {
       // Advance through steps
       fireEvent.press(getByTestId("onboarding-goal-gain_muscle"));
       fireEvent.press(getByTestId("onboarding-next"));
-      fireEvent.press(getByTestId("onboarding-experience-beginner"));
-      fireEvent.press(getByTestId("onboarding-next"));
+      fireEvent.changeText(getByTestId("onboarding-name"), "Sam");
+      fireEvent.changeText(getByTestId("onboarding-age"), "25");
       fireEvent.press(getByTestId("onboarding-sex-female"));
-      fireEvent.changeText(getByTestId("onboarding-birth-year"), "1995");
+      fireEvent.press(getByTestId("onboarding-next"));
       fireEvent.press(getByTestId("onboarding-next"));
       fireEvent.press(getByTestId("onboarding-equipment-dumbbells"));
+      fireEvent.press(getByTestId("onboarding-next"));
 
       // Complete -> triggers PATCH -> returns 500
       await act(async () => {
