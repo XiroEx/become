@@ -186,6 +186,9 @@ const V1_SCREENS: Screen[] = [
       fireEvent.press(screen.getByLabelText("Male"));
       fireEvent.press(screen.getByRole("button", { name: "Next" }));
       // Step 3: Body & nutrition
+      fireEvent.changeText(screen.getByLabelText("Feet"), "5");
+      fireEvent.changeText(screen.getByLabelText("Inches"), "10");
+      fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
       fireEvent.press(screen.getByRole("button", { name: "Next" }));
       // Step 4: Equipment
       fireEvent.press(screen.getByLabelText("Full Gym"));
@@ -495,6 +498,9 @@ describe("sign-in through to Home, by role and name only", () => {
     fireEvent.press(screen.getByLabelText("Male"));
     fireEvent.press(screen.getByRole("button", { name: "Next" }));
     // Step 3: Body & nutrition
+    fireEvent.changeText(screen.getByLabelText("Feet"), "5");
+    fireEvent.changeText(screen.getByLabelText("Inches"), "10");
+    fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
     fireEvent.press(screen.getByRole("button", { name: "Next" }));
     // Step 4: Equipment
     fireEvent.press(screen.getByLabelText("Full Gym"));

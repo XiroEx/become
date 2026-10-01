@@ -308,6 +308,9 @@ describe("Card NP-036 Acceptance Criteria", () => {
       fireEvent.changeText(getByTestId("onboarding-age"), "25");
       fireEvent.press(getByTestId("onboarding-sex-female"));
       fireEvent.press(getByTestId("onboarding-next"));
+      fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+      fireEvent.changeText(getByTestId("stat-height-in"), "6");
+      fireEvent.changeText(getByTestId("stat-current-weight"), "140");
       fireEvent.press(getByTestId("onboarding-next"));
       fireEvent.press(getByTestId("onboarding-equipment-dumbbells"));
       fireEvent.press(getByTestId("onboarding-next"));
