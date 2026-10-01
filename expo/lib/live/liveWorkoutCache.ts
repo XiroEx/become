@@ -39,10 +39,12 @@ export function applySetUpdate<S>(
 /** Stable cache key for a (program, phase, workout) tuple. */
 export function liveCacheKey(
   programId: string,
-  workoutIndex: number,
-  phaseIndex = 0,
+  workoutIndex: number | string,
+  phaseIndex: number | string = 0,
 ): string {
-  return `become.live.${programId}.${phaseIndex}.${workoutIndex}`;
+  const sanitize = (val: string | number) =>
+    String(val).trim().replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `become.live.${sanitize(programId)}.${sanitize(phaseIndex)}.${sanitize(workoutIndex)}`;
 }
 
 /**
@@ -108,7 +110,7 @@ async function addTrackedLiveKey(store: KeyValueStore, key: string): Promise<voi
       await store.set(LIVE_WORKOUT_TRACKER_KEY, JSON.stringify(keys));
     }
   } catch {
-    // failure to track must not throw
+    // Non-blocking
   }
 }
 
@@ -116,33 +118,28 @@ async function removeTrackedLiveKey(store: KeyValueStore, key: string): Promise<
   try {
     const keys = await getTrackedLiveKeys(store);
     const next = keys.filter((k) => k !== key);
-    await store.set(LIVE_WORKOUT_TRACKER_KEY, JSON.stringify(next));
+    if (next.length !== keys.length) {
+      await store.set(LIVE_WORKOUT_TRACKER_KEY, JSON.stringify(next));
+    }
   } catch {
-    // ignore
+    // Non-blocking
   }
 }
 
-/**
- * Clears all in-flight live workout drafts tracked in SecureStore.
- * SecureStore cannot enumerate keys, so keys are tracked in LIVE_WORKOUT_TRACKER_KEY.
- */
-export async function clearAllLiveWorkoutDrafts(
-  store: KeyValueStore = secureKeyValueStore,
-): Promise<void> {
+/** Wipes all tracked live workout draft snapshots in the store. */
+export async function clearAllLiveWorkoutDrafts(store: KeyValueStore = secureKeyValueStore): Promise<void> {
   try {
     const keys = await getTrackedLiveKeys(store);
-    for (const key of keys) {
-      await store.remove(key);
-    }
-    await store.remove(LIVE_WORKOUT_TRACKER_KEY);
+    await Promise.all(keys.map((k) => store.remove(k).catch(() => {})));
+    await store.remove(LIVE_WORKOUT_TRACKER_KEY).catch(() => {});
   } catch {
-    // ignore
+    // Non-blocking
   }
 }
 
 export interface LiveWorkoutCache {
   load(key: string): Promise<LiveWorkoutSnapshot | null>;
-  save(key: string, snapshot: LiveWorkoutSnapshot): Promise<void>;
+  save(key: string, snap: LiveWorkoutSnapshot): Promise<void>;
   clear(key: string): Promise<void>;
 }
 
@@ -151,26 +148,31 @@ export function createLiveWorkoutCache(
 ): LiveWorkoutCache {
   return {
     async load(key: string): Promise<LiveWorkoutSnapshot | null> {
-      const raw = await store.get(key);
-      if (!raw) return null;
       try {
+        const raw = await store.get(key);
+        if (!raw) return null;
         const parsed = JSON.parse(raw) as unknown;
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          return parsed as LiveWorkoutSnapshot;
-        }
-        return null;
+        if (typeof parsed !== "object" || parsed === null) return null;
+        return parsed as LiveWorkoutSnapshot;
       } catch {
-        // Corrupt cache entry — treat as empty rather than crashing the screen.
         return null;
       }
     },
-    async save(key: string, snapshot: LiveWorkoutSnapshot): Promise<void> {
-      await store.set(key, JSON.stringify(snapshot));
-      await addTrackedLiveKey(store, key);
+    async save(key: string, snap: LiveWorkoutSnapshot): Promise<void> {
+      try {
+        await store.set(key, JSON.stringify(snap));
+        await addTrackedLiveKey(store, key);
+      } catch {
+        // Silent failure — cache is an optimization, don't crash the workout.
+      }
     },
     async clear(key: string): Promise<void> {
-      await store.remove(key);
-      await removeTrackedLiveKey(store, key);
+      try {
+        await store.remove(key);
+        await removeTrackedLiveKey(store, key);
+      } catch {
+        // Silent failure
+      }
     },
   };
 }
