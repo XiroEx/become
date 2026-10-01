@@ -14,16 +14,12 @@ import {
 } from "@/components/live/ExerciseGroupNav";
 import { getBellWeightInfo } from "@become/core";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
+import { FramedVideo } from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { FramedVideo } from "@/components/FramedVideo";
-import {
-  getExerciseVideoDisplay,
-  resolveExerciseVideo,
-} from "@/lib/data/exerciseVideos";
-import type { VideoFramingOverride } from "@/lib/videoFraming";
-import type { VideoTrimOverride } from "@/lib/videoTrim";
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -212,8 +208,6 @@ export function LiveWorkoutClient({
           // superset/circuit/triset members render contiguously under a label.
           const prevGroup = workout.exercises[exIdx - 1]?.groupId;
           const showGroupHeader = !!ex.groupId && ex.groupId !== prevGroup;
-          const legacy = getExerciseVideoDisplay(ex.name);
-          const resolved = resolveExerciseVideo(ex, legacy);
           return (
             <View key={ex.slug}>
               {showGroupHeader ? (
@@ -231,19 +225,17 @@ export function LiveWorkoutClient({
                   ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`
                 }
               >
-                <View className="mb-3">
-                  <FramedVideo
-                    src={resolved.videoUrl}
-                    surface="live"
-                    exerciseName={ex.name}
-                    thumbnailUrl={resolved.thumbnailUrl}
-                    videoWidth={resolved.videoWidth}
-                    videoHeight={resolved.videoHeight}
-                    videoFraming={resolved.videoFraming}
-                    videoTrim={resolved.videoTrim}
-                    testID={`${testID}-${ex.slug}-video`}
-                  />
-                </View>
+                <FramedVideo
+                  src={ex.videoUrl}
+                  surface="live"
+                  exerciseName={ex.name}
+                  videoWidth={ex.videoWidth}
+                  videoHeight={ex.videoHeight}
+                  videoFraming={ex.videoFraming}
+                  videoTrim={ex.videoTrim}
+                  testID={`${testID}-${ex.slug}-video`}
+                  className="mb-3"
+                />
                 {ex.notes ? (
                   <Text
                     testID={`${testID}-${ex.slug}-notes`}

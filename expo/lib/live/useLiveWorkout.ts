@@ -472,12 +472,12 @@ export function useLiveWorkout(
         sets: oldEx.sets,
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
-        videoUrl: (candidate as any).videoUrl ?? null,
-        thumbnailUrl: (candidate as any).thumbnailUrl ?? null,
-        videoWidth: (candidate as any).videoWidth ?? null,
-        videoHeight: (candidate as any).videoHeight ?? null,
-        videoFraming: (candidate as any).videoFraming ?? null,
-        videoTrim: (candidate as any).videoTrim ?? null,
+        videoUrl: undefined,
+        thumbnailUrl: undefined,
+        videoWidth: null,
+        videoHeight: null,
+        videoFraming: null,
+        videoTrim: null,
       };
 
       setSwappedExercises((prev) => ({
@@ -749,6 +749,12 @@ export function useLiveWorkout(
               groupRounds: (m as any).groupRounds ?? existing?.groupRounds,
               restSec: existing?.restSec ?? 90,
               addedAdHoc: Boolean((m as any).addedAdHoc),
+              videoUrl: existing?.videoUrl ?? null,
+              thumbnailUrl: existing?.thumbnailUrl ?? null,
+              videoWidth: existing?.videoWidth ?? null,
+              videoHeight: existing?.videoHeight ?? null,
+              videoFraming: existing?.videoFraming ?? null,
+              videoTrim: existing?.videoTrim ?? null,
             };
           });
 
@@ -776,12 +782,12 @@ export function useLiveWorkout(
                   sets: targetEx.sets,
                   originalExerciseSlug: origSlug,
                   swappedFromName: origName,
-                  videoUrl: (savedEx as any).videoUrl ?? null,
-                  thumbnailUrl: (savedEx as any).thumbnailUrl ?? null,
-                  videoWidth: (savedEx as any).videoWidth ?? null,
-                  videoHeight: (savedEx as any).videoHeight ?? null,
-                  videoFraming: (savedEx as any).videoFraming ?? null,
-                  videoTrim: (savedEx as any).videoTrim ?? null,
+                  videoUrl: undefined,
+                  thumbnailUrl: undefined,
+                  videoWidth: null,
+                  videoHeight: null,
+                  videoFraming: null,
+                  videoTrim: null,
                 };
                 restoredSwaps[idx] = {
                   originalSlug: origSlug,

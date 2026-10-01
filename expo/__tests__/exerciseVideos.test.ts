@@ -1,113 +1,127 @@
 import {
-  resolveExerciseVideo,
   getExerciseVideoDisplay,
   getExerciseVideoUrl,
   getExerciseThumbnail,
+  resolveExerciseVideo,
   invalidateExerciseVideoCache,
-  setExerciseVideoCacheForTesting,
-  type ExerciseVideoDisplay,
+  initializeCache,
 } from "@/lib/data/exerciseVideos";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 
 describe("exerciseVideos", () => {
-  afterEach(() => {
+  beforeEach(() => {
     invalidateExerciseVideoCache();
+    (global as any).fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
   });
 
   describe("resolveExerciseVideo", () => {
-    const legacyRow: ExerciseVideoDisplay = {
-      videoUrl: "https://cdn.example.com/legacy-squat.mp4",
-      thumbnailUrl: "https://cdn.example.com/legacy-thumb.jpg",
-      videoWidth: 1920,
-      videoHeight: 1080,
-      videoFraming: { fit: "contain", positionX: 40, positionY: 60, zoom: 120 },
-      videoTrim: { start: 2, end: 8 },
-    };
-
     it("prefers own videoUrl over legacy row", () => {
       const own = {
-        videoUrl: "https://cdn.example.com/own-squat.mp4",
-        thumbnailUrl: "https://cdn.example.com/own-thumb.jpg",
-        videoWidth: 1080,
-        videoHeight: 1920,
-        videoFraming: { fit: "cover" as const, positionX: 50, positionY: 40, zoom: 100 },
+        videoUrl: "https://example.com/own.mp4",
         videoTrim: { start: 1, end: 5 },
       };
-
-      const resolved = resolveExerciseVideo(own, legacyRow);
-      expect(resolved.videoUrl).toBe("https://cdn.example.com/own-squat.mp4");
-      expect(resolved.thumbnailUrl).toBe("https://cdn.example.com/own-thumb.jpg");
-      expect(resolved.videoWidth).toBe(1080);
-      expect(resolved.videoHeight).toBe(1920);
-      expect(resolved.videoFraming).toEqual(own.videoFraming);
-      expect(resolved.videoTrim).toEqual(own.videoTrim);
-    });
-
-    it("rule 2: does NOT apply legacy trim or framing when own videoUrl is present but has no trim/framing", () => {
-      const own = {
-        videoUrl: "https://cdn.example.com/own-squat.mp4",
+      const legacy = {
+        videoUrl: "https://example.com/legacy.mp4",
+        thumbnailUrl: "https://example.com/legacy.jpg",
+        videoWidth: 1920,
+        videoHeight: 1080,
+        videoFraming: null,
+        videoTrim: { start: 2, end: 8 },
       };
 
-      const resolved = resolveExerciseVideo(own, legacyRow);
-      expect(resolved.videoUrl).toBe("https://cdn.example.com/own-squat.mp4");
-      // Trimming and framing belong to the file that supplied the URL
-      expect(resolved.videoTrim).toBeNull();
-      expect(resolved.videoFraming).toBeNull();
-      expect(resolved.videoWidth).toBeNull();
-      expect(resolved.videoHeight).toBeNull();
+      const res = resolveExerciseVideo(own, legacy);
+      expect(res.videoUrl).toBe("https://example.com/own.mp4");
+      expect(res.videoTrim).toEqual({ start: 1, end: 5 });
+      // Crucial: own file is played, so legacy dimensions/trim are NOT copied
+      expect(res.videoWidth).toBeNull();
+      expect(res.videoHeight).toBeNull();
+      expect(res.thumbnailUrl).toBe("https://example.com/legacy.jpg");
     });
 
-    it("falls through to legacy row when own videoUrl is absent or blank", () => {
+    it("falls through to legacy when own videoUrl is missing (e.g. after exercise swap)", () => {
       const own = {
-        videoUrl: "",
+        videoUrl: null,
+        videoTrim: null,
+      };
+      const legacy = {
+        videoUrl: "https://example.com/legacy.mp4",
+        thumbnailUrl: "https://example.com/legacy.jpg",
+        videoWidth: 1920,
+        videoHeight: 1080,
+        videoFraming: { fit: "cover" as const, positionX: 50, positionY: 40, zoom: 100 },
+        videoTrim: { start: 2, end: 8 },
       };
 
-      const resolved = resolveExerciseVideo(own, legacyRow);
-      expect(resolved.videoUrl).toBe("https://cdn.example.com/legacy-squat.mp4");
-      expect(resolved.thumbnailUrl).toBe("https://cdn.example.com/legacy-thumb.jpg");
-      expect(resolved.videoWidth).toBe(1920);
-      expect(resolved.videoHeight).toBe(1080);
-      expect(resolved.videoFraming).toEqual(legacyRow.videoFraming);
-      expect(resolved.videoTrim).toEqual(legacyRow.videoTrim);
+      const res = resolveExerciseVideo(own, legacy);
+      expect(res.videoUrl).toBe("https://example.com/legacy.mp4");
+      expect(res.videoTrim).toEqual({ start: 2, end: 8 });
+      expect(res.videoFraming).toEqual({
+        fit: "cover",
+        positionX: 50,
+        positionY: 40,
+        zoom: 100,
+      });
+      expect(res.videoWidth).toBe(1920);
+      expect(res.videoHeight).toBe(1080);
     });
 
-    it("returns null when neither has a video", () => {
-      const resolved = resolveExerciseVideo({}, null);
-      expect(resolved.videoUrl).toBeNull();
-      expect(resolved.thumbnailUrl).toBeNull();
-      expect(resolved.videoWidth).toBeNull();
-      expect(resolved.videoHeight).toBeNull();
-      expect(resolved.videoFraming).toBeNull();
-      expect(resolved.videoTrim).toBeNull();
+    it("returns nulls when neither own nor legacy has a video", () => {
+      const res = resolveExerciseVideo({}, null);
+      expect(res.videoUrl).toBeNull();
+      expect(res.thumbnailUrl).toBeNull();
+      expect(res.videoWidth).toBeNull();
+      expect(res.videoHeight).toBeNull();
+      expect(res.videoFraming).toBeNull();
+      expect(res.videoTrim).toBeNull();
     });
   });
 
-  describe("cache lookups", () => {
-    it("returns video display, url and thumbnail from cache", () => {
-      const testCache = new Map<string, ExerciseVideoDisplay>([
-        [
-          "bench press",
-          {
-            videoUrl: "https://cdn.example.com/bench.mp4",
-            thumbnailUrl: "https://cdn.example.com/bench.jpg",
-            videoWidth: 1920,
-            videoHeight: 1080,
-            videoFraming: null,
-            videoTrim: null,
-          },
-        ],
-      ]);
-      setExerciseVideoCacheForTesting(testCache);
+  describe("initializeCache and lookups", () => {
+    it("fetches /api/exercise-videos and skips retired videos", async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          videos: [
+            {
+              exerciseName: "Bench Press",
+              videoUrl: "https://example.com/bench.mp4",
+              thumbnailUrl: "https://example.com/bench.jpg",
+              videoWidth: 1920,
+              videoHeight: 1080,
+              trim: { start: 1, end: 4 },
+              framing: { fit: "cover" },
+            },
+            {
+              exerciseName: "Squat",
+              videoUrl: "https://example.com/squat.mp4",
+              status: "retired",
+            },
+          ],
+        }),
+      });
 
-      expect(getExerciseVideoUrl("Bench Press")).toBe(
-        "https://cdn.example.com/bench.mp4",
-      );
-      expect(getExerciseThumbnail("bench press")).toBe(
-        "https://cdn.example.com/bench.jpg",
-      );
-      expect(getExerciseVideoDisplay("Bench Press")).toEqual(
-        testCache.get("bench press"),
-      );
-      expect(getExerciseVideoUrl("Deadlift")).toBeNull();
+      await initializeCache();
+
+      expect(global.fetch).toHaveBeenCalledWith(`${WEBAPP_BASE_URL}/api/exercise-videos`);
+      expect(getExerciseVideoUrl("bench press")).toBe("https://example.com/bench.mp4");
+      expect(getExerciseThumbnail("Bench Press")).toBe("https://example.com/bench.jpg");
+
+      const display = getExerciseVideoDisplay("BENCH PRESS");
+      expect(display).toEqual({
+        videoUrl: "https://example.com/bench.mp4",
+        thumbnailUrl: "https://example.com/bench.jpg",
+        videoWidth: 1920,
+        videoHeight: 1080,
+        videoTrim: { start: 1, end: 4 },
+        videoFraming: { fit: "cover" },
+      });
+
+      // Retired video is excluded
+      expect(getExerciseVideoUrl("Squat")).toBeNull();
     });
   });
 });

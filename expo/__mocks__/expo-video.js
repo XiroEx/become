@@ -2,108 +2,95 @@ const React = require("react");
 const { View } = require("react-native");
 
 class MockVideoPlayer {
-  constructor(source, setup) {
+  constructor(source) {
+    this._listeners = new Map();
     this.source = source;
-    this._currentTime = 0;
+    this.playing = false;
+    this.muted = false;
+    this.loop = false;
+    this.currentTime = 0;
     this.duration = 10;
-    this.muted = true;
-    this.loop = true;
-    this.playing = false;
     this.status = "readyToPlay";
-    this.listeners = new Map();
-    if (typeof setup === "function") {
-      setup(this);
-    }
-  }
+    this.timeUpdateEventInterval = 0.25;
 
-  get currentTime() {
-    return this._currentTime;
-  }
-
-  set currentTime(val) {
-    this._currentTime = val;
-    this._emit("timeUpdate", { currentTime: val });
-  }
-
-  play() {
-    this.playing = true;
-    this._emit("statusChange", { status: "readyToPlay" });
-  }
-
-  pause() {
-    this.playing = false;
-  }
-
-  replay() {
-    this._currentTime = 0;
-    this.playing = true;
-    this._emit("timeUpdate", { currentTime: 0 });
-  }
-
-  seekBy(seconds) {
-    this.currentTime += seconds;
-  }
-
-  addListener(event, callback) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
-    }
-    this.listeners.get(event).add(callback);
-    return {
-      remove: () => {
-        this.listeners.get(event)?.delete(callback);
-      },
-    };
+    this.play = jest.fn(() => {
+      this.playing = true;
+      this._emit("playingChange", { isPlaying: true });
+    });
+    this.pause = jest.fn(() => {
+      this.playing = false;
+      this._emit("playingChange", { isPlaying: false });
+    });
+    this.replace = jest.fn((newSource) => {
+      this.source = newSource;
+      this._emit("sourceChange", { source: newSource });
+    });
+    this.replaceAsync = jest.fn(async (newSource) => {
+      this.source = newSource;
+      this._emit("sourceChange", { source: newSource });
+    });
+    this.seekBy = jest.fn((seconds) => {
+      this.currentTime = Math.max(0, this.currentTime + seconds);
+      this._emit("timeUpdate", { currentTime: this.currentTime });
+    });
+    this.addListener = jest.fn((event, handler) => {
+      if (!this._listeners.has(event)) {
+        this._listeners.set(event, new Set());
+      }
+      this._listeners.get(event).add(handler);
+      return {
+        remove: () => {
+          this._listeners.get(event)?.delete(handler);
+        },
+      };
+    });
+    this.removeListener = jest.fn((event, handler) => {
+      this._listeners.get(event)?.delete(handler);
+    });
   }
 
   _emit(event, payload) {
-    const set = this.listeners.get(event);
-    if (set) {
-      set.forEach((cb) => cb(payload));
+    const handlers = this._listeners.get(event);
+    if (handlers) {
+      for (const handler of handlers) {
+        handler(payload);
+      }
     }
   }
 }
 
-function createVideoPlayer(source, playerBuilderOptions) {
+function createVideoPlayer(source) {
   return new MockVideoPlayer(source);
 }
 
 function useVideoPlayer(source, setup) {
-  const sourceKey =
-    typeof source === "object" && source !== null
-      ? JSON.stringify(source)
-      : String(source);
+  const [player] = React.useState(() => {
+    const p = createVideoPlayer(source);
+    if (typeof setup === "function") {
+      setup(p);
+    }
+    return p;
+  });
 
-  return React.useMemo(
-    () => {
-      return new MockVideoPlayer(source, setup);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sourceKey],
-  );
+  return player;
 }
 
-function VideoView({ player, style, contentFit, testID, ...props }) {
+function VideoView({ player, contentFit, nativeControls, testID, style, ...props }) {
   return React.createElement(View, {
     testID: testID || "video-view",
+    player,
+    contentFit,
+    nativeControls,
     style,
-    "data-content-fit": contentFit,
-    "data-source": player?.source,
     ...props,
   });
 }
 
-function VideoAirPlayButton(props) {
-  return React.createElement(View, { testID: "video-airplay-button", ...props });
-}
-
 module.exports = {
+  __esModule: true,
   VideoView,
   useVideoPlayer,
   createVideoPlayer,
-  VideoAirPlayButton,
-  isPictureInPictureSupported: () => false,
-  clearVideoCacheAsync: async () => {},
-  setVideoCacheSizeAsync: async () => {},
-  getCurrentVideoCacheSize: () => 0,
+  MockVideoPlayer,
+  isPictureInPictureSupported: jest.fn(() => false),
 };

@@ -1,409 +1,359 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Image,
-  Linking,
-  Pressable,
-  type StyleProp,
-  View,
-  type ViewStyle,
-} from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, Linking, Pressable, type StyleProp, View, type ViewStyle } from "react-native";
+import { Dumbbell, Play } from "lucide-react-native";
+import { useVideoPlayer, VideoView, type VideoPlayer, type VideoContentFit } from "expo-video";
 import { Text } from "@/components/Text";
-import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
-import { Play, Dumbbell } from "lucide-react-native";
-import {
-  resolveFraming,
-  type VideoFramingInput,
-  type VideoSurface,
-} from "@/lib/videoFraming";
-import { resolveTrim, type VideoTrimOverride } from "@/lib/videoTrim";
-import { WEBAPP_BASE_URL } from "@/lib/config";
-import { useOptionalAuth } from "@/lib/auth/AuthProvider";
+import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveFraming, type VideoFramingInput, type VideoFramingOverride, type VideoSurface } from "@/lib/videoFraming";
+import { resolveTrim, type VideoTrimOverride } from "@/lib/videoTrim";
+import {
+  getExerciseVideoDisplay,
+  getExerciseVideoDisplayAsync,
+  resolveExerciseVideo,
+  type ExerciseVideoDisplay,
+} from "@/lib/data/exerciseVideos";
 
-export function isYouTubeUrl(u?: string | null): boolean {
-  if (!u) return false;
-  return /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)/i.test(u);
+const YOUTUBE_REGEX = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+
+function isYouTubeUrl(url: string): boolean {
+  return /(?:youtube\.com|youtu\.be)/i.test(url);
 }
 
-export function extractYouTubeId(url: string): string | null {
-  const match = url.match(
-    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/,
-  );
-  return match ? match[1] ?? null : null;
+function getYouTubeId(url: string): string | null {
+  const match = url.match(YOUTUBE_REGEX);
+  return match?.[1] ?? null;
+}
+
+function seekPlayer(player: VideoPlayer, time: number) {
+  player.currentTime = time;
+}
+
+function setPlayerLoop(player: VideoPlayer, loop: boolean) {
+  player.loop = loop;
+}
+
+function setPlayerMuted(player: VideoPlayer, muted: boolean) {
+  player.muted = muted;
 }
 
 export interface FramedVideoProps extends VideoFramingInput {
   src?: string | null;
   surface: VideoSurface;
   exerciseName?: string;
-  thumbnailUrl?: string | null;
   videoTrim?: VideoTrimOverride | null;
-  token?: string | null;
   onDuration?: (seconds: number) => void;
+  onDimensions?: (width: number, height: number) => void;
   className?: string;
   style?: StyleProp<ViewStyle>;
-  showBadge?: boolean;
-  showFullscreenToggle?: boolean;
   testID?: string;
-  wrapperOverride?: string;
+  showBadge?: boolean;
 }
 
-function setPlayerMuted(player: VideoPlayer, muted: boolean): void {
-  player.muted = muted;
+function VideoPlaceholder({
+  exerciseName,
+  testID,
+}: {
+  exerciseName?: string;
+  surface: VideoSurface;
+  testID?: string;
+}) {
+  const { colors } = useThemeTokens();
+  return (
+    <View
+      testID={testID ? `${testID}-placeholder` : "framed-video-placeholder"}
+      className="relative w-full aspect-video overflow-hidden rounded-xl bg-card/60 border border-border items-center justify-center p-4"
+    >
+      <Dumbbell size={36} color={colors["muted-foreground"]} style={{ marginBottom: 8, opacity: 0.5 }} />
+      <Text
+        testID={testID ? `${testID}-placeholder-text` : "framed-video-placeholder-text"}
+        className="text-muted-foreground text-sm font-medium text-center"
+      >
+        {exerciseName ? `${exerciseName} demo is coming` : "Demo is coming"}
+      </Text>
+    </View>
+  );
 }
 
-function setPlayerLoop(player: VideoPlayer, loop: boolean): void {
-  player.loop = loop;
+function YouTubeDemo({
+  url,
+  exerciseName,
+  testID,
+}: {
+  url: string;
+  exerciseName?: string;
+  surface: VideoSurface;
+  testID?: string;
+}) {
+  const { colors } = useThemeTokens();
+  const videoId = getYouTubeId(url);
+  const thumbnailUrl = videoId
+    ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+    : null;
+
+  const handlePress = useCallback(() => {
+    Linking.openURL(url).catch(() => {});
+  }, [url]);
+
+  return (
+    <Pressable
+      testID={testID ? `${testID}-youtube` : "framed-video-youtube"}
+      accessibilityRole="button"
+      accessibilityLabel={`Open YouTube demo for ${exerciseName || "exercise"}`}
+      onPress={handlePress}
+      className="relative w-full aspect-video overflow-hidden rounded-xl bg-black items-center justify-center"
+    >
+      {thumbnailUrl ? (
+        <Image
+          source={{ uri: thumbnailUrl }}
+          className="absolute inset-0 w-full h-full"
+          resizeMode="cover"
+        />
+      ) : null}
+      <View className="absolute inset-0 bg-black/40 items-center justify-center">
+        <View className="h-12 w-12 rounded-full bg-destructive/90 items-center justify-center">
+          <Play
+            size={24}
+            color={colors["destructive-foreground"]}
+            fill={colors["destructive-foreground"]}
+            style={{ marginLeft: 2 }}
+          />
+        </View>
+        <Text className="text-white text-xs font-semibold mt-2 px-2 py-0.5 rounded bg-black/60">
+          Watch on YouTube
+        </Text>
+      </View>
+    </Pressable>
+  );
 }
 
-function setPlayerCurrentTime(player: VideoPlayer, time: number): void {
-  player.currentTime = time;
+interface DirectVideoProps {
+  src: string;
+  surface: VideoSurface;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
+  onDuration?: (seconds: number) => void;
+  onDimensions?: (width: number, height: number) => void;
+  showBadge?: boolean;
+  testID?: string;
+}
+
+function DirectVideo({
+  src,
+  surface,
+  videoWidth,
+  videoHeight,
+  videoFraming,
+  videoTrim,
+  onDuration,
+  showBadge,
+  testID,
+}: DirectVideoProps) {
+  const { token } = useAuth();
+  const [duration, setDuration] = useState<number | null>(null);
+
+  const trim = useMemo(() => {
+    return resolveTrim({ videoTrim }, duration);
+  }, [videoTrim, duration]);
+
+  const framing = useMemo(() => {
+    return resolveFraming({ videoWidth, videoHeight, videoFraming }, surface);
+  }, [videoWidth, videoHeight, videoFraming, surface]);
+
+  const trimRef = useRef(trim);
+  useEffect(() => {
+    trimRef.current = trim;
+  }, [trim]);
+
+  const isCustom = src.includes("custom-exercises/");
+  const videoSource = useMemo(() => {
+    const headers: Record<string, string> = {};
+    if (isCustom && token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    return {
+      uri: src,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    };
+  }, [src, isCustom, token]);
+
+  const player = useVideoPlayer(videoSource, (p) => {
+    setPlayerMuted(p, true);
+    setPlayerLoop(p, trim.isFullLength);
+    p.timeUpdateEventInterval = 0.25;
+    p.play();
+  });
+
+  useEffect(() => {
+    setPlayerMuted(player, true);
+    setPlayerLoop(player, trim.isFullLength);
+  }, [player, trim.isFullLength]);
+
+  // Handle trim loop and duration listeners
+  useEffect(() => {
+    const timeSub = player.addListener("timeUpdate", (event) => {
+      const currentTrim = trimRef.current;
+      if (currentTrim.isFullLength) return;
+      const end = currentTrim.end;
+      if (end !== null && event.currentTime >= end) {
+        seekPlayer(player, currentTrim.start);
+        if (!player.playing) {
+          player.play();
+        }
+      } else if (event.currentTime < currentTrim.start - 0.25) {
+        seekPlayer(player, currentTrim.start);
+      }
+    });
+
+    const endSub = player.addListener("playToEnd", () => {
+      const currentTrim = trimRef.current;
+      if (!currentTrim.isFullLength) {
+        seekPlayer(player, currentTrim.start);
+        player.play();
+      }
+    });
+
+    const loadSub = player.addListener("sourceLoad", (event) => {
+      if (event.duration > 0) {
+        setDuration(event.duration);
+        onDuration?.(event.duration);
+      }
+    });
+
+    return () => {
+      timeSub.remove();
+      endSub.remove();
+      loadSub.remove();
+    };
+  }, [player, onDuration]);
+
+  // Initial seek to trim.start when trim changes
+  useEffect(() => {
+    if (!trim.isFullLength && player) {
+      if (Math.abs(player.currentTime - trim.start) > 0.05) {
+        seekPlayer(player, trim.start);
+      }
+    }
+  }, [player, trim.start, trim.isFullLength]);
+
+  const contentFit: VideoContentFit = framing.fit === "contain" ? "contain" : "cover";
+  const scale = framing.zoom !== 100 ? framing.zoom / 100 : 1;
+  const transform = scale !== 1 ? [{ scale }] : undefined;
+
+  return (
+    <View
+      testID={testID ? `${testID}-container` : "framed-video-container"}
+      className="relative w-full aspect-video overflow-hidden rounded-xl bg-black"
+    >
+      <VideoView
+        testID={testID ? `${testID}-player` : "framed-video-player"}
+        player={player}
+        contentFit={contentFit}
+        nativeControls={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          transform,
+        }}
+      />
+      {showBadge && surface !== "live" ? (
+        <View className="absolute top-2 right-2 rounded bg-black/60 px-2 py-1">
+          <Text className="text-xs font-medium text-white">Demo</Text>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export function FramedVideo({
   src,
   surface,
   exerciseName,
-  thumbnailUrl,
   videoWidth,
   videoHeight,
   videoFraming,
   videoTrim,
-  token: explicitToken,
   onDuration,
-  style,
+  onDimensions,
   showBadge,
-  showFullscreenToggle,
+  className,
+  style,
   testID,
-  wrapperOverride,
 }: FramedVideoProps) {
-  const { colors, scrim, tint } = useThemeTokens();
-  const auth = useOptionalAuth();
-  const token = explicitToken ?? auth?.token ?? null;
+  const [legacyVideo, setLegacyVideo] = useState<ExerciseVideoDisplay | null>(
+    () => (exerciseName ? getExerciseVideoDisplay(exerciseName) : null),
+  );
 
-  const rawUrl = src?.trim() || "";
-  const isYouTube = isYouTubeUrl(rawUrl);
+  useEffect(() => {
+    if (!src && exerciseName) {
+      let active = true;
+      void getExerciseVideoDisplayAsync(exerciseName).then((resolved) => {
+        if (active && resolved) {
+          setLegacyVideo(resolved);
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+  }, [src, exerciseName]);
 
-  // Placeholder branch: empty or invalid src
-  if (!rawUrl) {
+  const resolved = useMemo(() => {
+    return resolveExerciseVideo(
+      {
+        videoUrl: src,
+        videoWidth,
+        videoHeight,
+        videoFraming,
+        videoTrim,
+      },
+      legacyVideo,
+    );
+  }, [src, videoWidth, videoHeight, videoFraming, videoTrim, legacyVideo]);
+
+  const activeSrc = resolved.videoUrl;
+
+  if (!activeSrc) {
     return (
-      <View
-        testID={testID ? `${testID}-placeholder` : "framed-video-placeholder"}
-        style={[
-          surface === "live"
-            ? { width: "100%", height: "100%", minHeight: 180 }
-            : { width: "100%", aspectRatio: 16 / 9 },
-          {
-            backgroundColor: tint("muted", 0.4),
-            borderColor: tint("border", 0.5),
-            borderWidth: 1,
-            borderRadius: 12,
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          },
-          style,
-        ]}
-      >
-        <Dumbbell
-          size={32}
-          color={colors["muted-foreground"]}
-          style={{ marginBottom: 8, opacity: 0.6 }}
+      <View className={className} style={style}>
+        <VideoPlaceholder
+          exerciseName={exerciseName}
+          surface={surface}
+          testID={testID}
         />
-        <Text
-          testID={testID ? `${testID}-placeholder-name` : undefined}
-          className="text-foreground font-semibold text-center text-sm"
-        >
-          {exerciseName || "Exercise"}
-        </Text>
-        <Text
-          testID={testID ? `${testID}-placeholder-text` : undefined}
-          className="text-muted-foreground text-xs text-center mt-1"
-        >
-          Demo is coming soon
-        </Text>
       </View>
     );
   }
 
-  // YouTube branch: thumbnail that opens YouTube in browser / app
-  if (isYouTube) {
-    const ytId = extractYouTubeId(rawUrl);
-    const ytThumb =
-      thumbnailUrl ||
-      (ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null);
-
+  if (isYouTubeUrl(activeSrc)) {
     return (
-      <Pressable
-        testID={testID ? `${testID}-youtube` : "framed-video-youtube"}
-        accessibilityRole="button"
-        accessibilityLabel={`Watch ${exerciseName || "exercise"} demo on YouTube`}
-        onPress={() => {
-          void Linking.openURL(rawUrl).catch(() => {});
-        }}
-        style={[
-          surface === "live"
-            ? { width: "100%", height: "100%", minHeight: 180 }
-            : { width: "100%", aspectRatio: 16 / 9 },
-          {
-            borderRadius: 12,
-            overflow: "hidden",
-            position: "relative",
-            backgroundColor: colors.card,
-            justifyContent: "center",
-            alignItems: "center",
-          },
-          style,
-        ]}
-      >
-        {ytThumb ? (
-          <Image
-            source={{ uri: ytThumb }}
-            style={{ width: "100%", height: "100%", position: "absolute" }}
-            resizeMode="cover"
-          />
-        ) : (
-          <View
-            style={{
-              width: "100%",
-              height: "100%",
-              position: "absolute",
-              backgroundColor: tint("muted", 0.6),
-            }}
-          />
-        )}
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 24,
-              backgroundColor: colors.primary,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Play size={24} color={colors["primary-foreground"]} />
-          </View>
-          <Text className="text-foreground text-xs font-medium mt-2">
-            Watch on YouTube
-          </Text>
-        </View>
-      </Pressable>
+      <View className={className} style={style}>
+        <YouTubeDemo
+          url={activeSrc}
+          exerciseName={exerciseName}
+          surface={surface}
+          testID={testID}
+        />
+      </View>
     );
   }
 
-  // Direct video file playback
   return (
-    <DirectFramedVideoPlayer
-      src={rawUrl}
-      surface={surface}
-      videoWidth={videoWidth}
-      videoHeight={videoHeight}
-      videoFraming={videoFraming}
-      videoTrim={videoTrim}
-      token={token}
-      onDuration={onDuration}
-      style={style}
-      showBadge={showBadge}
-      showFullscreenToggle={showFullscreenToggle}
-      testID={testID}
-      wrapperOverride={wrapperOverride}
-    />
-  );
-}
-
-interface DirectPlayerProps extends VideoFramingInput {
-  src: string;
-  surface: VideoSurface;
-  videoTrim?: VideoTrimOverride | null;
-  token: string | null;
-  onDuration?: (seconds: number) => void;
-  style?: StyleProp<ViewStyle>;
-  showBadge?: boolean;
-  showFullscreenToggle?: boolean;
-  testID?: string;
-  wrapperOverride?: string;
-}
-
-function DirectFramedVideoPlayer({
-  src,
-  surface,
-  videoWidth,
-  videoHeight,
-  videoFraming,
-  videoTrim,
-  token,
-  onDuration,
-  style,
-  showBadge,
-  testID,
-}: DirectPlayerProps) {
-  const { colors, scrim } = useThemeTokens();
-  const [duration, setDuration] = useState<number | null>(null);
-
-  const resolved = useMemo(
-    () => resolveFraming({ videoWidth, videoHeight, videoFraming }, surface),
-    [videoWidth, videoHeight, videoFraming, surface],
-  );
-
-  const trim = useMemo(
-    () => resolveTrim({ videoTrim }, duration),
-    [videoTrim, duration],
-  );
-
-  const fullUri = src.startsWith("/") ? `${WEBAPP_BASE_URL}${src}` : src;
-  const isCustomExercise = fullUri.includes("custom-exercises/");
-
-  const videoSource = useMemo(() => {
-    if (isCustomExercise && token) {
-      return {
-        uri: fullUri,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      };
-    }
-    return { uri: fullUri };
-  }, [fullUri, isCustomExercise, token]);
-
-  const player = useVideoPlayer(videoSource, (p) => {
-    p.muted = true;
-    p.loop = trim.isFullLength;
-    p.play();
-  });
-
-  const handleDuration = useCallback(
-    (d: number) => {
-      if (Number.isFinite(d) && d > 0) {
-        setDuration(d);
-        onDuration?.(d);
-      }
-    },
-    [onDuration],
-  );
-
-  // Sync mute and loop state when trim or player changes
-  useEffect(() => {
-    setPlayerMuted(player, true);
-    setPlayerLoop(player, trim.isFullLength);
-  }, [player, trim.isFullLength]);
-
-  // Listen to status change to capture duration once ready
-  useEffect(() => {
-    const sub = player.addListener("statusChange", (event) => {
-      if (event.status === "readyToPlay" && player.duration > 0) {
-        handleDuration(player.duration);
-      }
-    });
-
-    return () => {
-      sub.remove();
-    };
-  }, [player, handleDuration]);
-
-  // Trim looping: timeUpdate and playToEnd
-  useEffect(() => {
-    const sub = player.addListener("timeUpdate", ({ currentTime }) => {
-      if (!trim.isFullLength && trim.end !== null) {
-        if (currentTime >= trim.end) {
-          setPlayerCurrentTime(player, trim.start);
-          if (!player.playing) {
-            player.play();
-          }
-        } else if (currentTime < trim.start - 0.25) {
-          setPlayerCurrentTime(player, trim.start);
-        }
-      }
-    });
-
-    const playToEndSub = player.addListener("playToEnd", () => {
-      if (!trim.isFullLength) {
-        setPlayerCurrentTime(player, trim.start);
-        player.play();
-      }
-    });
-
-    return () => {
-      sub.remove();
-      playToEndSub.remove();
-    };
-  }, [player, trim]);
-
-  // Seek to in-point on initial load or trim window change
-  useEffect(() => {
-    if (trim.isFullLength) return;
-    if (Math.abs(player.currentTime - trim.start) < 0.05) return;
-    if (
-      player.currentTime < trim.start ||
-      (trim.end !== null && player.currentTime > trim.end)
-    ) {
-      setPlayerCurrentTime(player, trim.start);
-    }
-  }, [player, trim, duration]);
-
-  const transformStyle =
-    resolved.zoom !== 100
-      ? { transform: [{ scale: resolved.zoom / 100 }] }
-      : undefined;
-
-  const wrapperStyle: ViewStyle =
-    surface === "live"
-      ? {
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          minHeight: 180,
-          overflow: "hidden",
-          backgroundColor: colors.background,
-        }
-      : {
-          position: "relative",
-          width: "100%",
-          aspectRatio: 16 / 9,
-          overflow: "hidden",
-          borderRadius: 12,
-          backgroundColor: colors.background,
-        };
-
-  return (
-    <View
-      testID={testID ? `${testID}-container` : "framed-video-container"}
-      style={[wrapperStyle, style]}
-    >
-      <VideoView
-        testID={testID || "framed-video-player"}
-        player={player}
-        style={[{ width: "100%", height: "100%" }, transformStyle]}
-        contentFit={resolved.fit}
-        nativeControls={false}
+    <View className={className} style={style}>
+      <DirectVideo
+        src={activeSrc}
+        surface={surface}
+        videoWidth={resolved.videoWidth}
+        videoHeight={resolved.videoHeight}
+        videoFraming={resolved.videoFraming}
+        videoTrim={resolved.videoTrim}
+        onDuration={onDuration}
+        onDimensions={onDimensions}
+        showBadge={showBadge}
+        testID={testID}
       />
-      {showBadge && surface !== "live" ? (
-        <View
-          style={{
-            position: "absolute",
-            top: 8,
-            right: 8,
-            borderRadius: 4,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            backgroundColor: scrim,
-          }}
-        >
-          <Text className="text-foreground text-xs font-medium">Demo</Text>
-        </View>
-      ) : null}
     </View>
   );
 }

@@ -550,10 +550,6 @@ export function AuthProvider({
  * is deliberate: a screen rendering its own session is the bug this file
  * exists to remove, and a silent fallback would hide it.
  */
-export function useOptionalAuth(): AuthContextValue | null {
-  return useContext(AuthContext);
-}
-
 export function useAuthContext(): AuthContextValue {
   const value = useContext(AuthContext);
   if (value === null) {

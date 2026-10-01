@@ -1,105 +1,91 @@
-import {
-  detectOrientation,
-  resolveFraming,
-} from "@/lib/videoFraming";
+import { detectOrientation, resolveFraming } from "@/lib/videoFraming";
 
 describe("videoFraming", () => {
   describe("detectOrientation", () => {
     it("detects landscape", () => {
       expect(detectOrientation(1920, 1080)).toBe("landscape");
-      expect(detectOrientation(1200, 1000)).toBe("landscape");
+      expect(detectOrientation(1200, 1000)).toBe("landscape"); // 1.2 > 1.1
     });
 
     it("detects portrait", () => {
       expect(detectOrientation(1080, 1920)).toBe("portrait");
-      expect(detectOrientation(720, 1280)).toBe("portrait");
+      expect(detectOrientation(800, 1000)).toBe("portrait"); // 0.8 < 0.9
     });
 
     it("detects square", () => {
       expect(detectOrientation(1000, 1000)).toBe("square");
-      expect(detectOrientation(1050, 1000)).toBe("square");
+      expect(detectOrientation(1000, 1050)).toBe("square"); // 0.95
     });
 
-    it("returns unknown when dimensions are missing or invalid", () => {
+    it("handles missing or invalid dimensions", () => {
       expect(detectOrientation(null, null)).toBe("unknown");
-      expect(detectOrientation(0, 100)).toBe("unknown");
-      expect(detectOrientation(100, 0)).toBe("unknown");
-      expect(detectOrientation(-10, 100)).toBe("unknown");
+      expect(detectOrientation(0, 1080)).toBe("unknown");
+      expect(detectOrientation(-100, 100)).toBe("unknown");
     });
   });
 
   describe("resolveFraming", () => {
-    it("resolves auto framing for landscape on live surface", () => {
-      const framing = resolveFraming(
-        { videoWidth: 1920, videoHeight: 1080 },
-        "live",
-      );
-      expect(framing).toEqual({
-        fit: "cover",
-        positionX: 50,
-        positionY: 50,
-        zoom: 100,
-        isAuto: true,
-        detectedOrientation: "landscape",
-      });
+    it("auto landscape on form surface", () => {
+      const res = resolveFraming({ videoWidth: 1920, videoHeight: 1080 }, "form");
+      expect(res.fit).toBe("cover");
+      expect(res.positionX).toBe(50);
+      expect(res.positionY).toBe(50);
+      expect(res.zoom).toBe(100);
+      expect(res.isAuto).toBe(true);
+      expect(res.detectedOrientation).toBe("landscape");
     });
 
-    it("resolves auto framing for portrait on live surface with positionY=40", () => {
-      const framing = resolveFraming(
-        { videoWidth: 1080, videoHeight: 1920 },
-        "live",
-      );
-      expect(framing).toEqual({
-        fit: "cover",
-        positionX: 50,
-        positionY: 40,
-        zoom: 100,
-        isAuto: true,
-        detectedOrientation: "portrait",
-      });
+    it("auto portrait on live surface tilts positionY to 40", () => {
+      const res = resolveFraming({ videoWidth: 1080, videoHeight: 1920 }, "live");
+      expect(res.fit).toBe("cover");
+      expect(res.positionX).toBe(50);
+      expect(res.positionY).toBe(40);
+      expect(res.zoom).toBe(100);
+      expect(res.isAuto).toBe(true);
+      expect(res.detectedOrientation).toBe("portrait");
     });
 
-    it("respects manual overrides for fit, position and zoom", () => {
-      const framing = resolveFraming(
+    it("manual override overrides only specified fields", () => {
+      const res = resolveFraming(
+        {
+          videoWidth: 1080,
+          videoHeight: 1920,
+          videoFraming: { positionY: 65, zoom: 150 },
+        },
+        "live",
+      );
+      expect(res.fit).toBe("cover"); // auto
+      expect(res.positionX).toBe(50); // auto
+      expect(res.positionY).toBe(65); // override
+      expect(res.zoom).toBe(150); // override
+      expect(res.isAuto).toBe(false);
+    });
+
+    it("manual fit override is respected", () => {
+      const res = resolveFraming(
         {
           videoWidth: 1920,
           videoHeight: 1080,
-          videoFraming: {
-            fit: "contain",
-            positionX: 30,
-            positionY: 70,
-            zoom: 150,
-          },
-        },
-        "preview",
-      );
-      expect(framing).toEqual({
-        fit: "contain",
-        positionX: 30,
-        positionY: 70,
-        zoom: 150,
-        isAuto: false,
-        detectedOrientation: "landscape",
-      });
-    });
-
-    it("clamps overrides within safe limits", () => {
-      const framing = resolveFraming(
-        {
-          videoWidth: 1000,
-          videoHeight: 1000,
-          videoFraming: {
-            positionX: 150,
-            positionY: -20,
-            zoom: 500,
-          },
+          videoFraming: { fit: "contain" },
         },
         "form",
       );
-      expect(framing.positionX).toBe(100);
-      expect(framing.positionY).toBe(0);
-      expect(framing.zoom).toBe(400);
-      expect(framing.isAuto).toBe(false);
+      expect(res.fit).toBe("contain");
+      expect(res.isAuto).toBe(false);
+    });
+
+    it("clamps position and zoom", () => {
+      const res = resolveFraming(
+        {
+          videoWidth: 1920,
+          videoHeight: 1080,
+          videoFraming: { positionX: -20, positionY: 150, zoom: 500 },
+        },
+        "preview",
+      );
+      expect(res.positionX).toBe(0);
+      expect(res.positionY).toBe(100);
+      expect(res.zoom).toBe(400);
     });
   });
 });

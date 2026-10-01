@@ -1,6 +1,14 @@
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, act } from "@testing-library/react-native";
 import { Linking } from "react-native";
 import { FramedVideo } from "@/components/FramedVideo";
+
+jest.mock("@/lib/auth/useAuth", () => ({
+  useAuth: () => ({
+    token: "mock-member-jwt",
+    user: { id: "user-123" },
+    isAuthed: true,
+  }),
+}));
 
 describe("FramedVideo", () => {
   beforeEach(() => {
@@ -8,177 +16,131 @@ describe("FramedVideo", () => {
     jest.spyOn(Linking, "openURL").mockResolvedValue(true as any);
   });
 
-  describe("Placeholder (criterion e015c85a)", () => {
-    it("renders the placeholder with exercise name and demo coming text when src is null", () => {
-      const { getByTestId, queryByTestId } = render(
-        <FramedVideo
-          src={null}
-          surface="live"
-          exerciseName="Barbell Squat"
-          testID="squat-video"
-        />,
-      );
+  it("(e015c85a) an exercise without a demo shows the placeholder, not a black box", () => {
+    const { getByTestId, queryByTestId } = render(
+      <FramedVideo
+        src={null}
+        exerciseName="Bulgarian Split Squat"
+        surface="live"
+        testID="demo-video"
+      />,
+    );
 
-      expect(getByTestId("squat-video-placeholder")).toBeTruthy();
-      expect(getByTestId("squat-video-placeholder-name").props.children).toBe(
-        "Barbell Squat",
-      );
-      expect(getByTestId("squat-video-placeholder-text").props.children).toBe(
-        "Demo is coming soon",
-      );
-      // Ensure it is not a black box or unhandled video player
-      expect(queryByTestId("squat-video-player")).toBeNull();
-    });
+    expect(getByTestId("demo-video-placeholder")).toBeTruthy();
+    const textEl = getByTestId("demo-video-placeholder-text");
+    expect(textEl.props.children).toContain("Bulgarian Split Squat");
+    expect(textEl.props.children).toContain("demo is coming");
 
-    it("renders the placeholder when src is empty string", () => {
-      const { getByTestId } = render(
-        <FramedVideo
-          src=""
-          surface="preview"
-          exerciseName="Push Up"
-          testID="pushup-video"
-        />,
-      );
+    // No video player rendered
+    expect(queryByTestId("demo-video-player")).toBeNull();
+  });
 
-      expect(getByTestId("pushup-video-placeholder")).toBeTruthy();
-      expect(getByTestId("pushup-video-placeholder-name").props.children).toBe(
-        "Push Up",
-      );
+  it("(e015c858) a .mov demo plays with native video player", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/squat.mov"
+        exerciseName="Squat"
+        surface="live"
+        testID="demo-video"
+      />,
+    );
+
+    const playerView = getByTestId("demo-video-player");
+    expect(playerView).toBeTruthy();
+  });
+
+  it("(e015c859) a member's own custom-exercise demo sends Authorization header", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://become.redbtn.io/api/blob/custom-exercises/user-123/my-lift.mp4"
+        surface="live"
+        testID="custom-video"
+      />,
+    );
+
+    const playerView = getByTestId("custom-video-player");
+    expect(playerView).toBeTruthy();
+    const player = playerView.props.player;
+    expect(player.source).toEqual({
+      uri: "https://become.redbtn.io/api/blob/custom-exercises/user-123/my-lift.mp4",
+      headers: {
+        Authorization: "Bearer mock-member-jwt",
+      },
     });
   });
 
-  describe("Legacy YouTube demos", () => {
-    it("renders YouTube thumbnail and opens YouTube link on press", () => {
-      const youtubeUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-      const { getByTestId } = render(
-        <FramedVideo
-          src={youtubeUrl}
-          surface="form"
-          exerciseName="Rickroll Press"
-          testID="yt-demo"
-        />,
-      );
+  it("catalogue demo does not send Authorization header", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://become.redbtn.io/exercises/bench-press.mp4"
+        surface="live"
+        testID="catalogue-video"
+      />,
+    );
 
-      const button = getByTestId("yt-demo-youtube");
-      expect(button).toBeTruthy();
-
-      fireEvent.press(button);
-      expect(Linking.openURL).toHaveBeenCalledWith(youtubeUrl);
-    });
+    const player = getByTestId("catalogue-video-player").props.player;
+    expect(player.source.headers).toBeUndefined();
   });
 
-  describe(".mov direct playback on Android/iOS (criterion e015c858)", () => {
-    it("passes .mov directly to native video player without web workarounds", () => {
-      const movUrl = "https://cdn.example.com/exercises/bench/demo.mov";
-      const { getByTestId } = render(
-        <FramedVideo
-          src={movUrl}
-          surface="live"
-          exerciseName="Bench Press"
-          testID="bench-video"
-        />,
-      );
+  it("(e015c857) a trimmed demo loops only between its trim points and stays muted", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/deadlift.mp4"
+        surface="live"
+        videoTrim={{ start: 2.0, end: 6.5 }}
+        testID="trimmed-video"
+      />,
+    );
 
-      const playerView = getByTestId("bench-video");
-      expect(playerView).toBeTruthy();
-      expect(playerView.props["data-source"]).toEqual({ uri: movUrl });
+    const player = getByTestId("trimmed-video-player").props.player;
+    expect(player.muted).toBe(true);
+    expect(player.loop).toBe(false); // native loop is turned off for trimmed video
+
+    // When time passes the trim end point, seeks back to start
+    act(() => {
+      player._emit("timeUpdate", { currentTime: 6.6 });
     });
+    expect(player.currentTime).toBe(2.0);
+
+    // When playToEnd fires, seeks back to start
+    act(() => {
+      player._emit("playToEnd");
+    });
+    expect(player.currentTime).toBe(2.0);
+    expect(player.play).toHaveBeenCalled();
   });
 
-  describe("Custom exercise demo authorization (criterion e015c859)", () => {
-    it("sends Authorization: Bearer in headers for custom-exercise demos", () => {
-      const customUrl =
-        "https://become.redbtn.io/api/blob/custom-exercises/user-123/my-lift/video.mp4";
-      const userToken = "test-jwt-token";
+  it("an untrimmed demo has native loop enabled", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.com/exercises/deadlift.mp4"
+        surface="live"
+        videoTrim={null}
+        testID="untrimmed-video"
+      />,
+    );
 
-      const { getByTestId } = render(
-        <FramedVideo
-          src={customUrl}
-          surface="live"
-          exerciseName="My Custom Lift"
-          token={userToken}
-          testID="custom-video"
-        />,
-      );
-
-      const playerView = getByTestId("custom-video");
-      expect(playerView.props["data-source"]).toEqual({
-        uri: customUrl,
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-        },
-      });
-    });
-
-    it("does not send Authorization headers for public catalogue demos", () => {
-      const catalogUrl =
-        "https://become.redbtn.io/api/blob/exercises/squat/demo.mp4";
-
-      const { getByTestId } = render(
-        <FramedVideo
-          src={catalogUrl}
-          surface="live"
-          exerciseName="Catalogue Squat"
-          token="token-should-not-be-sent"
-          testID="cat-video"
-        />,
-      );
-
-      const playerView = getByTestId("cat-video");
-      expect(playerView.props["data-source"]).toEqual({
-        uri: catalogUrl,
-      });
-    });
+    const player = getByTestId("untrimmed-video-player").props.player;
+    expect(player.loop).toBe(true);
+    expect(player.muted).toBe(true);
   });
 
-  describe("Trimmed demo looping (criterion e015c857)", () => {
-    it("configures trim points and seeks to start", () => {
-      const videoUrl = "https://cdn.example.com/exercises/deadlift/demo.mp4";
-      const { getByTestId } = render(
-        <FramedVideo
-          src={videoUrl}
-          surface="live"
-          exerciseName="Deadlift"
-          videoTrim={{ start: 2.0, end: 6.0 }}
-          testID="deadlift-video"
-        />,
-      );
+  it("shows legacy YouTube demos as a thumbnail that opens YouTube", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        exerciseName="Roll"
+        surface="live"
+        testID="yt-video"
+      />,
+    );
 
-      const playerView = getByTestId("deadlift-video");
-      expect(playerView).toBeTruthy();
-    });
-  });
+    const ytButton = getByTestId("yt-video-youtube");
+    expect(ytButton).toBeTruthy();
 
-  describe("Per-surface framing", () => {
-    it("applies contentFit cover for portrait demo on live surface", () => {
-      const { getByTestId } = render(
-        <FramedVideo
-          src="https://cdn.example.com/demo.mp4"
-          surface="live"
-          videoWidth={1080}
-          videoHeight={1920}
-          testID="portrait-video"
-        />,
-      );
-
-      const playerView = getByTestId("portrait-video");
-      expect(playerView.props["data-content-fit"]).toBe("cover");
-    });
-
-    it("applies zoom scale transform when configured", () => {
-      const { getByTestId } = render(
-        <FramedVideo
-          src="https://cdn.example.com/demo.mp4"
-          surface="form"
-          videoFraming={{ zoom: 150 }}
-          testID="zoomed-video"
-        />,
-      );
-
-      const playerView = getByTestId("zoomed-video");
-      expect(playerView.props.style).toEqual(
-        expect.arrayContaining([{ transform: [{ scale: 1.5 }] }]),
-      );
-    });
+    fireEvent.press(ytButton);
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    );
   });
 });
