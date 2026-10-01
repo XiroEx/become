@@ -1,5 +1,6 @@
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { DashboardScreen } from "@/components/DashboardScreen";
+import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
 
 describe("DashboardScreen", () => {
   const baseProps = {
@@ -59,12 +60,12 @@ describe("DashboardScreen", () => {
     expect(getByTestId("dashboard-greeting").props.children).toBe("Hey, Jon");
   });
 
-  it("opens the check-in modal when the trigger button is pressed", () => {
-    const { getByTestId, queryByTestId } = render(
-      <DashboardScreen {...baseProps} />,
+  it("opens the check-in modal when checkInOpen is true (prompt-driven parity)", () => {
+    const { getByTestId, queryByTestId, rerender } = render(
+      <DashboardScreen {...baseProps} checkInOpen={false} />,
     );
     expect(queryByTestId("dashboard-checkin-modal-mood-row")).toBeNull();
-    fireEvent.press(getByTestId("dashboard-open-checkin"));
+    rerender(<DashboardScreen {...baseProps} checkInOpen />);
     expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
   });
 
@@ -100,14 +101,23 @@ describe("DashboardScreen", () => {
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
   });
 
-  it("fires onOpenCalendar when the calendar button is pressed", () => {
-    // The calendar is a hidden route in the (tabs) tree, so this control is
-    // the dashboard's only way in — like the settings gear above it.
+  it("fires onOpenCalendar when the Up Next calendar link is pressed", () => {
+    // The calendar is reached via the Up Next link on Home (NP-211 / NP-106).
     const onOpenCalendar = jest.fn();
+    const upcomingWorkout: UpcomingWorkoutSummary = {
+      dateLabel: "Tomorrow",
+      dayLabel: "Day 2 Lower A",
+      workoutTitle: "Lower Body",
+      programName: "Foundation",
+    };
     const { getByTestId } = render(
-      <DashboardScreen {...baseProps} onOpenCalendar={onOpenCalendar} />,
+      <DashboardScreen
+        {...baseProps}
+        onOpenCalendar={onOpenCalendar}
+        upcomingWorkout={upcomingWorkout}
+      />,
     );
-    fireEvent.press(getByTestId("dashboard-open-calendar"));
+    fireEvent.press(getByTestId("up-next-calendar"));
     expect(onOpenCalendar).toHaveBeenCalledTimes(1);
   });
 

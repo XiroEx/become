@@ -39,6 +39,7 @@ export interface StatTileProps {
   /** Opens streaks detail screen (NP-108). */
   onOpenStreaks?: () => void;
   onPress?: () => void;
+  testID?: string;
 }
 
 export function StatTile({
@@ -54,18 +55,20 @@ export function StatTile({
   onOpenSettings,
   onOpenStreaks,
   onPress,
+  testID,
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
   const { weightUnit: userWeightUnit } = useUnits();
   const unit = statData?.weightUnit ?? userWeightUnit ?? "lbs";
   const wide = tile.size === "2x1";
   const [internalMoodOpen, setInternalMoodOpen] = useState(false);
+  const rootTestId = testID ?? `tile-${tile.id}`;
 
   // Loading skeleton
   if (loading && !statData) {
     return (
       <View
-        testID={`tile-${tile.id}`}
+        testID={rootTestId}
         style={[
           styles.card,
           {
@@ -315,7 +318,7 @@ export function StatTile({
   return (
     <>
       <Pressable
-        testID={`tile-${tile.id}`}
+        testID={rootTestId}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         onPress={handlePress}
@@ -341,7 +344,7 @@ export function StatTile({
                   {label}
                 </Text>
                 <Text
-                  testID={`tile-${tile.id}-value`}
+                  testID={`${rootTestId}-value`}
                   className="text-foreground text-2xl font-bold"
                   numberOfLines={1}
                 >
@@ -349,7 +352,7 @@ export function StatTile({
                 </Text>
                 {footer ? (
                   <Text
-                    testID={`tile-${tile.id}-footer`}
+                    testID={`${rootTestId}-footer`}
                     className="text-muted-foreground text-[11px] mt-0.5"
                     numberOfLines={1}
                   >
@@ -387,7 +390,7 @@ export function StatTile({
               </Text>
             </View>
             <Text
-              testID={`tile-${tile.id}-value`}
+              testID={`${rootTestId}-value`}
               className="text-foreground text-2xl font-bold mt-2"
               numberOfLines={1}
             >
@@ -407,7 +410,7 @@ export function StatTile({
             </View>
             {footer ? (
               <Text
-                testID={`tile-${tile.id}-footer`}
+                testID={`${rootTestId}-footer`}
                 className="text-muted-foreground text-[11px] mt-1"
                 numberOfLines={1}
               >
