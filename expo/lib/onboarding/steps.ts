@@ -1,7 +1,23 @@
-import type { NutritionDirection } from "@become/core";
-import { LEGAL_MINIMUM_AGE } from "@become/core";
+import type {
+  NutritionDirection,
+  ActivityLevel,
+  MacroPreset,
+} from "@become/core";
+import {
+  LEGAL_MINIMUM_AGE,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+} from "@become/core";
 
-export { LEGAL_MINIMUM_AGE };
+export {
+  LEGAL_MINIMUM_AGE,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+};
 
 /**
  * Onboarding option sets and types, mirroring webapp/app/onboarding/page.tsx
@@ -108,12 +124,44 @@ export const STEP_QUESTIONS: readonly string[] = [
   "Here's what we heard",
 ];
 
+export const DIRECTION_OPTIONS: readonly {
+  value: NutritionDirection;
+  label: string;
+  sub: string;
+}[] = [
+  { value: "lose", label: "Lose Weight", sub: "TDEE − 500" },
+  { value: "maintain", label: "Maintain", sub: "TDEE" },
+  { value: "gain", label: "Gain Weight", sub: "TDEE + 300" },
+];
+
+export const ACTIVITY_BLURBS: Record<ActivityLevel, string> = {
+  sedentary: "Desk job, mostly sitting, little walking",
+  light: "On your feet some of the day, light walking",
+  moderate: "Moving a good part of the day",
+  active: "On your feet most of the day, or a physical job",
+  very_active: "Hard physical work all day",
+};
+
+export const MACRO_PRESET_CHOICES: readonly MacroPreset[] = [
+  "recommended",
+  "balanced",
+  "high_protein",
+  "low_carb",
+];
+
 export interface OnboardingProfile {
   fitnessGoals?: FitnessGoal[];
   fitnessGoal?: FitnessGoal;
   experienceLevel?: ExperienceLevel;
   age?: number;
   biologicalSex?: BiologicalSex;
+  heightCm?: number;
+  currentWeightKg?: number;
+  targetWeightKg?: number;
+  paceKgPerWeek?: number;
+  activityLevel?: ActivityLevel;
+  macroPreset?: MacroPreset;
+  weeklyAvailability?: number;
   equipmentAccess?: EquipmentType[];
   nutritionDirection?: NutritionDirection;
   weightUnit?: "lbs" | "kg";

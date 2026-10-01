@@ -1,11 +1,39 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { View, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { announce } from "@/lib/a11y/announce";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { directionForGoal } from "@become/core";
+import {
+  directionForGoal,
+  defaultPaceKg,
+  directionFromWeights,
+  kgToUnit,
+  lbsToKg,
+  ftInToCm,
+  cmToFtIn,
+  displayWeight,
+  roundWeight,
+  roundHeightCm,
+  computeNutritionTargets,
+  splitForPreset,
+  recommendPreset,
+  calorieAdjustment,
+  DIRECTION_EXPLANATION,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+  explainCalories,
+  explainMacro,
+  proteinNeedsFlag,
+  MACRO_LABELS,
+  type MacroKey,
+  type NutritionDirection,
+  type ActivityLevel,
+  type MacroPreset,
+} from "@become/core";
+import { PacePicker } from "@/components/goals/PacePicker";
+import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
 import {
   GOAL_OPTIONS,
   GOAL_LABEL,
@@ -16,6 +44,9 @@ import {
   MAX_GOALS,
   LEGAL_MINIMUM_AGE,
   STEP_QUESTIONS,
+  DIRECTION_OPTIONS,
+  ACTIVITY_BLURBS,
+  MACRO_PRESET_CHOICES,
   type OnboardingProfile,
   type FitnessGoal,
   type EquipmentType,
@@ -129,7 +160,7 @@ function ReviewSection({
  * 5-step onboarding wizard:
  * 1. Goals (multi, up to 3 ordered, primary = index 0)
  * 2. About you (name: required & empty on fallback; age: 13+ minimum; sex)
- * 3. Body & nutrition (frame)
+ * 3. Body & nutrition (height, weight, target, pace, activity, macros)
  * 4. Equipment (none / full_gym / individual items)
  * 5. Review (summary of choices with edit links)
  */
@@ -147,7 +178,46 @@ export function OnboardingFlow({
     ...initialProfile,
   }));
 
-  const goals = profile.fitnessGoals ?? [];
+  const [useImperial, setUseImperial] = useState<boolean>(
+    (initialProfile.weightUnit ?? "lbs") !== "kg",
+  );
+
+  // Height and weight display states
+  const initialHeight = profile.heightCm
+    ? cmToFtIn(profile.heightCm)
+    : { ft: "", inches: "" };
+  const [heightFt, setHeightFt] = useState<string>(
+    initialHeight.ft !== "" ? String(initialHeight.ft) : "",
+  );
+  const [heightIn, setHeightIn] = useState<string>(
+    initialHeight.inches !== "" ? String(initialHeight.inches) : "",
+  );
+  const [heightCmDisplay, setHeightCmDisplay] = useState<string>(
+    profile.heightCm ? String(roundHeightCm(profile.heightCm)) : "",
+  );
+  const [currentLbs, setCurrentLbs] = useState<string>(
+    profile.currentWeightKg
+      ? String(displayWeight(profile.currentWeightKg, "lbs"))
+      : "",
+  );
+  const [currentKgDisplay, setCurrentKgDisplay] = useState<string>(
+    profile.currentWeightKg
+      ? String(roundWeight(profile.currentWeightKg))
+      : "",
+  );
+  const [targetLbs, setTargetLbs] = useState<string>(
+    profile.targetWeightKg
+      ? String(displayWeight(profile.targetWeightKg, "lbs"))
+      : "",
+  );
+  const [targetKgDisplay, setTargetKgDisplay] = useState<string>(
+    profile.targetWeightKg
+      ? String(roundWeight(profile.targetWeightKg))
+      : "",
+  );
+
+  const goals = useMemo(() => profile.fitnessGoals ?? [], [profile.fitnessGoals]);
+  const primaryGoal = goals[0];
 
   const set = (patch: Partial<OnboardingProfile>) =>
     setProfile((p) => ({ ...p, ...patch }));
@@ -167,7 +237,7 @@ export function OnboardingFlow({
         ...p,
         fitnessGoals: next,
         fitnessGoal: next[0],
-        nutritionDirection: directionForGoal(next[0]),
+        nutritionDirection: p.nutritionDirection ?? directionForGoal(next[0]),
       };
     });
   };
@@ -197,6 +267,207 @@ export function OnboardingFlow({
     });
   };
 
+  // Unit switching
+  const switchUnits = (toImperial: boolean) => {
+    if (toImperial) {
+      if (profile.heightCm) {
+        const { ft, inches } = cmToFtIn(profile.heightCm);
+        setHeightFt(String(ft));
+        setHeightIn(String(inches));
+      }
+      if (profile.currentWeightKg) {
+        setCurrentLbs(String(displayWeight(profile.currentWeightKg, "lbs")));
+      }
+      if (profile.targetWeightKg) {
+        setTargetLbs(String(displayWeight(profile.targetWeightKg, "lbs")));
+      }
+    } else {
+      if (profile.heightCm) {
+        setHeightCmDisplay(String(roundHeightCm(profile.heightCm)));
+      }
+      if (profile.currentWeightKg) {
+        setCurrentKgDisplay(String(roundWeight(profile.currentWeightKg)));
+      }
+      if (profile.targetWeightKg) {
+        setTargetKgDisplay(String(roundWeight(profile.targetWeightKg)));
+      }
+    }
+    setUseImperial(toImperial);
+    set({ weightUnit: toImperial ? "lbs" : "kg" });
+  };
+
+  const handleHeightChange = (ft: string, inches: string) => {
+    setHeightFt(ft);
+    setHeightIn(inches);
+    const ftNum = parseInt(ft, 10) || 0;
+    const inNum = parseInt(inches, 10) || 0;
+    set({
+      heightCm: ftNum > 0 || inNum > 0 ? ftInToCm(ftNum, inNum) : undefined,
+    });
+  };
+
+  const handleHeightCmChange = (cm: string) => {
+    setHeightCmDisplay(cm);
+    set({ heightCm: cm ? Number(cm) : undefined });
+  };
+
+  const handleCurrentWeightChange = (val: string) => {
+    if (useImperial) {
+      setCurrentLbs(val);
+      set({ currentWeightKg: val ? lbsToKg(Number(val)) : undefined });
+    } else {
+      setCurrentKgDisplay(val);
+      set({ currentWeightKg: val ? Number(val) : undefined });
+    }
+  };
+
+  const handleTargetWeightChange = (val: string) => {
+    if (useImperial) {
+      setTargetLbs(val);
+      set({ targetWeightKg: val ? lbsToKg(Number(val)) : undefined });
+    } else {
+      setTargetKgDisplay(val);
+      set({ targetWeightKg: val ? Number(val) : undefined });
+    }
+  };
+
+  // Direction logic
+  const derivedDirection = directionFromWeights(
+    profile.currentWeightKg,
+    profile.targetWeightKg,
+  );
+  const effectiveDirection: NutritionDirection =
+    profile.nutritionDirection ??
+    derivedDirection ??
+    (primaryGoal ? directionForGoal(primaryGoal) : "maintain");
+
+  const directionMismatch =
+    derivedDirection != null && derivedDirection !== effectiveDirection;
+
+  const activity: ActivityLevel = profile.activityLevel ?? "moderate";
+  const macroPreset: MacroPreset = profile.macroPreset ?? "recommended";
+
+  const recommendation = recommendPreset(
+    effectiveDirection,
+    goals,
+    profile.experienceLevel,
+  );
+  const suggestedPreset = recommendation.preset;
+
+  const canComputeTargets = Boolean(
+    profile.currentWeightKg &&
+      profile.heightCm &&
+      profile.age &&
+      profile.biologicalSex,
+  );
+
+  const targets = useMemo(() => {
+    if (!canComputeTargets) return null;
+    return computeNutritionTargets({
+      currentWeightKg: profile.currentWeightKg,
+      heightCm: profile.heightCm,
+      age: profile.age,
+      biologicalSex: profile.biologicalSex,
+      goals,
+      direction: effectiveDirection,
+      weeklyAvailability: profile.weeklyAvailability,
+      activityLevel: activity,
+      macroPreset,
+      paceKgPerWeek:
+        profile.paceKgPerWeek ?? defaultPaceKg(effectiveDirection),
+    });
+  }, [
+    canComputeTargets,
+    profile.currentWeightKg,
+    profile.heightCm,
+    profile.age,
+    profile.biologicalSex,
+    goals,
+    effectiveDirection,
+    profile.weeklyAvailability,
+    activity,
+    macroPreset,
+    profile.paceKgPerWeek,
+  ]);
+
+  const presetContext =
+    targets && profile.currentWeightKg
+      ? {
+          weightLbs: profile.currentWeightKg * 2.2046226218,
+          calories: targets.calories,
+          goals,
+        }
+      : undefined;
+
+  const proteinFlagged = useMemo(
+    () =>
+      !!targets &&
+      proteinNeedsFlag(
+        targets.protein,
+        profile.currentWeightKg,
+        targets.direction,
+        goals,
+      ),
+    [targets, profile.currentWeightKg, goals],
+  );
+
+  const [explaining, setExplaining] = useState<MacroKey | "calories" | null>(
+    null,
+  );
+
+  const explanation = useMemo(() => {
+    if (!explaining || !targets) return null;
+    if (explaining === "calories") {
+      const c = explainCalories(
+        {
+          currentWeightKg: profile.currentWeightKg,
+          heightCm: profile.heightCm,
+          age: profile.age,
+          biologicalSex: profile.biologicalSex,
+        },
+        targets.activityLevel,
+        targets.direction,
+        profile.paceKgPerWeek ?? defaultPaceKg(targets.direction),
+      );
+      if (!c) return null;
+      return {
+        title: "Where your calories come from",
+        headline: `${c.calories.toLocaleString()} cal / day`,
+        steps: c.steps,
+        note: undefined,
+      };
+    }
+    const macroKey = explaining as MacroKey;
+    const grams = targets[macroKey];
+    const percent = targets.split[macroKey];
+    const m = explainMacro({
+      macro: macroKey,
+      grams,
+      calories: targets.calories,
+      percent,
+      weightKg: profile.currentWeightKg,
+      direction: targets.direction,
+      goals,
+      presetLabel: MACRO_PRESET_LABELS[macroPreset],
+    });
+    return {
+      title: `Where your ${MACRO_LABELS[macroKey].toLowerCase()} comes from`,
+      headline: `${m.grams} g${m.perLb ? ` · ${m.perLb} g per lb` : ""}`,
+      steps: m.steps,
+      note: m.note,
+    };
+  }, [
+    explaining,
+    targets,
+    profile.currentWeightKg,
+    profile.heightCm,
+    profile.age,
+    profile.biologicalSex,
+    profile.paceKgPerWeek,
+    macroPreset,
+    goals,
+  ]);
+
   const isAgeValid =
     profile.age !== undefined &&
     Number.isFinite(profile.age) &&
@@ -213,13 +484,14 @@ export function OnboardingFlow({
       name.trim().length > 0 &&
       isAgeValid &&
       !!profile.biologicalSex) ||
-    step === 3 ||
+    (step === 3 && canComputeTargets) ||
     (step === 4 && (profile.equipmentAccess?.length ?? 0) > 0) ||
     (step === 5 &&
       !submitting &&
       goals.length > 0 &&
       name.trim().length > 0 &&
-      isAgeValid);
+      isAgeValid &&
+      canComputeTargets);
 
   /** Move to `next` and announce via accessibility */
   const goToStep = (next: number) => {
@@ -228,24 +500,36 @@ export function OnboardingFlow({
   };
 
   const onNext = () => {
+    if (step === 3 && !canComputeTargets) return;
     if (step < TOTAL_STEPS) {
       goToStep(step + 1);
     } else {
       if (isAgeBelowMinimum) return;
-      const primaryGoal = goals[0];
       void onComplete({
         name: name.trim(),
         profile: {
           ...profile,
           fitnessGoals: goals,
           fitnessGoal: primaryGoal,
-          nutritionDirection:
-            profile.nutritionDirection ?? directionForGoal(primaryGoal),
-          weightUnit: profile.weightUnit ?? "lbs",
+          nutritionDirection: effectiveDirection,
+          weightUnit: profile.weightUnit ?? (useImperial ? "lbs" : "kg"),
+          activityLevel: activity,
+          macroPreset,
+          paceKgPerWeek:
+            profile.paceKgPerWeek ?? defaultPaceKg(effectiveDirection),
         },
       });
     }
   };
+
+  const missing = [
+    !profile.age && "age",
+    !profile.heightCm && "height",
+    !profile.currentWeightKg && "weight",
+    (!profile.biologicalSex ||
+      profile.biologicalSex === "prefer_not_to_say") &&
+      "biological sex",
+  ].filter(Boolean) as string[];
 
   return (
     <View style={{ flex: 1 }} testID={testID}>
@@ -278,28 +562,23 @@ export function OnboardingFlow({
               {GOAL_OPTIONS.map((o) => {
                 const rank = goals.indexOf(o.value);
                 const selected = rank >= 0;
-                const badge = selected
-                  ? rank === 0
-                    ? "Primary"
-                    : `Also #${rank + 1}`
-                  : null;
+                let badge: string | null = null;
+                if (selected) {
+                  badge = rank === 0 ? "Primary" : `Also #${rank + 1}`;
+                }
                 return (
                   <OptionRow
                     key={o.value}
                     testID={`${testID}-goal-${o.value}`}
                     label={o.label}
                     selected={selected}
+                    multiple
                     badge={badge}
                     onPress={() => toggleGoal(o.value)}
                   />
                 );
               })}
             </View>
-            {goals.length >= MAX_GOALS ? (
-              <Text className="text-muted-foreground text-xs mt-2">
-                {"That's"} {MAX_GOALS} — tapping another swaps out your last pick.
-              </Text>
-            ) : null}
           </View>
         ) : null}
 
@@ -313,8 +592,7 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[1]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              Your name is how the app greets you. Age and sex set the baseline
-              for your coaching and calorie targets.
+              We personalize your targets to your body, not an average.
             </Text>
 
             {/* Name */}
@@ -401,82 +679,439 @@ export function OnboardingFlow({
           </View>
         ) : null}
 
-        {/* STEP 3: BODY & NUTRITION (FRAME) */}
+        {/* STEP 3: BODY & NUTRITION */}
         {step === 3 ? (
           <View testID={`${testID}-step-3`}>
-            <Text
-              accessibilityRole="header"
-              className="text-foreground text-xl font-bold mb-1"
-            >
-              {STEP_QUESTIONS[2]}
-            </Text>
-            <Text className="text-muted-foreground text-sm mb-4">
-              {"We'll"} calculate your calorie and macronutrient targets based on
-              your primary goal:{" "}
-              <Text className="font-semibold text-foreground">
-                {goals[0] ? GOAL_LABEL[goals[0]] : "your goal"}
-              </Text>
-              .
-            </Text>
+            <View className="flex-row items-start justify-between mb-2">
+              <View className="flex-1 mr-2">
+                <Text
+                  accessibilityRole="header"
+                  className="text-foreground text-xl font-bold mb-1"
+                >
+                  {STEP_QUESTIONS[2]}
+                </Text>
+                <Text className="text-muted-foreground text-sm mb-4">
+                  These numbers are what your daily calories and macros are built
+                  from. Nothing here is shared.
+                </Text>
+              </View>
 
-            <View className="p-4 rounded-xl border border-border bg-card mb-4">
-              <Text className="text-foreground font-semibold mb-1">
-                Direction
-              </Text>
-              <Text className="text-muted-foreground text-sm mb-3">
-                {goals[0] === "lose_weight"
-                  ? "Lose Weight (Caloric deficit)"
-                  : goals[0] === "gain_muscle"
-                    ? "Build Muscle (Caloric surplus)"
-                    : "Maintain & Tone (Energy balance)"}
-              </Text>
+              {/* Unit Toggle */}
+              <View className="flex-row border border-border rounded-lg overflow-hidden shrink-0 mt-1">
+                <Pressable
+                  testID={`${testID}-unit-lbs`}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: useImperial,
+                    selected: useImperial,
+                  }}
+                  accessibilityLabel="Imperial"
+                  onPress={() => switchUnits(true)}
+                  style={minTouchTarget}
+                  className={`px-3 py-1.5 ${
+                    useImperial ? "bg-primary" : "bg-card"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      useImperial ? "text-primary-foreground font-bold" : "text-muted-foreground"
+                    }`}
+                  >
+                    Imperial
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID={`${testID}-unit-kg`}
+                  accessibilityRole="radio"
+                  accessibilityState={{
+                    checked: !useImperial,
+                    selected: !useImperial,
+                  }}
+                  accessibilityLabel="Metric"
+                  onPress={() => switchUnits(false)}
+                  style={minTouchTarget}
+                  className={`px-3 py-1.5 ${
+                    !useImperial ? "bg-primary" : "bg-card"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-semibold ${
+                      !useImperial ? "text-primary-foreground font-bold" : "text-muted-foreground"
+                    }`}
+                  >
+                    Metric
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
 
-              <Text className="text-foreground font-semibold mb-1">
-                Preferred weight unit
+            {/* Height input */}
+            <View className="mb-4">
+              <Text className="text-foreground text-xs font-medium mb-1.5">
+                Height
               </Text>
-              <View
-                className="flex-row gap-3 mt-1"
-                accessibilityRole="radiogroup"
-                accessibilityLabel="Preferred weight unit"
-              >
-                {(["lbs", "kg"] as const).map((unit) => {
-                  const active = (profile.weightUnit ?? "lbs") === unit;
+              {useImperial ? (
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Input
+                      testID="stat-height-ft"
+                      label="Feet"
+                      keyboardType="number-pad"
+                      placeholder="5"
+                      value={heightFt}
+                      onChangeText={(val) => handleHeightChange(val, heightIn)}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Input
+                      testID="stat-height-in"
+                      label="Inches"
+                      keyboardType="number-pad"
+                      placeholder="10"
+                      value={heightIn}
+                      onChangeText={(val) => handleHeightChange(heightFt, val)}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <Input
+                  testID="stat-height-cm"
+                  label="Height (cm)"
+                  keyboardType="number-pad"
+                  placeholder="175"
+                  value={heightCmDisplay}
+                  onChangeText={handleHeightCmChange}
+                />
+              )}
+            </View>
+
+            {/* Weight inputs */}
+            <View className="flex-row gap-3 mb-4">
+              <View className="flex-1">
+                <Input
+                  testID="stat-current-weight"
+                  label={`Current weight (${useImperial ? "lbs" : "kg"})`}
+                  keyboardType="decimal-pad"
+                  placeholder={useImperial ? "185" : "84"}
+                  value={useImperial ? currentLbs : currentKgDisplay}
+                  onChangeText={handleCurrentWeightChange}
+                />
+              </View>
+              <View className="flex-1">
+                <Input
+                  testID="stat-target-weight"
+                  label={`Target weight (${useImperial ? "lbs" : "kg"})`}
+                  keyboardType="decimal-pad"
+                  placeholder={useImperial ? "165" : "75"}
+                  value={useImperial ? targetLbs : targetKgDisplay}
+                  onChangeText={handleTargetWeightChange}
+                />
+              </View>
+            </View>
+
+            {/* Pace picker */}
+            {profile.targetWeightKg && profile.currentWeightKg ? (
+              <View className="mb-4">
+                <PacePicker
+                  unit={useImperial ? "lbs" : "kg"}
+                  direction={effectiveDirection}
+                  valueKgPerWeek={
+                    profile.paceKgPerWeek ?? defaultPaceKg(effectiveDirection)
+                  }
+                  onChange={(kg) => set({ paceKgPerWeek: kg })}
+                  latestWeight={kgToUnit(
+                    profile.currentWeightKg,
+                    useImperial ? "lbs" : "kg",
+                  )}
+                  targetWeight={kgToUnit(
+                    profile.targetWeightKg,
+                    useImperial ? "lbs" : "kg",
+                  )}
+                  testID="pace-picker"
+                />
+              </View>
+            ) : null}
+
+            {/* Direction */}
+            <View className="mb-4">
+              <Text className="text-foreground text-sm font-semibold mb-1">
+                Which way are you eating?
+              </Text>
+              <Text className="text-muted-foreground text-xs mb-2">
+                {derivedDirection
+                  ? "Pre-set from your target weight — change it if you disagree."
+                  : "Pre-set from your primary goal — change it if you disagree."}
+              </Text>
+              <View className="flex-row gap-2">
+                {DIRECTION_OPTIONS.map(({ value, label, sub }) => {
+                  const selected = effectiveDirection === value;
+                  const applied = targets
+                    ? calorieAdjustment(targets.tdee, value)
+                    : null;
+                  const subLabel =
+                    applied === null || applied === 0
+                      ? sub
+                      : `TDEE ${applied < 0 ? "−" : "+"} ${Math.abs(applied)}`;
                   return (
                     <Pressable
-                      key={unit}
-                      testID={`${testID}-unit-${unit}`}
+                      key={value}
+                      testID={`direction-${value}`}
                       accessibilityRole="radio"
-                      accessibilityState={{ checked: active, selected: active }}
-                      accessibilityLabel={
-                        unit === "lbs" ? "Pounds" : "Kilograms"
-                      }
-                      onPress={() => set({ weightUnit: unit })}
+                      accessibilityState={{ checked: selected, selected }}
+                      onPress={() => set({ nutritionDirection: value })}
                       style={minTouchTarget}
-                      className={`px-4 py-2 rounded-lg border ${
-                        active
+                      className={`flex-1 p-3 rounded-xl border ${
+                        selected
                           ? "border-primary bg-primary/10"
                           : "border-border bg-card"
                       }`}
                     >
                       <Text
-                        className={
-                          active
-                            ? "text-primary font-bold"
-                            : "text-muted-foreground"
-                        }
+                        className={`text-xs font-semibold ${
+                          selected ? "text-primary" : "text-foreground"
+                        }`}
                       >
-                        {unit}
+                        {label}
+                      </Text>
+                      <Text className="text-[10px] text-muted-foreground mt-0.5">
+                        {subLabel}
                       </Text>
                     </Pressable>
                   );
                 })}
               </View>
+              {directionMismatch && derivedDirection ? (
+                <Pressable
+                  testID="direction-mismatch-warning"
+                  accessibilityRole="button"
+                  onPress={() => set({ nutritionDirection: derivedDirection })}
+                  style={minTouchTarget}
+                  className="mt-2 p-2.5 rounded-xl border border-amber-400 bg-amber-500/10"
+                >
+                  <Text className="text-amber-500 text-xs">
+                    Your target is{" "}
+                    {derivedDirection === "lose"
+                      ? "below"
+                      : derivedDirection === "gain"
+                        ? "above"
+                        : "close to"}{" "}
+                    your current weight — switch to{" "}
+                    {
+                      DIRECTION_OPTIONS.find((o) => o.value === derivedDirection)
+                        ?.label
+                    }
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
-            <Text className="text-muted-foreground text-xs leading-relaxed">
-              Body stats and personalized targets will be confirmed in your
-              daily training plan.
-            </Text>
+            {/* Activity level */}
+            <View className="mb-4">
+              <Text className="text-foreground text-sm font-semibold mb-1">
+                How active is your day, outside training?
+              </Text>
+              <Text className="text-muted-foreground text-xs mb-2">
+                Your job and daily movement, not your workouts.
+              </Text>
+              {(Object.keys(ACTIVITY_BLURBS) as ActivityLevel[]).map(
+                (level) => {
+                  const selected = activity === level;
+                  return (
+                    <Pressable
+                      key={level}
+                      testID={`activity-${level}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, selected }}
+                      onPress={() => set({ activityLevel: level })}
+                      style={minTouchTarget}
+                      className={`p-3 rounded-xl border mb-2 flex-row items-center justify-between ${
+                        selected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <View className="flex-1">
+                        <Text
+                          className={`text-xs font-semibold ${
+                            selected ? "text-primary" : "text-foreground"
+                          }`}
+                        >
+                          {level.replace("_", " ").toUpperCase()}
+                        </Text>
+                        <Text className="text-[10px] text-muted-foreground mt-0.5">
+                          {ACTIVITY_BLURBS[level]}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                },
+              )}
+            </View>
+
+            {/* Macro presets */}
+            <View className="mb-4">
+              <Text className="text-foreground text-sm font-semibold mb-1">
+                How do you want your macros split?
+              </Text>
+              {MACRO_PRESET_CHOICES.map((key) => {
+                const selected = macroPreset === key;
+                const split = splitForPreset(
+                  key,
+                  effectiveDirection,
+                  presetContext,
+                );
+                const isSuggested = key === suggestedPreset;
+                return (
+                  <Pressable
+                    key={key}
+                    testID={`macro-preset-${key}`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected, selected }}
+                    onPress={() => set({ macroPreset: key })}
+                    style={minTouchTarget}
+                    className={`p-3 rounded-xl border mb-2 flex-row items-center justify-between ${
+                      selected
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    <View className="flex-1">
+                      <View className="flex-row items-center gap-1.5">
+                        <Text
+                          className={`text-xs font-semibold ${
+                            selected ? "text-primary" : "text-foreground"
+                          }`}
+                        >
+                          {MACRO_PRESET_LABELS[key]}
+                        </Text>
+                        {isSuggested ? (
+                          <View className="bg-primary/20 px-1.5 py-0.5 rounded-full">
+                            <Text className="text-[9px] text-primary font-bold uppercase">
+                              {recommendation.badge}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Text className="text-[10px] text-muted-foreground mt-0.5">
+                        {MACRO_PRESET_BLURBS[key]}
+                      </Text>
+                    </View>
+                    <Text className="text-xs text-muted-foreground tabular-nums ml-2">
+                      {split.protein}/{split.carbs}/{split.fats}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Live TDEE preview */}
+            {!targets ? (
+              <View
+                testID="targets-incomplete"
+                className="p-4 rounded-xl border border-amber-300 bg-amber-500/10 mb-4"
+              >
+                <Text
+                  testID="tdee-incomplete"
+                  className="text-amber-500 text-xs"
+                >
+                  Add your {missing.join(", ")} above and we&apos;ll calculate
+                  your real calorie and macro targets. Without them we can only
+                  guess, and we would rather not.
+                </Text>
+              </View>
+            ) : (
+              <View
+                testID="tdee-preview"
+                className="p-4 rounded-2xl border-2 border-foreground bg-card mb-4"
+              >
+                <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-1">
+                  Your daily targets
+                </Text>
+
+                <Pressable
+                  testID="explain-calories"
+                  accessibilityRole="button"
+                  accessibilityLabel="Explain calories"
+                  onPress={() => setExplaining("calories")}
+                  className="flex-row items-baseline gap-1.5 my-2"
+                >
+                  <Text
+                    testID="preview-calories"
+                    className="text-2xl font-bold text-foreground"
+                  >
+                    {targets.calories.toLocaleString()}
+                  </Text>
+                  <Text className="text-sm text-muted-foreground">
+                    cal / day
+                  </Text>
+                </Pressable>
+
+                <View className="flex-row gap-2 my-2">
+                  {(
+                    [
+                      ["protein", targets.protein, "Protein"],
+                      ["carbs", targets.carbs, "Carbs"],
+                      ["fats", targets.fats, "Fats"],
+                    ] as const
+                  ).map(([key, grams, label]) => (
+                    <Pressable
+                      key={key}
+                      testID={`explain-${key}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Explain ${label}`}
+                      onPress={() => setExplaining(key)}
+                      style={minTouchTarget}
+                      className={`flex-1 p-2.5 rounded-xl border items-center ${
+                        key === "protein" && proteinFlagged
+                          ? "border-amber-400 bg-amber-500/20"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <Text
+                        testID={`preview-${key}`}
+                        className="text-sm font-bold text-foreground"
+                      >
+                        {grams}g
+                      </Text>
+                      <Text className="text-[10px] text-muted-foreground uppercase mt-0.5">
+                        {label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {proteinFlagged ? (
+                  <Pressable
+                    testID="protein-flag"
+                    accessibilityRole="button"
+                    onPress={() => setExplaining("protein")}
+                    style={minTouchTarget}
+                    className="mt-2 p-2 rounded-lg border border-amber-400 bg-amber-500/10"
+                  >
+                    <Text className="text-amber-500 text-xs">
+                      That protein number is outside the usual range for your
+                      bodyweight. Tap to see how we got it.
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                <Text className="text-muted-foreground text-xs mt-3 leading-relaxed">
+                  Your TDEE is about {targets.tdee.toLocaleString()} cal. We
+                  applied {DIRECTION_EXPLANATION[targets.direction]}. Tap any
+                  number to see how we got it.
+                </Text>
+              </View>
+            )}
+
+            <MacroExplainSheet
+              isOpen={!!explanation}
+              title={explanation?.title ?? ""}
+              headline={explanation?.headline ?? ""}
+              steps={explanation?.steps ?? []}
+              note={explanation?.note}
+              onClose={() => setExplaining(null)}
+              testID="macro-explain-sheet"
+            />
           </View>
         ) : null}
 
@@ -574,9 +1209,9 @@ export function OnboardingFlow({
               <ReviewRow
                 label="Direction"
                 value={
-                  profile.nutritionDirection === "lose"
+                  effectiveDirection === "lose"
                     ? "Lose Weight"
-                    : profile.nutritionDirection === "gain"
+                    : effectiveDirection === "gain"
                       ? "Gain Weight"
                       : "Maintain"
                 }
@@ -585,6 +1220,49 @@ export function OnboardingFlow({
                 label="Weight unit"
                 value={profile.weightUnit ?? "lbs"}
               />
+              {profile.heightCm ? (
+                <ReviewRow
+                  label="Height"
+                  value={
+                    useImperial
+                      ? `${cmToFtIn(profile.heightCm).ft}ft ${cmToFtIn(profile.heightCm).inches}in`
+                      : `${roundHeightCm(profile.heightCm)} cm`
+                  }
+                />
+              ) : null}
+              {profile.currentWeightKg ? (
+                <ReviewRow
+                  label="Current weight"
+                  value={`${displayWeight(
+                    profile.currentWeightKg,
+                    profile.weightUnit ?? "lbs",
+                  )} ${profile.weightUnit ?? "lbs"}`}
+                />
+              ) : null}
+              {profile.targetWeightKg ? (
+                <ReviewRow
+                  label="Target weight"
+                  value={`${displayWeight(
+                    profile.targetWeightKg,
+                    profile.weightUnit ?? "lbs",
+                  )} ${profile.weightUnit ?? "lbs"}`}
+                />
+              ) : null}
+              {profile.paceKgPerWeek ? (
+                <ReviewRow
+                  label="Pace"
+                  value={`${kgToUnit(
+                    profile.paceKgPerWeek,
+                    profile.weightUnit ?? "lbs",
+                  )} ${profile.weightUnit ?? "lbs"}/wk`}
+                />
+              ) : null}
+              {targets ? (
+                <ReviewRow
+                  label="Targets"
+                  value={`${targets.calories.toLocaleString()} cal (${targets.protein}p / ${targets.carbs}c / ${targets.fats}f)`}
+                />
+              ) : null}
             </ReviewSection>
 
             {/* Equipment review */}
@@ -628,22 +1306,9 @@ export function OnboardingFlow({
             testID={`${testID}-next`}
             onPress={onNext}
             disabled={!canAdvance || submitting}
-            loading={submitting && step === TOTAL_STEPS}
           >
-            {step < TOTAL_STEPS ? "Next" : submitting ? "Saving…" : "Finish"}
+            {step === TOTAL_STEPS ? "Finish" : "Next"}
           </Button>
-          {/* Also mount invisible pressable with finish testID for tests querying onboarding-finish */}
-          {step === TOTAL_STEPS ? (
-            <Pressable
-              testID={`${testID}-finish`}
-              accessible={false}
-              accessibilityElementsHidden={true}
-              importantForAccessibility="no-hide-descendants"
-              onPress={onNext}
-              disabled={!canAdvance || submitting}
-              style={{ display: "none" }}
-            />
-          ) : null}
         </View>
       </View>
     </View>
