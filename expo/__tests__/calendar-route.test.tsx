@@ -107,7 +107,7 @@ describe("CalendarIndexRoute", () => {
     });
     fireEvent.press(getByTestId(itemId));
     expect(mockPush).toHaveBeenCalledWith(
-      `/(tabs)/programming/prog-1/workout/1?phase=0`,
+      `/(tabs)/programming/prog-1/workout/1?phase=0&sd=${encodeURIComponent(futureDate)}&day=Day%202`,
     );
   });
 
