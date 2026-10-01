@@ -246,4 +246,198 @@ describe("TileGrid and Dashboard Tiles (NP-104)", () => {
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming?quick=true");
     });
   });
+
+  // ─── NP-210 Acceptance: Native data parity & missing tiles ──────────────
+  describe("NP-210: Native data parity & missing tiles", () => {
+    const mockStatContext = {
+      data: {
+        weightData: [
+          { date: "Sep 20", value: 170 },
+          { date: "Sep 30", value: 175.2 },
+        ],
+        bmiData: [{ date: "Sep 30", value: 24.2 }],
+        moodData: [
+          { date: "Sep 24", value: 4 },
+          { date: "Sep 25", value: 3 },
+          { date: "Sep 26", value: 4 },
+          { date: "Sep 27", value: 5 },
+          { date: "Sep 28", value: 4 },
+          { date: "Sep 29", value: 4 },
+          { date: "Sep 30", value: 4 },
+        ],
+        currentProgram: {
+          programId: "prog-1",
+          name: "Foundation",
+          currentPhase: 1,
+          currentWeek: 2,
+          totalWeeks: 8,
+          completedWorkouts: 4,
+          totalWorkouts: 16,
+        },
+        stats: {
+          totalWorkouts: 12,
+          thisWeekWorkouts: 2,
+          longestStreak: 15,
+        },
+        goal: {
+          fitnessGoal: "gain_muscle",
+          nutritionDirection: "gain",
+          targetWeightKg: 181 * 0.45359237,
+          startWeightKg: 170 * 0.45359237,
+          weightUnit: "lbs" as const,
+          pace: {
+            status: "on",
+            eta: "~12 wks",
+            behindByKg: 0,
+          },
+          weeklyAvailability: 3,
+        },
+      },
+      streakData: {
+        streakDays: 12,
+        longestStreak: 15,
+        nextMilestone: 14,
+        activityToday: true,
+        streakFreezes: 1,
+      },
+      nutritionData: {
+        calories: {
+          consumed: 0,
+          goal: 2000,
+        },
+        water: {
+          consumed: 32,
+          goal: 64,
+        },
+      },
+      streaks: {
+        overall: {
+          current: 12,
+          best: 15,
+          nextMilestone: 14,
+          activeToday: true,
+          freezes: 1,
+        },
+        pillars: {
+          workout: {
+            unit: "days" as const,
+            current: 4,
+            best: 6,
+            thisWeek: 2,
+            target: 3,
+            weekLost: false,
+          },
+          nutrition: { current: 3, best: 5, activeToday: false },
+          mindset: { current: 2, best: 4, activeToday: true },
+          super: {
+            current: 0,
+            best: 0,
+            activeToday: false,
+            today: {
+              nutrition: false,
+              mindset: true,
+              trained: false,
+              restDay: false,
+              weekOnTrack: true,
+            },
+          },
+        },
+      },
+      weeklyAvailability: 3,
+      weightUnit: "lbs" as const,
+      todaysMood: null,
+    };
+
+    it("renders Day Streak, Today's Mood, This Week, Goal, and Calories with real data, progress bars and sublines", () => {
+      const layout: DashboardTile[] = [
+        { id: "streak", kind: "stat", size: "1x1" },
+        { id: "mood", kind: "stat", size: "1x1" },
+        { id: "weekly", kind: "stat", size: "1x1" },
+        { id: "goal", kind: "stat", size: "1x1" },
+        { id: "calories", kind: "stat", size: "1x1" },
+      ];
+
+      const { getByTestId, queryByText } = render(
+        <TileGrid layout={layout} statContext={mockStatContext} />,
+      );
+
+      // 1. Day streak: 12 days, 2d to 14-day 🏆
+      const streakTile = getByTestId("tile-streak");
+      expect(streakTile).toBeTruthy();
+      expect(streakTile.props.accessibilityLabel).toContain("12 days");
+      expect(streakTile.props.accessibilityLabel).toContain("2d to 14-day 🏆");
+
+      // 2. Today's Mood: "Set", Last 7 days
+      const moodTile = getByTestId("tile-mood");
+      expect(moodTile).toBeTruthy();
+      expect(moodTile.props.accessibilityLabel).toContain("Set");
+      expect(moodTile.props.accessibilityLabel).toContain("Last 7 days");
+
+      // 3. This Week: 2/3, 1 to weekly target
+      const weeklyTile = getByTestId("tile-weekly");
+      expect(weeklyTile).toBeTruthy();
+      expect(weeklyTile.props.accessibilityLabel).toContain("2/3");
+      expect(weeklyTile.props.accessibilityLabel).toContain("1 to weekly target");
+
+      // 4. Goal: Build muscle, 5.8 lbs to go, 181 lbs, ~12 wks
+      const goalTile = getByTestId("tile-goal");
+      expect(goalTile).toBeTruthy();
+      expect(goalTile.props.accessibilityLabel).toContain("5.8 lbs to go");
+      expect(goalTile.props.accessibilityLabel).toContain("181");
+      expect(goalTile.props.accessibilityLabel).toContain("~12 wks");
+
+      // 5. Calories: 0/2000, 2000 cal left
+      const calTile = getByTestId("tile-calories");
+      expect(calTile).toBeTruthy();
+      expect(calTile.props.accessibilityLabel).toContain("0/2000");
+      expect(calTile.props.accessibilityLabel).toContain("2000 cal left");
+
+      // Never shows "—" as values when data is present
+      expect(queryByText("—")).toBeNull();
+    });
+
+    it("renders real Nudge card for smart tile slot and NEVER 'Coming soon'", () => {
+      const layout: DashboardTile[] = [
+        { id: "smart", kind: "smart-rotating", size: "2x1" },
+      ];
+
+      const mockSuggestions = [
+        {
+          id: "sug-core",
+          severity: "nudge" as const,
+          title: "Bring core back in",
+          body: "You have not targeted core in 8 days.",
+          primaryAction: {
+            label: "Browse exercises",
+            href: "/(tabs)/programming/browse",
+          },
+          dismissible: true,
+        },
+      ];
+
+      const onDismiss = jest.fn();
+
+      const { getByTestId, getByText, queryByText } = render(
+        <TileGrid
+          layout={layout}
+          statContext={mockStatContext}
+          suggestions={mockSuggestions}
+          onDismissSuggestion={onDismiss}
+        />,
+      );
+
+      expect(getByTestId("tile-smart")).toBeTruthy();
+      expect(getByText("Bring core back in")).toBeTruthy();
+      expect(getByText("Browse exercises")).toBeTruthy();
+      expect(getByText("NUDGE")).toBeTruthy();
+
+      // NEVER renders "Coming soon"
+      expect(queryByText("Coming soon")).toBeNull();
+
+      // Dismiss button functions
+      const dismissBtn = getByTestId("suggestion-dismiss");
+      fireEvent.press(dismissBtn);
+      expect(onDismiss).toHaveBeenCalledWith("sug-core");
+    });
+  });
 });

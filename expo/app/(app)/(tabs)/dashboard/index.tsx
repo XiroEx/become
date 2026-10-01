@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   MeResponseSchema,
   StreakResponseSchema,
+  StreaksResponseSchema,
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
+  ProgressApiResponseSchema,
+  NutritionLogDayResponseSchema,
+  DashboardTilesResponseSchema,
+  GoalProgressResponseSchema,
+  MindSummaryResponseSchema,
   classifyApiError,
 } from "@become/api-client";
 import {
@@ -23,6 +29,13 @@ import {
   LayoutWireSchema,
   LAYOUT_CACHE_KEY,
 } from "@/lib/dashboard/tileLayout";
+import type {
+  DashboardTileContext,
+  DashboardNutritionData,
+  BecomingWidgetData,
+  SuggestionItem,
+} from "@/lib/dashboard/types";
+import type { StreaksLite } from "@/lib/dashboard/streakTile";
 
 /**
  * Dashboard route — wires the first post-login screen to real data. Fetches the
@@ -55,6 +68,54 @@ export default function DashboardRoute() {
     {
       ...fetchOpts,
       cacheKey: LAYOUT_CACHE_KEY,
+    },
+  );
+  const progress = useFetch(
+    ready ? "/api/progress" : null,
+    ProgressApiResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.progress",
+    },
+  );
+  const streaks = useFetch(
+    ready ? "/api/streaks" : null,
+    StreaksResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.streaks",
+    },
+  );
+  const nutritionLog = useFetch(
+    ready ? "/api/nutrition/log" : null,
+    NutritionLogDayResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.nutrition.log",
+    },
+  );
+  const dashboardTiles = useFetch(
+    ready ? "/api/dashboard/tiles" : null,
+    DashboardTilesResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.tiles",
+    },
+  );
+  const goals = useFetch(
+    ready ? "/api/goals" : null,
+    GoalProgressResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.goals",
+    },
+  );
+  const mindSummary = useFetch(
+    ready ? "/api/mind/summary" : null,
+    MindSummaryResponseSchema,
+    {
+      ...fetchOpts,
+      cacheKey: "dashboard.mind.summary",
     },
   );
 
@@ -140,11 +201,242 @@ export default function DashboardRoute() {
     return Promise.all([
       me.refetch(),
       streak.refetch(),
+      streaks.refetch(),
+      progress.refetch(),
+      nutritionLog.refetch(),
+      dashboardTiles.refetch(),
+      goals.refetch(),
+      mindSummary.refetch(),
       active.refetch(),
       workout.refetch(),
       layout.refetch(),
     ]);
-  }, [active, layout, me, streak, workout]);
+  }, [
+    active,
+    dashboardTiles,
+    goals,
+    layout,
+    me,
+    mindSummary,
+    nutritionLog,
+    progress,
+    streak,
+    streaks,
+    workout,
+  ]);
+
+  const statContext = useMemo<DashboardTileContext>(() => {
+    const rawProgress = progress.data;
+    const rawStreaks = streaks.data;
+    const rawNutrition = nutritionLog.data;
+    const rawStreak = streak.data;
+
+    const streaksLite: StreaksLite | null = rawStreaks
+      ? {
+          overall: rawStreaks.overall,
+          pillars: rawStreaks.pillars,
+        }
+      : rawStreak
+        ? {
+            overall: {
+              current: rawStreak.streakDays,
+              best: rawStreak.longestStreak,
+              nextMilestone: rawStreak.nextMilestone,
+              activeToday: rawStreak.activityToday,
+              freezes: rawStreak.streakFreezes,
+            },
+            pillars: {
+              workout: {
+                unit: "days",
+                current: 0,
+                best: 0,
+                thisWeek: 0,
+                target: null,
+                remainingThisWeek: 0,
+                weekLost: false,
+              },
+              nutrition: { current: 0, best: 0, activeToday: false },
+              mindset: { current: 0, best: 0, activeToday: false },
+              super: {
+                current: 0,
+                best: 0,
+                activeToday: false,
+                today: {
+                  nutrition: false,
+                  mindset: false,
+                  trained: false,
+                  restDay: false,
+                  weekOnTrack: true,
+                },
+              },
+            },
+          }
+        : null;
+
+    const streakData = rawStreak
+      ? {
+          streakDays: rawStreak.streakDays,
+          longestStreak: rawStreak.longestStreak,
+          nextMilestone: rawStreak.nextMilestone,
+          activityToday: rawStreak.activityToday,
+          streakFreezes: rawStreak.streakFreezes,
+        }
+      : rawStreaks
+        ? {
+            streakDays: rawStreaks.overall.current,
+            longestStreak: rawStreaks.overall.best,
+            nextMilestone: rawStreaks.overall.nextMilestone,
+            activityToday: rawStreaks.overall.activeToday,
+            streakFreezes: rawStreaks.overall.freezes,
+          }
+        : null;
+
+    const caloriesConsumed = rawNutrition?.dailyTotals?.calories ?? null;
+    const caloriesGoal = rawNutrition?.goals?.calories ?? null;
+
+    const nutritionData: DashboardNutritionData | null =
+      caloriesGoal != null || caloriesConsumed != null
+        ? {
+            calories: {
+              consumed: caloriesConsumed ?? 0,
+              goal: caloriesGoal ?? 2000,
+            },
+            water: rawNutrition?.water
+              ? {
+                  consumed: rawNutrition.water.amount,
+                  goal: rawNutrition.water.dailyGoal,
+                }
+              : null,
+          }
+        : null;
+
+    const weightData = (rawProgress?.weightData ?? []).map((pt: { date: string; value: number }) => ({
+      date: pt.date,
+      value: pt.value,
+    }));
+    const bmiData = (rawProgress?.bmiData ?? []).map((pt: { date: string; value: number }) => ({
+      date: pt.date,
+      value: pt.value,
+    }));
+    const moodData = (rawProgress?.moodData ?? []).map((pt: { date: string; value: number }) => ({
+      date: pt.date,
+      value: pt.value,
+    }));
+
+    return {
+      data: {
+        weightData,
+        bmiData,
+        moodData,
+        currentProgram: rawProgress?.currentProgram
+          ? {
+              programId: rawProgress.currentProgram.programId,
+              name: rawProgress.currentProgram.name,
+              currentPhase: rawProgress.currentProgram.currentPhase,
+              currentWeek: rawProgress.currentProgram.currentWeek,
+              totalWeeks: rawProgress.currentProgram.totalWeeks,
+              completedWorkouts: rawProgress.currentProgram.completedWorkouts,
+              totalWorkouts: rawProgress.currentProgram.totalWorkouts,
+              nextWorkout: rawProgress.currentProgram.nextWorkout,
+            }
+          : null,
+        stats: {
+          totalWorkouts: rawProgress?.stats?.totalWorkouts ?? 0,
+          thisWeekWorkouts: rawProgress?.stats?.thisWeekWorkouts ?? 0,
+          longestStreak:
+            rawProgress?.stats?.longestStreak ?? rawStreak?.longestStreak ?? 0,
+        },
+        goal: rawProgress?.goal
+          ? {
+              fitnessGoal: rawProgress.goal.fitnessGoal,
+              nutritionDirection: rawProgress.goal.nutritionDirection,
+              targetWeightKg: rawProgress.goal.targetWeightKg,
+              startWeightKg: rawProgress.goal.startWeightKg,
+              weightUnit: rawProgress.goal.weightUnit as "lbs" | "kg",
+              pace: rawProgress.goal.pace
+                ? {
+                    status: rawProgress.goal.pace.status,
+                    eta: rawProgress.goal.pace.eta,
+                    behindByKg: rawProgress.goal.pace.behindByKg,
+                  }
+                : null,
+              weeklyAvailability: rawProgress.goal.weeklyAvailability,
+            }
+          : null,
+      },
+      streakData,
+      nutritionData,
+      streaks: streaksLite,
+      weeklyAvailability:
+        rawProgress?.goal?.weeklyAvailability ??
+        rawProgress?.weeklyAvailability ??
+        3,
+      weightUnit: (rawProgress?.goal?.weightUnit ?? "lbs") as "lbs" | "kg",
+      todaysMood: null,
+      onOpenCheckIn: () => {},
+    };
+  }, [progress.data, streaks.data, nutritionLog.data, streak.data]);
+
+  const becoming = useMemo<BecomingWidgetData | null>(() => {
+    const mind = mindSummary.data;
+    const g = goals.data;
+    const prog = progress.data;
+
+    const mindLevel = mind?.level ?? 1;
+    const mindChapter = mind?.chapter ?? 1;
+    const mindChapterName = mind?.chapterName ?? null;
+
+    let nutritionPace = "On pace";
+    if (g?.nutrition?.pace?.status === "behind") {
+      nutritionPace = "Behind pace";
+    } else if (g?.nutrition?.pace?.status === "ahead") {
+      nutritionPace = "Ahead";
+    }
+
+    const nutritionTargetWeight = g?.nutrition?.target?.weight ?? null;
+    const nutritionUnit = g?.nutrition?.unit ?? "lbs";
+
+    const trainingDone =
+      g?.training?.thisWeek?.done ?? prog?.stats?.thisWeekWorkouts ?? 0;
+    const trainingTarget =
+      g?.training?.target?.daysPerWeek ??
+      prog?.goal?.weeklyAvailability ??
+      3;
+
+    const averagePacePct =
+      trainingTarget > 0
+        ? Math.min(100, Math.round((trainingDone / trainingTarget) * 100))
+        : 67;
+
+    return {
+      mindLevel,
+      mindChapter,
+      mindChapterName,
+      nutritionPace,
+      nutritionTargetWeight,
+      nutritionUnit,
+      trainingDone,
+      trainingTarget,
+      averagePacePct,
+    };
+  }, [mindSummary.data, goals.data, progress.data]);
+
+  const suggestions: SuggestionItem[] = useMemo(() => {
+    const rawSuggestions = dashboardTiles.data?.suggestions ?? [];
+    return rawSuggestions.map((s: any) => ({
+      id: s.id,
+      severity: s.severity as "info" | "nudge" | "warning" | "celebration",
+      title: s.title,
+      body: s.body,
+      primaryAction: s.primaryAction
+        ? {
+            label: s.primaryAction.label,
+            href: s.primaryAction.href,
+          }
+        : undefined,
+      dismissible: s.dismissible ?? true,
+    }));
+  }, [dashboardTiles.data]);
 
   const initialTodayRef = useRef(today);
   // Refetch when the local day rolls over
@@ -217,8 +509,8 @@ export default function DashboardRoute() {
   return (
     <DashboardScreen
       userName={me.data?.user?.name ?? null}
-      streakDays={streak.data?.streakDays ?? 0}
-      freezeAvailable={(streak.data?.streakFreezes ?? 0) > 0}
+      streakDays={streak.data?.streakDays ?? streaks.data?.overall?.current ?? 0}
+      freezeAvailable={(streak.data?.streakFreezes ?? streaks.data?.overall?.freezes ?? 0) > 0}
       todayWorkout={todayWorkout}
       onStartWorkout={onStartWorkout}
       onOpenCalendar={onOpenCalendar}
@@ -229,6 +521,12 @@ export default function DashboardRoute() {
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
       layout={layout.data?.layout ?? null}
+      statContext={statContext}
+      suggestions={suggestions}
+      becoming={becoming}
+      onOpenBecoming={() => {
+        router.push("/(tabs)/mind" as never);
+      }}
       onOpenMind={onOpenMind}
       onOpenNutrition={onOpenNutrition}
       onOpenWorkoutNow={onOpenWorkoutNow}

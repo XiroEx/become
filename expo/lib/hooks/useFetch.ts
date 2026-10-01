@@ -71,9 +71,9 @@ function resolveMemberId(opts: UseFetchOptions): string | null {
   return null;
 }
 
-export function useFetch<T>(
+export function useFetch<T = any>(
   path: string | null,
-  schema: z.ZodType<T>,
+  schema: z.ZodType<T, any, any>,
   options: UseFetchOptions = {},
 ): UseFetchResult<T> {
   const effectiveKey = options.cacheKey ?? path;

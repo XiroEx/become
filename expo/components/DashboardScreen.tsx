@@ -1,14 +1,20 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { View, ScrollView, RefreshControl, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Settings } from "lucide-react-native";
+import { Settings, CalendarDays } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { StreakBanner } from "@/components/StreakBanner";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
+import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import type { DashboardTile } from "@become/api-client";
+import type {
+  DashboardTileContext,
+  BecomingWidgetData,
+  SuggestionItem,
+} from "@/lib/dashboard/types";
 import {
   CheckInModal,
   type CheckInPayload,
@@ -82,6 +88,16 @@ export interface DashboardScreenProps {
   /** Controls Workout Now sheet externally for testability. */
   workoutNowOpen?: boolean;
   onWorkoutNowOpenChange?: (open: boolean) => void;
+  /** Live stat-tile context (weight/mood/streak/etc.) */
+  statContext?: DashboardTileContext;
+  /** Server suggestions (e.g. Nudge cards) */
+  suggestions?: SuggestionItem[];
+  /** The Becoming summary data */
+  becoming?: BecomingWidgetData | null;
+  /** Opens The Becoming / Mind */
+  onOpenBecoming?: () => void;
+  /** Callback when a suggestion is dismissed */
+  onDismissSuggestion?: (id: string) => void;
 }
 
 export function DashboardScreen({
@@ -106,15 +122,23 @@ export function DashboardScreen({
   onOpenWorkoutNow,
   workoutNowOpen,
   onWorkoutNowOpenChange,
+  statContext,
+  suggestions,
+  becoming,
+  onOpenBecoming,
+  onDismissSuggestion,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
   const open = isControlled ? checkInOpen : internalOpen;
-  const setOpen = (value: boolean) => {
-    if (isControlled) onCheckInOpenChange?.(value);
-    else setInternalOpen(value);
-  };
+  const setOpen = useCallback(
+    (value: boolean) => {
+      if (isControlled) onCheckInOpenChange?.(value);
+      else setInternalOpen(value);
+    },
+    [isControlled, onCheckInOpenChange],
+  );
 
   const [internalWorkoutNowOpen, setInternalWorkoutNowOpen] =
     useState<boolean>(false);
@@ -126,6 +150,42 @@ export function DashboardScreen({
     if (isWorkoutNowControlled) onWorkoutNowOpenChange?.(value);
     else setInternalWorkoutNowOpen(value);
   };
+
+  const effectiveStatContext = useMemo<DashboardTileContext>(() => {
+    if (statContext) return statContext;
+    return {
+      data: {
+        weightData: [],
+        bmiData: [],
+        moodData: [],
+        stats: {
+          totalWorkouts: 0,
+          thisWeekWorkouts: 0,
+        },
+      },
+      streakData: {
+        streakDays,
+        longestStreak: streakDays,
+        nextMilestone:
+          streakDays > 0
+            ? streakDays < 3
+              ? 3
+              : streakDays < 7
+                ? 7
+                : streakDays < 14
+                  ? 14
+                  : streakDays + 7
+            : 3,
+        activityToday: streakDays > 0,
+        streakFreezes: freezeAvailable ? 1 : 0,
+      },
+      nutritionData: null,
+      weeklyAvailability: 3,
+      weightUnit: "lbs",
+      todaysMood: null,
+      onOpenCheckIn: () => setOpen(true),
+    };
+  }, [statContext, streakDays, freezeAvailable, setOpen]);
 
   const handleWorkoutNow = () => {
     if (onOpenWorkoutNow) {
@@ -255,71 +315,104 @@ export function DashboardScreen({
           freezeAvailable={freezeAvailable}
         />
 
-        {todayWorkout ? (
-          <Card testID="dashboard-today" title="Today's workout">
-            {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
-                count are one fact about today, so they are one accessibility
-                element that reads as a sentence; the button after it is the
-                thing to act on. */}
-            <View
-              testID="dashboard-today-summary"
-              accessible
-              accessibilityLabel={todayWorkoutSummaryLabel(todayWorkout)}
-            >
-              <Text
-                testID="dashboard-today-workout"
-                className="text-foreground text-lg font-semibold mb-1"
-              >
-                {todayWorkout.workoutTitle}
-              </Text>
-              <Text
-                testID="dashboard-today-program"
-                className="text-muted-foreground text-sm mb-1"
-              >
-                {todayWorkout.programName} · {todayWorkout.phaseLabel}
-              </Text>
-              <Text
-                testID="dashboard-today-exercises"
-                className="text-muted-foreground text-sm mb-3"
-              >
-                {todayWorkout.exerciseCount} exercise
-                {todayWorkout.exerciseCount === 1 ? "" : "s"}
-              </Text>
-            </View>
-            <Button
-              testID="dashboard-start-workout"
-              accessibilityLabel={`Start workout: ${todayWorkout.workoutTitle}`}
-              onPress={onStartWorkout}
-            >
-              Start workout
-            </Button>
-          </Card>
-        ) : (
-          <Card testID="dashboard-rest" title="Today">
-            <Text className="text-muted-foreground">
-              Rest day. Take a walk, drink water, log your mood.
-            </Text>
-          </Card>
-        )}
+        {/* The Becoming widget at the top (NP-210) */}
+        <BecomingDoor
+          data={becoming}
+          onOpen={onOpenBecoming ?? onOpenMind}
+          testID="dashboard-becoming"
+        />
 
-        {/* Unified Dashboard Tile Grid (NP-104) */}
+        {/* Unified Dashboard Tile Grid (NP-104 / NP-210) */}
         <TileGrid
           layout={layout}
+          statContext={effectiveStatContext}
+          suggestions={suggestions}
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
           onOpenWorkoutNow={handleWorkoutNow}
+          onOpenStreak={onOpenCalendar}
+          onOpenMood={() => setOpen(true)}
+          onOpenGoal={onOpenNutrition}
+          onOpenCalories={onOpenNutrition}
+          onOpenCalendar={onOpenCalendar}
+          onDismissSuggestion={onDismissSuggestion}
         />
 
-        {/* The way into the calendar — a hidden route in the (tabs) tree, so
-            the month view has no entry point of its own. */}
-        <Button
-          testID="dashboard-open-calendar"
-          variant="secondary"
-          accessibilityLabel="Calendar"
-          onPress={onOpenCalendar}
-        >
-          Calendar
-        </Button>
+        {/* Up Next with Calendar link below the tiles (NP-210; TODO: NP-106 owns full Next Workout Card) */}
+        <View testID="dashboard-up-next" style={{ gap: 8 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 }}>
+              <CalendarDays size={18} color={colors.primary} />
+              <Text className="text-foreground text-base font-semibold" style={{ flexShrink: 1 }}>
+                Up Next
+              </Text>
+            </View>
+          </View>
+
+          {todayWorkout ? (
+            <Card testID="dashboard-today" title="Today's workout">
+              {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
+                  count are one fact about today, so they are one accessibility
+                  element that reads as a sentence; the button after it is the
+                  thing to act on. */}
+              <View
+                testID="dashboard-today-summary"
+                accessible
+                accessibilityLabel={todayWorkoutSummaryLabel(todayWorkout)}
+              >
+                <Text
+                  testID="dashboard-today-workout"
+                  className="text-foreground text-lg font-semibold mb-1"
+                >
+                  {todayWorkout.workoutTitle}
+                </Text>
+                <Text
+                  testID="dashboard-today-program"
+                  className="text-muted-foreground text-sm mb-1"
+                >
+                  {todayWorkout.programName} · {todayWorkout.phaseLabel}
+                </Text>
+                <Text
+                  testID="dashboard-today-exercises"
+                  className="text-muted-foreground text-sm mb-3"
+                >
+                  {todayWorkout.exerciseCount} exercise
+                  {todayWorkout.exerciseCount === 1 ? "" : "s"}
+                </Text>
+              </View>
+              <Button
+                testID="dashboard-start-workout"
+                accessibilityLabel={`Start workout: ${todayWorkout.workoutTitle}`}
+                onPress={onStartWorkout}
+              >
+                Start workout
+              </Button>
+            </Card>
+          ) : (
+            <Card testID="dashboard-rest" title="Today">
+              <Text className="text-muted-foreground">
+                Rest day. Take a walk, drink water, log your mood.
+              </Text>
+            </Card>
+          )}
+
+          {/* The way into the calendar — a hidden route in the (tabs) tree, so
+              the month view has no entry point of its own. */}
+          <Button
+            testID="dashboard-open-calendar"
+            variant="secondary"
+            accessibilityLabel="Calendar"
+            onPress={onOpenCalendar}
+          >
+            Calendar
+          </Button>
+        </View>
 
         <Button
           testID="dashboard-open-checkin"

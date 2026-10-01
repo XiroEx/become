@@ -34,7 +34,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
   }
   if (tile.kind === "metric") {
     const label = tile.id
-      ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
       : "Metric";
     return {
       label,
@@ -111,7 +111,7 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
   }
 
   const label = tile.id
-    ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
     : "Stat";
   return {
     label,
@@ -158,7 +158,7 @@ export function PlaceholderTile({ tile }: PlaceholderTileProps) {
           </View>
           <View style={styles.wideRight}>
             <Text className="text-muted-foreground text-[11px]">
-              Coming soon
+              Active tile
             </Text>
           </View>
         </View>

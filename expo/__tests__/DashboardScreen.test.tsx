@@ -169,4 +169,83 @@ describe("DashboardScreen", () => {
     fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
   });
+
+  // ─── NP-210: Becoming widget and Up Next Section ─────────────────────────
+  describe("NP-210: The Becoming widget & Up Next section", () => {
+    it("renders The Becoming widget at the top with Mind Lv, Nutrition pace, Training, and averaging line", () => {
+      const onOpenBecoming = jest.fn();
+      const becomingData = {
+        mindLevel: 2,
+        mindChapter: 1,
+        mindChapterName: "Awareness",
+        nutritionPace: "On pace",
+        nutritionTargetWeight: 181,
+        nutritionUnit: "lbs",
+        trainingDone: 2,
+        trainingTarget: 3,
+        averagePacePct: 67,
+      };
+
+      const { getByTestId, getByText } = render(
+        <DashboardScreen
+          {...baseProps}
+          becoming={becomingData}
+          onOpenBecoming={onOpenBecoming}
+        />,
+      );
+
+      const becomingWidget = getByTestId("dashboard-becoming");
+      expect(becomingWidget).toBeTruthy();
+      expect(getByText("The Becoming")).toBeTruthy();
+      expect(getByText("Lv 2")).toBeTruthy();
+      expect(getByText("Ch 1")).toBeTruthy();
+      expect(getByText("On pace")).toBeTruthy();
+      expect(getByText("2/3")).toBeTruthy();
+
+      // Tapping routes to becoming/mind
+      fireEvent.press(becomingWidget);
+      expect(onOpenBecoming).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders Up Next below the tiles with Calendar link and workout actions", () => {
+      const onOpenCalendar = jest.fn();
+      const onStartWorkout = jest.fn();
+
+      const { getByTestId, getByText } = render(
+        <DashboardScreen
+          {...baseProps}
+          onOpenCalendar={onOpenCalendar}
+          onStartWorkout={onStartWorkout}
+          todayWorkout={{
+            programName: "Hypertrophy",
+            workoutTitle: "Day 2 - Lower A",
+            phaseLabel: "Phase 1, Week 2",
+            exerciseCount: 5,
+          }}
+        />,
+      );
+
+      // Up Next section is rendered
+      expect(getByTestId("dashboard-up-next")).toBeTruthy();
+      expect(getByText("Up Next")).toBeTruthy();
+
+      // Calendar button in Up Next header
+      const calBtn = getByTestId("dashboard-open-calendar");
+      expect(calBtn).toBeTruthy();
+      fireEvent.press(calBtn);
+      expect(onOpenCalendar).toHaveBeenCalledTimes(1);
+
+      // Workout details and start button
+      expect(getByTestId("dashboard-today-workout").props.children).toBe("Day 2 - Lower A");
+      expect(getByTestId("dashboard-today-program").props.children).toEqual([
+        "Hypertrophy",
+        " · ",
+        "Phase 1, Week 2",
+      ]);
+      const startBtn = getByTestId("dashboard-start-workout");
+      expect(startBtn).toBeTruthy();
+      fireEvent.press(startBtn);
+      expect(onStartWorkout).toHaveBeenCalledTimes(1);
+    });
+  });
 });

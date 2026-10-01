@@ -20,8 +20,8 @@ export const LAYOUT_CACHE_KEY = "dashboard.layout";
  */
 export const LayoutWireSchema = z.union([
   DashboardLayoutResponseSchema,
-  DashboardLayoutSchema.transform((layout) => ({ layout })),
-  z.object({}).passthrough().transform(() => ({ layout: [] })),
+  DashboardLayoutSchema.transform((layout: DashboardTile[]): { layout: DashboardTile[] } => ({ layout })),
+  z.object({}).passthrough().transform((): { layout: DashboardTile[] } => ({ layout: [] })),
 ]);
 
 export async function readCachedLayout(memberId?: string | null): Promise<DashboardTile[] | null> {
