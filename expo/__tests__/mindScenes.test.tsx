@@ -125,6 +125,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "identity",
         title: "I am becoming",
         statement: "I am someone who finishes what they start.",
+        xp: 5,
       };
       const { getByTestId } = render(
         <IdentityScene move={move} onDone={onDone} />,
@@ -157,6 +158,7 @@ describe("Mind Session Scenes (NP-103)", () => {
           { label: "On what I control", response: "That's where the leverage is." },
           { label: "On what happened", response: "Notice it, then return." },
         ],
+        xp: 5,
       };
       const { getByTestId } = render(
         <ChoiceScene move={move} onDone={onDone} />,
@@ -183,6 +185,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "type",
         title: "In your own hand",
         statement: "I do the work.",
+        xp: 5,
       };
       const { getByTestId } = render(
         <TypeScene move={move} onDone={onDone} />,
@@ -202,6 +205,7 @@ describe("Mind Session Scenes (NP-103)", () => {
           template: "Today I am {0}.",
           blanks: [["focused", "calm", "relentless"]],
         },
+        xp: 5,
       };
       const { getByTestId } = render(
         <ComposeScene move={move} onDone={onDone} />,
@@ -219,6 +223,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "assemble",
         title: "Rebuild the line",
         statement: "Stay the course.",
+        xp: 5,
       };
       const { getByTestId } = render(
         <AssembleScene move={move} onDone={onDone} />,
@@ -238,6 +243,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "contrast",
         title: "Mental contrast",
         statement: "Execute today with clarity.",
+        xp: 5,
       };
       const { getByTestId } = render(
         <ContrastScene move={move} onDone={onDone} />,
@@ -256,6 +262,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         id: "m-pat",
         kind: "antisabotage",
         title: "Anti-sabotage check",
+        xp: 5,
       };
       const { getByTestId } = render(
         <PatternScene move={move} onDone={onDone} />,
@@ -274,6 +281,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         id: "m-soc",
         kind: "social",
         title: "Pull someone in",
+        xp: 5,
       };
       const { getByTestId } = render(
         <SocialScene move={move} onDone={onDone} />,
@@ -282,6 +290,51 @@ describe("Mind Session Scenes (NP-103)", () => {
       await flush(900);
       expect(onDone).toHaveBeenCalledTimes(1);
       expect(onDone.mock.calls[0]![0].q).toBe("Who I am pulling in");
+    });
+
+    it("renders MissionScene and commits action", async () => {
+      const onDone = jest.fn();
+      const move: Move = {
+        id: "m-mis",
+        kind: "mission",
+        title: "Daily mission",
+        prompt: "Ship the feature",
+        xp: 5,
+      };
+      const { getByTestId } = render(
+        <MissionScene move={move} onDone={onDone} />,
+      );
+      fireEvent.press(getByTestId("mind-mission-scene-commit"));
+      await flush(900);
+      expect(onDone).toHaveBeenCalledWith({
+        q: "What is your one move today?",
+        a: "Ship the feature",
+      });
+    });
+
+    it("renders VisionScene and locks in", async () => {
+      const onDone = jest.fn();
+      const move: Move = {
+        id: "m-vis",
+        kind: "vision",
+        title: "Vision for tomorrow",
+        statement: "I see the horizon clearly.",
+        xp: 5,
+      };
+      const { getByTestId } = render(
+        <VisionScene move={move} onDone={onDone} />,
+      );
+      await flush();
+      // Advance reveal text
+      for (let i = 0; i < 10; i++) {
+        await act(async () => {
+          jest.runOnlyPendingTimers();
+        });
+      }
+      expect(getByTestId("mind-vision-scene-lock-in")).toBeTruthy();
+      fireEvent.press(getByTestId("mind-vision-scene-lock-in"));
+      await flush(900);
+      expect(onDone).toHaveBeenCalledTimes(1);
     });
 
     it("renders WriteAffirm fallback and locks in", async () => {
@@ -356,6 +409,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "win",
         title: "Bank a win",
         prompt: "What went right today?",
+        xp: 5,
       };
       const { getByTestId } = render(
         <WinScene move={move} onDone={onDone} preview={false} />,
@@ -394,6 +448,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         kind: "win",
         title: "Bank a win",
         prompt: "What went right today?",
+        xp: 5,
       };
       const { getByTestId } = render(
         <WinScene move={move} onDone={onDone} preview={true} />,
@@ -424,6 +479,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         id: "m-win",
         kind: "win",
         title: "Bank a win",
+        xp: 5,
       };
       const { getByTestId } = render(
         <WinScene move={move} onDone={onDone} preview={false} />,
@@ -443,6 +499,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         id: "m-chal",
         kind: "challenge",
         title: "Daily discipline",
+        xp: 5,
       };
       const { getByTestId } = render(
         <ChallengeScene move={move} onDone={onDone} preview={false} />,
@@ -481,6 +538,7 @@ describe("Mind Session Scenes (NP-103)", () => {
         id: "m-chal",
         kind: "challenge",
         title: "Daily discipline",
+        xp: 5,
       };
       const { getByTestId } = render(
         <ChallengeScene move={move} onDone={onDone} preview={true} />,
@@ -508,23 +566,27 @@ describe("Mind Session Scenes (NP-103)", () => {
         intro: { title: "Daily rep", subtitle: "Stay steady" },
         openingId: "test-open",
         doneText: "Session complete",
+        rewardXp: 20,
         moves: [
           {
             id: "m-check",
             kind: "state-check",
             title: "Check in",
+            xp: 5,
           },
           {
             id: "m-win",
             kind: "win",
             title: "Bank a win",
             prompt: "What did you accomplish?",
+            xp: 5,
           },
           {
             id: "m-mission",
             kind: "mission",
             title: "One move",
             prompt: "Ship the feature",
+            xp: 5,
           },
           {
             id: "m-choice",
@@ -533,6 +595,7 @@ describe("Mind Session Scenes (NP-103)", () => {
             options: [
               { label: "On the solution", response: "Forward momentum." },
             ],
+            xp: 5,
           },
         ],
       };
@@ -540,7 +603,7 @@ describe("Mind Session Scenes (NP-103)", () => {
       const { getByTestId } = render(
         <SessionPlayer
           plan={plan}
-          initialLiveState="focused"
+          initialLiveState="locked_in"
           onExit={jest.fn()}
           onComplete={onComplete}
         />,
@@ -604,18 +667,21 @@ describe("Mind Session Scenes (NP-103)", () => {
         intro: { title: "Review", subtitle: "" },
         openingId: "test-open",
         doneText: "Done",
+        rewardXp: 20,
         moves: [
           {
             id: "m-win",
             kind: "win",
             title: "Bank a win",
             prompt: "What did you do?",
+            xp: 5,
           },
           {
             id: "m-mission",
             kind: "mission",
             title: "One move",
             prompt: "Plan tomorrow",
+            xp: 5,
           },
         ],
       };

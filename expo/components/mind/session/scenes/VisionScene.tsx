@@ -177,7 +177,7 @@ export function VisionScene({
           {dims.length > 0 ? (
             <View className="mt-6 w-full space-y-1.5">
               {dims.slice(0, 3).map((d) => (
-                <Text key={d.key} className="text-sm text-muted-foreground">
+                <Text key={String(d.key)} className="text-sm text-muted-foreground">
                   <Text className="font-semibold text-foreground">
                     {d.label}:{" "}
                   </Text>

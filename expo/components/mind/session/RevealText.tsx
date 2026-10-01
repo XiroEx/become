@@ -47,7 +47,7 @@ export function RevealText({
       if (shown > 0) onComplete?.();
       return;
     }
-    const justShown = shown > 0 ? words[shown - 1] : "";
+    const justShown = shown > 0 ? (words[shown - 1] ?? "") : "";
     const base = shown === 0 ? 320 : WORD_MS + pauseAfter(justShown);
     const delay = base * speed;
     const t = setTimeout(() => setShown((n) => n + 1), delay);

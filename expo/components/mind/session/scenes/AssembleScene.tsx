@@ -17,10 +17,20 @@ function shuffled(tiles: Tile[]): Tile[] {
   const a = [...tiles];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    const first = a[i];
+    const second = a[j];
+    if (first !== undefined && second !== undefined) {
+      a[i] = second;
+      a[j] = first;
+    }
   }
   if (a.length > 1 && a.every((t, i) => t.id === i)) {
-    [a[0], a[a.length - 1]] = [a[a.length - 1], a[0]];
+    const first = a[0];
+    const last = a[a.length - 1];
+    if (first !== undefined && last !== undefined) {
+      a[0] = last;
+      a[a.length - 1] = first;
+    }
   }
   return a;
 }

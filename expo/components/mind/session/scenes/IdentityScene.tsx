@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
@@ -42,36 +42,33 @@ export function IdentityScene({
   const [holding, setHolding] = useState(false);
   const [affirmed, setAffirmed] = useState(false);
 
-  const affirmedRef = useRef(false);
-  affirmedRef.current = affirmed;
-
   // Hold timer: ticks every 50ms while a finger is down until it fills the ring.
   useEffect(() => {
     if (!holding || affirmed) return;
     const t = setInterval(() => {
-      setHeld((ms) => Math.min(HOLD_MS, ms + HOLD_TICK_MS));
+      setHeld((ms) => {
+        const next = ms + HOLD_TICK_MS;
+        if (next >= HOLD_MS) {
+          setHolding(false);
+          setAffirmed(true);
+          haptic();
+          setTimeout(() => onDone(), HOLD_DONE_HOLD_MS);
+          return HOLD_MS;
+        }
+        return next;
+      });
     }, HOLD_TICK_MS);
     return () => clearInterval(t);
-  }, [holding, affirmed]);
-
-  // Lock-in trigger once the ring is filled.
-  useEffect(() => {
-    if (held < HOLD_MS || affirmedRef.current) return;
-    setHolding(false);
-    setAffirmed(true);
-    haptic();
-    const t = setTimeout(() => onDone(), HOLD_DONE_HOLD_MS);
-    return () => clearTimeout(t);
-  }, [held, onDone, haptic]);
+  }, [holding, affirmed, onDone, haptic]);
 
   const press = () => {
-    if (affirmedRef.current) return;
+    if (affirmed) return;
     setHeld(0);
     setHolding(true);
   };
 
   const release = () => {
-    if (affirmedRef.current) return;
+    if (affirmed) return;
     setHolding(false);
     setHeld(0);
   };
@@ -116,8 +113,12 @@ export function IdentityScene({
               onPressIn={press}
               onPressOut={release}
               onAccessibilityTap={() => {
-                if (affirmedRef.current) return;
+                if (affirmed) return;
                 setHeld(HOLD_MS);
+                setHolding(false);
+                setAffirmed(true);
+                haptic();
+                setTimeout(() => onDone(), HOLD_DONE_HOLD_MS);
               }}
               style={[minTouchTarget, { height: 128, width: 128 }]}
               className="items-center justify-center rounded-full"

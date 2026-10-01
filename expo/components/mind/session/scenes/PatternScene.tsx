@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { ArrowRight, Shield } from "lucide-react-native";
@@ -11,6 +11,14 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const WINDOW = 6;
 
+function pickPatterns(): (typeof SABOTAGE_PATTERNS)[number][] {
+  const start = Math.floor(Math.random() * SABOTAGE_PATTERNS.length);
+  return Array.from(
+    { length: Math.min(WINDOW, SABOTAGE_PATTERNS.length) },
+    (_, i) => SABOTAGE_PATTERNS[(start + i) % SABOTAGE_PATTERNS.length],
+  ).filter((p): p is (typeof SABOTAGE_PATTERNS)[number] => p !== undefined);
+}
+
 export function PatternScene({
   move,
   onDone,
@@ -20,14 +28,7 @@ export function PatternScene({
   const reduced = useReducedMotion();
 
   const [selected, setSelected] = useState<number | null>(null);
-
-  const patterns = useMemo(() => {
-    const start = Math.floor(Math.random() * SABOTAGE_PATTERNS.length);
-    return Array.from(
-      { length: Math.min(WINDOW, SABOTAGE_PATTERNS.length) },
-      (_, i) => SABOTAGE_PATTERNS[(start + i) % SABOTAGE_PATTERNS.length],
-    );
-  }, []);
+  const [patterns] = useState(pickPatterns);
 
   return (
     <ScrollView
@@ -62,21 +63,24 @@ export function PatternScene({
           </Text>
 
           <View className="mt-6 w-full gap-2">
-            {patterns.map((p, i) => (
-              <Pressable
-                key={i}
-                testID={`${testID}-pattern-${i}`}
-                accessibilityRole="button"
-                accessibilityLabel={p.pattern}
-                onPress={() => setSelected(i)}
-                style={minTouchTarget}
-                className="w-full rounded-2xl border border-border bg-card px-4 py-3"
-              >
-                <Text className="text-left text-sm font-medium text-foreground">
-                  {p.pattern}
-                </Text>
-              </Pressable>
-            ))}
+            {patterns.map((p, i) => {
+              if (!p) return null;
+              return (
+                <Pressable
+                  key={i}
+                  testID={`${testID}-pattern-${i}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={p.pattern}
+                  onPress={() => setSelected(i)}
+                  style={minTouchTarget}
+                  className="w-full rounded-2xl border border-border bg-card px-4 py-3"
+                >
+                  <Text className="text-left text-sm font-medium text-foreground">
+                    {p.pattern}
+                  </Text>
+                </Pressable>
+              );
+            })}
 
             <Pressable
               testID={`${testID}-skip`}
@@ -99,29 +103,30 @@ export function PatternScene({
           className="w-full max-w-sm items-center"
         >
           <Text className="text-center text-xs uppercase tracking-widest text-muted-foreground">
-            {patterns[selected].pattern}
+            {selected !== null ? patterns[selected]?.pattern : ""}
           </Text>
           <Text
             testID={`${testID}-override`}
             className="mt-5 text-center text-xl font-semibold leading-relaxed text-foreground"
           >
-            {patterns[selected].override}
+            {selected !== null ? patterns[selected]?.override : ""}
           </Text>
 
           <Pressable
             testID={`${testID}-continue`}
             accessibilityRole="button"
             accessibilityLabel="Override it"
-            onPress={() =>
+            onPress={() => {
+              const cur = selected !== null ? patterns[selected] : undefined;
               onDone(
-                selected !== null
+                cur
                   ? {
                       q: "The pattern I catch myself in",
-                      a: patterns[selected].pattern,
+                      a: cur.pattern,
                     }
                   : undefined,
-              )
-            }
+              );
+            }}
             style={minTouchTarget}
             className="mt-10 w-full flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
           >

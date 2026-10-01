@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, { FadeInUp } from "react-native-reanimated";
 import { Check, Users } from "lucide-react-native";
@@ -9,6 +9,14 @@ import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
+function pickAccountabilityAction(): string {
+  return (
+    ACCOUNTABILITY_ACTIONS[
+      Math.floor(Math.random() * ACCOUNTABILITY_ACTIONS.length)
+    ] ?? "Send a one-line update to someone who counts on you."
+  );
+}
+
 export function SocialScene({
   move,
   onDone,
@@ -18,13 +26,7 @@ export function SocialScene({
   const reduced = useReducedMotion();
 
   const [committed, setCommitted] = useState(false);
-  const action = useMemo(
-    () =>
-      ACCOUNTABILITY_ACTIONS[
-        Math.floor(Math.random() * ACCOUNTABILITY_ACTIONS.length)
-      ],
-    [],
-  );
+  const [action] = useState(pickAccountabilityAction);
 
   const commit = () => {
     if (committed) return;
