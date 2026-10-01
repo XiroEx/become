@@ -36,6 +36,10 @@ const DELEGATING_SCREENS: { route: string; delegate: string }[] = [
     delegate: "components/DashboardScreen.tsx",
   },
   {
+    route: "app/(app)/(tabs)/dashboard/streaks.tsx",
+    delegate: "components/streaks/StreaksScreen.tsx",
+  },
+  {
     route: "app/(app)/(tabs)/programming/[id]/workout/[idx]/live.tsx",
     delegate: "components/live/LiveWorkoutClient.tsx",
   },

@@ -94,6 +94,7 @@ function wireApiFetch() {
     if (path.startsWith("/api/dashboard/layout")) {
       return Promise.resolve({
         layout: [
+          { id: "streak", kind: "stat", size: "1x1" },
           { id: "mindset", kind: "stat", size: "1x1" },
           { id: "nutrition", kind: "stat", size: "1x1" },
           { id: "workoutNow", kind: "stat", size: "2x1" },
@@ -115,6 +116,22 @@ function wireApiFetch() {
         nutrition: {
           target: { weight: 175, pacePerWeek: 1 },
           unit: "lbs",
+        },
+      });
+    }
+    if (path.startsWith("/api/streaks")) {
+      return Promise.resolve({
+        overall: { current: 12, best: 14, activeToday: true, freezes: 1 },
+        pillars: {
+          workout: { current: 4, best: 8, thisWeek: 2, target: 3, weekLost: false, unit: "days" },
+          nutrition: { current: 5, best: 7, activeToday: true },
+          mindset: { current: 3, best: 5, activeToday: true },
+          super: {
+            current: 0,
+            best: 0,
+            activeToday: false,
+            today: { trained: true, nutrition: true, mindset: true, restDay: false, weekOnTrack: true },
+          },
         },
       });
     }
@@ -179,8 +196,8 @@ describe("DashboardRoute", () => {
 
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting").props.children).toBe("Hey, Jon");
+      expect(getByTestId("tile-streak")).toBeTruthy();
     });
-    expect(getByTestId("dashboard-streak")).toBeTruthy();
     await waitFor(() => {
       expect(getByTestId("dashboard-today-workout").props.children).toBe(
         "Upper A",
