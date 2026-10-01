@@ -394,16 +394,24 @@ describe("NutritionIndexRoute", () => {
     await waitFor(() => {
       expect(getByTestId("nutrition-menu-search")).toBeTruthy();
       expect(getByTestId("nutrition-menu-recipes")).toBeTruthy();
+      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
     });
 
     // Does NOT offer unported web surfaces (NP-012)
     expect(queryByText("Timeline")).toBeNull();
-    expect(queryByText("Meal Schedule")).toBeNull();
     expect(queryByText("Estimate history")).toBeNull();
 
     // Tapping recipes navigates to recipes
     fireEvent.press(getByTestId("nutrition-menu-recipes"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/recipes");
+
+    // Reopen menu to tap meal schedule
+    fireEvent.press(getByTestId("nutrition-menu-button"));
+    await waitFor(() => {
+      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("nutrition-menu-meal-schedule"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/meal-schedule");
   });
 
   it("supports adding an empty tag section for the session and removing it", async () => {
