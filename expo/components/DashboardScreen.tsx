@@ -8,7 +8,18 @@ import { Button } from "@/components/Button";
 import { StreakBanner } from "@/components/StreakBanner";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
-import type { DashboardTile } from "@become/api-client";
+import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
+import { UpNextCard } from "@/components/dashboard/UpNextCard";
+import type {
+  DashboardTile,
+  DashboardTilesResponse,
+  GoalProgressResponse,
+  MindSummaryResponse,
+} from "@become/api-client";
+import type {
+  DashboardStatData,
+  UpcomingWorkoutSummary,
+} from "@/lib/dashboard/types";
 import {
   CheckInModal,
   type CheckInPayload,
@@ -88,6 +99,18 @@ export interface DashboardScreenProps {
   onOpenSettings?: () => void;
   /** Saved dashboard layout from server or cache (controlled). */
   layout?: DashboardTile[] | null;
+  /** Live stats data for stat tiles (streak, mood, weekly, goal, calories, etc.). */
+  statData?: DashboardStatData | null;
+  /** Server tiles response with suggestions, rotator picks, and metrics. */
+  tilesData?: DashboardTilesResponse | null;
+  /** Handler to dismiss a server suggestion. */
+  onDismissSuggestion?: (id: string) => Promise<void> | void;
+  /** The Becoming pillar goal views. */
+  goals?: GoalProgressResponse | null;
+  /** Mindset level and summary. */
+  mind?: MindSummaryResponse | null;
+  /** Upcoming scheduled workout for Up Next card. */
+  upcomingWorkout?: UpcomingWorkoutSummary | null;
   /** Action tile callback: opens Mind tab / session. */
   onOpenMind?: () => void;
   /** Action tile callback: opens Nutrition tab. */
@@ -123,6 +146,12 @@ export function DashboardScreen({
   onRefresh,
   onOpenSettings,
   layout,
+  statData,
+  tilesData,
+  onDismissSuggestion,
+  goals,
+  mind,
+  upcomingWorkout,
   onOpenMind,
   onOpenNutrition,
   onOpenWorkoutNow,
@@ -290,6 +319,13 @@ export function DashboardScreen({
           </Pressable>
         </View>
 
+        {/* The doorway to The Becoming (NP-192) */}
+        <BecomingDoor
+          goals={goals}
+          mind={mind}
+          onPress={onOpenMind}
+        />
+
         <StreakBanner
           testID="dashboard-streak"
           streakDays={streakDays}
@@ -346,10 +382,22 @@ export function DashboardScreen({
         {/* Unified Dashboard Tile Grid (NP-104) */}
         <TileGrid
           layout={layout}
+          statData={statData}
+          tilesData={tilesData}
+          onDismissSuggestion={onDismissSuggestion}
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
           onOpenWorkoutNow={handleWorkoutNow}
+          onOpenCalendar={onOpenCalendar}
+          onOpenCheckIn={() => setOpen(true)}
           onOpenWeight={handleOpenWeight}
+        />
+
+        {/* Up Next training card (NP-106) */}
+        <UpNextCard
+          workout={upcomingWorkout}
+          onOpenCalendar={onOpenCalendar}
+          onPressWorkout={onStartWorkout}
         />
 
         {/* The way into the calendar — a hidden route in the (tabs) tree, so

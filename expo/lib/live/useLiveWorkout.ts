@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   apiFetch,
   CurrentWorkoutResponseSchema,
@@ -44,18 +45,32 @@ import type {
   LiveWorkoutViewModel,
 } from "@/components/live/LiveWorkoutClient";
 
+function defaultSubscribeToAppState(
+  listener: (status: AppStateStatus) => void,
+): () => void {
+  const subscription = AppState.addEventListener("change", listener);
+  return () => subscription.remove();
+}
+
 export interface UseLiveWorkoutOptions {
-  /** DI for tests — defaults to SecureStore-backed cache. */
+  /** DI for tests — defaults to AsyncStorage-backed cache. */
   cacheStore?: KeyValueStore;
   /** Fallback phase index if not specified (0-based). */
   initialPhase?: number;
   /** Fallback workout index if day label not specified (0-based). */
   fallbackWorkoutIndex?: number;
+  /** Subscribe to AppState changes (DI for tests). */
+  subscribeToAppState?: (
+    listener: (status: AppStateStatus) => void,
+  ) => () => void;
+  /** Delay in milliseconds for autosave debounce (defaults to 1500). */
+  autoSaveDelayMs?: number;
 }
 
 export interface UseLiveWorkoutResult {
   loading: boolean;
   error: Error | null;
+  saveError: Error | null;
   workout: LiveWorkoutViewModel | null;
   phase: number;
   day: string;
@@ -105,10 +120,14 @@ export function useLiveWorkout(
   const cacheStore = options?.cacheStore;
   const initialPhase = options?.initialPhase;
   const fallbackWorkoutIndex = options?.fallbackWorkoutIndex;
+  const autoSaveDelayMs = options?.autoSaveDelayMs ?? 1500;
+  const subscribeToAppStateImpl =
+    options?.subscribeToAppState ?? defaultSubscribeToAppState;
   const cache = useMemo(() => createLiveWorkoutCache(cacheStore), [cacheStore]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [saveError, setSaveError] = useState<Error | null>(null);
   const [workout, setWorkout] = useState<LiveWorkoutViewModel | null>(null);
   const [phase, setPhase] = useState<number>(
     () => (options?.initialPhase ?? 0) + 1,
@@ -139,8 +158,13 @@ export function useLiveWorkout(
 
   const [finishing, setFinishing] = useState(false);
   const savingRef = useRef(false);
+  const inFlightIsCompleteRef = useRef(false);
+  const activeAutosavePromiseRef = useRef<Promise<WorkoutSaveResponse | null> | null>(null);
+  const pendingAutosaveGridRef = useRef<LiveGrid | null>(null);
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [newPRs, setNewPRs] = useState<NewPR[]>([]);
-  const [attemptId] = useState(newWorkoutAttemptId);
+  const [attemptId, setAttemptId] = useState(newWorkoutAttemptId);
   const [startedAtISO] = useState(() => new Date().toISOString());
   const logDateOverrideRef = useRef<string | null>(null);
 
@@ -159,21 +183,248 @@ export function useLiveWorkout(
       : resolvedDay;
   const cacheKey = liveCacheKey(programId, cacheWorkoutIndex, phase - 1);
 
+  const saveRef = useRef<
+    (
+      isComplete: boolean,
+      gridOverride?: LiveGrid,
+    ) => Promise<WorkoutSaveResponse | null>
+  >(async () => null);
+
+  // Save implementation with re-entrant lock and queueing
+  const save = useCallback(
+    async (
+      isComplete: boolean,
+      gridOverride?: LiveGrid,
+    ): Promise<WorkoutSaveResponse | null> => {
+      if (!workout) return null;
+
+      if (isComplete) {
+        // Prevent concurrent completing saves (double-tap Finish)
+        if (inFlightIsCompleteRef.current) return null;
+        inFlightIsCompleteRef.current = true;
+        setFinishing(true);
+
+        // Await any in-flight autosave before sending completing POST
+        if (activeAutosavePromiseRef.current) {
+          try {
+            await activeAutosavePromiseRef.current;
+          } catch {
+            // Non-blocking for completing save
+          }
+        }
+      } else {
+        // Autosave / set-complete save
+        if (inFlightIsCompleteRef.current) return null;
+        if (savingRef.current) {
+          // Coalesce latest grid into pending ref
+          pendingAutosaveGridRef.current = gridOverride ?? gridRef.current;
+          return null;
+        }
+      }
+
+      savingRef.current = true;
+
+      const performSave = async (): Promise<WorkoutSaveResponse | null> => {
+        try {
+          const currentGrid = gridOverride ?? gridRef.current;
+          const activeSecondsAtSave =
+            activeSecondsBaseline +
+            Math.floor((Date.now() - sessionStartTime) / 1000);
+          const logDateOverride = isComplete
+            ? logDateOverrideRef.current
+            : null;
+
+          const request = buildWorkoutSaveRequest({
+            programId: workout.programId,
+            phase,
+            day: resolvedDay,
+            exercises: workout.exercises,
+            grid: currentGrid,
+            completed: isComplete,
+            activeSeconds: activeSecondsAtSave,
+            attemptId,
+            scheduledDate: sd || undefined,
+            performedAt: logDateOverride || undefined,
+            tz: new Date().getTimezoneOffset(),
+            tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            swappedExercises,
+          });
+
+          const res = await apiFetch<WorkoutSaveResponse>(
+            "/api/workouts",
+            WorkoutSaveResponseSchema,
+            {
+              method: "POST",
+              body: request,
+              baseUrl: WEBAPP_BASE_URL,
+              getToken: () => token ?? undefined,
+            },
+          );
+
+          setSaveError(null);
+
+          if (isComplete) {
+            if (logDateOverrideRef.current) logDateOverrideRef.current = null;
+            invalidateMindSession();
+            void cache.clear(cacheKey);
+            setNewPRs(res.newPRsAchieved ?? []);
+
+            void mirrorWorkoutToHealth({
+              title: workout.workoutTitle,
+              startISO: startedAtISO,
+              endISO: new Date().toISOString(),
+              clientId: workoutClientId(attemptId),
+            });
+          }
+
+          return res;
+        } catch (err) {
+          console.error("Error saving workout:", err);
+          if (isComplete) {
+            setSaveError(
+              err instanceof Error ? err : new Error("Failed to save workout"),
+            );
+          }
+          return null;
+        } finally {
+          savingRef.current = false;
+          if (isComplete) {
+            inFlightIsCompleteRef.current = false;
+            setFinishing(false);
+          } else {
+            activeAutosavePromiseRef.current = null;
+            if (pendingAutosaveGridRef.current && !inFlightIsCompleteRef.current) {
+              const nextGrid = pendingAutosaveGridRef.current;
+              pendingAutosaveGridRef.current = null;
+              void saveRef.current(false, nextGrid);
+            }
+          }
+        }
+      };
+
+      const savePromise = performSave();
+      if (!isComplete) {
+        activeAutosavePromiseRef.current = savePromise;
+      }
+      return savePromise;
+    },
+    [
+      workout,
+      phase,
+      resolvedDay,
+      sd,
+      activeSecondsBaseline,
+      sessionStartTime,
+      attemptId,
+      startedAtISO,
+      swappedExercises,
+      cache,
+      cacheKey,
+      token,
+    ],
+  );
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+
   const onGridChange = useCallback(
     (nextGrid: LiveGrid) => {
       gridRef.current = nextGrid;
       setGrid(nextGrid);
-      void cache.save(cacheKey, nextGrid as LiveWorkoutSnapshot);
+      const elapsed =
+        activeSecondsBaseline +
+        Math.floor((Date.now() - sessionStartTime) / 1000);
+      void cache.save(
+        cacheKey,
+        nextGrid as LiveWorkoutSnapshot,
+        elapsed,
+        attemptId,
+      );
+
+      // Debounced server save
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        autoSaveTimeoutRef.current = null;
+        void save(false, nextGrid);
+      }, autoSaveDelayMs);
     },
-    [cache, cacheKey],
+    [
+      cache,
+      cacheKey,
+      activeSecondsBaseline,
+      sessionStartTime,
+      attemptId,
+      autoSaveDelayMs,
+      save,
+    ],
   );
 
   const onSetComplete = useCallback(
     (_input: { exerciseSlug: string; setIndex: number; state: LiveSetState }) => {
-      // Set completed; rest timer triggers in LiveWorkoutClient
+      // Immediate server save on set completion
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      const currentGrid = gridRef.current;
+      const elapsed =
+        activeSecondsBaseline +
+        Math.floor((Date.now() - sessionStartTime) / 1000);
+      void cache.save(
+        cacheKey,
+        currentGrid as LiveWorkoutSnapshot,
+        elapsed,
+        attemptId,
+      );
+      void save(false, currentGrid);
     },
-    [],
+    [cache, cacheKey, activeSecondsBaseline, sessionStartTime, attemptId, save],
   );
+
+  // AppState flush on background
+  useEffect(() => {
+    let prevStatus: AppStateStatus = AppState.currentState ?? "active";
+    const unsubscribe = subscribeToAppStateImpl((nextStatus) => {
+      if (
+        (nextStatus === "background" || nextStatus === "inactive") &&
+        prevStatus !== "background" &&
+        prevStatus !== "inactive"
+      ) {
+        if (autoSaveTimeoutRef.current) {
+          clearTimeout(autoSaveTimeoutRef.current);
+          autoSaveTimeoutRef.current = null;
+        }
+        const currentGrid = gridRef.current;
+        const elapsed =
+          activeSecondsBaseline +
+          Math.floor((Date.now() - sessionStartTime) / 1000);
+        void cache.save(
+          cacheKey,
+          currentGrid as LiveWorkoutSnapshot,
+          elapsed,
+          attemptId,
+        );
+        void save(false, currentGrid);
+      }
+      prevStatus = nextStatus;
+    });
+    return () => {
+      unsubscribe();
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [
+    subscribeToAppStateImpl,
+    cache,
+    cacheKey,
+    activeSecondsBaseline,
+    sessionStartTime,
+    attemptId,
+    save,
+  ]);
 
   // Exercise Swap logic
   const [swapSlug, setSwapSlug] = useState<string | null>(null);
@@ -244,12 +495,20 @@ export function useLiveWorkout(
         delete nextGrid[oldEx.slug];
         gridRef.current = nextGrid;
         setGrid(nextGrid);
-        void cache.save(cacheKey, nextGrid as LiveWorkoutSnapshot);
+        const elapsed =
+          activeSecondsBaseline +
+          Math.floor((Date.now() - sessionStartTime) / 1000);
+        void cache.save(
+          cacheKey,
+          nextGrid as LiveWorkoutSnapshot,
+          elapsed,
+          attemptId,
+        );
       }
 
       setSwapSlug(null);
     },
-    [swapSlug, workout, swappedExercises, cache, cacheKey],
+    [swapSlug, workout, swappedExercises, cache, cacheKey, activeSecondsBaseline, sessionStartTime, attemptId],
   );
 
   // Main data loader
@@ -562,12 +821,28 @@ export function useLiveWorkout(
       }
 
       if (!isResumed) {
-        // Check local SecureStore cache for in-flight progress
-        const cachedSnap = await cache.load(currentCacheKey);
-        if (cachedSnap) {
-          setRestoredGrid(cachedSnap as LiveGrid);
-          gridRef.current = cachedSnap as LiveGrid;
-          setGrid(cachedSnap as LiveGrid);
+        // Prefer server's open log (checked above); fall back to fresh local draft.
+        // Draft is used only when younger than 24h and has progress.
+        const cachedDraft = await cache.loadDraft(currentCacheKey, {
+          maxAgeMs: 86_400_000,
+          requireProgress: true,
+        });
+        if (cachedDraft) {
+          setIsResuming(true);
+          setRestoredGrid(cachedDraft.grid as LiveGrid);
+          gridRef.current = cachedDraft.grid as LiveGrid;
+          setGrid(cachedDraft.grid as LiveGrid);
+          if (
+            typeof cachedDraft.activeSeconds === "number" &&
+            cachedDraft.activeSeconds > 0
+          ) {
+            setActiveSecondsBaseline(cachedDraft.activeSeconds);
+            setSessionStartTime(Date.now());
+            setActiveSeconds(cachedDraft.activeSeconds);
+          }
+          if (cachedDraft.attemptId) {
+            setAttemptId(cachedDraft.attemptId);
+          }
         } else {
           // Fresh workout: start blank sets (last performance is reference only)
           const blankGrid: LiveGrid = {};
@@ -629,91 +904,6 @@ export function useLiveWorkout(
     void load();
   }, [load]);
 
-  // Save implementation with re-entrant lock
-  const save = useCallback(
-    async (
-      isComplete: boolean,
-      gridOverride?: LiveGrid,
-    ): Promise<WorkoutSaveResponse | null> => {
-      if (!workout) return null;
-      // Re-entrant guard: prevent double-tap / concurrent saves
-      if (savingRef.current) return null;
-      savingRef.current = true;
-      setFinishing(true);
-
-      try {
-        const currentGrid = gridOverride ?? gridRef.current;
-        const activeSecondsAtSave =
-          activeSecondsBaseline +
-          Math.floor((Date.now() - sessionStartTime) / 1000);
-        const logDateOverride = isComplete ? logDateOverrideRef.current : null;
-
-        const request = buildWorkoutSaveRequest({
-          programId: workout.programId,
-          phase,
-          day: resolvedDay,
-          exercises: workout.exercises,
-          grid: currentGrid,
-          completed: isComplete,
-          activeSeconds: activeSecondsAtSave,
-          attemptId,
-          scheduledDate: sd || undefined,
-          performedAt: logDateOverride || undefined,
-          tz: new Date().getTimezoneOffset(),
-          tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          swappedExercises,
-        });
-
-        const res = await apiFetch<WorkoutSaveResponse>(
-          "/api/workouts",
-          WorkoutSaveResponseSchema,
-          {
-            method: "POST",
-            body: request,
-            baseUrl: WEBAPP_BASE_URL,
-            getToken: () => token ?? undefined,
-          },
-        );
-
-        if (isComplete) {
-          if (logDateOverrideRef.current) logDateOverrideRef.current = null;
-          invalidateMindSession();
-          void cache.clear(cacheKey);
-          setNewPRs(res.newPRsAchieved ?? []);
-
-          void mirrorWorkoutToHealth({
-            title: workout.workoutTitle,
-            startISO: startedAtISO,
-            endISO: new Date().toISOString(),
-            clientId: workoutClientId(attemptId),
-          });
-        }
-
-        return res;
-      } catch (err) {
-        console.error("Error saving workout:", err);
-        return null;
-      } finally {
-        savingRef.current = false;
-        setFinishing(false);
-      }
-    },
-    [
-      workout,
-      phase,
-      resolvedDay,
-      sd,
-      activeSecondsBaseline,
-      sessionStartTime,
-      attemptId,
-      startedAtISO,
-      swappedExercises,
-      cache,
-      cacheKey,
-      token,
-    ],
-  );
-
   const onFinish = useCallback(
     async (finalGrid?: LiveGrid) => {
       return save(true, finalGrid);
@@ -724,6 +914,7 @@ export function useLiveWorkout(
   return {
     loading,
     error,
+    saveError,
     workout,
     phase,
     day: resolvedDay,

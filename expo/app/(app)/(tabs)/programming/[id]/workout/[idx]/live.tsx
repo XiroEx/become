@@ -62,6 +62,7 @@ export default function LiveWorkoutRoute({
     onSetComplete,
     onFinish,
     finishing,
+    saveError,
     newPRs,
     onRequestSwap,
     swapSlug,
@@ -126,6 +127,7 @@ export default function LiveWorkoutRoute({
         onSetComplete={onSetComplete}
         onFinish={(g) => void onFinish(g)}
         finishing={finishing}
+        saveError={saveError}
         onRequestSwap={onRequestSwap}
       />
       <ExerciseSwapModal

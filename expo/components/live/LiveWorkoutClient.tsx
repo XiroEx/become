@@ -78,6 +78,8 @@ export interface LiveWorkoutClientProps {
   onFinish?: (grid: LiveGrid) => void;
   /** Disables the finish button while the save is in flight. */
   finishing?: boolean;
+  /** Save error to surface offline / failure state and offer Retry. */
+  saveError?: Error | string | null;
   /** Open the swap picker for an exercise (route fetches alternatives). */
   onRequestSwap?: (slug: string) => void;
   /** Injected rest-timer interval impls for deterministic tests. */
@@ -123,12 +125,13 @@ export function LiveWorkoutClient({
   onGridChange,
   onFinish,
   finishing = false,
+  saveError,
   onRequestSwap,
   restTimerSetInterval,
   restTimerClearInterval,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [grid, setGrid] = useState<LiveGrid>(() =>
     initialGrid(workout.exercises, restoredGrid),
   );
@@ -277,6 +280,35 @@ export function LiveWorkoutClient({
             onResume={rest.resume}
             onSkip={rest.skip}
           />
+        ) : null}
+        {saveError ? (
+          <View
+            testID={`${testID}-error-banner`}
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              backgroundColor: tint("destructive", 0.15),
+              gap: 8,
+              marginTop: 12,
+            }}
+          >
+            <Text
+              testID={`${testID}-error-message`}
+              className="text-destructive font-medium text-sm"
+            >
+              {typeof saveError === "string"
+                ? saveError
+                : "Couldn’t save workout. You appear to be offline."}
+            </Text>
+            <Button
+              testID={`${testID}-retry`}
+              variant="secondary"
+              size="sm"
+              onPress={() => onFinish?.(gridRef.current)}
+            >
+              Retry
+            </Button>
+          </View>
         ) : null}
         <View style={{ height: 24 }} />
         <Button

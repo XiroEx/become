@@ -681,7 +681,7 @@ describe("DashboardRoute navigation", () => {
 
       // Simulate app foregrounding
       await act(async () => {
-        const changeListeners = AppState.addEventListener.mock.calls
+        const changeListeners = (AppState.addEventListener as jest.Mock).mock.calls
           .filter(([event]: [string]) => event === "change")
           .map(([, listener]: [string, (status: string) => void]) => listener);
         changeListeners.forEach((listener: (status: string) => void) => listener("active"));
