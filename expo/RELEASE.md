@@ -1,18 +1,36 @@
 # Release process
 
 How to ship a new version of the Become native app to TestFlight + Play
-Internal Track. The build/submit pipeline runs on **EAS** (Expo Application
-Services).
+Internal Track.
+
+**There is no Expo-hosted service in this pipeline and no over-the-air
+updates** (George, 2026-09-30). No EAS Build, no EAS Submit, no EAS Update, no
+Expo Push, no expo.dev project — and therefore no `eas.json` and no
+`expo-updates` in the dependency tree, which
+`scripts/check-no-ota.mjs` fails the `expo` CI job over. Expo *libraries* and
+the *CLI* are fine and are what this document uses: `npx expo prebuild`
+generates the native projects, `npx expo export` is the bundler check CI runs,
+and the archive is built locally by Xcode and Gradle.
+
+Every change — JS or native — therefore ships as a **store build**. An urgent
+one ships as a store build plus the **minimum-version gate** (NP-041), which is
+the only lever that reaches an already-installed app. See
+[Releasing a fix](#releasing-a-fix-there-is-no-ota).
 
 ## Prerequisites (one-time)
 
-1. **Apple Developer membership** for `io.redbtn.become`. Apple Team ID +
-   Apple ID + App Store Connect App ID populated in `eas.json` `submit.production.ios`.
-2. **Google Play Console** entry for `io.redbtn.become` with a service-account
-   JSON key (writer role) at `expo/play-store-service-account.json`. Treat the
-   key as a secret — `.gitignore` it.
-3. **EAS account** linked to the Expo dashboard. Run `eas login` once and
-   `eas init` to bind this directory to an Expo project ID.
+1. **Apple Developer membership** for `io.redbtn.become`, with the Apple ID on
+   the team that owns the App Store Connect app record. Nothing in the repo
+   stores those identifiers any more (`eas.json`, which held placeholders for
+   them, is gone): Xcode signs in and signs the archive.
+2. **Google Play Console** entry for `io.redbtn.become`, and an upload keystore
+   for the app bundle. Keep the keystore and its passwords in redsecrets, NOT
+   in the repo — losing it means a new app listing. Play App Signing holds the
+   release key.
+3. **A build machine with the native toolchains**, because nothing builds in
+   the cloud for us: macOS with Xcode (iOS archive + upload) and a JDK 17 +
+   Android SDK for `./gradlew` (Android app bundle). The iOS half needs a Mac;
+   the Android half runs anywhere.
 4. **Bundle / package identifiers locked** in `app.json`:
    - `ios.bundleIdentifier = "io.redbtn.become"`
    - `android.package = "io.redbtn.become"`
@@ -29,11 +47,15 @@ Services).
 ## Cutting a release
 
 ```bash
-# 1. Bump version. EAS handles iOS buildNumber + Android versionCode via
-#    `autoIncrement: true` in production profile; only marketing version
-#    needs a manual bump in app.json.
+# 1. Bump the versions. ALL THREE live in app.json and all three are ours now:
+#    EAS used to own the two counters remotely (`appVersionSource: "remote"`,
+#    `autoIncrement: true`), and both stores reject an upload that reuses one.
+#      - expo.version            marketing version, e.g. 0.1.0 → 0.1.1
+#      - expo.ios.buildNumber    +1 on EVERY upload, even a re-upload
+#      - expo.android.versionCode +1 on EVERY upload, must be an integer
 cd expo
-# Edit app.json: bump expo.version (e.g. 0.1.0 → 0.1.1).
+# Edit app.json, then `npm test` — storeDistribution.test.ts fails if either
+# counter goes missing.
 
 # 2. Run the test triad to make sure we're shipping green code.
 npm run typecheck
@@ -45,41 +67,109 @@ npm test
 #     Home, the largest Dynamic Type size and Reduce Motion are checked on one
 #     iPhone and one Android device, by hand, on the candidate build.
 
-# 3. Build for both platforms. Production builds use the `production` profile
-#    declared in eas.json — bundles app-bundle (.aab) for Android, .ipa for iOS.
-eas build --platform all --profile production
-# This kicks the build off in EAS cloud. Output: signed .ipa + .aab artifacts.
+# 3. Generate the native projects from app.json. ios/ and android/ are NOT
+#    committed (.gitignore), so this is how every build gets the plugins, the
+#    Info.plist keys, the widget providers and the privacy manifest.
+npx expo prebuild --clean
+
+# 4a. iOS — archive and upload with Xcode.
+open ios/Become.xcworkspace
+#     Product → Archive, then Distribute App → App Store Connect → Upload.
+#     (Or: xcodebuild -workspace ios/Become.xcworkspace -scheme Become \
+#        -configuration Release -archivePath build/Become.xcarchive archive
+#      then Transporter / `xcrun altool --upload-app` with an App Store
+#      Connect API key.)
+
+# 4b. Android — build the app bundle Play wants.
+cd android && ./gradlew bundleRelease
+#     Output: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
-**The build needs `../shared`, and it gets it.** `@become/api-client` is linked
-into `node_modules` from outside this directory
-(`"@become/api-client": "file:../shared/api-client"`), so a build that uploaded
-only `expo/` could not install, let alone bundle. `eas build` archives from the
-ROOT of the git repository and builds in the project subdirectory, and
-`shared/` is tracked git content with no `.easignore` excluding it — so it
-travels with every build. Keep it that way: an `.easignore` added later must
-not exclude `shared/`.
+**The build needs `../shared`, and a local build has it.**
+`@become/api-client` and `@become/core` are linked into `node_modules` from
+outside this directory (`"file:../shared/api-client"`), so the build has to run
+inside a checkout of the WHOLE repository with `npm install` already done in
+`expo/` — which is exactly what a local build is. (This is the thing a cloud
+builder used to do for us by archiving from the repo root; now it is yours to
+not break by copying `expo/` somewhere on its own.) If `npx expo export
+--platform ios` works, the archive will bundle: that is the step CI runs for
+precisely this reason.
 
 ## Submitting
 
-```bash
-# 4. Submit the built artifacts to App Store Connect + Play Internal Track.
-#    Reuses the credentials block in eas.json under submit.production.
-eas submit --platform all --profile production
-```
+Both uploads are by hand — there is no `submit` service in this pipeline:
 
-Submit defaults:
+- **iOS** → Xcode Organizer → *Distribute App* → *App Store Connect*
+  (or Transporter with the `.ipa`). The build appears in App Store Connect →
+  TestFlight after processing.
+- **Android** → Play Console → *Internal testing* → *Create new release* →
+  upload `app-release.aab`.
+
+Upload defaults:
 - iOS → TestFlight (no review required; just internal testers see it
   immediately, external testers after Apple beta review).
 - Android → Play Internal Track (no review; internal testers see it
   immediately, promote to Open/Production via the Play Console UI).
+
+## Releasing a fix (there is no OTA)
+
+**Every fix is a store build. A JS-only fix is a store build too.** The web app
+can be fixed by merging to `beta` or `main`, and the native app cannot: there
+are no over-the-air updates in v1, by decision (George, 2026-09-30 — no
+Expo-hosted services, which rules out EAS Update). An installed binary only
+changes when the member installs another binary.
+
+So a fix goes out like this:
+
+1. **Fix it, bump it, ship it.** Merge to `beta`, then bump `expo.version`
+   plus both counters and cut a release exactly as above. Nothing about a
+   one-line JS fix is faster than a native one — plan on store processing
+   (TestFlight minutes, Play Internal minutes, App Review hours to a day for a
+   public release).
+2. **If members must not keep running the broken build, raise the floor.** The
+   minimum-version gate (NP-041) is the only thing that reaches an app that is
+   already installed. It is server-side config, takes effect without a deploy,
+   and does not wait for a store:
+
+   ```json
+   "app": {
+     "ios":     { "minVersion": "0.1.1", "latestVersion": "0.1.1", "storeUrl": "https://apps.apple.com/app/id…" },
+     "android": { "minVersion": "0.1.1", "latestVersion": "0.1.1", "storeUrl": "https://play.google.com/store/apps/details?id=io.redbtn.become" }
+   }
+   ```
+
+   in `BECOME_RUNTIME_CONFIG` (see `webapp/RUNTIME_SECRETS.md`), served by
+   `GET /api/app/config` and read on every cold start by
+   `expo/lib/version/versionGate.ts`:
+
+   | Set | What the member gets |
+   |---|---|
+   | `latestVersion` above the installed version | A dismissible banner once per version (`components/version/UpdateBanner.tsx`) |
+   | `minVersion` above the installed version | A full-screen, undismissable "Update required" screen with a store button (`components/version/UpdateRequiredScreen.tsx`) |
+
+   **Set `minVersion` only to a version that is actually downloadable on both
+   stores.** It is a hard block: naming a build that is still processing locks
+   every member out of the app with nothing to install. Raise it after the
+   release is live, per platform — the two blocks are separate on purpose,
+   because Apple and Google approve on their own schedules.
+
+   The gate **fails open** (no network, a 500, or a payload it cannot parse →
+   no block), so it cannot be used as a kill switch and an outage cannot lock
+   anyone out.
+3. **Nothing to roll back.** The bad build is already on devices; see
+   [Rollback](#rollback) for what the stores actually let you do, which is stop
+   NEW installs and push forward to a fixed one.
+
+A self-hosted server speaking the open expo-updates protocol (our own
+infrastructure, not Expo's) would change step 1, and is a possible later card —
+only if George asks. Until then, assume no OTA.
 
 ## App Store Connect (iOS) checklist
 
 | Step | Where | Notes |
 |---|---|---|
 | Accessibility device pass | One iPhone + one Android device | `ACCESSIBILITY.md` → Device QA checklist: VoiceOver / TalkBack from sign-in to Home, largest Dynamic Type, 44-point targets, Reduce Motion |
-| Build appears in TestFlight | App Store Connect → TestFlight tab | Usually 10-30 min after `eas submit` |
+| Build appears in TestFlight | App Store Connect → TestFlight tab | Usually 10-30 min after the upload |
 | Internal testers added | TestFlight → Internal Testing group | Up to 100 internal testers — no Apple review |
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
 | Privacy form filled | App Store Connect → App Privacy | See "Apple App Privacy form" below |
@@ -90,7 +180,7 @@ Submit defaults:
 
 | Step | Where | Notes |
 |---|---|---|
-| Release available on Internal Track | Play Console → Internal Testing | Immediate after `eas submit` |
+| Release available on Internal Track | Play Console → Internal Testing | Immediate after the `.aab` upload |
 | Promote to Closed Testing | Play Console → Closed Testing | Adds Google review (~hours) |
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
@@ -131,7 +221,7 @@ Three things to check before you submit, all of them in
 ## What the build already answers for you
 
 Two questions an iOS upload normally stops to ask are answered in `app.json`,
-so `eas submit` does not need a person:
+so the upload does not stop on them:
 
 - **Export compliance.** `ios.infoPlist.ITSAppUsesNonExemptEncryption: false` —
   HTTPS only, no crypto of our own, which is exempt. Without it App Store
@@ -240,7 +330,10 @@ Declaration answers, in the words the form asks for:
 
 ## Rollback
 
-If a release ships with a serious regression:
+If a release ships with a serious regression. **There is no bundle to roll
+back** — no OTA means no previous bundle to serve, so "rollback" is only what
+the two stores let you do to NEW installs, plus the version gate for the ones
+already out there (see [Releasing a fix](#releasing-a-fix-there-is-no-ota)).
 
 ### Apple side
 1. Go to App Store Connect → TestFlight (or App Store).
@@ -256,17 +349,28 @@ If a release ships with a serious regression:
    supports stepping back to an earlier versionCode within the same track).
 3. For Internal Track regressions, just promote a different build.
 
-## Validating eas.json locally
+## What keeps OTA and EAS out
 
-Without an EAS account, the schema can be parsed and asserted via
-`__tests__/easConfig.test.ts` — it verifies 3 profiles, production has both
-iOS + Android entries, channels are named correctly, and the submit block
-points at io.redbtn.become. The full `eas build:configure --dry-run` flow
-requires an EAS account; run it once during onboarding to wire credentials.
+Three things, because a decision in a document is not a guard:
+
+- **`scripts/check-no-ota.mjs`** — fails on an `eas.json` anywhere in the repo,
+  on `expo-updates` in `expo/package.json` OR anywhere in
+  `expo/package-lock.json` (that is how a native module arrives transitively),
+  on an `eas` script, and on `updates` / `runtimeVersion` / `owner` /
+  `extra.eas` in `app.json`. Run it yourself with
+  `node scripts/check-no-ota.mjs`.
+- **The `expo` CI job runs it** as its first step, before any install.
+- **`__tests__/storeDistribution.test.ts`** asserts the same four footprints
+  and runs the guard against fixtures in both directions, so a guard that has
+  quietly stopped detecting anything fails the suite. The webapp's
+  always-running `verify` job repeats the file checks in
+  `webapp/tests/unit/ci/nativeJobs.test.ts`, because the `expo` job is skipped
+  on a PR that touches neither `expo/` nor `shared/`.
 
 ## Memory hooks
 
 - `feedback_deployment` — Become deploys via RedRun (webapp side). The native
-  app deploys via EAS / TestFlight / Play. These are unrelated pipelines.
+  app ships as a store build to TestFlight / Play; it has no OTA channel and no
+  Expo-hosted pipeline. These are unrelated release paths.
 - `feedback_black_translucent` — Verified by `__tests__/iosConfig.test.ts`
   to ensure no regression sneaks in via the release process.
