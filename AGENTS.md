@@ -879,6 +879,50 @@ The rules that travel are the web's: read `canCreate`, never recompute it from
 `limit` and `used`; when `enforced` is false render no lock, counter or plan
 card; a delete frees its slot immediately, so force a read after one.
 
+#### The NATIVE upgrade sheet and tier gate (NP-052)
+
+Same arrangement as the web — one upsell surface, opened by every gate — with one
+structural difference: **the purchase leaves the app.** Plus may be sold from the
+iOS app only through an external link on the US storefront (decision 9/20, App
+Review 3.1.1(a)), so the CTA hands Stripe's URL to `Linking.openURL` (Safari on
+iOS, Chrome on Android) and **never to `expo-web-browser`** — an in-app browser is
+still inside the app for 3.1.1 purposes, and that is a store rejection rather than
+a bug. `expo/__tests__/upgradeSheet.test.tsx` reads the four native billing
+sources as text and fails on an import of `expo-web-browser`, `WebBrowser.*`,
+`browserLauncher` or `openWebSignedIn`.
+
+| Piece | Job |
+|---|---|
+| `expo/lib/entitlements/upgradeSheet.ts` | `showUpgradeSheet(gate)` — a module store, not a hook, because the callers are not all components. Refuses anything that is not a gate. |
+| `expo/components/entitlements/UpgradeSheetHost.tsx` | Mounted ONCE in `app/_layout.tsx`, above every route. The only thing that renders the sheet. |
+| `expo/components/entitlements/UpgradeSheet.tsx` | The sheet. Renders `gate.error` verbatim with `allowanceLine`, three `PLUS_BENEFITS` rows, and one action slot (`CheckoutAction`). |
+| `expo/components/entitlements/TierGate.tsx` | Wraps a surface a free member may see but not use (Vision). |
+| `expo/lib/entitlements/billing.ts` | `checkoutRefusalState`, `startCheckout`, `openBillingPortal`, `probeCheckoutAvailable`. Every URL leaves through `openExternally`. |
+
+Both POSTs send **`returnTo: 'app'`** (NP-051): Stripe returns a native buyer to
+Safari, which has never held their session, and `middleware.ts` would bounce them
+off `/dashboard/plan` to `/login` seconds after their card was charged. `'app'`
+swaps in the public `/billing/*` pages, which carry a `become://` button back.
+
+The state machine is the web's, ported rather than reinvented —
+`webapp/components/UpgradeSheet.tsx#checkoutRefusalState` cannot be imported from
+a Next.js client component, so `upgradeSheet.test.tsx` reads BOTH function bodies
+and fails if the five codes and two statuses ever drift. The distinction that
+matters is the one the web learned the hard way: a REFUSED checkout is not an
+ABSENT one. Only 404 / 503 / `billing_not_configured` are "nothing to buy";
+`fix_payment_method` offers the portal, `already_*` says so, and everything else
+is a retry that must never read as "not for sale".
+
+Three rules travel with it, and all three are asserted: no amount, trial or date
+is written in the sheet (a price in the app needs a store release to change, the
+server's needs a deploy); a 429 never opens it; a 403 without BOTH `feature` and
+`requiresTier` never opens it. The last two are `classifyApiError`'s job and
+`onPlanGate` in `app/_layout.tsx` is the only caller.
+
+Native does NOT yet carry the web sheet's "See everything in Plus" link: the
+native plan page is NP-050, and opening the web one in a browser would put a
+second buy button on a surface this card deliberately keeps to one.
+
 #### The plan page (`app/dashboard/plan`)
 
 The sheet answers "why was I stopped?"; this answers "what is this and what
