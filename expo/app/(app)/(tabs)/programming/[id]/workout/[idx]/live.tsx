@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,6 +7,12 @@ import {
   type LiveWorkoutViewModel,
 } from "@/components/live/LiveWorkoutClient";
 import { ExerciseSwapModal } from "@/components/live/ExerciseSwapModal";
+import { DayChoiceModal } from "@/components/workout/DayChoiceModal";
+import {
+  IncompleteWorkoutModal,
+  type ResolveIncompleteAction,
+} from "@/components/workout/IncompleteWorkoutModal";
+import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import type { KeyValueStore } from "@/lib/live/liveWorkoutCache";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -14,6 +20,10 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
   cacheStore?: KeyValueStore;
+  /** Origin day key override for tests (YYYY-MM-DD). */
+  initialOriginKey?: string;
+  /** Clock injection point for tests. */
+  getNow?: () => Date;
 }
 
 /**
@@ -25,7 +35,10 @@ export interface LiveWorkoutRouteProps {
  */
 export default function LiveWorkoutRoute({
   cacheStore,
+  initialOriginKey,
+  getNow,
 }: LiveWorkoutRouteProps = {}) {
+  const router = useRouter();
   const { colors, tint } = useThemeTokens();
   const params = useLocalSearchParams<{
     id?: string;
@@ -70,12 +83,56 @@ export default function LiveWorkoutRoute({
     alternatives,
     onSelectAlternative,
     setSwapSlug,
+    staleIncomplete,
+    setStaleIncomplete,
+    resolveIncomplete,
+    resolvingIncomplete,
+    pendingDayChoice,
+    resolveDayChoice,
+    dismissDayChoice,
+    reload,
   } = useLiveWorkout(valid ? id : "", day, sd, {
     cacheStore,
     initialPhase:
       Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0,
     fallbackWorkoutIndex: Number.isFinite(idx) && idx >= 0 ? idx : 0,
+    initialOriginKey,
+    getNow,
   });
+
+  const handleResolveIncomplete = async (action: ResolveIncompleteAction) => {
+    const staleDay = staleIncomplete?.day;
+    const res = await resolveIncomplete(action);
+    if (!res) return;
+
+    if (action === "continue") {
+      if (staleDay && staleDay !== day) {
+        const targetIdx = workoutIndexFromDayLabel(staleDay);
+        router.replace(
+          `/(tabs)/programming/${encodeURIComponent(id)}/workout/${targetIdx}/live?phase=${phaseIndex}&day=${encodeURIComponent(staleDay)}`,
+        );
+      } else {
+        await reload();
+      }
+    } else if (action === "restart") {
+      if (staleDay && staleDay !== day) {
+        const targetIdx = workoutIndexFromDayLabel(staleDay);
+        router.replace(
+          `/(tabs)/programming/${encodeURIComponent(id)}/workout/${targetIdx}/live?phase=${phaseIndex}&day=${encodeURIComponent(staleDay)}`,
+        );
+      }
+    } else {
+      if (res.nextDay) {
+        const nextIdx = workoutIndexFromDayLabel(res.nextDay);
+        const nextP = (res.nextPhase ?? (phaseIndex + 1)) - 1;
+        router.replace(
+          `/(tabs)/programming/${encodeURIComponent(id)}/workout/${nextIdx}?phase=${Math.max(0, nextP)}&day=${encodeURIComponent(res.nextDay)}`,
+        );
+      } else {
+        router.replace(`/(tabs)/programming/${encodeURIComponent(id)}`);
+      }
+    }
+  };
 
   if (!valid) {
     return (
@@ -138,6 +195,24 @@ export default function LiveWorkoutRoute({
         onSelect={onSelectAlternative}
         onClose={() => setSwapSlug(null)}
       />
+      {staleIncomplete ? (
+        <IncompleteWorkoutModal
+          visible={staleIncomplete !== null}
+          stale={staleIncomplete}
+          loadingAction={resolvingIncomplete}
+          onResolve={handleResolveIncomplete}
+          onDismiss={() => setStaleIncomplete(null)}
+        />
+      ) : null}
+      {pendingDayChoice ? (
+        <DayChoiceModal
+          visible={pendingDayChoice !== null}
+          originalKey={pendingDayChoice.originalKey}
+          todayKey={pendingDayChoice.todayKey}
+          onChoose={(k) => void resolveDayChoice(k)}
+          onClose={dismissDayChoice}
+        />
+      ) : null}
     </View>
   );
 }
