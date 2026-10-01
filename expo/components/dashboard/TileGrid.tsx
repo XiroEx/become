@@ -13,6 +13,7 @@ import { PlaceholderTile } from "./PlaceholderTile";
 import { StatTile } from "./StatTile";
 import { SuggestionTile } from "./SuggestionTile";
 import type { DashboardStatData } from "@/lib/dashboard/types";
+import type { MoodLevel } from "@/components/CheckInModal";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { apiFetch } from "@become/api-client";
@@ -40,6 +41,11 @@ export interface TileGridProps {
   onOpenCheckIn?: () => void;
   /** Opens the weigh-in sheet (NP-105); the weight tile falls back to onOpenCheckIn. */
   onOpenWeight?: () => void;
+  /** Opens the mood sheet (NP-107). Falls back to onMoodChange or onOpenCheckIn. */
+  onOpenMood?: () => void;
+  onMoodChange?: (mood: MoodLevel) => Promise<void> | void;
+  /** Opens weekly target settings (NP-127). */
+  onOpenSettings?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -71,6 +77,9 @@ export function TileGrid({
   onOpenCalendar,
   onOpenCheckIn,
   onOpenWeight,
+  onOpenMood,
+  onMoodChange,
+  onOpenSettings,
   testID,
   style,
 }: TileGridProps) {
@@ -226,6 +235,9 @@ export function TileGrid({
               onOpenNutrition={onOpenNutrition}
               onOpenCheckIn={onOpenCheckIn}
               onOpenWeight={onOpenWeight}
+              onOpenMood={onOpenMood}
+              onMoodChange={onMoodChange}
+              onOpenSettings={onOpenSettings}
             />
           );
         } else if (tile.kind === "smart-rotating") {
