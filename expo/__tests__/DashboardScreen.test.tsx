@@ -80,7 +80,9 @@ describe("DashboardScreen", () => {
     );
     fireEvent.press(getByTestId("dashboard-checkin-modal-submit"));
     await waitFor(() => {
-      expect(onSubmit).toHaveBeenCalledWith({ mood: 5, weightLbs: 180 });
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ mood: 5, weightLbs: 180 }),
+      );
     });
   });
 
@@ -168,5 +170,49 @@ describe("DashboardScreen", () => {
     // Press start session in sheet
     fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the weight sheet when the Weight tile is pressed", () => {
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        layout={[{ id: "weight", kind: "stat", size: "1x1" }]}
+      />,
+    );
+    fireEvent.press(getByTestId("tile-weight"));
+    expect(getByTestId("dashboard-weight-sheet-input")).toBeTruthy();
+  });
+
+  it("submits weight through onSubmitWeight from the weight sheet", async () => {
+    const onSubmitWeight = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onSubmitWeight={onSubmitWeight}
+        layout={[{ id: "weight", kind: "stat", size: "1x1" }]}
+      />,
+    );
+    fireEvent.press(getByTestId("tile-weight"));
+    fireEvent.changeText(getByTestId("dashboard-weight-sheet-input"), "175.5");
+    fireEvent.press(getByTestId("dashboard-weight-sheet-submit"));
+
+    await waitFor(() => {
+      expect(onSubmitWeight).toHaveBeenCalledWith(175.5);
+    });
+  });
+
+  it("calls onSkipCheckIn when Skip for Today is pressed", async () => {
+    const onSkipCheckIn = jest.fn();
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        onSkipCheckIn={onSkipCheckIn}
+        checkInOpen
+      />,
+    );
+    fireEvent.press(getByTestId("dashboard-checkin-modal-skip"));
+    await waitFor(() => {
+      expect(onSkipCheckIn).toHaveBeenCalled();
+    });
   });
 });

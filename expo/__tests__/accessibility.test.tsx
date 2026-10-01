@@ -511,7 +511,7 @@ describe("sign-in through to Home, by role and name only", () => {
     expect(onOpenSettings).toHaveBeenCalled();
     fireEvent.press(screen.getByRole("button", { name: "Check in" }));
     expect(
-      screen.getByRole("radio", { name: "Mood 3: OK" }),
+      screen.getByRole("radio", { name: "Mood 3: Okay" }),
     ).toBeTruthy();
   });
 

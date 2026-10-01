@@ -13,6 +13,8 @@ import {
   CheckInModal,
   type CheckInPayload,
 } from "@/components/CheckInModal";
+import { WeightLogSheet } from "@/components/WeightLogSheet";
+import type { WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -82,6 +84,17 @@ export interface DashboardScreenProps {
   /** Controls Workout Now sheet externally for testability. */
   workoutNowOpen?: boolean;
   onWorkoutNowOpenChange?: (open: boolean) => void;
+  /** Weight sheet callback & state (NP-105) */
+  onOpenWeightSheet?: () => void;
+  weightSheetOpen?: boolean;
+  onWeightSheetOpenChange?: (open: boolean) => void;
+  onSubmitWeight?: (weight: number) => Promise<void> | void;
+  onSkipCheckIn?: () => Promise<void> | void;
+  lastWeight?: number | null;
+  targetWeight?: number | null;
+  unit?: WeightUnit;
+  daysSinceMood?: number;
+  daysSinceWeight?: number;
 }
 
 export function DashboardScreen({
@@ -106,6 +119,16 @@ export function DashboardScreen({
   onOpenWorkoutNow,
   workoutNowOpen,
   onWorkoutNowOpenChange,
+  onOpenWeightSheet,
+  weightSheetOpen,
+  onWeightSheetOpenChange,
+  onSubmitWeight,
+  onSkipCheckIn,
+  lastWeight,
+  targetWeight,
+  unit,
+  daysSinceMood,
+  daysSinceWeight,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
@@ -125,6 +148,25 @@ export function DashboardScreen({
   const setWorkoutNowOpen = (value: boolean) => {
     if (isWorkoutNowControlled) onWorkoutNowOpenChange?.(value);
     else setInternalWorkoutNowOpen(value);
+  };
+
+  const [internalWeightSheetOpen, setInternalWeightSheetOpen] =
+    useState<boolean>(false);
+  const isWeightSheetControlled = weightSheetOpen !== undefined;
+  const isWeightSheetOpen = isWeightSheetControlled
+    ? weightSheetOpen
+    : internalWeightSheetOpen;
+  const setWeightSheetOpen = (value: boolean) => {
+    if (isWeightSheetControlled) onWeightSheetOpenChange?.(value);
+    else setInternalWeightSheetOpen(value);
+  };
+
+  const handleOpenWeightSheet = () => {
+    if (onOpenWeightSheet) {
+      onOpenWeightSheet();
+    } else {
+      setWeightSheetOpen(true);
+    }
   };
 
   const handleWorkoutNow = () => {
@@ -308,6 +350,7 @@ export function DashboardScreen({
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
           onOpenWorkoutNow={handleWorkoutNow}
+          onOpenWeightSheet={handleOpenWeightSheet}
         />
 
         {/* The way into the calendar — a hidden route in the (tabs) tree, so
@@ -348,7 +391,29 @@ export function DashboardScreen({
           await onSubmitCheckIn(payload);
           setOpen(false);
         }}
+        onSkip={async () => {
+          await onSkipCheckIn?.();
+          setOpen(false);
+        }}
         submitting={submittingCheckIn}
+        daysSinceMood={daysSinceMood}
+        daysSinceWeight={daysSinceWeight}
+        lastWeight={lastWeight}
+        targetWeight={targetWeight}
+        unit={unit}
+      />
+
+      <WeightLogSheet
+        testID="dashboard-weight-sheet"
+        visible={isWeightSheetOpen}
+        onClose={() => setWeightSheetOpen(false)}
+        onSubmit={async (weight) => {
+          await onSubmitWeight?.(weight);
+          setWeightSheetOpen(false);
+        }}
+        lastWeight={lastWeight}
+        targetWeight={targetWeight}
+        unit={unit}
       />
 
       <BottomSheet

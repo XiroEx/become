@@ -1,5 +1,5 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
@@ -17,6 +17,7 @@ import {
 
 export interface PlaceholderTileProps {
   tile: DashboardTile;
+  onPress?: () => void;
 }
 
 type TokenThemeType = ReturnType<typeof useThemeTokens>;
@@ -121,26 +122,15 @@ function getTileConfig(tile: DashboardTile, theme: TokenThemeType) {
   };
 }
 
-export function PlaceholderTile({ tile }: PlaceholderTileProps) {
+export function PlaceholderTile({ tile, onPress }: PlaceholderTileProps) {
   const theme = useThemeTokens();
   const { colors } = theme;
   const wide = tile.size === "2x1";
   const config = getTileConfig(tile, theme);
   const IconComponent = config.Icon;
 
-  return (
-    <View
-      testID={`tile-${tile.id}`}
-      accessibilityRole="summary"
-      accessibilityLabel={`${config.label}: placeholder`}
-      style={[
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-        },
-      ]}
-    >
+  const content = (
+    <>
       {wide ? (
         <View style={styles.wideRow}>
           <View style={styles.wideLeft}>
@@ -158,7 +148,7 @@ export function PlaceholderTile({ tile }: PlaceholderTileProps) {
           </View>
           <View style={styles.wideRight}>
             <Text className="text-muted-foreground text-[11px]">
-              Coming soon
+              {onPress ? "Log" : "Coming soon"}
             </Text>
           </View>
         </View>
@@ -180,6 +170,44 @@ export function PlaceholderTile({ tile }: PlaceholderTileProps) {
           </Text>
         </View>
       )}
+    </>
+  );
+
+  if (onPress) {
+    return (
+      <Pressable
+        testID={`tile-${tile.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={config.label}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+      >
+        {content}
+      </Pressable>
+    );
+  }
+
+  return (
+    <View
+      testID={`tile-${tile.id}`}
+      accessibilityRole="summary"
+      accessibilityLabel={`${config.label}: placeholder`}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      {content}
     </View>
   );
 }

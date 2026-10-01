@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
+import { z } from "zod";
 import {
   MeResponseSchema,
   StreakResponseSchema,
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
+  GoalProgressResponseSchema,
+  CheckInActionResponseSchema,
+  apiFetch,
   classifyApiError,
 } from "@become/api-client";
 import {
@@ -14,6 +18,7 @@ import {
 import type { CheckInPayload } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
+import { useUnits } from "@/lib/hooks/useUnits";
 import { useLocalDay, useOnForeground } from "@/lib/time/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -23,6 +28,21 @@ import {
   LayoutWireSchema,
   LAYOUT_CACHE_KEY,
 } from "@/lib/dashboard/tileLayout";
+
+export const CheckInStatusSchema = z
+  .object({
+    due: z.boolean(),
+    reason: z.string().optional(),
+    complete: z.boolean().optional(),
+    moodLoggedToday: z.boolean().optional(),
+    weightLoggedToday: z.boolean().optional(),
+    skippedToday: z.boolean().optional(),
+    daysSinceMood: z.number().optional().nullable(),
+    daysSinceWeight: z.number().optional().nullable(),
+    todaysMood: z.number().optional().nullable(),
+    lastWeight: z.number().optional().nullable(),
+  })
+  .passthrough();
 
 /**
  * Dashboard route — wires the first post-login screen to real data. Fetches the
@@ -56,6 +76,21 @@ export default function DashboardRoute() {
       ...fetchOpts,
       cacheKey: LAYOUT_CACHE_KEY,
     },
+  );
+
+  const { unit } = useUnits();
+  const tz = new Date().getTimezoneOffset();
+
+  const checkIn = useFetch(
+    ready ? `/api/checkin?tz=${tz}` : null,
+    CheckInStatusSchema,
+    fetchOpts,
+  );
+
+  const goals = useFetch(
+    ready ? `/api/goals?tz=${tz}` : null,
+    GoalProgressResponseSchema,
+    fetchOpts,
   );
 
   const activeProgram = active.data?.activePrograms?.[0] ?? null;
@@ -143,8 +178,10 @@ export default function DashboardRoute() {
       active.refetch(),
       workout.refetch(),
       layout.refetch(),
+      checkIn.refetch(),
+      goals.refetch(),
     ]);
-  }, [active, layout, me, streak, workout]);
+  }, [active, checkIn, goals, layout, me, streak, workout]);
 
   const initialTodayRef = useRef(today);
   // Refetch when the local day rolls over
@@ -181,28 +218,79 @@ export default function DashboardRoute() {
   // not an error: the banner at the root says what happened. A REFUSAL still
   // is, and CheckInModal shows it inline.
   const [submittingCheckIn, setSubmittingCheckIn] = useState(false);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const shownStampedRef = useRef(false);
+
+  useEffect(() => {
+    if (checkIn.data?.due && !shownStampedRef.current) {
+      shownStampedRef.current = true;
+      setCheckInOpen(true);
+      void apiFetch("/api/checkin", CheckInActionResponseSchema, {
+        method: "POST",
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        body: { action: "shown", tz: new Date().getTimezoneOffset() },
+      }).catch(() => {});
+    }
+  }, [checkIn.data?.due, token]);
+
+  const onSkipCheckIn = useCallback(async () => {
+    setSubmittingCheckIn(true);
+    try {
+      await apiFetch("/api/checkin", CheckInActionResponseSchema, {
+        method: "POST",
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        body: { action: "skip", tz: new Date().getTimezoneOffset() },
+      });
+      await checkIn.refetch();
+    } finally {
+      setSubmittingCheckIn(false);
+    }
+  }, [checkIn, token]);
+
+  const onSubmitWeight = useCallback(
+    async (weightVal: number) => {
+      const writes = getOfflineWrites();
+      const status = await writes.logWeight(weightVal);
+      if (status === "sent") {
+        await Promise.all([streak.refetch(), checkIn.refetch()]);
+      }
+      void mirrorWeighInToHealth({
+        valueLbs: unit === "kg" ? weightVal * 2.20462 : weightVal,
+        atISO: new Date().toISOString(),
+        clientId: weighInClientId(today),
+      });
+    },
+    [checkIn, streak, today, unit],
+  );
+
   const onSubmitCheckIn = useCallback(
     async (payload: CheckInPayload) => {
       setSubmittingCheckIn(true);
       try {
         const writes = getOfflineWrites();
-        const moodStatus = await writes.logMood(payload.mood);
-        const weightStatus =
-          payload.weightLbs != null
-            ? await writes.logWeight(payload.weightLbs)
-            : null;
+        let moodStatus: string | null = null;
+        let weightStatus: string | null = null;
+        if (payload.mood != null) {
+          moodStatus = await writes.logMood(payload.mood);
+        }
+        const weightVal = payload.weight ?? payload.weightLbs;
+        if (weightVal != null && weightVal > 0) {
+          weightStatus = await writes.logWeight(weightVal);
+        }
         // New activity the SERVER has → re-pull the streak. A queued write has
         // not earned a streak day yet; the replay's response will.
         if (moodStatus === "sent" || weightStatus === "sent") {
-          await streak.refetch();
+          await Promise.all([streak.refetch(), checkIn.refetch()]);
         }
-        if (payload.weightLbs != null) {
+        if (weightVal != null && weightVal > 0) {
           // BECOME → HEALTH. Mirrors the weigh-in into Apple Health / Health
           // Connect, and does nothing unless the member left that direction on
           // when the app opened (lib/health/sync.ts). Never awaited and never
           // throws: the check-in is kept either way, sent or queued.
           void mirrorWeighInToHealth({
-            valueLbs: payload.weightLbs,
+            valueLbs: unit === "kg" ? weightVal * 2.20462 : weightVal,
             atISO: new Date().toISOString(),
             clientId: weighInClientId(today),
           });
@@ -211,7 +299,7 @@ export default function DashboardRoute() {
         setSubmittingCheckIn(false);
       }
     },
-    [streak, today],
+    [checkIn, streak, today, unit],
   );
 
   return (
@@ -228,7 +316,20 @@ export default function DashboardRoute() {
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
       submittingCheckIn={submittingCheckIn}
-      layout={layout.data?.layout ?? null}
+      checkInOpen={checkInOpen}
+      onCheckInOpenChange={setCheckInOpen}
+      onSkipCheckIn={onSkipCheckIn}
+      onSubmitWeight={onSubmitWeight}
+      lastWeight={checkIn.data?.lastWeight ?? null}
+      targetWeight={goals.data?.nutrition?.target?.weight ?? null}
+      unit={unit}
+      daysSinceMood={checkIn.data?.daysSinceMood ?? undefined}
+      daysSinceWeight={checkIn.data?.daysSinceWeight ?? undefined}
+      layout={
+        Array.isArray(layout.data)
+          ? layout.data
+          : (layout.data?.layout ?? null)
+      }
       onOpenMind={onOpenMind}
       onOpenNutrition={onOpenNutrition}
       onOpenWorkoutNow={onOpenWorkoutNow}

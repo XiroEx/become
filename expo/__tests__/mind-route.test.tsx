@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, render, waitFor } from "@testing-library/react-native";
 
 const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
@@ -60,10 +60,8 @@ function getsTo(path: string): unknown[][] {
   );
 }
 
-describe("MindRoute", () => {
+describe("MindRoute (NP-105: mood picker removed)", () => {
   afterEach(async () => {
-    // The offline queue is the app's one queue: leave nothing behind for the
-    // next test to replay.
     await getOfflineWrites().clear();
     mockNetInfoFetch.mockResolvedValue(ONLINE);
   });
@@ -71,20 +69,14 @@ describe("MindRoute", () => {
   beforeEach(() => {
     mockNetInfoFetch.mockResolvedValue(ONLINE);
     mockApiFetch.mockReset();
-    let progressGets = 0;
     mockApiFetch.mockImplementation((path: string, _s, init) => {
       const method = (init as { method?: string } | undefined)?.method;
       if (path === "/api/progress" && (!method || method === "GET")) {
-        progressGets += 1;
-        // First load: 1 point. After logging, the refetch returns 2 points.
         return Promise.resolve({
-          moodData:
-            progressGets === 1
-              ? [{ date: "Jun 1", value: 3 }]
-              : [
-                  { date: "Jun 1", value: 3 },
-                  { date: "Jun 2", value: 5 },
-                ],
+          moodData: [
+            { date: "Jun 1", value: 3 },
+            { date: "Jun 2", value: 5 },
+          ],
         });
       }
       if (path === "/api/mood" && method === "POST") {
@@ -107,73 +99,32 @@ describe("MindRoute", () => {
     expect(opts.getToken?.()).toBe(mockToken);
     await waitFor(() => {
       expect(getByTestId("mood-history-point-0")).toBeTruthy();
-    });
-  });
-
-  it("POSTs /api/mood {mood} and rerenders the strip from the refetch", async () => {
-    const { getByTestId, queryByTestId } = render(<MindRoute />);
-    await waitFor(() => {
-      expect(getByTestId("mood-picker-5")).toBeTruthy();
-    });
-    // Initially one history point.
-    await waitFor(() => {
-      expect(getByTestId("mood-history-point-0")).toBeTruthy();
-    });
-    expect(queryByTestId("mood-history-point-1")).toBeNull();
-
-    await act(async () => {
-      fireEvent.press(getByTestId("mood-picker-5"));
-    });
-
-    await waitFor(() => {
-      expect(callsByMethod("/api/mood", "POST").length).toBeGreaterThan(0);
-    });
-    const post = callsByMethod("/api/mood", "POST")[0]!;
-    expect(post[2]).toEqual(
-      expect.objectContaining({
-        method: "POST",
-        baseUrl: WEBAPP_BASE_URL,
-      }),
-    );
-    // The body carries the mood AND the day it was logged on — the queue
-    // stamps `date`/`loggedAt`/`tz` at the tap so a write delivered after
-    // midnight still lands on the day the member felt it (NP-189/NP-190).
-    const body = (post[2] as { body: Record<string, unknown> }).body;
-    expect(body.mood).toBe(5);
-    expect(body.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(typeof body.loggedAt).toBe("string");
-
-    // onSuccess refetched progress; the strip now shows the second point.
-    await waitFor(() => {
-      expect(getsTo("/api/progress").length).toBeGreaterThan(1);
-    });
-    await waitFor(() => {
       expect(getByTestId("mood-history-point-1")).toBeTruthy();
     });
   });
 
-  // NP-190's first acceptance, from the screen a member actually taps.
-  it("in airplane mode the mood is KEPT, and sent — on its own day — on reconnect", async () => {
+  it("does not render the mood picker on the Mind tab (moved to check-in)", async () => {
+    const { queryByTestId } = render(<MindRoute />);
+    await waitFor(() => {
+      expect(getsTo("/api/progress").length).toBeGreaterThan(0);
+    });
+    expect(queryByTestId("mood-picker")).toBeNull();
+    expect(queryByTestId("mood-picker-1")).toBeNull();
+    expect(queryByTestId("mood-picker-5")).toBeNull();
+  });
+
+  // Offline mood write test verifies the queue functionality independently of Mind tab
+  it("offline mood write is KEPT, and sent — on its own day — on reconnect", async () => {
     mockNetInfoFetch.mockResolvedValue(AIRPLANE_MODE);
-    const { getByTestId } = render(<MindRoute />);
-    await waitFor(() => {
-      expect(getByTestId("mood-picker-4")).toBeTruthy();
-    });
-
-    await act(async () => {
-      fireEvent.press(getByTestId("mood-picker-4"));
-    });
-
-    // Nothing left the device, and the member is told it was not lost.
+    const writes = getOfflineWrites();
+    const status = await writes.logMood(4);
+    expect(status).toBe("queued");
     expect(callsByMethod("/api/mood", "POST")).toHaveLength(0);
-    await waitFor(() => {
-      expect(getByTestId("mind-queued-note")).toBeTruthy();
-    });
 
-    // The signal comes back.
+    // Reconnect and flush
     mockNetInfoFetch.mockResolvedValue(ONLINE);
     await act(async () => {
-      await getOfflineWrites().flush();
+      await writes.flush();
     });
 
     const posts = callsByMethod("/api/mood", "POST");

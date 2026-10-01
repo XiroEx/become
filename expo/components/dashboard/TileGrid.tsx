@@ -30,6 +30,7 @@ export interface TileGridProps {
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
   onOpenWorkoutNow?: () => void;
+  onOpenWeightSheet?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -53,6 +54,7 @@ export function TileGrid({
   onOpenMind,
   onOpenNutrition,
   onOpenWorkoutNow,
+  onOpenWeightSheet,
   testID,
   style,
 }: TileGridProps) {
@@ -209,7 +211,10 @@ export function TileGrid({
                   onOpenWorkoutNow={onOpenWorkoutNow}
                 />
               ) : (
-                <PlaceholderTile tile={tile} />
+                <PlaceholderTile
+                  tile={tile}
+                  onPress={tile.id === "weight" ? onOpenWeightSheet : undefined}
+                />
               )}
             </TileErrorBoundary>
           </View>
