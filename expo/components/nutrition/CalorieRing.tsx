@@ -1,5 +1,6 @@
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 import Svg, { Circle, G } from "react-native-svg";
+import { Settings2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -17,7 +18,74 @@ export interface CalorieRingProps {
   fats: MacroValues;
   fiber?: number;
   goalLine?: string | null;
+  onEditGoals?: () => void;
   testID?: string;
+}
+
+function renderMacroPill(
+  current: number,
+  goal: number,
+  kind: "floor" | "ceiling",
+  testID: string,
+) {
+  if (goal <= 0) return null;
+  const safeCurrent = Math.max(0, current);
+  const remaining = Math.max(0, Math.round(goal - safeCurrent));
+  const excess = Math.max(0, Math.round(safeCurrent - goal));
+  const ratio = safeCurrent / goal;
+
+  let pillText = "";
+  let bgClass = "bg-muted";
+  let textClass = "text-muted-foreground";
+
+  if (kind === "floor") {
+    // Floor target (Protein): exceeding is a win
+    if (excess > 0) {
+      pillText = `+${excess}g`;
+      bgClass = "bg-emerald-500/10";
+      textClass = "text-emerald-600 dark:text-emerald-400";
+    } else if (remaining > 0) {
+      pillText = `${remaining}g left`;
+      if (ratio >= 0.95) {
+        bgClass = "bg-emerald-500/10";
+        textClass = "text-emerald-600 dark:text-emerald-400";
+      } else {
+        bgClass = "bg-muted";
+        textClass = "text-muted-foreground";
+      }
+    }
+  } else {
+    // Ceiling target (Carbs, Fats)
+    if (excess > 0) {
+      pillText = `+${excess}g`;
+      if (ratio > 1.05) {
+        bgClass = "bg-red-500/10";
+        textClass = "text-red-500";
+      } else {
+        bgClass = "bg-orange-500/10";
+        textClass = "text-orange-500";
+      }
+    } else if (remaining > 0) {
+      pillText = `${remaining}g left`;
+      if (ratio >= 0.95) {
+        bgClass = "bg-emerald-500/10";
+        textClass = "text-emerald-600 dark:text-emerald-400";
+      } else {
+        bgClass = "bg-muted";
+        textClass = "text-muted-foreground";
+      }
+    }
+  }
+
+  if (!pillText) return null;
+
+  return (
+    <View testID={testID} className={`px-1.5 py-0.5 rounded ${bgClass}`}>
+      <Text className={`text-[10px] font-semibold ${textClass}`}>
+        {pillText}
+      </Text>
+    </View>
+  );
 }
 
 export function CalorieRing({
@@ -28,6 +96,7 @@ export function CalorieRing({
   fats,
   fiber,
   goalLine,
+  onEditGoals,
   testID = "calorie-ring",
 }: CalorieRingProps) {
   const { colors } = useThemeTokens();
@@ -60,6 +129,46 @@ export function CalorieRing({
 
   return (
     <Card testID={testID}>
+      {/* Card header */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
+        }}
+      >
+        <Text
+          testID="calorie-ring-title"
+          className="text-sm font-semibold text-foreground"
+        >
+          Daily Calories
+        </Text>
+        <Pressable
+          testID="nutrition-edit-goals-btn"
+          accessibilityRole="button"
+          accessibilityLabel="Edit Goals"
+          onPress={onEditGoals}
+          hitSlop={8}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+          }}
+        >
+          <Settings2 size={14} color={colors["muted-foreground"]} />
+          <Text className="text-xs font-medium text-foreground">
+            Edit Goals
+          </Text>
+        </Pressable>
+      </View>
+
       <View style={{ alignItems: "center", justifyContent: "center" }}>
         <View
           style={{
@@ -120,8 +229,17 @@ export function CalorieRing({
           testID="day-totals-target"
           className="text-muted-foreground text-xs text-center mt-3"
         >
-          Goal {safeGoal} - Food {safeConsumed} = {Math.abs(remaining)}{" "}
-          {isOver ? "over" : "remaining"}
+          Goal {safeGoal} - Food {safeConsumed} ={" "}
+          <Text
+            testID="day-totals-target-remaining"
+            className={
+              isOver
+                ? "text-red-500 font-semibold"
+                : "text-emerald-600 dark:text-emerald-400 font-semibold"
+            }
+          >
+            {Math.abs(remaining)} {isOver ? "over" : "remaining"}
+          </Text>
         </Text>
 
         {/* Goal line */}
@@ -143,13 +261,17 @@ export function CalorieRing({
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 4,
             }}
           >
             <Text className="text-foreground text-xs font-semibold">Protein</Text>
-            <Text testID="day-totals-protein" className="text-muted-foreground text-xs">
-              {Math.round(protein.current)}g / {Math.round(protein.goal)}g P
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text testID="day-totals-protein" className="text-muted-foreground text-xs">
+                {Math.round(protein.current)}g / {Math.round(protein.goal)}g P
+              </Text>
+              {renderMacroPill(protein.current, protein.goal, "floor", "day-totals-protein-pill")}
+            </View>
           </View>
           <View className="h-2 rounded-full bg-muted overflow-hidden">
             <View
@@ -165,13 +287,17 @@ export function CalorieRing({
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 4,
             }}
           >
             <Text className="text-foreground text-xs font-semibold">Carbs</Text>
-            <Text testID="day-totals-carbs" className="text-muted-foreground text-xs">
-              {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g C
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text testID="day-totals-carbs" className="text-muted-foreground text-xs">
+                {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g C
+              </Text>
+              {renderMacroPill(carbs.current, carbs.goal, "ceiling", "day-totals-carbs-pill")}
+            </View>
           </View>
           <View className="h-2 rounded-full bg-muted overflow-hidden">
             <View
@@ -187,13 +313,17 @@ export function CalorieRing({
             style={{
               flexDirection: "row",
               justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: 4,
             }}
           >
             <Text className="text-foreground text-xs font-semibold">Fats</Text>
-            <Text testID="day-totals-fat" className="text-muted-foreground text-xs">
-              {Math.round(fats.current)}g / {Math.round(fats.goal)}g F
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text testID="day-totals-fat" className="text-muted-foreground text-xs">
+                {Math.round(fats.current)}g / {Math.round(fats.goal)}g F
+              </Text>
+              {renderMacroPill(fats.current, fats.goal, "ceiling", "day-totals-fat-pill")}
+            </View>
           </View>
           <View className="h-2 rounded-full bg-muted overflow-hidden">
             <View

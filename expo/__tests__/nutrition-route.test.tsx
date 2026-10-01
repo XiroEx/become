@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();
@@ -382,7 +382,7 @@ describe("NutritionIndexRoute", () => {
   });
 
   it("offers only natively existing screens in the menu (NP-012)", async () => {
-    const { getByTestId, queryByText } = render(<NutritionIndexRoute />);
+    const { getByTestId } = render(<NutritionIndexRoute />);
 
     await waitFor(() => {
       expect(getByTestId("nutrition-menu-button")).toBeTruthy();
@@ -394,16 +394,26 @@ describe("NutritionIndexRoute", () => {
     await waitFor(() => {
       expect(getByTestId("nutrition-menu-search")).toBeTruthy();
       expect(getByTestId("nutrition-menu-recipes")).toBeTruthy();
+      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
     });
 
-    // Does NOT offer unported web surfaces (NP-012)
-    expect(queryByText("Timeline")).toBeNull();
-    expect(queryByText("Meal Schedule")).toBeNull();
-    expect(queryByText("Estimate history")).toBeNull();
+    // Does NOT offer unported web surfaces in the menu (NP-012)
+    const menuSheet = getByTestId("nutrition-menu-sheet");
+    const { queryByText: queryInMenu } = within(menuSheet);
+    expect(queryInMenu("Timeline")).toBeNull();
+    expect(queryInMenu("Estimate history")).toBeNull();
 
     // Tapping recipes navigates to recipes
     fireEvent.press(getByTestId("nutrition-menu-recipes"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/recipes");
+
+    // Reopen menu to tap meal schedule
+    fireEvent.press(getByTestId("nutrition-menu-button"));
+    await waitFor(() => {
+      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("nutrition-menu-meal-schedule"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/meal-schedule");
   });
 
   it("supports adding an empty tag section for the session and removing it", async () => {

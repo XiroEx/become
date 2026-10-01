@@ -303,18 +303,15 @@ before(async () => {
 
   // A schedule, so the current-program card's week and session counts are
   // derived from real sessions rather than the coarse fallback.
-  const dPast = new Date(Date.now() - 3 * 86_400_000)
-  const dNext = new Date(Date.now() + 1 * 86_400_000)
-  const dFuture = new Date(Date.now() + 5 * 86_400_000)
   await Schedule.create({
     userId: new mongoose.Types.ObjectId(MEMBER.id),
     programId: PROGRAM_ID,
     programName: 'NP023 Contract Dashboard',
     settings: { trainingDays: [1, 3], startDate: START_DATE },
     scheduledWorkouts: [
-      { date: dPast, programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 1', workoutTitle: 'Lower A', status: 'completed' },
-      { date: dNext, programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 2', workoutTitle: 'Upper A', status: 'scheduled' },
-      { date: dFuture, programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 1', workoutTitle: 'Lower A', status: 'scheduled' },
+      { date: new Date('2026-09-28T00:00:00.000Z'), programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 1', workoutTitle: 'Lower A', status: 'completed' },
+      { date: new Date(Date.now() + 86_400_000), programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 2', workoutTitle: 'Upper A', status: 'scheduled' },
+      { date: new Date(Date.now() + 7 * 86_400_000), programId: PROGRAM_ID, phase: 1, dayLabel: 'Day 1', workoutTitle: 'Lower A', status: 'scheduled' },
     ],
   })
 })

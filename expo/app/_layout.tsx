@@ -20,7 +20,10 @@ import { TimezoneReporter } from "@/components/TimezoneReporter";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { VersionGate } from "@/components/version/VersionGate";
 import { WidgetsBridge } from "@/components/widgets/WidgetsBridge";
+import type { PlanGateError } from "@become/api-client";
 import { ApiErrorHandlerProvider } from "@/lib/errors";
+import { UpgradeSheetHost } from "@/components/entitlements/UpgradeSheetHost";
+import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { followSystemColorScheme } from "@/lib/theme/colorScheme";
 import {
   useThemeTokens,
@@ -53,6 +56,17 @@ followSystemColorScheme();
  * goes away. Hiding it again is `useGeistFonts()`'s job, below.
  */
 holdSplashForFonts();
+
+/**
+ * A plan gate becomes the upgrade sheet (NP-052).
+ *
+ * Module level, not an inline arrow: `ApiErrorHandlerProvider` memoises its
+ * context value on the identity of these callbacks, and a new function every
+ * render would rebuild it — and the latch it carries — on every render.
+ */
+function raiseUpgradeSheet(error: PlanGateError): void {
+  showUpgradeSheet(error.gate);
+}
 
 /**
  * THE COLD-OPEN UNLOCK — and nothing else.
@@ -142,14 +156,20 @@ export default function RootLayout() {
           <WidgetsBridge />
           {/*
             THE mount point for refusal handling: every screen below reaches it
-            with useApiErrorHandler(). The three answers arrive with the cards
-            that build them — sign-out (NP-002), the upgrade sheet (NP-052) and
-            the consent sheet (NP-046) — and `session` is the JWT, which is what
-            arms "sign out once per session". Until then a refused request comes
-            back to the screen it came from, with the server's wording and no
-            sheet, which is already the correct behaviour for every other class.
+            with useApiErrorHandler(). The remaining answers arrive with the cards
+            that build them — sign-out (NP-002) and the consent sheet (NP-046) —
+            and `session` is the JWT, which is what arms "sign out once per
+            session". Until then a refused request comes back to the screen it
+            came from, with the server's wording and no sheet, which is already
+            the correct behaviour for every other class.
+
+            `onPlanGate` is wired HERE and only here (NP-052): a plan gate is the
+            one refusal that answers with an upsell, and `classifyApiError`
+            guarantees what reaches it — a 403 carrying BOTH `feature` and
+            `requiresTier`. A 429 spend ceiling is `rate-limited` and never
+            arrives; an ownership 403 is `forbidden` and never arrives either.
           */}
-          <ApiErrorHandlerProvider>
+          <ApiErrorHandlerProvider onPlanGate={raiseUpgradeSheet}>
             {/*
               ABOVE EVERY ROUTE, and above the Stack rather than inside it: the
               connection can go while any screen is open, and the writes it
@@ -160,6 +180,15 @@ export default function RootLayout() {
             */}
             <View style={{ flex: 1 }}>
               <ConnectivityBanner />
+              {/*
+                THE upgrade sheet, mounted once and above every route (NP-052).
+                It renders nothing until `showUpgradeSheet(gate)` is called, and
+                it lives here rather than in a screen because a 403 can be routed
+                by code that is rendering nothing at all — the AI run client, the
+                offline replay — and can land after the screen that asked for it
+                has gone.
+              */}
+              <UpgradeSheetHost />
               <VersionGate>
                 <Stack
                   screenOptions={{

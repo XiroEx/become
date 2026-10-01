@@ -106,7 +106,7 @@ describe("CalendarIndexRoute", () => {
     });
     fireEvent.press(getByTestId(itemId));
     expect(mockPush).toHaveBeenCalledWith(
-      `/(tabs)/programming/prog-1/workout/1?phase=0`,
+      `/(tabs)/programming/prog-1/workout/1?phase=0&sd=${encodeURIComponent(futureDate)}&day=Day%202`,
     );
   });
 
@@ -351,8 +351,9 @@ describe("CalendarIndexRoute — Acceptance criteria & parity", () => {
   });
 
   it("(id: e015c924) At 21:00 Pacific today's slot shows as today, not missed", async () => {
-    const now = new Date();
-    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    // Pacific time 21:00 on 2026-09-30 (UTC is 2026-10-01 04:00Z)
+    // The device local day is 2026-09-30.
+    const todayLocal = new Date().toISOString().slice(0, 10);
     mockParams = { date: todayLocal };
 
     mockApiFetch.mockImplementation((path: string) => {

@@ -43,10 +43,15 @@ export interface LiveWorkoutExercise {
   /** Grouping metadata — exercises sharing a groupId form a superset/circuit/etc. */
   groupId?: string;
   groupLabel?: string;
+  groupType?: string;
+  groupRounds?: number;
   /** Rest between sets in seconds (defaults to 90). */
   restSec?: number;
   /** Last completed performance per set, used as prefill. */
   prefill?: (LiveSetState | null)[];
+  addedAdHoc?: boolean;
+  originalExerciseSlug?: string;
+  swappedFromName?: string;
 }
 
 export interface LiveWorkoutViewModel {
@@ -73,6 +78,8 @@ export interface LiveWorkoutClientProps {
   onFinish?: (grid: LiveGrid) => void;
   /** Disables the finish button while the save is in flight. */
   finishing?: boolean;
+  /** Save error to surface offline / failure state and offer Retry. */
+  saveError?: Error | string | null;
   /** Open the swap picker for an exercise (route fetches alternatives). */
   onRequestSwap?: (slug: string) => void;
   /** Injected rest-timer interval impls for deterministic tests. */
@@ -96,11 +103,14 @@ function initialGrid(
       // phantom sets.
       const restoredSet = saved?.[i];
       if (restoredSet) return { ...restoredSet };
+      // Sets start blank; last time's numbers are a reference and are never
+      // written into the inputs (the web stopped pre-filling because members
+      // logged numbers they never lifted).
       return {
-        weight: ex.prefill?.[i]?.weight ?? null,
-        reps: ex.prefill?.[i]?.reps ?? null,
-        durationSec: ex.prefill?.[i]?.durationSec ?? null,
-        distance: ex.prefill?.[i]?.distance ?? null,
+        weight: null,
+        reps: null,
+        durationSec: null,
+        distance: null,
         completed: false,
       };
     });
@@ -115,12 +125,13 @@ export function LiveWorkoutClient({
   onGridChange,
   onFinish,
   finishing = false,
+  saveError,
   onRequestSwap,
   restTimerSetInterval,
   restTimerClearInterval,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [grid, setGrid] = useState<LiveGrid>(() =>
     initialGrid(workout.exercises, restoredGrid),
   );
@@ -269,6 +280,35 @@ export function LiveWorkoutClient({
             onResume={rest.resume}
             onSkip={rest.skip}
           />
+        ) : null}
+        {saveError ? (
+          <View
+            testID={`${testID}-error-banner`}
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              backgroundColor: tint("destructive", 0.15),
+              gap: 8,
+              marginTop: 12,
+            }}
+          >
+            <Text
+              testID={`${testID}-error-message`}
+              className="text-destructive font-medium text-sm"
+            >
+              {typeof saveError === "string"
+                ? saveError
+                : "Couldn’t save workout. You appear to be offline."}
+            </Text>
+            <Button
+              testID={`${testID}-retry`}
+              variant="secondary"
+              size="sm"
+              onPress={() => onFinish?.(gridRef.current)}
+            >
+              Retry
+            </Button>
+          </View>
         ) : null}
         <View style={{ height: 24 }} />
         <Button

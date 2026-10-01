@@ -129,6 +129,63 @@ test('the expo job typechecks, lints, tests and checks dependency versions', () 
   assert.match(job, /EXPO_OFFLINE: '1'\n\s+run: npx expo install --check/)
 })
 
+// ── …and it refuses to let OTA back in (NP-040) ──────────────────────────────
+
+test('the expo job runs the no-OTA / no-EAS guard', () => {
+  // George, 2026-09-30: no Expo-HOSTED service anywhere — no EAS Build, EAS
+  // Submit, EAS Update, Expo Push, expo.dev. For v1 that means no OTA at all:
+  // every change ships as a store build and the minimum-version gate (NP-041)
+  // forces an urgent upgrade. OTA returns as configuration, not as code — an
+  // `eas.json` and `expo-updates` in the lockfile — so the guard is a step, and
+  // this assertion is in the ALWAYS-run webapp job so deleting the step fails a
+  // check that still reports.
+  const job = executable(JOBS['expo'])
+  assert.match(
+    job,
+    /run: node scripts\/check-no-ota\.mjs/,
+    'the expo job must run expo/scripts/check-no-ota.mjs',
+  )
+  assert.ok(
+    fs.existsSync(path.join(REPO, 'expo/scripts/check-no-ota.mjs')),
+    'expo/scripts/check-no-ota.mjs is missing — the guard step would fail the job',
+  )
+})
+
+test('no eas.json, and no expo-updates in the native dependency tree', () => {
+  // The same four footprints the guard checks, asserted here too: the guard
+  // only runs when expo/ or shared/ changed, and an eas.json can arrive in a
+  // PR that touches neither.
+  assert.ok(!fs.existsSync(path.join(REPO, 'expo/eas.json')), 'expo/eas.json is back')
+  assert.ok(!fs.existsSync(path.join(REPO, 'eas.json')), 'a root eas.json is back')
+
+  const expo = readJson('expo/package.json')
+  for (const field of ['dependencies', 'devDependencies'] as const) {
+    assert.ok(
+      !Object.keys(expo[field] ?? {}).includes('expo-updates'),
+      `expo/package.json ${field} declares expo-updates — v1 has no OTA`,
+    )
+  }
+  const lock = fs.readFileSync(path.join(REPO, 'expo/package-lock.json'), 'utf8')
+  assert.ok(
+    !/"node_modules\/expo-updates"/.test(lock),
+    'expo/package-lock.json resolves expo-updates (directly or via a preset)',
+  )
+  for (const [name, body] of Object.entries(expo.scripts ?? {})) {
+    assert.ok(
+      !/(^|[^\w-])eas(\s|$)/.test(body),
+      `expo/package.json script "${name}" runs the EAS CLI: ${body}`,
+    )
+  }
+
+  const appJson = JSON.parse(
+    fs.readFileSync(path.join(REPO, 'expo/app.json'), 'utf8'),
+  ) as { expo: Record<string, unknown> & { extra?: { eas?: unknown } } }
+  for (const key of ['updates', 'runtimeVersion', 'owner'] as const) {
+    assert.equal(appJson.expo[key], undefined, `app.json sets expo.${key} — that is OTA config`)
+  }
+  assert.equal(appJson.expo.extra?.eas, undefined, 'app.json sets expo.extra.eas')
+})
+
 // ── …and it bundles, which is the only step that builds the app ──────────────
 
 test('the expo job exports an iOS bundle, so an unresolvable import fails CI', () => {

@@ -381,7 +381,7 @@ export function UpcomingWeekStrip({
             const workoutIndex = workoutIndexFromDayLabel(todayWorkout.dayLabel);
             const phaseIndex = Math.max(0, todayWorkout.phase - 1);
             router.push(
-              `/(tabs)/programming/${todayWorkout.programId}/workout/${workoutIndex}?phase=${phaseIndex}`,
+              `/(tabs)/programming/${todayWorkout.programId}/workout/${workoutIndex}?phase=${phaseIndex}&sd=${encodeURIComponent(todayWorkout.date)}&day=${encodeURIComponent(todayWorkout.dayLabel)}`,
             );
           }}
           className="mt-3 flex-row items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20"

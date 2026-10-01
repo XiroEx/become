@@ -104,8 +104,12 @@ export function ResumeWorkoutPill({
         const dayParam = workout.day
           ? `&day=${encodeURIComponent(workout.day)}`
           : "";
+        const scheduledDate = (workout as { scheduledDate?: string }).scheduledDate;
+        const sdParam = scheduledDate
+          ? `&sd=${encodeURIComponent(scheduledDate)}`
+          : "";
         router.push(
-          `/(tabs)/programming/${encodeURIComponent(workout.programId)}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
+          `/(tabs)/programming/${encodeURIComponent(workout.programId)}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}${sdParam}`,
         );
       } else if (workout.sessionId) {
         router.push(

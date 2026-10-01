@@ -214,6 +214,7 @@ describe("the table", () => {
     ["/dashboard/nutrition", "/(tabs)/nutrition", "exact"],
     ["/dashboard/nutrition?date=2026-09-29", "/(tabs)/nutrition?date=2026-09-29", "exact"],
     ["/dashboard/nutrition/goals", "/(tabs)/nutrition", "nearest"],
+    ["/dashboard/nutrition/meal-schedule", "/(tabs)/nutrition/meal-schedule", "exact"],
     ["/dashboard/nutrition/recipes", "/(tabs)/nutrition/recipes", "exact"],
     ["/dashboard/recipes/r1", "/(tabs)/nutrition/recipes/r1", "exact"],
     ["/dashboard/recipes/new", "/(tabs)/nutrition/recipes", "nearest"],
