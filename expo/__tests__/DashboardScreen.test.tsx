@@ -19,10 +19,15 @@ describe("DashboardScreen", () => {
     onSubmitCheckIn: jest.fn(),
   };
 
-  it("renders the streak banner with the supplied streak days", () => {
-    const { getByTestId } = render(<DashboardScreen {...baseProps} />);
-    expect(getByTestId("dashboard-streak")).toBeTruthy();
-    expect(getByTestId("dashboard-streak-days").props.children).toContain("7");
+  it("renders the streak tile in the grid with the supplied streak days", () => {
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        layout={[{ id: "streak", kind: "stat", size: "1x1" }]}
+      />,
+    );
+    expect(getByTestId("tile-streak")).toBeTruthy();
+    expect(getByTestId("tile-streak-value")).toBeTruthy();
   });
 
   it("renders today's workout teaser when a workout is provided", () => {

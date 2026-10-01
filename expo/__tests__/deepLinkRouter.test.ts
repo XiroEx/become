@@ -10,7 +10,7 @@ describe("routeForNotification with the url the server actually sends", () => {
     ["/dashboard/calendar", "/(tabs)/calendar"],
     ["/dashboard/nutrition", "/(tabs)/nutrition"],
     ["/dashboard/mind", "/(tabs)/mind"],
-    ["/dashboard/streaks", "/(tabs)/dashboard"],
+    ["/dashboard/streaks", "/(tabs)/dashboard/streaks"],
     ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training"],
     ["/dashboard/workout", "/(tabs)/programming"],
     ["/dashboard/progress", "/(tabs)/programming"],

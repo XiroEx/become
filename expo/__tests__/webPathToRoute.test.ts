@@ -201,7 +201,7 @@ describe("the table", () => {
     ["/billing/cancelled?checkout=cancelled", "/?checkout=cancelled", "nearest"],
     // Home and its rooms
     ["/dashboard", "/(tabs)/dashboard", "exact"],
-    ["/dashboard/streaks", "/(tabs)/dashboard", "nearest"],
+    ["/dashboard/streaks", "/(tabs)/dashboard/streaks", "exact"],
     ["/dashboard/plan", "/(tabs)/dashboard", "nearest"],
     ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training", "nearest"],
     ["/dashboard/profile", "/(tabs)/dashboard", "nearest"],

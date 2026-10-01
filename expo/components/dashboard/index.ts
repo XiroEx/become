@@ -3,5 +3,6 @@ export * from "./TileErrorBoundary";
 export * from "./StatActionTile";
 export * from "./PlaceholderTile";
 export * from "./StatTile";
+export * from "./StreakTile";
 export * from "./WeightLogSheet";
 export * from "./MoodLogSheet";

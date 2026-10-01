@@ -26,7 +26,7 @@ import {
 import type { CheckInPayload, MoodLevel } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
-import { useLocalDay, useOnForeground, tzOffsetMinutes } from "@/lib/time/localDay";
+import { useLocalDay, useOnForeground, tzOffsetMinutes, withTz } from "@/lib/time/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useUnits } from "@/lib/hooks/useUnits";
@@ -86,7 +86,7 @@ export default function DashboardRoute() {
     fetchOpts,
   );
   const streaks = useFetch(
-    ready ? "/api/streaks" : null,
+    ready ? withTz("/api/streaks") : null,
     StreaksResponseSchema,
     fetchOpts,
   );
@@ -483,6 +483,7 @@ export default function DashboardRoute() {
     longestStreak,
     nextMilestone,
     activityToday,
+    streaksLite: streaks.data ?? null,
     todaysMood,
     recentMoods,
     thisWeekWorkouts,
@@ -619,6 +620,9 @@ export default function DashboardRoute() {
       onWorkoutNowOpenChange={setWorkoutNowOpen}
       onOpenSettings={() => {
         router.push("/settings");
+      }}
+      onOpenStreaks={() => {
+        router.push("/(tabs)/dashboard/streaks" as never);
       }}
     />
   );

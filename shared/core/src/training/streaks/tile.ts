@@ -88,7 +88,7 @@ const MISSING_LABEL: Record<'food' | 'mindset' | 'training', string> = {
 
 /** The pages, in the order they are shown. Super first when it exists. */
 export function streakPages(s: StreaksLite | null): StreakPage[] {
-  if (!s) return []
+  if (!s || !s.pillars || !s.pillars.super) return []
   const pages: StreakPage[] = []
   const sup = s.pillars.super
 

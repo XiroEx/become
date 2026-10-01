@@ -47,7 +47,7 @@ describe("+native-intent", () => {
 
   it.each([
     ["/dashboard", "/(tabs)/dashboard"],
-    ["/dashboard/streaks", "/(tabs)/dashboard"],
+    ["/dashboard/streaks", "/(tabs)/dashboard/streaks"],
     ["/dashboard/calendar?date=2026-09-29", "/(tabs)/calendar?date=2026-09-29"],
     ["/dashboard/nutrition", "/(tabs)/nutrition"],
     ["/dashboard/mind/becoming", "/(tabs)/mind"],

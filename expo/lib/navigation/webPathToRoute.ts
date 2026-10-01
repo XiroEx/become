@@ -89,6 +89,7 @@ export const NATIVE_ROUTES = {
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
   calendar: "/(tabs)/calendar",
   scheduleSettings: "/(tabs)/calendar/settings",
+  streaks: "/(tabs)/dashboard/streaks",
   chat: "/(tabs)/chat",
 } as const;
 
@@ -436,9 +437,13 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
 
-  // ── Home's own rooms: streak detail, plan, settings, profile, customize ───
+  // ── Streaks detail screen (NP-108) ─────────────────────────────────────────
+  if (section === "streaks") {
+    return native(NATIVE_ROUTES.streaks, params, "exact");
+  }
+
+  // ── Home's own rooms: plan, settings, profile, customize ───────────────────
   if (
-    section === "streaks" ||
     section === "plan" ||
     section === "settings" ||
     section === "profile" ||
