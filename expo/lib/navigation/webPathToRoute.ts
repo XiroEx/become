@@ -338,6 +338,12 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return web(rawPathname, params);
   }
 
+  if (head === "mind") {
+    return segments.length === 1
+      ? native(NATIVE_ROUTES.mind, params, "exact")
+      : native(NATIVE_ROUTES.mind, params, "nearest");
+  }
+
   if (head !== "dashboard") {
     return native(NATIVE_ROUTES.home, params, "unknown");
   }

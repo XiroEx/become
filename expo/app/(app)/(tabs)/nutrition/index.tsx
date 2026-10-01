@@ -17,8 +17,10 @@ import {
   MoreVertical,
   Plus,
   Search,
+  Trash2,
   Upload,
   X,
+  Zap,
 } from "lucide-react-native";
 import { z } from "zod";
 import {
@@ -57,6 +59,8 @@ import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
+import { WaterTracker } from "@/components/nutrition/WaterTracker";
+import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const EMPTY_PLANS: any[] = [];
@@ -64,7 +68,7 @@ const OCCURRENCE_OPTS = { includePlans: false } as const;
 const EMPTY_LOGS: MealLog[] = [];
 
 export default function NutritionIndexRoute() {
-  const { colors, scrim } = useThemeTokens();
+  const { colors, scrim, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
   const params = useLocalSearchParams<{ date?: string }>();
@@ -404,6 +408,8 @@ export default function NutritionIndexRoute() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [submittingQuickAdd, setSubmittingQuickAdd] = useState(false);
 
   const handleEditGoals = useCallback(() => {
     // TODO(NP-148): Nutrition goals editor screen (/dashboard/nutrition/goals) is NP-148.
@@ -449,13 +455,89 @@ export default function NutritionIndexRoute() {
         );
         i++;
       }
-      await refetchMealLogs();
+      await Promise.all([refetchMealLogs(), refetchSideTables()]);
     } catch {
       // ignore
     } finally {
       setCopyingYesterday(false);
     }
-  }, [activeDateObj, copyingYesterday, refetchMealLogs, tzOffset, token]);
+  }, [activeDateObj, copyingYesterday, refetchMealLogs, refetchSideTables, tzOffset, token]);
+
+  const handleAddWater = useCallback(
+    async (amount: number) => {
+      try {
+        await apiFetch(
+          withTz("/api/nutrition/water", tzOffset),
+          z.any(),
+          {
+            method: "POST",
+            body: { amount, date: activeDate, tz: tzOffset },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await refetchSideTables();
+      } catch (err) {
+        console.error("Failed to add water:", err);
+      }
+    },
+    [activeDate, tzOffset, token, refetchSideTables],
+  );
+
+  const handleQuickAdd = useCallback(
+    async (data: QuickAddData) => {
+      if (isFuture) return;
+      setSubmittingQuickAdd(true);
+      try {
+        await apiFetch(
+          withTz("/api/nutrition/quick-add", tzOffset),
+          z.any(),
+          {
+            method: "POST",
+            body: {
+              calories: data.calories,
+              protein: data.protein ?? 0,
+              carbs: data.carbs ?? 0,
+              fats: data.fats ?? 0,
+              note: data.note,
+              date: activeDate,
+              tz: tzOffset,
+            },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await refetchSideTables();
+      } catch (err) {
+        console.error("Failed to quick add:", err);
+      } finally {
+        setSubmittingQuickAdd(false);
+        setQuickAddOpen(false);
+      }
+    },
+    [activeDate, isFuture, tzOffset, token, refetchSideTables],
+  );
+
+  const handleDeleteQuickAdd = useCallback(
+    async (quickAddId: string) => {
+      try {
+        await apiFetch(
+          withTz("/api/nutrition/quick-add", tzOffset),
+          z.any(),
+          {
+            method: "DELETE",
+            body: { quickAddId, date: activeDate, tz: tzOffset },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await refetchSideTables();
+      } catch (err) {
+        console.error("Failed to delete quick add:", err);
+      }
+    },
+    [activeDate, tzOffset, token, refetchSideTables],
+  );
 
   const openSearch = (tagToUse?: string) => {
     setSearchTag(tagToUse ?? currentDefaultTag);
@@ -651,78 +733,108 @@ export default function NutritionIndexRoute() {
             onEditGoals={handleEditGoals}
           />
 
-          {/* Quick Adds (only on today / past dates; disabled on future dates) */}
+          {/* Quick Adds (visible entries with delete) */}
           {quickAdds.length > 0 ? (
             <Card testID="nutrition-quick-adds-section">
-              <Text className="text-foreground text-lg font-bold mb-2">
-                Quick Adds
-              </Text>
-              {quickAdds.map((qa, idx) => (
-                <View
-                  key={qa.id ?? `qa-${idx}`}
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    paddingVertical: 6,
-                    borderTopWidth: idx > 0 ? 1 : 0,
-                    borderTopColor: colors.border,
-                  }}
-                >
-                  <Text className="text-foreground text-sm font-medium">
-                    {qa.note ? qa.note : "Quick Add"}
-                  </Text>
-                  <Text className="text-muted-foreground text-xs font-medium">
-                    {Math.round(qa.calories)} kcal
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: tint("accent", 0.15),
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Zap size={15} color={colors.accent} />
+                  </View>
+                  <Text className="text-foreground text-sm font-semibold">
+                    Quick Adds
                   </Text>
                 </View>
-              ))}
+                <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+                  {quickAddCalories} cal
+                </Text>
+              </View>
+              <View>
+                {quickAdds.map((qa, idx) => (
+                  <View
+                    key={qa.id ?? `qa-${idx}`}
+                    testID={`nutrition-quick-add-item-${qa.id}`}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      paddingHorizontal: 16,
+                      paddingVertical: 10,
+                      borderTopWidth: idx > 0 ? 1 : 0,
+                      borderTopColor: colors.border,
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      {qa.note ? (
+                        <Text
+                          className="text-foreground text-sm font-medium"
+                          numberOfLines={1}
+                        >
+                          {qa.note}
+                        </Text>
+                      ) : (
+                        <Text className="text-foreground text-sm font-medium">
+                          Quick Add
+                        </Text>
+                      )}
+                      <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+                        {qa.calories} cal
+                        {((qa.protein ?? 0) > 0 ||
+                          (qa.carbs ?? 0) > 0 ||
+                          (qa.fats ?? 0) > 0) && (
+                          <Text className="text-muted-foreground text-xs">
+                            {` · P ${qa.protein ?? 0}g · C ${qa.carbs ?? 0}g · F ${qa.fats ?? 0}g`}
+                          </Text>
+                        )}
+                      </Text>
+                    </View>
+                    <Pressable
+                      testID={`nutrition-delete-quick-add-${qa.id}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete quick add ${qa.note ?? `${qa.calories} cal`}`}
+                      hitSlop={8}
+                      onPress={() => handleDeleteQuickAdd(qa.id)}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Trash2 size={16} color={colors.destructive} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
             </Card>
           ) : null}
 
           {/* Water Tracker */}
-          {sideTablesData?.water ? (
-            <Card testID="nutrition-water-section">
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <View>
-                  <Text className="text-foreground text-base font-bold">
-                    Water
-                  </Text>
-                  <Text className="text-muted-foreground text-xs mt-0.5">
-                    {sideTablesData.water.current ?? 0} /{" "}
-                    {sideTablesData.water.goal ?? 96} oz
-                  </Text>
-                </View>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  testID="nutrition-add-water-button"
-                  onPress={async () => {
-                    try {
-                      await apiFetch(
-                        withTz("/api/nutrition/water", tzOffset),
-                        z.any(),
-                        {
-                          method: "POST",
-                          body: { amount: 8, date: activeDate, tz: tzOffset },
-                          baseUrl: WEBAPP_BASE_URL,
-                          getToken: () => token ?? undefined,
-                        },
-                      );
-                      void refetchSideTables();
-                    } catch {}
-                  }}
-                >
-                  +8 oz
-                </Button>
-              </View>
-            </Card>
-          ) : null}
+          <WaterTracker
+            current={sideTablesData?.water?.current ?? 0}
+            goal={sideTablesData?.water?.goal ?? goalsData?.waterGoal ?? 96}
+            onAddWater={handleAddWater}
+          />
 
           {/* Occurrence / Tag Sections */}
           {sections.map((section) => (
@@ -768,6 +880,14 @@ export default function NutritionIndexRoute() {
                         Add food
                       </Button>
                       <Button
+                        testID="nutrition-empty-quick-add"
+                        variant="secondary"
+                        size="sm"
+                        onPress={() => setQuickAddOpen(true)}
+                      >
+                        Quick Add
+                      </Button>
+                      <Button
                         testID="nutrition-copy-yesterday"
                         variant="secondary"
                         size="sm"
@@ -798,6 +918,16 @@ export default function NutritionIndexRoute() {
               onPress={() => openSearch()}
             >
               Find a food
+            </Button>
+            <Button
+              testID="nutrition-quick-add-button"
+              variant="secondary"
+              disabled={isFuture}
+              onPress={() => {
+                if (!isFuture) setQuickAddOpen(true);
+              }}
+            >
+              Quick Add
             </Button>
             {!isFuture && (
               <Button
@@ -1210,6 +1340,14 @@ export default function NutritionIndexRoute() {
         onClose={() => setSearchOpen(false)}
         currentTag={searchTag}
         activeDate={activeDate}
+      />
+
+      {/* Quick Add Sheet */}
+      <QuickAddSheet
+        visible={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onSubmit={handleQuickAdd}
+        loading={submittingQuickAdd}
       />
 
       {/* Floating Add Food Button (FAB) */}
