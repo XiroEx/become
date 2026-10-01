@@ -265,7 +265,7 @@ export function useLiveWorkout(
 
           if (isComplete) {
             if (logDateOverrideRef.current) logDateOverrideRef.current = null;
-            invalidateMindSession();
+            void invalidateMindSession();
             void cache.clear(cacheKey);
             setNewPRs(res.newPRsAchieved ?? []);
 
