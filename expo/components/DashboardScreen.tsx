@@ -5,7 +5,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { StreakBanner } from "@/components/StreakBanner";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
@@ -104,6 +103,8 @@ export interface DashboardScreenProps {
    * both app stores require — is unreachable by a member or a reviewer.
    */
   onOpenSettings?: () => void;
+  /** Opens streaks detail screen (NP-108). */
+  onOpenStreaks?: () => void;
   /** Saved dashboard layout from server or cache (controlled). */
   layout?: DashboardTile[] | null;
   /** Live stats data for stat tiles (streak, mood, weekly, goal, calories, etc.). */
@@ -156,6 +157,7 @@ export function DashboardScreen({
   refreshing = false,
   onRefresh,
   onOpenSettings,
+  onOpenStreaks,
   layout,
   statData,
   tilesData,
@@ -356,12 +358,6 @@ export function DashboardScreen({
           onPress={onOpenMind}
         />
 
-        <StreakBanner
-          testID="dashboard-streak"
-          streakDays={streakDays}
-          freezeAvailable={freezeAvailable}
-        />
-
         {todayWorkout ? (
           <Card testID="dashboard-today" title="Today's workout">
             {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
@@ -412,7 +408,7 @@ export function DashboardScreen({
         {/* Unified Dashboard Tile Grid (NP-104) */}
         <TileGrid
           layout={layout}
-          statData={statData}
+          statData={statData ?? { streakDays, thisWeekWorkouts: 0 }}
           tilesData={tilesData}
           onDismissSuggestion={onDismissSuggestion}
           onOpenMind={onOpenMind}
@@ -424,6 +420,7 @@ export function DashboardScreen({
           onOpenMood={handleOpenMood}
           onMoodChange={onSubmitMood}
           onOpenSettings={onOpenSettings}
+          onOpenStreaks={onOpenStreaks}
         />
 
         {/* Up Next training card (NP-106) */}

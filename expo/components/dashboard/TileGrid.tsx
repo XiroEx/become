@@ -11,6 +11,7 @@ import { TileErrorBoundary } from "./TileErrorBoundary";
 import { StatActionTile } from "./StatActionTile";
 import { PlaceholderTile } from "./PlaceholderTile";
 import { StatTile } from "./StatTile";
+import { StreakTile } from "./StreakTile";
 import { SuggestionTile } from "./SuggestionTile";
 import type { DashboardStatData } from "@/lib/dashboard/types";
 import type { MoodLevel } from "@/components/CheckInModal";
@@ -46,6 +47,8 @@ export interface TileGridProps {
   onMoodChange?: (mood: MoodLevel) => Promise<void> | void;
   /** Opens weekly target settings (NP-127). */
   onOpenSettings?: () => void;
+  /** Opens streaks detail screen (NP-108). */
+  onOpenStreaks?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -80,6 +83,7 @@ export function TileGrid({
   onOpenMood,
   onMoodChange,
   onOpenSettings,
+  onOpenStreaks,
   testID,
   style,
 }: TileGridProps) {
@@ -226,6 +230,15 @@ export function TileGrid({
               onOpenWorkoutNow={onOpenWorkoutNow}
             />
           );
+        } else if (tile.kind === "stat" && tile.id === "streak") {
+          tileContent = (
+            <StreakTile
+              tile={tile}
+              statData={statData}
+              size={tile.size}
+              onOpenStreaks={onOpenStreaks}
+            />
+          );
         } else if (tile.kind === "stat") {
           tileContent = (
             <StatTile
@@ -238,6 +251,7 @@ export function TileGrid({
               onOpenMood={onOpenMood}
               onMoodChange={onMoodChange}
               onOpenSettings={onOpenSettings}
+              onOpenStreaks={onOpenStreaks}
             />
           );
         } else if (tile.kind === "smart-rotating") {

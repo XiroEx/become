@@ -36,6 +36,8 @@ export interface StatTileProps {
   onMoodChange?: (mood: MoodLevel) => Promise<void> | void;
   /** Opens weekly target settings (NP-127). */
   onOpenSettings?: () => void;
+  /** Opens streaks detail screen (NP-108). */
+  onOpenStreaks?: () => void;
   onPress?: () => void;
 }
 
@@ -50,6 +52,7 @@ export function StatTile({
   onOpenMood,
   onMoodChange,
   onOpenSettings,
+  onOpenStreaks,
   onPress,
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
@@ -127,7 +130,7 @@ export function StatTile({
     iconColor = colors.accent;
     badgeBg = tint("accent", 0.15);
     barColor = colors.accent;
-    handlePress = handlePress ?? onOpenCalendar;
+    handlePress = handlePress ?? onOpenStreaks ?? onOpenCalendar;
 
     const days = statData?.streakDays ?? 0;
     const next = statData?.nextMilestone ?? (days < 3 ? 3 : days < 7 ? 7 : days < 14 ? 14 : days < 30 ? 30 : days + 7);

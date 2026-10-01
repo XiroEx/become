@@ -63,7 +63,7 @@ describe("the server's widget deep links", () => {
 
   it("every one of them resolves to a real native screen", () => {
     const expected: Record<string, string> = {
-      streak: NATIVE_ROUTES.home,
+      streak: NATIVE_ROUTES.streaks,
       nutrition: NATIVE_ROUTES.nutrition,
       mind: NATIVE_ROUTES.mind,
       becoming: NATIVE_ROUTES.mind,
