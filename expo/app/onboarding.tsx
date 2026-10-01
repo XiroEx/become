@@ -9,6 +9,7 @@ import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 import type { OnboardingProfile } from "@/lib/onboarding/steps";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { AuthGuard } from "@/lib/auth/AuthGuard";
+import { ConsentGate } from "@/components/auth/ConsentGate";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -79,26 +80,28 @@ export default function OnboardingRoute() {
       onUnauthed={onUnauthed}
       testID="onboarding-guard"
     >
-      <ScreenState
-        error={submitError}
-        hasData={!submitError}
-        onRetry={async () => {
-          if (lastProfile) {
-            await onComplete(lastProfile);
-          } else {
-            setSubmitError(null);
-          }
-        }}
-        testID="onboarding-screen-state"
-      >
-        <SafeAreaView
-          edges={["top", "bottom"]}
-          style={{ flex: 1, backgroundColor: colors.background }}
-          testID="onboarding-route"
+      <ConsentGate>
+        <ScreenState
+          error={submitError}
+          hasData={!submitError}
+          onRetry={async () => {
+            if (lastProfile) {
+              await onComplete(lastProfile);
+            } else {
+              setSubmitError(null);
+            }
+          }}
+          testID="onboarding-screen-state"
         >
-          <OnboardingFlow onComplete={onComplete} submitting={submitting} />
-        </SafeAreaView>
-      </ScreenState>
+          <SafeAreaView
+            edges={["top", "bottom"]}
+            style={{ flex: 1, backgroundColor: colors.background }}
+            testID="onboarding-route"
+          >
+            <OnboardingFlow onComplete={onComplete} submitting={submitting} />
+          </SafeAreaView>
+        </ScreenState>
+      </ConsentGate>
     </AuthGuard>
   );
 }

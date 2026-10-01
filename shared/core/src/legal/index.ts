@@ -133,6 +133,42 @@ export const AI_CONSENT_REFUSAL_MESSAGE =
 export const HEALTH_DISCLAIMER_SHORT =
   'Become is a fitness, nutrition and mindset product, not medical care or medical advice. Talk to a physician before starting any exercise or nutrition program, scale the work to your own ability, and stop if something feels wrong.'
 
+// ─── Consent gate copy (Decision NP-017 / NP-045) ───────────────────────────
+
+export const CONSENT_TITLE_TERMS = 'Before you continue'
+export const CONSENT_TITLE_AI = 'One thing about AI'
+
+export function consentTitle(showTerms: boolean): string {
+  return showTerms ? CONSENT_TITLE_TERMS : CONSENT_TITLE_AI
+}
+
+export const CONSENT_STANDFIRST_TERMS =
+  'We need one thing on record: that you are old enough to use Become and that you agree to how it works.'
+
+export const CONSENT_STANDFIRST_AI =
+  `Become uses AI for some of its work, and that means sending what you submit to ${AI_PROVIDER}. We will not do that until you say we can.`
+
+export function consentStandfirst(showTerms: boolean): string {
+  return showTerms ? CONSENT_STANDFIRST_TERMS : CONSENT_STANDFIRST_AI
+}
+
+export const AI_CONSENT_SENDS_INTRO =
+  `What gets sent to ${AI_PROVIDER}, through ${AI_PROVIDER_ROUTE}:`
+
+export const CONSENT_ERROR_SAVE =
+  'That did not save. Check your connection and try again.'
+
+export function consentButtonLabel(opts: {
+  busy?: boolean
+  showTerms?: boolean
+  aiChecked?: boolean
+}): string {
+  if (opts.busy) return 'Saving…'
+  if (opts.showTerms) return 'Agree and continue'
+  if (opts.aiChecked) return 'Allow and continue'
+  return 'Save and continue'
+}
+
 /** How long deletion takes once we have confirmed the request. */
 export const LEGAL_DELETION_DAYS = 30
 /** The refund window on a member's FIRST charge (George, 2026-09-18): a full
