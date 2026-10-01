@@ -14,6 +14,9 @@ import {
 } from "@/components/live/ExerciseGroupNav";
 import { getBellWeightInfo } from "@become/core";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
+import { FramedVideo } from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -52,6 +55,12 @@ export interface LiveWorkoutExercise {
   addedAdHoc?: boolean;
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
 }
 
 export interface LiveWorkoutViewModel {
@@ -216,6 +225,17 @@ export function LiveWorkoutClient({
                   ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`
                 }
               >
+                <FramedVideo
+                  src={ex.videoUrl}
+                  surface="live"
+                  exerciseName={ex.name}
+                  videoWidth={ex.videoWidth}
+                  videoHeight={ex.videoHeight}
+                  videoFraming={ex.videoFraming}
+                  videoTrim={ex.videoTrim}
+                  testID={`${testID}-${ex.slug}-video`}
+                  className="mb-3"
+                />
                 {ex.notes ? (
                   <Text
                     testID={`${testID}-${ex.slug}-notes`}

@@ -117,6 +117,7 @@
       "expo-secure-store",
       "expo-font",
       "expo-apple-authentication",
+      "expo-video",
       "react-native-health-connect",
       [
         "expo-camera",
