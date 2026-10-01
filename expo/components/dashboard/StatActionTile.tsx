@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
-import { Brain, UtensilsCrossed, Zap, ChevronRight } from "lucide-react-native";
+import { Brain, UtensilsCrossed, Zap, ChevronRight, Scale } from "lucide-react-native";
 import { useRouter } from "expo-router";
 
 export interface StatActionTileProps {
@@ -11,6 +11,7 @@ export interface StatActionTileProps {
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
   onOpenWorkoutNow?: () => void;
+  onOpenWeight?: () => void;
 }
 
 export function StatActionTile({
@@ -18,6 +19,7 @@ export function StatActionTile({
   onOpenMind,
   onOpenNutrition,
   onOpenWorkoutNow,
+  onOpenWeight,
 }: StatActionTileProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
@@ -71,6 +73,18 @@ export function StatActionTile({
         onOpenWorkoutNow();
       } else {
         router.push("/(tabs)/programming?quick=true" as never);
+      }
+    };
+  } else if (tile.id === "weight") {
+    label = "Weight";
+    actionValue = "Log";
+    subtitle = "Track today's weight";
+    IconComponent = Scale;
+    color = colors.primary;
+    bg = tint("primary", 0.15);
+    handlePress = () => {
+      if (onOpenWeight) {
+        onOpenWeight();
       }
     };
   }

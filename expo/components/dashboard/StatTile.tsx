@@ -25,6 +25,8 @@ export interface StatTileProps {
   onOpenCalendar?: () => void;
   onOpenNutrition?: () => void;
   onOpenCheckIn?: () => void;
+  /** Opens the weigh-in sheet (NP-105). The weight tile falls back to onOpenCheckIn. */
+  onOpenWeight?: () => void;
   onPress?: () => void;
 }
 
@@ -43,6 +45,7 @@ export function StatTile({
   onOpenCalendar,
   onOpenNutrition,
   onOpenCheckIn,
+  onOpenWeight,
   onPress,
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
@@ -247,7 +250,7 @@ export function StatTile({
     iconColor = colors["muted-foreground"];
     badgeBg = tint("muted", 0.3);
     barColor = colors["muted-foreground"];
-    handlePress = handlePress ?? onOpenCheckIn;
+    handlePress = handlePress ?? onOpenWeight ?? onOpenCheckIn;
 
     const unit = statData?.weightUnit ?? "lbs";
     const latest = statData?.latestWeight;

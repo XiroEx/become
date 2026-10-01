@@ -62,6 +62,7 @@ import Goal from '../../../models/Goal'
 import StreakCredit from '../../../models/StreakCredit'
 import { signToken } from '../../../lib/auth'
 import { ensureGoals } from '../../../lib/goals/ensure'
+import { localDateKey } from '../../../lib/dayWindow'
 
 // ---------------------------------------------------------------------------
 // The manifest: every route NP-022's schemas describe.
@@ -269,10 +270,12 @@ test('POST /api/streaks/freeze success outcome (200) matches FreezeSuccessRespon
   const tz = 240
   const now = new Date()
   const dayMs = 86_400_000
-  const localNowMs = now.getTime() - tz * 60_000
-  const d1 = new Date(localNowMs - 1 * dayMs).toISOString().slice(0, 10)
-  const d2 = new Date(localNowMs - 2 * dayMs).toISOString().slice(0, 10)
-  const d3 = new Date(localNowMs - 3 * dayMs).toISOString().slice(0, 10)
+  const todayKey = localDateKey(null, tz, now)
+  const [y, m, d] = todayKey.split('-').map(Number)
+  const midday = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+  const d1 = new Date(midday.getTime() - 1 * dayMs).toISOString().slice(0, 10)
+  const d2 = new Date(midday.getTime() - 2 * dayMs).toISOString().slice(0, 10)
+  const d3 = new Date(midday.getTime() - 3 * dayMs).toISOString().slice(0, 10)
 
   // Seed 3 consecutive completed days across all three pillars so super streak >= 3
   for (const dayKey of [d1, d2, d3]) {
