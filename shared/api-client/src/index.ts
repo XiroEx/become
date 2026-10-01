@@ -23,6 +23,7 @@ export * from './schemas/chat';
 export * from './schemas/checkin';
 export * from './schemas/dashboard';
 export * from './schemas/appConfig';
+export * from './schemas/ai';
 
 // `./errors` and `./schemas/consent` both name the AI-consent shapes: the
 // classifier's hand-written interfaces (what `aiConsentRefusalFrom` RETURNS)
