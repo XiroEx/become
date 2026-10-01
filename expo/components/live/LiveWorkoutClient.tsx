@@ -17,6 +17,9 @@ import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { FramedVideo } from "@/components/FramedVideo";
+import type { VideoFramingOverride } from "@/lib/videoFraming";
+import type { VideoTrimOverride } from "@/lib/videoTrim";
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -52,6 +55,12 @@ export interface LiveWorkoutExercise {
   addedAdHoc?: boolean;
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+  videoWidth?: number | null;
+  videoHeight?: number | null;
+  videoFraming?: VideoFramingOverride | null;
+  videoTrim?: VideoTrimOverride | null;
 }
 
 export interface LiveWorkoutViewModel {
@@ -216,6 +225,18 @@ export function LiveWorkoutClient({
                   ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`
                 }
               >
+                <FramedVideo
+                  src={ex.videoUrl}
+                  exerciseName={ex.name}
+                  thumbnailUrl={ex.thumbnailUrl}
+                  surface="live"
+                  videoWidth={ex.videoWidth}
+                  videoHeight={ex.videoHeight}
+                  videoFraming={ex.videoFraming}
+                  videoTrim={ex.videoTrim}
+                  testID={`${testID}-${ex.slug}-video`}
+                  style={{ marginBottom: 12 }}
+                />
                 {ex.notes ? (
                   <Text
                     testID={`${testID}-${ex.slug}-notes`}

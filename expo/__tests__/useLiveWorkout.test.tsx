@@ -397,4 +397,69 @@ describe("useLiveWorkout", () => {
     expect(set?.reps == null || set?.reps === 0).toBe(true);
     expect(set?.completed).toBe(false);
   });
+
+  it("swapping an exercise clears prior video trim and framing", async () => {
+    (apiFetch as jest.Mock).mockImplementation((url: string) => {
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            programId: "prog-swap",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench-press",
+                name: "Barbell Bench Press",
+                sets: 3,
+                reps: "8",
+                videoUrl: "https://cdn.become.test/bench.mp4",
+                videoTrim: { start: 2, end: 5 },
+                videoFraming: { fit: "cover", zoom: 120 },
+              },
+            ],
+          },
+        });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: false,
+          workout: null,
+          exerciseHistory: {},
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() =>
+      useLiveWorkout("prog-swap", "Day 1", null),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const initialEx = result.current.workout?.exercises[0];
+    expect(initialEx?.videoUrl).toBe("https://cdn.become.test/bench.mp4");
+    expect(initialEx?.videoTrim).toEqual({ start: 2, end: 5 });
+    expect(initialEx?.videoFraming).toEqual({ fit: "cover", zoom: 120 });
+
+    // Request swap and select candidate
+    act(() => {
+      result.current.onRequestSwap("bench-press");
+    });
+    act(() => {
+      result.current.onSelectAlternative({
+        slug: "incline-dumbbell-press",
+        name: "Incline DB Press",
+        videoUrl: "https://cdn.become.test/incline.mp4",
+      } as any);
+    });
+
+    const swappedEx = result.current.workout?.exercises[0];
+    expect(swappedEx?.slug).toBe("incline-dumbbell-press");
+    expect(swappedEx?.name).toBe("Incline DB Press");
+    expect(swappedEx?.videoUrl).toBe("https://cdn.become.test/incline.mp4");
+    // Prior trim and framing are cleared
+    expect(swappedEx?.videoTrim).toBeNull();
+    expect(swappedEx?.videoFraming).toBeNull();
+  });
 });

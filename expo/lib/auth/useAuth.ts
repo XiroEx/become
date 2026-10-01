@@ -9,6 +9,7 @@
  */
 import {
   useAuthContext,
+  useOptionalAuthContext,
   type AuthContextValue,
 } from "@/lib/auth/AuthProvider";
 
@@ -21,4 +22,8 @@ export type UseAuthResult = AuthContextValue;
 
 export function useAuth(): UseAuthResult {
   return useAuthContext();
+}
+
+export function useOptionalAuth(): AuthContextValue | null {
+  return useOptionalAuthContext();
 }

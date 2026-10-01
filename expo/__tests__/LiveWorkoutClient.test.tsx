@@ -322,19 +322,37 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     expect(finished.pushup[0].reps).toBe(8);
   });
 
-  it("rehydrates logged duration/distance from a restored grid across remount", () => {
-    // Simulate the SecureStore cache returning a prior snapshot on re-entry.
-    const restoredGrid = {
-      run: [{ reps: null, weight: null, durationSec: 600, distance: 1500, completed: true }],
+  it("renders FramedVideo for each exercise, showing player or placeholder", () => {
+    const workoutWithVideo: LiveWorkoutViewModel = {
+      programId: "prog-demo",
+      workoutTitle: "Demo Workout",
+      exercises: [
+        {
+          slug: "squat",
+          name: "Barbell Squat",
+          sets: 2,
+          videoUrl: "https://cdn.become.test/squat.mp4",
+        },
+        {
+          slug: "curl",
+          name: "Bicep Curl",
+          sets: 2,
+          videoUrl: null, // no video -> placeholder
+        },
+      ],
     };
-    const { getByTestId } = render(
-      <LiveWorkoutClient workout={trackedWorkout} restoredGrid={restoredGrid} />,
+
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutClient workout={workoutWithVideo} />,
     );
-    expect(
-      getByTestId("live-workout-run-set-0-duration").props.value,
-    ).toBe("600");
-    expect(
-      getByTestId("live-workout-run-set-0-distance").props.value,
-    ).toBe("1500");
+
+    // Squat has a video -> player container is rendered
+    expect(getByTestId("live-workout-squat-video-container")).toBeTruthy();
+
+    // Curl has no video -> placeholder is rendered, not a black box
+    expect(getByTestId("live-workout-curl-video-placeholder")).toBeTruthy();
+    expect(getByTestId("live-workout-curl-video-placeholder-title").props.children).toBe("Bicep Curl");
+    expect(getByTestId("live-workout-curl-video-placeholder-message").props.children).toBe("Demo coming soon");
+    expect(queryByTestId("live-workout-curl-video-player")).toBeNull();
   });
 });

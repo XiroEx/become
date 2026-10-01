@@ -472,6 +472,12 @@ export function useLiveWorkout(
         sets: oldEx.sets,
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
+        videoUrl: candidate.videoUrl ?? null,
+        thumbnailUrl: null,
+        videoWidth: null,
+        videoHeight: null,
+        videoFraming: null,
+        videoTrim: null,
       };
 
       setSwappedExercises((prev) => ({
@@ -628,6 +634,12 @@ export function useLiveWorkout(
             groupType: ex.groupType,
             groupRounds: ex.groupRounds,
             restSec: ex.rest ? parseInt(ex.rest, 10) || 90 : 90,
+            videoUrl: ex.videoUrl ?? null,
+            thumbnailUrl: ex.thumbnailUrl ?? null,
+            videoWidth: ex.videoWidth ?? null,
+            videoHeight: ex.videoHeight ?? null,
+            videoFraming: ex.videoFraming ?? null,
+            videoTrim: ex.videoTrim ?? null,
           };
         },
       );

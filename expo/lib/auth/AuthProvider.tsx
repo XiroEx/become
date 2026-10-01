@@ -559,3 +559,7 @@ export function useAuthContext(): AuthContextValue {
   }
   return value;
 }
+
+export function useOptionalAuthContext(): AuthContextValue | null {
+  return useContext(AuthContext);
+}
