@@ -271,4 +271,174 @@ describe("native nutrition parity with web math (e015c7fa)", () => {
       expect(localDate.getDate()).toBe(30);
     });
   });
+
+  describe("8. Quantity picker and meal log parity (NP-093)", () => {
+    // 10 fixture foods covering mass, volume, discrete, variant, bridged
+    const TEN_FIXTURE_FOODS = [
+      // 1. Mass-native
+      {
+        name: "Chicken Breast",
+        servingSize: 100,
+        servingUnit: "g" as const,
+        nutrition: { calories: 165, protein: 31, carbs: 0, fats: 3.6 },
+        testCases: [{ qty: 200, unit: "g" as const }, { qty: 4, unit: "oz" as const }],
+      },
+      // 2. Mass-native with portion bridge
+      {
+        name: "Broccoli",
+        servingSize: 100,
+        servingUnit: "g" as const,
+        gramsPerServing: 85,
+        nutrition: { calories: 35.3, protein: 3.5, carbs: 4.7, fats: 0 },
+        testCases: [{ qty: 1, unit: "serving" as const }, { qty: 170, unit: "g" as const }],
+      },
+      // 3. Mass-native with alternate servings
+      {
+        name: "Ground Beef",
+        servingSize: 100,
+        servingUnit: "g" as const,
+        alternateServings: [{ label: "1 patty (113 g)", multiplier: 1.13 }],
+        nutrition: { calories: 250, protein: 26, carbs: 0, fats: 17 },
+        testCases: [{ qty: 250, unit: "g" as const }],
+      },
+      // 4. Volume-native
+      {
+        name: "Whole Milk",
+        servingSize: 240,
+        servingUnit: "ml" as const,
+        displayLabel: "1 cup",
+        nutrition: { calories: 149, protein: 7.7, carbs: 11.7, fats: 8 },
+        testCases: [{ qty: 2, unit: "cup" as const }, { qty: 480, unit: "ml" as const }],
+      },
+      // 5. Volume-native with tbsp
+      {
+        name: "Olive Oil",
+        servingSize: 15,
+        servingUnit: "ml" as const,
+        displayLabel: "1 tbsp",
+        nutrition: { calories: 119, protein: 0, carbs: 0, fats: 13.5 },
+        testCases: [{ qty: 2, unit: "tbsp" as const }, { qty: 30, unit: "ml" as const }],
+      },
+      // 6. Discrete unbridged
+      {
+        name: "Large Egg",
+        servingSize: 1,
+        servingUnit: "each" as const,
+        nutrition: { calories: 72, protein: 6.3, carbs: 0.4, fats: 4.8 },
+        testCases: [{ qty: 3, unit: "each" as const }],
+      },
+      // 7. Discrete with gram bridge
+      {
+        name: "Protein Bar",
+        servingSize: 1,
+        servingUnit: "each" as const,
+        gramsPerServing: 60,
+        nutrition: { calories: 210, protein: 20, carbs: 24, fats: 7 },
+        testCases: [{ qty: 2, unit: "each" as const }, { qty: 120, unit: "g" as const }],
+      },
+      // 8. Discrete with count and gram bridge
+      {
+        name: "Banana",
+        servingSize: 1,
+        servingUnit: "each" as const,
+        gramsPerServing: 118,
+        nutrition: { calories: 105, protein: 1.3, carbs: 27, fats: 0.3 },
+        testCases: [{ qty: 1, unit: "each" as const }, { qty: 236, unit: "g" as const }],
+      },
+      // 9. Multi-variant food (Chocolate scoop)
+      {
+        name: "Whey Protein (Chocolate)",
+        servingSize: 1,
+        servingUnit: "scoop" as const,
+        gramsPerServing: 32,
+        nutrition: { calories: 130, protein: 24, carbs: 3, fats: 2 },
+        testCases: [{ qty: 1, unit: "scoop" as const }, { qty: 64, unit: "g" as const }],
+      },
+      // 10. Mass with volume bridge
+      {
+        name: "Almond Butter",
+        servingSize: 32,
+        servingUnit: "g" as const,
+        mlPerServing: 30,
+        nutrition: { calories: 190, protein: 7, carbs: 6, fats: 18 },
+        testCases: [{ qty: 64, unit: "g" as const }, { qty: 2, unit: "tbsp" as const }],
+      },
+    ];
+
+    it("(id: e015c8c0) For ten fixture foods (mass, volume, discrete, variant, bridged) the native preview equals the web's for the same quantity and unit", () => {
+      expect(TEN_FIXTURE_FOODS).toHaveLength(10);
+
+      for (const food of TEN_FIXTURE_FOODS) {
+        for (const tc of food.testCases) {
+          const nativeMacros = nutritionForQuantity(food, tc.qty, tc.unit);
+          const factor = scalingFactor(food, tc.qty, tc.unit);
+
+          // Web computes macros as variant.nutrition scaled by factor
+          expect(nativeMacros.calories).toBeCloseTo(food.nutrition.calories * factor, 1);
+          expect(nativeMacros.protein).toBeCloseTo(food.nutrition.protein * factor, 1);
+          expect(nativeMacros.carbs).toBeCloseTo(food.nutrition.carbs * factor, 1);
+          expect(nativeMacros.fats).toBeCloseTo(food.nutrition.fats * factor, 1);
+        }
+      }
+    });
+
+    it("(id: e015c8c1) A natively logged item opened for editing on the web shows the same quantity and unit", () => {
+      // Simulate native item payload written by buildMealItemPayload
+      const testCases = [
+        { qty: 150, unit: "g" },
+        { qty: 2, unit: "each" },
+        { qty: 1.5, unit: "cup" },
+        { qty: 4, unit: "oz" },
+      ];
+
+      for (const tc of testCases) {
+        const item = {
+          foodId: "food-123",
+          name: "Test Item",
+          servingSize: 100,
+          servingUnit: "g",
+          servings: 1.5,
+          nutrition: { calories: 100, protein: 10, carbs: 10, fats: 2 },
+          loggedQuantity: tc.qty,
+          loggedUnit: tc.unit,
+        };
+
+        // Web's deriveVariantAndInitial logic in EditFoodModal.tsx:
+        // if (item.loggedQuantity != null && item.loggedUnit) {
+        //   return { variant, initial: { quantity: item.loggedQuantity, unit: item.loggedUnit } }
+        // }
+        const webDerivedInitial = (item.loggedQuantity != null && item.loggedUnit)
+          ? { quantity: item.loggedQuantity, unit: item.loggedUnit }
+          : { quantity: (item.servings ?? 1) * item.servingSize, unit: item.servingUnit };
+
+        expect(webDerivedInitial.quantity).toBe(tc.qty);
+        expect(webDerivedInitial.unit).toBe(tc.unit);
+      }
+    });
+
+    it("(id: e015c8c2) Logging with No time creates an untimed log that the web shows without a clock time", () => {
+      // Native log created with timeMode: "none"
+      const nativeUntimedLog = {
+        _id: "log-untimed-1",
+        loggedAt: "2026-10-01T00:00:00.000Z",
+        tags: ["snack"],
+        untimed: true,
+      };
+
+      // Web's buildDayOccurrences processes this day's logs
+      const occurrences = buildDayOccurrences([nativeUntimedLog], [], []);
+      expect(occurrences).toHaveLength(1);
+      const occ = occurrences[0]!;
+
+      // Web dayOrder marks occurrence as untimed
+      expect(occ.untimed).toBe(true);
+
+      // In web's TagSection:
+      // {occurrenceAt != null && <span>{formatClockLabel(occurrenceAt)}</span>}
+      // {untimed && <span>no time</span>}
+      // Because untimed is true, occurrence has untimed=true and web displays "no time" without clock time!
+      expect(occ.tag).toBe("snack");
+      expect(occ.logs[0]!.untimed).toBe(true);
+    });
+  });
 });

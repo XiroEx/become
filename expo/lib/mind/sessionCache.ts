@@ -1,12 +1,15 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export const MIND_AI_PLAN_KEY = "mind-ai-plan";
+
 /**
- * Mind session cache invalidation.
- *
- * A completed workout drops the cached Mind session so the next compose
- * (app open / Mind open) reflects the just-finished workout.
- *
- * Web equivalent: `webapp/lib/mind/sessionCache.ts#invalidateMindSession`.
- * When NP-102 implements native Mind session caching, this clears that cache.
+ * Drop the cached AI Mind session so the next compose regenerates.
+ * Safe anywhere (no-op when storage is unavailable).
  */
-export function invalidateMindSession(): void {
-  // Placeholder for NP-102: when native Mind session cache lands, drop it here.
+export async function invalidateMindSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(MIND_AI_PLAN_KEY);
+  } catch {
+    // ignore
+  }
 }

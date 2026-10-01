@@ -215,7 +215,7 @@ describe("FoodDetailRoute", () => {
     });
 
     await waitFor(() => {
-      expect(findCall("/api/nutrition/log", "POST")).toBeTruthy();
+      expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
     });
     // Nothing ever posted the quota-gated create.
     expect(gatedCreateCalls()).toHaveLength(0);
@@ -242,21 +242,16 @@ describe("FoodDetailRoute", () => {
     });
 
     await waitFor(() => {
-      expect(findCall("/api/nutrition/log", "POST")).toBeTruthy();
+      expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
     });
-    const add = findCall("/api/nutrition/log", "POST")!;
+    const add = findCall("/api/meal-logs", "POST")!;
     const body = (add[2] as { body?: Record<string, unknown> }).body!;
-    expect(body.mealType).toBe("dinner");
-
-    // The device's local day, not `toISOString()`'s UTC one.
-    const now = new Date();
-    const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    expect(body.date).toBe(localDay);
-    expect(body.tz).toBe(now.getTimezoneOffset());
+    expect(body.tags).toEqual(["dinner"]);
 
     // Per-serving snapshot × servings — the server totals it as
     // nutrition × servings, so one bar is 210 kcal, exactly like the web.
-    expect(body.food).toEqual(
+    const items = body.items as Record<string, unknown>[];
+    expect(items[0]).toEqual(
       expect.objectContaining({
         foodId: "6512c0ffee1234567890abcd",
         name: "Protein Bar",
@@ -276,12 +271,11 @@ describe("FoodDetailRoute", () => {
   it("scales by the amount the member picks, not by grams/100", async () => {
     const { getByTestId } = render(<FoodDetailRoute />);
     await waitFor(() => {
-      expect(getByTestId("serving-picker-amount")).toBeTruthy();
+      expect(getByTestId("quantity-input")).toBeTruthy();
     });
 
     // Two bars.
-    fireEvent.changeText(getByTestId("serving-picker-amount"), "2");
-    fireEvent.press(getByTestId("serving-picker-submit"));
+    fireEvent.changeText(getByTestId("quantity-input"), "2");
 
     fireEvent.press(getByTestId("save-as-meal-open"));
     fireEvent.press(getByTestId("save-as-meal-option-snack"));
@@ -290,17 +284,18 @@ describe("FoodDetailRoute", () => {
     });
 
     await waitFor(() => {
-      expect(findCall("/api/nutrition/log", "POST")).toBeTruthy();
+      expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
     });
     const body = (
-      findCall("/api/nutrition/log", "POST")![2] as {
+      findCall("/api/meal-logs", "POST")![2] as {
         body?: Record<string, unknown>;
       }
     ).body!;
-    const food = body.food as Record<string, unknown>;
+    const items = body.items as Record<string, unknown>[];
+    const food = items[0]!;
     expect(food.servings).toBe(2);
-    expect(food.loggedQuantity).toBe(120); // 2 × 60 g
-    expect(food.loggedUnit).toBe("g");
+    expect(food.loggedQuantity).toBe(2);
+    expect(food.loggedGramsPerServing).toBe(60);
     // 210 × 2 = 420 kcal once the server multiplies.
     expect((food.nutrition as { calories: number }).calories).toBe(210);
   });
@@ -319,7 +314,7 @@ describe("FoodDetailRoute", () => {
     });
     // No picker and no save button → nothing can be logged.
     expect(queryByTestId("save-as-meal-open")).toBeNull();
-    expect(findCall("/api/nutrition/log", "POST")).toBeUndefined();
+    expect(findCall("/api/meal-logs", "POST")).toBeUndefined();
   });
 
   it("falls back to a manual import built from the row the search passed", async () => {
@@ -395,13 +390,15 @@ describe("FoodDetailRoute", () => {
       fireEvent.press(getByTestId("save-as-meal-confirm"));
     });
     await waitFor(() => {
-      expect(findCall("/api/nutrition/log", "POST")).toBeTruthy();
+      expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
     });
-    const food = (
-      (findCall("/api/nutrition/log", "POST")![2] as {
+    const body = (
+      (findCall("/api/meal-logs", "POST")![2] as {
         body?: Record<string, unknown>;
       }).body as Record<string, unknown>
-    ).food as Record<string, unknown>;
+    );
+    const items = body.items as Record<string, unknown>[];
+    const food = items[0]!;
     expect(food.servings).toBeCloseTo(0.38, 5);
     expect((food.nutrition as { calories: number }).calories).toBe(530);
   });

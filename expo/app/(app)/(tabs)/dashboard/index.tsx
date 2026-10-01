@@ -6,6 +6,8 @@ import {
   ActiveProgramsApiResponseSchema,
   CurrentWorkoutResponseSchema,
   classifyApiError,
+  CheckInResponseSchema,
+  CheckInActionResponseSchema,
   ProgressApiResponseSchema,
   StreaksResponseSchema,
   NutritionLogDayResponseSchema,
@@ -24,9 +26,10 @@ import {
 import type { CheckInPayload } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
-import { useLocalDay, useOnForeground } from "@/lib/time/localDay";
+import { useLocalDay, useOnForeground, tzOffsetMinutes } from "@/lib/time/localDay";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
+import type { WeightUnit } from "@become/core";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import {
@@ -45,7 +48,7 @@ import type {
  * presentational and just receives the mapped props.
  */
 export default function DashboardRoute() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const router = useRouter();
   const { day: today } = useLocalDay();
   const ready = !!token;
@@ -70,6 +73,11 @@ export default function DashboardRoute() {
       ...fetchOpts,
       cacheKey: LAYOUT_CACHE_KEY,
     },
+  );
+  const checkin = useFetch(
+    ready ? `/api/checkin?tz=${tzOffsetMinutes()}` : null,
+    CheckInResponseSchema,
+    { ...fetchOpts, useCache: false },
   );
   const progress = useFetch(
     ready ? "/api/progress" : null,
@@ -106,6 +114,33 @@ export default function DashboardRoute() {
     ScheduleApiResponseSchema,
     fetchOpts,
   );
+
+  // ONE weight unit for the whole screen: the check-in and weigh-in writes
+  // (NP-105) and the stat tiles (NP-210). The member's explicit profile setting
+  // wins; otherwise the goal's unit from /api/progress or /api/goals; else lbs.
+  const profileWeightUnit = user?.profile?.weightUnit;
+  const weightUnit: WeightUnit =
+    profileWeightUnit === "kg" || profileWeightUnit === "lbs"
+      ? profileWeightUnit
+      : ((progress.data?.goal?.weightUnit as WeightUnit | undefined) ??
+        (goals.data?.nutrition?.unit as WeightUnit | undefined) ??
+        "lbs");
+
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const checkinShownRef = useRef(false);
+
+  useEffect(() => {
+    if (ready && checkin.data?.due && !checkInOpen && !checkinShownRef.current) {
+      checkinShownRef.current = true;
+      setCheckInOpen(true);
+      void apiFetch("/api/checkin", CheckInActionResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: { action: "shown", tz: tzOffsetMinutes() },
+      }).catch(() => {});
+    }
+  }, [ready, checkin.data?.due, checkInOpen, token]);
 
   const activeProgram = active.data?.activePrograms?.[0] ?? null;
   const programId = activeProgram?.programId ?? null;
@@ -192,6 +227,7 @@ export default function DashboardRoute() {
       active.refetch(),
       workout.refetch(),
       layout.refetch(),
+      checkin.refetch(),
       progress.refetch(),
       streaks.refetch(),
       nutrition.refetch(),
@@ -202,6 +238,7 @@ export default function DashboardRoute() {
     ]);
   }, [
     active,
+    checkin,
     goals,
     layout,
     me,
@@ -245,7 +282,7 @@ export default function DashboardRoute() {
     }
   }, [today, refetchAll]);
 
-  // Refetch when returning to the foreground
+  // Refetch when returning to the foreground (NP-035)
   useOnForeground(() => {
     void refetchAll();
   });
@@ -262,47 +299,80 @@ export default function DashboardRoute() {
   // Daily check-in writes — mirrors the webapp DailyCheckInModal flow: log mood
   // (always) + weight (when provided), then refresh the streak so the new
   // activity is reflected immediately.
-  //
-  // BOTH GO THROUGH THE OFFLINE QUEUE (`lib/offline/writes.ts`). When there is
-  // a connection that is a POST and nothing changes. When there is not, the
-  // check-in is kept on the device WITH the local day it was made on and
-  // replayed on reconnect, so a check-in made at 11:50pm in airplane mode does
-  // not become tomorrow's when it is delivered at 12:05am. A queued write is
-  // not an error: the banner at the root says what happened. A REFUSAL still
-  // is, and CheckInModal shows it inline.
   const [submittingCheckIn, setSubmittingCheckIn] = useState(false);
   const onSubmitCheckIn = useCallback(
     async (payload: CheckInPayload) => {
       setSubmittingCheckIn(true);
       try {
         const writes = getOfflineWrites();
-        const moodStatus = await writes.logMood(payload.mood);
-        const weightStatus =
-          payload.weightLbs != null
-            ? await writes.logWeight(payload.weightLbs)
-            : null;
-        // New activity the SERVER has → re-pull the streak. A queued write has
-        // not earned a streak day yet; the replay's response will.
-        if (moodStatus === "sent" || weightStatus === "sent") {
-          await streak.refetch();
+        let moodStatus: string | null = null;
+        if (payload.mood) {
+          moodStatus = await writes.logMood(payload.mood);
         }
-        if (payload.weightLbs != null) {
-          // BECOME → HEALTH. Mirrors the weigh-in into Apple Health / Health
-          // Connect, and does nothing unless the member left that direction on
-          // when the app opened (lib/health/sync.ts). Never awaited and never
-          // throws: the check-in is kept either way, sent or queued.
+        const weightVal = payload.weight ?? payload.weightLbs;
+        let weightStatus: string | null = null;
+        if (weightVal != null) {
+          weightStatus = await writes.logWeight(weightVal);
           void mirrorWeighInToHealth({
-            valueLbs: payload.weightLbs,
+            valueLbs: weightUnit === "kg" ? weightVal * 2.20462 : weightVal,
             atISO: new Date().toISOString(),
             clientId: weighInClientId(today),
           });
+        }
+        if (moodStatus === "sent" || weightStatus === "sent") {
+          await streak.refetch();
+          await checkin.refetch();
+          await goals.refetch();
+          // The mood and weight tiles (NP-210) read /api/progress.
+          await progress.refetch();
         }
       } finally {
         setSubmittingCheckIn(false);
       }
     },
-    [streak, today],
+    [checkin, goals, progress, streak, today, weightUnit],
   );
+
+  const onSkipCheckIn = useCallback(async () => {
+    try {
+      await apiFetch("/api/checkin", CheckInActionResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: { action: "skip", tz: tzOffsetMinutes() },
+      });
+      await checkin.refetch();
+    } catch {
+      // fail soft
+    }
+  }, [checkin, token]);
+
+  const onSubmitWeight = useCallback(
+    async (weightVal: number) => {
+      const writes = getOfflineWrites();
+      const status = await writes.logWeight(weightVal);
+      if (status === "sent") {
+        await streak.refetch();
+        await checkin.refetch();
+        await goals.refetch();
+        await progress.refetch();
+      }
+      void mirrorWeighInToHealth({
+        valueLbs: weightUnit === "kg" ? weightVal * 2.20462 : weightVal,
+        atISO: new Date().toISOString(),
+        clientId: weighInClientId(today),
+      });
+    },
+    [checkin, goals, progress, streak, today, weightUnit],
+  );
+
+  const targetWeight = goals.data?.nutrition?.target?.weight ?? null;
+  const checkInInfo = {
+    daysSinceMood: checkin.data?.daysSinceMood ?? 0,
+    daysSinceWeight: checkin.data?.daysSinceWeight ?? 0,
+    lastWeight: checkin.data?.lastWeight ?? null,
+    targetWeight,
+  };
 
   const streakDays =
     streaks.data?.overall?.current ??
@@ -354,10 +424,6 @@ export default function DashboardRoute() {
     progress.data?.goal?.targetWeightKg ?? null;
   const startWeightKg =
     progress.data?.goal?.startWeightKg ?? null;
-  const weightUnit =
-    (progress.data?.goal?.weightUnit as "lbs" | "kg" | undefined) ??
-    (goals.data?.nutrition?.unit as "lbs" | "kg" | undefined) ??
-    "lbs";
   const pace = progress.data?.goal?.pace
     ? {
         status: progress.data.goal.pace.status,
@@ -513,7 +579,13 @@ export default function DashboardRoute() {
       refreshing={refreshing}
       onRefresh={onRefresh}
       onSubmitCheckIn={onSubmitCheckIn}
+      onSkipCheckIn={onSkipCheckIn}
       submittingCheckIn={submittingCheckIn}
+      checkInOpen={checkInOpen}
+      onCheckInOpenChange={setCheckInOpen}
+      checkInInfo={checkInInfo}
+      weightUnit={weightUnit}
+      onSubmitWeight={onSubmitWeight}
       layout={layout.data?.layout ?? null}
       statData={statData}
       tilesData={tiles.data ?? null}
@@ -526,8 +598,6 @@ export default function DashboardRoute() {
       onOpenWorkoutNow={onOpenWorkoutNow}
       workoutNowOpen={workoutNowOpen}
       onWorkoutNowOpenChange={setWorkoutNowOpen}
-      // Settings lives in the (app) group, so this gear is the way a member —
-      // or an App Store reviewer looking for "Delete account" — can get to it.
       onOpenSettings={() => {
         router.push("/settings");
       }}

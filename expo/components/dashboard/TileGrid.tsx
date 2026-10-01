@@ -38,10 +38,14 @@ export interface TileGridProps {
   onOpenWorkoutNow?: () => void;
   onOpenCalendar?: () => void;
   onOpenCheckIn?: () => void;
+  /** Opens the weigh-in sheet (NP-105); the weight tile falls back to onOpenCheckIn. */
+  onOpenWeight?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
 
+// "weight" is a data tile (NP-210: latest weigh-in + delta); pressing it opens
+// the weigh-in sheet via onOpenWeight (NP-105).
 const ACTION_STAT_IDS = new Set(["mindset", "nutrition", "workoutNow"]);
 
 export function isActionTileId(id: string): boolean {
@@ -66,6 +70,7 @@ export function TileGrid({
   onOpenWorkoutNow,
   onOpenCalendar,
   onOpenCheckIn,
+  onOpenWeight,
   testID,
   style,
 }: TileGridProps) {
@@ -220,6 +225,7 @@ export function TileGrid({
               onOpenCalendar={onOpenCalendar}
               onOpenNutrition={onOpenNutrition}
               onOpenCheckIn={onOpenCheckIn}
+              onOpenWeight={onOpenWeight}
             />
           );
         } else if (tile.kind === "smart-rotating") {
