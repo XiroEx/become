@@ -13,7 +13,6 @@ import {
   Clock,
   Flame,
   Lock,
-  X,
 } from "lucide-react-native";
 import {
   apiFetch,
@@ -47,6 +46,7 @@ import {
 import { Text } from "@/components/Text";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
+import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
@@ -563,49 +563,7 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
           </View>
         )}
 
-        {/* Active Session in Progress */}
-        {playing && effectivePlan ? (
-          <View
-            testID="mind-session-player"
-            className="rounded-3xl bg-card border border-border p-6"
-          >
-            <View className="flex-row items-center justify-between">
-              <Text className="text-xs font-semibold uppercase tracking-widest text-primary">
-                Session in progress
-              </Text>
-              <Pressable
-                testID="mind-session-close"
-                accessibilityRole="button"
-                accessibilityLabel="Close session"
-                onPress={() => setPlaying(false)}
-                className="p-1 rounded-full bg-muted"
-              >
-                <X size={16} color={colors["muted-foreground"]} />
-              </Pressable>
-            </View>
-            <Text className="text-foreground text-2xl font-bold mt-2">
-              {effectivePlan.intro.title}
-            </Text>
-            <Text className="text-muted-foreground text-sm mt-1">
-              {effectivePlan.intro.subtitle}
-            </Text>
-            <View className="mt-4 gap-2">
-              {effectivePlan.moves.map((m, idx) => (
-                <View
-                  key={m.id}
-                  className="flex-row items-center justify-between p-3 rounded-xl bg-muted/50"
-                >
-                  <Text className="text-sm font-semibold text-foreground">
-                    {idx + 1}. {m.title}
-                  </Text>
-                  <Text className="text-xs font-medium text-muted-foreground">
-                    {MOVE_CHIP[m.kind as MoveKind] ?? m.kind}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : sessionLock ? (
+        {sessionLock ? (
           /* Lock Card: Free member with sessions >= sessionsLimit */
           <Pressable
             testID="mind-lock-card"
@@ -725,6 +683,24 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
           <MoodHistoryStrip points={points} />
         </View>
       </ScrollView>
+
+      {/* The session itself (NP-098): a full-screen modal over the home, so the
+          plan is PLAYED rather than listed. `sessionContext` is what lets the
+          live check-in re-open the opening — without it the session would be
+          stuck on whatever state yesterday's compose was built for. */}
+      {playing && effectivePlan ? (
+        <SessionPlayer
+          plan={effectivePlan}
+          {...(sessionContext ? { sessionContext } : {})}
+          onExit={() => {
+            setPlaying(false);
+            // The session is not read-only even before NP-101: the check-in
+            // logs a state and earns XP, so the home re-reads on the way out
+            // (the web's SessionPlayer says the same about `onExit`).
+            void load();
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
