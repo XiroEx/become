@@ -1,8 +1,8 @@
-// The PROGRAM half of the POST /api/workouts discriminated union. The bare
 // `WorkoutSaveRequest` is `program | quick` (NP-018), and this screen only ever
 // builds a program day: naming the half is what keeps `req.activeSeconds = …`
 // below type-checked rather than narrowed away.
 import type { WorkoutProgramSaveRequest } from "@become/api-client";
+import { normalizeTracking, tracksTime, prescriptionOf } from "@become/core";
 import type {
   LiveGrid,
   LiveWorkoutExercise,
@@ -27,6 +27,24 @@ export interface BuildWorkoutSaveInput {
    * is exactly how it behaved before.
    */
   attemptId?: string;
+  /**
+   * ISO date (or YYYY-MM-DD) of the exact Schedule slot this log fulfils (from `?sd=`),
+   * so a completion resolves THAT slot and never a neighbouring same-dayLabel one.
+   */
+  scheduledDate?: string | null;
+  /**
+   * Which day the member picked for a workout that crossed midnight (set
+   * by resolveDayChoice). Only ever sent on the completing save.
+   */
+  performedAt?: string | null;
+  /** Device timezone offset in minutes west of UTC (`new Date().getTimezoneOffset()`). */
+  tz?: number;
+  /** IANA timezone identifier (e.g. `Intl.DateTimeFormat().resolvedOptions().timeZone`). */
+  tzZone?: string;
+  /**
+   * Map of exercise index to original exercise details for swapped exercises.
+   */
+  swappedExercises?: Record<number, { originalSlug: string; originalName: string }>;
 }
 
 /**
@@ -52,7 +70,10 @@ export function newWorkoutAttemptId(): string {
 export function buildWorkoutSaveRequest(
   input: BuildWorkoutSaveInput,
 ): WorkoutProgramSaveRequest {
-  const exercises = input.exercises.map((ex) => {
+  const exercises = input.exercises.map((ex, index) => {
+    const swap = input.swappedExercises?.[index];
+    const t = normalizeTracking(ex.trackingType);
+    const timed = tracksTime(t);
     const sets = (input.grid[ex.slug] ?? []).map((s, i) => {
       const set: {
         setNumber: number;
@@ -63,20 +84,43 @@ export function buildWorkoutSaveRequest(
         distance?: number;
       } = {
         setNumber: i + 1,
-        reps: s.reps ?? 0,
-        weight: s.weight ?? 0,
+        reps: timed ? 0 : (s.reps ?? 0),
+        weight: timed ? 0 : (s.weight ?? 0),
         completed: s.completed,
       };
       // Time/distance tracking types log these instead of (or alongside)
       // reps/weight — only attach when present so strength sets stay clean.
-      if (s.durationSec != null) set.duration = s.durationSec;
-      if (s.distance != null) set.distance = s.distance;
+      if (timed && s.durationSec != null && s.durationSec > 0) {
+        set.duration = s.durationSec;
+      }
+      if (t === "time_distance" && s.distance != null && s.distance > 0) {
+        set.distance = s.distance;
+      }
       return set;
     });
+
+    const origSlug = swap?.originalSlug || ex.originalExerciseSlug;
+    const origName = swap?.originalName || ex.swappedFromName;
+
     return {
       name: ex.name,
       exerciseSlug: ex.slug,
       sets,
+      ...(ex.groupId ? { groupId: ex.groupId } : {}),
+      ...(ex.groupType ? { groupType: ex.groupType } : {}),
+      ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+      ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+      prescription: prescriptionOf({
+        name: ex.name,
+        sets: ex.sets,
+        reps: ex.repsLabel,
+        trackingType: ex.trackingType ?? undefined,
+        rest: ex.restSec != null ? `${ex.restSec}s` : undefined,
+      }),
+      ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
+      ...(origSlug
+        ? { originalExerciseSlug: origSlug, swappedFromName: origName || ex.name }
+        : {}),
     };
   });
 
@@ -96,5 +140,10 @@ export function buildWorkoutSaveRequest(
   }
   if (input.notes !== undefined) req.notes = input.notes;
   if (input.attemptId) req.attemptId = input.attemptId;
+  if (input.scheduledDate) req.scheduledDate = input.scheduledDate;
+  if (input.performedAt && input.completed) req.performedAt = input.performedAt;
+  req.tz = input.tz !== undefined ? input.tz : new Date().getTimezoneOffset();
+  if (input.tzZone) req.tzZone = input.tzZone;
+
   return req;
 }
