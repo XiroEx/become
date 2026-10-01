@@ -472,6 +472,12 @@ export function useLiveWorkout(
         sets: oldEx.sets,
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
+        videoUrl: undefined,
+        thumbnailUrl: undefined,
+        videoWidth: null,
+        videoHeight: null,
+        videoFraming: null,
+        videoTrim: null,
       };
 
       setSwappedExercises((prev) => ({
@@ -628,6 +634,12 @@ export function useLiveWorkout(
             groupType: ex.groupType,
             groupRounds: ex.groupRounds,
             restSec: ex.rest ? parseInt(ex.rest, 10) || 90 : 90,
+            videoUrl: ex.videoUrl ?? null,
+            thumbnailUrl: ex.thumbnailUrl ?? null,
+            videoWidth: ex.videoWidth ?? null,
+            videoHeight: ex.videoHeight ?? null,
+            videoFraming: ex.videoFraming ?? null,
+            videoTrim: ex.videoTrim ?? null,
           };
         },
       );
@@ -737,6 +749,12 @@ export function useLiveWorkout(
               groupRounds: (m as any).groupRounds ?? existing?.groupRounds,
               restSec: existing?.restSec ?? 90,
               addedAdHoc: Boolean((m as any).addedAdHoc),
+              videoUrl: existing?.videoUrl ?? null,
+              thumbnailUrl: existing?.thumbnailUrl ?? null,
+              videoWidth: existing?.videoWidth ?? null,
+              videoHeight: existing?.videoHeight ?? null,
+              videoFraming: existing?.videoFraming ?? null,
+              videoTrim: existing?.videoTrim ?? null,
             };
           });
 
@@ -764,6 +782,12 @@ export function useLiveWorkout(
                   sets: targetEx.sets,
                   originalExerciseSlug: origSlug,
                   swappedFromName: origName,
+                  videoUrl: undefined,
+                  thumbnailUrl: undefined,
+                  videoWidth: null,
+                  videoHeight: null,
+                  videoFraming: null,
+                  videoTrim: null,
                 };
                 restoredSwaps[idx] = {
                   originalSlug: origSlug,
