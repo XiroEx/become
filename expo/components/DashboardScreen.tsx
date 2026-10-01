@@ -2,18 +2,20 @@ import { useState } from "react";
 import { View, ScrollView, RefreshControl, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Settings } from "lucide-react-native";
+import { Settings, Sliders } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
+import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import type {
   DashboardTile,
   DashboardTilesResponse,
   GoalProgressResponse,
   MindSummaryResponse,
+  ProgressApiResponse,
 } from "@become/api-client";
 import type {
   DashboardStatData,
@@ -128,6 +130,14 @@ export interface DashboardScreenProps {
   /** Controls Workout Now sheet externally for testability. */
   workoutNowOpen?: boolean;
   onWorkoutNowOpenChange?: (open: boolean) => void;
+  /** Progress data for ProgressChart (Weight | BMI | Mood) (NP-211). */
+  progressData?: ProgressApiResponse | null;
+  /** Fitness goal for ProgressChart trend sentiment (NP-211). */
+  fitnessGoal?: string | null;
+  /** Target weight for ProgressChart reference line (NP-211). */
+  targetWeight?: number | null;
+  /** Callback when Customize tiles link is pressed (NP-157). */
+  onOpenCustomizeTiles?: () => void;
 }
 
 export function DashboardScreen({
@@ -170,6 +180,10 @@ export function DashboardScreen({
   onOpenWorkoutNow,
   workoutNowOpen,
   onWorkoutNowOpenChange,
+  progressData,
+  fitnessGoal,
+  targetWeight,
+  onOpenCustomizeTiles,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
@@ -268,6 +282,13 @@ export function DashboardScreen({
       </SafeAreaView>
     );
   }
+
+  // TODO: NP-157 owns native dashboard tile customizer
+  const handleCustomizeTiles = () => {
+    if (onOpenCustomizeTiles) {
+      onOpenCustomizeTiles();
+    }
+  };
 
   return (
     <SafeAreaView
@@ -423,6 +444,33 @@ export function DashboardScreen({
           onOpenStreaks={onOpenStreaks}
         />
 
+        {/* Customize tiles link (NP-211 / NP-157) */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            marginTop: -6,
+            marginBottom: 4,
+          }}
+        >
+          <Pressable
+            testID="dashboard-customize-tiles"
+            accessibilityRole="button"
+            accessibilityLabel="Customize tiles"
+            onPress={handleCustomizeTiles}
+            style={[
+              minTouchTarget,
+              { flexDirection: "row", alignItems: "center", gap: 4 },
+            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Sliders size={14} color={colors["muted-foreground"]} />
+            <Text className="text-muted-foreground text-xs font-medium">
+              Customize tiles
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Up Next training card (NP-106) */}
         <UpNextCard
           workout={upcomingWorkout}
@@ -430,24 +478,26 @@ export function DashboardScreen({
           onPressWorkout={onStartWorkout}
         />
 
-        {/* The way into the calendar — a hidden route in the (tabs) tree, so
-            the month view has no entry point of its own. */}
-        <Button
-          testID="dashboard-open-calendar"
-          variant="secondary"
-          accessibilityLabel="Calendar"
-          onPress={onOpenCalendar}
-        >
-          Calendar
-        </Button>
-
-        <Button
-          testID="dashboard-open-checkin"
-          variant="secondary"
-          onPress={() => setOpen(true)}
-        >
-          Check in
-        </Button>
+        {/* Progress Chart: Weight | BMI | Mood (NP-211) */}
+        <ProgressChart
+          weightData={progressData?.weightData}
+          bmiData={progressData?.bmiData}
+          bodyFatData={progressData?.bodyFatData}
+          leanMassData={progressData?.leanMassData}
+          moodData={progressData?.moodData}
+          fitnessGoal={fitnessGoal ?? statData?.fitnessGoal}
+          targetWeight={
+            targetWeight ??
+            (statData?.targetWeightKg
+              ? Math.round(
+                  statData.targetWeightKg *
+                    (weightUnit === "kg" ? 1 : 2.20462) *
+                    10,
+                ) / 10
+              : undefined)
+          }
+          weightUnit={weightUnit}
+        />
 
         {/* The in-app footer. Apple wants the privacy policy reachable from
             inside the app, not only from a marketing page a member installing to

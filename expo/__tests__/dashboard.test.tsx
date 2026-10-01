@@ -65,6 +65,7 @@ const DEFAULT_CURRENT_WORKOUT: Record<string, unknown> = {
 
 /** Swapped by the navigation tests to change the day label / phase. */
 let currentWorkout: Record<string, unknown> = DEFAULT_CURRENT_WORKOUT;
+let checkinDue = false;
 
 function wireApiFetch() {
   mockApiFetch.mockImplementation((path: string) => {
@@ -103,8 +104,8 @@ function wireApiFetch() {
     }
     if (path.startsWith("/api/checkin")) {
       return Promise.resolve({
-        due: false,
-        reason: "complete",
+        due: checkinDue,
+        reason: checkinDue ? "time" : "complete",
         daysSinceMood: 0,
         daysSinceWeight: 0,
         lastWeight: null,
@@ -154,6 +155,7 @@ describe("DashboardRoute", () => {
     mockPush.mockReset();
     mockNetInfoFetch.mockResolvedValue(ONLINE);
     currentWorkout = DEFAULT_CURRENT_WORKOUT;
+    checkinDue = false;
     wireApiFetch();
   });
 
@@ -235,14 +237,15 @@ describe("DashboardRoute", () => {
   });
 
   it("check-in fires POST /api/mood + /api/weight with bodies+baseUrl and refreshes the streak", async () => {
+    checkinDue = true;
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
     const streakCallsBefore = callsTo("/api/streak").length;
 
-    // Open the check-in modal, pick a mood, enter a weight, submit.
-    fireEvent.press(getByTestId("dashboard-open-checkin"));
+    // Pick a mood, enter a weight, submit.
     fireEvent.press(getByTestId("dashboard-checkin-modal-mood-4"));
     fireEvent.changeText(getByTestId("dashboard-checkin-modal-weight"), "183");
     await act(async () => {
@@ -294,9 +297,11 @@ describe("DashboardRoute", () => {
   // the airplane-mode test below). A 400 is the server's final answer, so
   // retrying cannot help and the modal must say so.
   it("surfaces an error in the check-in modal when the server REFUSES the write", async () => {
+    checkinDue = true;
     const { getByTestId, queryByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
     // Make the mood POST fail; keep the GETs succeeding.
@@ -319,7 +324,6 @@ describe("DashboardRoute", () => {
       return Promise.resolve({});
     });
 
-    fireEvent.press(getByTestId("dashboard-open-checkin"));
     fireEvent.press(getByTestId("dashboard-checkin-modal-mood-4"));
     await act(async () => {
       fireEvent.press(getByTestId("dashboard-checkin-modal-submit"));
@@ -334,13 +338,14 @@ describe("DashboardRoute", () => {
 
   // NP-190's first acceptance: the check-in a member makes on a plane.
   it("a check-in made in airplane mode is kept and replayed on its own day", async () => {
+    checkinDue = true;
     mockNetInfoFetch.mockResolvedValue(AIRPLANE_MODE);
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-open-checkin"));
     fireEvent.press(getByTestId("dashboard-checkin-modal-mood-4"));
     fireEvent.changeText(getByTestId("dashboard-checkin-modal-weight"), "183");
     await act(async () => {
@@ -374,12 +379,13 @@ describe("DashboardRoute", () => {
   });
 
   it("check-in logs mood only when weight is left blank", async () => {
+    checkinDue = true;
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("dashboard-greeting")).toBeTruthy();
+      expect(getByTestId("dashboard-checkin-modal-mood-row")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-open-checkin"));
     fireEvent.press(getByTestId("dashboard-checkin-modal-mood-3"));
     await act(async () => {
       fireEvent.press(getByTestId("dashboard-checkin-modal-submit"));
@@ -442,10 +448,10 @@ describe("DashboardRoute navigation", () => {
   it("Calendar opens the calendar screen", async () => {
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-open-calendar")).toBeTruthy();
+      expect(getByTestId("up-next-calendar")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-open-calendar"));
+    fireEvent.press(getByTestId("up-next-calendar"));
 
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/calendar");
   });
@@ -720,7 +726,7 @@ describe("DashboardRoute navigation", () => {
           });
         }
         if (path.startsWith("/api/checkin")) {
-          return Promise.resolve({ due: false, reason: "complete" });
+          return Promise.resolve({ due: false, reason: "complete", todaysMood: 4 });
         }
         if (path.startsWith("/api/dashboard/layout")) {
           return Promise.resolve({

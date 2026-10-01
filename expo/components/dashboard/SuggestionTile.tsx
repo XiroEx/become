@@ -241,13 +241,14 @@ export function SuggestionTile({
   // We wrap StatTile with an outer container that carries testID={currentTileId}
   // so tests expecting getByTestId("tile-smart") will find this element.
   return (
-    <View testID={currentTileId} style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <StatTile
         tile={rotatedTile}
         statData={statData}
         onOpenCalendar={onOpenCalendar}
         onOpenNutrition={onOpenNutrition}
         onOpenCheckIn={onOpenCheckIn}
+        testID={currentTileId}
       />
     </View>
   );

@@ -205,89 +205,115 @@ export function TileGrid({
     return null;
   }
 
+  const availableSuggestions = (tilesData?.suggestions ?? []).filter(
+    (s) => !s.placement || s.placement === "dashboard",
+  );
+
   return (
-    <View
-      testID={testID ?? "tilegrid"}
-      accessibilityRole="none"
-      accessibilityLabel="Dashboard tiles"
-      onLayout={(e) => setMeasuredWidth(e.nativeEvent.layout.width)}
-      style={[styles.gridContainer, style]}
-    >
-      {layout.map((tile, idx) => {
-        const isWide = tile.size === "2x1";
-        const cellWidth =
-          isWide ? "100%" : col1Width > 0 ? col1Width : "48.5%";
-        const key = `${tile.kind}-${tile.id}-${idx}`;
+    <View style={style}>
+      <View
+        testID={testID ?? "tilegrid"}
+        accessibilityRole="none"
+        accessibilityLabel="Dashboard tiles"
+        onLayout={(e) => setMeasuredWidth(e.nativeEvent.layout.width)}
+        style={styles.gridContainer}
+      >
+        {layout.map((tile, idx) => {
+          const isWide = tile.size === "2x1";
+          const cellWidth =
+            isWide ? "100%" : col1Width > 0 ? col1Width : "48.5%";
+          const key = `${tile.kind}-${tile.id}-${idx}`;
 
-        let tileContent: React.ReactNode = null;
+          let tileContent: React.ReactNode = null;
 
-        if (tile.kind === "stat" && isActionTileId(tile.id)) {
-          tileContent = (
-            <StatActionTile
-              tile={tile}
-              onOpenMind={onOpenMind}
-              onOpenNutrition={onOpenNutrition}
-              onOpenWorkoutNow={onOpenWorkoutNow}
-            />
-          );
-        } else if (tile.kind === "stat" && tile.id === "streak") {
-          tileContent = (
-            <StreakTile
-              tile={tile}
-              statData={statData}
-              size={tile.size}
-              onOpenStreaks={onOpenStreaks}
-            />
-          );
-        } else if (tile.kind === "stat") {
-          tileContent = (
-            <StatTile
-              tile={tile}
-              statData={statData}
-              onOpenCalendar={onOpenCalendar}
-              onOpenNutrition={onOpenNutrition}
-              onOpenCheckIn={onOpenCheckIn}
-              onOpenWeight={onOpenWeight}
-              onOpenMood={onOpenMood}
-              onMoodChange={onMoodChange}
-              onOpenSettings={onOpenSettings}
-              onOpenStreaks={onOpenStreaks}
-            />
-          );
-        } else if (tile.kind === "smart-rotating") {
-          tileContent = (
-            <SuggestionTile
-              tile={tile}
-              tilesData={tilesData}
-              statData={statData}
-              onDismissSuggestion={onDismissSuggestion}
-              onOpenCalendar={onOpenCalendar}
-              onOpenNutrition={onOpenNutrition}
-              onOpenCheckIn={onOpenCheckIn}
-            />
-          );
-        } else {
-          tileContent = <PlaceholderTile tile={tile} />;
-        }
+          if (tile.kind === "stat" && isActionTileId(tile.id)) {
+            tileContent = (
+              <StatActionTile
+                tile={tile}
+                onOpenMind={onOpenMind}
+                onOpenNutrition={onOpenNutrition}
+                onOpenWorkoutNow={onOpenWorkoutNow}
+              />
+            );
+          } else if (tile.kind === "stat" && tile.id === "streak") {
+            tileContent = (
+              <StreakTile
+                tile={tile}
+                statData={statData}
+                size={tile.size}
+                onOpenStreaks={onOpenStreaks}
+              />
+            );
+          } else if (tile.kind === "stat") {
+            tileContent = (
+              <StatTile
+                tile={tile}
+                statData={statData}
+                onOpenCalendar={onOpenCalendar}
+                onOpenNutrition={onOpenNutrition}
+                onOpenCheckIn={onOpenCheckIn}
+                onOpenWeight={onOpenWeight}
+                onOpenMood={onOpenMood}
+                onMoodChange={onMoodChange}
+                onOpenSettings={onOpenSettings}
+                onOpenStreaks={onOpenStreaks}
+              />
+            );
+          } else if (tile.kind === "smart-rotating") {
+            tileContent = (
+              <SuggestionTile
+                tile={tile}
+                statData={statData}
+                onOpenCalendar={onOpenCalendar}
+                onOpenNutrition={onOpenNutrition}
+                onOpenCheckIn={onOpenCheckIn}
+              />
+            );
+          } else {
+            tileContent = <PlaceholderTile tile={tile} />;
+          }
 
-        return (
-          <View
-            key={key}
-            style={[
-              styles.cell,
-              isWide ? styles.cell2x1 : styles.cell1x1,
-              { width: cellWidth },
-            ]}
-          >
-            <TileErrorBoundary
-              label={tile.id}
-              testID={`tile-error-${tile.id}`}
+          return (
+            <View
+              key={key}
+              style={[
+                styles.cell,
+                isWide ? styles.cell2x1 : styles.cell1x1,
+                { width: cellWidth },
+              ]}
             >
-              {tileContent}
-            </TileErrorBoundary>
-          </View>
-        );
-      })}
+              <TileErrorBoundary
+                label={tile.id}
+                testID={`tile-error-${tile.id}`}
+              >
+                {tileContent}
+              </TileErrorBoundary>
+            </View>
+          );
+        })}
+      </View>
+
+      {/* Suggestion banners live OUTSIDE the tile grid so they don't take a stat tile's slot */}
+      {availableSuggestions.length > 0 && (
+        <View testID="dashboard-suggestions" style={styles.suggestionsContainer}>
+          {availableSuggestions.map((s) => (
+            <View key={`suggestion-${s.id}`} style={styles.suggestionItem}>
+              <SuggestionTile
+                tile={{
+                  id: `suggestion-${s.id}`,
+                  kind: "smart-rotating",
+                  size: "2x1",
+                }}
+                suggestion={s}
+                onDismissSuggestion={onDismissSuggestion}
+                onOpenCalendar={onOpenCalendar}
+                onOpenNutrition={onOpenNutrition}
+                onOpenCheckIn={onOpenCheckIn}
+              />
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -304,6 +330,13 @@ const styles = StyleSheet.create({
   },
   cell1x1: {},
   cell2x1: {},
+  suggestionsContainer: {
+    marginTop: 4,
+    gap: 8,
+  },
+  suggestionItem: {
+    width: "100%",
+  },
 });
 
 export default TileGrid;

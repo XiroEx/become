@@ -148,7 +148,7 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
     const rendered = await renderShell("/(tabs)/dashboard");
     expect(await screen.findByTestId("dashboard-screen")).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId("dashboard-open-calendar"));
+    fireEvent.press(await screen.findByTestId("up-next-calendar"));
 
     expect(
       await screen.findByTestId(screenId("(app)/(tabs)/calendar/index")),

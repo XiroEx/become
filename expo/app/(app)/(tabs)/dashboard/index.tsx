@@ -405,11 +405,12 @@ export default function DashboardRoute() {
   const nextMilestone = streaks.data?.overall?.nextMilestone ?? null;
   const activityToday = streaks.data?.overall?.activeToday ?? false;
 
-  const todaysMood =
-    mind.data?.todayMood ??
-    (progress.data?.moodData && progress.data.moodData.length > 0
-      ? progress.data.moodData[progress.data.moodData.length - 1]?.value
-      : null);
+  // Only today's mood counts (NP-211). When today is unset, web shows "Set"
+  // rather than falling back to historical entries in progress.data.moodData.
+  const todaysMood: MoodLevel | null =
+    (checkin.data?.todaysMood as MoodLevel | null | undefined) ??
+    (mind.data?.todayMood as MoodLevel | null | undefined) ??
+    null;
   const recentMoods = progress.data?.moodData?.map((m) => m.value) ?? [];
 
   const thisWeekWorkouts =
@@ -618,6 +619,12 @@ export default function DashboardRoute() {
       onOpenWorkoutNow={onOpenWorkoutNow}
       workoutNowOpen={workoutNowOpen}
       onWorkoutNowOpenChange={setWorkoutNowOpen}
+      progressData={progress.data ?? null}
+      fitnessGoal={fitnessGoal}
+      targetWeight={targetWeight}
+      onOpenCustomizeTiles={() => {
+        // TODO: NP-157 owns native dashboard tile customizer
+      }}
       onOpenSettings={() => {
         router.push("/settings");
       }}
