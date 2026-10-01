@@ -21,6 +21,8 @@ import {
   AI_CONSENT_SENDS,
   AI_CONSENT_SENDS_INTRO,
   AI_CONSENT_STATEMENT,
+  AI_PROVIDER,
+  AI_PROVIDER_ROUTE,
   CONSENT_STATEMENT,
   HEALTH_DISCLAIMER_SHORT,
   LEGAL_MINIMUM_AGE,
@@ -50,6 +52,10 @@ export interface ConsentSheetProps {
   aiChecked?: boolean;
   /** Callback when AI checkbox toggles. */
   onAiCheckedChange?: (checked: boolean) => void;
+  /** Custom AI provider name from refusal/status response (e.g. "Google Gemini"). */
+  provider?: string;
+  /** Callback when modal is dismissed/closed (Android back or cancel). */
+  onClose?: () => void;
   /** Browser launcher for in-app browser links (pluggable for tests). */
   launcher?: BrowserLauncher;
   /** Test ID for the outer container. Default: 'consent-gate'. */
@@ -75,15 +81,27 @@ export function ConsentSheet({
   showAi = true,
   aiChecked = false,
   onAiCheckedChange,
+  provider,
+  onClose,
   launcher = defaultBrowserLauncher,
   testID = "consent-gate",
 }: ConsentSheetProps) {
   const { colors } = useThemeTokens();
   const reduceMotion = useReducedMotion();
 
+  const effectiveProvider = provider || AI_PROVIDER;
   const title = consentTitle(showTerms);
-  const standfirst = consentStandfirst(showTerms);
+  const standfirst = showTerms
+    ? consentStandfirst(showTerms)
+    : `Become uses AI for some of its work, and that means sending what you submit to ${effectiveProvider}. We will not do that until you say we can.`;
   const buttonLabel = consentButtonLabel({ busy, showTerms, aiChecked });
+
+  const aiStatement = provider
+    ? `I agree to share my meal photos, workout inputs, Mind session reflections and coach chat text with ${effectiveProvider}.`
+    : AI_CONSENT_STATEMENT;
+  const sendsIntro = provider
+    ? `What gets sent to ${effectiveProvider}, through ${AI_PROVIDER_ROUTE}:`
+    : AI_CONSENT_SENDS_INTRO;
 
   const onOpenLink = useCallback(
     (path: string) => {
@@ -97,7 +115,7 @@ export function ConsentSheet({
     <RNModal
       visible={visible}
       onRequestClose={() => {
-        // Non-dismissable: blocking gate
+        onClose?.();
       }}
       transparent={false}
       animationType={modalAnimation("slide", reduceMotion)}
@@ -201,7 +219,7 @@ export function ConsentSheet({
                 testID="ai-consent-checkbox"
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: aiChecked }}
-                accessibilityLabel={AI_CONSENT_STATEMENT}
+                accessibilityLabel={aiStatement}
                 onPress={() => onAiCheckedChange?.(!aiChecked)}
                 style={{ minHeight: 44 }}
                 className="mt-2 flex-row items-start gap-3"
@@ -222,11 +240,11 @@ export function ConsentSheet({
                   )}
                 </View>
                 <Text className="text-foreground text-sm leading-relaxed flex-1">
-                  {AI_CONSENT_STATEMENT}
+                  {aiStatement}
                 </Text>
               </Pressable>
               <Text className="mt-2.5 text-muted-foreground text-xs font-medium">
-                {AI_CONSENT_SENDS_INTRO}
+                {sendsIntro}
               </Text>
               <View className="mt-1.5 pl-2 space-y-1">
                 {AI_CONSENT_SENDS.map((item) => (
