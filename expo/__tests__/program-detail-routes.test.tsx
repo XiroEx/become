@@ -2,10 +2,15 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
+const mockOpenWebSignedIn = jest.fn();
 let mockParams: Record<string, string | undefined> = {};
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
   useLocalSearchParams: () => mockParams,
+}));
+
+jest.mock("@/lib/web/openWebSignedIn", () => ({
+  openWebSignedIn: (path: string) => mockOpenWebSignedIn(path),
 }));
 
 const mockToken = "test-jwt";
@@ -294,6 +299,49 @@ describe("ProgramDetailRoute", () => {
       expect(queryByTestId("program-detail-edit-in-browser")).toBeNull();
     });
     expect(queryByText("Edit in browser")).toBeNull();
+  });
+
+  it("(id: e015c9b9) Custom owned program shows Edit on web and opens /dashboard/programs/{id}/edit", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") {
+        return Promise.resolve({
+          ...PROGRAM,
+          isCustom: true,
+          isOwner: true,
+        });
+      }
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { getByTestId } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("program-detail-edit")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("program-detail-edit"));
+    expect(mockOpenWebSignedIn).toHaveBeenCalledWith(
+      "/dashboard/programs/prog-1/edit",
+    );
+  });
+
+  it("Custom program shared by trainer does not show Edit button", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") {
+        return Promise.resolve({
+          ...PROGRAM,
+          isCustom: true,
+          isOwner: false,
+        });
+      }
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { queryByTestId } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-edit")).toBeNull();
+    });
   });
 });
 

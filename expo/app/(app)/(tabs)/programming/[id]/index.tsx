@@ -37,13 +37,15 @@ import { enrollProgram, suggestStartDate } from "@/lib/programs/enrollment";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
+import { customProgramEditPath } from "@/lib/programs/customPrograms";
 
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const fetchOpts = useMemo(
     () => ({
@@ -58,6 +60,17 @@ export default function ProgramDetailRoute() {
     ProgramDetailResponseSchema,
     fetchOpts,
   );
+
+  const isCustomProgram = Boolean(data?.isCustom);
+  const isOwner = Boolean(
+    isCustomProgram &&
+      (data?.isOwner ?? (data?.createdBy ? data.createdBy === user?._id : true)),
+  );
+
+  const onEdit = useCallback(() => {
+    if (!id) return;
+    void openWebSignedIn(customProgramEditPath(id));
+  }, [id]);
 
   // Active-programs read kept here so the enroll/start-date/abandon mutations
   // can re-pull it on success (no shared query cache yet).
@@ -485,6 +498,7 @@ export default function ProgramDetailRoute() {
         onShift={onShift}
         isSaved={isSaved}
         onToggleSave={onToggleSave}
+        onEdit={isOwner ? onEdit : undefined}
         actionPending={actionPending}
       />
       <EnrollmentModal
