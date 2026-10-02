@@ -130,7 +130,13 @@ export default function ToolIntroGate({
           ? "bg-violet-500"
           : system === "mission"
             ? "bg-blue-500"
-            : "bg-primary";
+            : system === "discipline"
+              ? "bg-red-500"
+              : system === "anti-sabotage"
+                ? "bg-orange-500"
+                : system === "social"
+                  ? "bg-pink-500"
+                  : "bg-primary";
 
     return (
       <View testID="mind-intro-gate-intro" className="flex-1">
