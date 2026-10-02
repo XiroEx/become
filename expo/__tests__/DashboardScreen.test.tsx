@@ -238,4 +238,56 @@ describe("DashboardScreen", () => {
     expect(getByText("Current Weight (kg)")).toBeTruthy();
     expect(getByTestId("checkin-goal-line")).toBeTruthy();
   });
+
+  it("renders nutrition card below tile grid with calories, macros, water, and trend", () => {
+    const onOpenNutrition = jest.fn();
+    const onQuickAdd = jest.fn();
+    const nutritionData = {
+      calories: { consumed: 1650, goal: 2200 },
+      protein: { current: 140, goal: 160 },
+      carbs: { current: 180, goal: 220 },
+      fats: { current: 55, goal: 70 },
+      water: { current: 64, goal: 96 },
+    };
+    const nutritionTrend = {
+      loggedDays: 5,
+      totalDays: 7,
+      proteinHitDays: 3,
+      avgCalories: 2100,
+      calorieRead: "near" as const,
+      line: "Logged 5 of 7 days · protein hit 3 · avg 2,100 cal (on target)",
+    };
+
+    const { getByTestId, getByText } = render(
+      <DashboardScreen
+        {...baseProps}
+        nutritionData={nutritionData}
+        nutritionTrend={nutritionTrend}
+        onOpenNutrition={onOpenNutrition}
+        onQuickAdd={onQuickAdd}
+      />,
+    );
+
+    // Nutrition card rendered
+    expect(getByTestId("dashboard-nutrition-card")).toBeTruthy();
+    expect(getByTestId("nutrition-card-title")).toBeTruthy();
+    expect(getByTestId("nutrition-card-calories-val").props.children).toBe(550);
+    expect(getByTestId("nutrition-card-calories-label").props.children).toBe("left");
+    expect(getByTestId("nutrition-card-protein-meta").props.children).toEqual([140, "g / ", 160, "g"]);
+    expect(getByTestId("nutrition-card-carbs-meta").props.children).toEqual([180, "g / ", 220, "g"]);
+    expect(getByTestId("nutrition-card-fats-meta").props.children).toEqual([55, "g / ", 70, "g"]);
+    expect(getByTestId("nutrition-card-water-meta").props.children).toEqual([64, "/", 96, " oz"]);
+
+    // Trend sentence rendered with lowercase "logged"
+    expect(getByTestId("nutrition-trend")).toBeTruthy();
+    expect(getByText(/logged 5 of 7 days · protein hit 3/i)).toBeTruthy();
+
+    // Log meal opens nutrition
+    fireEvent.press(getByTestId("nutrition-card-log-meal"));
+    expect(onOpenNutrition).toHaveBeenCalled();
+
+    // Quick add opens quick-add sheet
+    fireEvent.press(getByTestId("nutrition-card-quick-add"));
+    expect(onQuickAdd).toHaveBeenCalled();
+  });
 });

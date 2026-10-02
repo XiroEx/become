@@ -24,6 +24,7 @@ import * as webMealPlanTimes from '../../lib/mealPlanTimes'
 import * as webMealPlanDates from '../../lib/mealPlanDates'
 import * as webLogTagMatch from '../../lib/nutrition/logTagMatch'
 import * as webGoalLine from '../../lib/nutrition/goalLine'
+import * as webNutritionTrend from '../../lib/dashboard/nutritionTrend'
 
 // Native copies in @become/core
 import * as coreUnits from '../../../shared/core/src/units'
@@ -36,6 +37,7 @@ import * as coreMealPlanTimes from '../../../shared/core/src/mealPlanTimes'
 import * as coreMealPlanDates from '../../../shared/core/src/mealPlanDates'
 import * as coreLogTagMatch from '../../../shared/core/src/nutrition/logTagMatch'
 import * as coreGoalLine from '../../../shared/core/src/nutrition/goalLine'
+import * as coreNutritionTrend from '../../../shared/core/src/nutrition/nutritionTrend'
 
 // ── Fixture foods ─────────────────────────────────────────────────────────────
 
@@ -316,6 +318,48 @@ describe('native parity with web nutrition modules (e015c7fa)', () => {
       assert.equal(coreMealPlanDates.plannedDateKey(date), webMealPlanDates.plannedDateKey(date))
       assert.deepEqual(coreMealPlanDates.localDateFromPlannedIso(iso), webMealPlanDates.localDateFromPlannedIso(iso))
       assert.equal(coreMealPlanDates.addDaysToKey('2026-09-30', 3), webMealPlanDates.addDaysToKey('2026-09-30', 3))
+    })
+
+    it('returns identical nutrition trend descriptions (NP-149 parity e015ca09)', () => {
+      const day = (date: string, calories: number, protein: number, hasData = true) => ({
+        date,
+        calories,
+        protein,
+        hasData,
+        mealCount: hasData ? 2 : 0,
+      })
+      const testCases = [
+        {
+          days: [
+            day('08-11', 2200, 160),
+            day('08-12', 2400, 140),
+            day('08-13', 0, 0, false),
+            day('08-14', 2100, 155),
+            day('08-15', 2600, 120),
+            day('08-16', 0, 0, false),
+            day('08-17', 2300, 150),
+          ],
+          goals: { calories: 2300, protein: 150 },
+        },
+        {
+          days: [day('08-17', 0, 0, false)],
+          goals: { calories: 2300, protein: 150 },
+        },
+        {
+          days: [{ date: '08-17', calories: 0, protein: 0, hasData: true, mealCount: 0 }],
+          goals: { calories: 2000, protein: 140 },
+        },
+        {
+          days: [day('a', 1500, 100), day('b', 3000, 120)],
+          goals: { calories: 2200, protein: 0 },
+        },
+      ]
+      for (const tc of testCases) {
+        assert.deepEqual(
+          coreNutritionTrend.describeNutritionTrend(tc.days, tc.goals),
+          webNutritionTrend.describeNutritionTrend(tc.days, tc.goals)
+        )
+      }
     })
   })
 })

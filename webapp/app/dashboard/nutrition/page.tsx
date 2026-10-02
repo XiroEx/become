@@ -138,6 +138,7 @@ function NutritionPageInner() {
   }> | null>(null)
   const [snapScanId, setSnapScanId] = useState<string | null>(null)
   const handledScanRef = useRef<string | null>(null)
+  const handledQuickAddRef = useRef(false)
   // Hidden inputs so "Snap" (camera) and "Upload" (library) are distinct, direct
   // actions from both the dash and the search hub — each opens the right picker
   // within the user gesture, then drops straight into the plate compose step.
@@ -166,7 +167,7 @@ function NutritionPageInner() {
       console.error('[nutrition] image capture failed', err)
     }
   }, [])
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(() => searchParams?.get('quickAdd') === 'true')
   const [editEntry, setEditEntry] = useState<{
     logId: string
     item: IMealItem & { _id?: string }
@@ -465,6 +466,15 @@ function NutritionPageInner() {
       } catch { /* ignore */ }
     })()
   }, [searchParams, getHeaders])
+
+  // Re-open quick-add sheet when arriving with ?quickAdd=true (NP-149)
+  useEffect(() => {
+    if (searchParams?.get('quickAdd') === 'true' && !handledQuickAddRef.current) {
+      handledQuickAddRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- route param triggers initial modal opening
+      setQuickAddOpen(true)
+    }
+  }, [searchParams])
 
   // ── The day, in the order it happened ─────────────────────────────────────────
   //

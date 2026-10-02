@@ -108,6 +108,11 @@ export const MODULE_MAPPINGS = [
           "import type { QuantityPickerVariant } from './types'"
         ),
   },
+  {
+    source: 'webapp/lib/dashboard/nutritionTrend.ts',
+    target: 'shared/core/src/nutrition/nutritionTrend.ts',
+    rewrite: (content) => content,
+  },
 ];
 
 export function vendorNutrition() {

@@ -101,7 +101,7 @@ export default function DashboardRoute() {
     fetchOpts,
   );
   const nutrition = useFetch(
-    ready ? "/api/nutrition/log" : null,
+    ready ? withTz("/api/nutrition/log") : null,
     NutritionLogDayResponseSchema,
     fetchOpts,
   );
@@ -624,8 +624,8 @@ export default function DashboardRoute() {
     const goalsData = nutrition.data.goals || {};
     const waterFallback =
       typeof nutrition.data.water === "object"
-        ? nutrition.data.water?.goal ?? 96
-        : 96;
+        ? nutrition.data.water?.goal ?? goalsData.waterGoal ?? 96
+        : (goalsData.waterGoal ?? 96);
     return {
       calories: {
         consumed: totals.calories ?? caloriesConsumed,
@@ -653,10 +653,10 @@ export default function DashboardRoute() {
   const nutritionTrend = useMemo(() => {
     if (!nutritionSummary.data?.days) return null;
     return describeNutritionTrend(nutritionSummary.data.days, {
-      calories: caloriesGoal,
-      protein: nutrition.data?.goals?.protein ?? 150,
+      calories: nutrition.data?.goals?.calories ?? 0,
+      protein: nutrition.data?.goals?.protein ?? 0,
     });
-  }, [nutritionSummary.data, caloriesGoal, nutrition.data]);
+  }, [nutritionSummary.data, nutrition.data]);
 
   const currentProgram = progress.data?.currentProgram ?? null;
 

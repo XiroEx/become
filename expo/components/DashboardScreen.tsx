@@ -587,6 +587,7 @@ export function DashboardScreen({
             water={nutritionData.water}
             trend={nutritionTrend}
             onOpenNutrition={onOpenNutrition}
+            onLogMeal={onOpenNutrition}
             onQuickAdd={onQuickAdd}
           />
         ) : null}

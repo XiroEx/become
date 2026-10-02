@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -136,6 +136,11 @@
       "types": "./dist/types/nutrition/plateReview.d.ts",
       "import": "./dist/esm/nutrition/plateReview.js",
       "require": "./dist/cjs/nutrition/plateReview.js"
+    },
+    "./nutrition/nutritionTrend": {
+      "types": "./dist/types/nutrition/nutritionTrend.d.ts",
+      "import": "./dist/esm/nutrition/nutritionTrend.js",
+      "require": "./dist/cjs/nutrition/nutritionTrend.js"
     },
     "./nutrition/types": {
       "types": "./dist/types/nutrition/types.d.ts",

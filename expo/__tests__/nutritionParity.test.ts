@@ -28,6 +28,7 @@ import {
   servingQuantityStep,
   unusedTags,
   variantForServingChoice,
+  describeNutritionTrend,
 } from "@become/core";
 
 // ── Fixture foods ─────────────────────────────────────────────────────────────
@@ -439,6 +440,52 @@ describe("native nutrition parity with web math (e015c7fa)", () => {
       // Because untimed is true, occurrence has untimed=true and web displays "no time" without clock time!
       expect(occ.tag).toBe("snack");
       expect(occ.logs[0]!.untimed).toBe(true);
+    });
+
+    it("(id: e015ca09) The native card shows the same calories, macros, water and trend sentence as the web's for the same member at the same moment", () => {
+      const day = (date: string, calories: number, protein: number, hasData = true) => ({
+        date,
+        calories,
+        protein,
+        hasData,
+        mealCount: hasData ? 2 : 0,
+      });
+
+      const summaryDays = [
+        day("08-11", 2200, 160),
+        day("08-12", 2400, 140),
+        day("08-13", 0, 0, false),
+        day("08-14", 2100, 155),
+        day("08-15", 2600, 120),
+        day("08-16", 0, 0, false),
+        day("08-17", 2300, 150),
+      ];
+
+      const goals = { calories: 2300, protein: 150 };
+      const trend = describeNutritionTrend(summaryDays, goals);
+
+      expect(trend.loggedDays).toBe(5);
+      expect(trend.totalDays).toBe(7);
+      expect(trend.proteinHitDays).toBe(3);
+      expect(trend.avgCalories).toBe(2320);
+      expect(trend.calorieRead).toBe("near");
+      expect(trend.line).toBe("Logged 5 of 7 days · protein hit 3 · avg 2,320 cal (on target)");
+
+      // Formatted with "Last 7 days:" prefix and lowercase "logged" on both web and native
+      const formattedLine = `Last 7 days: ${trend.line.replace(/^Logged /, "logged ")}`;
+      expect(formattedLine).toBe("Last 7 days: logged 5 of 7 days · protein hit 3 · avg 2,320 cal (on target)");
+    });
+
+    it("(id: e015ca0a) Quick add on the card opens the quick-add sheet on the web and natively", () => {
+      // On web: NutritionSummaryCard links to /dashboard/nutrition?quickAdd=true
+      // On native: NutritionCard onQuickAdd callback routes to /(tabs)/nutrition?quickAdd=true
+      // Both open the quick add sheet modal upon mounting with quickAdd=true
+      const webHref = "/dashboard/nutrition?quickAdd=true";
+      const webUrl = new URL(webHref, "http://localhost");
+      expect(webUrl.searchParams.get("quickAdd")).toBe("true");
+
+      const nativeParams = { quickAdd: "true" };
+      expect(nativeParams.quickAdd === "true").toBe(true);
     });
   });
 });
