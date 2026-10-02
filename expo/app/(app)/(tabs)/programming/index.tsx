@@ -5,6 +5,7 @@ import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   CalendarDays,
+  Dumbbell,
   Heart,
   History,
   Search,
@@ -36,6 +37,10 @@ export default function ProgrammingIndexRoute() {
 
   const handleOpenBrowse = () => {
     router.push("/(tabs)/programming/browse");
+  };
+
+  const handleOpenMine = () => {
+    router.push("/(tabs)/programming/mine");
   };
 
   const handleWorkoutNow = () => {
@@ -127,6 +132,19 @@ export default function ProgrammingIndexRoute() {
             <Sparkles size={14} color={colors.accent} />
             <Text className="text-foreground text-xs font-semibold">
               Browse
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="workout-open-mine"
+            accessibilityRole="button"
+            accessibilityLabel="My Programs"
+            onPress={handleOpenMine}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+          >
+            <Dumbbell size={14} color={colors.primary} />
+            <Text className="text-foreground text-xs font-semibold">
+              My Programs
             </Text>
           </Pressable>
 
