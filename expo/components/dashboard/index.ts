@@ -13,3 +13,4 @@ export * from "./CurrentProgramCard";
 export * from "./MindsetCard";
 export * from "./PlanCard";
 export * from "./MoodGatewayBanner";
+export * from "./CustomizeDashboardModal";
