@@ -49,9 +49,14 @@ export function isPrecomposing(): boolean {
  * Compose + cache the AI session if the 8h cooldown has lapsed. No-op otherwise.
  * Stamped before dispatch so a slow or failed run cannot re-fire.
  * Never raises consent prompt or upgrade sheet (silent: true).
+ *
+ * `seedOverride` exists for tests: production callers omit it and get a fresh
+ * random seed per composition. Tests pass an explicit seed so the session shape
+ * (and therefore the mock's validation) is deterministic.
  */
 export async function precomposeMindSession(opts?: {
   force?: boolean;
+  seed?: number;
 }): Promise<MindSessionPlan | null> {
   if (inFlight) return null;
 
@@ -146,7 +151,7 @@ export async function precomposeMindSession(opts?: {
       recentKinds,
       pathFocus: getPathSession(p.mainSessionCount ?? 0),
       dayOfYear: dayOfYear(new Date(now)),
-      seed: Math.floor(Math.random() * 1_000_000),
+      seed: opts?.seed ?? Math.floor(Math.random() * 1_000_000),
       now,
       lastBreathAt,
     };

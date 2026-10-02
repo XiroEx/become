@@ -240,6 +240,46 @@ jobs:
       - name: Unit tests
         run: npx jest --ci --maxWorkers=2
 
+      # NP-213: the Mind precompose test used to build a random session shape
+      # that sometimes failed its own mock's validation, so unrelated PRs went
+      # red at random. It is now seeded — and this loop proves it by running
+      # the file 20 times in a row. Deterministic tests pass 20/20; a flake
+      # cannot hide behind a single green run.
+      - name: Mind precompose determinism (20 runs)
+        run: |
+          for i in $(seq 1 20); do
+            echo "--- mindPrecompose run $i/20 ---"
+            npx jest --ci --maxWorkers=2 __tests__/mindPrecomposeNP102.test.tsx || exit 1
+          done
+
+      # No other test file in expo/ may use Math.random without a seed: an
+      # unseeded Math.random in a test is how this flake happened. Production
+      # code (lib/, components/, app/) is excluded — runtime randomness there
+      # is legitimate; only tests must be deterministic. The NP-102 file itself
+      # stubs Math.random to a fixed value as a belt-and-suspenders guard (all
+      # its cases also pass explicit seeds), so it is allow-listed here.
+      # NOTE: no `|| true` anywhere in this step — the `verify` job's
+      # `nativeJobs.test.ts` guard ("must not swallow an exit code") fails the
+      # PR on it. grep exits 1 on no-match, so capture the status explicitly
+      # and treat 1 as clean instead of masking it.
+      - name: No unseeded Math.random in expo tests
+        run: |
+          set +e
+          grep -rn 'Math\.random' __tests__ --include='*.test.*' --exclude='mindPrecomposeNP102.test.tsx' > "$RUNNER_TEMP/math-random-hits.txt" 2>/dev/null
+          grep_status=$?
+          set -e
+          if [ "$grep_status" -eq 1 ]; then
+            echo "No unseeded Math.random in expo tests."
+            exit 0
+          fi
+          if [ "$grep_status" -ne 0 ]; then
+            echo "::error::grep failed while scanning expo tests for Math.random (exit $grep_status)"
+            exit 1
+          fi
+          echo "::error::Unseeded Math.random in expo tests (seed it or use explicit fixtures):"
+          cat "$RUNNER_TEMP/math-random-hits.txt"
+          exit 1
+
       # The version-drift check Expo does at `expo start`, which CI never runs:
       # it fails when a dependency is pinned outside the range the installed SDK
       # supports. That is a class of break the typecheck cannot see, and the one
