@@ -32,15 +32,18 @@ import {
   CHAPTERS,
   composeSession,
   dayOfYear,
+  findProtocol,
   getPathSession,
   getUnlockedSystems,
   isMoodLevel,
   seedStateForMood,
   shouldAutoStartMindSession,
+  suggestActions,
   syntheticGate,
   type MindSessionPlan,
   type MoveKind,
   type SessionContext,
+  type SuggestedAction,
   type TodayMood,
 } from "@become/core";
 import { Text } from "@/components/Text";
@@ -56,8 +59,14 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes, useLocalDay } from "@/lib/time/localDay";
 import {
   invalidateMindSession,
+  invalidateMindSuggestions,
+  readMindPlanCache,
+  readMindSuggestionsCache,
   warmMindSession,
+  writeMindSuggestionsCache,
 } from "@/lib/mind/sessionCache";
+import { precomposeMindSession } from "@/lib/mind/precompose";
+import { runAiTask } from "@/lib/ai/runClient";
 
 export interface MindRouteProps {
   testID?: string;
@@ -153,6 +162,14 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
   const [playing, setPlaying] = useState(false);
   const [points, setPoints] = useState<ProgressMoodPoint[]>([]);
   const [loadedAt, setLoadedAt] = useState<number>(0);
+
+  // Pre-composed AI Mind plan (NP-102); null falls back to deterministic plan
+  const [aiPlan, setAiPlan] = useState<MindSessionPlan | null>(null);
+  // Post-session suggested next protocols (AI-picked with deterministic fallback)
+  const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(
+    null,
+  );
+  const [suggFetching, setSuggFetching] = useState(false);
 
   const autoStartedRef = useRef(false);
 
@@ -339,7 +356,120 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
     [sessionContext],
   );
 
-  const effectivePlan = resumable ? resumable.plan : plan;
+  // Adopt the AI-composed session if one is cached. Generation itself runs in
+  // the background on APP OPEN / foreground — we never block the Mind view on it.
+  // If the cache is empty (first run, or a workout/nutrition log invalidated it),
+  // kick a cooldown-gated, silent warm so the next view shows the fresh AI plan;
+  // meanwhile the deterministic plan renders instantly.
+  useEffect(() => {
+    if (!progress || aiPlan) return;
+    let cancelled = false;
+    void (async () => {
+      const cache = await readMindPlanCache();
+      if (cancelled) return;
+      if (cache?.plan) {
+        setAiPlan(cache.plan);
+        return;
+      }
+      await precomposeMindSession();
+      if (cancelled) return;
+      const c = await readMindPlanCache();
+      if (c?.plan) {
+        setAiPlan(c.plan);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [progress, aiPlan]);
+
+  const effectivePlan = resumable ? resumable.plan : (aiPlan ?? plan);
+
+  const deterministicSuggestions = useMemo(
+    () =>
+      progress
+        ? suggestActions({
+            state: recentState,
+            unlocked: progress.unlockedSystems,
+            seed: dayOfYear(loadedAt > 0 ? new Date(loadedAt) : undefined),
+          })
+        : [],
+    [progress, recentState, loadedAt],
+  );
+
+  // After a session (i.e. in the 20h cooldown), ask the AI to
+  // pick 3 next protocols from the user's state + tendencies. CACHED in
+  // AsyncStorage until the next session completes (max 12h) so revisiting the
+  // page doesn't refetch — settles to deterministic set if the AI fails.
+  // Silent run (never raises consent or gate).
+  useEffect(() => {
+    if (
+      !progress ||
+      (mainSessionAvailable ?? progress.mainSessionAvailable ?? true) ||
+      aiSuggestions
+    ) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const cached = await readMindSuggestionsCache();
+      if (cancelled) return;
+      if (cached) {
+        const valid = cached.filter((s) => findProtocol(s.system, s.id));
+        if (valid.length === 3) {
+          setAiSuggestions(valid);
+          return;
+        }
+      }
+      setSuggFetching(true);
+      try {
+        const r = await runAiTask(
+          "/api/ai/mind/suggestions",
+          {
+            context: {
+              state: recentState,
+              recentKinds,
+              unlockedSystems: progress.unlockedSystems,
+            },
+          },
+          { silent: true },
+        );
+        if (cancelled) return;
+        const raw =
+          r.ok && r.result
+            ? (
+                r.result as {
+                  suggestions?: {
+                    system: string;
+                    protocolId: string;
+                    reason?: string;
+                  }[];
+                }
+              ).suggestions
+            : null;
+        const valid = (Array.isArray(raw) ? raw : [])
+          .map((x) => {
+            const p = findProtocol(x.system, x.protocolId);
+            return p
+              ? { ...p, reason: (x.reason || "").trim() || p.blurb }
+              : null;
+          })
+          .filter((x): x is SuggestedAction => x !== null)
+          .slice(0, 3);
+        if (valid.length === 3) {
+          setAiSuggestions(valid);
+          await writeMindSuggestionsCache(valid);
+        }
+      } catch {
+        // Fall back to deterministic
+      } finally {
+        if (!cancelled) setSuggFetching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [progress, mainSessionAvailable, recentState, recentKinds, aiSuggestions]);
 
   const available = sessionLock
     ? false
@@ -363,6 +493,7 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
     }
     if (resumable) {
       setSessionSeed(resumable.seed);
+      setAiPlan(resumable.plan);
       setPlaying(true);
       return;
     }
@@ -702,6 +833,45 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
           </View>
         )}
 
+        {/* Suggested Next Moves during cooldown (NP-102) */}
+        {!available &&
+        (aiSuggestions ?? deterministicSuggestions).length > 0 ? (
+          <View testID="mind-suggested-actions" className="gap-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-foreground text-sm font-semibold uppercase tracking-wider">
+                Suggested Next Moves
+              </Text>
+              {suggFetching ? (
+                <Text
+                  testID="mind-sugg-loading"
+                  className="text-xs text-muted-foreground"
+                >
+                  tuning…
+                </Text>
+              ) : null}
+            </View>
+            {(aiSuggestions ?? deterministicSuggestions).map((action) => (
+              <View
+                key={`${action.system}-${action.id}`}
+                testID={`mind-suggested-action-${action.id}`}
+                className="rounded-2xl border border-border bg-card p-4 gap-1"
+              >
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-bold text-primary uppercase">
+                    {action.system}
+                  </Text>
+                  <Text className="text-xs text-muted-foreground">
+                    {action.title}
+                  </Text>
+                </View>
+                <Text className="text-sm text-foreground font-medium">
+                  {action.reason}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* Recent moods (kept below the card until NP-105 ships) */}
         <View testID="mind-recent-moods">
           <Text className="text-foreground font-semibold mb-2">
@@ -723,9 +893,12 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
           onExit={() => {
             setPlaying(false);
             setResumable(null);
+            setAiPlan(null);
+            setAiSuggestions(null);
             // Finished a session → drop the cache and warm a fresh one in the
             // background (non-blocking), so the next view shows a new AI session.
             void invalidateMindSession();
+            void invalidateMindSuggestions();
             void warmMindSession();
             void load();
           }}
