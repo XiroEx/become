@@ -71,7 +71,7 @@ export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
-  const params = useLocalSearchParams<{ date?: string }>();
+  const params = useLocalSearchParams<{ date?: string; quickAdd?: string }>();
 
   // Device-local day and timezone offset (NP-035).
   // Automatically rolls over on local midnight timer or app foregrounding.
@@ -408,7 +408,17 @@ export default function NutritionIndexRoute() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddOpen, setQuickAddOpen] = useState(
+    () => params.quickAdd === "true",
+  );
+
+  useEffect(() => {
+    if (params.quickAdd === "true") {
+      // Sync quickAdd query param from route when navigating from dashboard
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuickAddOpen(true);
+    }
+  }, [params.quickAdd]);
   const [submittingQuickAdd, setSubmittingQuickAdd] = useState(false);
 
   const handleEditGoals = useCallback(() => {

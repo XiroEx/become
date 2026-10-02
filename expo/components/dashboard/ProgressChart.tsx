@@ -79,7 +79,7 @@ export function ProgressChart({
   defaultChart,
   testID = "progress-chart",
 }: ProgressChartProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [chartWidth, setChartWidth] = useState<number>(320);
 
   const allTabs: ChartType[] = ["weight", "bmi"];
@@ -149,17 +149,24 @@ export function ProgressChart({
     5: colors.success,
   };
 
-  // Change color
-  let changeColor = colors["muted-foreground"];
+  // Change color & background
+  let sentimentToken: "success" | "accent" | "destructive" | "muted-foreground" =
+    "muted-foreground";
   if (stats.change !== 0) {
     if (isWeightLike) {
       const sentiment = weightTrendSentiment(stats.trend, fitnessGoal);
-      if (sentiment === "positive") changeColor = colors.success;
-      else if (sentiment === "warning") changeColor = colors.accent;
+      if (sentiment === "positive") sentimentToken = "success";
+      else if (sentiment === "warning") sentimentToken = "accent";
+      else sentimentToken = "muted-foreground";
     } else {
-      changeColor = stats.trend === "up" ? colors.success : colors.destructive;
+      sentimentToken = stats.trend === "up" ? "success" : "destructive";
     }
   }
+  const changeColor = colors[sentimentToken];
+  const changeBg =
+    sentimentToken === "muted-foreground"
+      ? colors.muted
+      : tint(sentimentToken, 0.18);
 
   // Dimensions for SVG plotting
   const height = 180;
@@ -260,18 +267,19 @@ export function ProgressChart({
         {stats.change !== 0 && activeChart !== "mood" ? (
           <View
             testID="progress-chart-change"
-            style={[styles.changeBadge, { backgroundColor: `${changeColor}18` }]}
+            accessibilityLabel={`${stats.trend === "up" ? "Up" : "Down"} ${Math.abs(stats.change).toFixed(1)} ${config.unit}`}
+            style={[styles.changeBadge, { backgroundColor: changeBg }]}
           >
             {stats.trend === "up" ? (
-              <ArrowUp size={14} color={changeColor} />
+              <ArrowUp size={12} strokeWidth={2.5} color={changeColor} />
             ) : (
-              <ArrowDown size={14} color={changeColor} />
+              <ArrowDown size={12} strokeWidth={2.5} color={changeColor} />
             )}
             <Text
+              testID="progress-chart-change-text"
               style={[styles.changeText, { color: changeColor }]}
             >
-              {Math.abs(stats.change).toFixed(1)}
-              {config.unit ? ` ${config.unit}` : ""}
+              {`${Math.abs(stats.change).toFixed(1)}${config.unit}`}
             </Text>
           </View>
         ) : null}
@@ -463,7 +471,7 @@ export function ProgressChart({
                   })}
 
                   {/* Target weight line */}
-                  {targetY != null ? (
+                  {targetY != null && targetWeight != null ? (
                     <>
                       <Line
                         testID="progress-chart-target-line"
@@ -476,6 +484,7 @@ export function ProgressChart({
                         strokeWidth={1.5}
                       />
                       <SvgText
+                        testID="progress-chart-target-label"
                         x={paddingLeft + plotWidth - 4}
                         y={targetY - 4}
                         fontSize={9}
@@ -483,7 +492,7 @@ export function ProgressChart({
                         textAnchor="end"
                         fontWeight="600"
                       >
-                        {`Goal ${targetWeight} ${weightUnit}`}
+                        {`Goal ${(Math.round(targetWeight * 10) / 10).toFixed(1)} ${weightUnit}`}
                       </SvgText>
                     </>
                   ) : null}
@@ -572,7 +581,7 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     justifyContent: "space-between",
   },
   valueRow: {
@@ -592,12 +601,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   changeText: {
     fontSize: 12,
     fontWeight: "600",
-    flexShrink: 1,
+    flexShrink: 0,
   },
   emptyBox: {
     minHeight: 140,
