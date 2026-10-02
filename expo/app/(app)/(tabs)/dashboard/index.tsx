@@ -205,6 +205,9 @@ export default function DashboardRoute() {
 
   const [checkInOpen, setCheckInOpen] = useState(false);
   const checkinShownRef = useRef(false);
+  // Set when the daily check-in just logged a mood → the one-line gateway to
+  // Mindset shows under the tiles until dismissed, session is done, or next load (NP-158).
+  const [gatewayMood, setGatewayMood] = useState<MoodLevel | null>(null);
 
   // The nudge opens before the check-in and never on top of it.
   useEffect(() => {
@@ -293,6 +296,10 @@ export default function DashboardRoute() {
 
   const onOpenMind = useCallback(() => {
     router.push("/(tabs)/mind?start=1" as never);
+  }, [router]);
+
+  const onOpenPlan = useCallback(() => {
+    router.push("/plan" as never);
   }, [router]);
 
   const onOpenNutrition = useCallback(() => {
@@ -420,6 +427,7 @@ export default function DashboardRoute() {
         let moodStatus: string | null = null;
         if (payload.mood) {
           moodStatus = await writes.logMood(payload.mood);
+          setGatewayMood(payload.mood);
         }
         const weightVal = payload.weight ?? payload.weightLbs;
         let weightStatus: string | null = null;
@@ -802,6 +810,9 @@ export default function DashboardRoute() {
       onQuickAdd={onQuickAdd}
       currentProgram={currentProgram}
       onViewProgram={onViewProgram}
+      gatewayMood={gatewayMood}
+      onDismissGatewayMood={() => setGatewayMood(null)}
+      onOpenPlan={onOpenPlan}
     />
   );
 }

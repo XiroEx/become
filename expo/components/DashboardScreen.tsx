@@ -13,6 +13,8 @@ import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
+import { PlanCard } from "@/components/dashboard/PlanCard";
+import { MoodGatewayBanner } from "@/components/dashboard/MoodGatewayBanner";
 import {
   CurrentProgramCard,
   type CurrentProgramData,
@@ -176,6 +178,11 @@ export interface DashboardScreenProps {
   currentProgram?: CurrentProgramData | null;
   /** View current program details callback */
   onViewProgram?: (programId: string) => void;
+  /** Active mood for the mood-to-mind gateway banner (NP-158) */
+  gatewayMood?: MoodLevel | null;
+  onDismissGatewayMood?: () => void;
+  /** Opens the native plan page (NP-158) */
+  onOpenPlan?: () => void;
 }
 
 export function DashboardScreen({
@@ -237,8 +244,23 @@ export function DashboardScreen({
   onQuickAdd,
   currentProgram,
   onViewProgram,
+  gatewayMood,
+  onDismissGatewayMood,
+  onOpenPlan,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
+  const [internalGatewayMood, setInternalGatewayMood] =
+    useState<MoodLevel | null>(null);
+  const isGatewayMoodControlled = gatewayMood !== undefined;
+  const activeGatewayMood = isGatewayMoodControlled
+    ? gatewayMood
+    : internalGatewayMood;
+  const handleDismissGatewayMood = () => {
+    if (isGatewayMoodControlled) {
+      onDismissGatewayMood?.();
+    }
+    setInternalGatewayMood(null);
+  };
   const [internalNudgeOpen, setInternalNudgeOpen] = useState<boolean>(false);
   const isNudgeControlled = nudgeOpen !== undefined;
   const isNudgeModalOpen = isNudgeControlled ? nudgeOpen : internalNudgeOpen;
@@ -552,6 +574,15 @@ export function DashboardScreen({
           </Pressable>
         </View>
 
+        {/* Mood → Mindset gateway, once, right after the daily check-in (NP-158) */}
+        {activeGatewayMood && !mind?.sessionDoneToday ? (
+          <MoodGatewayBanner
+            mood={activeGatewayMood}
+            onDismiss={handleDismissGatewayMood}
+            onOpenMind={onOpenMind}
+          />
+        ) : null}
+
         {/* Mindset Card (NP-150) */}
         <MindsetCard
           summary={mind ?? null}
@@ -615,6 +646,9 @@ export function DashboardScreen({
           />
         ) : null}
 
+        {/* Member plan & allowance meters (NP-158) */}
+        <PlanCard onOpenPlan={onOpenPlan} />
+
         {/* The in-app footer. Apple wants the privacy policy reachable from
             inside the app, not only from a marketing page a member installing to
             the home screen never returns to. Mirrors web's DashboardClient.tsx:965. */}
@@ -651,6 +685,9 @@ export function DashboardScreen({
         onClose={() => setOpen(false)}
         onSubmit={async (payload) => {
           await onSubmitCheckIn(payload);
+          if (payload.mood) {
+            setInternalGatewayMood(payload.mood);
+          }
           setOpen(false);
         }}
         onSkip={async () => {
