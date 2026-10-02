@@ -72,23 +72,18 @@ describe("this app's usage strings", () => {
     }
   });
 
-  // NP-059 installs expo-camera and expo-image-picker. Both plugins would
-  // otherwise write Expo's own "Allow $(PRODUCT_NAME) to access your
-  // microphone" into Info.plist, for a feature that records no audio at all.
-  it("opts the microphone OUT rather than shipping a prompt Become never needs", () => {
-    const plugins = realInput.config.expo.plugins ?? [];
-    for (const module of ["expo-camera", "expo-image-picker"]) {
-      const entry = plugins.find(
-        (p) => (typeof p === "string" ? p : p[0]) === module,
-      );
-      expect(entry).toBeDefined();
-      expect(Array.isArray(entry) ? entry[1]?.microphonePermission : undefined).toBe(
-        false,
-      );
-    }
-    expect(
-      realInput.config.expo.ios?.infoPlist?.NSMicrophoneUsageDescription,
-    ).toBeUndefined();
+  // NP-099 installs expo-speech-recognition and turns the microphone on so the
+  // app can follow along as the member speaks affirmations out loud.
+  it("says what the microphone and speech recognition are FOR", () => {
+    const infoPlist = realInput.config.expo.ios?.infoPlist ?? {};
+    expect(String(infoPlist.NSMicrophoneUsageDescription)).toMatch(/\bBecome\b/);
+    expect(String(infoPlist.NSMicrophoneUsageDescription)).toMatch(/speak/i);
+    expect(String(infoPlist.NSSpeechRecognitionUsageDescription)).toMatch(
+      /\bBecome\b/,
+    );
+    expect(String(infoPlist.NSSpeechRecognitionUsageDescription)).toMatch(
+      /speak/i,
+    );
   });
 
   it("says what the camera and the photo library are FOR", () => {

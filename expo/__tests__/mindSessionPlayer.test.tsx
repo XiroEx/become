@@ -40,11 +40,6 @@ import {
   type SessionContext,
 } from "@become/core";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
-import {
-  affirmDisplayLine,
-  HOLD_DONE_HOLD_MS,
-  HOLD_MS,
-} from "@/components/mind/session/scenes/HoldToAffirmScene";
 /* eslint-enable import/first */
 
 /**
@@ -221,16 +216,10 @@ describe("SessionPlayer (NP-098 / NP-101)", () => {
     fireEvent.press(getByTestId("mind-mission-scene-commit"));
     await flush(900);
 
-    expect(getByTestId("mind-hold-affirm")).toBeTruthy();
-    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-      affirmDisplayLine(WEB_PLAN.moves[3]!),
-    );
-    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-    await flush(HOLD_MS);
-    expect(getByTestId("mind-hold-affirm-status")).toHaveTextContent(
-      "Locked in.",
-    );
-    await flush(HOLD_DONE_HOLD_MS);
+    expect(getByTestId("mind-speak-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-speak-scene-start-button"));
+    fireEvent.press(getByTestId("mind-speak-scene-lock-anyway"));
+    await flush(1100);
 
     // Payoff.
     expect(getByTestId(`${P}-payoff`)).toBeTruthy();
@@ -312,13 +301,11 @@ describe("SessionPlayer (NP-098 / NP-101)", () => {
     fireEvent.press(getByTestId("mind-mission-scene-commit"));
     await flush(900);
 
-    // Move 4 — speak fallback
-    expect(getByTestId("mind-hold-affirm-line")).toHaveTextContent(
-      affirmDisplayLine(webRealigned[3]!),
-    );
-    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-    await flush(HOLD_MS);
-    await flush(HOLD_DONE_HOLD_MS);
+    // Move 4 — speak scene (ported in NP-099)
+    expect(getByTestId("mind-speak-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-speak-scene-start-button"));
+    fireEvent.press(getByTestId("mind-speak-scene-lock-anyway"));
+    await flush(1100);
 
     // What played is exactly the web's realigned chain.
     expect(onComplete.mock.calls[0]![0]).toEqual(
@@ -369,10 +356,10 @@ describe("SessionPlayer (NP-098 / NP-101)", () => {
     fireEvent.press(getByTestId("mind-mission-scene-commit"));
     await flush(900);
 
-    expect(getByTestId("mind-hold-affirm")).toBeTruthy();
-    fireEvent(getByTestId("mind-hold-affirm-button"), "pressIn");
-    await flush(HOLD_MS);
-    await flush(HOLD_DONE_HOLD_MS);
+    expect(getByTestId("mind-speak-scene")).toBeTruthy();
+    fireEvent.press(getByTestId("mind-speak-scene-start-button"));
+    fireEvent.press(getByTestId("mind-speak-scene-lock-anyway"));
+    await flush(1100);
 
     expect(onComplete.mock.calls[0]![0]).toEqual(
       expect.objectContaining({
