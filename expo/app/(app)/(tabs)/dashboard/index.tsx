@@ -51,6 +51,13 @@ import type {
  * drives a current-workout fetch for today's session. DashboardScreen stays
  * presentational and just receives the mapped props.
  */
+interface NutritionTotals {
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fats?: number;
+}
+
 export default function DashboardRoute() {
   const { token, user } = useAuth();
   const router = useRouter();
@@ -613,7 +620,7 @@ export default function DashboardRoute() {
 
   const nutritionData = useMemo(() => {
     if (!nutrition.data) return null;
-    const totals = nutrition.data.dailyTotals || {};
+    const totals: NutritionTotals = nutrition.data.dailyTotals || {};
     const goalsData = nutrition.data.goals || {};
     const waterFallback =
       typeof nutrition.data.water === "object"
