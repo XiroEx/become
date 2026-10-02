@@ -190,8 +190,14 @@ export default function LiveWorkoutRoute({
       <ExerciseSwapModal
         visible={swapSlug !== null}
         sourceName={swapSourceName}
-        alternatives={alternatives.data?.alternatives ?? []}
+        exerciseSlug={swapSlug ?? undefined}
+        workoutExerciseSlugs={workout?.exercises
+          .map((e) => e.slug)
+          .filter(Boolean)}
+        programRole={workout?.exercises.find((e) => e.slug === swapSlug)?.role}
+        alternatives={alternatives.data?.alternatives}
         loading={alternatives.loading}
+        onSwap={onSelectAlternative}
         onSelect={onSelectAlternative}
         onClose={() => setSwapSlug(null)}
       />

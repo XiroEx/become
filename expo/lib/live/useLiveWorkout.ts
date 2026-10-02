@@ -13,6 +13,9 @@ import {
   type WorkoutSaveResponse,
   type NewPR,
   type AlternativeCandidate,
+  type ExerciseAlternativesResponse,
+  ProgramSwapResponseSchema,
+  type ProgramSwapResponse,
   type ExerciseHistoryEntry,
   type ExercisePRSummary,
   type StaleIncompleteWorkout,
@@ -115,11 +118,19 @@ export interface UseLiveWorkoutResult {
     data: { alternatives?: AlternativeCandidate[] } | null;
     loading: boolean;
   };
-  onSelectAlternative: (candidate: AlternativeCandidate) => void;
+  onSelectAlternative: (
+    candidate: AlternativeCandidate,
+    scope?: "session" | "program",
+  ) => Promise<void> | void;
   setSwapSlug: (slug: string | null) => void;
   save: (
-    isComplete: boolean,
+    isComplete?: boolean,
     gridOverride?: LiveGrid,
+    exercisesOverride?: LiveWorkoutExercise[],
+    swappedExercisesOverride?: Record<
+      number,
+      { originalSlug: string; originalName: string }
+    >,
   ) => Promise<WorkoutSaveResponse | null>;
   onFinish: (grid?: LiveGrid) => Promise<WorkoutSaveResponse | null>;
   pendingDayChoice: {
@@ -229,8 +240,13 @@ export function useLiveWorkout(
   // Save implementation with re-entrant lock and queueing
   const save = useCallback(
     async (
-      isComplete: boolean,
+      isComplete = false,
       gridOverride?: LiveGrid,
+      exercisesOverride?: LiveWorkoutExercise[],
+      swappedExercisesOverride?: Record<
+        number,
+        { originalSlug: string; originalName: string }
+      >,
     ): Promise<WorkoutSaveResponse | null> => {
       if (!workout) return null;
 
@@ -274,7 +290,7 @@ export function useLiveWorkout(
             programId: workout.programId,
             phase,
             day: resolvedDay,
-            exercises: workout.exercises,
+            exercises: exercisesOverride ?? workout.exercises,
             grid: currentGrid,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
@@ -283,7 +299,7 @@ export function useLiveWorkout(
             performedAt: logDateOverride || undefined,
             tz: new Date().getTimezoneOffset(),
             tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            swappedExercises,
+            swappedExercises: swappedExercisesOverride ?? swappedExercises,
           });
 
           const res = await apiFetch<WorkoutSaveResponse>(
@@ -464,10 +480,26 @@ export function useLiveWorkout(
 
   // Exercise Swap logic
   const [swapSlug, setSwapSlug] = useState<string | null>(null);
-  const alternatives = useFetch(
-    swapSlug
-      ? `/api/exercises/alternatives?slug=${encodeURIComponent(swapSlug)}`
-      : null,
+
+  const workoutSlugs = useMemo(() => {
+    return (workout?.exercises ?? []).map((e) => e.slug).filter(Boolean);
+  }, [workout?.exercises]);
+
+  const alternativesUrl = useMemo(() => {
+    if (!swapSlug) return null;
+    const params = new URLSearchParams({ slug: swapSlug, limit: "30" });
+    if (workoutSlugs.length > 0) {
+      params.set("workoutSlugs", workoutSlugs.join(","));
+    }
+    const role = workout?.exercises.find((e) => e.slug === swapSlug)?.role;
+    if (role) {
+      params.set("programRole", role);
+    }
+    return `/api/exercises/alternatives?${params.toString()}`;
+  }, [swapSlug, workoutSlugs, workout?.exercises]);
+
+  const alternatives = useFetch<ExerciseAlternativesResponse>(
+    alternativesUrl,
     ExerciseAlternativesResponseSchema,
     {
       baseUrl: WEBAPP_BASE_URL,
@@ -484,7 +516,10 @@ export function useLiveWorkout(
   }, []);
 
   const onSelectAlternative = useCallback(
-    (candidate: AlternativeCandidate) => {
+    async (
+      candidate: AlternativeCandidate,
+      scope: "session" | "program" = "session",
+    ) => {
       if (!swapSlug || !workout) return;
       const exIdx = workout.exercises.findIndex((e) => e.slug === swapSlug);
       if (exIdx === -1) return;
@@ -500,15 +535,44 @@ export function useLiveWorkout(
         oldEx.swappedFromName ||
         oldEx.name;
 
+      // Program-wide scope: POST /api/programs/swap
+      if (scope === "program" && programId) {
+        try {
+          await apiFetch<ProgramSwapResponse>(
+            "/api/programs/swap",
+            ProgramSwapResponseSchema,
+            {
+              method: "POST",
+              baseUrl: WEBAPP_BASE_URL,
+              getToken: () => token ?? undefined,
+              body: {
+                programId,
+                originalSlug: origSlug,
+                replacementSlug: candidate.slug,
+                replacementName: candidate.name,
+              },
+            },
+          );
+        } catch (err) {
+          console.error("Error saving permanent swap:", err);
+        }
+      }
+
       const newExercises = [...workout.exercises];
       newExercises[exIdx] = {
         ...oldEx,
         name: candidate.name,
         slug: candidate.slug,
         sets: oldEx.sets,
+        trackingType: candidate.trackingType,
+        equipment: candidate.equipment,
+        laterality: candidate.laterality,
+        movementPatterns: candidate.movementPatterns,
+        category: candidate.category,
+        type: candidate.category,
         originalExerciseSlug: origSlug,
         swappedFromName: origName,
-        videoUrl: undefined,
+        videoUrl: candidate.videoUrl ?? undefined,
         thumbnailUrl: undefined,
         videoWidth: null,
         videoHeight: null,
@@ -516,10 +580,11 @@ export function useLiveWorkout(
         videoTrim: null,
       };
 
-      setSwappedExercises((prev) => ({
-        ...prev,
+      const nextSwappedExercises = {
+        ...swappedExercises,
         [exIdx]: { originalSlug: origSlug, originalName: origName },
-      }));
+      };
+      setSwappedExercises(nextSwappedExercises);
       setSwaps((prev) => ({
         ...prev,
         [oldEx.slug]: candidate.name,
@@ -530,27 +595,58 @@ export function useLiveWorkout(
         exercises: newExercises,
       });
 
-      // Move sets in grid from old slug to new slug
+      // Reset that exercise's sets in the grid
+      const blankSets: LiveSetState[] = Array.from(
+        { length: oldEx.sets || 1 },
+        () => ({
+          reps: null,
+          weight: null,
+          durationSec: null,
+          distance: null,
+          completed: false,
+        }),
+      );
+      const nextGrid: LiveGrid = {
+        ...gridRef.current,
+        [candidate.slug]: blankSets,
+      };
       if (oldEx.slug !== candidate.slug) {
-        const curSets = gridRef.current[oldEx.slug] ?? [];
-        const nextGrid = { ...gridRef.current, [candidate.slug]: curSets };
         delete nextGrid[oldEx.slug];
-        gridRef.current = nextGrid;
-        setGrid(nextGrid);
-        const elapsed =
-          activeSecondsBaseline +
-          Math.floor((Date.now() - sessionStartTime) / 1000);
-        void cache.save(
-          cacheKey,
-          nextGrid as LiveWorkoutSnapshot,
-          elapsed,
-          attemptId,
-        );
       }
+      gridRef.current = nextGrid;
+      setGrid(nextGrid);
+
+      const elapsed =
+        activeSecondsBaseline +
+        Math.floor((Date.now() - sessionStartTime) / 1000);
+      void cache.save(
+        cacheKey,
+        nextGrid as LiveWorkoutSnapshot,
+        elapsed,
+        attemptId,
+      );
+
+      // Clear any pending autosave timer and save immediately
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+      void save(false, nextGrid, newExercises, nextSwappedExercises);
 
       setSwapSlug(null);
     },
-    [swapSlug, workout, swappedExercises, cache, cacheKey, activeSecondsBaseline, sessionStartTime, attemptId],
+    [
+      swapSlug,
+      workout,
+      swappedExercises,
+      programId,
+      token,
+      activeSecondsBaseline,
+      sessionStartTime,
+      cache,
+      cacheKey,
+      attemptId,
+      save,
+    ],
   );
 
   // Main data loader
