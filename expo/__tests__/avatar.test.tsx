@@ -1,6 +1,10 @@
 import { render } from "@testing-library/react-native";
 import { Avatar } from "@/components/Avatar";
 import { PRESET_ICONS, presetIcon } from "@/lib/profile/icons";
+import {
+  PROFILE_ICON_GRADIENTS,
+  profileIconGradient,
+} from "@become/core/profileIcons";
 
 jest.mock("@/components/media/AuthedImage", () => {
   const { View } = require("react-native");
@@ -64,5 +68,35 @@ describe("<Avatar />", () => {
     for (const p of PRESET_ICONS) {
       expect(presetIcon(p.id).id).toBe(p.id);
     }
+  });
+
+  it("renders every preset on a gradient fill with the web's stops (NP-214)", () => {
+    // The shared table must cover the same 10 ids as the native catalog.
+    expect(PROFILE_ICON_GRADIENTS.length).toBe(10);
+    for (const p of PRESET_ICONS) {
+      expect(profileIconGradient(p.id).id).toBe(p.id);
+    }
+
+    for (const p of PRESET_ICONS) {
+      const { getByLabelText } = render(
+        <Avatar icon={p.id} testID={`avatar-${p.id}`} />,
+      );
+      const circle = getByLabelText(`${p.label} avatar`);
+      const expected = profileIconGradient(p.id);
+      // Two opaque stops: the circle is never transparent, in light or dark.
+      expect(circle.props.colors).toEqual(expected.colors);
+      expect(circle.props.colors).toHaveLength(2);
+      // Same angle as the web's `bg-gradient-to-br` (top-left → bottom-right).
+      expect(circle.props.start).toEqual({ x: 0, y: 0 });
+      expect(circle.props.end).toEqual({ x: 1, y: 1 });
+    }
+  });
+
+  it("falls back to the flame gradient for an unrecognized icon", () => {
+    const { getByLabelText } = render(
+      <Avatar icon="unknown-icon-id" testID="test-avatar" />,
+    );
+    const circle = getByLabelText("Flame avatar");
+    expect(circle.props.colors).toEqual(profileIconGradient("flame").colors);
   });
 });
