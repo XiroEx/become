@@ -179,7 +179,7 @@ function BreathSession({
         className="flex-1 items-center justify-center bg-card p-6 gap-4"
       >
         <View className="h-20 w-20 items-center justify-center rounded-full bg-cyan-500/20 mb-2">
-          <Check size={40} color={colors.cyan} strokeWidth={3} />
+          <Check size={40} color={colors.success} strokeWidth={3} />
         </View>
         <Text className="text-xl font-bold text-foreground text-center">
           {DONE_TEXT}
@@ -190,6 +190,7 @@ function BreathSession({
         <Pressable
           testID="breath-session-finish"
           accessibilityRole="button"
+          accessibilityLabel="Finish"
           onPress={onDone}
           className="mt-6 rounded-2xl bg-foreground px-8 py-3.5"
         >
@@ -209,6 +210,7 @@ function BreathSession({
       <Pressable
         testID="breath-session-exit"
         accessibilityRole="button"
+        accessibilityLabel="Exit breath session"
         onPress={onExit}
         className="absolute right-5 top-5 h-10 w-10 items-center justify-center rounded-full bg-muted"
       >
@@ -289,7 +291,7 @@ function FocusRow() {
       className="rounded-2xl border border-border bg-card p-4"
     >
       <View className="mb-2.5 flex-row items-center gap-1.5">
-        <Timer size={14} color={colors.cyan} />
+        <Timer size={14} color={colors.accent} />
         <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Focus mode
         </Text>
@@ -299,6 +301,8 @@ function FocusRow() {
           {FOCUS_DURATIONS.map((d) => (
             <Pressable
               key={d.label}
+              accessibilityRole="button"
+              accessibilityLabel={`Focus for ${d.label}`}
               onPress={() => select(d.seconds)}
               disabled={running}
               className={`flex-1 rounded-xl py-2 items-center justify-center ${
@@ -329,6 +333,8 @@ function FocusRow() {
 
           {done ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reset timer"
               onPress={() => select(selectedSeconds)}
               className="h-9 w-9 items-center justify-center rounded-xl bg-success/15"
             >
@@ -336,6 +342,8 @@ function FocusRow() {
             </Pressable>
           ) : running ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Pause focus timer"
               onPress={() => setRunning(false)}
               className="h-9 w-9 items-center justify-center rounded-xl bg-muted"
             >
@@ -343,6 +351,8 @@ function FocusRow() {
             </Pressable>
           ) : (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={remaining < selectedSeconds ? "Resume focus timer" : "Start focus timer"}
               onPress={() => {
                 setDone(false);
                 setRunning(true);
@@ -358,6 +368,8 @@ function FocusRow() {
 
           {remaining < selectedSeconds && !running && !done ? (
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Reset timer"
               onPress={() => {
                 setRunning(false);
                 setDone(false);
@@ -726,7 +738,7 @@ export default function StateShiftDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.cyan}
+        accentColor={colors.accent}
         accentClass="bg-cyan-500"
         doneText={DONE_TEXT}
         onReflect={
@@ -757,7 +769,7 @@ export default function StateShiftDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.cyan}
+        accentColor={colors.accent}
       />
 
       <SystemHero
@@ -768,7 +780,7 @@ export default function StateShiftDashboard() {
         statLabel="shifts"
         colorClass="text-cyan-500"
         bgClass="border-cyan-500/30 bg-cyan-500/10"
-        iconColor={colors.cyan}
+        iconColor={colors.accent}
       />
 
       {/* Where's your head right now? */}
@@ -799,7 +811,7 @@ export default function StateShiftDashboard() {
                 className="w-[48%] flex-row items-center gap-2.5 rounded-xl border border-border bg-card p-3 active:opacity-80"
               >
                 <View className="h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15">
-                  <SIcon size={16} color={colors.cyan} />
+                  <SIcon size={16} color={colors.accent} />
                 </View>
                 <Text className="text-sm font-semibold text-foreground">
                   {s.label}
@@ -840,7 +852,7 @@ export default function StateShiftDashboard() {
               title={b.name}
               blurb={`${b.rounds} rounds · ${b.bestFor}`}
               colorClass="text-cyan-500"
-              iconColor={colors.cyan}
+              iconColor={colors.accent}
               onClick={() => setBreath(b)}
             />
           ))}
@@ -863,7 +875,7 @@ export default function StateShiftDashboard() {
               title={f.title}
               blurb={f.blurb}
               colorClass="text-cyan-500"
-              iconColor={colors.cyan}
+              iconColor={colors.accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"

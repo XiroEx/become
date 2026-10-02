@@ -41,10 +41,7 @@ export type TokenName =
   | "destructive-foreground"
   | "accent"
   | "accent-foreground"
-  | "success"
-  | "cyan"
-  | "violet"
-  | "blue";
+  | "success";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -64,9 +61,6 @@ export const lightTokens: Record<TokenName, string> = {
   // light value is not the dark one.
   "accent-foreground": "24 24 27",
   success: "22 163 74", // green-600 — the web's `text-green-600`
-  cyan: "6 182 212", // cyan-500
-  violet: "139 92 246", // violet-500
-  blue: "59 130 246", // blue-500
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -83,9 +77,6 @@ export const darkTokens: Record<TokenName, string> = {
   accent: "251 191 36", // amber-400 — the web's `dark:text-amber-400`
   "accent-foreground": "24 24 27",
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
-  cyan: "34 211 238", // cyan-400
-  violet: "167 139 250", // violet-400
-  blue: "96 165 250", // blue-400
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

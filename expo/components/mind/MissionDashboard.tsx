@@ -439,7 +439,7 @@ export default function MissionDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.blue}
+        accentColor={colors.accent}
         accentClass="bg-blue-500"
         doneText={
           flow.kind === "define" ? "Your direction is set." : DONE_TEXT
@@ -472,7 +472,7 @@ export default function MissionDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.blue}
+        accentColor={colors.accent}
       />
 
       <SystemHero
@@ -485,7 +485,7 @@ export default function MissionDashboard() {
         statLabel="on mission"
         colorClass="text-blue-500"
         bgClass="border-blue-500/30 bg-blue-500/10"
-        iconColor={colors.blue}
+        iconColor={colors.accent}
       />
 
       {/* Your Mission */}
@@ -537,6 +537,8 @@ export default function MissionDashboard() {
           <View className="flex-row gap-2 mt-2">
             <Pressable
               testID="mission-edit-save"
+              accessibilityRole="button"
+              accessibilityLabel="Save mission"
               onPress={submitEdit}
               className="flex-1 rounded-xl bg-blue-500 py-2.5 items-center justify-center"
             >
@@ -544,6 +546,8 @@ export default function MissionDashboard() {
             </Pressable>
             <Pressable
               testID="mission-edit-cancel"
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing mission"
               onPress={() => setEditing(false)}
               className="rounded-xl border border-border px-4 py-2.5 items-center justify-center"
             >
@@ -569,7 +573,7 @@ export default function MissionDashboard() {
               onPress={openEditor}
               className="h-8 w-8 items-center justify-center rounded-full"
             >
-              <Pencil size={16} color={colors.blue} />
+              <Pencil size={16} color={colors.accent} />
             </Pressable>
           </View>
           <Text
@@ -651,7 +655,7 @@ export default function MissionDashboard() {
           }
           className="rounded-2xl border border-dashed border-blue-500/40 p-5 items-center justify-center bg-card active:opacity-80"
         >
-          <Compass size={28} color={colors.blue} />
+          <Compass size={28} color={colors.accent} />
           <Text className="mt-2 text-sm font-bold text-foreground">
             Define your mission
           </Text>
@@ -689,7 +693,7 @@ export default function MissionDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-blue-500"
-              iconColor={colors.blue}
+              iconColor={colors.accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"

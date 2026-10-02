@@ -542,7 +542,7 @@ export default function SelfImageDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.violet}
+        accentColor={colors.accent}
         accentClass="bg-violet-500"
         doneText={
           flow.kind === "define" ? "The line is drawn." : DONE_TEXT
@@ -577,7 +577,7 @@ export default function SelfImageDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.violet}
+        accentColor={colors.accent}
       />
 
       <SystemHero
@@ -588,7 +588,7 @@ export default function SelfImageDashboard() {
         statLabel="evolution"
         colorClass="text-violet-500"
         bgClass="border-violet-500/30 bg-violet-500/10"
-        iconColor={colors.violet}
+        iconColor={colors.accent}
       />
 
       {/* Who you're becoming */}
@@ -629,6 +629,8 @@ export default function SelfImageDashboard() {
           <View className="flex-row gap-2 mt-2">
             <Pressable
               testID="self-image-edit-save"
+              accessibilityRole="button"
+              accessibilityLabel="Save identity"
               onPress={submitEdit}
               className="flex-1 rounded-xl bg-violet-500 py-2.5 items-center justify-center"
             >
@@ -636,6 +638,8 @@ export default function SelfImageDashboard() {
             </Pressable>
             <Pressable
               testID="self-image-edit-cancel"
+              accessibilityRole="button"
+              accessibilityLabel="Cancel editing identity"
               onPress={() => setEditing(false)}
               className="rounded-xl border border-border px-4 py-2.5 items-center justify-center"
             >
@@ -661,7 +665,7 @@ export default function SelfImageDashboard() {
               onPress={openEditor}
               className="h-8 w-8 items-center justify-center rounded-full"
             >
-              <Pencil size={16} color={colors.violet} />
+              <Pencil size={16} color={colors.accent} />
             </Pressable>
           </View>
           <Text
@@ -681,7 +685,7 @@ export default function SelfImageDashboard() {
           <View className="mt-3">
             <View className="mb-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-1">
-                <TrendingUp size={14} color={colors.violet} />
+                <TrendingUp size={14} color={colors.accent} />
                 <Text className="text-[11px] font-medium text-muted-foreground">
                   Evolution
                 </Text>
@@ -756,7 +760,7 @@ export default function SelfImageDashboard() {
           }
           className="rounded-2xl border border-dashed border-violet-500/40 p-5 items-center justify-center bg-card active:opacity-80"
         >
-          <Fingerprint size={28} color={colors.violet} />
+          <Fingerprint size={28} color={colors.accent} />
           <Text className="mt-2 text-sm font-bold text-foreground">
             Define who you’re becoming
           </Text>
@@ -838,7 +842,7 @@ export default function SelfImageDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-violet-500"
-              iconColor={colors.violet}
+              iconColor={colors.accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"

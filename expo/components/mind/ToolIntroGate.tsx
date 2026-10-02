@@ -121,14 +121,7 @@ export default function ToolIntroGate({
 
   if (state === "intro") {
     const flow = INTRO_FLOWS[system]!;
-    const accentColor =
-      system === "state-shift"
-        ? colors.cyan
-        : system === "self-image"
-          ? colors.violet
-          : system === "mission"
-            ? colors.blue
-            : colors.primary;
+    const accentColor = colors.accent;
 
     const accentClass =
       system === "state-shift"
