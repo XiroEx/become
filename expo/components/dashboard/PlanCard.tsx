@@ -62,8 +62,7 @@ export function PlanMeter({ ent, label, suffix, feature }: PlanMeterProps) {
               : "text-muted-foreground"
           }`}
         >
-          {used}/{limit}
-          {suffix ? ` ${suffix}` : ""}
+          {`${used}/${limit}${suffix ? ` ${suffix}` : ""}`}
         </Text>
       </View>
       <View className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
@@ -89,7 +88,7 @@ export function PlanCard({
   testID = "dashboard-plan-card",
 }: PlanCardProps) {
   const router = useRouter();
-  const { isDark } = useThemeTokens();
+  const { colors } = useThemeTokens();
   const { data: hookData } = useEntitlements();
   const data = snapshot !== undefined ? snapshot : hookData;
 
@@ -131,7 +130,7 @@ export function PlanCard({
         className="w-full flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4"
       >
         <View className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-          <Sparkles size={20} color={isDark ? "#c084fc" : "#9333ea"} />
+          <Sparkles size={20} color={colors.accent} />
         </View>
         <View className="min-w-0 flex-1">
           <Text className="text-foreground text-sm font-semibold">

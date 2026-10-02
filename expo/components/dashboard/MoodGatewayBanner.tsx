@@ -27,7 +27,7 @@ export function MoodGatewayBanner({
   onOpenMind,
   testID = "mood-gateway-banner",
 }: MoodGatewayBannerProps) {
-  const { colors, isDark } = useThemeTokens();
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const g = moodGateway(mood);
 
@@ -46,7 +46,7 @@ export function MoodGatewayBanner({
       className="w-full flex-row items-center gap-3 rounded-2xl border border-purple-200 bg-purple-50 p-3 dark:border-purple-900/50 dark:bg-purple-950/30"
     >
       <View className="h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-card border border-border">
-        <Brain size={16} color={isDark ? "#c084fc" : "#9333ea"} />
+        <Brain size={16} color={colors.accent} />
       </View>
       <View className="min-w-0 flex-1">
         <Text className="text-foreground text-sm">
