@@ -1,9 +1,25 @@
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Modal as RNModal, Pressable, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Modal as RNModal,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, ArrowRight, Check, Sparkles, X } from "lucide-react-native";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronUp,
+  Flame,
+  Sparkles,
+  X,
+} from "lucide-react-native";
 import {
   BREATH_PROTOCOLS,
+  CHAPTERS,
+  SYSTEM_INFO,
   breathForState,
   realignOpening,
   type BreathProtocol,
@@ -13,6 +29,12 @@ import {
   type SessionAnswer,
   type SessionContext,
 } from "@become/core";
+import {
+  apiFetch,
+  MindJournalCreateResponseSchema,
+  MindSessionCompleteResponseSchema,
+  type MindSessionCompleteResponse,
+} from "@become/api-client";
 import { Text } from "@/components/Text";
 import { AssembleScene } from "@/components/mind/session/scenes/AssembleScene";
 import { BreathScene } from "@/components/mind/session/scenes/BreathScene";
@@ -29,63 +51,55 @@ import { StateCheckScene } from "@/components/mind/session/scenes/StateCheckScen
 import { TypeScene } from "@/components/mind/session/scenes/TypeScene";
 import { VisionScene } from "@/components/mind/session/scenes/VisionScene";
 import { WinScene } from "@/components/mind/session/scenes/WinScene";
+import { useAuth } from "@/lib/auth/useAuth";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 import { announce } from "@/lib/a11y/announce";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { tzOffsetMinutes } from "@/lib/time/localDay";
+import { reflectOnAnswers } from "@/lib/mind/reflect";
+import {
+  invalidateMindSession,
+  warmMindSession,
+} from "@/lib/mind/sessionCache";
 
 /**
- * THE MIND SESSION PLAYER, natively (NP-098).
+ * THE MIND SESSION PLAYER, natively (NP-098 / NP-101).
  *
  * A port of `webapp/components/mind/session/SessionPlayer.tsx`: a composed plan
  * is an ordered chain of MOVES, and this plays it one full-screen beat at a time
- * — intro → the moves, with back / next / exit → the payoff. The scenes are
- * dumb (`scenes/types.ts`, the web's `SceneProps`); everything that sequences,
- * adapts or remembers lives here, which is the same split the web has.
+ * — intro → the moves, with back / next / exit → the payoff → levelup.
  *
- * The four rules that travel with it, each of them behaviour the web has and a
- * native session would otherwise lose:
- *
- *  1. **The check-in re-opens the session, and only the OPENING.** The plan was
- *     composed before it was played (the AI plan is cached for hours), so it was
- *     built for whatever they felt LAST time. `realignOpening` swaps move 2 — the
- *     regulate beat — for the one today's answer calls for, and the path body
- *     survives untouched, along with every word the composer personalised into
- *     it. No `sessionContext`, no realignment: the session simply plays as
- *     composed.
- *  2. **The check-in IS the first answer** ("How I checked in today"), recorded
- *     ahead of everything else. The state/path split moved the guaranteed
- *     answer-producing beat out of the session, so a breath opening plus a
- *     non-typing body used to leave the close with nothing to read.
- *  3. **Answers keep the LATEST value per question**, so re-answering after a
- *     Back overwrites rather than duplicating.
- *  4. **A positive check-in skips the forced breathing.** A move carrying
- *     `altPositive` is swapped for it while the live state is `locked_in` — the
- *     amplify alternative — and the swap is what the player reports, so a
- *     locked-in session is never recorded as having breathed.
- *
- * WHAT IS NOT HERE YET, on purpose: the payoff is the shortest honest close
- * (NP-101 owns the recap, the XP, the streak, the journal write and the AI
- * reflection — this file performs NO completion write, and `onComplete` is the
- * seam it will hang off). The content scenes are NP-103, speech is NP-099 and the
- * mirror is NP-100; until each lands, its kind plays as the web's hold-to-affirm,
- * so every plan recorded on the web plays through to the end rather than
- * stranding the member on a beat with no scene.
+ * Rules that travel with it:
+ *  1. The check-in re-opens the session, and only the OPENING.
+ *  2. The check-in IS the first answer ("How I checked in today").
+ *  3. Answers keep the LATEST value per question (overwriting on back).
+ *  4. A positive check-in skips forced breathing (altPositive replaces breath).
+ *  5. Report the EFFECTIVE kinds shown (the locked-in alternative replaces breath).
+ *  6. Never compute XP or chapters natively; show the server's numbers.
+ *  7. Drop the cached AI plan and warm a fresh one on completion (NP-102).
  */
 
-export type SessionStage = "intro" | "move" | "payoff";
+export type SessionStage = "intro" | "move" | "payoff" | "levelup";
 
 export interface SessionCompletion {
   /**
    * The EFFECTIVE kinds the player actually showed, in order — so a locked-in
    * amplify is not reported as a breath. This is what `POST /api/mind/session`
-   * takes (`{ tz, moves: [{ kind }] }`) when NP-101 wires it up.
+   * takes (`{ tz, moves: [{ kind }] }`).
    */
   moves: { kind: string }[];
   /** Every answer the session collected, latest-per-question, in order. */
   answers: SessionAnswer[];
   /** The live check-in answer, or null when the member never named one. */
   liveState: MindState | null;
+}
+
+export interface LevelUpResult {
+  chapter: number;
+  newlyUnlocked: string[];
+  currentChapter: { name?: string; theme?: string };
 }
 
 export interface SessionPlayerProps {
@@ -102,12 +116,49 @@ export interface SessionPlayerProps {
   preview?: boolean;
   /** Seed the live state, so the breath protocol can be exercised directly. */
   initialLiveState?: MindState | null;
-  /** NP-101's seam: the completion facts, with no write performed here. */
+  /** Seam callback: the completion facts, with writes performed here (NP-101). */
   onComplete?: (completion: SessionCompletion) => void;
   /** Rendered as a full-screen modal; false closes it without unmounting. */
   visible?: boolean;
   testID?: string;
+  /** Timezone offset in minutes west of UTC. Defaults to device local. */
+  tz?: number;
+  /** Explicit token override (falls back to useAuth when inside AuthProvider). */
+  token?: string | null;
 }
+
+export const CHECK_IN_QUESTION = "How I checked in today";
+
+export const MOVE_RECAP_LABEL: Record<string, string> = {
+  "state-check": "Checked in honestly",
+  breath: "Steadied your breathing",
+  identity: "Affirmed who you are",
+  win: "Banked a real win",
+  challenge: "Faced the hard thing",
+  mission: "Named your one move",
+  vision: "Saw the future self",
+  antisabotage: "Caught the pattern",
+  social: "Pulled someone in",
+  mirror: "Said it to your own face",
+  choice: "Answered honestly",
+  type: "Wrote it out word for word",
+  speak: "Said it out loud",
+  assemble: "Rebuilt the line",
+  compose: "Made the words yours",
+  acknowledge: "Told yourself the truth",
+  interrogative: "Asked yourself straight",
+  contrast: "Planned around the obstacle",
+};
+
+export const FEATURE_UNLOCK_LABEL: Record<string, string> = {
+  coach: "Your coach is unlocked — talk it through any time.",
+  becoming: "The Becoming is unlocked — your training log is live.",
+};
+
+export const PAYOFF_SEAL_MS = 1100;
+export const PAYOFF_RECAP_STEP_MS = 500;
+export const PAYOFF_RECAP_HOLD_MS = 400;
+export const PAYOFF_SCORE_MS = 1000;
 
 /** The effective move for a beat: the amplify alternative when locked in. */
 export function effectiveMove(
@@ -118,8 +169,13 @@ export function effectiveMove(
   return move.altPositive && liveState === "locked_in" ? move.altPositive : move;
 }
 
-/** The question the check-in answer is filed under. The web's exact words. */
-export const CHECK_IN_QUESTION = "How I checked in today";
+function useOptionalAuth(): { token: string | null } {
+  try {
+    return useAuth();
+  } catch {
+    return { token: null };
+  }
+}
 
 export function SessionPlayer({
   plan: initialPlan,
@@ -130,9 +186,13 @@ export function SessionPlayer({
   onComplete,
   visible = true,
   testID = "mind-session-player",
+  tz,
+  token: propToken,
 }: SessionPlayerProps) {
   const { colors } = useThemeTokens();
   const reduceMotion = useReducedMotion();
+  const auth = useOptionalAuth();
+  const token = propToken !== undefined ? propToken : auth.token;
 
   const [stage, setStage] = useState<SessionStage>("intro");
   const [index, setIndex] = useState(0);
@@ -142,17 +202,49 @@ export function SessionPlayer({
   const [realigned, setRealigned] = useState<string | null>(null);
   const [confirmingExit, setConfirmingExit] = useState(false);
 
-  // The reflective answers given this session, deduped by question. NP-101
-  // persists them to MindJournal so the next session can build on them.
+  // Payoff state
+  const [payoffPhase, setPayoffPhase] = useState(0);
+  const [result, setResult] = useState<MindSessionCompleteResponse | null>(null);
+  const [reflection, setReflection] = useState<string | null>(null);
+  const [reflecting, setReflecting] = useState(false);
+  const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null);
+
+  // The reflective answers given this session, deduped by question.
   const answersRef = useRef<SessionAnswer[]>([]);
-  // The same value as `liveState`, readable at CALL time. A scene may report the
-  // state and advance in the same tick (the check-in's "Welcome back" does
-  // exactly that), and a session whose last move is the check-in would otherwise
-  // be completed with the state it had BEFORE the member answered.
   const liveStateRef = useRef<MindState | null>(initialLiveState);
 
   const total = plan.moves.length;
   const move = effectiveMove(plan.moves[index], liveState);
+
+  // Recap items matching what was actually shown
+  const recapItems = useMemo(
+    () =>
+      plan.moves
+        .map((m) => effectiveMove(m, liveState) ?? m)
+        .map((m) => MOVE_RECAP_LABEL[m.kind])
+        .filter(Boolean),
+    [plan.moves, liveState],
+  );
+
+  // Payoff animation progression
+  useEffect(() => {
+    if (stage !== "payoff") return;
+    const recapMs =
+      PAYOFF_RECAP_STEP_MS * recapItems.length + PAYOFF_RECAP_HOLD_MS;
+    const t1 = setTimeout(() => setPayoffPhase(1), PAYOFF_SEAL_MS);
+    const t2 = setTimeout(() => setPayoffPhase(2), PAYOFF_SEAL_MS + recapMs);
+    const t3 = setTimeout(
+      () => setPayoffPhase(3),
+      PAYOFF_SEAL_MS + recapMs + PAYOFF_SCORE_MS,
+    );
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [stage, recapItems.length]);
+
+  const skipPayoff = useCallback(() => setPayoffPhase(3), []);
 
   /**
    * The check-in just said how they actually feel. Rebuild the session around
@@ -188,18 +280,97 @@ export function SessionPlayer({
     [plan.openingId, sessionContext],
   );
 
-  const complete = useCallback(() => {
+  const complete = useCallback(async () => {
     setStage("payoff");
     const state = liveStateRef.current;
+    const effectiveMoves = plan.moves.map((m) => ({
+      kind: (effectiveMove(m, state) ?? m).kind,
+    }));
+    const answers = [...answersRef.current];
+
     onComplete?.({
-      // The EFFECTIVE kinds, so a locked-in amplify is never reported as breath.
-      moves: plan.moves.map((m) => ({
-        kind: (effectiveMove(m, state) ?? m).kind,
-      })),
-      answers: [...answersRef.current],
+      moves: effectiveMoves,
+      answers,
       liveState: state,
     });
-  }, [plan.moves, onComplete]);
+
+    if (preview) {
+      setResult({
+        completions: 1,
+        counted: false,
+        trainingMode: false,
+        xpAwarded: 0,
+        levelXp: 0,
+        level: 1,
+        previousLevel: 1,
+        leveledUp: false,
+        levelProgress: { level: 1, pct: 0, intoLevel: 0, span: 100, xpToNext: 100 },
+        chapter: 1,
+        previousChapter: 1,
+        chapterAdvanced: false,
+        newlyUnlocked: [],
+        unlockedSystems: [],
+        currentChapter: CHAPTERS[0],
+        mainSessionCount: 0,
+        sessionsIntoChapter: { done: 0, needed: 10, toNext: 10 },
+        nextMainSessionAt: Date.now(),
+        xpBank: 0,
+        streak: 0,
+        featureUnlocks: [],
+      });
+      return;
+    }
+
+    const tzMinutes = tz ?? tzOffsetMinutes();
+
+    // 1. Journal write (best effort)
+    if (answers.length > 0) {
+      const lines = answers.map((x) => ({ prompt: x.q, answer: x.a }));
+      void apiFetch("/api/mind/journal", MindJournalCreateResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: {
+          system: "session",
+          kind: "session",
+          title: plan.intro.title,
+          lines,
+          ...(tzMinutes != null ? { tz: tzMinutes } : {}),
+        },
+      }).catch(() => {});
+
+      // 2. Reflection through AI coach (hidden on failure)
+      setReflecting(true);
+      void Promise.resolve(reflectOnAnswers("Mind session", lines))
+        .then((t) => setReflection(t && t.trim() ? t.trim() : null))
+        .catch(() => setReflection(null))
+        .finally(() => setReflecting(false));
+    }
+
+    // 3. Completion POST: XP, counters, chapter, streak
+    try {
+      const data = await apiFetch(
+        "/api/mind/session",
+        MindSessionCompleteResponseSchema,
+        {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          method: "POST",
+          body: {
+            moves: effectiveMoves,
+            ...(tzMinutes != null ? { tz: tzMinutes } : {}),
+          },
+        },
+      );
+      setResult(data);
+    } catch {
+      /* payoff still shows; XP is best-effort (as on web) */
+    } finally {
+      // 4. Drop cached AI plan and warm a fresh one (NP-102)
+      void invalidateMindSession();
+      void warmMindSession();
+    }
+  }, [plan.moves, plan.intro.title, preview, tz, token, onComplete]);
 
   const next = useCallback(
     (answer?: SessionAnswer) => {
@@ -211,15 +382,13 @@ export function SessionPlayer({
         if (at >= 0) answers[at] = answer;
         else answers.push(answer);
       }
-      if (index >= total - 1) complete();
+      if (index >= total - 1) void complete();
       else setIndex((i) => i + 1);
     },
     [index, total, complete],
   );
 
-  // Step back one move (or back to the intro from the first move). The scene is
-  // keyed by its position, so going back RE-MOUNTS it fresh: the member can redo
-  // a beat instead of being locked forward.
+  // Step back one move (or back to the intro from the first move).
   const back = useCallback(() => {
     if (stage !== "move") return;
     if (index <= 0) {
@@ -231,23 +400,12 @@ export function SessionPlayer({
 
   const canGoBack = stage === "move";
 
-  /**
-   * The Android hardware back button. A visible React Native Modal consumes the
-   * press itself and delivers it here as `onRequestClose`, which is why there is
-   * no `BackHandler` subscription: a listener underneath would fire as well and
-   * the session would jump back two beats.
-   *
-   * It never closes the session silently — that is the one thing a back press
-   * must not do, because a half-played session is work the member cannot get
-   * back. It cancels the confirmation, then steps back a move, and only asks to
-   * leave when there is nowhere left to step.
-   */
   const onHardwareBack = useCallback(() => {
     if (confirmingExit) {
       setConfirmingExit(false);
       return;
     }
-    if (stage === "payoff") {
+    if (stage === "payoff" || stage === "levelup") {
       onExit();
       return;
     }
@@ -271,7 +429,8 @@ export function SessionPlayer({
     return breathForState(liveState);
   }, [move, liveState]);
 
-  const filledSegments = stage === "payoff" ? total : stage === "move" ? index : 0;
+  const filledSegments =
+    stage === "payoff" || stage === "levelup" ? total : stage === "move" ? index : 0;
 
   return (
     <RNModal
@@ -290,9 +449,11 @@ export function SessionPlayer({
             testID={`${testID}-exit`}
             accessibilityRole="button"
             accessibilityLabel="Exit session"
-            // Nothing is at stake once the session is finished, so the payoff's
-            // X is just a close. Anywhere else it asks.
-            onPress={() => (stage === "payoff" ? onExit() : setConfirmingExit(true))}
+            onPress={() =>
+              stage === "payoff" || stage === "levelup"
+                ? onExit()
+                : setConfirmingExit(true)
+            }
             style={minTouchTarget}
             className="items-center justify-center rounded-full bg-muted"
           >
@@ -335,8 +496,7 @@ export function SessionPlayer({
           </View>
         </View>
 
-        {/* The check-in changed the session, so say so. Being told "we rebuilt
-            this around what you just said" is the whole point of asking. */}
+        {/* Realignment notice */}
         {realigned && stage === "move" && index === 1 ? (
           <View
             testID={`${testID}-realigned`}
@@ -388,8 +548,6 @@ export function SessionPlayer({
           ) : null}
 
           {stage === "move" && move ? (
-            // Keyed by POSITION as well as id, so stepping back re-mounts the
-            // previous scene fresh rather than restoring the state it ended in.
             <View
               key={`move-${index}-${move.id}`}
               testID={`${testID}-move-${index}`}
@@ -436,54 +594,330 @@ export function SessionPlayer({
               ) : move.kind === "contrast" ? (
                 <ContrastScene move={move} onDone={next} preview={preview} />
               ) : (
-                // Mirror (NP-099) and Speak (NP-100) are hardware/voice modalities
-                // not yet ported; they fall back to HoldToAffirmScene so the plan
-                // always plays through to completion.
                 <HoldToAffirmScene move={move} onDone={next} preview={preview} />
               )}
             </View>
           ) : null}
 
           {stage === "payoff" ? (
-            // The SHORT close. NP-101 replaces this with the web's full payoff —
-            // the recap of the beats, XP, the level bar, the streak, the chapter
-            // unlock and the AI reflection — and with the writes that earn them.
-            <View
+            <ScrollView
               testID={`${testID}-payoff`}
-              className="flex-1 items-center justify-center px-6"
+              contentContainerStyle={{
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 32,
+                paddingHorizontal: 24,
+                flexGrow: 1,
+              }}
+              className="flex-1 w-full"
             >
-              <View className="mb-5 h-20 w-20 items-center justify-center rounded-full bg-primary">
-                <Check size={40} color={colors["primary-foreground"]} />
-              </View>
-              <Text
-                testID={`${testID}-payoff-title`}
-                className="text-center text-2xl font-extrabold text-foreground"
-              >
-                {plan.doneText ?? "You showed up."}
-              </Text>
-              <Text className="mt-2 text-center text-muted-foreground">
-                That&apos;s how it&apos;s built — one rep at a time.
-              </Text>
               <Pressable
-                testID={`${testID}-payoff-done`}
+                onPress={payoffPhase < 3 ? skipPayoff : undefined}
+                className="w-full max-w-sm items-center justify-center"
+              >
+                {/* Seal checkmark */}
+                <View className="mb-5 h-20 w-20 items-center justify-center rounded-full bg-primary">
+                  <Check size={40} color={colors["primary-foreground"]} />
+                </View>
+
+                {/* Title */}
+                <Text
+                  testID={`${testID}-payoff-title`}
+                  className="text-center text-2xl font-extrabold text-foreground"
+                >
+                  {result?.leveledUp
+                    ? "Level up."
+                    : result?.trainingMode
+                      ? "Another rep in."
+                      : plan.doneText ?? "You showed up."}
+                </Text>
+
+                {/* Subtitle */}
+                <Text
+                  testID={`${testID}-payoff-subtitle`}
+                  className="mt-2 text-center text-muted-foreground"
+                >
+                  {result?.leveledUp
+                    ? `You climbed to Level ${result.level}.`
+                    : "That's how it's built — one rep at a time."}
+                </Text>
+
+                {/* Recap of beats */}
+                {payoffPhase >= 1 ? (
+                  <View
+                    testID={`${testID}-payoff-recap`}
+                    className="mt-5 w-full max-w-xs gap-1.5"
+                  >
+                    {recapItems.map((label, i) => (
+                      <View
+                        key={`${label}-${i}`}
+                        testID={`${testID}-payoff-recap-${i}`}
+                        className="flex-row items-center gap-2.5 rounded-xl bg-card border border-border px-3 py-2"
+                      >
+                        <Check size={14} color={colors.success} strokeWidth={3} />
+                        <Text className="text-xs font-medium text-foreground">
+                          {label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {/* Adaptive reflection */}
+                {payoffPhase >= 3 && (reflecting || reflection) ? (
+                  <View
+                    testID={
+                      reflecting
+                        ? `${testID}-payoff-reflecting`
+                        : `${testID}-payoff-reflection`
+                    }
+                    className="mt-5 w-full max-w-sm rounded-2xl border border-border bg-card p-4"
+                  >
+                    {reflecting ? (
+                      <View className="flex-row items-center justify-center gap-2.5 py-2">
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text className="text-sm text-muted-foreground">
+                          Reading what you said…
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        <Text className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          Here&apos;s what I see
+                        </Text>
+                        <Text
+                          testID={`${testID}-payoff-reflection-text`}
+                          className="mt-1.5 text-sm leading-relaxed text-foreground"
+                        >
+                          {reflection}
+                        </Text>
+                      </>
+                    )}
+                  </View>
+                ) : null}
+
+                {/* XP pill */}
+                {payoffPhase >= 2 && result && (result.xpAwarded ?? 0) > 0 ? (
+                  <View
+                    testID={`${testID}-payoff-xp`}
+                    className="mt-4 rounded-full bg-muted px-4 py-1.5"
+                  >
+                    <Text className="text-sm font-bold text-success">
+                      +{result.xpAwarded} XP
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Level progress bar */}
+                {payoffPhase >= 2 && result?.level != null ? (
+                  <View
+                    testID={`${testID}-payoff-level`}
+                    className="mt-4 w-full max-w-xs"
+                  >
+                    <View className="flex-row items-center justify-between">
+                      <Text
+                        testID={`${testID}-payoff-level-label`}
+                        className={`text-xs font-semibold ${
+                          result.leveledUp ? "text-primary" : "text-foreground"
+                        }`}
+                      >
+                        Level {result.level}
+                      </Text>
+                      {result.levelProgress ? (
+                        <Text
+                          testID={`${testID}-payoff-level-xp-next`}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {result.levelProgress.xpToNext} XP to next
+                        </Text>
+                      ) : null}
+                    </View>
+                    <View className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <View
+                        testID={`${testID}-payoff-level-bar`}
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.max(0, result.levelProgress?.pct ?? 0),
+                          )}%`,
+                        }}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Cooldown note */}
+                {payoffPhase >= 2 && result?.trainingMode ? (
+                  <Text
+                    testID={`${testID}-payoff-cooldown-note`}
+                    className="mt-3 max-w-xs text-center text-xs text-muted-foreground"
+                  >
+                    You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
+                  </Text>
+                ) : null}
+
+                {/* Feature unlocks */}
+                {payoffPhase >= 2 &&
+                  (result?.featureUnlocks ?? []).map((f) => (
+                    <View
+                      key={f}
+                      testID={`${testID}-payoff-feature-unlock-${f}`}
+                      className="mt-3 flex-row items-center gap-1.5 rounded-full bg-muted px-3.5 py-1.5"
+                    >
+                      <Sparkles size={14} color={colors.accent} />
+                      <Text className="text-xs font-semibold text-accent">
+                        {FEATURE_UNLOCK_LABEL[f] ?? f}
+                      </Text>
+                    </View>
+                  ))}
+
+                {/* Streak */}
+                {payoffPhase >= 2 &&
+                  result &&
+                  typeof result.streak === "number" &&
+                  result.streak > 1 ? (
+                    <View
+                      testID={`${testID}-payoff-streak`}
+                      className="mt-3 flex-row items-center gap-1.5"
+                    >
+                      <Flame size={16} color={colors.accent} />
+                      <Text className="text-sm font-semibold text-foreground">
+                        {result.streak}-day streak
+                      </Text>
+                    </View>
+                  ) : null}
+
+                {/* Action buttons */}
+                {payoffPhase < 3 ? null : result?.chapterAdvanced ? (
+                  <View className="w-full items-center">
+                    <Pressable
+                      testID={`${testID}-payoff-chapter-unlock`}
+                      accessibilityRole="button"
+                      accessibilityLabel="New chapter unlocked"
+                      onPress={() => {
+                        if (result.currentChapter) {
+                          setLevelUp({
+                            chapter: result.chapter ?? 0,
+                            newlyUnlocked: result.newlyUnlocked ?? [],
+                            currentChapter: result.currentChapter,
+                          });
+                          setStage("levelup");
+                        } else {
+                          onExit();
+                        }
+                      }}
+                      style={minTouchTarget}
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+                    >
+                      <ChevronUp size={20} color={colors["primary-foreground"]} />
+                      <Text className="text-base font-bold text-primary-foreground">
+                        New chapter unlocked
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      testID={`${testID}-payoff-later`}
+                      accessibilityRole="button"
+                      accessibilityLabel="Later"
+                      onPress={onExit}
+                      style={minTouchTarget}
+                      className="mt-3 items-center justify-center py-2"
+                    >
+                      <Text className="text-sm font-medium text-muted-foreground">
+                        Later
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    testID={`${testID}-payoff-done`}
+                    accessibilityRole="button"
+                    accessibilityLabel="Done for now"
+                    onPress={onExit}
+                    style={minTouchTarget}
+                    className="mt-8 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
+                  >
+                    <Text className="text-base font-bold text-primary-foreground">
+                      Done for now
+                    </Text>
+                  </Pressable>
+                )}
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
+          {stage === "levelup" && levelUp ? (
+            <ScrollView
+              testID={`${testID}-levelup`}
+              contentContainerStyle={{
+                alignItems: "center",
+                justifyContent: "center",
+                paddingVertical: 32,
+                paddingHorizontal: 24,
+                flexGrow: 1,
+              }}
+              className="flex-1 w-full"
+            >
+              <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
+                Chapter {levelUp.chapter} unlocked
+              </Text>
+              <Text
+                testID={`${testID}-levelup-title`}
+                className="mt-3 text-center text-3xl font-extrabold text-foreground"
+              >
+                {levelUp.currentChapter?.name ??
+                  CHAPTERS[levelUp.chapter - 1]?.name}
+              </Text>
+              <Text
+                testID={`${testID}-levelup-theme`}
+                className="mt-2 text-center text-sm text-muted-foreground max-w-xs"
+              >
+                {levelUp.currentChapter?.theme ??
+                  CHAPTERS[levelUp.chapter - 1]?.theme}
+              </Text>
+
+              {levelUp.newlyUnlocked.length > 0 ? (
+                <View
+                  testID={`${testID}-levelup-tools`}
+                  className="mt-8 w-full max-w-xs"
+                >
+                  <Text className="mb-3 text-xs uppercase tracking-widest text-muted-foreground text-center">
+                    New tools
+                  </Text>
+                  <View className="gap-2">
+                    {levelUp.newlyUnlocked.map((id) => (
+                      <View
+                        key={id}
+                        testID={`${testID}-levelup-tool-${id}`}
+                        className="flex-row items-center gap-2 rounded-xl bg-card border border-border px-4 py-3"
+                      >
+                        <Sparkles size={16} color={colors.accent} />
+                        <Text className="text-sm font-semibold text-foreground">
+                          {SYSTEM_INFO[id]?.label ?? id}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              <Pressable
+                testID={`${testID}-levelup-enter`}
                 accessibilityRole="button"
-                accessibilityLabel="Done for now"
+                accessibilityLabel="Enter"
                 onPress={onExit}
                 style={minTouchTarget}
                 className="mt-10 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
               >
                 <Text className="text-base font-bold text-primary-foreground">
-                  Done for now
+                  Enter
                 </Text>
               </Pressable>
-            </View>
+            </ScrollView>
           ) : null}
         </View>
 
-        {/* Leaving mid-session throws the session away, so it is asked about
-            rather than done. An overlay and not a nested RN Modal: two modals on
-            Android fight over the back press, which is the gesture this dialog
-            exists to answer. */}
+        {/* Leaving mid-session confirmation dialog */}
         {confirmingExit ? (
           <View
             testID={`${testID}-exit-dialog`}
@@ -518,13 +952,13 @@ export function SessionPlayer({
               <Pressable
                 testID={`${testID}-exit-cancel`}
                 accessibilityRole="button"
-                accessibilityLabel="Keep going"
+                accessibilityLabel="Stay in session"
                 onPress={() => setConfirmingExit(false)}
                 style={minTouchTarget}
-                className="mt-2 items-center justify-center rounded-2xl py-3"
+                className="mt-2.5 items-center justify-center py-2"
               >
-                <Text className="text-base font-semibold text-foreground">
-                  Keep going
+                <Text className="text-sm font-medium text-muted-foreground">
+                  Stay
                 </Text>
               </Pressable>
             </View>
@@ -534,5 +968,3 @@ export function SessionPlayer({
     </RNModal>
   );
 }
-
-export default SessionPlayer;

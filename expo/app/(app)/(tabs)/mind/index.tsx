@@ -52,6 +52,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes, useLocalDay } from "@/lib/time/localDay";
+import {
+  invalidateMindSession,
+  warmMindSession,
+} from "@/lib/mind/sessionCache";
 
 export interface MindRouteProps {
   testID?: string;
@@ -692,11 +696,14 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
         <SessionPlayer
           plan={effectivePlan}
           {...(sessionContext ? { sessionContext } : {})}
+          tz={localDay.tz ?? tzOffsetMinutes()}
           onExit={() => {
             setPlaying(false);
-            // The session is not read-only even before NP-101: the check-in
-            // logs a state and earns XP, so the home re-reads on the way out
-            // (the web's SessionPlayer says the same about `onExit`).
+            setResumable(null);
+            // Finished a session → drop the cache and warm a fresh one in the
+            // background (non-blocking), so the next view shows a new AI session.
+            void invalidateMindSession();
+            void warmMindSession();
             void load();
           }}
         />

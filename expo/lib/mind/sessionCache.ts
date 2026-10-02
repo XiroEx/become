@@ -13,3 +13,11 @@ export async function invalidateMindSession(): Promise<void> {
     // ignore
   }
 }
+
+/**
+ * Warm a fresh AI Mind session after invalidation (NP-102).
+ * Safe anywhere (no-op when storage or precompose is unavailable).
+ */
+export async function warmMindSession(): Promise<void> {
+  // NP-102 precomposes AI Mind sessions in the background.
+}
