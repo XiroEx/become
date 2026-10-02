@@ -344,6 +344,15 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
       ? native(NATIVE_ROUTES.mind, params, "exact")
       : native(NATIVE_ROUTES.mind, params, "nearest");
   }
+  if (head === "programming" || head === "workout") {
+    return native(NATIVE_ROUTES.workout, params, "exact");
+  }
+  if (head === "nutrition") {
+    return native(NATIVE_ROUTES.nutrition, params, "exact");
+  }
+  if (head === "calendar") {
+    return native(NATIVE_ROUTES.calendar, params, "exact");
+  }
 
   if (head !== "dashboard") {
     return native(NATIVE_ROUTES.home, params, "unknown");

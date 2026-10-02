@@ -26,6 +26,7 @@ import {
   type CheckInPayload,
   type MoodLevel,
 } from "@/components/CheckInModal";
+import { ProgramNudgeModal } from "@/components/ProgramNudgeModal";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
 import type { WeightUnit } from "@become/core";
@@ -138,6 +139,13 @@ export interface DashboardScreenProps {
   targetWeight?: number | null;
   /** Callback when Customize tiles link is pressed (NP-157). */
   onOpenCustomizeTiles?: () => void;
+  /** Program nudge modal visibility */
+  nudgeOpen?: boolean;
+  onNudgeOpenChange?: (open: boolean) => void;
+  priorShowings?: number;
+  onExploreNudge?: () => void;
+  onFindProgram?: () => void;
+  onDismissNudgeForever?: () => void;
 }
 
 export function DashboardScreen({
@@ -184,8 +192,22 @@ export function DashboardScreen({
   fitnessGoal,
   targetWeight,
   onOpenCustomizeTiles,
+  nudgeOpen,
+  onNudgeOpenChange,
+  priorShowings,
+  onExploreNudge,
+  onFindProgram,
+  onDismissNudgeForever,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
+  const [internalNudgeOpen, setInternalNudgeOpen] = useState<boolean>(false);
+  const isNudgeControlled = nudgeOpen !== undefined;
+  const isNudgeModalOpen = isNudgeControlled ? nudgeOpen : internalNudgeOpen;
+  const setNudgeModalOpen = (value: boolean) => {
+    if (isNudgeControlled) onNudgeOpenChange?.(value);
+    else setInternalNudgeOpen(value);
+  };
+
   const [internalOpen, setInternalOpen] = useState<boolean>(false);
   const isControlled = checkInOpen !== undefined;
   const open = isControlled ? checkInOpen : internalOpen;
@@ -512,9 +534,28 @@ export function DashboardScreen({
         </View>
       </ScrollView>
 
+      <ProgramNudgeModal
+        testID="dashboard-program-nudge-modal"
+        visible={isNudgeModalOpen}
+        fitnessGoal={fitnessGoal}
+        priorShowings={priorShowings}
+        onExplore={() => {
+          setNudgeModalOpen(false);
+          onExploreNudge?.();
+        }}
+        onFindProgram={() => {
+          setNudgeModalOpen(false);
+          onFindProgram?.();
+        }}
+        onDismissForever={() => {
+          setNudgeModalOpen(false);
+          onDismissNudgeForever?.();
+        }}
+      />
+
       <CheckInModal
         testID="dashboard-checkin-modal"
-        visible={open}
+        visible={open && !isNudgeModalOpen}
         onClose={() => setOpen(false)}
         onSubmit={async (payload) => {
           await onSubmitCheckIn(payload);

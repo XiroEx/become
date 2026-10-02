@@ -16,6 +16,7 @@ import {
   MindSummaryResponseSchema,
   ScheduleApiResponseSchema,
   SuggestionDismissResponseSchema,
+  ProgramNudgeResponseSchema,
   apiFetch,
   type ScheduledWorkout,
 } from "@become/api-client";
@@ -115,6 +116,11 @@ export default function DashboardRoute() {
     ScheduleApiResponseSchema,
     fetchOpts,
   );
+  const programNudge = useFetch(
+    ready ? "/api/program-nudge" : null,
+    ProgramNudgeResponseSchema,
+    { ...fetchOpts, useCache: false },
+  );
 
   // ONE weight unit for the whole screen: the check-in and weigh-in writes
   // (NP-105) and the stat tiles (NP-210). The member's explicit profile setting
@@ -129,11 +135,79 @@ export default function DashboardRoute() {
         hookWeightUnit ??
         "lbs");
 
+  const activeProgram = active.data?.activePrograms?.[0] ?? null;
+  const programId = activeProgram?.programId ?? null;
+
+  const [nudgeOpen, setNudgeOpen] = useState(false);
+  const nudgeShownRef = useRef(false);
+
+  const onExploreNudge = useCallback(() => {
+    setNudgeOpen(false);
+    void apiFetch("/api/program-nudge", ProgramNudgeResponseSchema, {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      method: "POST",
+      body: { action: "dismiss" },
+    }).catch(() => {});
+  }, [token]);
+
+  const onFindProgram = useCallback(() => {
+    setNudgeOpen(false);
+    router.push("/(tabs)/programming");
+    void apiFetch("/api/program-nudge", ProgramNudgeResponseSchema, {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      method: "POST",
+      body: { action: "dismiss" },
+    }).catch(() => {});
+  }, [router, token]);
+
+  const onDismissNudgeForever = useCallback(() => {
+    setNudgeOpen(false);
+    void apiFetch("/api/program-nudge", ProgramNudgeResponseSchema, {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      method: "POST",
+      body: { action: "dismiss_forever" },
+    }).catch(() => {});
+  }, [token]);
+
+  // Program nudge is due if member has no active program, the server reports
+  // due: true, and it has not yet been shown this session.
+  const isNudgeDue = ready && !activeProgram && !!programNudge.data?.due;
+
+  useEffect(() => {
+    if (isNudgeDue && !nudgeOpen && !nudgeShownRef.current) {
+      nudgeShownRef.current = true;
+      setNudgeOpen(true);
+      void apiFetch("/api/program-nudge", ProgramNudgeResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: { action: "shown" },
+      }).catch(() => {});
+    }
+  }, [isNudgeDue, nudgeOpen, token]);
+
   const [checkInOpen, setCheckInOpen] = useState(false);
   const checkinShownRef = useRef(false);
 
+  // The nudge opens before the check-in and never on top of it.
   useEffect(() => {
-    if (ready && checkin.data?.due && !checkInOpen && !checkinShownRef.current) {
+    const nudgeBusy =
+      nudgeOpen ||
+      (ready &&
+        !activeProgram &&
+        (programNudge.loading ||
+          (!!programNudge.data?.due && !nudgeShownRef.current)));
+
+    if (
+      ready &&
+      checkin.data?.due &&
+      !checkInOpen &&
+      !checkinShownRef.current &&
+      !nudgeBusy
+    ) {
       checkinShownRef.current = true;
       setCheckInOpen(true);
       void apiFetch("/api/checkin", CheckInActionResponseSchema, {
@@ -143,10 +217,16 @@ export default function DashboardRoute() {
         body: { action: "shown", tz: tzOffsetMinutes() },
       }).catch(() => {});
     }
-  }, [ready, checkin.data?.due, checkInOpen, token]);
-
-  const activeProgram = active.data?.activePrograms?.[0] ?? null;
-  const programId = activeProgram?.programId ?? null;
+  }, [
+    ready,
+    checkin.data?.due,
+    checkInOpen,
+    nudgeOpen,
+    activeProgram,
+    programNudge.loading,
+    programNudge.data?.due,
+    token,
+  ]);
 
   const workout = useFetch(
     ready && programId
@@ -238,6 +318,7 @@ export default function DashboardRoute() {
       goals.refetch(),
       mind.refetch(),
       schedule.refetch(),
+      programNudge.refetch(),
     ]);
   }, [
     active,
@@ -247,6 +328,7 @@ export default function DashboardRoute() {
     me,
     mind,
     nutrition,
+    programNudge,
     progress,
     schedule,
     streak,
@@ -434,7 +516,10 @@ export default function DashboardRoute() {
       : null;
 
   const fitnessGoal =
-    progress.data?.goal?.fitnessGoal ?? null;
+    user?.profile?.fitnessGoal ??
+    me.data?.user?.profile?.fitnessGoal ??
+    progress.data?.goal?.fitnessGoal ??
+    null;
   const nutritionDirection =
     goals.data?.nutrition?.direction ??
     progress.data?.goal?.nutritionDirection ??
@@ -603,6 +688,12 @@ export default function DashboardRoute() {
       submittingCheckIn={submittingCheckIn}
       checkInOpen={checkInOpen}
       onCheckInOpenChange={setCheckInOpen}
+      nudgeOpen={nudgeOpen}
+      onNudgeOpenChange={setNudgeOpen}
+      priorShowings={programNudge.data?.showings ?? 0}
+      onExploreNudge={onExploreNudge}
+      onFindProgram={onFindProgram}
+      onDismissNudgeForever={onDismissNudgeForever}
       checkInInfo={checkInInfo}
       weightUnit={weightUnit}
       onSubmitWeight={onSubmitWeight}
