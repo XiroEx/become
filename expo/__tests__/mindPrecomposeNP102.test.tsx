@@ -103,6 +103,15 @@ describe("Native Mind Precompose & Cache (NP-102)", () => {
           result: {
             intro: { title: "AI Composed", subtitle: "Subtitle" },
             moves: [
+              {
+                kind: "choice",
+                title: "How do you feel?",
+                subtitle: "Choose one",
+                options: [
+                  { label: "Ready", response: "Good" },
+                  { label: "Tired", response: "Rest" },
+                ],
+              },
               { kind: "identity", title: "I am becoming", statement: "I show up daily." },
             ],
           },
@@ -156,8 +165,23 @@ describe("Native Mind Precompose & Cache (NP-102)", () => {
         return {
           ok: true,
           result: {
-            intro: { title: "AI Plan 1" },
-            moves: [{ kind: "identity", title: "Move 1", statement: "Statement 1" }],
+            intro: { title: "AI Plan 1", subtitle: "Daily Focus" },
+            moves: [
+              {
+                kind: "choice",
+                title: "How do you feel?",
+                subtitle: "Choose one",
+                options: [
+                  { label: "Ready", response: "Good" },
+                  { label: "Tired", response: "Rest" },
+                ],
+              },
+              {
+                kind: "identity",
+                title: "Move 1",
+                statement: "I show up daily.",
+              },
+            ],
           },
         };
       });

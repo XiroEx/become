@@ -238,4 +238,43 @@ describe("DashboardScreen", () => {
     expect(getByText("Current Weight (kg)")).toBeTruthy();
     expect(getByTestId("checkin-goal-line")).toBeTruthy();
   });
+
+  it("(id: e015ca09 / e015ca0a) renders NutritionCard when nutritionData is provided and passes callbacks", () => {
+    const onOpenNutrition = jest.fn();
+    const onQuickAdd = jest.fn();
+    const nutritionData = {
+      calories: { consumed: 1500, goal: 2000 },
+      protein: { current: 120, goal: 150 },
+      carbs: { current: 180, goal: 220 },
+      fats: { current: 50, goal: 65 },
+      water: { current: 64, goal: 96 },
+    };
+    const nutritionTrend = {
+      loggedDays: 5,
+      totalDays: 7,
+      proteinHitDays: 3,
+      avgCalories: 1800,
+      calorieRead: "under" as const,
+      line: "Logged 5 of 7 days · protein hit 3 · avg 1,800 cal (under)",
+    };
+
+    const { getByTestId } = render(
+      <DashboardScreen
+        {...baseProps}
+        nutritionData={nutritionData}
+        nutritionTrend={nutritionTrend}
+        onOpenNutrition={onOpenNutrition}
+        onQuickAdd={onQuickAdd}
+      />,
+    );
+
+    expect(getByTestId("dashboard-nutrition-card")).toBeTruthy();
+    expect(getByTestId("nutrition-trend")).toBeTruthy();
+
+    fireEvent.press(getByTestId("nutrition-card-quick-add"));
+    expect(onQuickAdd).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByTestId("nutrition-card-view-all"));
+    expect(onOpenNutrition).toHaveBeenCalledTimes(1);
+  });
 });
