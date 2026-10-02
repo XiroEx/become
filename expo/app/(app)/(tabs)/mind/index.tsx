@@ -10,10 +10,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowRight,
   Check,
-  Clock,
   Flame,
   Lock,
-  Sparkles,
 } from "lucide-react-native";
 import {
   apiFetch,
@@ -36,7 +34,6 @@ import {
   findProtocol,
   getPathSession,
   getUnlockedSystems,
-  SYSTEM_INFO,
   isMoodLevel,
   seedStateForMood,
   shouldAutoStartMindSession,
@@ -54,6 +51,8 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
+import SuggestedActions from "@/components/mind/SuggestedActions";
+import TrainingGrounds from "@/components/mind/TrainingGrounds";
 import MindSectionRoute from "./[section]";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -97,16 +96,6 @@ function untilLabel(ts: number | null): string | null {
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
 }
-
-const ALL_SYSTEM_IDS = [
-  "state-shift",
-  "self-image",
-  "mission",
-  "vision",
-  "discipline",
-  "anti-sabotage",
-  "social",
-] as const;
 
 export const MOVE_CHIP: Record<string, string> = {
   "state-check": "Check in",
@@ -823,135 +812,19 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             </Pressable>
           </View>
         ) : (
-          /* Cooldown Card */
-          <View
-            testID="mind-cooldown-card"
-            className="rounded-3xl border border-border bg-card p-6"
-          >
-            <View className="flex-row items-center gap-2">
-              <Clock size={16} color={colors["muted-foreground"]} />
-              <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                Session completed
-              </Text>
-            </View>
-            <Text className="text-foreground text-xl font-bold mt-2">
-              Today&apos;s session is done
-            </Text>
-            <Text
-              testID="mind-cooldown-label"
-              className="text-muted-foreground text-sm mt-1"
-            >
-              Next session {cooldownLabel ?? "unlocks tomorrow"}
-            </Text>
+          /* Cooldown state: Suggested Actions + Training Grounds */
+          <View testID="mind-cooldown-card">
+            <SuggestedActions
+              actions={aiSuggestions ?? deterministicSuggestions}
+              loading={suggFetching}
+            />
+            <TrainingGrounds
+              unlocked={progress?.unlockedSystems ?? []}
+              nextInLabel={cooldownLabel}
+              mainSessionCount={progress?.mainSessionCount ?? 0}
+            />
           </View>
         )}
-
-        {/* Suggested Next Moves during cooldown (NP-102) */}
-        {!available &&
-        (aiSuggestions ?? deterministicSuggestions).length > 0 ? (
-          <View testID="mind-suggested-actions" className="gap-3">
-            <View className="flex-row items-center justify-between">
-              <Text className="text-foreground text-sm font-semibold uppercase tracking-wider">
-                Suggested Next Moves
-              </Text>
-              {suggFetching ? (
-                <Text
-                  testID="mind-sugg-loading"
-                  className="text-xs text-muted-foreground"
-                >
-                  tuning…
-                </Text>
-              ) : null}
-            </View>
-            {(aiSuggestions ?? deterministicSuggestions).map((action) => (
-              <Pressable
-                key={`${action.system}-${action.id}`}
-                testID={`mind-suggested-action-${action.id}`}
-                accessibilityRole="button"
-                onPress={() =>
-                  router.push(`/(tabs)/mind/${action.system}` as any)
-                }
-                className="rounded-2xl border border-border bg-card p-4 gap-1 active:opacity-80"
-              >
-                <View className="flex-row items-center justify-between">
-                  <Text className="text-xs font-bold text-primary uppercase">
-                    {action.system}
-                  </Text>
-                  <Text className="text-xs text-muted-foreground">
-                    {action.title}
-                  </Text>
-                </View>
-                <Text className="text-sm text-foreground font-medium">
-                  {action.reason}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        ) : null}
-
-        {/* Mind Systems (NP-151) */}
-        <View testID="mind-systems-section" className="gap-3">
-          <Text className="text-foreground text-sm font-semibold uppercase tracking-wider">
-            Mind Systems
-          </Text>
-          <View className="gap-2.5">
-            {ALL_SYSTEM_IDS.map((id) => {
-              const info = SYSTEM_INFO[id];
-              const unlockedList =
-                progress?.unlockedSystems ??
-                getUnlockedSystems(progress?.chapter ?? 1);
-              const isUnlocked = unlockedList.includes(id);
-
-              if (!isUnlocked) {
-                return (
-                  <View
-                    key={id}
-                    testID={`mind-system-tile-${id}`}
-                    className="flex-row items-center gap-3 rounded-2xl border border-dashed border-border bg-card/60 p-4 opacity-75"
-                  >
-                    <View className="h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-                      <Lock size={18} color={colors["muted-foreground"]} />
-                    </View>
-                    <View className="min-w-0 flex-1">
-                      <Text className="text-sm font-semibold text-muted-foreground">
-                        {info?.label ?? id}
-                      </Text>
-                      <Text className="text-xs text-muted-foreground/80">
-                        Unlocks in Chapter {info?.chapter ?? 1}
-                      </Text>
-                    </View>
-                  </View>
-                );
-              }
-
-              return (
-                <Pressable
-                  key={id}
-                  testID={`mind-system-tile-${id}`}
-                  accessibilityRole="button"
-                  onPress={() => router.push(`/(tabs)/mind/${id}` as any)}
-                  className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
-                >
-                  <View className="h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
-                    <Sparkles size={18} color={colors.primary} />
-                  </View>
-                  <View className="min-w-0 flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {info?.label ?? id}
-                    </Text>
-                    <Text
-                      className="text-xs text-muted-foreground"
-                      numberOfLines={1}
-                    >
-                      {info?.hook ?? ""}
-                    </Text>
-                  </View>
-                  <ArrowRight size={16} color={colors["muted-foreground"]} />
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
 
         {/* Recent moods (kept below the card until NP-105 ships) */}
         <View testID="mind-recent-moods">

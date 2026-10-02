@@ -92,6 +92,7 @@ export const NATIVE_ROUTES = {
   streaks: "/(tabs)/dashboard/streaks",
   chat: "/(tabs)/chat",
   profile: "/(tabs)/profile",
+  becoming: "/becoming",
 } as const;
 
 /**
@@ -340,8 +341,15 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return web(rawPathname, params);
   }
 
+  if (head === "becoming") {
+    return native(NATIVE_ROUTES.becoming, params, "exact");
+  }
+
   if (head === "mind") {
     const sub = lower(segments[1] ?? "");
+    if (sub === "becoming") {
+      return native(NATIVE_ROUTES.becoming, params, "exact");
+    }
     if (
       sub === "state-shift" ||
       sub === "self-image" ||
@@ -440,6 +448,9 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   // ── Mind ──────────────────────────────────────────────────────────────────
   if (section === "mind") {
     const sub = lower(segments[2] ?? "");
+    if (sub === "becoming") {
+      return native(NATIVE_ROUTES.becoming, params, "exact");
+    }
     if (
       sub === "state-shift" ||
       sub === "self-image" ||
