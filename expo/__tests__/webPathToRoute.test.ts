@@ -250,8 +250,9 @@ describe("the table", () => {
     ["/dashboard/programs/new", "/(tabs)/programming", "nearest"],
     ["/dashboard/programs/p1/edit", "/(tabs)/programming", "nearest"],
     ["/dashboard/history", "/(tabs)/programming", "nearest"],
-    ["/dashboard/progress", "/(tabs)/programming", "nearest"],
-    ["/dashboard/progress#records", "/(tabs)/programming", "nearest"],
+    ["/dashboard/progress", "/progress", "exact"],
+    ["/dashboard/progress#records", "/progress", "exact"],
+    ["/dashboard/progress/bench-press", "/(tabs)/programming", "nearest"],
     ["/dashboard/insights/weight", "/(tabs)/programming", "nearest"],
     // Chat and community — hidden in v1 (NP-032)
     ["/dashboard/chat", "/(tabs)/dashboard", "hidden"],

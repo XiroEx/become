@@ -78,6 +78,7 @@ export default function AppGroupLayout() {
             <Stack.Screen name="settings" />
             <Stack.Screen name="plan" />
             <Stack.Screen name="becoming" />
+            <Stack.Screen name="progress" />
           </Stack>
         </OnboardingGuard>
       </ConsentGate>
