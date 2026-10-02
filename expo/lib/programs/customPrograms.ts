@@ -4,9 +4,11 @@
  * Native counterpart of `webapp/app/dashboard/programs/mine/MyProgramsClient.tsx`.
  * Members build their own programs on the web (3 on the free tier); natively
  * they need at least to find, enrol in and delete them. Building one is a
- * heavy editor, so create and edit stay web-only until the native builder
- * (NP-168, NP-171, NP-172) exists and open signed-in through `openWebSignedIn`
- * (NP-121).
+ * heavy editor: NP-168 has ported its FRAME (program details, phases,
+ * sessions, create, update and the draft), and until the exercise rows land
+ * with NP-171 create and edit still open the web signed in through
+ * `openWebSignedIn` (NP-121) — see `programCreateDestination` at the bottom of
+ * this file, which is the one place that decision is made.
  *
  * FOUR RULES TRAVEL WITH EVERY READER OF THIS MODULE:
  *
@@ -84,4 +86,59 @@ export function canEditCustomProgram(program: CustomProgramSummary): boolean {
 /** Delete path for one owned custom program. */
 export function customProgramDeletePath(programId: string): string {
   return `/api/programs/custom/${encodeURIComponent(programId)}`;
+}
+
+// ─── WHERE "CREATE" AND "EDIT" GO (NP-168) ──────────────────────────────────
+
+/**
+ * Does THIS build carry the FULL builder?
+ *
+ * NP-168 builds the frame: program details, phases, sessions with their day
+ * labels and titles, create, update and the local draft. What it does not yet
+ * have is the thing a program is actually made of — the exercise rows, with
+ * search, the prescription fields and custom exercises (NP-171) and their
+ * order and grouping (NP-172).
+ *
+ * Until those land, a member sent to the native builder could save a program
+ * with no exercises in it, which is strictly worse than the web editor they
+ * have today. So the member-facing link only moves off the web on a build that
+ * has the rows, and this is the one switch that moves it: NP-171 flips it to
+ * `true` and every caller below follows. The screens themselves ship now
+ * (`app/(app)/(tabs)/programming/new.tsx`,
+ * `app/(app)/(tabs)/programming/[id]/edit.tsx`) so that flip is a one-line
+ * change rather than a second port.
+ */
+export const NATIVE_BUILDER_HAS_EXERCISE_ROWS = false;
+
+/** The native builder's own routes. */
+export const NATIVE_PROGRAM_CREATE_ROUTE = "/(tabs)/programming/new";
+
+export function nativeProgramEditRoute(programId: string): string {
+  return `/(tabs)/programming/${encodeURIComponent(programId)}/edit`;
+}
+
+/**
+ * Where a "Create"/"Edit" tap should land: a native route, or a web page
+ * opened signed in (NP-121). One decision, so the two call sites — the My
+ * programs list and a program's own screen — cannot disagree.
+ */
+export type ProgramBuilderDestination =
+  | { surface: "native"; route: string }
+  | { surface: "web"; path: string };
+
+export function programCreateDestination(
+  hasExerciseRows: boolean = NATIVE_BUILDER_HAS_EXERCISE_ROWS,
+): ProgramBuilderDestination {
+  return hasExerciseRows
+    ? { surface: "native", route: NATIVE_PROGRAM_CREATE_ROUTE }
+    : { surface: "web", path: CUSTOM_PROGRAM_CREATE_PATH };
+}
+
+export function programEditDestination(
+  programId: string,
+  hasExerciseRows: boolean = NATIVE_BUILDER_HAS_EXERCISE_ROWS,
+): ProgramBuilderDestination {
+  return hasExerciseRows
+    ? { surface: "native", route: nativeProgramEditRoute(programId) }
+    : { surface: "web", path: customProgramEditPath(programId) };
 }
