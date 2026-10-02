@@ -500,6 +500,12 @@ export default function SettingsScreen() {
             onDeleted={() => {
               router.replace("/login");
             }}
+            onKept={() => {
+              // The request latched `notificationsEnabled` false and cancelling
+              // does not undo it: refetch prefs so the NP-068 switch shows the
+              // latched-off state instead of a stale on.
+              void notifPrefs.refetch();
+            }}
           />
         </View>
       </ScrollView>
