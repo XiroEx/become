@@ -30,7 +30,10 @@
  *   - mindContent: the 30-protocol content library and MindState
  *   - ai/sanitize: model-output sanitizers and guided-step validation
  *   - mind: session path, deterministic composer, move builders, speech matcher
+ *   - profileIcons: preset avatar gradient stops shared by web and native
  */
+
+export * from './profileIcons'
 
 export * from './bodyUnits'
 export * from './goals/pace'

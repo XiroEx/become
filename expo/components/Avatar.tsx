@@ -3,8 +3,13 @@
  * Ported from `webapp/components/Avatar.tsx`.
  *
  * Shows a custom uploaded photo when equipped, otherwise a preset glyph on its
- * branded color. A custom photo that fails to load falls back to a neutral
+ * branded gradient. A custom photo that fails to load falls back to a neutral
  * silhouette (MISSING_PHOTO) rather than a preset the member never picked.
+ *
+ * The gradient fill is `expo-linear-gradient` with stops from
+ * `@become/core/profileIcons` — the same stops and angle (`to bottom right`)
+ * as the web's `bg-gradient-to-br`. NativeWind cannot render gradient
+ * classes, so a className fill would come out transparent (NP-214).
  */
 
 import { useState } from "react";
@@ -15,7 +20,9 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { UserRound } from "lucide-react-native";
+import { profileIconGradient } from "@become/core/profileIcons";
 import { AuthedImage } from "@/components/media/AuthedImage";
 import {
   avatarImageSrc,
@@ -121,12 +128,16 @@ export function Avatar({
 
   const preset = presetIcon(icon);
   const Icon = preset.Icon;
+  const gradient = profileIconGradient(preset.id);
 
   return (
-    <View
+    <LinearGradient
       testID={testID}
       accessibilityRole="image"
       accessibilityLabel={`${preset.label} avatar`}
+      colors={gradient.colors}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[
         containerStyle,
         {
@@ -135,14 +146,13 @@ export function Avatar({
         },
         style,
       ]}
-      className={preset.bgClass}
     >
       <Icon
         color={colors["primary-foreground"]}
         size={size * 0.55}
         strokeWidth={2.25}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
