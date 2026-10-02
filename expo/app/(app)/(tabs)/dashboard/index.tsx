@@ -121,7 +121,7 @@ export default function DashboardRoute() {
     fetchOpts,
   );
   const mind = useFetch(
-    ready ? "/api/mind/summary" : null,
+    ready ? withTz("/api/mind/summary") : null,
     MindSummaryResponseSchema,
     fetchOpts,
   );
@@ -773,6 +773,7 @@ export default function DashboardRoute() {
       onDismissSuggestion={onDismissSuggestion}
       goals={goals.data ?? null}
       mind={mind.data ?? null}
+      todaysMood={todaysMood}
       upcomingWorkout={upcomingWorkout}
       onOpenMind={onOpenMind}
       onOpenNutrition={onOpenNutrition}

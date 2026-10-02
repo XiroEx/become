@@ -10,3 +10,4 @@ export * from "./ProgressChart";
 export * from "./UpNextCard";
 export * from "./NutritionCard";
 export * from "./CurrentProgramCard";
+export * from "./MindsetCard";
