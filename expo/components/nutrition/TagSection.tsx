@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { Plus, Trash2 } from "lucide-react-native";
+import { Check, Plus, Trash2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -7,6 +7,13 @@ import type { Occurrence } from "@/lib/nutrition/dayOrder";
 import type { MealLog } from "@become/api-client";
 import type { MealPlan } from "@/lib/nutrition/mealPlans";
 import { NutritionPlanCard } from "@/components/nutrition/NutritionPlanCard";
+import {
+  canCombine,
+  combineTotals,
+  pickedLogItems,
+  selectableLogItems,
+  selectionKey,
+} from "@/lib/nutrition/combineItems";
 
 export interface TagSectionProps {
   occurrence: Occurrence<MealLog, MealPlan>;
@@ -18,6 +25,26 @@ export interface TagSectionProps {
   onLogPlan?: (planId: string) => void;
   onRemovePlan?: (planId: string) => void;
   onSkipPlan?: (planId: string) => void;
+  /**
+   * ── Select mode (NP-175) ──────────────────────────────────────────────────
+   *
+   * Pick rows already logged in this sitting, then fold them into one entry.
+   * The screen owns the selection and the sheet, because a combine is ONE
+   * server request over whatever was picked — see `lib/nutrition/combineItems`.
+   * Omit `onStartSelect` and the section has no select mode at all, which is
+   * what a day with nothing addressable in it should have.
+   *
+   * It hands back the OCCURRENCE key, not the tag: a day with a 10am snack and
+   * a 3pm snack is two sittings, and selecting in one must not light up the
+   * other.
+   */
+  onStartSelect?: (sectionKey: string) => void;
+  selecting?: boolean;
+  selectedKeys?: ReadonlySet<string>;
+  onToggleSelect?: (logId: string, itemId: string) => void;
+  onCancelSelect?: () => void;
+  /** Open the combine sheet over what is picked. */
+  onCombine?: () => void;
   testID?: string;
 }
 
@@ -46,9 +73,15 @@ export function TagSection({
   onLogPlan,
   onRemovePlan,
   onSkipPlan,
+  onStartSelect,
+  selecting = false,
+  selectedKeys,
+  onToggleSelect,
+  onCancelSelect,
+  onCombine,
   testID,
 }: TagSectionProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const sectionTag = occurrence.tag;
   const sectionTestId = testID ?? `nutrition-section-${sectionTag}`;
   const isPlannedOccurrence = Boolean(occurrence.planned);
@@ -56,6 +89,15 @@ export function TagSection({
   const hasPlans = plans.length > 0;
   const hasLogs = (occurrence.logs ?? []).length > 0;
   const hasContent = !empty && (hasLogs || hasPlans);
+
+  // Only rows with a real subdocument id can be combined — the route addresses
+  // a pick as `{ logId, itemId }`. Two of them is the floor: one item is not a
+  // combination, it would just rename a row.
+  const selectable = selectableLogItems(occurrence.logs);
+  const canStartSelect =
+    Boolean(onStartSelect) && !isPlannedOccurrence && canCombine(selectable);
+  const picked = pickedLogItems(selectable, selectedKeys ?? new Set<string>());
+  const pickedTotals = combineTotals(picked);
 
   let totalCals = 0;
   let totalProtein = 0;
@@ -163,7 +205,91 @@ export function TagSection({
             <Trash2 size={16} color={colors.destructive} />
           </Pressable>
         ) : null}
+
+        {/* Select mode's way in and out (NP-175) */}
+        {selecting ? (
+          <Pressable
+            testID={`nutrition-combine-cancel-${sectionTag}`}
+            accessibilityLabel={`Stop selecting items in ${sectionTag}`}
+            accessibilityRole="button"
+            onPress={onCancelSelect}
+            hitSlop={8}
+            style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+          >
+            <Text className="text-muted-foreground text-xs font-semibold">
+              Cancel
+            </Text>
+          </Pressable>
+        ) : canStartSelect ? (
+          <Pressable
+            testID={`nutrition-combine-start-${sectionTag}`}
+            accessibilityLabel={`Select items in ${sectionTag} to combine`}
+            accessibilityRole="button"
+            onPress={() => onStartSelect?.(occurrence.key)}
+            hitSlop={8}
+            style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+          >
+            <Text className="text-primary text-xs font-semibold">Select</Text>
+          </Pressable>
+        ) : null}
       </View>
+
+      {/* The running count, so it stays visible while a long sitting scrolls. */}
+      {selecting ? (
+        <View
+          testID={`nutrition-combine-bar-${sectionTag}`}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            marginBottom: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            borderRadius: 10,
+            backgroundColor: tint("primary", 0.1),
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              testID={`nutrition-combine-count-${sectionTag}`}
+              className="text-foreground text-xs font-semibold"
+            >
+              {picked.length === 0
+                ? "Tap items to combine"
+                : `${picked.length} selected`}
+            </Text>
+            {picked.length > 0 ? (
+              <Text className="text-muted-foreground text-xs mt-0.5">
+                {Math.round(pickedTotals.calories)} kcal ·{" "}
+                {Math.round(pickedTotals.protein)}g P ·{" "}
+                {Math.round(pickedTotals.carbs)}g C ·{" "}
+                {Math.round(pickedTotals.fats)}g F
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            testID={`nutrition-combine-submit-${sectionTag}`}
+            accessibilityLabel={`Combine ${picked.length} selected items`}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canCombine(picked) }}
+            disabled={!canCombine(picked)}
+            onPress={onCombine}
+            hitSlop={8}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              backgroundColor: colors.primary,
+              opacity: canCombine(picked) ? 1 : 0.5,
+            }}
+          >
+            <Text className="text-primary-foreground text-xs font-semibold">
+              Combine
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Content */}
       {!hasContent ? (
@@ -191,19 +317,36 @@ export function TagSection({
                     ? `${servings !== 1 ? `${servings} × ` : ""}${item.servingSize} ${item.servingUnit}`
                     : `${servings} serving${servings !== 1 ? "s" : ""}`;
 
-                return (
-                  <View
-                    key={itemId}
-                    testID={`nutrition-item-row-${itemId}`}
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      paddingVertical: 10,
-                      borderTopWidth: 1,
-                      borderTopColor: colors.border,
-                    }}
-                  >
+                // Addressable only with a real subdocument id; the fallback key
+                // above is for React, not for the server.
+                const pickKey = item._id
+                  ? selectionKey(logId, String(item._id))
+                  : null;
+                const selectableRow = selecting && pickKey !== null;
+                const isSelected = pickKey !== null && Boolean(selectedKeys?.has(pickKey));
+
+                const body = (
+                  <>
+                    {selectableRow ? (
+                      <View
+                        testID={`nutrition-combine-check-${itemId}`}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          marginRight: 10,
+                          borderRadius: 4,
+                          borderWidth: 1,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderColor: isSelected ? colors.primary : colors.border,
+                          backgroundColor: isSelected ? colors.primary : "transparent",
+                        }}
+                      >
+                        {isSelected ? (
+                          <Check size={13} color={colors["primary-foreground"]} />
+                        ) : null}
+                      </View>
+                    ) : null}
                     <View style={{ flex: 1, marginRight: 12 }}>
                       <Text className="text-foreground text-sm font-semibold">
                         {item.name}
@@ -213,16 +356,56 @@ export function TagSection({
                       </Text>
                     </View>
 
+                    {/* In select mode the row is a checkbox target and its
+                        delete affordance is withheld — tapping to pick must
+                        never delete a log. */}
+                    {selectableRow ? null : (
+                      <Pressable
+                        testID={`day-totals-entry-${itemId}-remove`}
+                        accessibilityLabel={`Remove ${item.name}`}
+                        accessibilityRole="button"
+                        onPress={() => onRemoveItem(logId, itemId)}
+                        hitSlop={8}
+                        style={{ padding: 6 }}
+                      >
+                        <Trash2 size={16} color={colors.destructive} />
+                      </Pressable>
+                    )}
+                  </>
+                );
+
+                const rowStyle = {
+                  flexDirection: "row" as const,
+                  justifyContent: "space-between" as const,
+                  alignItems: "center" as const,
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                };
+
+                if (selectableRow) {
+                  return (
                     <Pressable
-                      testID={`day-totals-entry-${itemId}-remove`}
-                      accessibilityLabel={`Remove ${item.name}`}
-                      accessibilityRole="button"
-                      onPress={() => onRemoveItem(logId, itemId)}
-                      hitSlop={8}
-                      style={{ padding: 6 }}
+                      key={itemId}
+                      testID={`nutrition-item-row-${itemId}`}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: isSelected }}
+                      accessibilityLabel={`${isSelected ? "Deselect" : "Select"} ${item.name}`}
+                      onPress={() => onToggleSelect?.(logId, String(item._id))}
+                      style={rowStyle}
                     >
-                      <Trash2 size={16} color={colors.destructive} />
+                      {body}
                     </Pressable>
+                  );
+                }
+
+                return (
+                  <View
+                    key={itemId}
+                    testID={`nutrition-item-row-${itemId}`}
+                    style={rowStyle}
+                  >
+                    {body}
                   </View>
                 );
               });
