@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   StreaksResponseSchema,
   FreezeSuccessResponseSchema,
@@ -18,6 +18,11 @@ export default function StreaksRoute() {
   const { token } = useAuth();
   const router = useRouter();
   const ready = !!token;
+  const params = useLocalSearchParams<{ milestone?: string }>();
+  const initialMilestone = params.milestone ? parseInt(params.milestone, 10) : null;
+  const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(
+    initialMilestone && !Number.isNaN(initialMilestone) ? initialMilestone : null,
+  );
 
   const fetchOpts = {
     baseUrl: WEBAPP_BASE_URL,
@@ -114,6 +119,8 @@ export default function StreaksRoute() {
       onUseFreeze={onUseFreeze}
       freezing={freezing}
       freezeError={freezeError}
+      milestoneCelebration={milestoneCelebration}
+      onCloseMilestoneCelebration={() => setMilestoneCelebration(null)}
     />
   );
 }

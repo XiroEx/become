@@ -28,3 +28,21 @@ export function lightHaptic(): void {
     /* module unavailable (web, a build without it) */
   }
 }
+
+/**
+ * CELEBRATION HAPTIC (NP-159).
+ *
+ * Fires when a member reaches a streak milestone or hits their weight goal.
+ * Uses success notification feedback if available, with graceful fallback.
+ */
+export function celebrationHaptic(): void {
+  try {
+    void Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success,
+    ).catch(() => {
+      /* no engine, or the member turned haptics off */
+    });
+  } catch {
+    /* module unavailable (web, a build without it) */
+  }
+}

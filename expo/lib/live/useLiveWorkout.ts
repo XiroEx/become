@@ -143,6 +143,9 @@ export interface UseLiveWorkoutResult {
   workoutOriginKey: string;
   logDateOverrideRef: React.MutableRefObject<string | null>;
   reload: () => Promise<void>;
+  streakMilestone: number | null;
+  workoutStreakDays: number;
+  clearStreakMilestone: () => void;
 }
 
 export function useLiveWorkout(
@@ -199,6 +202,8 @@ export function useLiveWorkout(
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [newPRs, setNewPRs] = useState<NewPR[]>([]);
+  const [streakMilestone, setStreakMilestone] = useState<number | null>(null);
+  const [workoutStreakDays, setWorkoutStreakDays] = useState<number>(0);
   const [attemptId, setAttemptId] = useState(newWorkoutAttemptId);
   const [startedAtISO] = useState(() => new Date().toISOString());
   const logDateOverrideRef = useRef<string | null>(null);
@@ -320,6 +325,12 @@ export function useLiveWorkout(
             void invalidateMindSession();
             void cache.clear(cacheKey);
             setNewPRs(res.newPRsAchieved ?? []);
+            if (res.streak?.newMilestone) {
+              setStreakMilestone(res.streak.newMilestone);
+            }
+            if (res.streak?.streakDays != null) {
+              setWorkoutStreakDays(res.streak.streakDays);
+            }
 
             void mirrorWorkoutToHealth({
               title: workout.workoutTitle,
@@ -1174,6 +1185,9 @@ export function useLiveWorkout(
     setSwapSlug,
     save,
     onFinish,
+    streakMilestone,
+    workoutStreakDays,
+    clearStreakMilestone: () => setStreakMilestone(null),
     pendingDayChoice,
     resolveDayChoice,
     dismissDayChoice,

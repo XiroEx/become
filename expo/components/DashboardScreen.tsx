@@ -25,6 +25,7 @@ import type {
   DashboardTile,
   DashboardTilesResponse,
   GoalProgressResponse,
+  GoalReached,
   MindSummaryResponse,
   ProgressApiResponse,
 } from "@become/api-client";
@@ -38,6 +39,8 @@ import {
   type MoodLevel,
 } from "@/components/CheckInModal";
 import { ProgramNudgeModal } from "@/components/ProgramNudgeModal";
+import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
+import { GoalAchievedModal } from "@/components/GoalAchievedModal";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
 import type { WeightUnit } from "@become/core";
@@ -191,6 +194,13 @@ export interface DashboardScreenProps {
   onDismissGatewayMood?: () => void;
   /** Opens the native plan page (NP-158) */
   onOpenPlan?: () => void;
+  /** Streak milestone celebration (NP-159) */
+  milestoneCelebration?: number | null;
+  onCloseMilestoneCelebration?: () => void;
+  /** Goal reached celebration (NP-159) */
+  goalCelebration?: GoalReached | null;
+  onCloseGoalCelebration?: () => void;
+  onSetNextGoal?: () => void;
 }
 
 export function DashboardScreen({
@@ -258,6 +268,11 @@ export function DashboardScreen({
   gatewayMood,
   onDismissGatewayMood,
   onOpenPlan,
+  milestoneCelebration,
+  onCloseMilestoneCelebration,
+  goalCelebration,
+  onCloseGoalCelebration,
+  onSetNextGoal,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalGatewayMood, setInternalGatewayMood] =
@@ -776,6 +791,22 @@ export function DashboardScreen({
           setInternalLayout(savedLayout);
           setCustomizeOpen(false);
         }}
+      />
+
+      <StreakMilestoneModal
+        testID="dashboard-streak-milestone-modal"
+        visible={milestoneCelebration !== null && milestoneCelebration !== undefined}
+        milestone={milestoneCelebration ?? null}
+        streakDays={streakDays}
+        onClose={() => onCloseMilestoneCelebration?.()}
+      />
+
+      <GoalAchievedModal
+        testID="dashboard-goal-achieved-modal"
+        visible={goalCelebration !== null && goalCelebration !== undefined}
+        reached={goalCelebration ?? null}
+        onClose={() => onCloseGoalCelebration?.()}
+        onSetNextGoal={onSetNextGoal}
       />
     </SafeAreaView>
   );

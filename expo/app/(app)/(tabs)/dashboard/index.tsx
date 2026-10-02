@@ -20,6 +20,7 @@ import {
   ProgramNudgeResponseSchema,
   DashboardLayoutPatchResponseSchema,
   type DashboardTile,
+  type GoalReached,
   apiFetch,
   type ScheduledWorkout,
 } from "@become/api-client";
@@ -446,6 +447,10 @@ export default function DashboardRoute() {
     }
   }, [refetchAll]);
 
+  // Celebrations: streak milestone and goal reached (NP-159)
+  const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null);
+  const [goalCelebration, setGoalCelebration] = useState<GoalReached | null>(null);
+
   // Daily check-in writes — mirrors the webapp DailyCheckInModal flow: log mood
   // (always) + weight (when provided), then refresh the streak so the new
   // activity is reflected immediately.
@@ -459,11 +464,26 @@ export default function DashboardRoute() {
         if (payload.mood) {
           moodStatus = await writes.logMood(payload.mood);
           setGatewayMood(payload.mood);
+          if (moodStatus === "sent") {
+            const moodRes = writes.getLastMoodResponse();
+            if (moodRes?.streak?.newMilestone) {
+              setMilestoneCelebration(moodRes.streak.newMilestone);
+            }
+          }
         }
         const weightVal = payload.weight ?? payload.weightLbs;
         let weightStatus: string | null = null;
         if (weightVal != null) {
           weightStatus = await writes.logWeight(weightVal);
+          if (weightStatus === "sent") {
+            const weightRes = writes.getLastWeightResponse();
+            if (weightRes?.streak?.newMilestone) {
+              setMilestoneCelebration(weightRes.streak.newMilestone);
+            }
+            if (weightRes?.goalReached) {
+              setGoalCelebration(weightRes.goalReached);
+            }
+          }
           void mirrorWeighInToHealth({
             valueLbs: weightUnit === "kg" ? weightVal * 2.20462 : weightVal,
             atISO: new Date().toISOString(),
@@ -503,6 +523,13 @@ export default function DashboardRoute() {
       const writes = getOfflineWrites();
       const status = await writes.logWeight(weightVal);
       if (status === "sent") {
+        const res = writes.getLastWeightResponse();
+        if (res?.streak?.newMilestone) {
+          setMilestoneCelebration(res.streak.newMilestone);
+        }
+        if (res?.goalReached) {
+          setGoalCelebration(res.goalReached);
+        }
         await streak.refetch();
         await checkin.refetch();
         await goals.refetch();
@@ -522,6 +549,10 @@ export default function DashboardRoute() {
       const writes = getOfflineWrites();
       const status = await writes.logMood(moodVal);
       if (status === "sent") {
+        const res = writes.getLastMoodResponse();
+        if (res?.streak?.newMilestone) {
+          setMilestoneCelebration(res.streak.newMilestone);
+        }
         await streak.refetch();
         await checkin.refetch();
         await goals.refetch();
@@ -845,6 +876,14 @@ export default function DashboardRoute() {
       gatewayMood={gatewayMood}
       onDismissGatewayMood={() => setGatewayMood(null)}
       onOpenPlan={onOpenPlan}
+      milestoneCelebration={milestoneCelebration}
+      onCloseMilestoneCelebration={() => setMilestoneCelebration(null)}
+      goalCelebration={goalCelebration}
+      onCloseGoalCelebration={() => setGoalCelebration(null)}
+      onSetNextGoal={() => {
+        setGoalCelebration(null);
+        onOpenNutrition();
+      }}
     />
   );
 }

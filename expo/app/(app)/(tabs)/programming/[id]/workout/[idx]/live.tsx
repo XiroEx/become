@@ -7,6 +7,7 @@ import {
   type LiveWorkoutViewModel,
 } from "@/components/live/LiveWorkoutClient";
 import { ExerciseSwapModal } from "@/components/live/ExerciseSwapModal";
+import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
 import { DayChoiceModal } from "@/components/workout/DayChoiceModal";
 import {
   IncompleteWorkoutModal,
@@ -91,6 +92,9 @@ export default function LiveWorkoutRoute({
     resolveDayChoice,
     dismissDayChoice,
     reload,
+    streakMilestone,
+    workoutStreakDays,
+    clearStreakMilestone,
   } = useLiveWorkout(valid ? id : "", day, sd, {
     cacheStore,
     initialPhase:
@@ -219,6 +223,13 @@ export default function LiveWorkoutRoute({
           onClose={dismissDayChoice}
         />
       ) : null}
+      <StreakMilestoneModal
+        testID="live-streak-milestone-modal"
+        visible={streakMilestone !== null}
+        milestone={streakMilestone}
+        streakDays={workoutStreakDays}
+        onClose={clearStreakMilestone}
+      />
     </View>
   );
 }
