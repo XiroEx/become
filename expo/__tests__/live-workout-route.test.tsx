@@ -415,7 +415,8 @@ describe("LiveWorkoutRoute", () => {
     const altCall = mockApiFetch.mock.calls.find((c) =>
       String(c[0]).startsWith("/api/exercises/alternatives"),
     )!;
-    expect(String(altCall[0])).toBe("/api/exercises/alternatives?slug=bench");
+    expect(String(altCall[0])).toContain("/api/exercises/alternatives?slug=bench");
+    expect(String(altCall[0])).toContain("workoutSlugs=bench");
     expect(altCall[2]).toEqual(
       expect.objectContaining({ baseUrl: WEBAPP_BASE_URL }),
     );

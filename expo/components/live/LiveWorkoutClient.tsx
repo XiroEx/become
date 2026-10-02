@@ -55,6 +55,9 @@ export interface LiveWorkoutExercise {
   addedAdHoc?: boolean;
   originalExerciseSlug?: string;
   swappedFromName?: string;
+  category?: string;
+  type?: string;
+  role?: string;
   videoUrl?: string | null;
   thumbnailUrl?: string | null;
   videoWidth?: number | null;
