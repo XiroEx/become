@@ -32,6 +32,8 @@ jest.mock("@become/api-client", () => {
 });
 
 import { apiFetch } from "@become/api-client";
+import { Share } from "react-native";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 import {
   CHAPTERS,
   composeSession,
@@ -154,6 +156,7 @@ describe("SessionPlayer (NP-098 / NP-101)", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   it("the web's composer produced the plan these tests play", () => {
@@ -845,5 +848,167 @@ describe("SessionPlayer (NP-098 / NP-101)", () => {
 
     // Done button is still available to exit gracefully:
     expect(getByTestId3(`${P}-payoff-done`)).toBeTruthy();
+  });
+
+  // ── NP-179: share a finished session through the native share sheet ───────
+
+  it("(id: e015caa7) sharing a finished session posts the plan and opens Share.share with the web viewer URL", async () => {
+    const shareSpy = jest
+      .spyOn(Share, "share")
+      .mockResolvedValue({ action: "sharedAction" });
+
+    mockApiFetch.mockImplementation((path: string, _schema, init) => {
+      const method = (init as { method?: string } | undefined)?.method ?? "GET";
+      const clean = String(path).split("?")[0];
+      if (clean === "/api/mind/session" && method === "POST") {
+        return Promise.resolve({
+          completions: 1,
+          counted: true,
+          trainingMode: false,
+          xpAwarded: 20,
+          levelXp: 120,
+          level: 2,
+          previousLevel: 1,
+          leveledUp: false,
+          levelProgress: { level: 2, pct: 20, intoLevel: 20, span: 100, xpToNext: 80 },
+          chapter: 1,
+          previousChapter: 1,
+          chapterAdvanced: false,
+          newlyUnlocked: [],
+          unlockedSystems: ["state", "identity", "discipline", "mission"],
+          currentChapter: CHAPTERS[0],
+          mainSessionCount: 1,
+          sessionsIntoChapter: { done: 1, needed: 10, toNext: 9 },
+          nextMainSessionAt: Date.now() + 20 * 3600 * 1000,
+          xpBank: 20,
+          streak: 1,
+          featureUnlocks: [],
+        });
+      }
+      if (clean === "/api/mind/share" && method === "POST") {
+        return Promise.resolve({ token: "tok123", url: "/share/mind/tok123" });
+      }
+      return Promise.resolve({});
+    });
+
+    const shortPlan: MindSessionPlan = {
+      ...WEB_PLAN,
+      moves: [WEB_PLAN.moves[1]!],
+    };
+
+    const { getByTestId } = render(
+      <SessionPlayer plan={shortPlan} onExit={jest.fn()} />,
+    );
+
+    fireEvent.press(getByTestId(`${P}-intro-begin`));
+    await flush();
+    fireEvent.changeText(getByTestId("mind-win-scene-input"), "Kept my word");
+    fireEvent.press(getByTestId("mind-win-scene-bank-it"));
+    await flush();
+    await flush(1100);
+    await flush(4000);
+
+    // The payoff offers the share affordance once the session is finished.
+    const shareBtn = getByTestId(`${P}-payoff-share`);
+    expect(shareBtn).toHaveTextContent("Share this session");
+
+    fireEvent.press(shareBtn);
+    await flush();
+    await flush();
+    await flush();
+
+    // Same contract as the web payoff: kind + title + the finished plan
+    // (apiFetch also merges the device tz into date-scoped write bodies).
+    const shareCall = mockApiFetch.mock.calls.find((c) =>
+      String(c[0]).startsWith("/api/mind/share"),
+    );
+    expect(shareCall).toBeTruthy();
+    expect(shareCall?.[2]?.body).toEqual(
+      expect.objectContaining({
+        kind: "session",
+        title: shortPlan.intro.title,
+        plan: shortPlan,
+      }),
+    );
+
+    // The native sheet opens with the canonical web viewer URL — the same
+    // domain every other native web link uses, so a signed-out recipient
+    // lands on the public web viewer (which gates trying on sign-in).
+    expect(shareSpy).toHaveBeenCalledTimes(1);
+    const opened = shareSpy.mock.calls[0]![0] as { message: string };
+    expect(opened.message).toBe(
+      `${WEBAPP_BASE_URL}/share/mind/tok123`,
+    );
+
+    // The payoff confirms the link was created.
+    expect(getByTestId(`${P}-payoff-share`)).toHaveTextContent(
+      "Link ready — shared",
+    );
+  });
+
+  it("a failed share leaves the payoff exactly as it was", async () => {
+    jest.spyOn(Share, "share").mockReset();
+
+    mockApiFetch.mockImplementation((path: string, _schema, init) => {
+      const method = (init as { method?: string } | undefined)?.method ?? "GET";
+      const clean = String(path).split("?")[0];
+      if (clean === "/api/mind/session" && method === "POST") {
+        return Promise.reject(new Error("403 Forbidden: EntitlementRequired"));
+      }
+      if (clean === "/api/mind/share" && method === "POST") {
+        return Promise.reject(new Error("500"));
+      }
+      return Promise.resolve({});
+    });
+
+    const shortPlan: MindSessionPlan = {
+      ...WEB_PLAN,
+      moves: [WEB_PLAN.moves[1]!],
+    };
+
+    const { getByTestId } = render(
+      <SessionPlayer plan={shortPlan} onExit={jest.fn()} />,
+    );
+
+    fireEvent.press(getByTestId(`${P}-intro-begin`));
+    await flush();
+    fireEvent.changeText(getByTestId("mind-win-scene-input"), "Showed up anyway");
+    fireEvent.press(getByTestId("mind-win-scene-bank-it"));
+    await flush();
+    await flush(1100);
+    await flush(4000);
+
+    fireEvent.press(getByTestId(`${P}-payoff-share`));
+    await flush();
+    await flush();
+    await flush();
+
+    // No sheet, no confirmation — the payoff is untouched.
+    expect(Share.share).not.toHaveBeenCalled();
+    expect(getByTestId(`${P}-payoff-share`)).toHaveTextContent(
+      "Share this session",
+    );
+    expect(getByTestId(`${P}-payoff-done`)).toBeTruthy();
+  });
+
+  it("preview sessions never offer sharing", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <SessionPlayer
+        plan={{ ...WEB_PLAN, moves: [WEB_PLAN.moves[1]!] }}
+        onExit={jest.fn()}
+        preview
+      />,
+    );
+
+    fireEvent.press(getByTestId(`${P}-intro-begin`));
+    await flush();
+    fireEvent.changeText(getByTestId("mind-win-scene-input"), "Kept my word");
+    fireEvent.press(getByTestId("mind-win-scene-bank-it"));
+    await flush();
+    await flush(1100);
+    await flush(4000);
+
+    expect(queryByTestId(`${P}-payoff-share`)).toBeNull();
+    expect(getByTestId(`${P}-payoff-done`)).toBeTruthy();
   });
 });

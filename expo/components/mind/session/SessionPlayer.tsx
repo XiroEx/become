@@ -4,6 +4,7 @@ import {
   Modal as RNModal,
   Pressable,
   ScrollView,
+  Share,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -13,6 +14,7 @@ import {
   Check,
   ChevronUp,
   Flame,
+  Share2,
   Sparkles,
   X,
 } from "lucide-react-native";
@@ -33,7 +35,9 @@ import {
   apiFetch,
   MindJournalCreateResponseSchema,
   MindSessionCompleteResponseSchema,
+  MindShareResponseSchema,
   type MindSessionCompleteResponse,
+  type MindShareResponse,
 } from "@become/api-client";
 import { Text } from "@/components/Text";
 import { AssembleScene } from "@/components/mind/session/scenes/AssembleScene";
@@ -161,6 +165,78 @@ export const PAYOFF_RECAP_STEP_MS = 500;
 export const PAYOFF_RECAP_HOLD_MS = 400;
 export const PAYOFF_SCORE_MS = 1000;
 
+/**
+ * Build the public, read-only viewer URL for a finished Mind session share.
+ *
+ * The viewer stays on the web (`/share/mind/[token]`, signed out, gated) — the
+ * app only creates the link and hands it to the native share sheet. The
+ * canonical domain is the same one every other native web link uses
+ * (`WEBAPP_BASE_URL` in `@/lib/config`): the recipient opens the link in a
+ * browser, where the web viewer prompts them to sign in to try the session.
+ */
+export function mindShareViewerUrl(
+  share: Pick<MindShareResponse, "url">,
+  baseUrl: string = WEBAPP_BASE_URL,
+): string {
+  return `${baseUrl.replace(/\/$/, "")}${share.url}`;
+}
+
+/**
+ * Snapshot a finished session plan into a public, read-only share link
+ * (`POST /api/mind/share { kind: 'session', title, plan }`, mirroring the web
+ * payoff in `webapp/components/mind/session/SessionPlayer.tsx`), then open
+ * React Native's `Share.share` with the web viewer URL. Never throws: a share
+ * failure leaves the payoff exactly as it was.
+ */
+export async function shareMindSession(
+  args: {
+    title: string;
+    plan: MindSessionPlan;
+    token?: string | null;
+  },
+  deps: {
+    postShare?: (body: unknown) => Promise<MindShareResponse>;
+    openShareSheet?: (options: {
+      message: string;
+      title?: string;
+    }) => Promise<unknown>;
+    baseUrl?: string;
+  } = {},
+): Promise<MindShareResponse | null> {
+  const postShare =
+    deps.postShare ??
+    ((body: unknown) =>
+      apiFetch("/api/mind/share", MindShareResponseSchema, {
+        baseUrl: deps.baseUrl ?? WEBAPP_BASE_URL,
+        getToken: () => args.token ?? undefined,
+        method: "POST",
+        body: body as Record<string, unknown>,
+      }));
+  const openShareSheet =
+    deps.openShareSheet ?? ((options) => Share.share(options));
+
+  let share: MindShareResponse;
+  try {
+    share = await postShare({
+      kind: "session",
+      title: args.title,
+      plan: args.plan,
+    });
+  } catch {
+    return null;
+  }
+  if (!share || typeof share.url !== "string" || share.url.length === 0) {
+    return null;
+  }
+  const message = mindShareViewerUrl(share, deps.baseUrl ?? WEBAPP_BASE_URL);
+  try {
+    await openShareSheet({ message, title: "A Become session for you" });
+  } catch {
+    /* dismissed — the link was still created */
+  }
+  return share;
+}
+
 /** The effective move for a beat: the amplify alternative when locked in. */
 export function effectiveMove(
   move: Move | undefined,
@@ -209,6 +285,11 @@ export function SessionPlayer({
   const [reflection, setReflection] = useState<string | null>(null);
   const [reflecting, setReflecting] = useState(false);
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null);
+  // Share state — the payoff's "Share this session" snapshots the finished
+  // plan into a public, read-only web link (as the web payoff does), then
+  // opens the native share sheet with it.
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
 
   // The reflective answers given this session, deduped by question.
   const answersRef = useRef<SessionAnswer[]>([]);
@@ -400,6 +481,25 @@ export function SessionPlayer({
   }, [stage, index]);
 
   const canGoBack = stage === "move";
+
+  // Share the session just finished — snapshot the plan into a public,
+  // read-only link (recipients open the web viewer signed out and sign in to
+  // try it), then open the native share sheet with it. Lives on the payoff,
+  // not the hub: you share a session after you've done it, as on the web.
+  const handleShare = useCallback(async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      const created = await shareMindSession({
+        title: plan.intro.title,
+        plan,
+        token,
+      });
+      if (created) setShared(true);
+    } finally {
+      setSharing(false);
+    }
+  }, [sharing, plan, token]);
 
   const onHardwareBack = useCallback(() => {
     if (confirmingExit) {
@@ -832,18 +932,45 @@ export function SessionPlayer({
                     </Pressable>
                   </View>
                 ) : (
-                  <Pressable
-                    testID={`${testID}-payoff-done`}
-                    accessibilityRole="button"
-                    accessibilityLabel="Done for now"
-                    onPress={onExit}
-                    style={minTouchTarget}
-                    className="mt-8 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
-                  >
-                    <Text className="text-base font-bold text-primary-foreground">
-                      Done for now
-                    </Text>
-                  </Pressable>
+                  <View className="w-full items-center">
+                    <Pressable
+                      testID={`${testID}-payoff-done`}
+                      accessibilityRole="button"
+                      accessibilityLabel="Done for now"
+                      onPress={onExit}
+                      style={minTouchTarget}
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
+                    >
+                      <Text className="text-base font-bold text-primary-foreground">
+                        Done for now
+                      </Text>
+                    </Pressable>
+                    {/* Share the session just finished (not one not yet started). */}
+                    {preview ? null : (
+                      <Pressable
+                        testID={`${testID}-payoff-share`}
+                        accessibilityRole="button"
+                        accessibilityLabel="Share this session"
+                        accessibilityState={{ disabled: sharing }}
+                        disabled={sharing}
+                        onPress={() => void handleShare()}
+                        style={minTouchTarget}
+                        className="mt-3 flex-row items-center justify-center gap-1.5 py-2"
+                      >
+                        <Share2
+                          size={14}
+                          color={colors["muted-foreground"]}
+                        />
+                        <Text className="text-xs font-medium text-muted-foreground">
+                          {sharing
+                            ? "Creating link…"
+                            : shared
+                              ? "Link ready — shared"
+                              : "Share this session"}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
                 )}
               </Pressable>
             </ScrollView>
