@@ -50,7 +50,7 @@ describe("+native-intent", () => {
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks"],
     ["/dashboard/calendar?date=2026-09-29", "/(tabs)/calendar?date=2026-09-29"],
     ["/dashboard/nutrition", "/(tabs)/nutrition"],
-    ["/dashboard/mind/becoming", "/(tabs)/mind"],
+    ["/dashboard/mind/becoming", "/becoming"],
     [
       "/dashboard/workout/p1/workout/live?day=Day%202&sd=2026-09-29",
       "/(tabs)/programming/p1/workout/1/live?day=Day%202&sd=2026-09-29",
