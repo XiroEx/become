@@ -20,6 +20,8 @@ import {
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { FramedVideo } from "@/components/FramedVideo";
+import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
 import { Search, X, ChevronDown, ChevronUp, Sparkles } from "lucide-react-native";
 
 export type SwapScope = "session" | "program";
@@ -140,18 +142,40 @@ export function ExerciseSwapModal({
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
 
+  const {
+    activeSlug: activePlayingSlug,
+    play: playVideo,
+    release: releaseVideo,
+    registerLayout: registerSwapLayout,
+    onScroll: handleSwapScroll,
+  } = useSingleVideoPlayer();
+
+  const handleToggleExpand = (slug: string) => {
+    setSelectedSlug((prev) => {
+      if (prev === slug) {
+        releaseVideo();
+        return null;
+      }
+      playVideo(slug);
+      return slug;
+    });
+  };
+
   // Reset local state when opened/closed
   const prevVisibleRef = useRef(visible);
   useEffect(() => {
     if (visible && !prevVisibleRef.current) {
       setSearchQuery("");
       setSelectedSlug(null);
+      releaseVideo();
       setCatalogMatches(null);
       setSelectedVariants({});
       setVariationsCache({});
+    } else if (!visible && prevVisibleRef.current) {
+      releaseVideo();
     }
     prevVisibleRef.current = visible;
-  }, [visible]);
+  }, [visible, releaseVideo]);
 
   // Fetch alternatives if not provided via props
   useEffect(() => {
@@ -479,6 +503,8 @@ export function ExerciseSwapModal({
               style={{ maxHeight: 420 }}
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              onScroll={handleSwapScroll}
+              scrollEventThrottle={16}
             >
               {/* My Custom Exercises */}
               {customExercises.length > 0 && !searchQuery.trim() ? (
@@ -546,6 +572,12 @@ export function ExerciseSwapModal({
                   return (
                     <View
                       key={alt.slug}
+                      onLayout={(e) => {
+                        registerSwapLayout(alt.slug, {
+                          y: e.nativeEvent.layout.y,
+                          height: e.nativeEvent.layout.height,
+                        });
+                      }}
                       className={`border rounded-xl p-3 mb-2.5 ${
                         isExpanded ? "border-primary bg-primary/5" : "border-border bg-card"
                       }`}
@@ -564,7 +596,7 @@ export function ExerciseSwapModal({
                         {/* Title and details */}
                         <Pressable
                           className="flex-1 min-w-0"
-                          onPress={() => setSelectedSlug(isExpanded ? null : alt.slug)}
+                          onPress={() => handleToggleExpand(alt.slug)}
                           accessibilityRole="button"
                           accessibilityLabel={`View details for ${displayName}`}
                         >
@@ -616,7 +648,7 @@ export function ExerciseSwapModal({
                         {/* Expand Chevron */}
                         <Pressable
                           testID={`${testID}-option-${alt.slug}-expand`}
-                          onPress={() => setSelectedSlug(isExpanded ? null : alt.slug)}
+                          onPress={() => handleToggleExpand(alt.slug)}
                           accessibilityRole="button"
                           accessibilityLabel={isExpanded ? "Collapse" : "Expand"}
                           className="p-1.5 ml-1"
@@ -632,6 +664,21 @@ export function ExerciseSwapModal({
                       {/* Expanded Section */}
                       {isExpanded ? (
                         <View className="mt-3 pt-3 border-t border-border">
+                          {/* Demo video preview */}
+                          {alt.videoUrl ? (
+                            <View className="mb-3">
+                              <FramedVideo
+                                src={alt.videoUrl}
+                                thumbnailUrl={typeof alt.thumbnailUrl === "string" ? alt.thumbnailUrl : null}
+                                surface="preview"
+                                exerciseName={displayName}
+                                isPlaying={activePlayingSlug === alt.slug}
+                                onPlayPress={() => playVideo(alt.slug)}
+                                testID={`${testID}-option-${alt.slug}-video`}
+                              />
+                            </View>
+                          ) : null}
+
                           {/* Reasons */}
                           {alt.reasons && alt.reasons.length > 0 ? (
                             <View className="mb-2">

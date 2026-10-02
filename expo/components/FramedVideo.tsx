@@ -41,6 +41,7 @@ export interface FramedVideoProps extends VideoFramingInput {
   src?: string | null;
   surface: VideoSurface;
   exerciseName?: string;
+  thumbnailUrl?: string | null;
   videoTrim?: VideoTrimOverride | null;
   onDuration?: (seconds: number) => void;
   onDimensions?: (width: number, height: number) => void;
@@ -48,6 +49,10 @@ export interface FramedVideoProps extends VideoFramingInput {
   style?: StyleProp<ViewStyle>;
   testID?: string;
   showBadge?: boolean;
+  /** In lists, controls whether the active video player is mounted. When false, renders thumbnail with zero player overhead. */
+  isPlaying?: boolean;
+  /** Called when user taps the play button on the thumbnail view. */
+  onPlayPress?: () => void;
 }
 
 function VideoPlaceholder({
@@ -123,6 +128,72 @@ function YouTubeDemo({
           Watch on YouTube
         </Text>
       </View>
+    </Pressable>
+  );
+}
+
+function VideoThumbnailView({
+  thumbnailUrl,
+  exerciseName,
+  onPress,
+  testID,
+  showBadge,
+}: {
+  thumbnailUrl?: string | null;
+  exerciseName?: string;
+  surface: VideoSurface;
+  onPress?: () => void;
+  testID?: string;
+  showBadge?: boolean;
+}) {
+  const { colors } = useThemeTokens();
+  return (
+    <Pressable
+      testID={testID ? `${testID}-thumbnail` : "framed-video-thumbnail"}
+      accessibilityRole="button"
+      accessibilityLabel={`Play demo video for ${exerciseName || "exercise"}`}
+      onPress={onPress}
+      className="relative w-full aspect-video overflow-hidden rounded-xl bg-card/60 border border-border items-center justify-center"
+    >
+      {thumbnailUrl ? (
+        <Image
+          testID={testID ? `${testID}-thumbnail-image` : "framed-video-thumbnail-image"}
+          source={{ uri: thumbnailUrl }}
+          className="absolute inset-0 w-full h-full"
+          resizeMode="cover"
+        />
+      ) : (
+        <View
+          testID={testID ? `${testID}-thumbnail-placeholder` : "framed-video-thumbnail-placeholder"}
+          className="items-center justify-center p-4"
+        >
+          <Dumbbell size={36} color={colors["muted-foreground"]} style={{ marginBottom: 8, opacity: 0.5 }} />
+          <Text
+            testID={testID ? `${testID}-thumbnail-text` : "framed-video-thumbnail-text"}
+            className="text-muted-foreground text-sm font-medium text-center"
+          >
+            {exerciseName ? `${exerciseName} demo` : "Demo"}
+          </Text>
+        </View>
+      )}
+      <View className="absolute inset-0 bg-black/30 items-center justify-center">
+        <View
+          testID={testID ? `${testID}-play-btn` : "framed-video-play-btn"}
+          className="h-12 w-12 rounded-full bg-primary items-center justify-center shadow-lg"
+        >
+          <Play
+            size={22}
+            color={colors["primary-foreground"]}
+            fill={colors["primary-foreground"]}
+            style={{ marginLeft: 2 }}
+          />
+        </View>
+      </View>
+      {showBadge ? (
+        <View className="absolute top-2 right-2 rounded bg-black/60 px-2 py-1">
+          <Text className="text-xs font-medium text-white">Demo</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -271,6 +342,7 @@ export function FramedVideo({
   src,
   surface,
   exerciseName,
+  thumbnailUrl,
   videoWidth,
   videoHeight,
   videoFraming,
@@ -281,6 +353,8 @@ export function FramedVideo({
   className,
   style,
   testID,
+  isPlaying,
+  onPlayPress,
 }: FramedVideoProps) {
   const [legacyVideo, setLegacyVideo] = useState<ExerciseVideoDisplay | null>(
     () => (exerciseName ? getExerciseVideoDisplay(exerciseName) : null),
@@ -304,6 +378,7 @@ export function FramedVideo({
     return resolveExerciseVideo(
       {
         videoUrl: src,
+        thumbnailUrl,
         videoWidth,
         videoHeight,
         videoFraming,
@@ -311,7 +386,7 @@ export function FramedVideo({
       },
       legacyVideo,
     );
-  }, [src, videoWidth, videoHeight, videoFraming, videoTrim, legacyVideo]);
+  }, [src, thumbnailUrl, videoWidth, videoHeight, videoFraming, videoTrim, legacyVideo]);
 
   const activeSrc = resolved.videoUrl;
 
@@ -321,6 +396,23 @@ export function FramedVideo({
         <VideoPlaceholder
           exerciseName={exerciseName}
           surface={surface}
+          testID={testID}
+        />
+      </View>
+    );
+  }
+
+  // When isPlaying is explicitly false (in lists where only one row plays),
+  // show the thumbnail or placeholder view with zero video player allocation.
+  if (isPlaying === false) {
+    return (
+      <View className={className} style={style}>
+        <VideoThumbnailView
+          thumbnailUrl={resolved.thumbnailUrl}
+          exerciseName={exerciseName}
+          surface={surface}
+          onPress={onPlayPress}
+          showBadge={showBadge}
           testID={testID}
         />
       </View>
