@@ -719,6 +719,11 @@ export default function DashboardRoute() {
       onOpenSettings={() => {
         router.push("/settings");
       }}
+      onOpenProfile={() => {
+        router.push("/(tabs)/profile" as never);
+      }}
+      userIcon={typeof user?.profileIcon === "string" ? user.profileIcon : null}
+      userAvatarUrl={typeof user?.avatarUrl === "string" ? user.avatarUrl : null}
       onOpenStreaks={() => {
         router.push("/(tabs)/dashboard/streaks" as never);
       }}

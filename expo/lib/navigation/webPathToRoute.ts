@@ -91,6 +91,7 @@ export const NATIVE_ROUTES = {
   scheduleSettings: "/(tabs)/calendar/settings",
   streaks: "/(tabs)/dashboard/streaks",
   chat: "/(tabs)/chat",
+  profile: "/(tabs)/profile",
 } as const;
 
 /**
@@ -353,6 +354,9 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   if (head === "calendar") {
     return native(NATIVE_ROUTES.calendar, params, "exact");
   }
+  if (head === "profile") {
+    return native(NATIVE_ROUTES.profile, params, "exact");
+  }
 
   if (head !== "dashboard") {
     return native(NATIVE_ROUTES.home, params, "unknown");
@@ -451,11 +455,15 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return native(NATIVE_ROUTES.streaks, params, "exact");
   }
 
-  // ── Home's own rooms: plan, settings, profile, customize ───────────────────
+  // ── Profile screen (NP-163) ───────────────────────────────────────────────
+  if (section === "profile") {
+    return native(NATIVE_ROUTES.profile, params, "exact");
+  }
+
+  // ── Home's own rooms: plan, settings, customize ─────────────────────────────
   if (
     section === "plan" ||
     section === "settings" ||
-    section === "profile" ||
     section === "customize"
   ) {
     return native(NATIVE_ROUTES.home, params, "nearest");

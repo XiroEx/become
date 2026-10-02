@@ -57,6 +57,12 @@ export const PLATE_PHOTO_RESIZE: ResizeSpec = { maxDim: 1024, quality: 0.6 };
  */
 export const MEAL_PHOTO_RESIZE: ResizeSpec = { maxDim: 1600, quality: 0.82 };
 
+/**
+ * Avatar photo parameters (512 / 0.85). Matches web's `AvatarCropModal.tsx` output
+ * and profile avatar upload (NP-163).
+ */
+export const AVATAR_PHOTO_RESIZE: ResizeSpec = { maxDim: 512, quality: 0.85 };
+
 /** Everything this module produces is a JPEG. The upload routes allow-list it. */
 export const CAPTURE_MIME_TYPE = "image/jpeg";
 
