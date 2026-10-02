@@ -240,6 +240,34 @@ jobs:
       - name: Unit tests
         run: npx jest --ci --maxWorkers=2
 
+      # NP-213: the Mind precompose test used to build a random session shape
+      # that sometimes failed its own mock's validation, so unrelated PRs went
+      # red at random. It is now seeded — and this loop proves it by running
+      # the file 20 times in a row. Deterministic tests pass 20/20; a flake
+      # cannot hide behind a single green run.
+      - name: Mind precompose determinism (20 runs)
+        run: |
+          for i in $(seq 1 20); do
+            echo "--- mindPrecompose run $i/20 ---"
+            npx jest --ci --maxWorkers=2 __tests__/mindPrecomposeNP102.test.tsx || exit 1
+          done
+
+      # No other test file in expo/ may use Math.random without a seed: an
+      # unseeded Math.random in a test is how this flake happened. Production
+      # code (lib/, components/, app/) is excluded — runtime randomness there
+      # is legitimate; only tests must be deterministic. The NP-102 file itself
+      # stubs Math.random to a fixed value as a belt-and-suspenders guard (all
+      # its cases also pass explicit seeds), so it is allow-listed here.
+      - name: No unseeded Math.random in expo tests
+        run: |
+          offenders="$(grep -rn 'Math\.random' __tests__ --include='*.test.*' | grep -v '__tests__/mindPrecomposeNP102.test.tsx' || true)"
+          if [ -n "$offenders" ]; then
+            echo "::error::Unseeded Math.random in expo tests (seed it or use explicit fixtures):"
+            printf '%s\n' "$offenders"
+            exit 1
+          fi
+          echo "No unseeded Math.random in expo tests."
+
       # The version-drift check Expo does at `expo start`, which CI never runs:
       # it fails when a dependency is pinned outside the range the installed SDK
       # supports. That is a class of break the typecheck cannot see, and the one
