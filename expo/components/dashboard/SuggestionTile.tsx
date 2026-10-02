@@ -4,6 +4,8 @@ import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useRouter } from "expo-router";
 import { X } from "lucide-react-native";
+import { resolveWebPath } from "@/lib/navigation/webPathToRoute";
+import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import type {
   DashboardTile,
   DashboardTilesResponse,
@@ -47,16 +49,23 @@ export function SuggestionTile({
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
 
   // Filter server suggestions scoped for dashboard and not yet dismissed
-  const availableSuggestions = (tilesData?.suggestions ?? []).filter(
-    (s) =>
-      (!s.placement || s.placement === "dashboard") &&
-      !dismissedIds.includes(s.id),
-  );
+  const availableSuggestions = (tilesData?.suggestions ?? []).filter((s) => {
+    if (s.placement === "exercise") return false;
+    const surface = (s as any).context?.surface;
+    if (surface && surface !== "dashboard") return false;
+    return !dismissedIds.includes(s.id);
+  });
 
-  const activeSuggestion =
-    propSuggestion && !dismissedIds.includes(propSuggestion.id)
-      ? propSuggestion
-      : availableSuggestions[0] ?? null;
+  const propIsValid =
+    propSuggestion &&
+    propSuggestion.placement !== "exercise" &&
+    (!((propSuggestion as any).context?.surface) ||
+      (propSuggestion as any).context?.surface === "dashboard") &&
+    !dismissedIds.includes(propSuggestion.id);
+
+  const activeSuggestion = propIsValid
+    ? propSuggestion
+    : availableSuggestions[0] ?? null;
 
   const handleDismiss = useCallback(async () => {
     if (!activeSuggestion) return;
@@ -72,18 +81,17 @@ export function SuggestionTile({
   const handleAction = useCallback(() => {
     if (!activeSuggestion?.primaryAction?.href) return;
     const href = activeSuggestion.primaryAction.href;
-    if (href.startsWith("/programming") || href.includes("exercise")) {
-      router.push("/(tabs)/programming" as never);
-    } else if (href.startsWith("/nutrition") || href.includes("nutrition")) {
-      if (onOpenNutrition) onOpenNutrition();
-      else router.push("/(tabs)/nutrition" as never);
-    } else if (href.startsWith("/calendar") || href.includes("calendar")) {
-      if (onOpenCalendar) onOpenCalendar();
-      else router.push("/(tabs)/calendar" as never);
-    } else if (href.startsWith("/mind") || href.includes("mind")) {
-      router.push("/(tabs)/mind?start=1" as never);
+    const target = resolveWebPath(href);
+    if (target.kind === "web") {
+      void openWebSignedIn(target.path).catch(() => {});
     } else {
-      router.push(href as never);
+      if (target.href.startsWith("/(tabs)/nutrition") && onOpenNutrition) {
+        onOpenNutrition();
+      } else if (target.href.startsWith("/(tabs)/calendar") && onOpenCalendar) {
+        onOpenCalendar();
+      } else {
+        router.push(target.href as never);
+      }
     }
   }, [activeSuggestion, onOpenCalendar, onOpenNutrition, router]);
 

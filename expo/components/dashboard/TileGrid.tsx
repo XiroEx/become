@@ -205,9 +205,11 @@ export function TileGrid({
     return null;
   }
 
-  const availableSuggestions = (tilesData?.suggestions ?? []).filter(
-    (s) => !s.placement || s.placement === "dashboard",
-  );
+  const availableSuggestions = (tilesData?.suggestions ?? []).filter((s) => {
+    if (s.placement === "exercise") return false;
+    const surface = (s as any).context?.surface;
+    return !surface || surface === "dashboard";
+  });
 
   return (
     <View style={style}>
