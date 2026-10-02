@@ -17,6 +17,7 @@ import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
+import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ScreenState } from "@/components/ScreenState";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -462,6 +463,8 @@ export default function SettingsScreen() {
           </Text>
 
           <LegalLinks showSupportEmail={true} />
+
+          <FeedbackSheet token={token} />
 
           {consent.data?.acceptedAt && consent.data?.acceptedVersion && acceptedDate ? (
             <Text
