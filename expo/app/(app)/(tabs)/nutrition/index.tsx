@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  CalendarDays,
   Camera,
   ChefHat,
   ChevronDown,
@@ -65,11 +66,11 @@ import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import {
-  PlansResponseSchema,
-  type MealPlan,
-  type PlansResponse,
-} from "@/lib/nutrition/mealPlans";
+import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
+import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
+import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
+
+export type NutritionViewMode = "day" | "week" | "month";
 
 const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
@@ -78,7 +79,25 @@ export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
-  const params = useLocalSearchParams<{ date?: string; quickAdd?: string }>();
+  const params = useLocalSearchParams<{
+    date?: string;
+    quickAdd?: string;
+    view?: string;
+  }>();
+
+  const [viewMode, setViewMode] = useState<NutritionViewMode>(() => {
+    if (params.view === "week" || params.view === "month" || params.view === "day") {
+      return params.view;
+    }
+    return "day";
+  });
+
+  useEffect(() => {
+    if (params.view === "week" || params.view === "month" || params.view === "day") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
+      setViewMode(params.view);
+    }
+  }, [params.view]);
 
   // Device-local day and timezone offset (NP-035).
   // Automatically rolls over on local midnight timer or app foregrounding.
@@ -98,6 +117,35 @@ export default function NutritionIndexRoute() {
       setExplicitDate(params.date);
     }
   }, [params.date]);
+
+  const handleViewChange = useCallback(
+    (mode: NutritionViewMode) => {
+      setViewMode(mode);
+      router.push({
+        pathname: "/(tabs)/nutrition",
+        params: {
+          ...(explicitDate ? { date: explicitDate } : {}),
+          view: mode,
+        },
+      } as any);
+    },
+    [explicitDate, router],
+  );
+
+  const handleOpenDay = useCallback(
+    (dateKey: string) => {
+      setExplicitDate(dateKey);
+      setViewMode("day");
+      router.push({
+        pathname: "/(tabs)/nutrition",
+        params: {
+          date: dateKey,
+          view: "day",
+        },
+      } as any);
+    },
+    [router],
+  );
 
   const activeDate = explicitDate ?? today;
   const isToday = activeDate === today;
@@ -925,15 +973,123 @@ export default function NutritionIndexRoute() {
         </View>
       </View>
 
+      {/* 3-segment View Selector (Day / Week / Month) */}
+      <View
+        testID="nutrition-view-selector"
+        style={{
+          flexDirection: "row",
+          marginHorizontal: 16,
+          marginBottom: 8,
+          padding: 3,
+          borderRadius: 10,
+          backgroundColor: colors.muted,
+        }}
+      >
+        <Pressable
+          testID="nutrition-view-day"
+          accessibilityRole="button"
+          accessibilityLabel="Day view"
+          onPress={() => handleViewChange("day")}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingVertical: 6,
+            borderRadius: 7,
+            backgroundColor: viewMode === "day" ? colors.card : "transparent",
+            borderWidth: viewMode === "day" ? 1 : 0,
+            borderColor: colors.border,
+          }}
+        >
+          <Clock
+            size={14}
+            color={viewMode === "day" ? colors.foreground : colors["muted-foreground"]}
+          />
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "day" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Day
+          </Text>
+        </Pressable>
+
+        <Pressable
+          testID="nutrition-view-week"
+          accessibilityRole="button"
+          accessibilityLabel="Week view"
+          onPress={() => handleViewChange("week")}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingVertical: 6,
+            borderRadius: 7,
+            backgroundColor: viewMode === "week" ? colors.card : "transparent",
+            borderWidth: viewMode === "week" ? 1 : 0,
+            borderColor: colors.border,
+          }}
+        >
+          <CalendarDays
+            size={14}
+            color={viewMode === "week" ? colors.foreground : colors["muted-foreground"]}
+          />
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "week" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Week
+          </Text>
+        </Pressable>
+
+        <Pressable
+          testID="nutrition-view-month"
+          accessibilityRole="button"
+          accessibilityLabel="Month view"
+          onPress={() => handleViewChange("month")}
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingVertical: 6,
+            borderRadius: 7,
+            backgroundColor: viewMode === "month" ? colors.card : "transparent",
+            borderWidth: viewMode === "month" ? 1 : 0,
+            borderColor: colors.border,
+          }}
+        >
+          <CalendarDays
+            size={14}
+            color={viewMode === "month" ? colors.foreground : colors["muted-foreground"]}
+          />
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "month" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Month
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Date Navigation & Swipe Container */}
       <View
         style={{ flex: 1 }}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={viewMode === "day" ? onTouchStart : undefined}
+        onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
+          {viewMode === "day" ? (
+            <>
           {/* Undo Auto-promote Banner (NP-147) */}
           {undoBatch ? (
             <View
@@ -1292,6 +1448,26 @@ export default function NutritionIndexRoute() {
               + Add a tag
             </Button>
           </View>
+          </>
+          ) : viewMode === "week" ? (
+            <TimelineWeekView
+              selectedDate={activeDate}
+              calorieGoal={goalCalories}
+              onOpenDay={handleOpenDay}
+              onLogPlan={handleLogPlan}
+              onSkipPlan={handleSkipPlan}
+              onRemovePlan={handleRemovePlan}
+            />
+          ) : (
+            <TimelineMonthView
+              selectedDate={activeDate}
+              calorieGoal={goalCalories}
+              onOpenDay={handleOpenDay}
+              onLogPlan={handleLogPlan}
+              onSkipPlan={handleSkipPlan}
+              onRemovePlan={handleRemovePlan}
+            />
+          )}
         </ScrollView>
       </View>
 
@@ -1428,8 +1604,7 @@ export default function NutritionIndexRoute() {
               }}
               onPress={() => {
                 setTimelineMenuOpen(false);
-                // TODO(NP-177): Eating timeline (day, week and month views) is NP-177.
-                router.push("/(tabs)/calendar");
+                handleViewChange("week");
               }}
             >
               <Clock size={16} color={colors.foreground} />
