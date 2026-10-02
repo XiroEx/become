@@ -8,6 +8,8 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 export interface MacroValues {
   current: number;
   goal: number;
+  /** Grams still planned (not yet logged) for today. */
+  planned?: number;
 }
 
 export interface CalorieRingProps {
@@ -19,6 +21,8 @@ export interface CalorieRingProps {
   fiber?: number;
   goalLine?: string | null;
   onEditGoals?: () => void;
+  /** Calories still planned for today, rendered as a light shadow arc. */
+  plannedExtra?: number;
   testID?: string;
 }
 
@@ -97,20 +101,30 @@ export function CalorieRing({
   fiber,
   goalLine,
   onEditGoals,
+  plannedExtra,
   testID = "calorie-ring",
 }: CalorieRingProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const safeGoal = Math.round(Number.isFinite(goal) && goal > 0 ? goal : 0);
   const safeConsumed = Math.round(Number.isFinite(consumed) && consumed > 0 ? consumed : 0);
+  const safePlannedExtra = Math.round(
+    Number.isFinite(plannedExtra) && (plannedExtra ?? 0) > 0 ? (plannedExtra ?? 0) : 0,
+  );
   const remaining = safeGoal - safeConsumed;
   const isOver = remaining < 0;
   const percentage = safeGoal > 0 ? Math.min(safeConsumed / safeGoal, 1) : 0;
+  const plannedPercentage =
+    safeGoal > 0 && safePlannedExtra > 0
+      ? Math.min((safeConsumed + safePlannedExtra) / safeGoal, 1)
+      : percentage;
+  const hasPlanned = plannedPercentage > percentage;
 
   const size = 160;
   const strokeWidth = 14;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - percentage * circumference;
+  const plannedDashoffset = circumference - plannedPercentage * circumference;
 
   const progressColor = isOver ? colors.destructive : colors.success;
 
@@ -118,14 +132,28 @@ export function CalorieRing({
     protein.goal > 0
       ? Math.min((Math.max(protein.current, 0) / protein.goal) * 100, 100)
       : 0;
+  const proteinPlannedPct =
+    protein.goal > 0 && (protein.planned ?? 0) > 0
+      ? Math.min((Math.max(protein.current + (protein.planned ?? 0), 0) / protein.goal) * 100, 100)
+      : proteinPct;
+
   const carbsPct =
     carbs.goal > 0
       ? Math.min((Math.max(carbs.current, 0) / carbs.goal) * 100, 100)
       : 0;
+  const carbsPlannedPct =
+    carbs.goal > 0 && (carbs.planned ?? 0) > 0
+      ? Math.min((Math.max(carbs.current + (carbs.planned ?? 0), 0) / carbs.goal) * 100, 100)
+      : carbsPct;
+
   const fatsPct =
     fats.goal > 0
       ? Math.min((Math.max(fats.current, 0) / fats.goal) * 100, 100)
       : 0;
+  const fatsPlannedPct =
+    fats.goal > 0 && (fats.planned ?? 0) > 0
+      ? Math.min((Math.max(fats.current + (fats.planned ?? 0), 0) / fats.goal) * 100, 100)
+      : fatsPct;
 
   return (
     <Card testID={testID}>
@@ -188,6 +216,20 @@ export function CalorieRing({
                 strokeWidth={strokeWidth}
                 fill="none"
               />
+              {hasPlanned && (
+                <Circle
+                  testID="calorie-ring-planned-shadow"
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke={tint("success", 0.35)}
+                  strokeWidth={strokeWidth}
+                  fill="none"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={plannedDashoffset}
+                  strokeLinecap="round"
+                />
+              )}
               {percentage > 0 && (
                 <Circle
                   cx={size / 2}
@@ -251,6 +293,30 @@ export function CalorieRing({
             {goalLine}
           </Text>
         ) : null}
+
+        {hasPlanned ? (
+          <View
+            testID="calorie-ring-planned-extra"
+            style={{
+              marginTop: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 2,
+              borderRadius: 9999,
+              backgroundColor: tint("success", 0.12),
+              alignSelf: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: colors.success,
+                fontSize: 11,
+                fontWeight: "600",
+              }}
+            >
+              +{safePlannedExtra} planned
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Macro bars */}
@@ -273,7 +339,14 @@ export function CalorieRing({
               {renderMacroPill(protein.current, protein.goal, "floor", "day-totals-protein-pill")}
             </View>
           </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden">
+          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+            {proteinPlannedPct > proteinPct && (
+              <View
+                testID="macro-bar-protein-planned"
+                className="h-full rounded-full bg-blue-500/40 absolute left-0"
+                style={{ width: `${proteinPlannedPct}%` }}
+              />
+            )}
             <View
               className="h-full rounded-full bg-blue-500"
               style={{ width: `${proteinPct}%` }}
@@ -299,7 +372,14 @@ export function CalorieRing({
               {renderMacroPill(carbs.current, carbs.goal, "ceiling", "day-totals-carbs-pill")}
             </View>
           </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden">
+          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+            {carbsPlannedPct > carbsPct && (
+              <View
+                testID="macro-bar-carbs-planned"
+                className="h-full rounded-full bg-emerald-500/40 absolute left-0"
+                style={{ width: `${carbsPlannedPct}%` }}
+              />
+            )}
             <View
               className="h-full rounded-full bg-emerald-500"
               style={{ width: `${carbsPct}%` }}
@@ -325,7 +405,14 @@ export function CalorieRing({
               {renderMacroPill(fats.current, fats.goal, "ceiling", "day-totals-fat-pill")}
             </View>
           </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden">
+          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+            {fatsPlannedPct > fatsPct && (
+              <View
+                testID="macro-bar-fats-planned"
+                className="h-full rounded-full bg-purple-500/40 absolute left-0"
+                style={{ width: `${fatsPlannedPct}%` }}
+              />
+            )}
             <View
               className="h-full rounded-full bg-purple-500"
               style={{ width: `${fatsPct}%` }}
