@@ -2,12 +2,13 @@
  * Account deletion, from a store build.
  *
  * This is the native half of the same feature the web app ships: it calls the
- * SAME routes (`DELETE /api/me/account`, `POST /api/me/account/restore`) with
- * the same body, so iOS, Android and the web cannot end up with three
- * different ideas of what deletion means. The server drops every push
- * registration this account holds at request time — web endpoints AND the Expo
- * push token this installation registered (webapp/models/PushSubscription.ts
- * holds both) — which is why nothing here has to hunt for the token itself.
+ * SAME routes (`GET | DELETE | POST /api/me/account`,
+ * `POST /api/me/account/restore`) with the same bodies, so iOS, Android and
+ * the web cannot end up with three different ideas of what deletion means.
+ * The server drops every push registration this account holds at request time
+ * — web endpoints AND the Expo push token this installation registered
+ * (webapp/models/PushSubscription.ts holds both) — which is why nothing here
+ * has to hunt for the token itself.
  *
  * Apple checks this BY HAND (App Store Review Guideline 5.1.1(v)): a reviewer
  * signs in, opens Settings and expects to find Delete account without leaving
@@ -21,7 +22,6 @@
 
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { isBecomeWebHost } from "@/lib/navigation/webPathToRoute";
-import { DELETE_CONFIRMATION as _DC, RESTORE_WINDOW_DAYS as _RWD } from "@become/core";
 
 /**
  * What the server requires in the body before it will schedule a deletion.
@@ -50,6 +50,27 @@ export interface AccountActionResult {
   status?: number;
   /** Present on success: when the account is actually removed. */
   restorableUntil?: string | null;
+}
+
+/**
+ * What `GET /api/me/account` says about a pending request. Mirrors
+ * `DeletionStatus` in webapp/lib/accountDeletion.ts (via @become/core) and
+ * `DeletionStatusSchema` in @become/api-client — the danger zone reads this
+ * when Settings opens so a member who signs back in during the window sees
+ * the scheduled date instead of the delete button again.
+ */
+export interface DeletionStatus {
+  pending: boolean;
+  requestedAt: string | null;
+  /** ISO. The last instant the restore link works — the purge due date. */
+  restorableUntil: string | null;
+  /** Whole days left, floored at 0. */
+  daysLeft: number;
+  restoreWindowDays: number;
+}
+
+export interface AccountStatus {
+  deletion: DeletionStatus;
 }
 
 function resolveFetch(fetchImpl?: typeof fetch): typeof fetch {
@@ -119,6 +140,73 @@ export async function cancelAccountDeletion(
     return { ok: res.ok, status: res.status };
   } catch {
     return { ok: false };
+  }
+}
+
+export interface AccountStatusOptions {
+  /** The session JWT out of SecureStore. */
+  jwt: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Read `GET /api/me/account` — is a deletion pending, and until when? The
+ * danger zone calls this when Settings opens, so a member who requested
+ * deletion and signs back in during the window sees the scheduled date and
+ * "Keep my account" instead of "Delete account" again (web parity:
+ * webapp/components/settings/DangerZone.tsx).
+ *
+ * A failed read answers `{ ok: false }` and the caller keeps the delete
+ * button drawn with the server as the gate — the surface must never vanish
+ * because a fetch blipped.
+ */
+export async function getAccountDeletionStatus(
+  options: AccountStatusOptions,
+): Promise<{ ok: true; status: AccountStatus } | { ok: false; status?: number }> {
+  const fetchImpl = resolveFetch(options.fetchImpl);
+  let res: Response;
+  try {
+    res = await fetchImpl(url(options.baseUrl, "/api/me/account"), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${options.jwt}`,
+      },
+    });
+  } catch {
+    return { ok: false };
+  }
+  if (!res.ok) return { ok: false, status: res.status };
+  try {
+    const body = (await res.json()) as {
+      deletion?: {
+        pending?: unknown;
+        requestedAt?: unknown;
+        restorableUntil?: unknown;
+        daysLeft?: unknown;
+        restoreWindowDays?: unknown;
+      } | null;
+    };
+    const deletion = body?.deletion ?? null;
+    return {
+      ok: true,
+      status: {
+        deletion: {
+          pending: deletion?.pending === true,
+          requestedAt:
+            typeof deletion?.requestedAt === "string" ? deletion.requestedAt : null,
+          restorableUntil:
+            typeof deletion?.restorableUntil === "string" ? deletion.restorableUntil : null,
+          daysLeft: typeof deletion?.daysLeft === "number" ? deletion.daysLeft : 0,
+          restoreWindowDays:
+            typeof deletion?.restoreWindowDays === "number"
+              ? deletion.restoreWindowDays
+              : RESTORE_WINDOW_DAYS,
+        },
+      },
+    };
+  } catch {
+    return { ok: false, status: res.status };
   }
 }
 

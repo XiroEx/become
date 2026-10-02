@@ -500,6 +500,13 @@ export default function SettingsScreen() {
             onDeleted={() => {
               router.replace("/login");
             }}
+            onKept={() => {
+              // Cancelling does not undo the `notificationsEnabled: false`
+              // latch the request set server-side — the member stays silent
+              // until they flip the switch themselves (web parity). Re-read
+              // the switch so it shows the true (off) state, not a stale on.
+              void notifPrefs.refetch();
+            }}
           />
         </View>
       </ScrollView>

@@ -732,7 +732,10 @@ export default function HealthSettingsRoute() {
               until NP-185 installs HealthKit — see lib/health/enabled.ts. */}
           <HealthSyncSection />
 
-          {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE */}
+          {/* THE DANGER ZONE, LAST AND ALWAYS VISIBLE.
+              Reads GET /api/me/account on mount: a member who requested
+              deletion and signs back in during the window sees the scheduled
+              date with "Keep my account" instead of the delete button again. */}
           <View
             className="border-t border-border"
             style={{ marginTop: 8, paddingTop: 16 }}
