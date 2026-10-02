@@ -130,11 +130,17 @@ export const NUTRITION_MODULES: ModuleSpec[] = [
           "import type { QuantityPickerVariant } from './types'"
         ),
   },
+  {
+    name: 'nutritionTrend',
+    webRelative: 'dashboard/nutritionTrend.ts',
+    sharedRelative: 'nutrition/nutritionTrend.ts',
+    rewrite: s => s,
+  },
 ]
 
 describe('nutrition lockstep drift (NP-017 / NP-061)', () => {
-  it('covers all 11 pure nutrition modules', () => {
-    assert.equal(NUTRITION_MODULES.length, 11)
+  it('covers all 12 pure nutrition modules', () => {
+    assert.equal(NUTRITION_MODULES.length, 12)
   })
 
   for (const mod of NUTRITION_MODULES) {

@@ -166,7 +166,13 @@ function NutritionPageInner() {
       console.error('[nutrition] image capture failed', err)
     }
   }, [])
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(() => searchParams?.get('quickAdd') === 'true')
+  useEffect(() => {
+    if (searchParams?.get('quickAdd') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
+      setQuickAddOpen(true)
+    }
+  }, [searchParams])
   const [editEntry, setEditEntry] = useState<{
     logId: string
     item: IMealItem & { _id?: string }
