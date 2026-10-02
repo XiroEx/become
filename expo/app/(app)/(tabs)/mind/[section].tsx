@@ -7,6 +7,9 @@ import ToolIntroGate from "@/components/mind/ToolIntroGate";
 import StateShiftDashboard from "@/components/mind/StateShiftDashboard";
 import SelfImageDashboard from "@/components/mind/SelfImageDashboard";
 import MissionDashboard from "@/components/mind/MissionDashboard";
+import DisciplineDashboard from "@/components/mind/DisciplineDashboard";
+import AntiSabotageDashboard from "@/components/mind/AntiSabotageDashboard";
+import SocialDashboard from "@/components/mind/SocialDashboard";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export const SECTION_LABELS: Record<string, string> = {
@@ -67,7 +70,10 @@ export default function MindSectionRoute() {
             {section === "state-shift" && <StateShiftDashboard />}
             {section === "self-image" && <SelfImageDashboard />}
             {section === "mission" && <MissionDashboard />}
-            {!["state-shift", "self-image", "mission"].includes(section) && (
+            {section === "discipline" && <DisciplineDashboard />}
+            {section === "anti-sabotage" && <AntiSabotageDashboard />}
+            {section === "social" && <SocialDashboard />}
+            {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social"].includes(section) && (
               <View className="items-center justify-center p-8">
                 <Text className="text-center text-sm text-muted-foreground">
                   {label} is coming soon.
