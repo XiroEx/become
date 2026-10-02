@@ -6,7 +6,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowRight,
   Check,
@@ -44,6 +44,8 @@ import {
   type TodayMood,
 } from "@become/core";
 import { Text } from "@/components/Text";
+import { Avatar } from "@/components/Avatar";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
@@ -119,8 +121,9 @@ export const MOVE_CHIP: Record<string, string> = {
  * - Re-reads on local day change via `useLocalDay` (NP-035)
  */
 export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
+  const router = useRouter();
   const { colors } = useThemeTokens();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const localDay = useLocalDay();
   const params = useLocalSearchParams<{ start?: string }>();
   const autoStart = params.start === "1";
@@ -459,7 +462,7 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
-        {/* Header: Title and Mind streak */}
+        {/* Header: Title, Mind streak, and Profile avatar button */}
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-foreground text-2xl font-bold">Mind</Text>
@@ -467,17 +470,37 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
               Daily mindset &amp; focus
             </Text>
           </View>
-          {streak > 0 ? (
-            <View
-              testID="mind-streak-badge"
-              className="flex-row items-center gap-1 rounded-full bg-primary/10 px-3 py-1"
+          <View className="flex-row items-center gap-3">
+            {streak > 0 ? (
+              <View
+                testID="mind-streak-badge"
+                className="flex-row items-center gap-1 rounded-full bg-primary/10 px-3 py-1"
+              >
+                <Flame size={16} color={colors.primary} />
+                <Text className="text-sm font-bold text-primary">
+                  {streak}
+                </Text>
+              </View>
+            ) : null}
+            <Pressable
+              testID="mind-header-profile"
+              accessibilityRole="button"
+              accessibilityLabel="Profile"
+              onPress={() => router.push("/(tabs)/profile" as never)}
+              style={[
+                minTouchTarget,
+                { alignItems: "center", justifyContent: "center" },
+              ]}
+              className="rounded-full border border-border p-0.5"
             >
-              <Flame size={16} color={colors.primary} />
-              <Text className="text-sm font-bold text-primary">
-                {streak}
-              </Text>
-            </View>
-          ) : null}
+              <Avatar
+                icon={typeof user?.profileIcon === "string" ? user.profileIcon : null}
+                imageUrl={typeof user?.avatarUrl === "string" ? user.avatarUrl : null}
+                size={32}
+                testID="mind-header-avatar"
+              />
+            </Pressable>
+          </View>
         </View>
 
         {/* Level progress bar */}

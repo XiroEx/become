@@ -33,6 +33,9 @@ export const SCAN_IMAGE_PATH = "/api/nutrition/scans/image";
 /** Food-report label photo → `food-flags/<userId>/…`. Multipart field `file`. */
 export const FOOD_FLAG_IMAGE_PATH = "/api/nutrition/flags/image";
 
+/** Avatar photo → `/api/profile/avatar`. Multipart field `file`. */
+export const AVATAR_IMAGE_PATH = "/api/profile/avatar";
+
 /** A meal's photo. Multipart field `image` — see `uploadMealImage`. */
 export function mealImagePath(mealId: string): string {
   return `/api/meals/${encodeURIComponent(mealId)}/image`;
@@ -103,13 +106,20 @@ export function multipartFileFor(image: UploadableImage): MultipartFile {
 
 /**
  * The URL an upload route answers with. `scans` and `food-flags` return
- * `imageUrl`; the meal route returns `{ success, imageUrl }`. Anything else is
- * treated as a failure rather than guessed at.
+ * `imageUrl`; the meal route returns `{ success, imageUrl }`; the avatar route
+ * returns `{ avatarUrl }`. Anything else is treated as a failure rather than
+ * guessed at.
  */
 export function imageUrlFrom(body: unknown): string | null {
   if (body === null || typeof body !== "object") return null;
-  const url = (body as { imageUrl?: unknown }).imageUrl;
-  return typeof url === "string" && url.length > 0 ? url : null;
+  const record = body as { imageUrl?: unknown; avatarUrl?: unknown };
+  const url =
+    typeof record.imageUrl === "string" && record.imageUrl.length > 0
+      ? record.imageUrl
+      : typeof record.avatarUrl === "string" && record.avatarUrl.length > 0
+        ? record.avatarUrl
+        : null;
+  return url;
 }
 
 /**
@@ -210,6 +220,19 @@ export function uploadMealImage(
     path: mealImagePath(mealId),
     image,
     field: MEAL_UPLOAD_FIELD,
+    ...(deps ? { deps } : {}),
+  });
+}
+
+/** An avatar photo (`/api/profile/avatar`). Sets avatarUrl and equips `profileIcon: 'custom'`. */
+export function uploadAvatarImage(
+  image: UploadableImage,
+  deps?: UploadDeps,
+): Promise<UploadResult> {
+  return uploadImage({
+    path: AVATAR_IMAGE_PATH,
+    image,
+    field: BLOB_UPLOAD_FIELD,
     ...(deps ? { deps } : {}),
   });
 }

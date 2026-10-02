@@ -204,7 +204,8 @@ describe("the table", () => {
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks", "exact"],
     ["/dashboard/plan", "/(tabs)/dashboard", "nearest"],
     ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training", "nearest"],
-    ["/dashboard/profile", "/(tabs)/dashboard", "nearest"],
+    ["/dashboard/profile", "/(tabs)/profile", "exact"],
+    ["/profile", "/(tabs)/profile", "exact"],
     ["/dashboard/customize", "/(tabs)/dashboard", "nearest"],
     // Calendar
     ["/dashboard/calendar", "/(tabs)/calendar", "exact"],

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, ScrollView, RefreshControl, Pressable } from "react-native";
 import { Text } from "@/components/Text";
+import { Avatar } from "@/components/Avatar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Sliders } from "lucide-react-native";
 import { Card } from "@/components/Card";
@@ -106,6 +107,10 @@ export interface DashboardScreenProps {
    * both app stores require — is unreachable by a member or a reviewer.
    */
   onOpenSettings?: () => void;
+  /** Opens the profile screen (NP-163). */
+  onOpenProfile?: () => void;
+  userIcon?: string | null;
+  userAvatarUrl?: string | null;
   /** Opens streaks detail screen (NP-108). */
   onOpenStreaks?: () => void;
   /** Saved dashboard layout from server or cache (controlled). */
@@ -175,6 +180,9 @@ export function DashboardScreen({
   refreshing = false,
   onRefresh,
   onOpenSettings,
+  onOpenProfile,
+  userIcon,
+  userAvatarUrl,
   onOpenStreaks,
   layout,
   statData,
@@ -377,21 +385,39 @@ export function DashboardScreen({
               Here&apos;s your day
             </Text>
           </View>
-          {/* The way into Settings — and therefore the way to Delete account,
-              which both stores check is reachable from inside the app. */}
-          <Pressable
-            testID="dashboard-open-settings"
-            accessibilityRole="button"
-            accessibilityLabel="Settings"
-            onPress={onOpenSettings}
-            disabled={!onOpenSettings}
-            // A 20-point icon in 8 points of padding is a 36-point target. The
-            // border grows to 44 x 44 and the icon stays centred in it.
-            style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
-            className="rounded-xl border border-border p-2"
-          >
-            <Settings color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
-          </Pressable>
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              testID="dashboard-open-profile"
+              accessibilityRole="button"
+              accessibilityLabel="Profile"
+              onPress={onOpenProfile}
+              disabled={!onOpenProfile}
+              style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+              className="rounded-full border border-border p-1"
+            >
+              <Avatar
+                icon={userIcon}
+                imageUrl={userAvatarUrl}
+                size={32}
+                testID="dashboard-header-avatar"
+              />
+            </Pressable>
+            {/* The way into Settings — and therefore the way to Delete account,
+                which both stores check is reachable from inside the app. */}
+            <Pressable
+              testID="dashboard-open-settings"
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              onPress={onOpenSettings}
+              disabled={!onOpenSettings}
+              // A 20-point icon in 8 points of padding is a 36-point target. The
+              // border grows to 44 x 44 and the icon stays centred in it.
+              style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+              className="rounded-xl border border-border p-2"
+            >
+              <Settings color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+            </Pressable>
+          </View>
         </View>
 
         {/* The doorway to The Becoming (NP-192) */}
