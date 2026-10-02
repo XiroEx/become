@@ -47,6 +47,7 @@ import { IdentityScene } from "@/components/mind/session/scenes/IdentityScene";
 import { MissionScene } from "@/components/mind/session/scenes/MissionScene";
 import { PatternScene } from "@/components/mind/session/scenes/PatternScene";
 import { SocialScene } from "@/components/mind/session/scenes/SocialScene";
+import { SpeakScene } from "@/components/mind/session/scenes/SpeakScene";
 import { StateCheckScene } from "@/components/mind/session/scenes/StateCheckScene";
 import { TypeScene } from "@/components/mind/session/scenes/TypeScene";
 import { VisionScene } from "@/components/mind/session/scenes/VisionScene";
@@ -593,6 +594,8 @@ export function SessionPlayer({
                 <ComposeScene move={move} onDone={next} preview={preview} />
               ) : move.kind === "contrast" ? (
                 <ContrastScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "speak" ? (
+                <SpeakScene move={move} onDone={next} preview={preview} />
               ) : (
                 <HoldToAffirmScene move={move} onDone={next} preview={preview} />
               )}
