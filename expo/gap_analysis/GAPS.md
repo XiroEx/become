@@ -9,8 +9,7 @@ revisit date (or `permanent` when there's no plan to port).
 
 | Surface | Webapp URL | Why deferred | Tier | Revisit |
 |---|---|---|---|---|
-| **Program editor** | `https://become.redbtn.io/dashboard/programming/[id]/edit` | Heavy drag-reorder form with @hello-pangea/dnd — native equivalent (react-native-draggable-flatlist) would take weeks and the editor is used by ~1 user (the coach). | Tier 3 | permanent |
-| **Workout builder (create)** | `https://become.redbtn.io/dashboard/programming/create` | Same drag-reorder pattern as the editor; multi-step wizard with exercise picker → set/rep matrix. Coach-only. | Tier 3 | permanent |
+| **Admin program editor / catalog builder** | `https://become.redbtn.io/dashboard/admin/programs/[programId]/edit` | Heavy drag-reorder form with @hello-pangea/dnd over the SHARED catalog. Admin-only (`requireAdmin`), used by ~1 person; NP-013 keeps the native admin screens out of store builds and NP-122 leaves one admin-only link to the web. | Tier 3 | permanent |
 | **Recipe create / edit** | `https://become.redbtn.io/dashboard/nutrition/recipes/create` (or `/[id]/edit`) | Multi-step form with image upload, ingredients table, instructions editor. Webapp version is responsive — mobile-web is usable. | Tier 3 | permanent |
 | **Exercise editor + video upload** | `https://become.redbtn.io/dashboard/admin/exercises/[slug]` | Form + S3 video upload + framing editor — needs presigned PUT plumbing on native and a canvas-equivalent for framing. Coach-only. | Tier 3 | permanent |
 | **Admin food review** | `https://become.redbtn.io/dashboard/admin/foods/[id]` | USDA / OFF reconciliation form, variant merging UI, nutrition override editor. Coach-only. | Tier 3 | permanent |
@@ -18,6 +17,27 @@ revisit date (or `permanent` when there's no plan to port).
 | **Onboarding coach setup** | `https://become.redbtn.io/dashboard/admin/onboarding` | Configures the user-facing onboarding questionnaire. Coach-only, used once per question revision. | Tier 3 | permanent |
 | **Framing editor (video)** | `https://become.redbtn.io/dashboard/admin/exercises/[slug]/framing` | Per-surface video framing override; requires canvas / pointer-precision drawing. Could revisit when Skia ships an N-handle framing widget. | Tier 2 | when Skia ships |
 | **HealthKit / Health Connect smoke test** | n/a (native module) | `react-native-health-connect` IS installed now (NP-199) and the Android bridge, both directions and the switches are unit-tested against a fake module; iOS still has no module at all (`react-native-health`, NP-185 / NP-186). Neither can run in Expo Go, so the end-to-end check — a weigh-in crossing both ways, and each direction stopping at the next launch — needs a dev build and a physical phone with a real weight sample. | Tier 1 (deferred) | when the next Android dev build ships (NP-199 sign-off) |
+
+### No longer a gap: the MEMBER program builder (NP-168)
+
+The two rows this file used to carry for a "Program editor" and a "Workout
+builder (create)" described coach-only surfaces at
+`/dashboard/programming/[id]/edit` and `/dashboard/programming/create` — paths
+that 404. The real member surfaces are `/dashboard/programs/new` and
+`/dashboard/programs/[programId]/edit`, and building a custom program is a
+MEMBER feature, not a coach one: three of them on the free tier
+(`custom-programs`), more with Plus.
+
+So it is being ported rather than deferred. NP-168 ships the frame natively —
+program details, phases with their weeks and focus, sessions with their day
+labels and titles, create and update against `/api/programs/custom`, and a
+local draft that survives the app being killed
+(`expo/app/(app)/(tabs)/programming/new.tsx`,
+`expo/app/(app)/(tabs)/programming/[id]/edit.tsx`,
+`expo/lib/programs/programBuilder.ts`). The exercise rows are NP-171 and drag
+reorder NP-172; until the rows land, the member-facing Create and Edit still
+open the web signed in, and `programCreateDestination` in
+`expo/lib/programs/customPrograms.ts` is the single switch that moves them.
 
 ## How to add a gap
 
@@ -27,7 +47,9 @@ with a Tier-3 'Edit in browser' button on the native side.
 
 ## Native surfaces that consume these deep-links
 
-- `expo/components/programs/ProgramDetail.tsx` — program editor + workout builder
+- `expo/components/programs/ProgramDetail.tsx` — a custom program's Edit, which
+  goes to the native builder or to the web through `programEditDestination`
+  (`expo/lib/programs/customPrograms.ts`); the ADMIN catalog editor stays web-only
 - `expo/components/recipes/RecipeDetail.tsx` — recipe edit
 - `expo/components/admin/AdminFoodList.tsx` — admin food review
 - `expo/components/admin/AdminExerciseList.tsx` — exercise editor + video upload
