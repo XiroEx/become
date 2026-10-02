@@ -70,6 +70,10 @@ import {
   type MealPlan,
   type PlansResponse,
 } from "@/lib/nutrition/mealPlans";
+import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
+import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
+
+type ViewMode = "day" | "week" | "month";
 
 const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
@@ -78,7 +82,11 @@ export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
-  const params = useLocalSearchParams<{ date?: string; quickAdd?: string }>();
+  const params = useLocalSearchParams<{
+    date?: string;
+    view?: "day" | "week" | "month";
+    quickAdd?: string;
+  }>();
 
   // Device-local day and timezone offset (NP-035).
   // Automatically rolls over on local midnight timer or app foregrounding.
@@ -98,6 +106,25 @@ export default function NutritionIndexRoute() {
       setExplicitDate(params.date);
     }
   }, [params.date]);
+
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (params.view === "week" || params.view === "month" || params.view === "day") {
+      return params.view;
+    }
+    return "day";
+  });
+
+  useEffect(() => {
+    if (params.view === "week" || params.view === "month" || params.view === "day") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
+      setViewMode(params.view);
+    }
+  }, [params.view]);
+
+  const handleOpenDay = useCallback((dateKey: string) => {
+    setExplicitDate(dateKey);
+    setViewMode("day");
+  }, []);
 
   const activeDate = explicitDate ?? today;
   const isToday = activeDate === today;
@@ -925,12 +952,100 @@ export default function NutritionIndexRoute() {
         </View>
       </View>
 
-      {/* Date Navigation & Swipe Container */}
+      {/* View Mode Toggle: Day · Week · Month */}
       <View
-        style={{ flex: 1 }}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
+        className="bg-muted mx-4 mb-2 p-1 rounded-xl flex-row"
       >
+        <Pressable
+          testID="nutrition-view-mode-day"
+          accessibilityRole="tab"
+          accessibilityLabel="Day view"
+          accessibilityState={{ selected: viewMode === "day" }}
+          onPress={() => setViewMode("day")}
+          style={{
+            flex: 1,
+            paddingVertical: 6,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 7,
+            backgroundColor: viewMode === "day" ? colors.card : "transparent",
+            shadowColor: viewMode === "day" ? colors.foreground : "transparent",
+            shadowOpacity: viewMode === "day" ? 0.05 : 0,
+            shadowRadius: 2,
+            elevation: viewMode === "day" ? 1 : 0,
+          }}
+        >
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "day" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Day
+          </Text>
+        </Pressable>
+        <Pressable
+          testID="nutrition-view-mode-week"
+          accessibilityRole="tab"
+          accessibilityLabel="Week view"
+          accessibilityState={{ selected: viewMode === "week" }}
+          onPress={() => setViewMode("week")}
+          style={{
+            flex: 1,
+            paddingVertical: 6,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 7,
+            backgroundColor: viewMode === "week" ? colors.card : "transparent",
+            shadowColor: viewMode === "week" ? colors.foreground : "transparent",
+            shadowOpacity: viewMode === "week" ? 0.05 : 0,
+            shadowRadius: 2,
+            elevation: viewMode === "week" ? 1 : 0,
+          }}
+        >
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "week" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Week
+          </Text>
+        </Pressable>
+        <Pressable
+          testID="nutrition-view-mode-month"
+          accessibilityRole="tab"
+          accessibilityLabel="Month view"
+          accessibilityState={{ selected: viewMode === "month" }}
+          onPress={() => setViewMode("month")}
+          style={{
+            flex: 1,
+            paddingVertical: 6,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 7,
+            backgroundColor: viewMode === "month" ? colors.card : "transparent",
+            shadowColor: viewMode === "month" ? colors.foreground : "transparent",
+            shadowOpacity: viewMode === "month" ? 0.05 : 0,
+            shadowRadius: 2,
+            elevation: viewMode === "month" ? 1 : 0,
+          }}
+        >
+          <Text
+            className={`text-xs font-semibold ${
+              viewMode === "month" ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            Month
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Date Navigation & Swipe Container */}
+      {viewMode === "day" ? (
+        <View
+          style={{ flex: 1 }}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
@@ -1294,6 +1409,26 @@ export default function NutritionIndexRoute() {
           </View>
         </ScrollView>
       </View>
+      ) : viewMode === "week" ? (
+        <TimelineWeekView
+          referenceDate={activeDate}
+          goalCalories={goalCalories}
+          tzOffset={tzOffset}
+          token={token}
+          onOpenDay={handleOpenDay}
+          onLogPlan={handleLogPlan}
+          onSkipPlan={handleSkipPlan}
+          onRemovePlan={handleRemovePlan}
+        />
+      ) : (
+        <TimelineMonthView
+          referenceDate={activeDate}
+          goalCalories={goalCalories}
+          tzOffset={tzOffset}
+          token={token}
+          onOpenDay={handleOpenDay}
+        />
+      )}
 
       {/* Screen Menu (NP-012: only offers screens that exist natively) */}
       <Modal
@@ -1428,12 +1563,53 @@ export default function NutritionIndexRoute() {
               }}
               onPress={() => {
                 setTimelineMenuOpen(false);
-                // TODO(NP-177): Eating timeline (day, week and month views) is NP-177.
-                router.push("/(tabs)/calendar");
+                setViewMode("week");
               }}
             >
               <Clock size={16} color={colors.foreground} />
               <Text className="text-sm font-medium text-foreground">Timeline</Text>
+            </Pressable>
+            <Pressable
+              testID="nutrition-timeline-week"
+              accessibilityRole="button"
+              accessibilityLabel="Week view"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
+              onPress={() => {
+                setTimelineMenuOpen(false);
+                setViewMode("week");
+              }}
+            >
+              <Clock size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Week view</Text>
+            </Pressable>
+            <Pressable
+              testID="nutrition-timeline-month"
+              accessibilityRole="button"
+              accessibilityLabel="Month view"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
+              onPress={() => {
+                setTimelineMenuOpen(false);
+                setViewMode("month");
+              }}
+            >
+              <Clock size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Month view</Text>
             </Pressable>
             <Pressable
               testID="nutrition-timeline-meal-schedule"
