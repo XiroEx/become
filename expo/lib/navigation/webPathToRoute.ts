@@ -341,6 +341,18 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   }
 
   if (head === "mind") {
+    const sub = lower(segments[1] ?? "");
+    if (
+      sub === "state-shift" ||
+      sub === "self-image" ||
+      sub === "mission" ||
+      sub === "discipline" ||
+      sub === "anti-sabotage" ||
+      sub === "social" ||
+      sub === "vision"
+    ) {
+      return native(`${NATIVE_ROUTES.mind}/${sub}`, params, "exact");
+    }
     return segments.length === 1
       ? native(NATIVE_ROUTES.mind, params, "exact")
       : native(NATIVE_ROUTES.mind, params, "nearest");
@@ -427,8 +439,20 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
 
   // ── Mind ──────────────────────────────────────────────────────────────────
   if (section === "mind") {
+    const sub = lower(segments[2] ?? "");
+    if (
+      sub === "state-shift" ||
+      sub === "self-image" ||
+      sub === "mission" ||
+      sub === "discipline" ||
+      sub === "anti-sabotage" ||
+      sub === "social" ||
+      sub === "vision"
+    ) {
+      return native(`${NATIVE_ROUTES.mind}/${sub}`, params, "exact");
+    }
     // `/dashboard/mind`, and every room off it — `becoming` (NP-192),
-    // `arsenal`, `[section]` — land on the Mind tab until NP-097 ports them.
+    // `arsenal` — land on the Mind tab until NP-097 ports them.
     return segments.length === 2
       ? native(NATIVE_ROUTES.mind, params, "exact")
       : native(NATIVE_ROUTES.mind, params, "nearest");
