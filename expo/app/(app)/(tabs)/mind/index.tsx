@@ -13,6 +13,7 @@ import {
   Clock,
   Flame,
   Lock,
+  Sparkles,
 } from "lucide-react-native";
 import {
   apiFetch,
@@ -35,6 +36,7 @@ import {
   findProtocol,
   getPathSession,
   getUnlockedSystems,
+  SYSTEM_INFO,
   isMoodLevel,
   seedStateForMood,
   shouldAutoStartMindSession,
@@ -52,6 +54,7 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
+import MindSectionRoute from "./[section]";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
@@ -95,6 +98,16 @@ function untilLabel(ts: number | null): string | null {
   return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
 }
 
+const ALL_SYSTEM_IDS = [
+  "state-shift",
+  "self-image",
+  "mission",
+  "vision",
+  "discipline",
+  "anti-sabotage",
+  "social",
+] as const;
+
 export const MOVE_CHIP: Record<string, string> = {
   "state-check": "Check in",
   breath: "Breathe",
@@ -129,7 +142,7 @@ export const MOVE_CHIP: Record<string, string> = {
  * - `become://mind?start=1` auto-start
  * - Re-reads on local day change via `useLocalDay` (NP-035)
  */
-export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
+function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token, user } = useAuth();
@@ -851,10 +864,14 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
               ) : null}
             </View>
             {(aiSuggestions ?? deterministicSuggestions).map((action) => (
-              <View
+              <Pressable
                 key={`${action.system}-${action.id}`}
                 testID={`mind-suggested-action-${action.id}`}
-                className="rounded-2xl border border-border bg-card p-4 gap-1"
+                accessibilityRole="button"
+                onPress={() =>
+                  router.push(`/(tabs)/mind/${action.system}` as any)
+                }
+                className="rounded-2xl border border-border bg-card p-4 gap-1 active:opacity-80"
               >
                 <View className="flex-row items-center justify-between">
                   <Text className="text-xs font-bold text-primary uppercase">
@@ -867,10 +884,74 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
                 <Text className="text-sm text-foreground font-medium">
                   {action.reason}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </View>
         ) : null}
+
+        {/* Mind Systems (NP-151) */}
+        <View testID="mind-systems-section" className="gap-3">
+          <Text className="text-foreground text-sm font-semibold uppercase tracking-wider">
+            Mind Systems
+          </Text>
+          <View className="gap-2.5">
+            {ALL_SYSTEM_IDS.map((id) => {
+              const info = SYSTEM_INFO[id];
+              const unlockedList =
+                progress?.unlockedSystems ??
+                getUnlockedSystems(progress?.chapter ?? 1);
+              const isUnlocked = unlockedList.includes(id);
+
+              if (!isUnlocked) {
+                return (
+                  <View
+                    key={id}
+                    testID={`mind-system-tile-${id}`}
+                    className="flex-row items-center gap-3 rounded-2xl border border-dashed border-border bg-card/60 p-4 opacity-75"
+                  >
+                    <View className="h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+                      <Lock size={18} color={colors["muted-foreground"]} />
+                    </View>
+                    <View className="min-w-0 flex-1">
+                      <Text className="text-sm font-semibold text-muted-foreground">
+                        {info?.label ?? id}
+                      </Text>
+                      <Text className="text-xs text-muted-foreground/80">
+                        Unlocks in Chapter {info?.chapter ?? 1}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <Pressable
+                  key={id}
+                  testID={`mind-system-tile-${id}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/(tabs)/mind/${id}` as any)}
+                  className="flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4 active:opacity-80"
+                >
+                  <View className="h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted">
+                    <Sparkles size={18} color={colors.primary} />
+                  </View>
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm font-semibold text-foreground">
+                      {info?.label ?? id}
+                    </Text>
+                    <Text
+                      className="text-xs text-muted-foreground"
+                      numberOfLines={1}
+                    >
+                      {info?.hook ?? ""}
+                    </Text>
+                  </View>
+                  <ArrowRight size={16} color={colors["muted-foreground"]} />
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         {/* Recent moods (kept below the card until NP-105 ships) */}
         <View testID="mind-recent-moods">
@@ -907,3 +988,12 @@ export default function MindRoute({ testID = "mind-route" }: MindRouteProps) {
     </SafeAreaView>
   );
 }
+
+export default function MindRoute(props: MindRouteProps) {
+  const params = useLocalSearchParams<{ section?: string }>();
+  if (params.section) {
+    return <MindSectionRoute />;
+  }
+  return <MindMainRoute {...props} />;
+}
+

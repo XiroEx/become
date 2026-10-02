@@ -38,8 +38,12 @@ import { z } from "zod";
 import {
   ApiError,
   apiFetch,
+  LogWeightResponseSchema,
+  LogMoodResponseSchema,
   type ApiCallInit,
   type ApiFetchOptions,
+  type LogWeightResponse,
+  type LogMoodResponse,
 } from "@become/api-client";
 import {
   createOfflineQueue,
@@ -85,12 +89,24 @@ export type OfflineWriteStatus =
   /** It is on disk and will be replayed — offline, or the server was down. */
   | "queued";
 
+export interface LogWeightOptions {
+  now?: Date;
+  onResponse?: (response: LogWeightResponse) => void;
+}
+
+export interface LogMoodOptions {
+  now?: Date;
+  onResponse?: (response: LogMoodResponse) => void;
+}
+
 export interface OfflineWrites {
   logWeight: (
     weightLbs: number,
-    opts?: { now?: Date },
+    opts?: LogWeightOptions,
   ) => Promise<OfflineWriteStatus>;
-  logMood: (mood: MoodValue, opts?: { now?: Date }) => Promise<OfflineWriteStatus>;
+  logMood: (mood: MoodValue, opts?: LogMoodOptions) => Promise<OfflineWriteStatus>;
+  getLastWeightResponse: () => LogWeightResponse | null;
+  getLastMoodResponse: () => LogMoodResponse | null;
   /** Re-hydrate the snapshot, subscribe to reconnect, flush if already online. */
   start: () => Promise<void>;
   stop: () => void;
@@ -170,6 +186,9 @@ export function createOfflineWrites(deps: OfflineWritesDeps = {}): OfflineWrites
   /** Item keys the current flush actually tried. */
   const attempted = new Set<string>();
 
+  let lastWeightResponse: LogWeightResponse | null = null;
+  let lastMoodResponse: LogMoodResponse | null = null;
+
   const flusher = async (
     item: OfflineQueueItem<QueuedWrite>,
   ): Promise<{ ok: boolean }> => {
@@ -193,7 +212,28 @@ export function createOfflineWrites(deps: OfflineWritesDeps = {}): OfflineWrites
         getToken: () => token,
       };
       if (deps.fetchImpl !== undefined) init.fetchImpl = deps.fetchImpl;
-      await apiFetch(path, AckSchema, init);
+
+      const schema =
+        item.collection === "weight"
+          ? LogWeightResponseSchema
+          : item.collection === "mood"
+            ? LogMoodResponseSchema
+            : AckSchema;
+
+      let res: unknown;
+      try {
+        res = await apiFetch(path, schema, init);
+      } catch (parseError) {
+        if (parseError instanceof ApiError) throw parseError;
+        res = await apiFetch(path, AckSchema, init);
+      }
+
+      if (item.collection === "weight" && res && typeof res === "object") {
+        lastWeightResponse = res as LogWeightResponse;
+      } else if (item.collection === "mood" && res && typeof res === "object") {
+        lastMoodResponse = res as LogMoodResponse;
+      }
+
       return { ok: true };
     } catch (error) {
       // One place decides what a 401 means; this only reports it.
@@ -279,12 +319,22 @@ export function createOfflineWrites(deps: OfflineWritesDeps = {}): OfflineWrites
     queue,
     async logWeight(weightLbs, opts): Promise<OfflineWriteStatus> {
       const fields = dayFieldsFor(opts?.now);
-      return submit("weight", { ...fields, weight: weightLbs });
+      const status = await submit("weight", { ...fields, weight: weightLbs });
+      if (status === "sent" && lastWeightResponse && opts?.onResponse) {
+        opts.onResponse(lastWeightResponse);
+      }
+      return status;
     },
     async logMood(mood, opts): Promise<OfflineWriteStatus> {
       const fields = dayFieldsFor(opts?.now);
-      return submit("mood", { ...fields, mood });
+      const status = await submit("mood", { ...fields, mood });
+      if (status === "sent" && lastMoodResponse && opts?.onResponse) {
+        opts.onResponse(lastMoodResponse);
+      }
+      return status;
     },
+    getLastWeightResponse: () => lastWeightResponse,
+    getLastMoodResponse: () => lastMoodResponse,
     /**
      * Read back what the last launch could not send, then watch for the
      * connection coming back. Called once, from the root
@@ -307,6 +357,8 @@ export function createOfflineWrites(deps: OfflineWritesDeps = {}): OfflineWrites
     },
     clear: async (): Promise<void> => {
       refusals.clear();
+      lastWeightResponse = null;
+      lastMoodResponse = null;
       await queue.clear();
     },
     pending: () => queue.size(),

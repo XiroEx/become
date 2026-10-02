@@ -22,6 +22,7 @@ import {
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { FireNumber } from "@/components/streaks/FireNumber";
+import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
 import { streakDisplay, STREAK_VISIBLE_MIN } from "@become/core";
 import type { StreaksPayload } from "@become/api-client";
 
@@ -36,6 +37,8 @@ export interface StreaksScreenProps {
   onUseFreeze?: () => Promise<void> | void;
   freezing?: boolean;
   freezeError?: string | null;
+  milestoneCelebration?: number | null;
+  onCloseMilestoneCelebration?: () => void;
 }
 
 function unitWord(n: number, unit: "days" | "weeks"): string {
@@ -155,6 +158,8 @@ export function StreaksScreen({
   onUseFreeze,
   freezing = false,
   freezeError,
+  milestoneCelebration,
+  onCloseMilestoneCelebration,
 }: StreaksScreenProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
@@ -643,6 +648,13 @@ export function StreaksScreen({
           </View>
         </Card>
       </ScrollView>
+      <StreakMilestoneModal
+        testID="streaks-screen-milestone-modal"
+        visible={milestoneCelebration !== null && milestoneCelebration !== undefined}
+        milestone={milestoneCelebration ?? null}
+        streakDays={overall?.current ?? 0}
+        onClose={() => onCloseMilestoneCelebration?.()}
+      />
     </SafeAreaView>
   );
 }
