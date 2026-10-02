@@ -18,6 +18,8 @@ import {
   ScheduleApiResponseSchema,
   SuggestionDismissResponseSchema,
   ProgramNudgeResponseSchema,
+  DashboardLayoutPatchResponseSchema,
+  type DashboardTile,
   apiFetch,
   type ScheduledWorkout,
 } from "@become/api-client";
@@ -39,6 +41,7 @@ import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import {
   LayoutWireSchema,
   LAYOUT_CACHE_KEY,
+  writeCachedLayout,
 } from "@/lib/dashboard/tileLayout";
 import type {
   DashboardStatData,
@@ -390,6 +393,34 @@ export default function DashboardRoute() {
       }
     },
     [tiles, token],
+  );
+
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+
+  const onSaveLayout = useCallback(
+    async (nextLayout: DashboardTile[]) => {
+      try {
+        const res = await apiFetch(
+          "/api/dashboard/layout",
+          DashboardLayoutPatchResponseSchema,
+          {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+            method: "PATCH",
+            body: { layout: nextLayout },
+          },
+        );
+        const saved = res.layout ?? nextLayout;
+        const memberId = typeof user?.id === "string" ? user.id : null;
+        await writeCachedLayout(saved, memberId);
+        await layout.refetch();
+        return saved;
+      } catch (err) {
+        console.error("Failed to save dashboard layout:", err);
+        throw err;
+      }
+    },
+    [layout, token, user],
   );
 
   const initialTodayRef = useRef(today);
@@ -791,9 +822,10 @@ export default function DashboardRoute() {
       progressData={progress.data ?? null}
       fitnessGoal={fitnessGoal}
       targetWeight={targetWeight}
-      onOpenCustomizeTiles={() => {
-        // TODO: NP-157 owns native dashboard tile customizer
-      }}
+      customizeTilesOpen={customizeOpen}
+      onCustomizeTilesOpenChange={setCustomizeOpen}
+      onOpenCustomizeTiles={() => setCustomizeOpen(true)}
+      onSaveLayout={onSaveLayout}
       onOpenSettings={() => {
         router.push("/settings");
       }}
