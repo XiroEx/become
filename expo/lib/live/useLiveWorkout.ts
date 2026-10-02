@@ -16,6 +16,10 @@ import {
   type ExerciseHistoryEntry,
   type ExercisePRSummary,
   type StaleIncompleteWorkout,
+  type ResolveIncompleteAction,
+  type ResolveIncompleteRequest,
+  type ResolveIncompleteResponse,
+  ResolveIncompleteResponseSchema,
 } from "@become/api-client";
 import {
   normalizeTracking,
@@ -38,6 +42,7 @@ import {
 } from "@/lib/live/liveWorkoutCache";
 import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import { localDateKey } from "@/lib/time/localDay";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import type {
   LiveGrid,
@@ -52,6 +57,8 @@ function defaultSubscribeToAppState(
   return () => subscription.remove();
 }
 
+const defaultGetNow = () => new Date();
+
 export interface UseLiveWorkoutOptions {
   /** DI for tests — defaults to AsyncStorage-backed cache. */
   cacheStore?: KeyValueStore;
@@ -65,6 +72,10 @@ export interface UseLiveWorkoutOptions {
   ) => () => void;
   /** Delay in milliseconds for autosave debounce (defaults to 1500). */
   autoSaveDelayMs?: number;
+  /** Testing override for workout origin key (default: device's local calendar day). */
+  initialOriginKey?: string;
+  /** Clock injection point for tests (defaults to () => new Date()). */
+  getNow?: () => Date;
 }
 
 export interface UseLiveWorkoutResult {
@@ -81,6 +92,11 @@ export interface UseLiveWorkoutResult {
   exerciseHistory: Record<string, ExerciseHistoryEntry>;
   exercisePRs: Record<string, ExercisePRSummary>;
   staleIncomplete: StaleIncompleteWorkout | null;
+  setStaleIncomplete: (stale: StaleIncompleteWorkout | null) => void;
+  resolveIncomplete: (
+    action: ResolveIncompleteAction,
+  ) => Promise<ResolveIncompleteResponse | null>;
+  resolvingIncomplete: ResolveIncompleteAction | null;
   swappedExercises: Record<number, { originalSlug: string; originalName: string }>;
   swaps: Record<string, string>;
   finishing: boolean;
@@ -106,6 +122,14 @@ export interface UseLiveWorkoutResult {
     gridOverride?: LiveGrid,
   ) => Promise<WorkoutSaveResponse | null>;
   onFinish: (grid?: LiveGrid) => Promise<WorkoutSaveResponse | null>;
+  pendingDayChoice: {
+    originalKey: string;
+    todayKey: string;
+    grid?: LiveGrid;
+  } | null;
+  resolveDayChoice: (chosenKey: string) => Promise<WorkoutSaveResponse | null>;
+  dismissDayChoice: () => void;
+  workoutOriginKey: string;
   logDateOverrideRef: React.MutableRefObject<string | null>;
   reload: () => Promise<void>;
 }
@@ -167,6 +191,18 @@ export function useLiveWorkout(
   const [attemptId, setAttemptId] = useState(newWorkoutAttemptId);
   const [startedAtISO] = useState(() => new Date().toISOString());
   const logDateOverrideRef = useRef<string | null>(null);
+
+  const getNow = options?.getNow ?? defaultGetNow;
+  const [workoutOriginKey, setWorkoutOriginKey] = useState<string>(
+    () => options?.initialOriginKey ?? localDateKey(getNow()),
+  );
+  const [pendingDayChoice, setPendingDayChoice] = useState<{
+    originalKey: string;
+    todayKey: string;
+    grid?: LiveGrid;
+  } | null>(null);
+  const [resolvingIncomplete, setResolvingIncomplete] =
+    useState<ResolveIncompleteAction | null>(null);
 
   // Timer tracking on the wall clock (baseline + elapsed)
   useEffect(() => {
@@ -705,6 +741,10 @@ export function useLiveWorkout(
           setIsResuming(true);
           const savedWorkout = resumeRes.workout;
 
+          if (savedWorkout.date) {
+            setWorkoutOriginKey(localDateKey(new Date(savedWorkout.date)));
+          }
+
           if (
             typeof savedWorkout.activeSeconds === "number" &&
             savedWorkout.activeSeconds > 0
@@ -930,9 +970,80 @@ export function useLiveWorkout(
 
   const onFinish = useCallback(
     async (finalGrid?: LiveGrid) => {
+      const todayKeyNow = localDateKey(getNow());
+      if (workoutOriginKey !== todayKeyNow && !logDateOverrideRef.current) {
+        setPendingDayChoice({
+          originalKey: workoutOriginKey,
+          todayKey: todayKeyNow,
+          grid: finalGrid,
+        });
+        return null;
+      }
       return save(true, finalGrid);
     },
-    [save],
+    [workoutOriginKey, getNow, save],
+  );
+
+  const resolveDayChoice = useCallback(
+    async (chosenKey: string) => {
+      const pending = pendingDayChoice;
+      logDateOverrideRef.current = chosenKey;
+      setPendingDayChoice(null);
+      return save(true, pending?.grid);
+    },
+    [pendingDayChoice, save],
+  );
+
+  const dismissDayChoice = useCallback(() => {
+    setPendingDayChoice(null);
+  }, []);
+
+  const resolveIncomplete = useCallback(
+    async (
+      action: ResolveIncompleteAction,
+    ): Promise<ResolveIncompleteResponse | null> => {
+      if (!staleIncomplete) return null;
+      setResolvingIncomplete(action);
+      try {
+        const body: ResolveIncompleteRequest = {
+          programId,
+          day: staleIncomplete.day,
+          phase: staleIncomplete.phase ?? phase,
+          action,
+          tz: new Date().getTimezoneOffset(),
+          tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+
+        const res = await apiFetch<ResolveIncompleteResponse>(
+          "/api/workouts/resolve-incomplete",
+          ResolveIncompleteResponseSchema,
+          {
+            method: "POST",
+            body,
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+
+        if (action === "continue") {
+          setStaleIncomplete(null);
+        } else if (action === "restart") {
+          setStaleIncomplete(null);
+          await cache.clear(cacheKey);
+          await load();
+        } else {
+          setStaleIncomplete(null);
+        }
+
+        return res;
+      } catch (err) {
+        console.error("Error resolving incomplete workout:", err);
+        return null;
+      } finally {
+        setResolvingIncomplete(null);
+      }
+    },
+    [staleIncomplete, programId, phase, token, cache, cacheKey, load],
   );
 
   return {
@@ -949,6 +1060,9 @@ export function useLiveWorkout(
     exerciseHistory,
     exercisePRs,
     staleIncomplete,
+    setStaleIncomplete,
+    resolveIncomplete,
+    resolvingIncomplete,
     swappedExercises,
     swaps,
     finishing,
@@ -964,6 +1078,10 @@ export function useLiveWorkout(
     setSwapSlug,
     save,
     onFinish,
+    pendingDayChoice,
+    resolveDayChoice,
+    dismissDayChoice,
+    workoutOriginKey,
     logDateOverrideRef,
     reload: load,
   };
