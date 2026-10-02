@@ -18,6 +18,8 @@ import {
   ScheduleApiResponseSchema,
   SuggestionDismissResponseSchema,
   ProgramNudgeResponseSchema,
+  DashboardLayoutPatchResponseSchema,
+  type DashboardTile,
   apiFetch,
   type ScheduledWorkout,
 } from "@become/api-client";
@@ -39,6 +41,7 @@ import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import {
   LayoutWireSchema,
   LAYOUT_CACHE_KEY,
+  writeCachedLayout,
 } from "@/lib/dashboard/tileLayout";
 import type {
   DashboardStatData,
@@ -293,6 +296,29 @@ export default function DashboardRoute() {
   }, [router]);
 
   const [workoutNowOpen, setWorkoutNowOpen] = useState(false);
+  const [customLayout, setCustomLayout] = useState<DashboardTile[] | null>(null);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+
+  const handleSaveLayout = useCallback(
+    async (nextLayout: DashboardTile[]) => {
+      const res = await apiFetch(
+        "/api/dashboard/layout",
+        DashboardLayoutPatchResponseSchema,
+        {
+          method: "PATCH",
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          body: { layout: nextLayout },
+        },
+      );
+      const saved = res.layout ?? nextLayout;
+      setCustomLayout(saved);
+      void writeCachedLayout(saved);
+      void layout.refetch();
+      return saved;
+    },
+    [token, layout],
+  );
 
   const onOpenMind = useCallback(() => {
     router.push("/(tabs)/mind?start=1" as never);
@@ -775,7 +801,7 @@ export default function DashboardRoute() {
       weightUnit={weightUnit}
       onSubmitWeight={onSubmitWeight}
       onSubmitMood={onSubmitMood}
-      layout={layout.data?.layout ?? null}
+      layout={customLayout ?? layout.data?.layout ?? null}
       statData={statData}
       tilesData={tiles.data ?? null}
       onDismissSuggestion={onDismissSuggestion}
@@ -791,9 +817,10 @@ export default function DashboardRoute() {
       progressData={progress.data ?? null}
       fitnessGoal={fitnessGoal}
       targetWeight={targetWeight}
-      onOpenCustomizeTiles={() => {
-        // TODO: NP-157 owns native dashboard tile customizer
-      }}
+      customizeOpen={customizeOpen}
+      onCustomizeOpenChange={setCustomizeOpen}
+      onOpenCustomizeTiles={() => setCustomizeOpen(true)}
+      onSaveLayout={handleSaveLayout}
       onOpenSettings={() => {
         router.push("/settings");
       }}
