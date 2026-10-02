@@ -15,6 +15,7 @@ import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
 import { PlanCard } from "@/components/dashboard/PlanCard";
 import { MoodGatewayBanner } from "@/components/dashboard/MoodGatewayBanner";
+import { CustomizeDashboardModal } from "@/components/dashboard/CustomizeDashboardModal";
 import {
   CurrentProgramCard,
   type CurrentProgramData,
@@ -155,6 +156,13 @@ export interface DashboardScreenProps {
   targetWeight?: number | null;
   /** Callback when Customize tiles link is pressed (NP-157). */
   onOpenCustomizeTiles?: () => void;
+  /** Controls customize tiles modal externally for testability (NP-157). */
+  customizeTilesOpen?: boolean;
+  onCustomizeTilesOpenChange?: (open: boolean) => void;
+  /** Callback when layout is saved from customizer (NP-157). */
+  onSaveLayout?: (
+    layout: DashboardTile[],
+  ) => Promise<DashboardTile[] | void> | void;
   /** Program nudge modal visibility */
   nudgeOpen?: boolean;
   onNudgeOpenChange?: (open: boolean) => void;
@@ -233,6 +241,9 @@ export function DashboardScreen({
   fitnessGoal,
   targetWeight,
   onOpenCustomizeTiles,
+  customizeTilesOpen,
+  onCustomizeTilesOpenChange,
+  onSaveLayout,
   nudgeOpen,
   onNudgeOpenChange,
   priorShowings,
@@ -334,6 +345,18 @@ export function DashboardScreen({
     }
   };
 
+  const [internalCustomizeOpen, setInternalCustomizeOpen] =
+    useState<boolean>(false);
+  const isCustomizeOpen = customizeTilesOpen ?? internalCustomizeOpen;
+  const setCustomizeOpen = (value: boolean) => {
+    if (customizeTilesOpen !== undefined) onCustomizeTilesOpenChange?.(value);
+    else setInternalCustomizeOpen(value);
+  };
+
+  const [internalLayout, setInternalLayout] =
+    useState<DashboardTile[] | null>(null);
+  const currentLayout = layout ?? internalLayout;
+
   if (loading) {
     return (
       <SafeAreaView
@@ -366,8 +389,9 @@ export function DashboardScreen({
     );
   }
 
-  // TODO: NP-157 owns native dashboard tile customizer
+  // NP-157 owns native dashboard tile customizer
   const handleCustomizeTiles = () => {
+    setCustomizeOpen(true);
     if (onOpenCustomizeTiles) {
       onOpenCustomizeTiles();
     }
@@ -529,7 +553,7 @@ export function DashboardScreen({
 
         {/* Unified Dashboard Tile Grid (NP-104) */}
         <TileGrid
-          layout={layout}
+          layout={currentLayout}
           statData={statData ?? { streakDays, thisWeekWorkouts: 0 }}
           tilesData={tilesData}
           onDismissSuggestion={onDismissSuggestion}
@@ -741,6 +765,18 @@ export function DashboardScreen({
           </Button>
         </View>
       </BottomSheet>
+
+      <CustomizeDashboardModal
+        testID="dashboard-customize-modal"
+        visible={isCustomizeOpen}
+        layout={currentLayout ?? []}
+        onClose={() => setCustomizeOpen(false)}
+        onSave={onSaveLayout ? (next) => onSaveLayout(next) : undefined}
+        onSaved={async (savedLayout) => {
+          setInternalLayout(savedLayout);
+          setCustomizeOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
