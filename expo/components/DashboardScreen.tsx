@@ -8,8 +8,8 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
-import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
+import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
@@ -132,6 +132,8 @@ export interface DashboardScreenProps {
   goals?: GoalProgressResponse | null;
   /** Mindset level and summary. */
   mind?: MindSummaryResponse | null;
+  /** Today's mood if logged (1–5) (NP-150 / NP-211). */
+  todaysMood?: MoodLevel | null;
   /** Upcoming scheduled workout for Up Next card. */
   upcomingWorkout?: UpcomingWorkoutSummary | null;
   /** Action tile callback: opens Mind tab / session. */
@@ -213,6 +215,7 @@ export function DashboardScreen({
   onDismissSuggestion,
   goals,
   mind,
+  todaysMood,
   upcomingWorkout,
   onOpenMind,
   onOpenNutrition,
@@ -549,6 +552,17 @@ export function DashboardScreen({
           </Pressable>
         </View>
 
+        {/* Mindset Card (NP-150) */}
+        <MindsetCard
+          summary={mind ?? null}
+          todaysMood={
+            todaysMood !== undefined
+              ? todaysMood
+              : ((statData?.todaysMood as MoodLevel | null | undefined) ?? null)
+          }
+          onOpenMind={onOpenMind}
+        />
+
         {/* Up Next training card (NP-106) */}
         <UpNextCard
           workout={upcomingWorkout}
@@ -591,15 +605,6 @@ export function DashboardScreen({
             onQuickAdd={onQuickAdd}
           />
         ) : null}
-
-        {/* Mindset card (NP-150) — below the tile grid, fed by the read-only
-            GET /api/mind/summary (never /api/mind/progress, which migrates and
-            upserts on every call). Mirrors web's DashboardClient.tsx:904. */}
-        <MindsetCard
-          summary={mind}
-          todaysMood={statData?.todaysMood ?? null}
-          onOpenMind={onOpenMind}
-        />
 
         {/* Current Program Card (NP-212) */}
         {currentProgram ? (

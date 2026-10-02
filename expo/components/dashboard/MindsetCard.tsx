@@ -1,87 +1,88 @@
 import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
-import { Brain, Check, Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { moodGateway } from "@become/core";
+import { useRouter } from "expo-router";
+import { ArrowRight, Brain, Check, Sparkles } from "lucide-react-native";
 import type { MindSummaryResponse } from "@become/api-client";
-import type { MoodLevel } from "@/components/CheckInModal";
+import { moodGateway, type MoodLevel } from "@become/core";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import {
-  chapterProgressPct,
-  mindsetCta,
-  mindsetStatus,
-  resolveMindsetMood,
-  visibleLastState,
+  computeMindsetCta,
+  computeMindsetStatus,
+  computeChapterProgress,
+  isLastStateWithin24Hours,
+  formatLastStateFeeling,
+  getEffectiveMood,
 } from "@/lib/mind/mindsetCard";
 
 export interface MindsetCardProps {
-  /** The cheap read-only summary from GET /api/mind/summary (NP-037). */
   summary?: MindSummaryResponse | null;
-  /** Today's 1–5 mood from the check-in; falls back to summary.todayMood. */
-  todaysMood?: MoodLevel | number | null;
-  /** Opens the native Mind tab. Defaults to the tab route (NP-097). */
+  todaysMood?: MoodLevel | null;
   onOpenMind?: () => void;
   testID?: string;
 }
 
-/**
- * The dashboard's Mindset card, ported from
- * `webapp/components/dashboard/MindsetCard.tsx`.
- *
- * Shows the level and chapter with sessions into the chapter, whether today's
- * session is done or ready, this week's mood check-ins and sessions, the last
- * reported state (within 24 hours only), and a button whose words follow
- * today's mood. The button opens the native Mind tab — never the web.
- */
 export function MindsetCard({
-  summary = null,
-  todaysMood = null,
+  summary,
+  todaysMood,
   onOpenMind,
   testID = "mindset-card",
 }: MindsetCardProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
 
-  const mood = resolveMindsetMood(todaysMood, summary);
-  const gateway = mood ? moodGateway(mood) : null;
-  const cta = mindsetCta(summary, mood);
-  const status = mindsetStatus(summary);
-  const lastStateWord = visibleLastState(summary);
-  const pct = summary ? chapterProgressPct(summary) : 0;
-
-  const handlePress = () => {
+  const handleOpenMind = () => {
     if (onOpenMind) {
       onOpenMind();
     } else {
-      router.push("/(tabs)/mind?start=1" as never);
+      router.push("/(tabs)/mind" as never);
     }
   };
 
-  const moodCount = summary?.moodCheckinsLast7Days ?? 0;
-  const sessionCount = summary?.sessionsLast7Days ?? 0;
+  const mood = getEffectiveMood(todaysMood, summary);
+  const gateway = mood ? moodGateway(mood) : null;
+  const cta = computeMindsetCta(summary, mood);
+  const status = computeMindsetStatus(summary);
+  const lastState =
+    summary?.lastState && isLastStateWithin24Hours(summary.lastState)
+      ? summary.lastState
+      : null;
+
+  const progressPct = summary
+    ? computeChapterProgress(
+        summary.sessionsIntoChapter,
+        summary.sessionsPerChapter,
+      )
+    : 0;
 
   return (
     <Card testID={testID}>
+      {/* Header */}
       <View style={styles.headerRow}>
         <Text
-          testID={`${testID}-title`}
-          className="text-foreground text-base font-semibold"
+          testID="mindset-card-title"
+          style={[styles.headerTitle, WRAPPABLE_TEXT]}
         >
           Mindset
         </Text>
         <Pressable
-          testID={`${testID}-view`}
+          testID="mindset-card-view"
           accessibilityRole="button"
           accessibilityLabel="View Mindset"
-          onPress={handlePress}
-          style={[minTouchTarget, styles.viewLink]}
+          onPress={handleOpenMind}
+          style={[minTouchTarget, styles.viewLink, { flexShrink: 1 }]}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text className="text-sm font-medium text-blue-600 dark:text-blue-400">
+          <Text
+            style={[
+              styles.viewLinkText,
+              WRAPPABLE_TEXT,
+              { color: colors.primary },
+            ]}
+          >
             View
           </Text>
         </Pressable>
@@ -93,7 +94,7 @@ export function MindsetCard({
           <View style={styles.levelRow}>
             <View
               style={[
-                styles.iconBadge,
+                styles.brainBadge,
                 { backgroundColor: tint("accent", 0.15) },
               ]}
             >
@@ -101,103 +102,161 @@ export function MindsetCard({
             </View>
             <View style={styles.levelMeta}>
               <Text
-                testID={`${testID}-level`}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                className="text-foreground font-medium"
+                testID="mindset-level-chapter"
+                style={styles.levelTitleText}
               >
-                Level {summary.level} · Chapter {summary.chapter}
+                Level {summary.level}
+                <Text style={styles.dotText}> · </Text>
+                Chapter {summary.chapter}
                 {summary.chapterName ? `: ${summary.chapterName}` : ""}
               </Text>
               <View style={styles.progressRow}>
-                <View className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                <View
+                  style={[
+                    styles.progressTrack,
+                    { backgroundColor: tint("muted", 0.5) },
+                  ]}
+                >
                   <View
-                    testID={`${testID}-progress-bar`}
-                    className="h-full rounded-full bg-amber-500"
-                    style={{ width: `${pct}%` }}
+                    style={[
+                      styles.progressBar,
+                      {
+                        backgroundColor: colors.accent,
+                        width: `${progressPct}%`,
+                      },
+                    ]}
                   />
                 </View>
                 <Text
-                  testID={`${testID}-progress-label`}
-                  className="text-muted-foreground text-[11px] tabular-nums"
+                  testID="mindset-sessions-progress"
+                  style={[styles.sessionsCountText, WRAPPABLE_TEXT]}
                 >
-                  {summary.sessionsIntoChapter}/{summary.sessionsPerChapter}{" "}
-                  sessions
+                  {summary.sessionsIntoChapter}/{summary.sessionsPerChapter} sessions
                 </Text>
               </View>
             </View>
           </View>
 
-          {/* Today + this week */}
+          {/* Today + this week — flat tinted block */}
           <View
             style={[
-              styles.weekBlock,
+              styles.statusBlock,
               { backgroundColor: tint("muted", 0.3) },
             ]}
           >
             {status ? (
-              <View
-                testID={`${testID}-status`}
-                accessible
-                accessibilityRole="text"
-                accessibilityLabel={status.text}
-                style={styles.statusRow}
-              >
+              <View style={styles.statusLineRow}>
                 {status.done ? (
-                  <Check size={14} color={colors.success} />
+                  <Check size={16} color={colors.success} />
                 ) : (
-                  <Sparkles size={14} color={colors.accent} />
+                  <Sparkles size={16} color={colors.accent} />
                 )}
                 <Text
-                  className={`text-sm font-medium ${
-                    status.done ? "text-green-600" : "text-foreground"
-                  }`}
+                  testID="mindset-status-text"
+                  style={[
+                    styles.statusText,
+                    WRAPPABLE_TEXT,
+                    { color: status.done ? colors.success : colors.foreground },
+                  ]}
                 >
                   {status.text}
                 </Text>
               </View>
             ) : null}
+
             <Text
-              testID={`${testID}-week`}
-              className="text-muted-foreground text-xs mt-0.5"
+              testID="mindset-week-text"
+              style={[styles.weekText, { color: colors["muted-foreground"] }]}
             >
-              {`This week: ${moodCount} mood check-in${moodCount === 1 ? "" : "s"} · ${sessionCount} session${sessionCount === 1 ? "" : "s"}`}
-              {lastStateWord ? ` · last check-in ${lastStateWord}` : ""}
+              This week: {summary.moodCheckinsLast7Days} mood check-in
+              {summary.moodCheckinsLast7Days === 1 ? "" : "s"}
+              {" · "}
+              {summary.sessionsLast7Days} session
+              {summary.sessionsLast7Days === 1 ? "" : "s"}
+              {lastState ? (
+                <>
+                  {" · "}last check-in{" "}
+                  <Text
+                    style={[
+                      styles.feelingText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    {formatLastStateFeeling(lastState)}
+                  </Text>
+                </>
+              ) : null}
             </Text>
+
             {gateway && !summary.sessionDoneToday ? (
               <Text
-                testID={`${testID}-gateway`}
-                className="text-muted-foreground text-xs mt-1"
+                testID="mindset-gateway-text"
+                style={[
+                  styles.gatewayText,
+                  { color: colors["muted-foreground"] },
+                ]}
               >
-                {`${gateway.headline} ${gateway.body}`}
+                <Text
+                  style={[
+                    styles.gatewayHeadline,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  {gateway.headline}{" "}
+                </Text>
+                {gateway.body}
               </Text>
             ) : null}
           </View>
         </>
       ) : (
+        /* Loading placeholder */
         <View
-          testID={`${testID}-skeleton`}
-          style={styles.skeleton}
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel="Loading mindset"
+          testID="mindset-card-placeholder"
+          accessible={false}
+          importantForAccessibility="no"
+          style={styles.placeholderContainer}
         >
           <View
-            style={[styles.skeletonBar, { backgroundColor: colors.muted }]}
+            style={[
+              styles.placeholderTop,
+              { backgroundColor: tint("muted", 0.5) },
+            ]}
           />
           <View
-            style={[styles.skeletonBlock, { backgroundColor: colors.muted }]}
+            style={[
+              styles.placeholderBottom,
+              { backgroundColor: tint("muted", 0.5) },
+            ]}
           />
         </View>
       )}
 
-      <Button
-        testID={`${testID}-cta`}
+      {/* CTA Button */}
+      <Pressable
+        testID="mindset-cta"
+        accessibilityRole="button"
         accessibilityLabel={cta}
-        onPress={handlePress}
+        onPress={handleOpenMind}
+        style={({ pressed }) => [
+          styles.ctaButton,
+          {
+            backgroundColor: colors.foreground,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
       >
-        {cta}
-      </Button>
+        <Text
+          style={[
+            styles.ctaText,
+            WRAPPABLE_TEXT,
+            { color: colors.background },
+          ]}
+        >
+          {cta}
+        </Text>
+        <ArrowRight size={16} color={colors.background} />
+      </Pressable>
     </Card>
   );
 }
@@ -209,9 +268,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 12,
   },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
   viewLink: {
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "flex-end",
+  },
+  viewLinkText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
   levelRow: {
     flexDirection: "row",
@@ -219,7 +286,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
-  iconBadge: {
+  brainBadge: {
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -230,6 +297,14 @@ const styles = StyleSheet.create({
   levelMeta: {
     flex: 1,
     minWidth: 0,
+    justifyContent: "center",
+  },
+  levelTitleText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  dotText: {
+    opacity: 0.5,
   },
   progressRow: {
     flexDirection: "row",
@@ -237,28 +312,79 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  weekBlock: {
-    borderRadius: 8,
+  progressTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 9999,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    borderRadius: 9999,
+  },
+  sessionsCountText: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+  statusBlock: {
+    borderRadius: 10,
     padding: 10,
     marginBottom: 12,
+    gap: 4,
   },
-  statusRow: {
+  statusLineRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  skeleton: {
-    gap: 8,
-    marginBottom: 12,
+  statusText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
-  skeletonBar: {
-    height: 40,
+  weekText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  feelingText: {
+    fontWeight: "600",
+  },
+  gatewayText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  gatewayHeadline: {
+    fontWeight: "700",
+  },
+  placeholderContainer: {
+    marginBottom: 12,
+    gap: 8,
+  },
+  placeholderTop: {
+    minHeight: 36,
     width: "66%",
     borderRadius: 8,
   },
-  skeletonBlock: {
-    height: 56,
+  placeholderBottom: {
+    minHeight: 52,
     width: "100%",
-    borderRadius: 8,
+    borderRadius: 10,
+  },
+  ctaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    minHeight: 44,
+    minWidth: 44,
+  },
+  ctaText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
+
+export default MindsetCard;
