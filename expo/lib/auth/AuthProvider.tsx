@@ -58,6 +58,7 @@ import {
 } from "@/lib/push/pushTokenStore";
 import { clearAppBadge } from "@/lib/widgets/badge";
 import { clearAllLiveWorkoutDrafts } from "@/lib/live/liveWorkoutCache";
+import { clearAllProgramDrafts } from "@/lib/programs/programDraft";
 import { clearAuthedImageCache } from "@/lib/media/authedBlob";
 import { getOfflineWrites } from "@/lib/offline/writes";
 
@@ -320,6 +321,14 @@ export function AuthProvider({
       }
       try {
         await clearAllLiveWorkoutDrafts();
+      } catch {
+        /* ignore */
+      }
+      // And any half-built program (NP-168). A builder draft is the member's
+      // own typing, so it goes with the session — otherwise the next person to
+      // sign in on this phone opens the builder on somebody else's program.
+      try {
+        await clearAllProgramDrafts();
       } catch {
         /* ignore */
       }

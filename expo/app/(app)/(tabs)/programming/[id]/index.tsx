@@ -38,7 +38,7 @@ import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
-import { customProgramEditPath } from "@/lib/programs/customPrograms";
+import { programEditDestination } from "@/lib/programs/customPrograms";
 
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
@@ -67,10 +67,17 @@ export default function ProgramDetailRoute() {
       (data?.isOwner ?? (data?.createdBy ? data.createdBy === user?._id : true)),
   );
 
+  // The native builder (NP-168) or the web editor signed in, decided in one
+  // place — `programEditDestination` moves off the web with NP-171's rows.
   const onEdit = useCallback(() => {
     if (!id) return;
-    void openWebSignedIn(customProgramEditPath(id));
-  }, [id]);
+    const destination = programEditDestination(id);
+    if (destination.surface === "native") {
+      router.push(destination.route);
+      return;
+    }
+    void openWebSignedIn(destination.path);
+  }, [id, router]);
 
   // Active-programs read kept here so the enroll/start-date/abandon mutations
   // can re-pull it on success (no shared query cache yet).

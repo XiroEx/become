@@ -27,9 +27,9 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { apiFetch } from "@become/api-client";
 import {
-  CUSTOM_PROGRAM_CREATE_PATH,
   customProgramDeletePath,
-  customProgramEditPath,
+  programCreateDestination,
+  programEditDestination,
   toCustomProgramSummary,
 } from "@/lib/programs/customPrograms";
 import { enrollProgram } from "@/lib/programs/enrollment";
@@ -135,6 +135,9 @@ export default function MyProgramsRoute() {
     }, [refreshEntitlements]),
   );
 
+  // Create and edit go wherever `programCreateDestination` says (NP-168): the
+  // native builder on a build that has the exercise rows (NP-171), the web
+  // editor signed in until then. One decision, in one place, for both.
   const openCreate = useCallback(() => {
     if (!mayCreate && entitlements && entitlements.enforced !== false) {
       const entitlement = entitlements.features?.["custom-programs"] ?? null;
@@ -147,12 +150,25 @@ export default function MyProgramsRoute() {
       );
       return;
     }
-    void openWebSignedIn(CUSTOM_PROGRAM_CREATE_PATH);
-  }, [mayCreate, entitlements]);
+    const destination = programCreateDestination();
+    if (destination.surface === "native") {
+      router.push(destination.route);
+      return;
+    }
+    void openWebSignedIn(destination.path);
+  }, [mayCreate, entitlements, router]);
 
-  const openEdit = useCallback((id: string) => {
-    void openWebSignedIn(customProgramEditPath(id));
-  }, []);
+  const openEdit = useCallback(
+    (id: string) => {
+      const destination = programEditDestination(id);
+      if (destination.surface === "native") {
+        router.push(destination.route);
+        return;
+      }
+      void openWebSignedIn(destination.path);
+    },
+    [router],
+  );
 
   const requestEnroll = useCallback(
     (id: string) => {
