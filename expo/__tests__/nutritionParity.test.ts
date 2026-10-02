@@ -17,6 +17,7 @@ import {
   convert,
   convertWithBridge,
   defaultTimeForTag,
+  describeNutritionTrend,
   familyOf,
   findLogForTag,
   localDateFromPlannedIso,
@@ -439,6 +440,28 @@ describe("native nutrition parity with web math (e015c7fa)", () => {
       // Because untimed is true, occurrence has untimed=true and web displays "no time" without clock time!
       expect(occ.tag).toBe("snack");
       expect(occ.logs[0]!.untimed).toBe(true);
+    });
+
+    it("(id: e015ca09) 7-day trend sentence calculated identically from shared core", () => {
+      const days = [
+        { date: "2026-09-26", calories: 1650, protein: 90, hasData: true, mealCount: 3 },
+        { date: "2026-09-27", calories: 1700, protein: 95, hasData: true, mealCount: 3 },
+        { date: "2026-09-28", calories: 1600, protein: 85, hasData: true, mealCount: 2 },
+        { date: "2026-09-29", calories: 1680, protein: 100, hasData: true, mealCount: 3 },
+        { date: "2026-09-30", calories: 1640, protein: 90, hasData: true, mealCount: 3 },
+        { date: "2026-10-01", calories: 1654, protein: 110, hasData: true, mealCount: 3 },
+        { date: "2026-10-02", calories: 0, protein: 0, hasData: false, mealCount: 0 },
+      ];
+      const goals = { calories: 2000, protein: 150 };
+      const trend = describeNutritionTrend(days, goals);
+
+      expect(trend.loggedDays).toBe(6);
+      expect(trend.proteinHitDays).toBe(0);
+      expect(trend.avgCalories).toBe(1654);
+      expect(trend.calorieRead).toBe("under");
+      expect(trend.line.replace(/^Logged /, "logged ")).toBe(
+        "logged 6 of 7 days · protein hit 0 · avg 1,654 cal (under)",
+      );
     });
   });
 });
