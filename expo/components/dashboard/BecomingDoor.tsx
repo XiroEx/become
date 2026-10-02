@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Pressable, StyleSheet } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Pressable, StyleSheet, Animated } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useRouter } from "expo-router";
@@ -16,8 +16,8 @@ import type {
   MindSummaryResponse,
 } from "@become/api-client";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-
-// TODO: NP-192 owns full native Becoming screen and journey stage
+import { checkBecomingUnread, markBecomingSeen } from "@/lib/becoming/storage";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
 export interface BecomingDoorProps {
   goals?: GoalProgressResponse | null;
@@ -44,14 +44,46 @@ export function BecomingDoor({
   onPress,
   testID = "becoming-door",
 }: BecomingDoorProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const router = useRouter();
+  const reduced = useReducedMotion();
+  const [isUnread, setIsUnread] = useState(false);
+
+  const pulseAnim = useMemo(() => new Animated.Value(1), []);
+
+  useEffect(() => {
+    let anim: Animated.CompositeAnimation | null = null;
+    if (isUnread && !reduced) {
+      anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 0.88,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      anim.start();
+    } else {
+      pulseAnim.setValue(1);
+    }
+    return () => {
+      anim?.stop();
+    };
+  }, [isUnread, reduced, pulseAnim]);
 
   const handlePress = () => {
+    markBecomingSeen();
+    setIsUnread(false);
     if (onPress) {
       onPress();
     } else {
-      router.push("/(tabs)/mind?start=1" as never);
+      router.push("/becoming" as never);
     }
   };
 
@@ -107,131 +139,296 @@ export function BecomingDoor({
         };
 
   return (
-    <Pressable
-      testID={testID}
-      accessibilityRole="button"
-      accessibilityLabel="The Becoming. Then → now → next, across all three."
-      onPress={handlePress}
-      style={({ pressed }) => [
-        minTouchTarget,
-        styles.card,
-        {
-          backgroundColor: colors.card,
-          borderColor: colors.border,
-          opacity: pressed ? 0.85 : 1,
-        },
-      ]}
+    <Animated.View
+      style={{
+        opacity: isUnread && !reduced ? pulseAnim : 1,
+      }}
     >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View
-            style={[
-              styles.iconBadge,
-              { backgroundColor: tint("accent", 0.15) },
-            ]}
-          >
-            <Compass size={18} color={colors.accent} />
-          </View>
-          <View style={styles.headerMeta}>
-            <Text
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isUnread
+            ? "The Becoming · a new week is written. Then → now → next, across all three."
+            : "The Becoming. Then → now → next, across all three."
+        }
+        onPress={handlePress}
+        style={({ pressed }) => [
+          minTouchTarget,
+          styles.card,
+          isUnread
+            ? {
+                backgroundColor: isDark
+                  ? "hsl(258, 45%, 15%)"
+                  : "hsl(258, 90%, 96%)",
+                borderColor: isDark
+                  ? "hsl(258, 80%, 65%)"
+                  : "hsl(258, 80%, 55%)",
+              }
+            : {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+              },
+          {
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View
               style={[
-                styles.kicker,
-                { color: colors.accent },
+                styles.iconBadge,
+                {
+                  backgroundColor: isUnread
+                    ? isDark
+                      ? "hsla(258, 80%, 70%, 0.25)"
+                      : "hsla(258, 80%, 50%, 0.15)"
+                    : tint("accent", 0.15),
+                },
               ]}
             >
-              The Becoming
-            </Text>
-            <Text className="text-foreground text-sm font-bold">
-              Then → now → next, across all three
-            </Text>
-          </View>
-        </View>
-        <ArrowRight size={18} color={colors["muted-foreground"]} />
-      </View>
-
-      <View style={styles.chipRow}>
-        {/* Mind chip */}
-        <View
-          style={[
-            styles.chip,
-            { backgroundColor: tint("muted", 0.3) },
-          ]}
-        >
-          <Brain size={14} color={colors.accent} />
-          <View style={styles.chipContent}>
-            <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
-              Mind
-            </Text>
-            <Text className="text-foreground text-xs font-bold leading-tight">
-              {mindChip.value}
-            </Text>
-            {mindChip.sub ? (
-              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
-                {mindChip.sub}
+              <Compass
+                size={18}
+                color={
+                  isUnread
+                    ? isDark
+                      ? "hsl(258, 90%, 80%)"
+                      : "hsl(258, 90%, 45%)"
+                    : colors.accent
+                }
+              />
+            </View>
+            <View style={styles.headerMeta}>
+              <Text
+                style={[
+                  styles.kicker,
+                  {
+                    color: isUnread
+                      ? isDark
+                        ? "hsl(258, 90%, 80%)"
+                        : "hsl(258, 90%, 45%)"
+                      : colors.accent,
+                  },
+                ]}
+              >
+                The Becoming{isUnread ? " · a new week is written" : ""}
               </Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Nutrition chip */}
-        <View
-          style={[
-            styles.chip,
-            { backgroundColor: tint("muted", 0.3) },
-          ]}
-        >
-          <UtensilsCrossed size={14} color={colors.primary} />
-          <View style={styles.chipContent}>
-            <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
-              Nutrition
-            </Text>
-            <Text className="text-foreground text-xs font-bold leading-tight">
-              {nutritionChip.value}
-            </Text>
-            {nutritionChip.sub ? (
-              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
-                {nutritionChip.sub}
+              <Text
+                style={[
+                  styles.titleText,
+                  { color: colors.foreground },
+                ]}
+              >
+                Then → now → next, across all three
               </Text>
-            ) : null}
+            </View>
           </View>
+          <ArrowRight
+            size={18}
+            color={
+              isUnread
+                ? isDark
+                  ? "hsl(258, 90%, 80%)"
+                  : "hsl(258, 90%, 45%)"
+                : colors["muted-foreground"]
+            }
+          />
         </View>
 
-        {/* Training chip */}
-        <View
-          style={[
-            styles.chip,
-            { backgroundColor: tint("muted", 0.3) },
-          ]}
-        >
-          <Dumbbell size={14} color={colors.success} />
-          <View style={styles.chipContent}>
-            <Text style={[styles.chipLabel, { color: colors["muted-foreground"] }]}>
-              Training
-            </Text>
-            <Text className="text-foreground text-xs font-bold leading-tight">
-              {trainingChip.value}
-            </Text>
-            {trainingChip.sub ? (
-              <Text style={[styles.chipSub, { color: colors["muted-foreground"] }]}>
-                {trainingChip.sub}
+        <View style={styles.chipRow}>
+          {/* Mind chip */}
+          <View
+            style={[
+              styles.chip,
+              {
+                backgroundColor: isUnread
+                  ? isDark
+                    ? "hsla(258, 60%, 70%, 0.15)"
+                    : "hsla(258, 60%, 50%, 0.08)"
+                  : tint("muted", 0.3),
+              },
+            ]}
+          >
+            <Brain
+              size={14}
+              color={
+                isUnread
+                  ? isDark
+                    ? "hsl(258, 80%, 75%)"
+                    : "hsl(258, 70%, 45%)"
+                  : colors.accent
+              }
+            />
+            <View style={styles.chipContent}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  { color: colors["muted-foreground"] },
+                ]}
+              >
+                Mind
               </Text>
-            ) : null}
+              <Text
+                style={[
+                  styles.chipValue,
+                  { color: colors.foreground },
+                ]}
+              >
+                {mindChip.value}
+              </Text>
+              {mindChip.sub ? (
+                <Text
+                  style={[
+                    styles.chipSub,
+                    { color: colors["muted-foreground"] },
+                  ]}
+                >
+                  {mindChip.sub}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Nutrition chip */}
+          <View
+            style={[
+              styles.chip,
+              {
+                backgroundColor: isUnread
+                  ? isDark
+                    ? "hsla(258, 60%, 70%, 0.15)"
+                    : "hsla(258, 60%, 50%, 0.08)"
+                  : tint("muted", 0.3),
+              },
+            ]}
+          >
+            <UtensilsCrossed
+              size={14}
+              color={
+                isUnread
+                  ? isDark
+                    ? "hsl(38, 90%, 65%)"
+                    : "hsl(38, 90%, 45%)"
+                  : colors.primary
+              }
+            />
+            <View style={styles.chipContent}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  { color: colors["muted-foreground"] },
+                ]}
+              >
+                Nutrition
+              </Text>
+              <Text
+                style={[
+                  styles.chipValue,
+                  { color: colors.foreground },
+                ]}
+              >
+                {nutritionChip.value}
+              </Text>
+              {nutritionChip.sub ? (
+                <Text
+                  style={[
+                    styles.chipSub,
+                    { color: colors["muted-foreground"] },
+                  ]}
+                >
+                  {nutritionChip.sub}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Training chip */}
+          <View
+            style={[
+              styles.chip,
+              {
+                backgroundColor: isUnread
+                  ? isDark
+                    ? "hsla(258, 60%, 70%, 0.15)"
+                    : "hsla(258, 60%, 50%, 0.08)"
+                  : tint("muted", 0.3),
+              },
+            ]}
+          >
+            <Dumbbell
+              size={14}
+              color={
+                isUnread
+                  ? isDark
+                    ? "hsl(142, 70%, 65%)"
+                    : "hsl(142, 70%, 40%)"
+                  : colors.success
+              }
+            />
+            <View style={styles.chipContent}>
+              <Text
+                style={[
+                  styles.chipLabel,
+                  { color: colors["muted-foreground"] },
+                ]}
+              >
+                Training
+              </Text>
+              <Text
+                style={[
+                  styles.chipValue,
+                  { color: colors.foreground },
+                ]}
+              >
+                {trainingChip.value}
+              </Text>
+              {trainingChip.sub ? (
+                <Text
+                  style={[
+                    styles.chipSub,
+                    { color: colors["muted-foreground"] },
+                  ]}
+                >
+                  {trainingChip.sub}
+                </Text>
+              ) : null}
+            </View>
           </View>
         </View>
-      </View>
 
-      {top ? (
-        <View testID="becoming-door-next" style={styles.nextRow}>
-          <Sparkles size={14} color={colors.accent} />
-          <Text className="text-foreground text-xs font-semibold">
-            {top.title}
-          </Text>
-          <Text style={[styles.nextSub, { color: colors["muted-foreground"] }]}>
-            · {top.sub}
-          </Text>
-        </View>
-      ) : null}
-    </Pressable>
+        {top ? (
+          <View testID="becoming-door-next" style={styles.nextRow}>
+            <Sparkles
+              size={14}
+              color={
+                isUnread
+                  ? isDark
+                    ? "hsl(38, 90%, 65%)"
+                    : "hsl(38, 90%, 45%)"
+                  : colors.accent
+              }
+            />
+            <Text
+              style={[
+                styles.nextTitle,
+                { color: colors.foreground },
+              ]}
+            >
+              {top.title}
+            </Text>
+            <Text
+              style={[
+                styles.nextSub,
+                { color: colors["muted-foreground"] },
+              ]}
+            >
+              · {top.sub}
+            </Text>
+          </View>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -272,6 +469,10 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  titleText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
   chipRow: {
     flexDirection: "row",
     gap: 6,
@@ -295,6 +496,11 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  chipValue: {
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 16,
+  },
   chipSub: {
     fontSize: 10,
     lineHeight: 12,
@@ -303,6 +509,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
+  },
+  nextTitle: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   nextSub: {
     fontSize: 11,

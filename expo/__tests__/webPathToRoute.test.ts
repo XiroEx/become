@@ -229,7 +229,7 @@ describe("the table", () => {
     ["/dashboard/mind?start=1", "/(tabs)/mind?start=1", "exact"],
     ["become://mind", "/(tabs)/mind", "exact"],
     ["become://mind?start=1", "/(tabs)/mind?start=1", "exact"],
-    ["/dashboard/mind/becoming", "/(tabs)/mind", "nearest"],
+    ["/dashboard/mind/becoming", "/becoming", "exact"],
     ["/dashboard/mind/arsenal", "/(tabs)/mind", "nearest"],
     // Training
     ["/dashboard/workout", "/(tabs)/programming", "exact"],

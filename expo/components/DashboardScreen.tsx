@@ -144,6 +144,8 @@ export interface DashboardScreenProps {
   upcomingWorkout?: UpcomingWorkoutSummary | null;
   /** Action tile callback: opens Mind tab / session. */
   onOpenMind?: () => void;
+  /** Doorway to The Becoming (NP-192). */
+  onOpenBecoming?: () => void;
   /** Action tile callback: opens Nutrition tab. */
   onOpenNutrition?: () => void;
   /** Action tile callback: opens Workout Now sheet. */
@@ -243,6 +245,7 @@ export function DashboardScreen({
   todaysMood,
   upcomingWorkout,
   onOpenMind,
+  onOpenBecoming,
   onOpenNutrition,
   onOpenWorkoutNow,
   workoutNowOpen,
@@ -512,13 +515,6 @@ export function DashboardScreen({
           </View>
         </View>
 
-        {/* The doorway to The Becoming (NP-192) */}
-        <BecomingDoor
-          goals={goals}
-          mind={mind}
-          onPress={onOpenMind}
-        />
-
         {todayWorkout ? (
           <Card testID="dashboard-today" title="Today's workout">
             {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
@@ -621,6 +617,13 @@ export function DashboardScreen({
             onOpenMind={onOpenMind}
           />
         ) : null}
+
+        {/* The doorway to The Becoming (NP-192) */}
+        <BecomingDoor
+          goals={goals}
+          mind={mind}
+          onPress={onOpenBecoming}
+        />
 
         {/* Mindset Card (NP-150) */}
         <MindsetCard

@@ -66,7 +66,7 @@ describe("the server's widget deep links", () => {
       streak: NATIVE_ROUTES.streaks,
       nutrition: NATIVE_ROUTES.nutrition,
       mind: NATIVE_ROUTES.mind,
-      becoming: NATIVE_ROUTES.mind,
+      becoming: NATIVE_ROUTES.becoming,
     };
     for (const definition of ANDROID_WIDGETS) {
       const link = links.get(definition.feedKey)!;

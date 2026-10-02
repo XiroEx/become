@@ -302,6 +302,10 @@ export default function DashboardRoute() {
     router.push("/(tabs)/mind?start=1" as never);
   }, [router]);
 
+  const onOpenBecoming = useCallback(() => {
+    router.push("/becoming" as never);
+  }, [router]);
+
   const onOpenPlan = useCallback(() => {
     router.push("/plan" as never);
   }, [router]);
@@ -846,6 +850,7 @@ export default function DashboardRoute() {
       todaysMood={todaysMood}
       upcomingWorkout={upcomingWorkout}
       onOpenMind={onOpenMind}
+      onOpenBecoming={onOpenBecoming}
       onOpenNutrition={onOpenNutrition}
       onOpenWorkoutNow={onOpenWorkoutNow}
       workoutNowOpen={workoutNowOpen}
