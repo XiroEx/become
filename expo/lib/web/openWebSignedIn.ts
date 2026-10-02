@@ -30,7 +30,7 @@ import { sessionStore, type TokenStore } from "@/lib/auth/secureStoreToken";
 import {
   defaultBrowserLauncher,
   type BrowserLauncher,
-} from "@/lib/programs/browserLauncher";
+} from "@/lib/web/browserLauncher";
 
 /** Where a code is minted. Mirrors HANDOFF_MINT_PATH in webapp/lib/authHandoff.ts. */
 export const HANDOFF_MINT_PATH = "/api/auth/handoff";

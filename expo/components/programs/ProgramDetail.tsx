@@ -90,6 +90,8 @@ export interface ProgramDetailProps {
   onPauseResume?: () => void;
   /** Shift the schedule. Button renders only when provided. */
   onShift?: (days?: number) => void;
+  /** Open web editor for this custom program. Button renders only when provided. */
+  onEdit?: () => void;
   /** Disables the action buttons while a mutation is in flight. */
   actionPending?: boolean;
   /** Whether this program is saved by the user. */
@@ -128,6 +130,7 @@ export function ProgramDetail({
   onAbandon,
   onPauseResume,
   onShift,
+  onEdit,
   actionPending = false,
   isSaved = false,
   onToggleSave,
@@ -555,6 +558,17 @@ export function ProgramDetail({
       ) : null}
 
       {/* Program Management Actions */}
+      {onEdit ? (
+        <Button
+          testID={`${testID}-edit`}
+          variant="secondary"
+          onPress={onEdit}
+          disabled={actionPending}
+        >
+          Edit on web
+        </Button>
+      ) : null}
+
       {onPauseResume ? (
         <Button
           testID={`${testID}-pause-resume`}
