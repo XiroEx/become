@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import {
   MeResponseSchema,
@@ -11,6 +11,7 @@ import {
   ProgressApiResponseSchema,
   StreaksResponseSchema,
   NutritionLogDayResponseSchema,
+  NutritionSummaryResponseSchema,
   DashboardTilesResponseSchema,
   GoalProgressResponseSchema,
   MindSummaryResponseSchema,
@@ -32,6 +33,7 @@ import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useUnits } from "@/lib/hooks/useUnits";
 import type { WeightUnit } from "@become/core";
+import { describeNutritionTrend } from "@/lib/dashboard/nutritionTrend";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import {
@@ -94,6 +96,11 @@ export default function DashboardRoute() {
   const nutrition = useFetch(
     ready ? "/api/nutrition/log" : null,
     NutritionLogDayResponseSchema,
+    fetchOpts,
+  );
+  const nutritionSummary = useFetch(
+    ready ? withTz("/api/nutrition/summary?period=week") : null,
+    NutritionSummaryResponseSchema,
     fetchOpts,
   );
   const tiles = useFetch(
@@ -285,6 +292,17 @@ export default function DashboardRoute() {
     router.push("/(tabs)/nutrition" as never);
   }, [router]);
 
+  const onQuickAdd = useCallback(() => {
+    router.push("/(tabs)/nutrition?quickAdd=true" as never);
+  }, [router]);
+
+  const onViewProgram = useCallback(
+    (progId: string) => {
+      router.push(`/(tabs)/programming/${progId}` as never);
+    },
+    [router],
+  );
+
   const onOpenWorkoutNow = useCallback(() => {
     setWorkoutNowOpen(true);
   }, []);
@@ -314,6 +332,7 @@ export default function DashboardRoute() {
       progress.refetch(),
       streaks.refetch(),
       nutrition.refetch(),
+      nutritionSummary.refetch(),
       tiles.refetch(),
       goals.refetch(),
       mind.refetch(),
@@ -328,6 +347,7 @@ export default function DashboardRoute() {
     me,
     mind,
     nutrition,
+    nutritionSummary,
     programNudge,
     progress,
     schedule,
@@ -591,6 +611,48 @@ export default function DashboardRoute() {
     weightEntries,
   };
 
+  const nutritionData = useMemo(() => {
+    if (!nutrition.data) return null;
+    const totals = nutrition.data.dailyTotals || {};
+    const goalsData = nutrition.data.goals || {};
+    const waterFallback =
+      typeof nutrition.data.water === "object"
+        ? nutrition.data.water?.goal ?? 96
+        : 96;
+    return {
+      calories: {
+        consumed: totals.calories ?? caloriesConsumed,
+        goal: goalsData.calories ?? caloriesGoal,
+      },
+      protein: {
+        current: totals.protein ?? 0,
+        goal: goalsData.protein ?? 150,
+      },
+      carbs: {
+        current: totals.carbs ?? 0,
+        goal: goalsData.carbs ?? 250,
+      },
+      fats: {
+        current: totals.fats ?? 0,
+        goal: goalsData.fats ?? 65,
+      },
+      water: {
+        current: waterCurrent,
+        goal: waterFallback,
+      },
+    };
+  }, [nutrition.data, caloriesConsumed, caloriesGoal, waterCurrent]);
+
+  const nutritionTrend = useMemo(() => {
+    if (!nutritionSummary.data?.days) return null;
+    return describeNutritionTrend(nutritionSummary.data.days, {
+      calories: caloriesGoal,
+      protein: nutrition.data?.goals?.protein ?? 150,
+    });
+  }, [nutritionSummary.data, caloriesGoal, nutrition.data]);
+
+  const currentProgram = progress.data?.currentProgram ?? null;
+
   const upcomingWorkout: UpcomingWorkoutSummary | null = (() => {
     const schedules = schedule.data?.schedules ?? [];
     const now = new Date();
@@ -722,6 +784,11 @@ export default function DashboardRoute() {
       onOpenStreaks={() => {
         router.push("/(tabs)/dashboard/streaks" as never);
       }}
+      nutritionData={nutritionData}
+      nutritionTrend={nutritionTrend}
+      onQuickAdd={onQuickAdd}
+      currentProgram={currentProgram}
+      onViewProgram={onViewProgram}
     />
   );
 }
