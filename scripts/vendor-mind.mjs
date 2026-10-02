@@ -88,6 +88,7 @@ export const MODULE_MAPPINGS = [
   mindModule('speechMatch'),
   mindModule('recentFeeling'),
   mindModule('rotation'),
+  mindModule('conformSession'),
 ];
 
 export function vendorMind({ check = false } = {}) {
