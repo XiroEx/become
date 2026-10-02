@@ -29,9 +29,11 @@ import {
   MealScheduleResponseSchema,
   NutritionGoalsResponseSchema,
   NutritionLogDayResponseSchema,
+  ProfileResponseSchema,
   TagsResponseSchema,
   apiFetch,
   type MealLog,
+  type ProfileResponse,
 } from "@become/api-client";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -63,9 +65,13 @@ import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import {
+  PlansResponseSchema,
+  type MealPlan,
+  type PlansResponse,
+} from "@/lib/nutrition/mealPlans";
 
-const EMPTY_PLANS: any[] = [];
-const OCCURRENCE_OPTS = { includePlans: false } as const;
+const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
 
 export default function NutritionIndexRoute() {
@@ -102,6 +108,8 @@ export default function NutritionIndexRoute() {
     [y, m, d],
   );
   const isFuture = isFutureLocalDate(activeDateObj);
+  // Show planned meals on today and future days (NP-012, NP-147).
+  const showPlans = activeDate >= today;
 
   // ── Fetchers ───────────────────────────────────────────────────────────────
 
@@ -168,13 +176,42 @@ export default function NutritionIndexRoute() {
     },
   );
 
+  // 7. GET /api/profile for planPromoteMode (NP-147)
+  const { data: profileData } = useFetch(
+    "/api/profile",
+    ProfileResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
+    },
+  );
+  const planPromoteMode =
+    (profileData as ProfileResponse | null)?.profile?.planPromoteMode ?? "manual";
+
+  // 8. GET /api/meal-plans?from=YYYY-MM-DD&to=YYYY-MM-DD (NP-147)
+  const mealPlansPath = `/api/meal-plans?from=${activeDate}&to=${activeDate}`;
+  const {
+    data: plansData,
+    refetch: refetchMealPlans,
+  } = useFetch(mealPlansPath, PlansResponseSchema, {
+    baseUrl: WEBAPP_BASE_URL,
+    getToken: () => token ?? undefined,
+    skip: !token || !showPlans,
+  });
+
   useOnForeground(() => {
     void refetchMealLogs();
     void refetchSideTables();
+    if (showPlans) {
+      void refetchMealPlans();
+    }
   });
 
-  // ── Optimistic item deletion ──────────────────────────────────────────────
+  // ── Optimistic item and plan deletion ─────────────────────────────────────
   const [removedItemIds, setRemovedItemIds] = useState<Set<string>>(new Set());
+  const [removedPlanIds, setRemovedPlanIds] = useState<Set<string>>(new Set());
+  const loggingPlanIdsRef = useRef<Set<string>>(new Set());
 
   const displayedLogs = useMemo(() => {
     const rawLogs = (mealLogsData?.logs ?? []) as MealLog[];
@@ -192,6 +229,17 @@ export default function NutritionIndexRoute() {
       })
       .filter((log) => (log.items ?? []).length > 0);
   }, [mealLogsData?.logs, removedItemIds]);
+
+  const activePlans = useMemo(() => {
+    if (!showPlans) return EMPTY_PLANS;
+    const raw = ((plansData as PlansResponse | null)?.plans ?? []) as MealPlan[];
+    return raw.filter((p) => {
+      if (p.status !== "active") return false;
+      if (removedPlanIds.has(p._id)) return false;
+      const key = p.plannedDateKey ?? p.plannedDate?.split("T")[0];
+      return !key || key === activeDate;
+    });
+  }, [showPlans, plansData, removedPlanIds, activeDate]);
 
   const handleRemoveItem = useCallback(
     async (logId: string, itemId: string) => {
@@ -219,6 +267,196 @@ export default function NutritionIndexRoute() {
     [refetchMealLogs, token],
   );
 
+  // Log it — promote plan to untimed meal log (today only)
+  const handleLogPlan = useCallback(
+    async (planId: string) => {
+      if (loggingPlanIdsRef.current.has(planId)) return;
+      loggingPlanIdsRef.current.add(planId);
+      setRemovedPlanIds((prev) => new Set(prev).add(planId));
+      try {
+        await apiFetch(
+          `/api/meal-plans/${encodeURIComponent(planId)}/promote`,
+          z.any(),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: { untimed: true },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await Promise.all([refetchMealLogs(), refetchMealPlans()]);
+      } catch {
+        // In case of conflict (already promoted) or error, resync
+        await Promise.all([refetchMealLogs(), refetchMealPlans()]);
+      } finally {
+        loggingPlanIdsRef.current.delete(planId);
+      }
+    },
+    [token, refetchMealLogs, refetchMealPlans],
+  );
+
+  const handleRemovePlan = useCallback(
+    async (planId: string) => {
+      setRemovedPlanIds((prev) => new Set(prev).add(planId));
+      try {
+        await apiFetch(
+          `/api/meal-plans/${encodeURIComponent(planId)}`,
+          z.any(),
+          {
+            method: "DELETE",
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await refetchMealPlans();
+      } catch {
+        setRemovedPlanIds((prev) => {
+          const next = new Set(prev);
+          next.delete(planId);
+          return next;
+        });
+      }
+    },
+    [token, refetchMealPlans],
+  );
+
+  const handleSkipPlan = useCallback(
+    async (planId: string) => {
+      setRemovedPlanIds((prev) => new Set(prev).add(planId));
+      try {
+        await apiFetch(
+          `/api/meal-plans/${encodeURIComponent(planId)}/skip`,
+          z.any(),
+          {
+            method: "POST",
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        await refetchMealPlans();
+      } catch {
+        setRemovedPlanIds((prev) => {
+          const next = new Set(prev);
+          next.delete(planId);
+          return next;
+        });
+      }
+    },
+    [token, refetchMealPlans],
+  );
+
+  // ── Auto-promote sweep (NP-147) ───────────────────────────────────────────
+  const [undoBatch, setUndoBatch] = useState<{
+    logIds: string[];
+    expiresAt: number;
+  } | null>(null);
+
+  const autoPromoteFiredFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (planPromoteMode !== "auto") return;
+    if (!isToday) return;
+    if (!plansData) return;
+    if (autoPromoteFiredFor.current === today) return;
+
+    const raw = ((plansData as PlansResponse | null)?.plans ?? []) as MealPlan[];
+    const targets = raw.filter(
+      (p) =>
+        p.status === "active" &&
+        (p.plannedDateKey ?? p.plannedDate?.split("T")[0]) === today,
+    );
+
+    if (targets.length === 0) {
+      autoPromoteFiredFor.current = today;
+      return;
+    }
+
+    autoPromoteFiredFor.current = today;
+    let cancelled = false;
+
+    const runSweep = async () => {
+      const results = await Promise.allSettled(
+        targets.map((p) =>
+          apiFetch<{ success?: boolean; log?: { _id?: string } }>(
+            `/api/meal-plans/${encodeURIComponent(p._id)}/promote`,
+            z.any(),
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: { untimed: true },
+              baseUrl: WEBAPP_BASE_URL,
+              getToken: () => token ?? undefined,
+            },
+          ).then((res) => ({
+            planId: p._id,
+            logId: res?.log?._id ? String(res.log._id) : null,
+          })),
+        ),
+      );
+
+      if (cancelled) return;
+
+      const successful = results.flatMap((r) =>
+        r.status === "fulfilled" && r.value.logId
+          ? [{ planId: r.value.planId, logId: r.value.logId }]
+          : [],
+      );
+
+      if (successful.length === 0) return;
+
+      setUndoBatch({
+        logIds: successful.map((s) => s.logId),
+        expiresAt: Date.now() + 8000,
+      });
+
+      await Promise.all([refetchMealLogs(), refetchMealPlans()]);
+    };
+
+    void runSweep();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    planPromoteMode,
+    isToday,
+    today,
+    plansData,
+    token,
+    refetchMealLogs,
+    refetchMealPlans,
+  ]);
+
+  useEffect(() => {
+    if (!undoBatch) return;
+    const remaining = Math.max(0, undoBatch.expiresAt - Date.now());
+    const timer = setTimeout(() => {
+      setUndoBatch(null);
+    }, remaining);
+    return () => clearTimeout(timer);
+  }, [undoBatch]);
+
+  const handleUndoAutoPromote = useCallback(async () => {
+    if (!undoBatch) return;
+    const { logIds } = undoBatch;
+    setUndoBatch(null);
+    await Promise.allSettled(
+      logIds.map((id) =>
+        apiFetch(
+          `/api/meal-logs/${encodeURIComponent(id)}`,
+          z.any(),
+          {
+            method: "DELETE",
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        ),
+      ),
+    );
+    await Promise.all([refetchMealLogs(), refetchMealPlans()]);
+  }, [undoBatch, token, refetchMealLogs, refetchMealPlans]);
+
   // ── Session Tags (add-a-tag behaviour) ────────────────────────────────────
   const [sessionTags, setSessionTags] = useState<string[]>([]);
   const [addTagOpen, setAddTagOpen] = useState(false);
@@ -238,11 +476,11 @@ export default function NutritionIndexRoute() {
   const occurrences = useMemo(() => {
     return buildDayOccurrences(
       displayedLogs,
-      EMPTY_PLANS,
+      activePlans,
       scheduleWindows,
-      OCCURRENCE_OPTS,
+      { includePlans: showPlans },
     );
-  }, [displayedLogs, scheduleWindows]);
+  }, [displayedLogs, activePlans, scheduleWindows, showPlans]);
 
   const sections = useMemo(() => {
     const withContent = occurrences.map((o) => ({ ...o, empty: false }));
@@ -321,24 +559,62 @@ export default function NutritionIndexRoute() {
     return { calories, protein, carbs, fats, fiber };
   }, [displayedLogs, removedItemIds.size, mealLogsData?.dailyTotals]);
 
-  // Ring totals = daily totals + quick adds
-  const consumedCalories = Math.max(
-    0,
-    Math.round(activeDailyTotals.calories + quickAddCalories),
-  );
-  const totalProtein = Math.max(
-    0,
-    Math.round(activeDailyTotals.protein + quickAddProtein),
-  );
-  const totalCarbs = Math.max(
-    0,
-    Math.round(activeDailyTotals.carbs + quickAddCarbs),
-  );
-  const totalFats = Math.max(
-    0,
-    Math.round(activeDailyTotals.fats + quickAddFats),
-  );
-  const totalFiber = Math.max(0, Math.round(activeDailyTotals.fiber ?? 0));
+  // Planned totals for the visible date (today and future days)
+  const plannedTotals = useMemo(() => {
+    if (!showPlans) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 };
+    let c = 0;
+    let p = 0;
+    let cb = 0;
+    let f = 0;
+    let fib = 0;
+    for (const plan of activePlans) {
+      const n = plan.expectedNutrition;
+      if (n) {
+        c += n.calories ?? 0;
+        p += n.protein ?? 0;
+        cb += n.carbs ?? 0;
+        f += n.fats ?? 0;
+        fib += (n as { fiber?: number }).fiber ?? 0;
+      } else {
+        for (const item of plan.items ?? []) {
+          const s = typeof item.servings === "number" && item.servings > 0 ? item.servings : 1;
+          const nut = item.nutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
+          c += (nut.calories ?? 0) * s;
+          p += (nut.protein ?? 0) * s;
+          cb += (nut.carbs ?? 0) * s;
+          f += (nut.fats ?? 0) * s;
+          fib += (nut.fiber ?? 0) * s;
+        }
+      }
+    }
+    return {
+      calories: Math.round(c),
+      protein: Math.round(p),
+      carbs: Math.round(cb),
+      fats: Math.round(f),
+      fiber: Math.round(fib),
+    };
+  }, [showPlans, activePlans]);
+
+  // Today only: preview planned totals as shadow arc / bars
+  const todayPlannedExtra = isToday ? plannedTotals : null;
+
+  // On future dates, primary ring displays planned totals; on today & past, consumed logs + quick adds
+  const consumedCalories = isFuture
+    ? plannedTotals.calories
+    : Math.max(0, Math.round(activeDailyTotals.calories + quickAddCalories));
+  const totalProtein = isFuture
+    ? plannedTotals.protein
+    : Math.max(0, Math.round(activeDailyTotals.protein + quickAddProtein));
+  const totalCarbs = isFuture
+    ? plannedTotals.carbs
+    : Math.max(0, Math.round(activeDailyTotals.carbs + quickAddCarbs));
+  const totalFats = isFuture
+    ? plannedTotals.fats
+    : Math.max(0, Math.round(activeDailyTotals.fats + quickAddFats));
+  const totalFiber = isFuture
+    ? plannedTotals.fiber
+    : Math.max(0, Math.round(activeDailyTotals.fiber ?? 0));
 
   const goalCalories = goalsData?.calories ?? 2000;
   const goalProtein = goalsData?.protein ?? 150;
@@ -658,6 +934,46 @@ export default function NutritionIndexRoute() {
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
+          {/* Undo Auto-promote Banner (NP-147) */}
+          {undoBatch ? (
+            <View
+              testID="nutrition-undo-banner"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 12,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                shadowColor: colors.foreground,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.08,
+                shadowRadius: 4,
+                elevation: 3,
+              }}
+            >
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text className="text-foreground text-sm font-semibold">
+                  Auto-logged planned meals
+                </Text>
+                <Text className="text-muted-foreground text-xs">
+                  Today&apos;s active plans were logged automatically.
+                </Text>
+              </View>
+              <Button
+                testID="nutrition-undo-auto-promote"
+                variant="secondary"
+                size="sm"
+                onPress={handleUndoAutoPromote}
+              >
+                Undo
+              </Button>
+            </View>
+          ) : null}
+
           {/* Search row: input + camera + upload */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Pressable
@@ -738,11 +1054,24 @@ export default function NutritionIndexRoute() {
           <CalorieRing
             consumed={consumedCalories}
             goal={goalCalories}
-            protein={{ current: totalProtein, goal: goalProtein }}
-            carbs={{ current: totalCarbs, goal: goalCarbs }}
-            fats={{ current: totalFats, goal: goalFats }}
+            protein={{
+              current: totalProtein,
+              goal: goalProtein,
+              planned: todayPlannedExtra?.protein,
+            }}
+            carbs={{
+              current: totalCarbs,
+              goal: goalCarbs,
+              planned: todayPlannedExtra?.carbs,
+            }}
+            fats={{
+              current: totalFats,
+              goal: goalFats,
+              planned: todayPlannedExtra?.fats,
+            }}
             fiber={totalFiber}
             goalLine={goalLineText}
+            plannedExtra={todayPlannedExtra?.calories}
             onEditGoals={handleEditGoals}
           />
 
@@ -849,7 +1178,7 @@ export default function NutritionIndexRoute() {
             onAddWater={handleAddWater}
           />
 
-          {/* Occurrence / Tag Sections */}
+          {/* Occurrence / Tag Sections (including Planned meals) */}
           {sections.map((section) => (
             <TagSection
               key={section.key}
@@ -859,10 +1188,13 @@ export default function NutritionIndexRoute() {
               onRemoveItem={handleRemoveItem}
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
+              onLogPlan={isToday ? handleLogPlan : undefined}
+              onRemovePlan={handleRemovePlan}
+              onSkipPlan={handleSkipPlan}
             />
           ))}
 
-          {/* Empty State when nothing logged */}
+          {/* Empty State when nothing logged and nothing planned */}
           {sections.length === 0 && quickAdds.length === 0 && (
             <Card testID="nutrition-empty-state">
               <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
