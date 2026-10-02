@@ -58,7 +58,18 @@ import {
 } from "@/lib/nutrition/mealSchedule";
 import { nutritionGoalLine } from "@/lib/nutrition/goalLine";
 import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
+import {
+  canCombine,
+  combineLoggedItems,
+  pickedLogItems,
+  selectableLogItems,
+  selectionKey,
+  toggleSelection,
+} from "@/lib/nutrition/combineItems";
+import { useEntitlements } from "@/lib/entitlements";
+import { useApiErrorHandler } from "@/lib/errors";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
+import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
@@ -556,6 +567,120 @@ export default function NutritionIndexRoute() {
   const handleRemoveTag = (tag: string) => {
     setSessionTags((prev) => prev.filter((t) => t !== tag));
   };
+
+  // ── Combine logged items into one sitting (NP-175) ────────────────────────
+  //
+  // Select rows already logged today, then fold them into ONE entry — the
+  // native half of `POST /api/meal-logs/combine`. The server does the
+  // create-then-strip atomically inside that single request, so this screen
+  // makes exactly one call and then refetches the day; it never emulates the
+  // merge with a create plus a handful of deletes.
+  //
+  // The selection is held HERE rather than inside TagSection because the sheet
+  // that submits it is a sibling of the sections, and it is keyed by occurrence
+  // so two snack sittings on one day cannot pool their picks.
+  const handleApiError = useApiErrorHandler();
+  const [selectSectionKey, setSelectSectionKey] = useState<string | null>(null);
+  const [combineSelection, setCombineSelection] = useState<Set<string>>(
+    () => new Set<string>(),
+  );
+  const [combineSheetOpen, setCombineSheetOpen] = useState(false);
+  const [combining, setCombining] = useState(false);
+  const [combineError, setCombineError] = useState<string | null>(null);
+  // Bumped once per select session and used as the sheet's key, so a NEW
+  // selection gets a fresh name field and a fresh toggle instead of the last
+  // combine's. Closing and reopening the sheet inside one session keeps what
+  // they typed, which is the half worth keeping.
+  const [combineSession, setCombineSession] = useState(0);
+
+  const {
+    data: entitlements,
+    feature: entitlementFor,
+    refresh: refreshEntitlements,
+  } = useEntitlements();
+  // Keeping the result as a reusable meal is the gated half; folding the day's
+  // own rows is not (webapp/app/api/meal-logs/combine/route.ts:58-65). Read
+  // `canCreate`, never recomputed from limit and used: `allowed` stays true for
+  // a capped free member on purpose so they can still edit and delete theirs.
+  const canSaveMeals =
+    !entitlements ||
+    entitlements.enforced === false ||
+    entitlementFor("custom-meals")?.canCreate !== false;
+
+  const selectedSection = useMemo(
+    () => sections.find((s) => s.key === selectSectionKey) ?? null,
+    [sections, selectSectionKey],
+  );
+
+  const combinePicked = useMemo(
+    () =>
+      pickedLogItems(
+        selectableLogItems(selectedSection?.logs ?? EMPTY_LOGS),
+        combineSelection,
+      ),
+    [selectedSection, combineSelection],
+  );
+
+  const exitSelectMode = useCallback(() => {
+    setSelectSectionKey(null);
+    setCombineSelection(new Set<string>());
+    setCombineSheetOpen(false);
+    setCombineError(null);
+  }, []);
+
+  const handleStartSelect = useCallback((sectionKey: string) => {
+    setSelectSectionKey(sectionKey);
+    setCombineSelection(new Set<string>());
+    setCombineError(null);
+    setCombineSession((n) => n + 1);
+  }, []);
+
+  const handleToggleSelect = useCallback((logId: string, itemId: string) => {
+    setCombineSelection((prev) => toggleSelection(prev, selectionKey(logId, itemId)));
+  }, []);
+
+  const handleCombine = useCallback(
+    async (opts: { mealName?: string | undefined; saveAsMeal: boolean }) => {
+      if (combining || !canCombine(combinePicked)) return;
+      setCombining(true);
+      setCombineError(null);
+      try {
+        await combineLoggedItems({
+          picks: combinePicked.map((item) => ({
+            logId: item.logId,
+            itemId: item.itemId,
+          })),
+          mealName: opts.mealName,
+          saveAsMeal: opts.saveAsMeal,
+          apiFetch,
+          token,
+        });
+        // A saved meal consumed an allowance slot: re-read the snapshot so the
+        // next sheet shows the cap it just reached rather than the one before.
+        if (opts.saveAsMeal) {
+          await refreshEntitlements().catch(() => {});
+        }
+        exitSelectMode();
+        await refetchMealLogs();
+      } catch (err) {
+        // A plan gate goes to the upgrade sheet through the root handler; an
+        // ordinary refusal keeps the server's own words in the sheet.
+        const { handled, message } = handleApiError(err);
+        if (!handled) setCombineError(message);
+      } finally {
+        setCombining(false);
+      }
+    },
+    [
+      combining,
+      combinePicked,
+      token,
+      refreshEntitlements,
+      exitSelectMode,
+      refetchMealLogs,
+      handleApiError,
+    ],
+  );
 
   // ── Totals & Goal Line ────────────────────────────────────────────────────
   const quickAdds = Array.isArray(sideTablesData?.quickAdds)
@@ -1347,6 +1472,15 @@ export default function NutritionIndexRoute() {
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
+              onStartSelect={handleStartSelect}
+              selecting={selectSectionKey === section.key}
+              selectedKeys={combineSelection}
+              onToggleSelect={handleToggleSelect}
+              onCancelSelect={exitSelectMode}
+              onCombine={() => {
+                setCombineError(null);
+                setCombineSheetOpen(true);
+              }}
             />
           ))}
 
@@ -1860,6 +1994,22 @@ export default function NutritionIndexRoute() {
         onClose={() => setSearchOpen(false)}
         currentTag={searchTag}
         activeDate={activeDate}
+      />
+
+      {/* Combine Sheet (NP-175) */}
+      <CombineSheet
+        key={`combine-session-${combineSession}`}
+        visible={combineSheetOpen}
+        tag={selectedSection?.tag}
+        picked={combinePicked}
+        canSaveMeals={canSaveMeals}
+        submitting={combining}
+        error={combineError}
+        onClose={() => {
+          setCombineSheetOpen(false);
+          setCombineError(null);
+        }}
+        onSubmit={handleCombine}
       />
 
       {/* Quick Add Sheet */}

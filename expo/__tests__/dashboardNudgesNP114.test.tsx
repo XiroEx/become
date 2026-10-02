@@ -185,6 +185,7 @@ describe("Suggestion cards and web-path resolver", () => {
 
     fireEvent.press(getByTestId("suggestion-primary-action"));
     // /dashboard/progress/<slug> maps to native workout tab /(tabs)/programming
+    // (records are NP-131 — the Training Log has no per-exercise view yet).
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
   });
 
