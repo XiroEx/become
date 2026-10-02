@@ -90,6 +90,8 @@ export const NATIVE_ROUTES = {
   calendar: "/(tabs)/calendar",
   scheduleSettings: "/(tabs)/calendar/settings",
   streaks: "/(tabs)/dashboard/streaks",
+  /** The Training Log — `app/(app)/progress.tsx` (NP-130). */
+  progress: "/progress",
   chat: "/(tabs)/chat",
   profile: "/(tabs)/profile",
   becoming: "/becoming",
@@ -479,9 +481,18 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     // screen, and a member-facing surface we do not link out of in v1.
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
-  if (section === "history" || section === "progress" || section === "insights") {
-    // Training history, the charts and a single metric: the Workout tab owns
+  if (section === "history" || section === "insights") {
+    // Training history and single-metric insights: the Workout tab owns
     // the subject until those screens exist.
+    return native(NATIVE_ROUTES.workout, params, "nearest");
+  }
+  if (section === "progress") {
+    // The Training Log (NP-130): weekly volume, workout detail, this month.
+    // Records (NP-131) live on the web's page but not yet natively, so a
+    // per-exercise deep link (`/dashboard/progress/<slug>`) still lands on
+    // the Workout tab — the closest screen that means something.
+    const slug = segments[2];
+    if (!slug) return native(NATIVE_ROUTES.progress, params, "exact");
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
 

@@ -13,7 +13,7 @@ describe("routeForNotification with the url the server actually sends", () => {
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks"],
     ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training"],
     ["/dashboard/workout", "/(tabs)/programming"],
-    ["/dashboard/progress", "/(tabs)/programming"],
+    ["/dashboard/progress", "/progress"],
     [
       "https://becomeurbest.com/dashboard/workout/p1/workout/live?day=Day%202&sd=2026-09-29",
       "/(tabs)/programming/p1/workout/1/live?day=Day%202&sd=2026-09-29",
