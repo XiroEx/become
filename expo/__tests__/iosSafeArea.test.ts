@@ -43,6 +43,10 @@ const DELEGATING_SCREENS: { route: string; delegate: string }[] = [
     route: "app/(app)/(tabs)/programming/[id]/workout/[idx]/live.tsx",
     delegate: "components/live/LiveWorkoutClient.tsx",
   },
+  {
+    route: "app/(app)/(tabs)/profile/index.tsx",
+    delegate: "components/profile/ProfileScreen.tsx",
+  },
 ];
 
 describe("iOS safe-area pass", () => {
