@@ -1,0 +1,808 @@
+// Discipline system dashboard — the native port of
+// `webapp/components/mind/DisciplineDashboard.tsx` (NP-152), on the NP-151
+// framework. Its PRIMARY mechanic is distinct from the other systems: a
+// persistent Non-Negotiables tracker — standing user-defined standards with a
+// daily check-off and a breakable per-item streak — plus today's rotating hard
+// thing, the daily fight check, and the guided protocols.
+//
+// Non-negotiables are PER LOCAL DAY, so every read and every write carries `tz`
+// as the numeric minutes-west-of-UTC offset (`tzOffsetMinutes()`), exactly the
+// way the web sends `new Date().getTimezoneOffset()`. A native check-off and a
+// web check-off therefore land on the same day key.
+
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, View } from "react-native";
+import {
+  Check,
+  Crosshair,
+  Eye,
+  Flame,
+  Gauge,
+  Megaphone,
+  ShieldCheck,
+  Soup,
+  Sword,
+  Trash2,
+} from "lucide-react-native";
+import {
+  apiFetch,
+  MindDisciplineResponseSchema,
+  MindJournalCreateResponseSchema,
+  MindJournalResponseSchema,
+  MindNonNegotiableCreateResponseSchema,
+  MindNonNegotiablePatchResponseSchema,
+  MindNonNegotiablesResponseSchema,
+} from "@become/api-client";
+import { Text } from "@/components/Text";
+import GuidedFlow, { type GuidedStep } from "@/components/mind/system/GuidedFlow";
+import ProtocolUnlockModal, {
+  useProtocolUnlocks,
+} from "@/components/mind/system/ProtocolUnlock";
+import {
+  AdaptiveSession,
+  DailyDrop,
+  SystemHero,
+  ToolkitCard,
+  TrackRecord,
+  type TrackRecordEntry,
+} from "@/components/mind/system/SystemDashboard";
+import { runAiTask } from "@/lib/ai/runClient";
+import { validateGuidedSteps } from "@/lib/ai/sanitize";
+import { useAuth } from "@/lib/auth/useAuth";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import { reflectOnAnswers } from "@/lib/mind/reflect";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { tzOffsetMinutes } from "@/lib/time/localDay";
+
+const DONE_TEXT = "That’s how it’s built.";
+
+/** Seven active maximum — the eighth is a 400 from the route. */
+const MAX_NON_NEGOTIABLES = 7;
+
+// ── Discipline protocols ──────────────────────────────────────────────────────
+
+const PROTOCOLS: {
+  id: string;
+  title: string;
+  blurb: string;
+  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  steps: GuidedStep[];
+}[] = [
+  {
+    id: "do-it-anyway",
+    title: "Do It Anyway",
+    blurb: "Feelings are data, not instructions.",
+    Icon: Flame,
+    steps: [
+      {
+        title: "What’s the resistance?",
+        body: "Name what’s really in the way right now.",
+        choices: ["Tired", "Bored", "Scared", "Too busy", "Just don’t want to"],
+      },
+      {
+        title: "What are you dodging?",
+        inputPrompt: "What are you dodging?",
+        body: "The exact thing you keep pushing off — the workout, the call, the task. Be specific.",
+        placeholder: "e.g. The leg workout I keep skipping",
+      },
+      {
+        title: "Go execute it.",
+        body: "Every time you do what you said regardless of how you feel, you become someone who does what they say.",
+      },
+    ],
+  },
+  {
+    id: "eat-the-frog",
+    title: "Eat the Frog",
+    blurb: "Hardest thing first. The day is won.",
+    Icon: Soup,
+    steps: [
+      {
+        title: "What’s your frog today?",
+        inputPrompt: "What’s your frog today?",
+        body: "Your “frog” is the hardest, ugliest, most-avoided task on your plate right now.",
+        placeholder: "e.g. Finish the proposal I’ve been avoiding",
+      },
+      {
+        title: "Eat it first.",
+        body: "No phone, no food, no “quick” anything until that one’s started. The momentum carries the whole day.",
+      },
+    ],
+  },
+  {
+    id: "find-your-40",
+    title: "Find Your 40%",
+    blurb: "When you think you’re done, you’re at 40%.",
+    Icon: Gauge,
+    steps: [
+      {
+        title: "Your tank has more.",
+        body: "That “done” feeling is your comfort system talking, not your real limit. It’s lying to you.",
+      },
+      {
+        title: "What’s your one-more?",
+        inputPrompt: "What’s your one-more?",
+        body: "One more rep, one more minute, one more step past where you wanted to quit. Name it.",
+        placeholder: "e.g. 5 more minutes on the run",
+      },
+      {
+        title: "Go get it.",
+        body: "Just that next checkpoint. Once you’re there, you’ll find another.",
+      },
+    ],
+  },
+  {
+    id: "cold-reality",
+    title: "Cold Reality",
+    blurb: "Where you are is the result of what you’ve done.",
+    Icon: Eye,
+    steps: [
+      {
+        title: "Sixty brutally honest seconds.",
+        body: "No blame. No excuses. Just the facts about where you actually are right now.",
+      },
+      {
+        title: "What got you here?",
+        inputPrompt: "What got you here?",
+        body: "The habits and choices — good and bad — that built your current situation. Own all of it.",
+        placeholder: "e.g. Late nights, skipped mornings, no real plan",
+      },
+      {
+        title: "Now decide.",
+        body: "What changes if you keep those habits? What changes if you don’t? You already know.",
+      },
+    ],
+  },
+  {
+    id: "excuse-callout",
+    title: "Excuse Callout",
+    blurb: "An excuse is a lie told too many times.",
+    Icon: Megaphone,
+    steps: [
+      {
+        title: "What’s your excuse?",
+        inputPrompt: "What’s your excuse?",
+        body: "Say the exact thing you’re about to tell yourself to get out of it.",
+        placeholder: "e.g. I’m too tired to train today",
+      },
+      {
+        title: "Is it true — or is it comfort?",
+        body: "Discomfort is not danger. That excuse has a solution, and somewhere you already know what it is.",
+      },
+      {
+        title: "Do it anyway.",
+        body: "You’ll respect yourself more at the end of the day. Your future self is watching this exact decision.",
+      },
+    ],
+  },
+];
+
+const SET_NONNEGOTIABLE: GuidedStep[] = [
+  {
+    title: "Draw a line you won’t cross.",
+    body: "A non-negotiable is the floor you defend no matter what — not the goal, the standard beneath it.",
+  },
+  {
+    title: "What’s your line?",
+    inputPrompt: "What’s your line?",
+    body: "One standard you refuse to drop below, in your own words.",
+    placeholder: "e.g. I train even on bad days",
+  },
+  {
+    title: "That’s your standard now.",
+    body: "Standards you defend become identity. Defend this one today.",
+  },
+];
+
+const FIGHT_LABELS: Record<number, string> = {
+  1: "Coasting",
+  2: "Light",
+  3: "Solid",
+  4: "Hard",
+  5: "All in",
+};
+
+const FIGHT_CHECK: GuidedStep[] = [
+  {
+    title: "How hard are you willing to go today?",
+    body: "No wrong answer — just be honest about today’s fight.",
+    scale: { min: 1, max: 5, minLabel: "Coasting", maxLabel: "All in" },
+  },
+  {
+    title: "Now back it up.",
+    body: "A number is a promise to yourself. Make today match it.",
+  },
+];
+
+interface TodayChallenge {
+  challenge: string;
+  completed: boolean;
+}
+
+interface NonNeg {
+  id: string;
+  text: string;
+  currentStreak: number;
+  longestStreak: number;
+  checkedToday: boolean;
+}
+
+export default function DisciplineDashboard() {
+  const { colors } = useThemeTokens();
+  const { token } = useAuth();
+
+  const [entries, setEntries] = useState<TrackRecordEntry[]>([]);
+  // Lifetime reps in this tool — 1 + reps protocols are open.
+  const [reps, setReps] = useState<number | null>(null);
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } =
+    useProtocolUnlocks(PROTOCOLS, reps);
+  const [today, setToday] = useState<TodayChallenge | null>(null);
+  const [nonNegs, setNonNegs] = useState<NonNeg[]>([]);
+  const [fightToday, setFightToday] = useState<number | null>(null);
+  const [marking, setMarking] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [flow, setFlow] = useState<{
+    title: string;
+    kind: string;
+    steps: GuidedStep[];
+    aiGenerated?: boolean;
+  } | null>(null);
+
+  const load = useCallback(async () => {
+    const tz = tzOffsetMinutes();
+    const [jr, cr, nr] = await Promise.allSettled([
+      apiFetch(
+        "/api/mind/journal?system=discipline&limit=8",
+        MindJournalResponseSchema,
+        {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+        },
+      ),
+      apiFetch("/api/mind/discipline", MindDisciplineResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        tz,
+      }),
+      apiFetch("/api/mind/non-negotiables", MindNonNegotiablesResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        tz,
+      }),
+    ]);
+
+    if (jr.status === "fulfilled") {
+      const raw = jr.value.entries ?? [];
+      setEntries(
+        raw.map((e) => ({
+          id: String(e.id ?? e._id ?? ""),
+          title: e.title,
+          kind: e.kind,
+          createdAt: e.createdAt ?? new Date().toISOString(),
+        })),
+      );
+      const counts = jr.value.counts ?? {};
+      setReps(
+        Object.values(counts as Record<string, number>).reduce(
+          (a, b) => a + b,
+          0,
+        ),
+      );
+      // Surface today's fight-check score rather than saving it silently.
+      const todayStr = new Date().toDateString();
+      const fc = raw.find(
+        (e) =>
+          e.kind === "fight-check" &&
+          new Date(e.createdAt ?? 0).toDateString() === todayStr,
+      );
+      const v = fc?.lines?.[0]?.answer ? Number(fc.lines[0].answer) : NaN;
+      setFightToday(Number.isFinite(v) ? v : null);
+    }
+
+    if (cr.status === "fulfilled" && cr.value.challenge) {
+      setToday({
+        challenge: cr.value.challenge.challenge,
+        completed: !!cr.value.challenge.completed,
+      });
+    }
+
+    if (nr.status === "fulfilled") {
+      setNonNegs(
+        (nr.value.items ?? []).map((n) => ({
+          id: n.id,
+          text: n.text,
+          currentStreak: n.currentStreak,
+          longestStreak: n.longestStreak,
+          checkedToday: n.checkedToday,
+        })),
+      );
+    }
+  }, [token]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync discipline state from the server fetch
+    void load();
+  }, [load]);
+
+  // ── Non-negotiables (the distinct centerpiece of Discipline) ──
+  const heldToday = nonNegs.filter((n) => n.checkedToday).length;
+  const topStreak = nonNegs.reduce((m, n) => Math.max(m, n.currentStreak), 0);
+
+  const createNonNeg = async (text: string) => {
+    setError(null);
+    try {
+      await apiFetch(
+        "/api/mind/non-negotiables",
+        MindNonNegotiableCreateResponseSchema,
+        {
+          method: "POST",
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          body: { text },
+          tz: tzOffsetMinutes(),
+        },
+      );
+      void load();
+    } catch {
+      setError("Could not save that line. Try again.");
+    }
+  };
+
+  const checkNonNeg = async (n: NonNeg) => {
+    if (n.checkedToday) return;
+    const tz = tzOffsetMinutes();
+    // Optimistic — the row flips immediately, the server confirms the streak.
+    setNonNegs((prev) =>
+      prev.map((x) =>
+        x.id === n.id
+          ? { ...x, checkedToday: true, currentStreak: x.currentStreak + 1 }
+          : x,
+      ),
+    );
+    try {
+      await apiFetch(
+        "/api/mind/non-negotiables",
+        MindNonNegotiablePatchResponseSchema,
+        {
+          method: "PATCH",
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          body: { id: n.id, action: "check", tz },
+          tz,
+        },
+      );
+      void load();
+    } catch {
+      // Put the row back the way the server still has it.
+      setNonNegs((prev) =>
+        prev.map((x) =>
+          x.id === n.id
+            ? { ...x, checkedToday: false, currentStreak: n.currentStreak }
+            : x,
+        ),
+      );
+    }
+  };
+
+  const removeNonNeg = async (id: string) => {
+    const previous = nonNegs;
+    setNonNegs((prev) => prev.filter((x) => x.id !== id)); // optimistic
+    try {
+      await apiFetch(
+        "/api/mind/non-negotiables",
+        MindNonNegotiablePatchResponseSchema,
+        {
+          method: "PATCH",
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          body: { id, action: "deactivate" },
+          tz: tzOffsetMinutes(),
+        },
+      );
+    } catch {
+      setNonNegs(previous);
+    }
+  };
+
+  const save = async (
+    kind: string,
+    title: string,
+    lines: { prompt: string; answer: string }[],
+  ) => {
+    try {
+      await apiFetch("/api/mind/journal", MindJournalCreateResponseSchema, {
+        method: "POST",
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        body: { system: "discipline", kind, title, lines },
+        tz: tzOffsetMinutes(),
+      });
+      void load();
+    } catch {
+      // ignore
+    }
+  };
+
+  // Personalize with AI. Falls back to the static "Do It Anyway" protocol on
+  // any failure — an AI decline must never dead-end the screen.
+  const runAiFlow = async (topic: string) => {
+    if (aiLoading) return;
+    setAiLoading(true);
+    try {
+      const r = await runAiTask("/api/ai/mind/flow", {
+        system: "discipline",
+        topic,
+      });
+      const steps = validateGuidedSteps(
+        (r.result as { steps?: unknown } | undefined)?.steps,
+      );
+      if (r.ok && steps) {
+        setFlow({ title: topic, kind: "protocol", steps, aiGenerated: true });
+        return;
+      }
+    } catch {
+      // fall through without surfacing an error
+    } finally {
+      setAiLoading(false);
+    }
+    const fallback = PROTOCOLS[0]!;
+    setFlow({ title: fallback.title, kind: "protocol", steps: fallback.steps });
+  };
+
+  const markDone = async () => {
+    if (marking || !today || today.completed) return;
+    setMarking(true);
+    setToday({ ...today, completed: true }); // optimistic
+    try {
+      const tz = tzOffsetMinutes();
+      await apiFetch("/api/mind/discipline", MindDisciplineResponseSchema, {
+        method: "POST",
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        body: { action: "complete", tz },
+        tz,
+      });
+      await save("did-the-hard-thing", today.challenge, []);
+    } catch {
+      // ignore
+    }
+    setMarking(false);
+  };
+
+  if (flow) {
+    return (
+      <GuidedFlow
+        title={flow.title}
+        steps={flow.steps}
+        accentColor={colors.primary}
+        accentClass="bg-red-500"
+        doneText={DONE_TEXT}
+        onReflect={
+          flow.aiGenerated || flow.kind !== "protocol"
+            ? undefined
+            : (a) => reflectOnAnswers("Discipline drill", a)
+        }
+        onExit={() => {
+          setFlow(null);
+          setAiLoading(false);
+        }}
+        onComplete={(answers) => {
+          const kind = flow.kind;
+          const title = flow.title;
+          setFlow(null);
+          setAiLoading(false);
+          if (kind === "nonnegotiable") {
+            // Create a STANDING non-negotiable from the typed line (not a journal).
+            const line = answers[0]?.answer?.trim();
+            if (line) void createNonNeg(line);
+            return;
+          }
+          if (kind === "fight-check") {
+            const v = Number(answers[0]?.answer);
+            if (Number.isFinite(v)) setFightToday(v); // optimistic
+            void save(kind, title, answers);
+            return;
+          }
+          void save(kind, title, answers);
+        }}
+      />
+    );
+  }
+
+  return (
+    <View testID="discipline-dashboard" className="gap-5">
+      <ProtocolUnlockModal
+        unlocked={justUnlocked}
+        onDismiss={dismissUnlock}
+        accentColor={colors.primary}
+      />
+
+      <SystemHero
+        Icon={Sword}
+        title="Discipline"
+        tagline="Hold your own line — do the hard thing"
+        statValue={topStreak > 0 ? `${topStreak}🔥` : "—"}
+        statLabel="best streak"
+        colorClass="text-red-500"
+        bgClass="border-red-500/30 bg-red-500/10"
+        iconColor={colors.primary}
+      />
+
+      {/* Your non-negotiables — the standing, checkable, streak-tracked list. */}
+      <View testID="discipline-non-negotiables">
+        <View className="mb-2 flex-row items-center justify-between">
+          <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Your non-negotiables
+          </Text>
+          {nonNegs.length > 0 ? (
+            <Text
+              testID="discipline-held-today"
+              className="text-[11px] font-semibold text-muted-foreground"
+            >
+              {heldToday}/{nonNegs.length} held today
+            </Text>
+          ) : null}
+        </View>
+
+        <View className="gap-2">
+          {nonNegs.map((n) => (
+            <View
+              key={n.id}
+              testID={`discipline-non-negotiable-${n.id}`}
+              className={`flex-row items-center gap-3 rounded-2xl border p-3.5 ${
+                n.checkedToday
+                  ? "border-success/40 bg-success/10"
+                  : "border-border bg-card"
+              }`}
+            >
+              <Pressable
+                testID={`discipline-non-negotiable-check-${n.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  n.checkedToday ? "Held today" : `Mark held today: ${n.text}`
+                }
+                accessibilityState={{ checked: n.checkedToday }}
+                onPress={() => void checkNonNeg(n)}
+                className={`h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 ${
+                  n.checkedToday
+                    ? "border-success bg-success"
+                    : "border-border bg-card"
+                }`}
+              >
+                <Check
+                  size={16}
+                  strokeWidth={3}
+                  color={
+                    n.checkedToday ? colors.background : colors["muted-foreground"]
+                  }
+                />
+              </Pressable>
+
+              <Text
+                className={`min-w-0 flex-1 text-sm font-medium ${
+                  n.checkedToday
+                    ? "text-muted-foreground line-through"
+                    : "text-foreground"
+                }`}
+              >
+                {n.text}
+              </Text>
+
+              {n.currentStreak > 0 ? (
+                <View className="shrink-0 flex-row items-center gap-0.5 rounded-full bg-accent/15 px-2 py-0.5">
+                  <Flame size={13} color={colors.accent} />
+                  <Text className="text-xs font-bold text-accent">
+                    {n.currentStreak}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                testID={`discipline-non-negotiable-remove-${n.id}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove non-negotiable: ${n.text}`}
+                onPress={() => void removeNonNeg(n.id)}
+                className="h-8 w-8 shrink-0 items-center justify-center rounded-full"
+              >
+                <Trash2 size={16} color={colors["muted-foreground"]} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+
+        {nonNegs.length === 0 ? (
+          <Text
+            testID="discipline-non-negotiables-empty"
+            className="rounded-2xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground"
+          >
+            No lines drawn yet. Set the standards you refuse to drop below — then
+            check them off daily and build a streak.
+          </Text>
+        ) : null}
+
+        {error ? (
+          <Text
+            testID="discipline-non-negotiables-error"
+            className="mt-2 text-center text-xs text-destructive"
+          >
+            {error}
+          </Text>
+        ) : null}
+
+        {nonNegs.length < MAX_NON_NEGOTIABLES ? (
+          <Pressable
+            testID="discipline-draw-line"
+            accessibilityRole="button"
+            accessibilityLabel="Draw a new line"
+            onPress={() =>
+              setFlow({
+                title: "Set a non-negotiable",
+                kind: "nonnegotiable",
+                steps: SET_NONNEGOTIABLE,
+              })
+            }
+            className="mt-2 flex-row items-center justify-center gap-1.5 rounded-2xl border border-dashed border-red-500/40 py-3 active:opacity-80"
+          >
+            <ShieldCheck size={16} color={colors.primary} />
+            <Text className="text-sm font-semibold text-red-500">
+              Draw a new line
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {/* Daily fight check — once logged today, show the score instead. */}
+      {fightToday != null ? (
+        <Pressable
+          testID="discipline-fight-check-logged"
+          accessibilityRole="button"
+          accessibilityLabel="Change today’s fight check"
+          onPress={() =>
+            setFlow({
+              title: "Fight check",
+              kind: "fight-check",
+              steps: FIGHT_CHECK,
+            })
+          }
+          className="flex-row items-center gap-3 rounded-2xl border border-success/40 bg-success/10 p-4 active:opacity-90"
+        >
+          <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-success/15">
+            <Crosshair size={20} color={colors.success} />
+          </View>
+          <View className="min-w-0 flex-1">
+            <Text className="text-[10px] font-bold uppercase tracking-widest text-success">
+              Daily fight check · logged
+            </Text>
+            <Text className="text-sm font-bold text-foreground">
+              Today: {fightToday}/5 — {FIGHT_LABELS[fightToday] ?? ""}
+            </Text>
+            <Text className="text-xs text-muted-foreground">
+              Tap to change your answer.
+            </Text>
+          </View>
+          <Check size={18} color={colors.success} strokeWidth={3} />
+        </Pressable>
+      ) : (
+        <DailyDrop
+          testID="discipline-fight-check"
+          Icon={Crosshair}
+          eyebrow="Daily fight check"
+          title="How hard will you go today?"
+          blurb="One tap. Sets the bar for the day."
+          ctaLabel="Check"
+          colorClass="text-red-500"
+          iconColor={colors.primary}
+          onClick={() =>
+            setFlow({
+              title: "Fight check",
+              kind: "fight-check",
+              steps: FIGHT_CHECK,
+            })
+          }
+        />
+      )}
+
+      {/* Today's hard thing — the rotating daily challenge. */}
+      <View
+        testID="discipline-hard-thing"
+        className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4"
+      >
+        <Text className="text-xs font-semibold uppercase tracking-widest text-red-500">
+          Today’s hard thing
+        </Text>
+        <Text
+          testID="discipline-hard-thing-text"
+          className="mt-2 text-base font-bold leading-snug text-foreground"
+        >
+          {today?.challenge ?? "Loading your hard thing…"}
+        </Text>
+        {today?.completed ? (
+          <View
+            testID="discipline-hard-thing-done"
+            className="mt-3 flex-row items-center gap-2"
+          >
+            <Check size={18} color={colors.success} strokeWidth={3} />
+            <Text className="text-sm font-semibold text-success">
+              Done today. Respect.
+            </Text>
+          </View>
+        ) : (
+          <View className="mt-3 gap-2">
+            <Pressable
+              testID="discipline-hard-thing-done-button"
+              accessibilityRole="button"
+              accessibilityLabel="I did today’s hard thing"
+              onPress={() => void markDone()}
+              disabled={marking || !today}
+              className="w-full flex-row items-center justify-center gap-2 rounded-xl bg-red-500 py-3 active:opacity-90 disabled:opacity-60"
+            >
+              <Check size={16} color={colors["primary-foreground"]} strokeWidth={3} />
+              <Text className="text-sm font-bold text-white">I did it</Text>
+            </Pressable>
+            <Pressable
+              testID="discipline-not-feeling-it"
+              accessibilityRole="button"
+              accessibilityLabel="Not feeling it"
+              onPress={() =>
+                setFlow({
+                  title: PROTOCOLS[0]!.title,
+                  kind: "protocol",
+                  steps: PROTOCOLS[0]!.steps,
+                })
+              }
+              className="items-center py-1"
+            >
+              <Text className="text-xs font-medium text-red-500">
+                Not feeling it? →
+              </Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
+
+      {/* Today's adaptive session */}
+      <AdaptiveSession
+        loading={aiLoading}
+        onStart={() => void runAiFlow("do the hard thing I am avoiding today")}
+        colorClass="text-red-500"
+        bgClass="border-red-500/30 bg-red-500/10"
+        subtitle="Aimed at the hard thing you’ve actually been dodging."
+      />
+
+      {/* Discipline protocols */}
+      <View>
+        <Text className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Discipline protocols
+        </Text>
+        <View className="gap-2">
+          {PROTOCOLS.map((p, i) => (
+            <ToolkitCard
+              key={p.id}
+              Icon={p.Icon}
+              title={p.title}
+              blurb={p.blurb}
+              colorClass="text-red-500"
+              iconColor={colors.primary}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
+                i - (reps ?? 0) === 1 ? "" : "s"
+              } in Discipline to unlock`}
+              onClick={() =>
+                setFlow({ title: p.title, kind: "protocol", steps: p.steps })
+              }
+            />
+          ))}
+        </View>
+      </View>
+
+      {/* Track record */}
+      <View>
+        <Text className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Track record
+        </Text>
+        <TrackRecord entries={entries} />
+      </View>
+    </View>
+  );
+}
