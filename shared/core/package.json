@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -176,6 +176,11 @@
       "types": "./dist/types/training/index.d.ts",
       "import": "./dist/esm/training/index.js",
       "require": "./dist/cjs/training/index.js"
+    },
+    "./profileIcons": {
+      "types": "./dist/types/profileIcons.d.ts",
+      "import": "./dist/esm/profileIcons.js",
+      "require": "./dist/cjs/profileIcons.js"
     }
   },
   "files": [
