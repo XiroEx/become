@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 
@@ -8,15 +8,27 @@ export interface CardProps {
   children?: ReactNode;
   testID?: string;
   accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+  className?: string;
 }
 
-export function Card({ title, subtitle, children, testID, accessibilityLabel }: CardProps) {
+export function Card({
+  title,
+  subtitle,
+  children,
+  testID,
+  accessibilityLabel,
+  style,
+  className,
+}: CardProps) {
+  const baseClass = "bg-card rounded-2xl p-4 border border-border";
   return (
     <View
       testID={testID}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="summary"
-      className="bg-card rounded-2xl p-4 border border-border"
+      className={className ? `${baseClass} ${className}` : baseClass}
+      style={style}
     >
       {title ? (
         <Text
