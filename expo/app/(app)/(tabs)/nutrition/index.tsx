@@ -61,6 +61,7 @@ import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
+import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const EMPTY_PLANS: any[] = [];
@@ -465,6 +466,7 @@ export default function NutritionIndexRoute() {
         );
         i++;
       }
+      await invalidateMindSession();
       await Promise.all([refetchMealLogs(), refetchSideTables()]);
     } catch {
       // ignore
@@ -517,6 +519,7 @@ export default function NutritionIndexRoute() {
             getToken: () => token ?? undefined,
           },
         );
+        await invalidateMindSession();
         await refetchSideTables();
       } catch (err) {
         console.error("Failed to quick add:", err);

@@ -82,6 +82,7 @@ export const MIND_MODULES: ModuleSpec[] = [
   mindModule('speechMatch'),
   mindModule('recentFeeling'),
   mindModule('rotation'),
+  mindModule('conformSession'),
 ]
 
 /** Pull `export interface GuidedStep { … }` out of a file, as text. */
@@ -95,7 +96,7 @@ function guidedStepInterface(source: string): string | null {
 
 describe('Mind lockstep drift (NP-017 / NP-062)', () => {
   it('covers every pure Mind module the card lists', () => {
-    assert.equal(MIND_MODULES.length, 22)
+    assert.equal(MIND_MODULES.length, 23)
   })
 
   for (const mod of MIND_MODULES) {

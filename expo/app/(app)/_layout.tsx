@@ -3,6 +3,7 @@ import { Stack, useRouter } from "expo-router";
 import { AuthGuard } from "@/lib/auth/AuthGuard";
 import { ConsentGate } from "@/components/auth/ConsentGate";
 import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
+import { MindSessionWarmer } from "@/components/mind/MindSessionWarmer";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -64,6 +65,9 @@ export default function AppGroupLayout() {
               a platform with no health module (iOS until NP-185) — see
               components/health/HealthSyncBridge.tsx. */}
           <HealthSyncBridge />
+          {/* Pre-composes the AI Mind session in the background on app open
+              and when returning to the foreground (NP-102). Silent and non-blocking. */}
+          <MindSessionWarmer />
           <Stack
             screenOptions={{
               headerShown: false,
