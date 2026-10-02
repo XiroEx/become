@@ -1,10 +1,12 @@
-import { useState, useMemo } from "react";
-import { View, ScrollView, Pressable, Image } from "react-native";
+import { useState, useMemo, useCallback } from "react";
+import { View, ScrollView, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { Check, Clock, Heart, Play } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { ExerciseAccordion } from "@/components/ExerciseAccordion";
+import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
 import type { ActiveProgramSummary } from "@become/api-client";
 
 export interface ProgramExerciseDetail {
@@ -220,6 +222,47 @@ export function ProgramDetail({
     }
   };
 
+  const {
+    activeSlug: activePlayingSlug,
+    play: playVideo,
+    release: releaseVideo,
+    registerLayout,
+    onScroll: handleScroll,
+  } = useSingleVideoPlayer();
+  const [expandedSlug, setExpandedSlug] = useState<string | null>(null);
+
+  const handleToggleExpand = useCallback(
+    (slug: string) => {
+      setExpandedSlug((prev) => {
+        if (prev === slug) {
+          releaseVideo();
+          return null;
+        }
+        playVideo(slug);
+        return slug;
+      });
+    },
+    [playVideo, releaseVideo],
+  );
+
+  const handlePlayPress = useCallback(
+    (slug: string) => {
+      setExpandedSlug((prev) => {
+        if (prev !== slug) {
+          playVideo(slug);
+          return slug;
+        }
+        if (activePlayingSlug === slug) {
+          releaseVideo();
+        } else {
+          playVideo(slug);
+        }
+        return slug;
+      });
+    },
+    [activePlayingSlug, playVideo, releaseVideo],
+  );
+
   // Render grouped or flat exercise rows
   const renderedExercises = useMemo(() => {
     const exercises = currentWorkout?.exercises;
@@ -269,22 +312,75 @@ export function ProgramDetail({
               </Text>
             </View>
             {groupExercises.map(({ exercise: gEx, index: gIdx }) => (
-              <ExerciseItem key={gEx.slug || gIdx} exercise={gEx} index={gIdx} testID={testID} colors={colors} />
+              <View
+                key={gEx.slug || gIdx}
+                onLayout={(e) => {
+                  registerLayout(gEx.slug, {
+                    y: e.nativeEvent.layout.y,
+                    height: e.nativeEvent.layout.height,
+                  });
+                }}
+              >
+                <ExerciseAccordion
+                  exercise={gEx}
+                  index={gIdx}
+                  isInGroup
+                  isExpanded={expandedSlug === gEx.slug}
+                  isPlaying={activePlayingSlug === gEx.slug}
+                  onToggleExpand={() => handleToggleExpand(gEx.slug)}
+                  onPlayPress={() => handlePlayPress(gEx.slug)}
+                  testID={testID}
+                />
+              </View>
             ))}
           </View>,
         );
       } else {
+        const currentEx = ex;
+        const currentIndex = i;
         elements.push(
-          <ExerciseItem key={ex.slug || i} exercise={ex} index={i} testID={testID} colors={colors} />,
+          <View
+            key={currentEx.slug || currentIndex}
+            onLayout={(e) => {
+              registerLayout(currentEx.slug, {
+                y: e.nativeEvent.layout.y,
+                height: e.nativeEvent.layout.height,
+              });
+            }}
+          >
+            <ExerciseAccordion
+              exercise={currentEx}
+              index={currentIndex}
+              isExpanded={expandedSlug === currentEx.slug}
+              isPlaying={activePlayingSlug === currentEx.slug}
+              onToggleExpand={() => handleToggleExpand(currentEx.slug)}
+              onPlayPress={() => handlePlayPress(currentEx.slug)}
+              testID={testID}
+            />
+          </View>,
         );
         i++;
       }
     }
     return elements;
-  }, [currentWorkout?.exercises, colors, testID]);
+  }, [
+    currentWorkout?.exercises,
+    colors,
+    testID,
+    expandedSlug,
+    activePlayingSlug,
+    handleToggleExpand,
+    handlePlayPress,
+    registerLayout,
+  ]);
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} testID={testID}>
+    <ScrollView
+      contentContainerStyle={{ padding: 16, gap: 16 }}
+      testID={testID}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
+    >
       {/* Program Header */}
       <View
         style={{
@@ -664,89 +760,3 @@ export function ProgramDetail({
   );
 }
 
-function ExerciseItem({
-  exercise,
-  index,
-  testID,
-  colors,
-}: {
-  exercise: ProgramExerciseDetail;
-  index: number;
-  testID: string;
-  colors: Record<string, string>;
-}) {
-  const repsText = exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : "";
-  const setsReps = exercise.sets ? `${exercise.sets} sets${repsText ? ` · ${repsText}` : ""}` : repsText;
-  const restText = exercise.rest ? ` · ${exercise.rest} rest` : "";
-  const prescription = `${setsReps}${restText}`;
-
-  return (
-    <View
-      testID={`${testID}-exercise-${exercise.slug}`}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        padding: 12,
-        borderRadius: 12,
-        backgroundColor: colors.card,
-        borderWidth: 1,
-        borderColor: colors.border,
-      }}
-    >
-      {exercise.thumbnailUrl ? (
-        <Image
-          source={{ uri: exercise.thumbnailUrl }}
-          accessibilityLabel={`${exercise.name} thumbnail`}
-          testID={`${testID}-exercise-thumb-${exercise.slug}`}
-          style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.muted }}
-        />
-      ) : (
-        <View
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            backgroundColor: colors.muted,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>
-            {index + 1}
-          </Text>
-        </View>
-      )}
-
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}>
-          {exercise.name}
-        </Text>
-        {prescription ? (
-          <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
-            {prescription}
-          </Text>
-        ) : null}
-        {exercise.details ? (
-          <Text style={{ fontSize: 12, color: colors["muted-foreground"], marginTop: 2 }}>
-            {exercise.details}
-          </Text>
-        ) : null}
-      </View>
-
-      {exercise.videoUrl ? (
-        <View
-          testID={`${testID}-exercise-demo-${exercise.slug}`}
-          accessibilityLabel={`${exercise.name} demo video`}
-          style={{
-            padding: 8,
-            borderRadius: 20,
-            backgroundColor: colors.muted,
-          }}
-        >
-          <Play size={14} color={colors.primary} fill={colors.primary} />
-        </View>
-      ) : null}
-    </View>
-  );
-}

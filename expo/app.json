@@ -17,7 +17,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Become uses the camera to photograph a meal so it can log what is in it, a food label when you report a food, and a progress photo when you choose to add one.",
-        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo to attach — a meal, a food label, a progress shot or an avatar — and reads nothing else from it."
+        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo to attach — a meal, a food label, a progress shot or an avatar — and reads nothing else from it.",
+        "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
+        "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud."
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -77,6 +79,7 @@
       "versionCode": 1,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.WRITE_WEIGHT",
         "android.permission.health.WRITE_EXERCISE"
@@ -122,16 +125,11 @@
       [
         "expo-camera",
         {
-          "microphonePermission": false,
           "recordAudioAndroid": false
         }
       ],
-      [
-        "expo-image-picker",
-        {
-          "microphonePermission": false
-        }
-      ],
+      "expo-image-picker",
+      "expo-speech-recognition",
       [
         "expo-build-properties",
         {
