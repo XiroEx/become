@@ -11,6 +11,12 @@ import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
+import { NutritionCard } from "@/components/dashboard/NutritionCard";
+import {
+  CurrentProgramCard,
+  type CurrentProgramData,
+} from "@/components/dashboard/CurrentProgramCard";
+import type { NutritionTrend } from "@/lib/dashboard/nutritionTrend";
 import type {
   DashboardTile,
   DashboardTilesResponse,
@@ -151,6 +157,22 @@ export interface DashboardScreenProps {
   onExploreNudge?: () => void;
   onFindProgram?: () => void;
   onDismissNudgeForever?: () => void;
+  /** Nutrition summary data (NP-212) */
+  nutritionData?: {
+    calories: { consumed: number; goal: number };
+    protein: { current: number; goal: number };
+    carbs: { current: number; goal: number };
+    fats: { current: number; goal: number };
+    water: { current: number; goal: number };
+  } | null;
+  /** Nutrition trend from last 7 days (NP-212) */
+  nutritionTrend?: NutritionTrend | null;
+  /** Quick Add callback from nutrition card */
+  onQuickAdd?: () => void;
+  /** Current program info from progressData (NP-212) */
+  currentProgram?: CurrentProgramData | null;
+  /** View current program details callback */
+  onViewProgram?: (programId: string) => void;
 }
 
 export function DashboardScreen({
@@ -206,6 +228,11 @@ export function DashboardScreen({
   onExploreNudge,
   onFindProgram,
   onDismissNudgeForever,
+  nutritionData,
+  nutritionTrend,
+  onQuickAdd,
+  currentProgram,
+  onViewProgram,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalNudgeOpen, setInternalNudgeOpen] = useState<boolean>(false);
@@ -537,17 +564,41 @@ export function DashboardScreen({
           moodData={progressData?.moodData}
           fitnessGoal={fitnessGoal ?? statData?.fitnessGoal}
           targetWeight={
-            targetWeight ??
-            (statData?.targetWeightKg
-              ? Math.round(
-                  statData.targetWeightKg *
-                    (weightUnit === "kg" ? 1 : 2.20462) *
-                    10,
-                ) / 10
-              : undefined)
+            targetWeight != null
+              ? Math.round(targetWeight * 10) / 10
+              : (statData?.targetWeightKg
+                ? Math.round(
+                    statData.targetWeightKg *
+                      (weightUnit === "kg" ? 1 : 2.20462) *
+                      10,
+                  ) / 10
+                : undefined)
           }
           weightUnit={weightUnit}
         />
+
+        {/* Nutrition Summary Card (NP-212) */}
+        {nutritionData ? (
+          <NutritionCard
+            calories={nutritionData.calories}
+            protein={nutritionData.protein}
+            carbs={nutritionData.carbs}
+            fats={nutritionData.fats}
+            water={nutritionData.water}
+            trend={nutritionTrend}
+            onOpenNutrition={onOpenNutrition}
+            onQuickAdd={onQuickAdd}
+          />
+        ) : null}
+
+        {/* Current Program Card (NP-212) */}
+        {currentProgram ? (
+          <CurrentProgramCard
+            program={currentProgram}
+            onView={() => onViewProgram?.(currentProgram.programId)}
+            onContinue={onStartWorkout}
+          />
+        ) : null}
 
         {/* The in-app footer. Apple wants the privacy policy reachable from
             inside the app, not only from a marketing page a member installing to
