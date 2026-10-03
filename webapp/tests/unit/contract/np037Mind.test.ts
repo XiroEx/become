@@ -1090,13 +1090,18 @@ test('GET /api/mind/progress matches MindProgressResponseSchema', async () => {
   // A chapter unlock in the history, so the array is not empty here and The
   // Becoming below has a real "Chapter 2 opened" day. Entry 0 is the PLACEMENT
   // and is skipped by the journey on purpose.
+  //
+  // The unlock is stamped NOW, not "a day ago": The Becoming buckets by
+  // Sunday-start week in DAY_SHIFT_TZ, and whenever that local day is a Sunday
+  // (any Saturday afternoon UTC run) yesterday falls in LAST week, so the live
+  // week's chapterUnlocked came back null on those days only.
   await MindProgress.updateOne(
     { userId: PLUS_MEMBER.id },
     {
       $set: {
         chapterHistory: [
           { chapter: 1, unlockedAt: new Date(Date.now() - 42 * DAY_MS) },
-          { chapter: 2, unlockedAt: new Date(Date.now() - DAY_MS) },
+          { chapter: 2, unlockedAt: new Date() },
         ],
       },
     },
