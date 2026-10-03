@@ -60,6 +60,9 @@ export type {
 
 export * from "./store";
 export * from "./useEntitlements";
+// Coming back from checkout or the portal (NP-054): the session-hint
+// activation, the remembered handover, and the foreground re-read.
+export * from "./billingReturn";
 // `showUpgradeSheet(gate)` — the one handle every gated screen raises the sheet
 // with (NP-052). Exported from here rather than from the component so a screen
 // does not import a sheet to open one.
