@@ -80,6 +80,11 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
 import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
 import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
+import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
+import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
+import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
+import { applyLogCorrection } from "@/lib/nutrition/foodFlags";
+import { isObjectIdString } from "@/lib/nutrition/foodImport";
 
 export type NutritionViewMode = "day" | "week" | "month";
 
@@ -271,6 +276,23 @@ export default function NutritionIndexRoute() {
   const [removedItemIds, setRemovedItemIds] = useState<Set<string>>(new Set());
   const [removedPlanIds, setRemovedPlanIds] = useState<Set<string>>(new Set());
   const loggingPlanIdsRef = useRef<Set<string>>(new Set());
+  // Food reports (NP-174): the flag sheet target for a logged row. Declared
+  // here — before the callbacks that set it — so no callback reads it early.
+  const [flagTarget, setFlagTarget] = useState<{
+    logId: string;
+    itemId: string;
+    foodId: string;
+    name: string;
+    nutrition: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fats: number;
+      fiber: number;
+    };
+    portionLabel: string;
+    portionFactor: number;
+  } | null>(null);
 
   const displayedLogs = useMemo(() => {
     const rawLogs = (mealLogsData?.logs ?? []) as MealLog[];
@@ -324,6 +346,68 @@ export default function NutritionIndexRoute() {
       }
     },
     [refetchMealLogs, token],
+  );
+
+  // "Something look wrong?" on a logged row (NP-174). Opens the flag sheet
+  // with the row's own per-serving nutrition as the correction basis. The
+  // flag never edits the shared Food; the correction PATCHes the member's
+  // own log item instead.
+  const handleFlagItem = useCallback(
+    (logId: string, item: MealLog["items"][number]) => {
+      const foodId =
+        typeof item.foodId === "string" && isObjectIdString(item.foodId)
+          ? item.foodId
+          : null;
+      if (!foodId) return;
+      const nut = item.nutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
+      const servings =
+        typeof item.servings === "number" && item.servings > 0 ? item.servings : 1;
+      const portionLabel =
+        item.servingLabel ||
+        (item.loggedQuantity != null && item.loggedUnit
+          ? `${item.loggedQuantity} ${item.loggedUnit}`
+          : "this entry");
+      setFlagTarget({
+        logId,
+        itemId: String(item._id ?? item.id ?? ""),
+        foodId,
+        name: item.name,
+        nutrition: {
+          calories: nut.calories ?? 0,
+          protein: nut.protein ?? 0,
+          carbs: nut.carbs ?? 0,
+          fats: nut.fats ?? 0,
+          fiber: nut.fiber ?? 0,
+        },
+        portionLabel,
+        portionFactor: servings,
+      });
+    },
+    [],
+  );
+
+  const handleApplyFlagCorrection = useCallback(
+    async (values: {
+      calories: number;
+      protein: number;
+      carbs: number;
+      fats: number;
+      fiber: number;
+      servingLabel?: string;
+    }) => {
+      if (!flagTarget) return;
+      const res = await applyLogCorrection({
+        logId: flagTarget.logId,
+        itemId: flagTarget.itemId,
+        correction: values,
+        jwt: token ?? null,
+      });
+      if (res.status === "applied") {
+        setFlagTarget(null);
+        await refetchMealLogs();
+      }
+    },
+    [flagTarget, token, refetchMealLogs],
   );
 
   // Log it — promote plan to untimed meal log (today only)
@@ -858,6 +942,11 @@ export default function NutritionIndexRoute() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
+  // Food reports (NP-174): the unread-outcomes badge and the My reports
+  // list. `reportsRefreshKey` re-reads the badge after filing a report or
+  // after the list marks outcomes read.
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsRefreshKey, setReportsRefreshKey] = useState(0);
   const [quickAddOpen, setQuickAddOpen] = useState(
     () => params.quickAdd === "true",
   );
@@ -1030,6 +1119,12 @@ export default function NutritionIndexRoute() {
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          {/* Unread food-report outcomes (NP-174). Opens My reports, which marks them read. */}
+          <FoodReportsBadge
+            token={token}
+            onOpen={() => setReportsOpen(true)}
+            refreshKey={reportsRefreshKey}
+          />
           {/* My Stuff header action */}
           <Pressable
             testID="nutrition-my-stuff-button"
@@ -1467,6 +1562,7 @@ export default function NutritionIndexRoute() {
               empty={section.empty}
               removable={section.empty && sessionTags.includes(section.tag)}
               onRemoveItem={handleRemoveItem}
+              onFlagItem={handleFlagItem}
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
               onLogPlan={isToday ? handleLogPlan : undefined}
@@ -2019,6 +2115,34 @@ export default function NutritionIndexRoute() {
         onSubmit={handleQuickAdd}
         loading={submittingQuickAdd}
       />
+
+      {/* My reports (NP-174): opening marks outcomes read, which clears the badge. */}
+      <FoodReportsSheet
+        visible={reportsOpen}
+        onClose={() => {
+          setReportsOpen(false);
+          setReportsRefreshKey((k) => k + 1);
+        }}
+        token={token}
+      />
+
+      {/* Flag sheet for a logged row (NP-174). */}
+      {flagTarget ? (
+        <FlagFoodSheet
+          visible={flagTarget !== null}
+          foodId={flagTarget.foodId}
+          foodName={flagTarget.name}
+          token={token}
+          currentNutrition={flagTarget.nutrition}
+          portion={{
+            label: flagTarget.portionLabel,
+            factor: flagTarget.portionFactor,
+          }}
+          onApplyToLog={(values) => void handleApplyFlagCorrection(values)}
+          onClose={() => setFlagTarget(null)}
+          editableServingLabel
+        />
+      ) : null}
 
       {/* Floating Add Food Button (FAB) */}
       <Pressable

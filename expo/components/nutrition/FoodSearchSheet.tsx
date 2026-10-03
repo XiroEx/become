@@ -23,6 +23,7 @@ import {
   Bookmark,
   ChefHat,
   Clock,
+  Flag,
   Star,
   X,
   AlertCircle,
@@ -30,6 +31,7 @@ import {
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { BottomSheet } from "@/components/BottomSheet";
+import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -105,6 +107,11 @@ export function FoodSearchSheet({
   const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [importingRowId, setImportingRowId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // "Something look wrong?" (NP-174). The flag sheet needs the food's own
+  // nutrition basis for its log-correction panel; the search row only shows
+  // the flattened default variant, which is exactly that basis.
+  const [flagFood, setFlagFood] = useState<Food | null>(null);
 
   const debouncedQuery = useDebouncedValue(
     query,
@@ -471,6 +478,22 @@ export function FoodSearchSheet({
             </Text>
           </View>
 
+          {isObjectIdString(id) ? (
+            <Pressable
+              testID={`food-flag-${id}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Report ${food.name}`}
+              accessibilityHint="Something look wrong? Report this food without changing your entry"
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                setFlagFood(food);
+              }}
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <Flag size={18} color={colors["muted-foreground"]} />
+            </Pressable>
+          ) : null}
           <Pressable
             testID={`food-bookmark-${id}`}
             accessibilityRole="button"
@@ -932,6 +955,28 @@ export function FoodSearchSheet({
           ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Flag sheet (NP-174): report the catalogue row, never edits it. */}
+      {flagFood ? (
+        <FlagFoodSheet
+          visible={flagFood !== null}
+          foodId={String(flagFood._id ?? flagFood.id ?? "")}
+          foodName={flagFood.name}
+          token={token}
+          currentNutrition={
+            flagFood.nutrition
+              ? {
+                  calories: flagFood.nutrition.calories ?? 0,
+                  protein: flagFood.nutrition.protein ?? 0,
+                  carbs: flagFood.nutrition.carbs ?? 0,
+                  fats: flagFood.nutrition.fats ?? 0,
+                  fiber: flagFood.nutrition.fiber ?? 0,
+                }
+              : undefined
+          }
+          onClose={() => setFlagFood(null)}
+        />
+      ) : null}
     </BottomSheet>
   );
 }

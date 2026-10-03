@@ -102,6 +102,70 @@ export async function requestAccountDeletion(
   return { ok: true, status: res.status, restorableUntil };
 }
 
+export interface DeletionStatus {
+  /** True while the request is scheduled and still undoable. */
+  pending: boolean;
+  /** ISO of the request, or null when nothing is pending. */
+  requestedAt?: string | null;
+  /** ISO of the purge due date — the last instant the restore link works. */
+  restorableUntil?: string | null;
+  /** Whole days left, floored at 0. */
+  daysLeft?: number;
+  /** The window the server promises, in days. */
+  restoreWindowDays?: number;
+}
+
+export interface AccountStatusOptions {
+  /** The session JWT out of SecureStore. */
+  jwt: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export interface AccountStatusResult {
+  ok: boolean;
+  status?: number;
+  deletion: DeletionStatus | null;
+}
+
+/**
+ * Read GET /api/me/account — the danger zone's read. Answers whether a
+ * deletion is pending and until when, so a member who signs back in during
+ * the window sees the scheduled date instead of a fresh "Delete account".
+ * A failed read reports `{ ok: false }` and the caller keeps the request
+ * surface drawn: the server stays the gate, and the surface must never
+ * vanish because a fetch blipped.
+ */
+export async function getAccountDeletionStatus(
+  options: AccountStatusOptions,
+): Promise<AccountStatusResult> {
+  const fetchImpl = resolveFetch(options.fetchImpl);
+  let res: Response;
+  try {
+    res = await fetchImpl(url(options.baseUrl, "/api/me/account"), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${options.jwt}`,
+      },
+    });
+  } catch {
+    return { ok: false, deletion: null };
+  }
+  if (!res.ok) return { ok: false, status: res.status, deletion: null };
+  try {
+    const body = (await res.json()) as {
+      deletion?: DeletionStatus | null;
+    };
+    const deletion = body?.deletion ?? null;
+    if (!deletion || typeof deletion !== "object") {
+      return { ok: true, status: res.status, deletion: null };
+    }
+    return { ok: true, status: res.status, deletion };
+  } catch {
+    return { ok: false, deletion: null };
+  }
+}
+
 /** Change of mind, from a session that still works (Settings → Keep my account). */
 export async function cancelAccountDeletion(
   options: AccountRequestOptions,
