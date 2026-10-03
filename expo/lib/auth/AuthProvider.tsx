@@ -315,6 +315,14 @@ export function AuthProvider({
         /* ignore */
       }
       try {
+        const { getWorkoutSaveQueue } = await import(
+          "@/lib/offline/workoutSaves"
+        );
+        await getWorkoutSaveQueue().clear();
+      } catch {
+        /* ignore */
+      }
+      try {
         await clearAppBadge();
       } catch {
         /* ignore */
