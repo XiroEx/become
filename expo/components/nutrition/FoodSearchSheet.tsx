@@ -51,6 +51,11 @@ import {
   saveFoodBookmark,
   removeFoodBookmark,
 } from "@/lib/nutrition/foodBookmarks";
+import { defaultVariantOf } from "@/lib/nutrition/foodMath";
+import {
+  buildMealItemPayload,
+  type MealItemPayload,
+} from "@/lib/nutrition/mealLogActions";
 
 export type FoodSearchTabId = "all" | "mine" | "meals" | "recent" | "frequent";
 
@@ -74,6 +79,22 @@ export interface FoodSearchSheetProps {
   activeDate?: string;
   onPickFood?: (food: Food) => void;
   onPickMeal?: (meal: Meal) => void;
+  /**
+   * ── Basket mode (NP-094) ────────────────────────────────────────────────
+   *
+   * The web's "Build a meal": each picked food is added to a basket (kept as a
+   * fully-built item payload at the default amount) instead of opening the
+   * quantity picker, and the basket is logged together in one request. Omit
+   * `onAddToBasket` and the sheet keeps its one-food-at-a-time behaviour.
+   */
+  onAddToBasket?: (entry: { item: MealItemPayload; name: string }) => void;
+  /**
+   * Add a food into a specific logged sitting (`POST /api/meal-logs/{id}/items`)
+   * — the web's "Add to this meal". When set, the sheet's heading names the
+   * sitting it appends to.
+   */
+  addToLogId?: string | null;
+  addToMealName?: string;
   debounceMs?: number;
   setTimeoutImpl?: typeof setTimeout;
   clearTimeoutImpl?: typeof clearTimeout;
@@ -91,6 +112,9 @@ export function FoodSearchSheet({
   activeDate,
   onPickFood,
   onPickMeal,
+  onAddToBasket,
+  addToLogId = null,
+  addToMealName,
   debounceMs = 300,
   setTimeoutImpl,
   clearTimeoutImpl,
@@ -360,6 +384,11 @@ export function FoodSearchSheet({
   // Picking a food: runs import step if external before handing off.
   // `useCallback` (not a bare async fn) because the barcode path below
   // awaits the same pick — a searched food and a scanned food log identically.
+  //
+  // Basket mode (NP-094): with `onAddToBasket` the pick banks a fully-built
+  // item payload at the default amount instead of opening the quantity picker
+  // — the web's "Build a meal", where each item keeps its own quantity later
+  // on the detail screen. The sheet stays open for the next item.
   const handlePickFood = useCallback(
     async (food: Food) => {
       if (food.persistable === false) {
@@ -395,14 +424,47 @@ export function FoodSearchSheet({
         }
       }
 
-      onClose();
-      if (onPickFood) {
-        onPickFood(targetFood);
-      } else {
-        router.push(foodDetailHref(targetFood._id, targetFood));
+      if (onAddToBasket) {
+        const variant = defaultVariantOf(targetFood);
+        if (!variant) {
+          setErrorMessage("Could not add this food to the basket");
+          return;
+        }
+        const foodId = String(targetFood._id ?? targetFood.id ?? "");
+        const item = buildMealItemPayload({
+          food: {
+            _id: foodId || null,
+            name: targetFood.name,
+            brand: targetFood.brand ?? null,
+          },
+          variant: {
+            servingSize: variant.servingSize,
+            servingUnit: variant.servingUnit,
+            nutrition: variant.nutrition,
+            ...(variant.name ? { name: variant.name } : {}),
+            ...(variant.gramsPerServing != null
+              ? { gramsPerServing: variant.gramsPerServing }
+              : {}),
+            ...(variant.mlPerServing != null
+              ? { mlPerServing: variant.mlPerServing }
+              : {}),
+          },
+          quantity: 1,
+          unit: variant.servingUnit,
+        });
+        onAddToBasket({ item, name: String(targetFood.name ?? "Food") });
+        return;
       }
+
+      if (onPickFood) {
+        onClose();
+        onPickFood(targetFood);
+        return;
+      }
+      onClose();
+      router.push(foodDetailHref(targetFood._id, targetFood));
     },
-    [onClose, onPickFood, router, token],
+    [onAddToBasket, onClose, onPickFood, router, token],
   );
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
@@ -430,7 +492,11 @@ export function FoodSearchSheet({
     [handlePickFood, lookupBarcodeImpl, token],
   );
 
-  // Picking a meal
+  // Picking a meal — the native half of the web's `MealApplySheet`
+  // (`webapp/components/meals/MealApplySheet.tsx:241-250`): `POST
+  // /api/meals/{id}/log` with `portion`, `tags`, `loggedAt`, `untimed`. With
+  // `onPickMeal` the pick hands off (the screen opens the portion sheet);
+  // without it the meal is logged at portion 1 straight away.
   const handlePickMeal = async (meal: Meal) => {
     if (onPickMeal) {
       onClose();
@@ -446,9 +512,9 @@ export function FoodSearchSheet({
           baseUrl: WEBAPP_BASE_URL,
           getToken: () => token ?? undefined,
           body: {
-            tags: [currentTag ?? "snack"],
-            date: activeDate,
             portion: 1,
+            tags: [(currentTag ?? "snack").toLowerCase()],
+            untimed: true,
           },
         },
       );
@@ -466,14 +532,15 @@ export function FoodSearchSheet({
     const source = narrowFoodSource(food.source);
     const calories = food.nutrition?.calories;
     const isImporting = importingRowId === id;
+    const basketMode = Boolean(onAddToBasket);
 
     return (
       <Pressable
         key={id}
         testID={`food-search-result-${id}`}
-        onPress={() => handlePickFood(food)}
+        onPress={() => void handlePickFood(food)}
         accessibilityRole="button"
-        accessibilityLabel={`Pick ${food.name}`}
+        accessibilityLabel={basketMode ? `Add ${food.name} to basket` : `Pick ${food.name}`}
         disabled={isImporting}
         style={{
           flexDirection: "row",
@@ -578,14 +645,15 @@ export function FoodSearchSheet({
     const id = String(meal._id);
     const calories = meal.totalNutrition?.calories;
     const itemCount = meal.items?.length ?? 0;
+    const mealPickMode = Boolean(onPickMeal);
 
     return (
       <Pressable
         key={id}
         testID={`meal-result-${id}`}
-        onPress={() => handlePickMeal(meal)}
+        onPress={() => void handlePickMeal(meal)}
         accessibilityRole="button"
-        accessibilityLabel={`Pick meal ${meal.name}`}
+        accessibilityLabel={mealPickMode ? `Log meal ${meal.name}` : `Pick meal ${meal.name}`}
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -618,7 +686,13 @@ export function FoodSearchSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Find a food"
+      title={
+        addToLogId
+          ? addToMealName
+            ? `Add to ${addToMealName}`
+            : "Add to this meal"
+          : "Find a food"
+      }
       testID={testID}
       sheetStyle={{ height: "85%", maxHeight: "90%", paddingHorizontal: 0 }}
     >

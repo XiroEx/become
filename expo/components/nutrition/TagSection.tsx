@@ -30,12 +30,23 @@ export interface TagSectionProps {
    */
   onEditMeal?: (logId: string, mealName: string | undefined, tag: string) => void;
   /**
+   * Edit a whole logged meal (NP-095). Offered on the section header when the
+   * sitting holds logs; the screen opens the meal editor sheet.
+   */
+  onEditMeal?: (logId: string, mealName: string | undefined, tag: string) => void;
+  /**
    * "Something look wrong?" on a logged row (NP-174). Offered only for rows
    * with a real catalogue food behind them; the screen opens the flag sheet.
    */
   onFlagItem?: (logId: string, item: MealLog["items"][number]) => void;
   onRemoveTag?: (tag: string) => void;
   onAddFood: (tag: string) => void;
+  /**
+   * Add a food into a specific logged sitting (NP-094) — the web's "Add food
+   * to this meal" on a logged meal group. Hands back the MealLog id (and the
+   * tag) so the screen can open the search sheet in append mode.
+   */
+  onAddToMeal?: (logId: string, tag: string) => void;
   onLogPlan?: (planId: string) => void;
   onRemovePlan?: (planId: string) => void;
   onSkipPlan?: (planId: string) => void;
@@ -87,6 +98,7 @@ export function TagSection({
   onFlagItem,
   onRemoveTag,
   onAddFood,
+  onAddToMeal,
   onLogPlan,
   onRemovePlan,
   onSkipPlan,
@@ -520,6 +532,28 @@ export function TagSection({
             Add to {capitalizeTag(sectionTag)}
           </Text>
         </Pressable>
+        {/* Add a food INTO a named logged sitting (NP-094) — the web's "Add
+            food to this meal" on a logged meal group. Only when the sitting
+            holds a log to append to. */}
+        {onAddToMeal && hasLogs && firstLog ? (
+          <Pressable
+            testID={`nutrition-add-to-meal-${sectionTag}`}
+            accessibilityLabel={`Add food to this meal in ${sectionTag}`}
+            accessibilityRole="button"
+            onPress={() =>
+              onAddToMeal(
+                String(firstLog._id ?? (firstLog as { id?: unknown }).id ?? ""),
+                sectionTag,
+              )
+            }
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
+          >
+            <Plus size={16} color={colors.primary} />
+            <Text className="text-primary text-xs font-semibold">
+              Add to this meal
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </Card>
   );
