@@ -243,12 +243,23 @@ export async function probeCheckoutAvailable(
 /**
  * Query GET /api/billing/status for configured status, per-plan availability,
  * and subscription details.
+ *
+ * `sessionId` is the `cs_…` id off the success return URL. It is only a HINT:
+ * the route checks the session's `client_reference_id` against the signed-in
+ * member before it activates anything, so a forged or foreign id is a no-op
+ * and the webhook remains the source of truth. Nothing amount- or date-shaped
+ * is computed from it here — the response is rendered, never derived from.
  */
 export async function fetchBillingStatus(
   deps: BillingDeps = {},
+  sessionId?: string | null,
 ): Promise<BillingStatusResult | null> {
   try {
-    const body = await apiFetch(BILLING_STATUS_PATH, BillingStatusResponseSchema, {
+    const path =
+      sessionId && /^cs_[A-Za-z0-9_]{4,200}$/.test(sessionId)
+        ? `${BILLING_STATUS_PATH}?session_id=${encodeURIComponent(sessionId)}`
+        : BILLING_STATUS_PATH;
+    const body = await apiFetch(path, BillingStatusResponseSchema, {
       method: "GET",
       ...requestOptions(deps),
     });

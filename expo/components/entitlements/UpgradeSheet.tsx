@@ -72,6 +72,7 @@ import {
   type CheckoutState,
   type PortalState,
 } from "@/lib/entitlements/billing";
+import { markBillingReturnOpened } from "@/lib/entitlements/billingReturn";
 
 /**
  * ─── THE WORDS, IN ONE PLACE ──────────────────────────────────────────────────
@@ -384,7 +385,13 @@ export function UpgradeSheet({
       // return this sheet is still mounted — a spinner that never resolves is
       // the one thing it must not be left showing.
       setCheckout(opened ? "ready" : "error");
-      if (opened) setBrowserOpened(true);
+      // Remember the handover (NP-054): coming back may mean switching apps
+      // manually — no link, no params — in which case the plan page's
+      // foreground re-read is the only refresh.
+      if (opened) {
+        setBrowserOpened(true);
+        markBillingReturnOpened("checkout");
+      }
     })();
   }, [gate, checkout, deps]);
 
@@ -392,6 +399,9 @@ export function UpgradeSheet({
     setPortalState("opening");
     void openBillingPortal(portalPath, deps).then((opened) => {
       setPortalState(opened ? "idle" : "failed");
+      // Same memory as checkout (NP-054): a portal visit can cancel the
+      // subscription, and the foreground re-read shows `cancelAtPeriodEnd`.
+      if (opened) markBillingReturnOpened("portal");
     });
   }, [portalPath, deps]);
 

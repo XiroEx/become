@@ -196,13 +196,20 @@ describe("the table", () => {
     ["/login", "/login", "exact"],
     ["/register", "/login", "nearest"],
     ["/onboarding", "/onboarding", "exact"],
-    // Billing return — no native screen, so the launch route with its params
-    ["become://?billing=success&session_id=cs_1", "/?billing=success&session_id=cs_1", "exact"],
-    ["/billing/cancelled?checkout=cancelled", "/?checkout=cancelled", "nearest"],
+    // Billing return — the plan page, carrying the outcome (NP-054). The
+    // success return keeps `session_id` so the plan page can activate from
+    // it; the cancel return carries nothing to activate.
+    ["become://?billing=success&session_id=cs_1", "/plan?billing=success&session_id=cs_1", "exact"],
+    ["/billing/return?session_id=cs_1", "/plan?billing=success&session_id=cs_1", "exact"],
+    ["/billing/cancelled?checkout=cancelled", "/plan?billing=cancelled", "exact"],
+    ["become://?billing=cancelled", "/plan?billing=cancelled", "exact"],
+    ["become://?billing=portal-return", "/plan?billing=portal-return", "exact"],
+    ["/billing/portal-return", "/plan?billing=portal-return", "exact"],
     // Home and its rooms
     ["/dashboard", "/(tabs)/dashboard", "exact"],
     ["/dashboard/streaks", "/(tabs)/dashboard/streaks", "exact"],
-    ["/dashboard/plan", "/(tabs)/dashboard", "nearest"],
+    ["/dashboard/plan", "/plan", "exact"],
+    ["/dashboard/plan?checkout=success&session_id=cs_1", "/plan?checkout=success&session_id=cs_1", "exact"],
     ["/dashboard/settings?tab=training", "/(tabs)/dashboard?tab=training", "nearest"],
     ["/dashboard/profile", "/(tabs)/profile", "exact"],
     ["/profile", "/(tabs)/profile", "exact"],

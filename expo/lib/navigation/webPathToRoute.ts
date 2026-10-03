@@ -95,6 +95,8 @@ export const NATIVE_ROUTES = {
   chat: "/(tabs)/chat",
   profile: "/(tabs)/profile",
   becoming: "/becoming",
+  /** The plan page — `app/(app)/plan.tsx` (NP-054). */
+  plan: "/plan",
 } as const;
 
 /**
@@ -306,9 +308,17 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   // ── The public app: launch, auth, account, billing return ─────────────────
   if (segments.length === 0) {
     // `/` — and `become://?billing=success&session_id=…`, which is how the
-    // billing return pages come back into the app. There is no native billing
-    // screen, so the params ride along to the launch route, which always
-    // resolves (sign-in, onboarding or Home) and is never blank.
+    // billing return pages come back into the app (NP-054: the public
+    // `/billing/*` pages hand back `become://?billing=…[&session_id=…]`).
+    // A success return carries the session id the plan page activates from;
+    // a cancel or portal return carries no session, only the outcome.
+    // All three land on the plan page — the one screen that says which plan
+    // the member is on — with the outcome as query. Anything else on `/`
+    // (a bare launch, an unknown param) keeps the launch decision.
+    const billing = lower(params.billing);
+    if (billing === "success" || billing === "cancelled" || billing === "portal-return") {
+      return native(NATIVE_ROUTES.plan, params, "exact");
+    }
     return native(NATIVE_ROUTES.launch, params, "exact");
   }
 
@@ -323,8 +333,26 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   }
   if (head === "billing" || (head === "auth" && segments.length > 1)) {
     // `/billing/return`, `/billing/cancelled`, `/billing/portal-return` and
-    // `/auth/finish|handoff` are web pages the app has no screen for. The
-    // launch route, carrying whatever they said, is the deliberate landing.
+    // `/auth/finish|handoff` are web pages the app has no screen for (NP-054).
+    // The billing return pages are where Stripe drops a native buyer in Safari;
+    // a universal link / App Link on one of them — or the custom-scheme
+    // equivalent — lands on the plan page with the outcome as query, so the
+    // success return can activate from `session_id` and the cancel return
+    // shows the plan unchanged. `/auth/*` keeps the launch landing.
+    if (head === "billing") {
+      const second = lower(segments[1]);
+      if (second === "return") {
+        const next: Record<string, string> = { billing: "success" };
+        if (params.session_id) next.session_id = params.session_id;
+        return native(NATIVE_ROUTES.plan, next, "exact");
+      }
+      if (second === "cancelled") {
+        return native(NATIVE_ROUTES.plan, { billing: "cancelled" }, "exact");
+      }
+      if (second === "portal-return") {
+        return native(NATIVE_ROUTES.plan, { billing: "portal-return" }, "exact");
+      }
+    }
     return native(NATIVE_ROUTES.launch, params, "nearest");
   }
 
@@ -507,11 +535,14 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   }
 
   // ── Home's own rooms: plan, settings, customize ─────────────────────────────
-  if (
-    section === "plan" ||
-    section === "settings" ||
-    section === "customize"
-  ) {
+  if (section === "plan") {
+    // The web's plan page IS the native plan page (`/plan`, NP-054): the
+    // success return activates from `session_id` there, and the cancel and
+    // portal returns re-read status there. Carrying the query through is what
+    // lets `?checkout=success&session_id=…` survive the trip.
+    return native(NATIVE_ROUTES.plan, params, "exact");
+  }
+  if (section === "settings" || section === "customize") {
     return native(NATIVE_ROUTES.home, params, "nearest");
   }
 

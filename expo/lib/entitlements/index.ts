@@ -60,6 +60,9 @@ export type {
 
 export * from "./store";
 export * from "./useEntitlements";
+// `markBillingReturnOpened` / `takeBillingReturn` — the memory that a checkout
+// or portal URL left the app, so the foreground re-read knows to run (NP-054).
+export * from "./billingReturn";
 // `showUpgradeSheet(gate)` — the one handle every gated screen raises the sheet
 // with (NP-052). Exported from here rather than from the component so a screen
 // does not import a sheet to open one.

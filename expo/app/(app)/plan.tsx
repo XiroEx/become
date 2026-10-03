@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
+import { AppState, type AppStateStatus } from "react-native";
 import {
   ArrowRight,
   Check,
@@ -48,6 +49,12 @@ import {
   type PlanAvailability,
   type PortalState,
 } from "@/lib/entitlements/billing";
+import {
+  billingForegroundPass,
+  clearBillingReturn,
+  markBillingReturnOpened,
+  takeBillingReturn,
+} from "@/lib/entitlements/billingReturn";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
@@ -751,11 +758,27 @@ export default function PlanScreen({
   const params = useLocalSearchParams<{
     checkout?: string;
     billing?: string;
+    portal?: string;
     session_id?: string;
   }>();
 
-  const paidReturn = params.checkout === "success" || params.billing === "success";
-  const paidSessionId = params.session_id;
+  // The return outcome, in the web's vocabulary as well as the app link's.
+  // Success arrives as `?checkout=success&session_id=…` (web fallback) or
+  // `?billing=success&session_id=…` (the `become://` return link); a cancel
+  // arrives as `?checkout=cancelled` or `?billing=cancelled` and changes
+  // nothing; a portal visit as `?portal=return` or `?billing=portal-return`.
+  // Only success carries a session id, and only success activates from it.
+  const checkoutParam = params.checkout;
+  const billingParam = params.billing;
+  const portalParam = params.portal;
+  const paidReturn =
+    checkoutParam === "success" || billingParam === "success";
+  const portalReturn =
+    portalParam === "return" || billingParam === "portal-return";
+  const paidSessionId =
+    typeof params.session_id === "string" && params.session_id
+      ? params.session_id
+      : undefined;
 
   const { data: hookSnapshot, loading: entitlementsLoading, refresh } =
     useEntitlements();
@@ -857,12 +880,54 @@ export default function PlanScreen({
   }, [checkoutAvailable, billingStatus, deps]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Consume return from checkout
+  // Consume return from checkout (NP-054) — the native half of the web's
+  // `?checkout=success&session_id=` activation
+  // (`webapp/app/dashboard/plan/PlanPageClient.tsx`). Two steps, and both are
+  // needed: the status call activates from the session (idempotent — the same
+  // outcome the webhook would apply, through the same ordering guard; the
+  // server checks the session's `client_reference_id` against the signed-in
+  // member, so the id is only a hint), and the forced refresh is what makes
+  // THIS screen show it. A cancel return changes nothing; a portal return
+  // re-reads status and entitlements so a cancellation (`cancelAtPeriodEnd`)
+  // shows up without a manual refresh.
+  //
+  // eslint-disable-next-line react-hooks/set-state-in-effect: the return URL
+  // is an external system (a Stripe redirect through Safari), so consuming it
+  // cannot be derived during render.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!paidReturn) return;
+    if (!paidReturn && !portalReturn) return;
     let cancelled = false;
 
     void (async () => {
+      if (paidReturn) {
+        try {
+          const status = await fetchBillingStatus(deps, paidSessionId ?? null);
+          if (status) {
+            setBillingStatus(status);
+            setAvailable(status.plans);
+            setCheckout(
+              status.configured &&
+                (status.plans.monthly || status.plans.annual)
+                ? "ready"
+                : "unavailable",
+            );
+          }
+        } catch {
+          // Never fatal. The webhook remains the source of truth; this only
+          // saves the member the few seconds Stripe takes to call us.
+        }
+      } else {
+        try {
+          const status = await fetchBillingStatus(deps);
+          if (status) {
+            setBillingStatus(status);
+            setAvailable(status.plans);
+          }
+        } catch {
+          // Non-fatal: the refresh below still re-reads entitlements.
+        }
+      }
       try {
         await refresh();
       } catch {
@@ -876,7 +941,84 @@ export default function PlanScreen({
     return () => {
       cancelled = true;
     };
-  }, [paidReturn, paidSessionId, refresh]);
+  }, [paidReturn, portalReturn, paidSessionId, refresh, deps]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // When the app comes back to the foreground after a remembered checkout or
+  // portal handover — the member switched back manually, with no link — the
+  // return params above never fire. Re-read status and entitlements instead,
+  // retrying for a few seconds until the tier changes (the webhook usually
+  // lands first). A cancel return is not remembered, so there is nothing to
+  // re-read for it.
+  //
+  // eslint-disable-next-line react-hooks/set-state-in-effect: AppState is an
+  // external system, so subscribing to it is a sync, not a derivation.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async (deadline: number): Promise<void> => {
+      if (cancelled) return;
+      const { tierIsPlus } = await billingForegroundPass({
+        sessionId: null,
+        fetchStatus: (_sessionId?: string | null) =>
+          fetchBillingStatus(deps, _sessionId ?? null),
+        refreshEntitlements: () => refresh(),
+        // The forced refresh above publishes through the shared store; the
+        // screen's own snapshot prop arrives via `useEntitlements` on the
+        // next render. Until then the tier check below is conservative — a
+        // missed Plus only means one more retry, never a wrong lock.
+        readTierIsPlus: () => false,
+      });
+      if (cancelled) return;
+      if (tierIsPlus) {
+        clearBillingReturn();
+        setCheckoutReturn((prev: CheckoutReturnState) =>
+          prev === "none" ? prev : "confirmed",
+        );
+        return;
+      }
+      if (Date.now() >= deadline) {
+        clearBillingReturn();
+        try {
+          await refresh();
+        } catch {
+          // non-fatal
+        }
+        return;
+      }
+      timer = setTimeout(() => {
+        void poll(deadline);
+      }, 2000);
+    };
+
+    const onStatus = (status: AppStateStatus) => {
+      if (status !== "active") return;
+      if (!takeBillingReturn()) return;
+      if (cancelled) return;
+      void (async () => {
+        try {
+          const s = await fetchBillingStatus(deps);
+          if (s) {
+            setBillingStatus(s);
+            setAvailable(s.plans);
+          }
+        } catch {
+          // Non-fatal: the poll below still retries.
+        }
+        if (!cancelled) void poll(Date.now() + 8000);
+      })();
+    };
+
+    const subscription = AppState.addEventListener("change", onStatus);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      subscription.remove();
+    };
+  }, [deps, refresh]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const onStart = useCallback(
     async (plan: BillingPlan) => {
@@ -892,7 +1034,13 @@ export default function PlanScreen({
         }
         const opened = await openExternally(result.url, deps);
         setCheckout(opened ? "ready" : "error");
-        if (opened) setBrowserOpened(true);
+        // Remember the handover: the member is in Safari now, and coming back
+        // may mean switching apps manually — no link, no params — in which
+        // case the foreground re-read above is the only refresh (NP-054).
+        if (opened) {
+          setBrowserOpened(true);
+          markBillingReturnOpened("checkout");
+        }
       } catch {
         setCheckout("error");
       } finally {
@@ -907,6 +1055,9 @@ export default function PlanScreen({
     try {
       const opened = await openBillingPortal(portalPath, deps);
       setPortalState(opened ? "idle" : "failed");
+      // Same memory as checkout: a portal visit can cancel the subscription,
+      // and the foreground re-read is what shows `cancelAtPeriodEnd`.
+      if (opened) markBillingReturnOpened("portal");
     } catch {
       setPortalState("failed");
     }
