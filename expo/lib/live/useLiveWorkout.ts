@@ -25,6 +25,7 @@ import {
   ResolveIncompleteResponseSchema,
 } from "@become/api-client";
 import {
+  findPhantomPrefilledSets,
   normalizeTracking,
   tracksTime,
   mergeAdHocFromLog,
@@ -152,6 +153,13 @@ export interface UseLiveWorkoutResult {
    * retrying cannot fix.
    */
   pendingSync: boolean;
+  /**
+   * Session notes, the web's Track-view textarea. Sent as `notes` on every
+   * save of this attempt once it holds anything (`WorkoutFormClient` does the
+   * same: `...(workoutNotes.trim() && { notes: workoutNotes.trim() })`).
+   */
+  notes: string;
+  setNotes: (notes: string) => void;
   onGridChange: (grid: LiveGrid) => void;
   onSetComplete: (input: {
     exerciseSlug: string;
@@ -285,6 +293,16 @@ export function useLiveWorkout(
   const [startedAtISO] = useState(() => new Date().toISOString());
   const [pendingSync, setPendingSync] = useState(false);
   const logDateOverrideRef = useRef<string | null>(null);
+  // Notes are read through a ref inside `save` on purpose: a keystroke must
+  // not give `save` a new identity (every callback built on it would churn and
+  // the load effect's neighbours with it). The state is only what the textarea
+  // renders.
+  const [notes, setNotesState] = useState("");
+  const notesRef = useRef("");
+  const setNotes = useCallback((value: string) => {
+    notesRef.current = value;
+    setNotesState(value);
+  }, []);
 
   const getNow = options?.getNow ?? defaultGetNow;
   const [workoutOriginKey, setWorkoutOriginKey] = useState<string>(
@@ -377,6 +395,7 @@ export function useLiveWorkout(
             grid: currentGrid,
             completed: isComplete,
             activeSeconds: activeSecondsAtSave,
+            notes: notesRef.current.trim() || undefined,
             attemptId,
             scheduledDate: sd || undefined,
             performedAt: logDateOverride || undefined,
@@ -1110,6 +1129,44 @@ export function useLiveWorkout(
                 completed: false,
               }));
             }
+
+            // THE OLD PREFILL BUG'S FINGERPRINT (web parity, NP-087).
+            //
+            // A log written before the app stopped seeding every set from the
+            // last completed one restores as two or more INCOMPLETE sets
+            // carrying the identical numbers — numbers the member never
+            // lifted, sitting in a Track view that ticks a set the moment it
+            // looks filled. `findPhantomPrefilledSets` is the shared rule the
+            // web's restore runs (`WorkoutFormClient`, `phantomIndices`): it
+            // names those sets and they are blanked before anything is shown.
+            // ONE filled-but-incomplete set is left alone on purpose — that is
+            // a set the member unticked to redo.
+            const rows = restored[ex.slug] ?? [];
+            const phantom = new Set(
+              findPhantomPrefilledSets(
+                ex.trackingType,
+                rows.map((s) => ({
+                  reps: s.reps != null ? String(s.reps) : "",
+                  weight: s.weight != null ? String(s.weight) : "",
+                  duration: s.durationSec != null ? String(s.durationSec) : "",
+                  distance: s.distance != null ? String(s.distance) : "",
+                  completed: s.completed,
+                })),
+              ),
+            );
+            if (phantom.size > 0) {
+              restored[ex.slug] = rows.map((s, i) =>
+                phantom.has(i)
+                  ? {
+                      reps: null,
+                      weight: null,
+                      durationSec: null,
+                      distance: null,
+                      completed: false,
+                    }
+                  : s,
+              );
+            }
           });
 
           setRestoredGrid(restored);
@@ -1309,6 +1366,8 @@ export function useLiveWorkout(
     finishedElapsedSeconds,
     attemptId,
     pendingSync,
+    notes,
+    setNotes,
     onGridChange,
     onSetComplete,
     onRequestSwap,

@@ -394,7 +394,10 @@ export default function ProgramDetailRoute() {
     setUserSelectedDay(dayKey);
   }, []);
 
-  // Continue training on scheduled next day (opens Track/Workout overview)
+  // Continue training on the scheduled next day. Opens the TRACK view
+  // (NP-087) — the web's Continue goes straight to
+  // `/dashboard/workout/{id}/workout?day=…`, every set on one screen, with
+  // Live one tap away on the toggle.
   const onContinue = useCallback(() => {
     const phaseIndex = Math.max(0, (activeProgram?.currentPhase ?? 1) - 1);
     const dayLabel = activeProgram?.currentDay;
@@ -411,8 +414,9 @@ export default function ProgramDetailRoute() {
     if (workoutIndex < 0 || workoutIndex >= phaseWorkouts.length) {
       workoutIndex = 0;
     }
+    const dayParam = dayLabel ? `&day=${encodeURIComponent(dayLabel)}` : "";
     router.push(
-      `/(tabs)/programming/${encodeURIComponent(id)}/workout/${workoutIndex}?phase=${phaseIndex}`,
+      `/(tabs)/programming/${encodeURIComponent(id)}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
     );
   }, [router, id, activeProgram?.currentPhase, activeProgram?.currentDay, program.phases]);
 

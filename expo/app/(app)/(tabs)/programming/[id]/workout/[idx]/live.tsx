@@ -7,6 +7,7 @@ import {
   LiveWorkoutClient,
   type LiveGrid,
   type LiveWorkoutViewModel,
+  type WorkoutView,
 } from "@/components/live/LiveWorkoutClient";
 import {
   WorkoutSummary,
@@ -22,8 +23,12 @@ import {
   type ResolveIncompleteAction,
 } from "@/components/workout/IncompleteWorkoutModal";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
-import type { KeyValueStore } from "@/lib/live/liveWorkoutCache";
+import {
+  asyncStorageKeyValueStore,
+  type KeyValueStore,
+} from "@/lib/live/liveWorkoutCache";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
+import { programScope } from "@become/core";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -38,6 +43,12 @@ import type { LiveSetState } from "@/components/live/LiveSetRow";
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
   cacheStore?: KeyValueStore;
+  /**
+   * Where the remembered Track/Live position is kept. Defaults to
+   * `cacheStore` when a test injects one (so a test's position is as isolated
+   * as its draft), and to AsyncStorage in the app.
+   */
+  positionStore?: KeyValueStore | null;
   /** Origin day key override for tests (YYYY-MM-DD). */
   initialOriginKey?: string;
   /** Clock injection point for tests. */
@@ -55,7 +66,17 @@ export interface LiveWorkoutRouteProps {
 }
 
 /**
- * Live workout route.
+ * The workout route — TRACK and LIVE, one workout seen two ways (NP-087).
+ *
+ * Opening a workout lands on Track (every exercise and every set on one
+ * screen), with a Track | Live toggle at the top, exactly as on the web where
+ * `/dashboard/workout/[programId]/workout?day=` is the Track page and
+ * `…/workout/live` is Live. Both views edit one grid, share one rest timer,
+ * one set of session notes and one remembered position, and finish through
+ * the same save — so a workout completed from Track and the same workout
+ * completed from Live leave identical state on the server and show the same
+ * summary. `?view=live` opens on Live.
+ *
  * Addresses a workout by programId, day and sd (NP-078 parity).
  * Loads current workout with permanent swaps, previews on 404, resumes in-progress
  * sessions with set state in the web's shape and wall-clock active seconds,
@@ -71,6 +92,7 @@ export interface LiveWorkoutRouteProps {
  */
 export default function LiveWorkoutRoute({
   cacheStore,
+  positionStore,
   initialOriginKey,
   getNow,
   saveQueue,
@@ -86,6 +108,7 @@ export default function LiveWorkoutRoute({
     sd?: string;
     idx?: string;
     phase?: string;
+    view?: string;
   }>();
 
   const id =
@@ -103,12 +126,18 @@ export default function LiveWorkoutRoute({
         ? params.idx
         : undefined;
   const sd = typeof params.sd === "string" && params.sd ? params.sd : null;
+  // Opening a workout lands on TRACK, as on the web; `?view=live` is how a
+  // deep link or a resume asks for the set-by-set view instead.
+  const initialView: WorkoutView = params.view === "live" ? "live" : "track";
 
   const valid = !!id && (Boolean(day) || (Number.isFinite(idx) && idx >= 0));
 
   const {
     loading,
     workout,
+    day: resolvedDay,
+    notes,
+    setNotes,
     restoredGrid,
     onGridChange,
     onSetComplete,
@@ -374,6 +403,15 @@ export default function LiveWorkoutRoute({
       ) : null}
       <LiveWorkoutClient
         workout={vm}
+        initialView={initialView}
+        notes={notes}
+        onNotesChange={setNotes}
+        positionScope={programScope(id, resolvedDay)}
+        positionStore={
+          positionStore !== undefined
+            ? positionStore
+            : (cacheStore ?? asyncStorageKeyValueStore)
+        }
         restoredGrid={restoredGrid}
         onGridChange={onGridChange}
         onSetComplete={onSetComplete}

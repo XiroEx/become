@@ -232,7 +232,9 @@ describe("LiveWorkoutRoute", () => {
       expect(getByTestId("live-workout-bench-set-0-weight")).toBeTruthy();
     });
 
-    // Log a set (each edit re-renders before the next, as with real input).
+    // Log every set (each edit re-renders before the next, as with real
+    // input). BOTH sets, because Complete Workout only exists once the whole
+    // workout is done — the web's rule, ported in NP-087.
     await act(async () => {
       fireEvent.changeText(
         getByTestId("live-workout-bench-set-0-weight"),
@@ -243,23 +245,34 @@ describe("LiveWorkoutRoute", () => {
       fireEvent.changeText(getByTestId("live-workout-bench-set-0-reps"), "5");
     });
     await act(async () => {
+      fireEvent.changeText(
+        getByTestId("live-workout-bench-set-1-weight"),
+        "225",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("live-workout-bench-set-1-reps"), "5");
+    });
+    await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
     });
 
-    await waitFor(() => {
-      const posts = mockApiFetch.mock.calls.filter(
+    // The COMPLETING save, not the autosaves: each set that ticks itself
+    // (NP-087) flushes the grid to the server straight away, so the first POST
+    // of the attempt is `completed: false` and the contract under test is the
+    // last one.
+    const completingPosts = () =>
+      mockApiFetch.mock.calls.filter(
         (c) =>
           String(c[0]) === "/api/workouts" &&
-          (c[2] as { method?: string }).method === "POST",
+          (c[2] as { method?: string }).method === "POST" &&
+          (c[2] as { body?: { completed?: boolean } }).body?.completed === true,
       );
-      expect(posts.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(completingPosts().length).toBeGreaterThan(0);
     });
 
-    const post = mockApiFetch.mock.calls.find(
-      (c) =>
-        String(c[0]) === "/api/workouts" &&
-        (c[2] as { method?: string }).method === "POST",
-    )!;
+    const post = completingPosts()[0]!;
     const opts = post[2] as {
       method?: string;
       baseUrl?: string;
@@ -285,12 +298,16 @@ describe("LiveWorkoutRoute", () => {
     expect(ex?.name).toBe("Bench");
     expect(ex?.exerciseSlug).toBe("bench");
     expect(ex?.sets).toHaveLength(2);
+    // `completed: true` without a tap on the checkbox: a `reps_weight` set
+    // ticks itself the moment it holds reps AND a weight (`isSetFilled`,
+    // NP-087). It used to need the tap, and a set logged but never ticked
+    // reached the server as an unfinished one.
     expect(ex?.sets?.[0]).toEqual(
       expect.objectContaining({
         setNumber: 1,
         weight: 225,
         reps: 5,
-        completed: false,
+        completed: true,
       }),
     );
 
@@ -327,6 +344,18 @@ describe("LiveWorkoutRoute", () => {
         "200",
       );
     });
+    await act(async () => {
+      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-0-reps"), "5");
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        ok.getByTestId("live-workout-bench-set-1-weight"),
+        "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-1-reps"), "5");
+    });
     // Cache populated by the in-flight edit.
     await waitFor(async () => {
       expect(await store.get(cacheKey)).toBeTruthy();
@@ -362,6 +391,24 @@ describe("LiveWorkoutRoute", () => {
       fireEvent.changeText(
         fail.getByTestId("live-workout-bench-set-0-weight"),
         "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-0-reps"),
+        "5",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-1-weight"),
+        "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-1-reps"),
+        "5",
       );
     });
     await waitFor(async () => {
