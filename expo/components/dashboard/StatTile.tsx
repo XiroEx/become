@@ -39,6 +39,12 @@ export interface StatTileProps {
   /** Opens streaks detail screen (NP-108). */
   onOpenStreaks?: () => void;
   onPress?: () => void;
+  /**
+   * Fired on press BEFORE the tile's own action, and never instead of it — the
+   * smart tile's engagement signal (NP-156). The card keeps doing what it does
+   * on the grid; the tap is simply also recorded.
+   */
+  onTap?: () => void;
   testID?: string;
 }
 
@@ -55,6 +61,7 @@ export function StatTile({
   onOpenSettings,
   onOpenStreaks,
   onPress,
+  onTap,
   testID,
 }: StatTileProps) {
   const { colors, tint } = useThemeTokens();
@@ -315,13 +322,22 @@ export function StatTile({
 
   const accessibilityLabel = `${label}: ${value}${footer ? `, ${footer}` : ""}`;
 
+  // The tap signal is additive: record it, then do whatever the tile does.
+  const resolvedPress = handlePress;
+  const pressHandler = onTap
+    ? () => {
+        onTap();
+        resolvedPress?.();
+      }
+    : resolvedPress;
+
   return (
     <>
       <Pressable
         testID={rootTestId}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        onPress={handlePress}
+        onPress={pressHandler}
         style={[
           styles.card,
           {
