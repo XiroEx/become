@@ -14,7 +14,9 @@
  * `RNWidgetBackgroundTask` and the widget would sit on whatever it last drew.
  *
  * Guarded by platform because it is Android's mechanism. iOS's widgets are a
- * WidgetKit extension (NP-181) and share the feed and the token, not this entry.
+ * WidgetKit extension (NP-181): their layouts register from
+ * `lib/widgets/ios/widgets.ts` (one `createWidget` per row of `IOS_WIDGETS`),
+ * and share the feed and the token, not this entry.
  *
  * `__tests__/androidWidgets.test.ts` reads this file, so the registration cannot
  * quietly go missing while the four providers stay in the manifest.
@@ -28,4 +30,10 @@ import { widgetTaskHandler } from "./lib/widgets/taskHandler";
 
 if (Platform.OS === "android") {
   registerWidgetTaskHandler(widgetTaskHandler);
+}
+
+if (Platform.OS === "ios") {
+  // The WidgetKit layouts: one `createWidget(name, BecomeWidget)` per row of
+  // `IOS_WIDGETS`. Side-effect import — registration, not a value.
+  require("./lib/widgets/ios/widgets");
 }
