@@ -39,12 +39,12 @@ import {
   storeWidgetsToken,
   type MintWidgetsTokenResult,
 } from "@/lib/widgets/token";
-import { drawAndroidWidgets, hasWidgetSurface } from "@/lib/widgets/update";
+import { drawWidgetsOnThisPlatform, hasWidgetSurface } from "@/lib/widgets/update";
 
 export type WidgetHandoffResult =
   /** Token minted, stored, feed read and the tiles redrawn. */
   | "handed-off"
-  /** This platform has no widget surface yet (iOS, until NP-181). */
+  /** This platform has no widget surface yet (web). */
   | "unsupported"
   /** Token minted and stored; the feed read did not land, tiles left alone. */
   | "token-only"
@@ -81,7 +81,7 @@ function resolve(deps: WidgetHandoffDeps): Resolved {
     fetchFeed: deps.fetchFeed ?? ((token) => fetchWidgetFeed(token)),
     saveSnapshot: deps.saveSnapshot ?? ((s) => saveSnapshot(s)),
     clearSnapshot: deps.clearSnapshot ?? (() => clearSnapshot()),
-    draw: deps.draw ?? ((args) => drawAndroidWidgets(args)),
+    draw: deps.draw ?? ((args) => drawWidgetsOnThisPlatform(args)),
     hasSurface: deps.hasSurface ?? hasWidgetSurface,
     now: deps.now ?? (() => new Date()),
     tzOffsetMinutes:

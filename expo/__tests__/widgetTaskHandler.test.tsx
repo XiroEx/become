@@ -81,6 +81,17 @@ const FEED = {
       rings: [],
       deepLink: "/dashboard/mind/becoming",
     },
+    {
+      key: "training",
+      title: "Training",
+      headline: "Upper Body",
+      headlineUnit: null,
+      caption: "45 min · 5 exercises",
+      state: "todo",
+      progress: 0.2,
+      rings: [],
+      deepLink: "/dashboard/workout",
+    },
   ],
 } as const;
 
@@ -203,8 +214,9 @@ describe("a signed-in refresh", () => {
         },
       }),
     );
-    // Four rows kept (the feed's `training` row is not a widget here).
-    expect(order).toEqual(["saved:2026-09-29:4"]);
+    // Five rows kept: one snapshot feeds both platforms now (Android draws
+    // four of them, iOS all five).
+    expect(order).toEqual(["saved:2026-09-29:5"]);
   });
 });
 

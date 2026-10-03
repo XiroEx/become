@@ -63,11 +63,14 @@ describe("snapshotFromFeed", () => {
         row({ key: "training" }),
       ]),
     );
+    // Both platforms' tiles, from one snapshot: Android draws four (no
+    // `training`), iOS draws all five — so all five rows are kept.
     expect(snapshot.rows.map((r) => r.key)).toEqual([
       "streak",
       "nutrition",
       "mind",
       "becoming",
+      "training",
     ]);
   });
 
