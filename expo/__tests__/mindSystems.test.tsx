@@ -411,7 +411,7 @@ describe("Mind System Framework (NP-151)", () => {
       // Mock AI failure / decline
       mockedRunAiTask.mockRejectedValue(new Error("AI declined by user"));
 
-      const { getByTestId } = render(<StateShiftDashboard />);
+      const { getByTestId, getAllByTestId } = render(<StateShiftDashboard />);
 
       await waitFor(() => {
         expect(getByTestId("mind-adaptive-session")).toBeTruthy();
@@ -430,8 +430,14 @@ describe("Mind System Framework (NP-151)", () => {
         expect(getByTestId("guided-flow-screen")).toBeTruthy();
       });
 
-      // GuidedFlow is active and operational
-      expect(getByTestId("guided-flow-next")).toBeTruthy();
+      // GuidedFlow is active and operational. The fallback protocol is the
+      // day-rotated featured flow (dailyPick), so its first step may be an
+      // info step (Next button), a pick-one (choices) or a scale: accept any
+      // actionable control rather than pinning the test to one weekday.
+      expect(getByTestId("guided-flow-step")).toBeTruthy();
+      expect(
+        getAllByTestId(/^guided-flow-(next|choice-\d+|scale-\d+)$/).length,
+      ).toBeGreaterThan(0);
     });
 
     it("hides reflection in GuidedFlow cleanly when reflection AI fails", async () => {
