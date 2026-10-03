@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { Check, Flag, Plus, Trash2 } from "lucide-react-native";
+import { Check, Flag, Pencil, Plus, Trash2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -20,6 +20,15 @@ export interface TagSectionProps {
   empty?: boolean;
   removable?: boolean;
   onRemoveItem: (logId: string, itemId: string) => void;
+  /**
+   * Edit a logged row (NP-095). The screen opens the item editor sheet.
+   */
+  onEditItem?: (logId: string, item: MealLog["items"][number], tag: string) => void;
+  /**
+   * Edit a whole logged meal (NP-095). Offered on the section header when the
+   * sitting holds logs; the screen opens the meal editor sheet.
+   */
+  onEditMeal?: (logId: string, mealName: string | undefined, tag: string) => void;
   /**
    * "Something look wrong?" on a logged row (NP-174). Offered only for rows
    * with a real catalogue food behind them; the screen opens the flag sheet.
@@ -73,6 +82,8 @@ export function TagSection({
   empty,
   removable,
   onRemoveItem,
+  onEditItem,
+  onEditMeal,
   onFlagItem,
   onRemoveTag,
   onAddFood,
@@ -226,18 +237,40 @@ export function TagSection({
               Cancel
             </Text>
           </Pressable>
-        ) : canStartSelect ? (
-          <Pressable
-            testID={`nutrition-combine-start-${sectionTag}`}
-            accessibilityLabel={`Select items in ${sectionTag} to combine`}
-            accessibilityRole="button"
-            onPress={() => onStartSelect?.(occurrence.key)}
-            hitSlop={8}
-            style={{ paddingHorizontal: 6, paddingVertical: 4 }}
-          >
-            <Text className="text-primary text-xs font-semibold">Select</Text>
-          </Pressable>
-        ) : null}
+        ) : (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {onEditMeal && hasLogs && firstLog ? (
+              <Pressable
+                testID={`nutrition-edit-meal-${sectionTag}`}
+                accessibilityLabel={`Edit ${capitalizeTag(sectionTag)} meal`}
+                accessibilityRole="button"
+                onPress={() =>
+                  onEditMeal(
+                    String(firstLog._id ?? (firstLog as { id?: unknown }).id ?? ""),
+                    firstLog.mealName,
+                    sectionTag,
+                  )
+                }
+                hitSlop={8}
+                style={{ padding: 6 }}
+              >
+                <Pencil size={16} color={colors["muted-foreground"]} />
+              </Pressable>
+            ) : null}
+            {canStartSelect ? (
+              <Pressable
+                testID={`nutrition-combine-start-${sectionTag}`}
+                accessibilityLabel={`Select items in ${sectionTag} to combine`}
+                accessibilityRole="button"
+                onPress={() => onStartSelect?.(occurrence.key)}
+                hitSlop={8}
+                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+              >
+                <Text className="text-primary text-xs font-semibold">Select</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
       </View>
 
       {/* The running count, so it stays visible while a long sitting scrolls. */}
@@ -372,6 +405,18 @@ export function TagSection({
                           alignItems: "center",
                         }}
                       >
+                        {onEditItem && item._id ? (
+                          <Pressable
+                            testID={`day-totals-entry-${itemId}-edit`}
+                            accessibilityLabel={`Edit ${item.name}`}
+                            accessibilityRole="button"
+                            onPress={() => onEditItem(logId, item, sectionTag)}
+                            hitSlop={8}
+                            style={{ padding: 6 }}
+                          >
+                            <Pencil size={16} color={colors["muted-foreground"]} />
+                          </Pressable>
+                        ) : null}
                         {onFlagItem && item.foodId ? (
                           <Pressable
                             testID={`day-totals-entry-${itemId}-flag`}
