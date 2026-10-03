@@ -43,7 +43,7 @@ import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
 import { GoalAchievedModal } from "@/components/GoalAchievedModal";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
-import type { WeightUnit } from "@become/core";
+import { kgToUnit, type WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -654,13 +654,11 @@ export function DashboardScreen({
           targetWeight={
             targetWeight != null
               ? Math.round(targetWeight * 10) / 10
-              : (statData?.targetWeightKg
+              : statData?.targetWeightKg != null
                 ? Math.round(
-                    statData.targetWeightKg *
-                      (weightUnit === "kg" ? 1 : 2.20462) *
-                      10,
+                    kgToUnit(statData.targetWeightKg, weightUnit) * 10,
                   ) / 10
-                : undefined)
+                : undefined
           }
           weightUnit={weightUnit}
         />
