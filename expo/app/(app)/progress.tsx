@@ -4,17 +4,18 @@
  * The web's `webapp/app/dashboard/progress/ProgressClient.tsx` draws five
  * sections from `GET /api/progress?detailed=1&tz` plus `GET /api/profile`:
  * volume, workouts, records, this month and body composition. Native ports
- * three of them here:
+ * four of them here:
  *
  *   volume    — the last-12-weeks bar chart (`VolumeBarChart`, theme-safe ink)
  *   workouts  — the workout list with best sets and per-workout volume,
  *               expandable rows exactly like the web's `WorkoutRow`
+ *   records   — the personal-records list plus the per-exercise trend modal
+ *               with correct / remove (`PersonalRecords`, NP-131)
  *   this month — the activity calendar (`MonthGrid`)
  *
- * Records are NP-131 and the dashboard chart is NP-132: both deliberately
- * absent, not forgotten. Body composition already lives on the dashboard's
- * `ProgressChart` (weight / body-fat / lean-mass tabs), so it is not
- * duplicated here.
+ * The dashboard chart is NP-132: deliberately absent, not forgotten. Body
+ * composition already lives on the dashboard's `ProgressChart` (weight /
+ * body-fat / lean-mass tabs), so it is not duplicated here.
  *
  * The numbers come straight from the route — no client-side recomputation —
  * so weekly volume matches the web's by construction. Every colour comes from
@@ -43,6 +44,7 @@ import {
   ProgressApiResponseSchema,
   type ProgressApiResponse,
   type ProgressDetailedWorkout,
+  type ProgressExercisePR,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -56,6 +58,11 @@ import {
   VolumeBarChart,
   formatVolume,
 } from "@/components/progress/ProgressCharts";
+import {
+  PersonalRecordModal,
+  PersonalRecordsSection,
+  prHistoryForSlug,
+} from "@/components/progress/PersonalRecords";
 
 const WORKOUTS_PAGE = 5;
 
@@ -278,6 +285,8 @@ export interface ProgressScreenProps {
   refreshing?: boolean;
   onRefresh?: () => void;
   onBack?: () => void;
+  /** Session JWT for record correct / remove. Absent → the modal still opens. */
+  authToken?: string | null;
   testID?: string;
 }
 
@@ -288,12 +297,14 @@ export function ProgressScreen({
   refreshing = false,
   onRefresh,
   onBack,
+  authToken = null,
   testID = "progress-screen",
 }: ProgressScreenProps) {
   const { colors } = useThemeTokens();
   const router = useRouter();
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -327,6 +338,17 @@ export function ProgressScreen({
 
   const hasData = !loading && !error && data !== null;
   const isEmpty = hasData && !hasWorkouts && weeklyVolume.length === 0;
+  const pbs = useMemo(() => data?.pbs ?? [], [data?.pbs]);
+  const selectedPR = useMemo(
+    () =>
+      pbs.find((pr: ProgressExercisePR) => pr.slug === selectedSlug) ?? null,
+    [pbs, selectedSlug],
+  );
+  const selectedPoints = useMemo(
+    () =>
+      selectedPR ? prHistoryForSlug(detailedWorkouts, selectedPR.slug) : [],
+    [selectedPR, detailedWorkouts],
+  );
 
   return (
     <ScreenState
@@ -526,7 +548,26 @@ export function ProgressScreen({
               <MonthGrid workoutDays={dayKeys} />
             </View>
           ) : null}
+          {pbs.length > 0 ? (
+            <PersonalRecordsSection
+              pbs={pbs}
+              onSelect={(pr) => setSelectedSlug(pr.slug)}
+            />
+          ) : null}
         </ScrollView>
+        {selectedPR ? (
+          <PersonalRecordModal
+            key={selectedPR.slug}
+            pr={selectedPR}
+            points={selectedPoints}
+            onClose={() => setSelectedSlug(null)}
+            onChanged={async () => {
+              setSelectedSlug(null);
+              onRefresh?.();
+            }}
+            authToken={authToken}
+          />
+        ) : null}
       </SafeAreaView>
     </ScreenState>
   );
@@ -571,6 +612,7 @@ export default function ProgressRoute() {
       refreshing={false}
       onRefresh={onRefresh}
       onBack={onBack}
+      authToken={token}
     />
   );
 }
