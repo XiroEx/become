@@ -1,5 +1,6 @@
 /**
- * ─── THE PROGRAM BUILDER, AS STATE (NP-168, exercise rows NP-171) ───────────
+ * ─── THE PROGRAM BUILDER, AS STATE (NP-168, exercise rows NP-171, reorder and
+ * grouping NP-172) ──────────────────────────────────────────────────────────
  *
  * Native counterpart of the frame inside
  * `webapp/app/dashboard/admin/programs/_editors/ProgramCreator.tsx` (plus
@@ -29,10 +30,15 @@
  *      Every phase therefore carries `weeks` and `focus` as strings, every
  *      workout `day`, `title` and an `exercises` array, even when empty.
  *
- * Exercise ROWS are NP-171 and drag-reorder is NP-172: exercises ride through
- * `toCustomProgramPayload` field-for-field (a `BuilderExercise` is the
- * prescription the web editor writes), so editing a program built on the web
- * never drops the prescription inside it.
+ * Exercise ROWS are NP-171 and drag-reorder plus grouping are NP-172:
+ * exercises ride through `toCustomProgramPayload` field-for-field (a
+ * `BuilderExercise` is the prescription the web editor writes, plus the
+ * `groupId`/`groupType`/`groupLabel`/`groupRest`/`groupRounds` block the web
+ * `WorkoutEditor` writes), so editing a program built on the web never drops
+ * the prescription inside it. Reordering is a pure array move; grouping moves
+ * the picked rows together at the first pick and stamps the web's own fields,
+ * so the saved order and the saved block are what the web editor shows and
+ * what Live interleaves (`buildWorkoutFlow` in `@become/core`).
  */
 
 /**
@@ -66,8 +72,10 @@ export const MAX_DURATION_WEEKS = 52;
  * `exerciseSlug` is the link — the catalogue key hydration, PRs and demos
  * resolve through — so a row without one cannot be saved. `name` rides along
  * as the display copy (and as the dehydrate fallback the server reads when no
- * slug resolves). Grouping fields (`groupId`, `groupType`, …) ride through
- * untouched: drag reorder and grouping are NP-172.
+ * slug resolves). Grouping fields (`groupId`, `groupType`, …) are what the web
+ * `WorkoutEditor` writes for a superset/circuit/triset/giant-set/EMOM/AMRAP
+ * block: the phone edits them in NP-172 (reorder + group editor) and Live
+ * interleaves them (`buildWorkoutFlow` in `@become/core`).
  */
 export interface BuilderExercise {
   exerciseSlug?: string;
@@ -166,7 +174,7 @@ function asOptionalGroupType(
 /**
  * A server/hydrated/draft exercise read into a row. Unknown shapes stay rows
  * (an edit must never drop a prescription it cannot render); grouping rides
- * through untouched for NP-172.
+ * through so a program built on the web keeps its blocks on the phone.
  */
 export function toBuilderExercise(raw: unknown): BuilderExercise {
   if (!raw || typeof raw !== "object") return { exerciseSlug: "" };
@@ -663,10 +671,11 @@ export function withTrainingDays(
   };
 }
 
-// ─── Exercise-row edits (NP-171) ────────────────────────────────────────────
+// ─── Exercise-row edits (NP-171, reorder and grouping NP-172) ──────────────
 // Every one of these returns a NEW state, like the phase/workout edits above.
-// Drag reorder and grouping are NP-172: rows are only added, edited and
-// removed here, never reordered.
+// Rows are added, edited, reordered, grouped and ungrouped here — never in a
+// component — so the invariants (grouped rows stay consecutive, a group left
+// with one member dissolves) hold in one place rather than per button.
 
 /** Append a picked catalogue/custom exercise to a workout. Slug saved, name shown. */
 export function addBuilderExercise(
@@ -739,7 +748,9 @@ export function updateBuilderExercise(
 /**
  * Remove one row. The last row of a workout stays removable — an empty session
  * is what the web editor saves when every row is deleted, and a row the
- * member cannot remove is a row they are stuck with.
+ * member cannot remove is a row they are stuck with. Removing a grouped row
+ * that would leave its block with a single member dissolves the block (the
+ * web `WorkoutEditor.removeFromGroup` rule): one exercise is not a superset.
  */
 export function removeBuilderExercise(
   state: ProgramBuilderState,
@@ -753,6 +764,17 @@ export function removeBuilderExercise(
   if (exerciseIndex < 0 || exerciseIndex >= workout.exercises.length) {
     return state;
   }
+  const removed = workout.exercises[exerciseIndex];
+  let exercises = workout.exercises.filter((_, k) => k !== exerciseIndex);
+  const groupId = removed?.groupId;
+  if (groupId) {
+    const remaining = exercises.filter((e) => e.groupId === groupId);
+    if (remaining.length === 1) {
+      exercises = exercises.map((e) =>
+        e.groupId === groupId ? stripGroupFields(e) : e,
+      );
+    }
+  }
   return {
     ...state,
     phases: state.phases.map((p, i) =>
@@ -760,16 +782,395 @@ export function removeBuilderExercise(
         ? {
             ...p,
             workouts: p.workouts.map((w, j) =>
-              j === workoutIndex
-                ? {
-                    ...w,
-                    exercises: w.exercises.filter((_, k) => k !== exerciseIndex),
-                  }
-                : w,
+              j === workoutIndex ? { ...w, exercises } : w,
             ),
           }
         : p,
     ),
+  };
+}
+
+// ─── Reorder and grouping (NP-172) ──────────────────────────────────────────
+// Native counterpart of the drag reorder (`onDragEnd`) and the Combine flow
+// (`createGroup` / `removeFromGroup` / Ungroup) in
+// `webapp/app/dashboard/admin/programs/_editors/WorkoutEditor.tsx`. The web
+// writes exactly five fields per grouped row — `groupId`, `groupType`,
+// `groupLabel`, `groupRest`, `groupRounds` — and Live (`buildWorkoutFlow` in
+// `@become/core`) interleaves CONSECUTIVE rows sharing a `groupId`, so every
+// mutation below keeps grouped rows consecutive and stamps the web's own
+// fields. The payload writer needs no change: it already carries these fields
+// field-for-field.
+
+/** The six blocks the web builder offers (`GROUP_TYPE_OPTIONS`). */
+export const BUILDER_GROUP_TYPES = [
+  "superset",
+  "triset",
+  "circuit",
+  "giant_set",
+  "emom",
+  "amrap",
+] as const;
+
+export type BuilderGroupType = (typeof BUILDER_GROUP_TYPES)[number];
+
+/** Display copy for each block, as the web labels a new group. */
+export const BUILDER_GROUP_LABELS: Record<BuilderGroupType, string> = {
+  superset: "Superset",
+  triset: "Triset",
+  circuit: "Circuit",
+  giant_set: "Giant Set",
+  emom: "EMOM",
+  amrap: "AMRAP",
+};
+
+function isBuilderGroupType(value: unknown): value is BuilderGroupType {
+  return (BUILDER_GROUP_TYPES as readonly string[]).includes(
+    typeof value === "string" ? value : "",
+  );
+}
+
+function asBuilderGroupType(
+  value: unknown,
+): BuilderGroupType | undefined {
+  return isBuilderGroupType(value) ? value : undefined;
+}
+
+/** A group id that cannot collide with one already in the workout. */
+export function newBuilderGroupId(
+  exercises: readonly Pick<BuilderExercise, "groupId">[],
+  seed = 1,
+): string {
+  const taken = new Set(
+    exercises.map((e) => e.groupId).filter((id): id is string => Boolean(id)),
+  );
+  let n = Math.max(1, Math.floor(seed));
+  let id = `group-${n}`;
+  while (taken.has(id)) {
+    n += 1;
+    id = `group-${n}`;
+  }
+  return id;
+}
+
+function stripGroupFields(exercise: BuilderExercise): BuilderExercise {
+  const next = { ...exercise };
+  delete next.groupId;
+  delete next.groupType;
+  delete next.groupLabel;
+  delete next.groupRest;
+  delete next.groupRounds;
+  return next;
+}
+
+/** Parse a group-rounds field: empty clears it, the rest must be ≥ 1. */
+export function parseBuilderGroupRounds(text: string): {
+  value?: number;
+  error?: string;
+} {
+  const trimmed = text.trim();
+  if (trimmed === "") return {};
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return { error: "Rounds must be at least 1." };
+  }
+  return { value: Math.round(parsed) };
+}
+
+function setWorkoutExercises(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exercises: BuilderExercise[],
+): ProgramBuilderState {
+  return {
+    ...state,
+    phases: state.phases.map((p, i) =>
+      i === phaseIndex
+        ? {
+            ...p,
+            workouts: p.workouts.map((w, j) =>
+              j === workoutIndex ? { ...w, exercises } : w,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
+/**
+ * Move one row within its workout (drag reorder). Out-of-range or no-op moves
+ * return the state untouched. A move that would split a block apart dissolves
+ * the leftovers: Live only interleaves CONSECUTIVE rows sharing a `groupId`,
+ * so a group whose members are no longer neighbours is not a group — the web
+ * keeps them together by rendering the block, the phone by dissolving what a
+ * drag pulled apart.
+ */
+export function moveBuilderExercise(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  fromIndex: number,
+  toIndex: number,
+): ProgramBuilderState {
+  const workout = state.phases[phaseIndex]?.workouts[workoutIndex];
+  if (!workout) return state;
+  const count = workout.exercises.length;
+  if (
+    fromIndex < 0 ||
+    fromIndex >= count ||
+    toIndex < 0 ||
+    toIndex >= count ||
+    fromIndex === toIndex
+  ) {
+    return state;
+  }
+  const exercises = [...workout.exercises];
+  const [moved] = exercises.splice(fromIndex, 1);
+  if (!moved) return state;
+  exercises.splice(toIndex, 0, moved);
+  return setWorkoutExercises(
+    state,
+    phaseIndex,
+    workoutIndex,
+    dissolveSplitGroups(exercises),
+  );
+}
+
+/**
+ * Dissolve every block whose members are no longer consecutive. A block of one
+ * (a single row carrying a `groupId`) dissolves too — one exercise is not a
+ * superset, and the web ungroups the last survivor on removal for the same
+ * reason.
+ */
+export function dissolveSplitGroups(
+  exercises: readonly BuilderExercise[],
+): BuilderExercise[] {
+  // Exact contiguity check per group: collect member positions, dissolve when
+  // they are not one unbroken run or when the run has a single member.
+  const positions = new Map<string, number[]>();
+  exercises.forEach((exercise, index) => {
+    if (!exercise.groupId) return;
+    const list = positions.get(exercise.groupId);
+    if (list) list.push(index);
+    else positions.set(exercise.groupId, [index]);
+  });
+  const split = new Set<string>();
+  for (const [groupId, list] of positions) {
+    if (list.length < 2) {
+      split.add(groupId);
+      continue;
+    }
+    const first = list[0] as number;
+    const contiguous = list.every((pos, i) => pos === first + i);
+    if (!contiguous) split.add(groupId);
+  }
+  if (split.size === 0) return [...exercises];
+  return exercises.map((exercise) =>
+    exercise.groupId && split.has(exercise.groupId)
+      ? stripGroupFields(exercise)
+      : exercise,
+  );
+}
+
+/**
+ * Combine the picked rows into one block, moving them together at the first
+ * pick — the web `createGroup` rule. Fewer than two picks, an unknown kind or
+ * a bad index returns the state untouched. The block is stamped with the web's
+ * own fields (`groupId`, `groupType`, `groupLabel`); `groupRest`/`groupRounds`
+ * are left for the group editor and ride through untouched until set.
+ */
+export function groupBuilderExercises(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndexes: readonly number[],
+  groupType: BuilderGroupType | string,
+): ProgramBuilderState {
+  const kind = asBuilderGroupType(groupType);
+  if (!kind) return state;
+  const workout = state.phases[phaseIndex]?.workouts[workoutIndex];
+  if (!workout) return state;
+  const picked = [...new Set(exerciseIndexes)]
+    .filter((i) => i >= 0 && i < workout.exercises.length)
+    .sort((a, b) => a - b);
+  if (picked.length < 2) return state;
+  const anchor = picked[0] as number;
+  const groupId = newBuilderGroupId(workout.exercises, anchor + 1);
+  const label = BUILDER_GROUP_LABELS[kind];
+  const order: number[] = [];
+  for (let i = 0; i < anchor; i += 1) {
+    if (!picked.includes(i)) order.push(i);
+  }
+  order.push(...picked);
+  for (let i = anchor + 1; i < workout.exercises.length; i += 1) {
+    if (!picked.includes(i)) order.push(i);
+  }
+  const exercises = order.map((oldIndex) => {
+    const exercise = workout.exercises[oldIndex] as BuilderExercise;
+    if (!picked.includes(oldIndex)) return exercise;
+    return {
+      ...exercise,
+      groupId,
+      groupType: kind,
+      groupLabel: label,
+    };
+  });
+  return setWorkoutExercises(state, phaseIndex, workoutIndex, exercises);
+}
+
+/**
+ * Break up the block the row at `exerciseIndex` belongs to (the web Ungroup).
+ * Order is unchanged; a row in no block returns the state untouched.
+ */
+export function ungroupBuilderExercises(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndex: number,
+): ProgramBuilderState {
+  const workout = state.phases[phaseIndex]?.workouts[workoutIndex];
+  if (!workout) return state;
+  const target = workout.exercises[exerciseIndex];
+  const groupId = target?.groupId;
+  if (!groupId) return state;
+  return setWorkoutExercises(
+    state,
+    phaseIndex,
+    workoutIndex,
+    workout.exercises.map((exercise) =>
+      exercise.groupId === groupId ? stripGroupFields(exercise) : exercise,
+    ),
+  );
+}
+
+/**
+ * Remove one row from its block but keep the block (the web per-row
+ * `removeFromGroup`). When a single member would remain, the block dissolves —
+ * one exercise is not a superset.
+ */
+export function removeBuilderExerciseFromGroup(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndex: number,
+): ProgramBuilderState {
+  const workout = state.phases[phaseIndex]?.workouts[workoutIndex];
+  if (!workout) return state;
+  const target = workout.exercises[exerciseIndex];
+  const groupId = target?.groupId;
+  if (!groupId) return state;
+  const remaining = workout.exercises.filter(
+    (exercise, index) => index !== exerciseIndex && exercise.groupId === groupId,
+  );
+  if (remaining.length < 2) {
+    return ungroupBuilderExercises(state, phaseIndex, workoutIndex, exerciseIndex);
+  }
+  return setWorkoutExercises(
+    state,
+    phaseIndex,
+    workoutIndex,
+    workout.exercises.map((exercise, index) =>
+      index === exerciseIndex ? stripGroupFields(exercise) : exercise,
+    ),
+  );
+}
+
+/**
+ * Patch a block's label, rest and rounds. Blank strings clear the field rather
+ * than persisting a blank; `groupRounds` must be a finite number ≥ 1. Rows
+ * outside the block are untouched, and a row in no block leaves the state
+ * untouched.
+ */
+export function updateBuilderGroup(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndex: number,
+  patch: Partial<Pick<BuilderExercise, "groupLabel" | "groupRest" | "groupRounds">>,
+): ProgramBuilderState {
+  const workout = state.phases[phaseIndex]?.workouts[workoutIndex];
+  if (!workout) return state;
+  const target = workout.exercises[exerciseIndex];
+  const groupId = target?.groupId;
+  if (!groupId) return state;
+  if (patch.groupRounds !== undefined) {
+    const rounds = patch.groupRounds;
+    if (typeof rounds !== "number" || !Number.isFinite(rounds) || rounds < 1) {
+      return state;
+    }
+  }
+  const exercises = workout.exercises.map((exercise) => {
+    if (exercise.groupId !== groupId) return exercise;
+    const updated = { ...exercise };
+    if (patch.groupLabel !== undefined) {
+      const label = patch.groupLabel.trim();
+      if (label) updated.groupLabel = label;
+      else delete updated.groupLabel;
+    }
+    if (patch.groupRest !== undefined) {
+      const rest = patch.groupRest.trim();
+      if (rest) updated.groupRest = rest;
+      else delete updated.groupRest;
+    }
+    if (patch.groupRounds !== undefined) {
+      updated.groupRounds = Math.round(patch.groupRounds as number);
+    }
+    return updated;
+  });
+  return setWorkoutExercises(state, phaseIndex, workoutIndex, exercises);
+}
+
+/** The consecutive run sharing the row's `groupId`, with its bounds. */
+export interface BuilderExerciseGroup {
+  groupId: string;
+  groupType?: BuilderExercise["groupType"];
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
+  startIndex: number;
+  endIndex: number;
+  indexes: number[];
+}
+
+/**
+ * The consecutive run sharing the row's `groupId` — what the group editor and
+ * the grouped rendering both read. A row in no block, or a block split apart
+ * (which `dissolveSplitGroups` would dissolve on the next move), answers null.
+ */
+export function builderGroupAt(
+  exercises: readonly BuilderExercise[],
+  exerciseIndex: number,
+): BuilderExerciseGroup | null {
+  const target = exercises[exerciseIndex];
+  const groupId = target?.groupId;
+  if (!groupId) return null;
+  let start = exerciseIndex;
+  while (start - 1 >= 0 && exercises[start - 1]?.groupId === groupId) {
+    start -= 1;
+  }
+  let end = exerciseIndex;
+  while (
+    end + 1 < exercises.length &&
+    exercises[end + 1]?.groupId === groupId
+  ) {
+    end += 1;
+  }
+  const indexes: number[] = [];
+  for (let i = start; i <= end; i += 1) indexes.push(i);
+  if (indexes.length < 2) return null;
+  return {
+    groupId,
+    ...(target.groupType !== undefined ? { groupType: target.groupType } : {}),
+    ...(target.groupLabel !== undefined
+      ? { groupLabel: target.groupLabel }
+      : {}),
+    ...(target.groupRest !== undefined ? { groupRest: target.groupRest } : {}),
+    ...(target.groupRounds !== undefined
+      ? { groupRounds: target.groupRounds }
+      : {}),
+    startIndex: start,
+    endIndex: end,
+    indexes,
   };
 }
 
@@ -946,9 +1347,12 @@ export interface CustomProgramBuilderPayload {
  * Strings are trimmed; `weeks`, `focus`, `day`, `title` and `exercises` are
  * ALWAYS present (rule 3 — the web editor calls `.trim()` on them during
  * render). Each row is written field-for-field — `exerciseSlug` first, so
- * hydration, PRs and demos resolve — with grouping riding through untouched
- * for NP-172. `tags` rides along only when the program actually has some, so
- * a native save never writes an empty array over a list the phone cannot edit.
+ * hydration, PRs and demos resolve — with the grouping block (`groupId`,
+ * `groupType`, `groupLabel`, `groupRest`, `groupRounds`) written exactly as
+ * the web `WorkoutEditor` writes it, in saved order, so the web editor shows
+ * the same order and the same blocks and Live interleaves them. `tags` rides
+ * along only when the program actually has some, so a native save never writes
+ * an empty array over a list the phone cannot edit.
  */
 export function toCustomProgramPayload(
   state: ProgramBuilderState,
@@ -979,9 +1383,13 @@ export function toCustomProgramPayload(
 /**
  * One row as the server stores it (`dehydrateProgram` in
  * `webapp/lib/hydrateExercises.ts` reads exactly these keys): the slug link,
- * the display name, the prescription, the coach notes and the grouping. Empty
- * strings and undefined clear a field rather than persisting a blank; hydrated
- * extras the phone cannot edit (`videoUrl`, `type`, `tip`) never leave it.
+ * the display name, the prescription, the coach notes and the grouping block.
+ * Empty strings and undefined clear a field rather than persisting a blank;
+ * hydrated extras the phone cannot edit (`videoUrl`, `type`, `tip`) never
+ * leave it. Grouping is written field-for-field in saved order — the same
+ * `groupId`/`groupType`/`groupLabel`/`groupRest`/`groupRounds` the web
+ * `WorkoutEditor` writes — so the web shows the same blocks and Live
+ * interleaves them as rounds.
  */
 function toPayloadExercise(exercise: BuilderExercise): BuilderExercise {
   const row: BuilderExercise = {};

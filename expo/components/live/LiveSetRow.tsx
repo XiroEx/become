@@ -70,6 +70,12 @@ export interface LiveSetRowProps {
   prefill?: LiveSetState | null;
   /** Canonical exercise trackingType — selects which inputs render. */
   trackingType?: string | null;
+  /**
+   * The interleaved round this set belongs to (NP-172) — e.g. "Round 2" for
+   * the second pass through a superset. Shown beside the set number so a
+   * grouped block reads as rounds, the way the web track view renders them.
+   */
+  roundLabel?: string;
   onChange: (next: LiveSetState) => void;
   testID?: string;
 }
@@ -88,6 +94,7 @@ export function LiveSetRow({
   state,
   prefill,
   trackingType,
+  roundLabel,
   onChange,
   testID,
 }: LiveSetRowProps) {
@@ -115,6 +122,14 @@ export function LiveSetRow({
       >
         {setIndex + 1}
       </Text>
+      {roundLabel ? (
+        <Text
+          testID={`${tid}-round`}
+          className="text-muted-foreground text-xs font-semibold"
+        >
+          {roundLabel}
+        </Text>
+      ) : null}
       {inputs.weight ? (
         <View style={{ flex: 1 }}>
           <Input
