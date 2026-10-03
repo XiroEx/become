@@ -128,6 +128,22 @@ export interface UseLiveWorkoutResult {
   swaps: Record<string, string>;
   finishing: boolean;
   newPRs: NewPR[];
+  /**
+   * The last workout of a program, as the completing save reported it. The
+   * web's summary reads the same two fields (`programCompleted` +
+   * `programName`) off its save response — the summary's program-complete
+   * state is a fact about the save, not a second fetch.
+   */
+  programCompleted: boolean;
+  completedProgramName: string;
+  /**
+   * The finished session, frozen at completion: the grid the completing save
+   * carried and the wall-clock seconds it snapshotted. Null until a
+   * completing save lands — that is what flips the route to the summary.
+   * The live grid keeps ticking behind it; the summary never reads it.
+   */
+  finishedGrid: LiveGrid | null;
+  finishedElapsedSeconds: number;
   attemptId: string;
   /**
    * True while a save is waiting on the phone (offline or server down) and
@@ -259,6 +275,10 @@ export function useLiveWorkout(
   const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [newPRs, setNewPRs] = useState<NewPR[]>([]);
+  const [programCompleted, setProgramCompleted] = useState(false);
+  const [completedProgramName, setCompletedProgramName] = useState("");
+  const [finishedGrid, setFinishedGrid] = useState<LiveGrid | null>(null);
+  const [finishedElapsedSeconds, setFinishedElapsedSeconds] = useState(0);
   const [streakMilestone, setStreakMilestone] = useState<number | null>(null);
   const [workoutStreakDays, setWorkoutStreakDays] = useState<number>(0);
   const [attemptId, setAttemptId] = useState(newWorkoutAttemptId);
@@ -415,6 +435,14 @@ export function useLiveWorkout(
             void invalidateMindSession();
             void cache.clear(cacheKey);
             setNewPRs(res.newPRsAchieved ?? []);
+            setProgramCompleted(res.programCompleted ?? false);
+            setCompletedProgramName(res.programName ?? "");
+            // Freeze the finished session for the summary: the grid this save
+            // carried and the wall-clock seconds it snapshotted. The web
+            // stops its elapsed timer when the summary appears; the summary
+            // reads these, never the live grid.
+            setFinishedGrid({ ...(gridOverride ?? gridRef.current) });
+            setFinishedElapsedSeconds(activeSecondsAtSave);
             if (res.streak?.newMilestone) {
               setStreakMilestone(res.streak.newMilestone);
             }
@@ -1275,6 +1303,10 @@ export function useLiveWorkout(
     swaps,
     finishing,
     newPRs,
+    programCompleted,
+    completedProgramName,
+    finishedGrid,
+    finishedElapsedSeconds,
     attemptId,
     pendingSync,
     onGridChange,
