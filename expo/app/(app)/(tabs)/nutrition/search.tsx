@@ -7,7 +7,11 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 export default function NutritionSearchRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
-  const params = useLocalSearchParams<{ tag?: string; date?: string }>();
+  const params = useLocalSearchParams<{
+    tag?: string;
+    date?: string;
+    barcode?: string;
+  }>();
 
   return (
     <SafeAreaView
@@ -26,6 +30,7 @@ export default function NutritionSearchRoute() {
             onClose={() => router.back()}
             currentTag={params.tag}
             activeDate={params.date}
+            initialBarcodeOpen={params.barcode === "1"}
             testID="nutrition-search-sheet"
           />
         </View>
