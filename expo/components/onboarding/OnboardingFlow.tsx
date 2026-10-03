@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { View, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -32,6 +32,7 @@ import {
   type ActivityLevel,
   type MacroPreset,
 } from "@become/core";
+import type { ProgramRecommendation } from "@become/api-client";
 import { PacePicker } from "@/components/goals/PacePicker";
 import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
 import {
@@ -62,6 +63,29 @@ export interface OnboardingFlowProps {
   }) => void | Promise<void>;
   submitting?: boolean;
   testID?: string;
+  /**
+   * Called with the in-progress answers whenever they change, so the route
+   * can keep the server-driven review-step recommendation live. Fire-and-
+   * forget: the flow never waits on it.
+   */
+  onDraftChange?: (profile: OnboardingProfile) => void;
+  /**
+   * Server-driven program recommendation for the review step (NP-057).
+   * The route owns the fetch via `useOnboardingRecommendation`; tests and
+   * previews may inject a canned value instead.
+   */
+  recommendation?: ProgramRecommendation | null;
+  /** True while the recommendation request is in flight. */
+  recommendationLoading?: boolean;
+  /**
+   * Optional enrolment in the recommended program, offered on the review
+   * step. Mirrors the web: a failed enrolment never blocks finishing.
+   */
+  onEnrollRecommended?: () => void | Promise<void>;
+  /** True while the enrolment request is in flight. */
+  enrolling?: boolean;
+  /** True once the member is enrolled in the recommended program. */
+  enrolled?: boolean;
 }
 
 function OptionRow({
@@ -112,6 +136,108 @@ function OptionRow({
         <Text className="text-primary font-bold ml-2">✓</Text>
       ) : null}
     </Pressable>
+  );
+}
+
+/**
+ * The program match on the review step (NP-057). Mirrors the web's
+ * RecommendationCard: server-driven, optional enrolment, never blocking.
+ * Renders nothing when there is no recommendation and no request in flight.
+ */
+function RecommendationCard({
+  testID,
+  recommendation,
+  loading,
+  enrolling = false,
+  enrolled = false,
+  onEnroll,
+}: {
+  testID: string;
+  recommendation: ProgramRecommendation | null;
+  loading: boolean;
+  enrolling?: boolean;
+  enrolled?: boolean;
+  /** Omit to render the card as pure information (no action). */
+  onEnroll?: () => void;
+}) {
+  if (loading && !recommendation) {
+    return (
+      <View
+        testID={`${testID}-recommendation-loading`}
+        className="mt-3 p-4 rounded-2xl border border-border bg-card"
+      >
+        <Text className="text-muted-foreground text-sm">
+          Finding your program…
+        </Text>
+      </View>
+    );
+  }
+  if (!recommendation) return null;
+  const meta = [
+    recommendation.duration_weeks
+      ? `${recommendation.duration_weeks} weeks`
+      : null,
+    recommendation.training_days_per_week
+      ? `${recommendation.training_days_per_week} days/week`
+      : null,
+    recommendation.target_user || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <View
+      testID={`${testID}-recommended-program`}
+      className="mt-3 p-4 rounded-2xl border-2 border-foreground bg-card"
+    >
+      <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+        Recommended for you
+      </Text>
+      <Text
+        testID={`${testID}-recommended-program-name`}
+        className="text-foreground text-base font-bold mt-2"
+      >
+        {recommendation.name}
+      </Text>
+      {meta ? (
+        <Text className="text-muted-foreground text-xs mt-1">{meta}</Text>
+      ) : null}
+      {recommendation.reasons.length > 0 ? (
+        <View
+          testID={`${testID}-recommended-program-reasons`}
+          className="mt-3 gap-1.5"
+        >
+          {recommendation.reasons.slice(0, 3).map((reason: string) => (
+            <View key={reason} className="flex-row items-start gap-2">
+              <Text className="text-primary font-bold">✓</Text>
+              <Text className="text-muted-foreground text-xs flex-1">
+                {reason}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {onEnroll ? (
+        enrolled ? (
+          <Text
+            testID={`${testID}-recommended-program-enrolled`}
+            className="text-primary text-xs font-semibold mt-3"
+          >
+            ✓ Added — it will be waiting on your dashboard.
+          </Text>
+        ) : (
+          <View className="mt-3">
+            <Button
+              testID={`${testID}-recommended-program-enroll`}
+              onPress={onEnroll}
+              disabled={enrolling}
+              loading={enrolling}
+            >
+              {enrolling ? "Adding…" : "Start this program"}
+            </Button>
+          </View>
+        )
+      ) : null}
+    </View>
   );
 }
 
@@ -170,6 +296,12 @@ export function OnboardingFlow({
   onComplete,
   submitting = false,
   testID = "onboarding",
+  recommendation = null,
+  recommendationLoading = false,
+  onEnrollRecommended,
+  enrolling = false,
+  enrolled = false,
+  onDraftChange,
 }: OnboardingFlowProps) {
   const [step, setStep] = useState<number>(1);
   const [name, setName] = useState<string>(initialName);
@@ -218,6 +350,17 @@ export function OnboardingFlow({
 
   const goals = useMemo(() => profile.fitnessGoals ?? [], [profile.fitnessGoals]);
   const primaryGoal = goals[0];
+
+  // Keep the route's server-driven recommendation in step with the draft
+  // answers. The callback is stable-or-not by caller choice; guard with a
+  // ref so a non-memoized callback cannot loop the effect.
+  const draftRef = useRef(onDraftChange);
+  useEffect(() => {
+    draftRef.current = onDraftChange;
+  });
+  useEffect(() => {
+    draftRef.current?.(profile);
+  }, [profile]);
 
   const set = (patch: Partial<OnboardingProfile>) =>
     setProfile((p) => ({ ...p, ...patch }));
@@ -347,12 +490,12 @@ export function OnboardingFlow({
   const activity: ActivityLevel = profile.activityLevel ?? "moderate";
   const macroPreset: MacroPreset = profile.macroPreset ?? "recommended";
 
-  const recommendation = recommendPreset(
+  const presetRecommendation = recommendPreset(
     effectiveDirection,
     goals,
     profile.experienceLevel,
   );
-  const suggestedPreset = recommendation.preset;
+  const suggestedPreset = presetRecommendation.preset;
 
   const canComputeTargets = Boolean(
     profile.currentWeightKg &&
@@ -987,7 +1130,7 @@ export function OnboardingFlow({
                         {isSuggested ? (
                           <View className="bg-primary/20 px-1.5 py-0.5 rounded-full">
                             <Text className="text-[9px] text-primary font-bold uppercase">
-                              {recommendation.badge}
+                              {presetRecommendation.badge}
                             </Text>
                           </View>
                         ) : null}
@@ -1284,6 +1427,30 @@ export function OnboardingFlow({
                 }
               />
             </ReviewSection>
+
+            {/* Program match — server-driven, optional enrolment, never
+                blocking. Entirely optional: the member can also start it
+                later from Home, or browse the full catalog instead. */}
+            <View className="p-4 rounded-xl border border-border bg-card mb-3">
+              <Text className="text-foreground font-semibold text-base mb-1">
+                Your program match
+              </Text>
+              <RecommendationCard
+                testID={testID}
+                recommendation={recommendation}
+                loading={recommendationLoading}
+                enrolling={enrolling}
+                enrolled={enrolled}
+                onEnroll={onEnrollRecommended}
+              />
+              {recommendation ? (
+                <Text className="text-muted-foreground text-[11px] leading-relaxed mt-3">
+                  Entirely optional — you can also start it later from Home,
+                  or browse the full catalog if you&apos;d rather pick your
+                  own.
+                </Text>
+              ) : null}
+            </View>
           </View>
         ) : null}
       </ScrollView>
