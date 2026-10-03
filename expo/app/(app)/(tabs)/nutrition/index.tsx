@@ -1027,6 +1027,9 @@ export default function NutritionIndexRoute() {
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
+  // Barcode scan (NP-088): the camera menu opens the search sheet straight
+  // onto the scanner instead of the name search.
+  const [searchBarcodeOpen, setSearchBarcodeOpen] = useState(false);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
@@ -1176,8 +1179,9 @@ export default function NutritionIndexRoute() {
     [activeDate, tzOffset, token, refetchSideTables],
   );
 
-  const openSearch = (tagToUse?: string) => {
+  const openSearch = (tagToUse?: string, opts?: { barcode?: boolean }) => {
     setSearchTag(tagToUse ?? currentDefaultTag);
+    setSearchBarcodeOpen(opts?.barcode === true);
     setSearchOpen(true);
   };
 
@@ -2064,8 +2068,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setCameraMenuOpen(false);
-                // TODO(NP-059, NP-088): Barcode scanner is NP-059/NP-088.
-                openSearch();
+                openSearch(undefined, { barcode: true });
               }}
             >
               Scan barcode
@@ -2211,9 +2214,13 @@ export default function NutritionIndexRoute() {
       {/* Food Search Sheet (NP-092) */}
       <FoodSearchSheet
         visible={searchOpen}
-        onClose={() => setSearchOpen(false)}
+        onClose={() => {
+          setSearchOpen(false);
+          setSearchBarcodeOpen(false);
+        }}
         currentTag={searchTag}
         activeDate={activeDate}
+        initialBarcodeOpen={searchBarcodeOpen}
       />
 
       {/* Combine Sheet (NP-175) */}

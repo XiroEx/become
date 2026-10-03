@@ -24,6 +24,7 @@ import {
   ChefHat,
   Clock,
   Flag,
+  ScanBarcode,
   Star,
   X,
   AlertCircle,
@@ -32,6 +33,12 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { BottomSheet } from "@/components/BottomSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
+import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
+import {
+  BARCODE_LOOKUP_FAILED_MESSAGE,
+  lookupBarcode,
+} from "@/lib/nutrition/barcodeLookup";
+import { foodDetailHref, narrowFoodSource } from "@/lib/nutrition/foodSearch";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -40,7 +47,6 @@ import {
   isObjectIdString,
   importExternalIfNeeded,
 } from "@/lib/nutrition/foodImport";
-import { foodDetailHref, narrowFoodSource } from "@/lib/nutrition/foodSearch";
 import {
   saveFoodBookmark,
   removeFoodBookmark,
@@ -71,6 +77,10 @@ export interface FoodSearchSheetProps {
   debounceMs?: number;
   setTimeoutImpl?: typeof setTimeout;
   clearTimeoutImpl?: typeof clearTimeout;
+  /** Open on the barcode scanner instead of the name search (camera menu). */
+  initialBarcodeOpen?: boolean;
+  /** Injection point for the barcode lookup; the app leaves it unset. */
+  lookupBarcodeImpl?: typeof lookupBarcode;
   testID?: string;
 }
 
@@ -84,6 +94,8 @@ export function FoodSearchSheet({
   debounceMs = 300,
   setTimeoutImpl,
   clearTimeoutImpl,
+  initialBarcodeOpen = false,
+  lookupBarcodeImpl = lookupBarcode,
   testID = "food-search-sheet",
 }: FoodSearchSheetProps) {
   const { colors } = useThemeTokens();
@@ -112,6 +124,22 @@ export function FoodSearchSheet({
   // nutrition basis for its log-correction panel; the search row only shows
   // the flattened default variant, which is exactly that basis.
   const [flagFood, setFlagFood] = useState<Food | null>(null);
+
+  // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
+  // up on the server and open the quantity picker on a real food. A miss or
+  // a preview shows the web's message with a Search by name button; logging
+  // goes through the same pick path as a searched food (no `source` added).
+  const [scannerOpen, setScannerOpen] = useState<boolean>(false);
+  const [barcodeLoading, setBarcodeLoading] = useState<boolean>(false);
+  const [barcodeError, setBarcodeError] = useState<string | null>(null);
+
+  // The camera menu opens the sheet straight onto the scanner.
+  useEffect(() => {
+    if (visible && initialBarcodeOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from open intent
+      setScannerOpen(true);
+    }
+  }, [visible, initialBarcodeOpen]);
 
   const debouncedQuery = useDebouncedValue(
     query,
@@ -329,48 +357,78 @@ export function FoodSearchSheet({
     }
   };
 
-  // Picking a food: runs import step if external before handing off
-  const handlePickFood = async (food: Food) => {
-    if (food.persistable === false) {
-      setErrorMessage(
-        "This food preview cannot be logged. Try searching for this food by name.",
-      );
-      return;
-    }
-
-    const id = String(food._id ?? food.id ?? "");
-    let targetFood: Food = food;
-
-    if (!isObjectIdString(id)) {
-      setImportingRowId(id);
-      try {
-        const result = await importExternalIfNeeded(
-          food,
-          () => token ?? undefined,
+  // Picking a food: runs import step if external before handing off.
+  // `useCallback` (not a bare async fn) because the barcode path below
+  // awaits the same pick — a searched food and a scanned food log identically.
+  const handlePickFood = useCallback(
+    async (food: Food) => {
+      if (food.persistable === false) {
+        setErrorMessage(
+          "This food preview cannot be logged. Try searching for this food by name.",
         );
-        if (result.error || !result.foodId || !isObjectIdString(result.foodId)) {
-          setErrorMessage(
-            result.error ? `Import failed: ${result.error}` : "Import failed",
+        return;
+      }
+
+      const id = String(food._id ?? food.id ?? "");
+      let targetFood: Food = food;
+
+      if (!isObjectIdString(id)) {
+        setImportingRowId(id);
+        try {
+          const result = await importExternalIfNeeded(
+            food,
+            () => token ?? undefined,
           );
+          if (result.error || !result.foodId || !isObjectIdString(result.foodId)) {
+            setErrorMessage(
+              result.error ? `Import failed: ${result.error}` : "Import failed",
+            );
+            return;
+          }
+          if (result.food) {
+            targetFood = result.food;
+          } else {
+            targetFood = { ...food, _id: result.foodId };
+          }
+        } finally {
+          setImportingRowId(null);
+        }
+      }
+
+      onClose();
+      if (onPickFood) {
+        onPickFood(targetFood);
+      } else {
+        router.push(foodDetailHref(targetFood._id, targetFood));
+      }
+    },
+    [onClose, onPickFood, router, token],
+  );
+
+  // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
+  // up on the server and open the quantity picker on a real food. A miss or
+  // a preview shows the web's message with a Search by name button; logging
+  // goes through the same pick path as a searched food (no `source` added).
+  const handleBarcodeDetected = useCallback(
+    async (code: string) => {
+      setScannerOpen(false);
+      setBarcodeLoading(true);
+      setBarcodeError(null);
+      try {
+        const result = await lookupBarcodeImpl(code, () => token ?? undefined);
+        if (result.status === "found") {
+          await handlePickFood(result.food);
           return;
         }
-        if (result.food) {
-          targetFood = result.food;
-        } else {
-          targetFood = { ...food, _id: result.foodId };
-        }
+        setBarcodeError(result.message);
+      } catch {
+        setBarcodeError(BARCODE_LOOKUP_FAILED_MESSAGE);
       } finally {
-        setImportingRowId(null);
+        setBarcodeLoading(false);
       }
-    }
-
-    onClose();
-    if (onPickFood) {
-      onPickFood(targetFood);
-    } else {
-      router.push(foodDetailHref(targetFood._id, targetFood));
-    }
-  };
+    },
+    [handlePickFood, lookupBarcodeImpl, token],
+  );
 
   // Picking a meal
   const handlePickMeal = async (meal: Meal) => {
@@ -568,19 +626,110 @@ export function FoodSearchSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        {/* Search Input */}
-        <View style={{ paddingHorizontal: 16, marginBottom: 8 }}>
-          <Input
-            testID="food-search-input"
-            placeholder="Apple, chicken breast…"
-            autoCapitalize="none"
-            value={query}
-            onChangeText={(text) => {
-              setQuery(text);
-              if (errorMessage) setErrorMessage(null);
+        {/* Search Input + barcode button */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Input
+              testID="food-search-input"
+              placeholder="Apple, chicken breast…"
+              autoCapitalize="none"
+              value={query}
+              onChangeText={(text) => {
+                setQuery(text);
+                if (errorMessage) setErrorMessage(null);
+              }}
+            />
+          </View>
+          <Pressable
+            testID="food-search-barcode-button"
+            accessibilityRole="button"
+            accessibilityLabel="Scan barcode"
+            onPress={() => {
+              setBarcodeError(null);
+              setScannerOpen(true);
             }}
-          />
+            hitSlop={8}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ScanBarcode size={18} color={colors.foreground} />
+          </Pressable>
         </View>
+
+        {/* Barcode loading / miss feedback — the web's message + Search by name */}
+        {barcodeLoading ? (
+          <View
+            testID="food-search-barcode-loading"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginHorizontal: 16,
+              marginBottom: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              backgroundColor: colors.muted,
+            }}
+          >
+            <ActivityIndicator color={colors.primary} size="small" />
+            <Text className="text-muted-foreground text-xs">
+              Looking up barcode…
+            </Text>
+          </View>
+        ) : null}
+        {barcodeError && !barcodeLoading ? (
+          <View
+            testID="food-search-barcode-error"
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.destructive,
+              backgroundColor: colors.card,
+              gap: 8,
+            }}
+          >
+            <Text className="text-destructive text-xs">{barcodeError}</Text>
+            <Pressable
+              testID="food-search-barcode-search-name"
+              accessibilityRole="button"
+              accessibilityLabel="Search by name"
+              onPress={() => setBarcodeError(null)}
+              hitSlop={8}
+              style={{
+                alignSelf: "flex-start",
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: colors.muted,
+              }}
+            >
+              <Text className="text-foreground text-xs font-semibold">
+                Search by name
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Filter Chips Bar (Horizontal scroll, no All chip) */}
         <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
@@ -977,6 +1126,14 @@ export function FoodSearchSheet({
           onClose={() => setFlagFood(null)}
         />
       ) : null}
+
+      {/* Barcode scanner (NP-088): full-screen camera view over the sheet. */}
+      <BarcodeScanner
+        visible={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={(code) => void handleBarcodeDetected(code)}
+        testID="food-search-barcode-scanner"
+      />
     </BottomSheet>
   );
 }
