@@ -1,12 +1,15 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Modal, View, Pressable, ScrollView, TextInput } from "react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
+import type { z } from "zod";
 import {
   apiFetch,
+  classifyApiError,
   ExerciseAlternativesResponseSchema,
   ExerciseSearchResponseSchema,
   ExerciseVariationsResponseSchema,
+  CustomExerciseResponseSchema,
   CustomExercisesResponseSchema,
   type AlternativeCandidate,
   type ExerciseAlternativesResponse,
@@ -22,7 +25,15 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { FramedVideo } from "@/components/FramedVideo";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
-import { Search, X, ChevronDown, ChevronUp, Sparkles } from "lucide-react-native";
+import { CustomExerciseForm } from "@/components/workout/CustomExerciseForm";
+import {
+  DEFAULT_CUSTOM_EXERCISE_FORM,
+  toCustomExerciseWriteBody,
+  type CustomExerciseFormValues,
+} from "@/lib/workout/customExercises";
+import { useEntitlements, syntheticGate } from "@/lib/entitlements";
+import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import { Search, X, ChevronDown, ChevronUp, Sparkles, Plus } from "lucide-react-native";
 
 export type SwapScope = "session" | "program";
 
@@ -114,6 +125,7 @@ function getScoreBadgeStyle(score?: number): { bg: string; text: string } {
  * - Catalogue search
  * - Equipment variations
  * - Member's custom exercises
+ * - Inline custom-exercise creation (NP-169, NP-083 follow-up)
  * - Program-wide and session-only scope selection
  */
 export function ExerciseSwapModal({
@@ -141,6 +153,19 @@ export function ExerciseSwapModal({
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  // Inline creation (NP-169): the same form the My exercises screen uses,
+  // so "custom exercise" means the same thing in the swap sheet and the
+  // library. Creating goes through `canCreate` (requireQuota on the server);
+  // a member at the cap gets the upgrade sheet, not a form error.
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createValues, setCreateValues] = useState<CustomExerciseFormValues>(
+    DEFAULT_CUSTOM_EXERCISE_FORM,
+  );
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const { data: entitlements, canCreate, refresh: refreshEntitlements } =
+    useEntitlements();
+  const mayCreateCustom = canCreate("custom-exercises");
 
   const {
     activeSlug: activePlayingSlug,
@@ -171,6 +196,9 @@ export function ExerciseSwapModal({
       setCatalogMatches(null);
       setSelectedVariants({});
       setVariationsCache({});
+      setShowCreateForm(false);
+      setCreateValues(DEFAULT_CUSTOM_EXERCISE_FORM);
+      setCreateError(null);
     } else if (!visible && prevVisibleRef.current) {
       releaseVideo();
     }
@@ -385,7 +413,18 @@ export function ExerciseSwapModal({
     });
   }, [searchCandidates, searchQuery, effectiveCatalogMatches]);
 
-  const handleSwap = (alt: AlternativeCandidate, scope: SwapScope) => {
+  // The swap handler must read the LATEST `selectedVariants` at press time
+  // (the variation-selection test pins this: picking a variation then tapping
+  // Swap must swap the VARIED slug). A `useCallback` with empty deps would
+  // close over the first render's state, and a plain function re-created every
+  // render trips `exhaustive-deps` in the inline-create callback below — so
+  // the implementation lives in a ref updated by effect (outside render), and
+  // the stable handle calls through it.
+  const handleSwapRef = useRef(
+    (_alt: AlternativeCandidate, _scope: SwapScope) => {},
+  );
+  useEffect(() => {
+    handleSwapRef.current = (alt: AlternativeCandidate, scope: SwapScope) => {
     const chosenVarSlug = selectedVariants[alt.slug];
     let chosenCandidate = alt;
     if (chosenVarSlug && chosenVarSlug !== alt.slug) {
@@ -417,7 +456,107 @@ export function ExerciseSwapModal({
       }
     }
     onClose();
-  };
+    };
+  }, [selectedVariants, variationsCache, onSwap, onSelect, onClose]);
+  // Stable handle for every press site: always calls the latest render's
+  // implementation above (which must read the latest `selectedVariants` —
+  // see its note), without changing identity every render.
+  const handleSwap = useCallback(
+    (alt: AlternativeCandidate, scope: SwapScope) => {
+      handleSwapRef.current(alt, scope);
+    },
+    [],
+  );
+
+  const openCreateForm = useCallback(() => {
+    if (!mayCreateCustom && entitlements && entitlements.enforced !== false) {
+      const entitlement = entitlements.features?.["custom-exercises"] ?? null;
+      showUpgradeSheet(
+        syntheticGate(
+          "custom-exercises",
+          entitlement?.requiresTier ?? "plus",
+          entitlement,
+        ),
+      );
+      return;
+    }
+    setCreateError(null);
+    setCreateValues(DEFAULT_CUSTOM_EXERCISE_FORM);
+    setShowCreateForm(true);
+  }, [mayCreateCustom, entitlements]);
+
+  const closeCreateForm = useCallback(() => {
+    if (creating) return;
+    setShowCreateForm(false);
+    setCreateError(null);
+  }, [creating]);
+
+  // Inline creation: POST the same body the library sends, map the created
+  // exercise onto a swap candidate, and swap it straight in — the web's
+  // "Create & Swap In" in one step. A plan-gate raises the upgrade sheet
+  // (NP-052); anything else is the server's own words under the form.
+  const confirmCreateForm = useCallback(async () => {
+    if (!createValues.name.trim()) {
+      setCreateError("Name is required");
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      // `z.infer` spelled out: a bare `apiFetch(path, schema)` infers `{}`
+      // under this repo's zod/TS pairing (every other screen does the same).
+      const created = await apiFetch<
+        z.infer<typeof CustomExerciseResponseSchema>
+      >(
+        "/api/exercises/custom",
+        CustomExerciseResponseSchema,
+        {
+          method: "POST",
+          body: toCustomExerciseWriteBody(createValues),
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+        },
+      );
+      const ex = created.exercise;
+      const candidate: AlternativeCandidate = {
+        slug: ex.slug,
+        name: ex.name,
+        score: 100,
+        reasons: ["Your custom exercise"],
+        equipment: ex.equipment ?? [],
+        primaryMuscles: ex.primaryMuscles ?? [],
+        movementPatterns: ex.movementPatterns ?? [],
+        difficulty: ex.difficulty ?? "intermediate",
+        category: ex.category,
+        bodyRegion: ex.bodyRegion,
+        role: ex.role ?? "accessory",
+        trackingType: ex.trackingType,
+        isExplicitAlternative: true,
+        isCustom: true,
+        videoUrl: ex.videoUrl ?? null,
+      };
+      setCustomExercises((prev) =>
+        prev.some((c) => c.slug === candidate.slug) ? prev : [...prev, candidate],
+      );
+      setShowCreateForm(false);
+      setCreateValues(DEFAULT_CUSTOM_EXERCISE_FORM);
+      await refreshEntitlements().catch(() => {});
+      handleSwap(candidate, "session");
+    } catch (err) {
+      const classification = classifyApiError(err);
+      if (classification.kind === "plan-gate") {
+        setCreating(false);
+        setShowCreateForm(false);
+        showUpgradeSheet(classification.gate);
+        await refreshEntitlements().catch(() => {});
+        return;
+      }
+      const message =
+        classification.message ?? "Could not create that exercise. Try again.";
+      setCreateError(message);
+      setCreating(false);
+    }
+  }, [createValues, token, refreshEntitlements, handleSwap]);
 
   return (
     <Modal
@@ -799,9 +938,54 @@ export function ExerciseSwapModal({
 
           {/* Cancel button */}
           <View style={{ height: 8 }} />
-          <Button testID={`${testID}-close`} variant="secondary" onPress={onClose}>
-            Cancel
-          </Button>
+          {showCreateForm ? (
+            <View testID={`${testID}-create-form`} style={{ marginTop: 8 }}>
+              <View className="flex-row items-center gap-2 mb-3">
+                <Pressable
+                  testID={`${testID}-create-back`}
+                  onPress={closeCreateForm}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to alternatives"
+                  className="p-1 rounded-full bg-muted"
+                >
+                  <X size={18} color={colors["muted-foreground"]} />
+                </Pressable>
+                <Text className="text-foreground text-sm font-semibold">
+                  Create Custom Exercise
+                </Text>
+              </View>
+              <CustomExerciseForm
+                values={createValues}
+                onChange={setCreateValues}
+                error={createError}
+                submitting={creating}
+                submitLabel={creating ? "Creating..." : "Create & Swap In"}
+                onSubmit={() => void confirmCreateForm()}
+                onCancel={closeCreateForm}
+                testID={`${testID}-create`}
+              />
+            </View>
+          ) : (
+            <>
+              <Pressable
+                testID={`${testID}-create-custom`}
+                onPress={openCreateForm}
+                accessibilityRole="button"
+                accessibilityLabel="Create Custom Exercise"
+                className="flex-row items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 mt-1"
+              >
+                <Plus size={16} color={colors["muted-foreground"]} />
+                <Text className="text-muted-foreground text-sm font-medium">
+                  Create Custom Exercise
+                </Text>
+              </Pressable>
+              <View style={{ height: 8 }} />
+              <Button testID={`${testID}-close`} variant="secondary" onPress={onClose}>
+                Cancel
+              </Button>
+            </>
+          )}
         </View>
       </View>
     </Modal>
