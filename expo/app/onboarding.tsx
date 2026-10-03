@@ -11,6 +11,13 @@ import {
   apiFetch,
 } from "@become/api-client";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import { useOnboardingRecommendation } from "@/lib/onboarding/useOnboardingRecommendation";
+import { enrollProgram } from "@/lib/programs/enrollment";
+import { notifyProgramUpdated } from "@/lib/programs/programEvents";
+import {
+  askNotificationPermissionAfterOnboarding,
+  maybeShowTrialPromptAfterOnboarding,
+} from "@/lib/push/afterOnboarding";
 import {
   LEGAL_MINIMUM_AGE,
   defaultIconForGoal,
@@ -86,6 +93,46 @@ export default function OnboardingRoute() {
     name: string;
     profile: OnboardingProfile;
   } | null>(null);
+
+  // NP-057: the review step's server-driven program recommendation, ranked on
+  // the answers given in THIS session (profile=0). The wizard collects the
+  // answers; this hook asks the server for the match as they change.
+  // The flow component owns the draft profile, so the route mirrors the
+  // latest answers here via onDraftChange to keep the recommendation live.
+  const [draftProfile, setDraftProfile] = useState<OnboardingProfile | null>(
+    null,
+  );
+  const { recommendation, loading: recommendationLoading } =
+    useOnboardingRecommendation(draftProfile ?? {}, {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    });
+
+  // Optional enrolment straight from the recommendation. A failure here must
+  // never block finishing onboarding — enrolling is a bonus, not a step.
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrolledProgramId, setEnrolledProgramId] = useState<string | null>(
+    null,
+  );
+
+  const onEnrollRecommended = useCallback(async () => {
+    const programId = recommendation?.program_id;
+    if (!programId || enrolling || enrolledProgramId) return;
+    setEnrolling(true);
+    try {
+      await enrollProgram(
+        { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+        { programId },
+      );
+      setEnrolledProgramId(programId);
+      notifyProgramUpdated();
+    } catch {
+      // Stay un-enrolled; the member can start it from Home. Finishing
+      // onboarding proceeds regardless.
+    } finally {
+      setEnrolling(false);
+    }
+  }, [recommendation?.program_id, enrolling, enrolledProgramId, token]);
 
   const initialName = useMemo(() => {
     if (!user) return "";
@@ -229,8 +276,31 @@ export default function OnboardingRoute() {
         // Await all three seeds before leaving
         await Promise.all(seeds);
 
+        // The member already chose (or skipped) enrolment on the review
+        // step, so nothing more to do with the program here: a failed
+        // enrolment never blocks finishing.
+
         // Re-pull the user so the onboarding gate sees the cleared flag.
         await refresh();
+
+        // The considered moment for the notification permission ask
+        // (NP-065): after onboarding completes, before Home — never at
+        // first launch. A refusal (or NP-065 not being filled in yet)
+        // must never block landing Home.
+        try {
+          await askNotificationPermissionAfterOnboarding();
+        } catch {
+          // ignore — permission is optional
+        }
+
+        // Hook for the post-onboarding trial prompt (NP-129). No-op until
+        // the web ships the trial and NP-129 fills it.
+        try {
+          await maybeShowTrialPromptAfterOnboarding();
+        } catch {
+          // ignore — the trial prompt is optional
+        }
+
         router.replace("/(tabs)/dashboard");
       } catch (err) {
         setSubmitError(err);
@@ -270,6 +340,16 @@ export default function OnboardingRoute() {
               initialName={initialName}
               onComplete={onComplete}
               submitting={submitting}
+              onDraftChange={setDraftProfile}
+              recommendation={recommendation}
+              recommendationLoading={recommendationLoading}
+              onEnrollRecommended={onEnrollRecommended}
+              enrolling={enrolling}
+              enrolled={Boolean(
+                enrolledProgramId &&
+                  recommendation &&
+                  enrolledProgramId === recommendation.program_id,
+              )}
             />
           </SafeAreaView>
         </ScreenState>
