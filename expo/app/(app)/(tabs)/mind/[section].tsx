@@ -4,9 +4,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import ToolIntroGate from "@/components/mind/ToolIntroGate";
+import { TierGate } from "@/components/entitlements/TierGate";
 import StateShiftDashboard from "@/components/mind/StateShiftDashboard";
 import SelfImageDashboard from "@/components/mind/SelfImageDashboard";
 import MissionDashboard from "@/components/mind/MissionDashboard";
+import VisionDashboard from "@/components/mind/VisionDashboard";
 import DisciplineDashboard from "@/components/mind/DisciplineDashboard";
 import AntiSabotageDashboard from "@/components/mind/AntiSabotageDashboard";
 import SocialDashboard from "@/components/mind/SocialDashboard";
@@ -73,7 +75,12 @@ export default function MindSectionRoute() {
             {section === "discipline" && <DisciplineDashboard />}
             {section === "anti-sabotage" && <AntiSabotageDashboard />}
             {section === "social" && <SocialDashboard />}
-            {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social"].includes(section) && (
+            {section === "vision" && (
+              <TierGate feature="vision">
+                <VisionDashboard />
+              </TierGate>
+            )}
+            {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social", "vision"].includes(section) && (
               <View className="items-center justify-center p-8">
                 <Text className="text-center text-sm text-muted-foreground">
                   {label} is coming soon.
