@@ -272,10 +272,13 @@ export function LiveWorkoutClient({
             <View key={ex.slug}>
               {showGroupHeader ? (
                 <View
-                  testID={`${testID}-group-${ex.groupId}`}
+                  testID={`${testID}-group-${ex.groupId}-header`}
                   style={{ gap: 4, marginTop: 8 }}
                 >
-                  <Text className="text-primary text-sm font-semibold">
+                  <Text
+                    testID={`${testID}-group-${ex.groupId}`}
+                    className="text-primary text-sm font-semibold"
+                  >
                     {ex.groupLabel ?? ex.groupId}
                   </Text>
                   {groupRoundsForBlock > 1 ? (
