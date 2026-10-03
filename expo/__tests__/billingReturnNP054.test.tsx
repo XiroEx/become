@@ -238,12 +238,17 @@ describe("NP-054: the remembered handover re-reads on the next foreground", () =
     rememberBillingHandover("portal");
     expect(pendingBillingHandover()).toBe("portal");
     const { deps } = depsWith();
+    // The clock must advance with each sleep, or the retry loop never reaches
+    // its deadline (a constant `now` with an instant `sleep` spins forever).
+    let nowMs = 0;
     await consumeBillingHandover({
       ...deps,
       getTier: () => "free",
       reloadEntitlements: jest.fn(async () => null),
-      now: () => BILLING_RETURN_RETRY_MS + 1,
-      sleep: jest.fn(async () => {}),
+      now: () => nowMs,
+      sleep: jest.fn(async (ms: number) => {
+        nowMs += ms;
+      }),
     });
     expect(pendingBillingHandover()).toBeNull();
   });
