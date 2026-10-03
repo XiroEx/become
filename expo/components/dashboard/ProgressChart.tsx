@@ -1,3 +1,17 @@
+/**
+ * THE DASHBOARD PROGRESS CHART (NP-132) — the web dashboard's ProgressChart.
+ *
+ * Ports `webapp/components/ProgressChart.tsx` (weight with the goal line, BMI,
+ * body fat, lean mass and mood) onto the NP-130 chart kit: `react-native-svg`
+ * instead of Recharts, every colour from `useThemeTokens()` (NP-123) so light
+ * and dark mode both read. The weight line and goal line match the web's for
+ * the same member by construction: the series come straight from
+ * `GET /api/progress` (`weightData`, `bmiData`, `bodyFatData`, `leanMassData`,
+ * `moodData`) with no client-side recomputation, and the goal line is the
+ * web's `Math.round(kgToUnit(targetWeightKg, weightUnit) * 10) / 10`
+ * (`DashboardClient.tsx`), computed with the same `kgToUnit` from
+ * `@become/core` — never the truncated `2.20462` factor.
+ */
 import React, { useState } from "react";
 import { View, StyleSheet, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
