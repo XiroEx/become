@@ -99,12 +99,18 @@ export function ContinueTrainingSection({
     if (isPaused) {
       router.push(`/(tabs)/programming/${program.programId}`);
     } else {
+      // Continue opens the TRACK view (NP-087): every set of the next day on
+      // one screen, the way `/dashboard/workout/{id}/workout?day=…` does on
+      // the web, with Live a tap away on the toggle.
       const phaseIndex = Math.max(0, (program.currentPhase ?? 1) - 1);
       const workoutIndex = workoutIndexFromDayLabel(
         program.currentDay ?? undefined,
       );
+      const dayParam = program.currentDay
+        ? `&day=${encodeURIComponent(program.currentDay)}`
+        : "";
       router.push(
-        `/(tabs)/programming/${program.programId}/workout/${workoutIndex}?phase=${phaseIndex}`,
+        `/(tabs)/programming/${program.programId}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
       );
     }
   };

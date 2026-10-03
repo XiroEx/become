@@ -230,10 +230,12 @@ describe("ProgramDetailRoute", () => {
       "Pull A",
     );
 
-    // 4. Pressing Continue routes to Track on the day the schedule says is next
+    // 4. Pressing Continue routes to the TRACK VIEW on the day the schedule
+    //    says is next (NP-087): every set on one screen, with Live on the
+    //    toggle, as `/dashboard/workout/{id}/workout?day=Day 1` is on the web.
     fireEvent.press(getByTestId("program-detail-continue"));
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/prog-1/workout/0?phase=0",
+      "/(tabs)/programming/prog-1/workout/0/live?phase=0&day=Day%201",
     );
   });
 

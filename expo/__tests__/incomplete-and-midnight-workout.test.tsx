@@ -393,7 +393,22 @@ describe("Incomplete and Midnight Workout Modals", () => {
               day: "Day 1",
               date: "2026-09-30T23:40:00.000Z",
               completed: false,
-              exercises: [{ name: "Squat", sets: [{ setNumber: 1, reps: 8, weight: 200, completed: true }] }],
+              // Every set of the day already logged: Complete Workout only
+              // exists once the whole workout is done (NP-087), so a resume
+              // that is one set in would not have the button to press.
+              // Different numbers per set on purpose — identical numbers on
+              // INCOMPLETE sets are the old prefill bug's fingerprint and the
+              // restore blanks them.
+              exercises: [
+                {
+                  name: "Squat",
+                  sets: [
+                    { setNumber: 1, reps: 8, weight: 200, completed: true },
+                    { setNumber: 2, reps: 8, weight: 205, completed: true },
+                    { setNumber: 3, reps: 8, weight: 210, completed: true },
+                  ],
+                },
+              ],
             },
             isResume: true,
           });
@@ -473,6 +488,16 @@ describe("Incomplete and Midnight Workout Modals", () => {
           });
         }
         if (path === "/api/workouts" && (init as { method?: string })?.method === "POST") {
+          // Only the COMPLETING save is the one under test. Ticking the three
+          // sets so Complete Workout appears at all (NP-087) fires an autosave
+          // each, and those must not consume the scripted failure.
+          const completing = Boolean(
+            (init as { body?: { completed?: boolean } } | undefined)?.body
+              ?.completed,
+          );
+          if (!completing) {
+            return Promise.resolve({ message: "autosaved", completed: false });
+          }
           saveAttempt++;
           if (saveAttempt === 1) {
             // First completing save fails
@@ -498,11 +523,22 @@ describe("Incomplete and Midnight Workout Modals", () => {
         />,
       );
 
+      // Complete Workout only exists at 100% (NP-087), so tick all three sets
+      // of the day's one exercise by hand first.
+      await waitFor(() => {
+        expect(getByTestId("live-workout-squat-set-0-complete")).toBeTruthy();
+      });
+      for (let i = 0; i < 3; i++) {
+        await act(async () => {
+          fireEvent.press(getByTestId(`live-workout-squat-set-${i}-complete`));
+        });
+      }
+
       await waitFor(() => {
         expect(getByTestId("live-workout-finish")).toBeTruthy();
       });
 
-      // Press Finish workout
+      // Press Complete Workout
       await act(async () => {
         fireEvent.press(getByTestId("live-workout-finish"));
       });

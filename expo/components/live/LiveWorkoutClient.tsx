@@ -1,25 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import type { LiveSetState } from "@/components/live/LiveSetRow";
+import type { ExerciseGroupType } from "@/components/live/ExerciseGroupNav";
 import {
-  LiveSetRow,
-  type LiveSetState,
-} from "@/components/live/LiveSetRow";
-import {
-  ExerciseGroupNav,
-  type ExerciseGroupType,
-} from "@/components/live/ExerciseGroupNav";
-import { getBellWeightInfo, buildWorkoutFlow } from "@become/core";
-import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
-import { FramedVideo } from "@/components/FramedVideo";
+  buildWorkoutFlow,
+  isSetFilled,
+  resolveStartStep,
+  type WorkoutPosition,
+} from "@become/core";
+import { applySetUpdate, type KeyValueStore } from "@/lib/live/liveWorkoutCache";
+import { writeWorkoutPosition, readWorkoutPosition } from "@/lib/live/workoutPosition";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import { TrackWorkoutView } from "@/components/live/TrackWorkoutView";
+import { LiveStepView } from "@/components/live/LiveStepView";
+import {
+  WorkoutViewToggle,
+  type WorkoutView,
+} from "@/components/live/WorkoutViewToggle";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+
+export type { WorkoutView };
 
 /** exerciseSlug → ordered set states. Exposed for cache persistence. */
 export type LiveGrid = Record<string, LiveSetState[]>;
@@ -86,7 +92,7 @@ export interface LiveWorkoutClientProps {
   restoredGrid?: LiveGrid | null;
   /** Fires on every set edit with the full new grid, for cache persistence. */
   onGridChange?: (grid: LiveGrid) => void;
-  /** Fires when the user taps Finish, with the final grid for the save POST. */
+  /** Fires when the user taps Complete Workout, with the final grid for the save POST. */
   onFinish?: (grid: LiveGrid) => void;
   /** Disables the finish button while the save is in flight. */
   finishing?: boolean;
@@ -101,6 +107,22 @@ export interface LiveWorkoutClientProps {
   pendingSync?: boolean;
   /** Open the swap picker for an exercise (route fetches alternatives). */
   onRequestSwap?: (slug: string) => void;
+  /**
+   * Which view to open on. The web lands on Track and offers Live from the
+   * toggle, so that is the default here too.
+   */
+  initialView?: WorkoutView;
+  /** Session notes, saved as `notes` on the workout log (web parity). */
+  notes?: string;
+  onNotesChange?: (notes: string) => void;
+  /**
+   * Storage scope for the remembered position — `programScope(programId, day)`
+   * or `quickScope(sessionId)` from `@become/core`. Omitted, the position is
+   * kept for this mount only (which is still enough to make the toggle work).
+   */
+  positionScope?: string;
+  /** DI for the position store. Omitted, nothing is persisted. */
+  positionStore?: KeyValueStore | null;
   /** Injected rest-timer interval impls for deterministic tests. */
   restTimerSetInterval?: typeof setInterval;
   restTimerClearInterval?: typeof clearInterval;
@@ -137,6 +159,56 @@ function initialGrid(
   return grid;
 }
 
+/**
+ * One set as the shared `isSetFilled` reads it — strings, the way the web's
+ * inputs hand them over. Native keeps numbers in the grid, so this is the
+ * translation and nothing more: no rounding, no coercion of a real 0.
+ */
+function typedSet(state: LiveSetState): {
+  reps: string;
+  weight: string;
+  duration: string;
+  distance: string;
+} {
+  const s = (v: number | null | undefined) =>
+    v === null || v === undefined ? "" : String(v);
+  return {
+    reps: s(state.reps),
+    weight: s(state.weight),
+    duration: s(state.durationSec),
+    distance: s(state.distance),
+  };
+}
+
+/** The sets of each exercise, by exercise index — what `resolveStartStep` reads. */
+function setsByExercise(
+  exercises: LiveWorkoutExercise[],
+  grid: LiveGrid,
+): LiveSetState[][] {
+  return exercises.map((ex) => grid[ex.slug] ?? []);
+}
+
+/**
+ * ONE WORKOUT, TWO VIEWS (NP-087).
+ *
+ * Track (every exercise and every set on one screen) and Live (one set at a
+ * time) are the same grid, the same rest timer, the same notes and the same
+ * save — exactly as on the web, where `WorkoutFormClient` and the live client
+ * share progress and a remembered position. Natively they are two renderings
+ * of one component, so flipping is a state change rather than a reload and the
+ * position never has to survive a round trip to be right.
+ *
+ * Two rules travel from the web with the views:
+ *
+ *  * A set ticks itself DONE the moment it holds what its tracking type asks
+ *    for (`isSetFilled` — reps and weight for `reps_weight`, reps for
+ *    bodyweight, duration for time, any of duration/distance for cardio;
+ *    `none` is ticked by hand), and un-ticks if a required field is cleared.
+ *    A manual tap on the checkbox is always obeyed.
+ *  * Complete Workout appears only when EVERY set is done. It used to be an
+ *    always-visible "Finish workout", which made a half-logged session one tap
+ *    from being filed as a finished one.
+ */
 export function LiveWorkoutClient({
   workout,
   onSetComplete,
@@ -147,6 +219,11 @@ export function LiveWorkoutClient({
   saveError,
   pendingSync = false,
   onRequestSwap,
+  initialView = "track",
+  notes: notesProp,
+  onNotesChange,
+  positionScope,
+  positionStore,
   restTimerSetInterval,
   restTimerClearInterval,
   testID = "live-workout",
@@ -171,14 +248,17 @@ export function LiveWorkoutClient({
   }, [grid]);
   const [round, setRound] = useState<number>(1);
   const totalRounds = workout.groupRounds ?? 1;
+  const [view, setView] = useState<WorkoutView>(initialView);
+  const [notes, setNotes] = useState<string>(notesProp ?? "");
 
   /**
    * The interleaved rounds for every grouped block (NP-172): the same
    * `buildWorkoutFlow` the web live view runs, over the same consecutive
    * `groupId` runs the builder saves. `flowIndexByKey` maps each
-   * `exerciseSlug:setIndex` to its position in the flow, so the rounds strip
+   * `exerciseIndex:setIndex` to its position in the flow, so the rounds strip
    * under a block header can walk the member through the block round by round
-   * instead of exercise by exercise.
+   * instead of exercise by exercise — and so the Live view can step through
+   * the workout in the order it actually runs.
    */
   const workoutFlow = useMemo(
     () =>
@@ -198,13 +278,21 @@ export function LiveWorkoutClient({
   const flowIndexByKey = useMemo(() => {
     const map = new Map<string, number>();
     workoutFlow.forEach((step, flowIndex) => {
-      const slug = workout.exercises[step.exerciseIndex]?.slug ?? "";
-      map.set(`${slug}:${step.setIndex}`, flowIndex);
+      map.set(`${step.exerciseIndex}:${step.setIndex}`, flowIndex);
     });
     return map;
-  }, [workoutFlow, workout.exercises]);
+  }, [workoutFlow]);
 
-  // Single rest countdown, (re)started whenever a set is completed.
+  // WHERE THE MEMBER IS — shared by the two views, which is the whole point of
+  // remembering it. Held in state (the views are one component) and mirrored to
+  // the device through `positionScope`, under the key the web writes.
+  // Nothing RENDERS from it, so it is a ref and not state: it is read when the
+  // other view opens and written on every move.
+  const positionRef = useRef<WorkoutPosition | null>(null);
+  const [liveStepIndex, setLiveStepIndex] = useState<number>(0);
+
+  // Single rest countdown, (re)started whenever a set is completed, and shared
+  // by the two views for the same reason the grid is.
   const rest = useRestTimer({
     setIntervalImpl: restTimerSetInterval,
     clearIntervalImpl: restTimerClearInterval,
@@ -222,6 +310,166 @@ export function LiveWorkoutClient({
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [workout, restoredGrid]);
 
+  // A position remembered on this device, for the workout this scope names.
+  // It comes from storage — outside React — so it arrives in an effect; the
+  // member's own first move always wins over it.
+  useEffect(() => {
+    if (!positionScope || !positionStore) return;
+    let alive = true;
+    void (async () => {
+      const saved = await readWorkoutPosition(positionScope, positionStore);
+      if (!alive || !saved || positionRef.current) return;
+      positionRef.current = saved;
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [positionScope, positionStore]);
+
+  const rememberPosition = useCallback(
+    (exerciseIndex: number, setIndex: number) => {
+      const next: WorkoutPosition = {
+        exerciseIndex,
+        setIndex,
+        at: Date.now(),
+      };
+      positionRef.current = next;
+      if (positionScope && positionStore) {
+        void writeWorkoutPosition(
+          positionScope,
+          exerciseIndex,
+          setIndex,
+          positionStore,
+          next.at,
+        );
+      }
+    },
+    [positionScope, positionStore],
+  );
+
+  /**
+   * Where you are after touching a set.
+   *
+   * The web writes the set you last typed into. Native writes the same thing
+   * with one refinement the shared `resolveStartStep` then honours verbatim:
+   * once a set has TICKED ITSELF DONE you are no longer standing on it, you
+   * are standing on the next one — so logging two sets in Track and flipping
+   * to Live opens Live on the third set rather than back on the second. Untick
+   * a set to redo it and the position is that set again, which is the case the
+   * web's own test calls out ("you went back to redo it").
+   */
+  const rememberAfterEdit = useCallback(
+    (exerciseIndex: number, setIndex: number, completed: boolean) => {
+      if (completed) {
+        const flowIndex = flowIndexByKey.get(`${exerciseIndex}:${setIndex}`);
+        const nextStep =
+          flowIndex === undefined ? undefined : workoutFlow[flowIndex + 1];
+        if (nextStep) {
+          rememberPosition(nextStep.exerciseIndex, nextStep.setIndex);
+          return;
+        }
+      }
+      rememberPosition(exerciseIndex, setIndex);
+    },
+    [flowIndexByKey, workoutFlow, rememberPosition],
+  );
+
+  const handleSetChange = useCallback(
+    (exerciseIndex: number, setIndex: number, next: LiveSetState) => {
+      const ex = workout.exercises[exerciseIndex];
+      if (!ex) return;
+      const prev = gridRef.current[ex.slug]?.[setIndex];
+      // A tap on the checkbox is the member's own call and is always obeyed;
+      // anything else re-asks `isSetFilled` whether the set is done.
+      const manualToggle = !!prev && prev.completed !== next.completed;
+      const resolved: LiveSetState = manualToggle
+        ? next
+        : { ...next, completed: isSetFilled(ex.trackingType, typedSet(next)) };
+      const justCompleted = !prev?.completed && resolved.completed;
+
+      const updated = applySetUpdate(
+        gridRef.current,
+        ex.slug,
+        setIndex,
+        resolved,
+      );
+      gridRef.current = updated;
+      setGrid(updated);
+      onGridChange?.(updated);
+      rememberAfterEdit(exerciseIndex, setIndex, resolved.completed);
+      if (justCompleted) {
+        rest.start(ex.restSec ?? DEFAULT_REST_SEC);
+        void onSetComplete?.({
+          exerciseSlug: ex.slug,
+          setIndex,
+          state: resolved,
+        });
+      }
+    },
+    [workout.exercises, onGridChange, onSetComplete, rememberAfterEdit, rest],
+  );
+
+  const handleStepChange = useCallback(
+    (nextIndex: number) => {
+      setLiveStepIndex(nextIndex);
+      const step = workoutFlow[nextIndex];
+      if (step) rememberPosition(step.exerciseIndex, step.setIndex);
+    },
+    [workoutFlow, rememberPosition],
+  );
+
+  const handleViewChange = useCallback(
+    (nextView: WorkoutView) => {
+      if (nextView === "live") {
+        // The shared rule, unchanged: the remembered position first, then the
+        // first set that still needs doing, then the last step.
+        setLiveStepIndex(
+          resolveStartStep(
+            workoutFlow,
+            setsByExercise(workout.exercises, gridRef.current),
+            positionRef.current,
+          ),
+        );
+      }
+      setView(nextView);
+    },
+    [workoutFlow, workout.exercises],
+  );
+
+  const handleNotesChange = useCallback(
+    (value: string) => {
+      setNotes(value);
+      onNotesChange?.(value);
+    },
+    [onNotesChange],
+  );
+
+  const totalSets = useMemo(
+    () => workout.exercises.reduce((acc, ex) => acc + (grid[ex.slug]?.length ?? 0), 0),
+    [workout.exercises, grid],
+  );
+  const completedSets = useMemo(
+    () =>
+      workout.exercises.reduce(
+        (acc, ex) => acc + (grid[ex.slug] ?? []).filter((s) => s.completed).length,
+        0,
+      ),
+    [workout.exercises, grid],
+  );
+  // The web's rule verbatim: the button exists at 100% and nowhere else.
+  const allSetsDone = totalSets > 0 && completedSets === totalSets;
+
+  const finishButton = allSetsDone ? (
+    <Button
+      testID={`${testID}-finish`}
+      variant="primary"
+      disabled={finishing}
+      onPress={() => onFinish?.(gridRef.current)}
+    >
+      {finishing ? "Saving…" : "Complete Workout! 🎉"}
+    </Button>
+  ) : null;
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -229,153 +477,50 @@ export function LiveWorkoutClient({
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+        <WorkoutViewToggle
+          testID={`${testID}-view`}
+          active={view}
+          onChange={handleViewChange}
+        />
         <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
           {workout.workoutTitle}
         </Text>
+        <Text
+          testID={`${testID}-progress`}
+          className="text-muted-foreground text-xs"
+        >
+          {`${completedSets} of ${totalSets} sets done`}
+        </Text>
 
-        {workout.groupType ? (
-          <ExerciseGroupNav
-            testID={`${testID}-group-nav`}
+        {view === "track" ? (
+          <TrackWorkoutView
+            testID={testID}
+            exercises={workout.exercises}
+            grid={grid}
+            workoutFlow={workoutFlow}
+            flowIndexByKey={flowIndexByKey}
             groupType={workout.groupType}
-            currentRound={round}
+            round={round}
             totalRounds={totalRounds}
-            onPrev={() => setRound((r) => Math.max(1, r - 1))}
-            onNext={() => setRound((r) => Math.min(totalRounds, r + 1))}
+            onRoundChange={setRound}
+            onSetChange={handleSetChange}
+            onRequestSwap={onRequestSwap}
+            notes={notes}
+            onNotesChange={handleNotesChange}
+            showNotes={completedSets > 0}
           />
-        ) : null}
-
-        {workout.exercises.map((ex, exIdx) => {
-          const bell = getBellWeightInfo(ex);
-          const sets = grid[ex.slug] ?? [];
-          // Render a group header the first time a new groupId appears, so
-          // superset/circuit/triset members render contiguously under a label.
-          const prevGroup = workout.exercises[exIdx - 1]?.groupId;
-          const showGroupHeader = !!ex.groupId && ex.groupId !== prevGroup;
-          // The interleaved rounds for this block (NP-172): consecutive rows
-          // sharing a groupId run A1 B1 A2 B2 …, so the header names each
-          // round and each set row names its round. `flowIndexByKey` is the
-          // same `buildWorkoutFlow` the web live view runs, keyed by
-          // exercise + set.
-          const groupRoundsForBlock = showGroupHeader
-            ? (() => {
-                const members = workout.exercises.filter(
-                  (member) => member.groupId === ex.groupId,
-                );
-                const maxSets = Math.max(
-                  ex.groupRounds ?? 0,
-                  ...members.map((member) => member.sets || 0),
-                );
-                return maxSets > 0 ? maxSets : members.length > 0 ? 1 : 0;
-              })()
-            : 0;
-          return (
-            <View key={ex.slug}>
-              {showGroupHeader ? (
-                <View
-                  testID={`${testID}-group-${ex.groupId}-header`}
-                  style={{ gap: 4, marginTop: 8 }}
-                >
-                  <Text
-                    testID={`${testID}-group-${ex.groupId}`}
-                    className="text-primary text-sm font-semibold"
-                  >
-                    {ex.groupLabel ?? ex.groupId}
-                  </Text>
-                  {groupRoundsForBlock > 1 ? (
-                    <Text
-                      testID={`${testID}-group-${ex.groupId}-rounds`}
-                      className="text-muted-foreground text-xs"
-                    >
-                      {`Runs as ${groupRoundsForBlock} interleaved rounds`}
-                    </Text>
-                  ) : null}
-                </View>
-              ) : null}
-              <Card
-                testID={`${testID}-exercise-${ex.slug}`}
-                title={ex.name}
-                subtitle={
-                  ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`
-                }
-              >
-                <FramedVideo
-                  src={ex.videoUrl}
-                  surface="live"
-                  exerciseName={ex.name}
-                  videoWidth={ex.videoWidth}
-                  videoHeight={ex.videoHeight}
-                  videoFraming={ex.videoFraming}
-                  videoTrim={ex.videoTrim}
-                  testID={`${testID}-${ex.slug}-video`}
-                  className="mb-3"
-                />
-                {ex.notes ? (
-                  <Text
-                    testID={`${testID}-${ex.slug}-notes`}
-                    className="text-muted-foreground text-xs mb-2"
-                  >
-                    {ex.notes}
-                  </Text>
-                ) : null}
-                {sets.map((s, i) => {
-                  const flowIndex = ex.groupId
-                    ? flowIndexByKey.get(`${ex.slug}:${i}`)
-                    : undefined;
-                  const flowStep =
-                    flowIndex !== undefined
-                      ? workoutFlow[flowIndex]
-                      : undefined;
-                  return (
-                    <LiveSetRow
-                      key={i}
-                      setIndex={i}
-                      bell={bell}
-                      exerciseName={ex.name}
-                      state={s}
-                      prefill={ex.prefill?.[i] ?? null}
-                      trackingType={ex.trackingType}
-                      testID={`${testID}-${ex.slug}-set-${i}`}
-                      roundLabel={
-                        ex.groupId && flowStep
-                          ? `Round ${flowStep.roundNumber + 1}`
-                          : undefined
-                      }
-                      onChange={(next) => {
-                        const justCompleted = !s.completed && next.completed;
-                        const updated = applySetUpdate(
-                          gridRef.current,
-                          ex.slug,
-                          i,
-                          next,
-                        );
-                        gridRef.current = updated;
-                        setGrid(updated);
-                        onGridChange?.(updated);
-                        if (justCompleted) {
-                          rest.start(ex.restSec ?? DEFAULT_REST_SEC);
-                          void onSetComplete?.({
-                            exerciseSlug: ex.slug,
-                            setIndex: i,
-                            state: next,
-                          });
-                        }
-                      }}
-                    />
-                  );
-                })}
-                <Pressable
-                  testID={`${testID}-${ex.slug}-swap`}
-                  onPress={() => onRequestSwap?.(ex.slug)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Swap ${ex.name}`}
-                  className="mt-2"
-                >
-                  <Text className="text-primary text-sm">Swap exercise</Text>
-                </Pressable>
-              </Card>
-            </View>
-          );
-        })}
+        ) : (
+          <LiveStepView
+            testID={testID}
+            exercises={workout.exercises}
+            grid={grid}
+            workoutFlow={workoutFlow}
+            stepIndex={liveStepIndex}
+            onStepChange={handleStepChange}
+            onSetChange={handleSetChange}
+            onRequestSwap={onRequestSwap}
+          />
+        )}
 
         {rest.active && rest.remainingSec > 0 ? (
           <RestTimerBar
@@ -445,14 +590,7 @@ export function LiveWorkoutClient({
           </View>
         ) : null}
         <View style={{ height: 24 }} />
-        <Button
-          testID={`${testID}-finish`}
-          variant="primary"
-          disabled={finishing}
-          onPress={() => onFinish?.(gridRef.current)}
-        >
-          {finishing ? "Saving…" : "Finish workout"}
-        </Button>
+        {finishButton}
       </ScrollView>
     </SafeAreaView>
   );

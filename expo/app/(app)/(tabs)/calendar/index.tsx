@@ -240,8 +240,12 @@ export default function CalendarIndexRoute() {
       const dayParam = slot.dayLabel
         ? `&day=${encodeURIComponent(slot.dayLabel)}`
         : "";
+      // A tapped slot opens the TRACK view (NP-087) — the web's calendar links
+      // to `/dashboard/workout/{id}/workout?day=…&sd=…`, every set on one
+      // screen, with Live on the toggle. `sd` still names the exact slot so the
+      // completion resolves THAT day and not a neighbouring same-label one.
       router.push(
-        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
+        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}/live?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
       );
     },
     [router, todayDate],
