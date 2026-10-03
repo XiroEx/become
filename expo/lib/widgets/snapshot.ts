@@ -35,6 +35,7 @@ import {
   type TokenStore,
 } from "@/lib/auth/secureStoreToken";
 import { ANDROID_WIDGETS } from "@/lib/widgets/androidWidgets";
+import { IOS_WIDGETS } from "@/lib/widgets/iosWidgets";
 
 /** Everything one widget needs to draw, and nothing else. */
 export interface WidgetSnapshotRow {
@@ -108,7 +109,12 @@ export function snapshotFromFeed(
   feed: WidgetFeed,
   now: number = Date.now(),
 ): WidgetSnapshot {
-  const wanted = new Set(ANDROID_WIDGETS.map((w) => w.feedKey));
+  // Both surfaces draw from the same snapshot: Android's four rows plus iOS's
+  // fifth (`training`). The union is what keeps one feed read feeding both.
+  const wanted: ReadonlySet<string> = new Set<string>([
+    ...ANDROID_WIDGETS.map((w) => w.feedKey),
+    ...IOS_WIDGETS.map((w) => w.feedKey),
+  ]);
   return {
     generatedAt: feed.generatedAt ?? now,
     todayKey: feed.todayKey ?? "",

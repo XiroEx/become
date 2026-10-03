@@ -63,11 +63,14 @@ describe("snapshotFromFeed", () => {
         row({ key: "training" }),
       ]),
     );
+    // Both surfaces draw from the one snapshot: Android's four rows plus
+    // iOS's fifth (`training`), from the same feed read.
     expect(snapshot.rows.map((r) => r.key)).toEqual([
       "streak",
       "nutrition",
       "mind",
       "becoming",
+      "training",
     ]);
   });
 

@@ -16,7 +16,7 @@
  *  2. **At sign-out: forget and redraw.** The server side already happens
  *     (`POST /api/auth/logout` bumps the counter, `lib/auth/AuthProvider.tsx`).
  *     This is the device side: drop the token, drop the cached day, and push the
- *     sign-in prompt onto all four tiles immediately rather than leaving the
+ *     sign-in prompt onto every tile immediately rather than leaving the
  *     member's streak and calories on the home screen of a phone they just
  *     signed out of.
  *
@@ -39,12 +39,12 @@ import {
   storeWidgetsToken,
   type MintWidgetsTokenResult,
 } from "@/lib/widgets/token";
-import { drawAndroidWidgets, hasWidgetSurface } from "@/lib/widgets/update";
+import { drawWidgets, hasWidgetSurface } from "@/lib/widgets/update";
 
 export type WidgetHandoffResult =
   /** Token minted, stored, feed read and the tiles redrawn. */
   | "handed-off"
-  /** This platform has no widget surface yet (iOS, until NP-181). */
+  /** This platform has no widget surface yet (Expo Go, web). */
   | "unsupported"
   /** Token minted and stored; the feed read did not land, tiles left alone. */
   | "token-only"
@@ -81,7 +81,7 @@ function resolve(deps: WidgetHandoffDeps): Resolved {
     fetchFeed: deps.fetchFeed ?? ((token) => fetchWidgetFeed(token)),
     saveSnapshot: deps.saveSnapshot ?? ((s) => saveSnapshot(s)),
     clearSnapshot: deps.clearSnapshot ?? (() => clearSnapshot()),
-    draw: deps.draw ?? ((args) => drawAndroidWidgets(args)),
+    draw: deps.draw ?? ((args) => drawWidgets(args)),
     hasSurface: deps.hasSurface ?? hasWidgetSurface,
     now: deps.now ?? (() => new Date()),
     tzOffsetMinutes:

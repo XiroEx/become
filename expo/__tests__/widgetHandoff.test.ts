@@ -21,6 +21,7 @@ import {
   drawAndroidWidgets,
   hasWidgetSurface,
   loadAndroidWidgetUpdater,
+  loadIosWidgetUpdaters,
 } from "@/lib/widgets/update";
 import type { WidgetFeedResult } from "@/lib/widgets/feed";
 import { snapshotFromFeed, type WidgetSnapshot } from "@/lib/widgets/snapshot";
@@ -314,10 +315,20 @@ describe("drawAndroidWidgets", () => {
     expect(updates[0]?.texts).not.toContain("12");
   });
 
-  // The invariant that keeps the two platform checks from drifting apart: a
+  // The invariant that keeps the platform checks from drifting apart: a
   // platform that claims a widget surface must have a module to draw with.
+  // Under jest the platform is iOS in this file's sibling suite and Android
+  // everywhere else, so this pins the platform it runs on: Android's updater
+  // on Android, the iOS updaters on iOS. `__tests__/iosWidgetDraw.test.ts`
+  // pins the iOS half with `Platform.OS = 'ios'`.
   it("only claims a surface where there is a module to draw with", () => {
-    expect(hasWidgetSurface()).toBe(loadAndroidWidgetUpdater() !== null);
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Platform.OS is reassigned per-suite; a static import would freeze it
+    const { Platform } = require("react-native") as typeof import("react-native");
+    if (Platform.OS === "ios") {
+      expect(hasWidgetSurface()).toBe(loadIosWidgetUpdaters() !== null);
+    } else {
+      expect(hasWidgetSurface()).toBe(loadAndroidWidgetUpdater() !== null);
+    }
   });
 
   it("does nothing, and says so, when there is no widget module (iOS, Expo Go)", async () => {
