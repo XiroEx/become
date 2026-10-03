@@ -43,6 +43,10 @@ export default function ProgrammingIndexRoute() {
     router.push("/(tabs)/programming/mine");
   };
 
+  const handleOpenExercises = () => {
+    router.push("/(tabs)/programming/exercises");
+  };
+
   const handleWorkoutNow = () => {
     router.push("/(tabs)/programming?quick=true" as never);
   };
@@ -145,6 +149,19 @@ export default function ProgrammingIndexRoute() {
             <Dumbbell size={14} color={colors.primary} />
             <Text className="text-foreground text-xs font-semibold">
               My Programs
+            </Text>
+          </Pressable>
+
+          <Pressable
+            testID="workout-open-exercises"
+            accessibilityRole="button"
+            accessibilityLabel="My Exercises"
+            onPress={handleOpenExercises}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+          >
+            <Dumbbell size={14} color={colors.primary} />
+            <Text className="text-foreground text-xs font-semibold">
+              My Exercises
             </Text>
           </Pressable>
 
