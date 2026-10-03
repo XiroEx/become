@@ -75,6 +75,7 @@ import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
+import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -1025,6 +1026,11 @@ export default function NutritionIndexRoute() {
   const [timelineMenuOpen, setTimelineMenuOpen] = useState(false);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  // Meal-photo / describe estimate (NP-089): which surface the sheet opens on.
+  const [estimateOpen, setEstimateOpen] = useState(false);
+  const [estimatePhase, setEstimatePhase] = useState<"chooser" | "describe">(
+    "chooser",
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   // Barcode scan (NP-088): the camera menu opens the search sheet straight
@@ -1184,6 +1190,19 @@ export default function NutritionIndexRoute() {
     setSearchBarcodeOpen(opts?.barcode === true);
     setSearchOpen(true);
   };
+
+  // Meal-photo / describe estimate (NP-089): Take photo and Upload capture
+  // inside the sheet (NP-059's capture helper); Describe opens on the text
+  // surface. Capture needs no device check here — NP-093's code is on beta
+  // and camera verification is deferred to NP-008.
+  const openEstimate = (phase: "chooser" | "describe") => {
+    setEstimatePhase(phase);
+    setEstimateOpen(true);
+  };
+
+  const handleEstimateLogged = useCallback(async () => {
+    await Promise.all([refetchMealLogs(), refetchSideTables()]);
+  }, [refetchMealLogs, refetchSideTables]);
 
   return (
     <SafeAreaView
@@ -2057,8 +2076,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setCameraMenuOpen(false);
-                // TODO(NP-060, NP-089): AI meal photo capture & estimation flow is NP-060/NP-089.
-                router.push("/(tabs)/nutrition/recipes");
+                openEstimate("chooser");
               }}
             >
               Take photo
@@ -2119,8 +2137,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setUploadMenuOpen(false);
-                // TODO(NP-059): Photo upload and blob intake is NP-059.
-                router.push("/(tabs)/nutrition/recipes");
+                openEstimate("chooser");
               }}
             >
               Upload photo
@@ -2130,8 +2147,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setUploadMenuOpen(false);
-                // TODO(NP-089): Describe meal estimation flow is NP-089.
-                openSearch();
+                openEstimate("describe");
               }}
             >
               Describe
@@ -2221,6 +2237,22 @@ export default function NutritionIndexRoute() {
         currentTag={searchTag}
         activeDate={activeDate}
         initialBarcodeOpen={searchBarcodeOpen}
+      />
+
+      {/* Meal-photo / describe estimate (NP-089) */}
+      <EstimateSheet
+        visible={estimateOpen}
+        onClose={() => setEstimateOpen(false)}
+        onLogged={() => void handleEstimateLogged()}
+        tag={currentDefaultTag}
+        tagOptions={[
+          ...availableTags.defaults,
+          ...availableTags.userTags,
+          ...sessionTags,
+        ]}
+        dateKey={activeDate}
+        todayKey={today}
+        initialPhase={estimatePhase}
       />
 
       {/* Combine Sheet (NP-175) */}
