@@ -398,8 +398,13 @@ describe("CalendarIndexRoute — Acceptance criteria & parity", () => {
   });
 
   it("(id: e015c925) A quick session planned for Friday shows on Friday as planned", async () => {
-    // Friday date
-    const friday = "2026-10-02";
+    // The next Friday strictly after today. A hard-coded date turns into a
+    // past day once the clock passes it, and a past planned quick session is
+    // (correctly) rendered as status-incomplete.
+    const fri = new Date();
+    fri.setHours(12, 0, 0, 0);
+    fri.setDate(fri.getDate() + (((5 - fri.getDay() + 7) % 7) || 7));
+    const friday = localDateKey(fri);
     mockParams = { date: friday };
 
     mockApiFetch.mockImplementation((path: string) => {
