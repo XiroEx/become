@@ -106,8 +106,11 @@ describe("CalendarIndexRoute", () => {
       expect(getByTestId(itemId)).toBeTruthy();
     });
     fireEvent.press(getByTestId(itemId));
+    // A tapped slot opens the TRACK view (NP-087) — every set on one screen,
+    // with Live on the toggle, the way the web's calendar links to
+    // `/dashboard/workout/{id}/workout?day=…&sd=…`.
     expect(mockPush).toHaveBeenCalledWith(
-      `/(tabs)/programming/prog-1/workout/1?phase=0&sd=${encodeURIComponent(futureDate)}&day=Day%202`,
+      `/(tabs)/programming/prog-1/workout/1/live?phase=0&sd=${encodeURIComponent(futureDate)}&day=Day%202`,
     );
   });
 

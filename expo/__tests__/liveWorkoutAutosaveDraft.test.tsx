@@ -463,9 +463,10 @@ describe("Live Workout Autosave & Crash-safe Local Draft (NP-079)", () => {
         "5",
       );
     });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("live-workout-bench-set-0-complete"));
-    });
+    // No tap on the checkbox: a `reps_weight` set ticks ITSELF the moment it
+    // holds reps and a weight (`isSetFilled`, NP-087), and tapping now would
+    // un-tick it — which would take Complete Workout off the screen, because
+    // that button only exists once every set is done.
 
     // Verify cache has the workout before finish
     await waitFor(async () => {

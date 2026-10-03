@@ -315,6 +315,10 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     );
     fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "30");
     fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "8");
+    // Complete Workout only exists once every set is done (NP-087) — each of
+    // these three sets ticks itself the moment its tracking type is satisfied,
+    // so the cardio row has to be logged too before the button is there.
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
     fireEvent.press(getByTestId("live-workout-finish"));
     expect(onFinish).toHaveBeenCalledTimes(1);
     const finished = onFinish.mock.calls[0]![0];

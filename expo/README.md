@@ -173,8 +173,10 @@ If the web gained a new exported function, the parity test fails with
 table covers it. That is the point: an uncompared export is not a copy.
 
 Two files are deliberately only half-copied, and both say so at the top:
-`workout/position.ts` (the web half is `localStorage`; the native store
-arrives with NP-081) and `quickSession/log.ts` (`logQuickSession` reads a
+`workout/position.ts` (the web half is `localStorage`; the native store is
+`lib/live/workoutPosition.ts`, which wraps the copy's key, scopes and age rule
+over the same `KeyValueStore` the live draft cache uses — NP-087) and
+`quickSession/log.ts` (`logQuickSession` reads a
 token out of `localStorage` and POSTs a relative URL — native saves through
 `@become/api-client`). The parity test names each omission with its reason and
 fails if anything else goes missing.

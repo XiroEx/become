@@ -376,10 +376,12 @@ describe("Workout tab: acceptance criteria tests", () => {
       expect(getByText("8/12 sessions")).toBeTruthy();
       expect(getByText("Phase 2 • Day 3")).toBeTruthy();
 
-      // Tap opens Track for next day (Day 3 -> workoutIndex 2, Phase 2 -> phaseIndex 1)
+      // Tap opens the TRACK VIEW for the next day (NP-087) — every set on one
+      // screen with Live on the toggle. Day 3 -> workoutIndex 2, Phase 2 ->
+      // phaseIndex 1.
       fireEvent.press(getByTestId("continue-program-card-p1"));
       expect(mockPush).toHaveBeenCalledWith(
-        "/(tabs)/programming/p1/workout/2?phase=1",
+        "/(tabs)/programming/p1/workout/2/live?phase=1&day=Day%203",
       );
 
       // Program 2: Strength 5x5 (paused, 25%)

@@ -49,6 +49,7 @@ import { ContrastScene } from "@/components/mind/session/scenes/ContrastScene";
 import { HoldToAffirmScene } from "@/components/mind/session/scenes/HoldToAffirmScene";
 import { IdentityScene } from "@/components/mind/session/scenes/IdentityScene";
 import { MissionScene } from "@/components/mind/session/scenes/MissionScene";
+import { MirrorScene } from "@/components/mind/session/scenes/MirrorScene";
 import { PatternScene } from "@/components/mind/session/scenes/PatternScene";
 import { SocialScene } from "@/components/mind/session/scenes/SocialScene";
 import { SpeakScene } from "@/components/mind/session/scenes/SpeakScene";
@@ -696,6 +697,8 @@ export function SessionPlayer({
                 <ContrastScene move={move} onDone={next} preview={preview} />
               ) : move.kind === "speak" ? (
                 <SpeakScene move={move} onDone={next} preview={preview} />
+              ) : move.kind === "mirror" ? (
+                <MirrorScene move={move} onDone={next} preview={preview} />
               ) : (
                 <HoldToAffirmScene move={move} onDone={next} preview={preview} />
               )}
