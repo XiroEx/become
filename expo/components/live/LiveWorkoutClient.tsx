@@ -92,6 +92,13 @@ export interface LiveWorkoutClientProps {
   finishing?: boolean;
   /** Save error to surface offline / failure state and offer Retry. */
   saveError?: Error | string | null;
+  /**
+   * True while the latest save is kept on the phone and will sync when the
+   * connection returns. Renders the small "saved on this phone, will sync"
+   * state — distinct from `saveError`, which is a refusal retrying cannot
+   * fix. Retry replays the same queued payload.
+   */
+  pendingSync?: boolean;
   /** Open the swap picker for an exercise (route fetches alternatives). */
   onRequestSwap?: (slug: string) => void;
   /** Injected rest-timer interval impls for deterministic tests. */
@@ -138,6 +145,7 @@ export function LiveWorkoutClient({
   onFinish,
   finishing = false,
   saveError,
+  pendingSync = false,
   onRequestSwap,
   restTimerSetInterval,
   restTimerClearInterval,
@@ -303,6 +311,33 @@ export function LiveWorkoutClient({
             onResume={rest.resume}
             onSkip={rest.skip}
           />
+        ) : null}
+        {pendingSync && !saveError ? (
+          <View
+            testID={`${testID}-pending-sync-banner`}
+            style={{
+              padding: 12,
+              borderRadius: 8,
+              backgroundColor: tint("primary", 0.12),
+              gap: 8,
+              marginTop: 12,
+            }}
+          >
+            <Text
+              testID={`${testID}-pending-sync-message`}
+              className="text-foreground font-medium text-sm"
+            >
+              Saved on this phone — will sync when you&apos;re back online.
+            </Text>
+            <Button
+              testID={`${testID}-retry`}
+              variant="secondary"
+              size="sm"
+              onPress={() => onFinish?.(gridRef.current)}
+            >
+              Retry
+            </Button>
+          </View>
         ) : null}
         {saveError ? (
           <View

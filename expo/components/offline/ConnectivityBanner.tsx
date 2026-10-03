@@ -7,6 +7,10 @@ import {
   type ConnectivitySource,
 } from "@/lib/offline/connectivity";
 import { getOfflineWrites, type OfflineWrites } from "@/lib/offline/writes";
+import {
+  getWorkoutSaveQueue,
+  type WorkoutSaveQueue,
+} from "@/lib/offline/workoutSaves";
 
 /**
  * THE ONE MOUNT POINT for everything offline. It lives at the root
@@ -30,11 +34,13 @@ import { getOfflineWrites, type OfflineWrites } from "@/lib/offline/writes";
 export interface ConnectivityBannerProps {
   connectivity?: ConnectivitySource;
   writes?: OfflineWrites;
+  workoutSaves?: WorkoutSaveQueue;
 }
 
 export function ConnectivityBanner({
   connectivity = netInfoConnectivity,
   writes,
+  workoutSaves,
 }: ConnectivityBannerProps = {}) {
   const { status } = useAuth();
   const insets = useSafeAreaInsets();
@@ -46,6 +52,14 @@ export function ConnectivityBanner({
   const queue = useMemo<OfflineWrites>(
     () => writes ?? getOfflineWrites(),
     [writes],
+  );
+  // The app's one WORKOUT queue unless a test hands us another. It replays
+  // the live workout's own saves — autosaves and the completing save — in
+  // order when the connection returns, each carrying its attempt id so a
+  // replay after a crash or after local midnight never duplicates.
+  const workoutQueue = useMemo<WorkoutSaveQueue>(
+    () => workoutSaves ?? getWorkoutSaveQueue(),
+    [workoutSaves],
   );
 
   useEffect(() => {
@@ -67,17 +81,22 @@ export function ConnectivityBanner({
 
   useEffect(() => {
     void queue.start();
+    void workoutQueue.start();
     return () => {
       queue.stop();
+      workoutQueue.stop();
     };
-  }, [queue]);
+  }, [queue, workoutQueue]);
 
   useEffect(() => {
     // `loading` is the launch read of the secure store, not a signed-out state:
     // clearing on it would wipe a snapshot before the session that owns it has
     // even been read back.
-    if (status === "signed-out") void queue.clear();
-  }, [status, queue]);
+    if (status === "signed-out") {
+      void queue.clear();
+      void workoutQueue.clear();
+    }
+  }, [status, queue, workoutQueue]);
 
   return <OfflineBanner online={online} topInset={insets.top} />;
 }

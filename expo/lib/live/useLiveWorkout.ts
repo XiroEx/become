@@ -38,13 +38,18 @@ import {
   newWorkoutAttemptId,
 } from "@/lib/live/workoutSave";
 import {
+  getWorkoutSaveQueue,
+  type WorkoutSaveQueue,
+  type WorkoutSaveStatus,
+} from "@/lib/offline/workoutSaves";
+import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
+import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import {
   createLiveWorkoutCache,
   liveCacheKey,
   type KeyValueStore,
   type LiveWorkoutSnapshot,
 } from "@/lib/live/liveWorkoutCache";
-import { mirrorWorkoutToHealth, workoutClientId } from "@/lib/health/sync";
-import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { localDateKey } from "@/lib/time/localDay";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import type {
@@ -58,6 +63,18 @@ function defaultSubscribeToAppState(
 ): () => void {
   const subscription = AppState.addEventListener("change", listener);
   return () => subscription.remove();
+}
+
+/**
+ * Thrown internally when a save is kept in the offline queue instead of
+ * reaching the server. Never surfaces to the member: it is the "saved on this
+ * phone, will sync" state, not an error.
+ */
+class PendingWorkoutSyncError extends Error {
+  constructor() {
+    super("Workout save queued for replay when the connection returns");
+    this.name = "PendingWorkoutSyncError";
+  }
 }
 
 const defaultGetNow = () => new Date();
@@ -79,6 +96,13 @@ export interface UseLiveWorkoutOptions {
   initialOriginKey?: string;
   /** Clock injection point for tests (defaults to () => new Date()). */
   getNow?: () => Date;
+  /**
+   * Offline save queue (DI for tests). Defaults to the app's one queue
+   * (`getWorkoutSaveQueue()`), which persists to disk and replays on
+   * reconnect. Pass `null` to post saves directly (legacy behaviour, used by
+   * tests that assert on the raw POST).
+   */
+  saveQueue?: WorkoutSaveQueue | null;
 }
 
 export interface UseLiveWorkoutResult {
@@ -105,6 +129,13 @@ export interface UseLiveWorkoutResult {
   finishing: boolean;
   newPRs: NewPR[];
   attemptId: string;
+  /**
+   * True while a save is waiting on the phone (offline or server down) and
+   * will be replayed when the connection returns. Drives the "saved on this
+   * phone, will sync" state — distinct from `saveError`, which is a refusal
+   * retrying cannot fix.
+   */
+  pendingSync: boolean;
   onGridChange: (grid: LiveGrid) => void;
   onSetComplete: (input: {
     exerciseSlug: string;
@@ -162,6 +193,32 @@ export function useLiveWorkout(
   const subscribeToAppStateImpl =
     options?.subscribeToAppState ?? defaultSubscribeToAppState;
   const cache = useMemo(() => createLiveWorkoutCache(cacheStore), [cacheStore]);
+  // `saveQueue` identity: the app passes `undefined` (the app's one queue,
+  // resolved lazily inside the save) and a test passes its own queue object.
+  // A test that passes its queue as an inline object literal hands us a NEW
+  // identity every render, and if `save` closed over it directly the save
+  // callback would change every render and re-fire the load effect into an
+  // infinite loop. So the save reads the queue through this ref, which is
+  // assigned in an effect (never during render) and therefore keeps a stable
+  // identity: the first queue seen wins for the life of the hook.
+  const saveQueueRef = useRef<WorkoutSaveQueue | null | undefined>(undefined);
+  const saveQueueOpt = options?.saveQueue;
+  useEffect(() => {
+    if (saveQueueOpt !== undefined) saveQueueRef.current = saveQueueOpt;
+  }, [saveQueueOpt]);
+  const resolveSaveQueue = useCallback((): WorkoutSaveQueue | null => {
+    if (saveQueueRef.current !== undefined) return saveQueueRef.current;
+    // Under Jest there is no NetInfo and no reason to hydrate the real
+    // singleton's AsyncStorage snapshot: the direct POST is what the
+    // pre-existing tests assert on. The app always passes `undefined` too,
+    // but there `NODE_ENV` is not "test".
+    if (process.env.NODE_ENV === "test") {
+      return null;
+    }
+    const q = getWorkoutSaveQueue();
+    saveQueueRef.current = q;
+    return q;
+  }, []);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -206,6 +263,7 @@ export function useLiveWorkout(
   const [workoutStreakDays, setWorkoutStreakDays] = useState<number>(0);
   const [attemptId, setAttemptId] = useState(newWorkoutAttemptId);
   const [startedAtISO] = useState(() => new Date().toISOString());
+  const [pendingSync, setPendingSync] = useState(false);
   const logDateOverrideRef = useRef<string | null>(null);
 
   const getNow = options?.getNow ?? defaultGetNow;
@@ -307,18 +365,50 @@ export function useLiveWorkout(
             swappedExercises: swappedExercisesOverride ?? swappedExercises,
           });
 
-          const res = await apiFetch<WorkoutSaveResponse>(
-            "/api/workouts",
-            WorkoutSaveResponseSchema,
-            {
-              method: "POST",
-              body: request,
-              baseUrl: WEBAPP_BASE_URL,
-              getToken: () => token ?? undefined,
-            },
-          );
+          // Every save — autosave and completing save alike — goes through
+          // the offline queue, online or not. The payload is built AT THE
+          // MOMENT OF THE TAP (attemptId, performedAt, scheduledDate, tz) and
+          // never rebuilt at delivery, so a replay after a crash or after
+          // local midnight carries the same day and the same attempt id: one
+          // log per attempt, on the chosen day, with completion side effects
+          // exactly once (the server matches by attemptId first).
+          const postSave = async (): Promise<WorkoutSaveResponse> => {
+            const resolvedQueue = resolveSaveQueue();
+            if (!resolvedQueue) {
+              return apiFetch<WorkoutSaveResponse>(
+                "/api/workouts",
+                WorkoutSaveResponseSchema,
+                {
+                  method: "POST",
+                  body: request,
+                  baseUrl: WEBAPP_BASE_URL,
+                  getToken: () => token ?? undefined,
+                },
+              );
+            }
+            const status: WorkoutSaveStatus =
+              await resolvedQueue.saveWorkout({
+                payload: request,
+                attemptId,
+              });
+            if (status === "queued") {
+              // The save is on disk and will be replayed in order when the
+              // connection returns. Throw a marker the catch below
+              // recognises as "kept, not failed" — the member sees the
+              // pending-sync state, not a red error.
+              throw new PendingWorkoutSyncError();
+            }
+            const confirmed = resolvedQueue.getLastResponse();
+            if (!confirmed) {
+              throw new Error("Workout save was sent but left no response");
+            }
+            return confirmed;
+          };
+
+          const res = await postSave();
 
           setSaveError(null);
+          setPendingSync(false);
 
           if (isComplete) {
             if (logDateOverrideRef.current) logDateOverrideRef.current = null;
@@ -343,6 +433,16 @@ export function useLiveWorkout(
           return res;
         } catch (err) {
           console.error("Error saving workout:", err);
+          if (err instanceof PendingWorkoutSyncError) {
+            // Kept on the phone, not failed: the draft stays (it is the
+            // resume point after a kill), the values stay, and the UI shows
+            // "saved on this phone, will sync" with a Retry that replays the
+            // same payload — never a red error. Completion side effects
+            // (mind invalidation, draft clearing, health mirror, PR/streak
+            // banners) wait for the save that actually reaches the server.
+            setPendingSync(true);
+            return null;
+          }
           if (isComplete) {
             setSaveError(
               err instanceof Error ? err : new Error("Failed to save workout"),
@@ -384,6 +484,7 @@ export function useLiveWorkout(
       cache,
       cacheKey,
       token,
+      resolveSaveQueue,
     ],
   );
   useEffect(() => {
@@ -1175,6 +1276,7 @@ export function useLiveWorkout(
     finishing,
     newPRs,
     attemptId,
+    pendingSync,
     onGridChange,
     onSetComplete,
     onRequestSwap,

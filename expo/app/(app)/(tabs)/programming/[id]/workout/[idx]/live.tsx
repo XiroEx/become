@@ -25,6 +25,8 @@ export interface LiveWorkoutRouteProps {
   initialOriginKey?: string;
   /** Clock injection point for tests. */
   getNow?: () => Date;
+  /** Offline save queue override for tests (defaults to the app's one queue). */
+  saveQueue?: import("@/lib/offline/workoutSaves").WorkoutSaveQueue | null;
 }
 
 /**
@@ -38,6 +40,7 @@ export default function LiveWorkoutRoute({
   cacheStore,
   initialOriginKey,
   getNow,
+  saveQueue,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
   const { colors, tint } = useThemeTokens();
@@ -77,6 +80,7 @@ export default function LiveWorkoutRoute({
     onFinish,
     finishing,
     saveError,
+    pendingSync,
     newPRs,
     onRequestSwap,
     swapSlug,
@@ -102,6 +106,7 @@ export default function LiveWorkoutRoute({
     fallbackWorkoutIndex: Number.isFinite(idx) && idx >= 0 ? idx : 0,
     initialOriginKey,
     getNow,
+    ...(saveQueue !== undefined ? { saveQueue } : {}),
   });
 
   const handleResolveIncomplete = async (action: ResolveIncompleteAction) => {
@@ -189,6 +194,7 @@ export default function LiveWorkoutRoute({
         onFinish={(g) => void onFinish(g)}
         finishing={finishing}
         saveError={saveError}
+        pendingSync={pendingSync}
         onRequestSwap={onRequestSwap}
       />
       <ExerciseSwapModal
