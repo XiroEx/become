@@ -35,6 +35,7 @@ import {
   type TokenStore,
 } from "@/lib/auth/secureStoreToken";
 import { ANDROID_WIDGETS } from "@/lib/widgets/androidWidgets";
+import { IOS_WIDGETS } from "@/lib/widgets/iosWidgets";
 
 /** Everything one widget needs to draw, and nothing else. */
 export interface WidgetSnapshotRow {
@@ -108,7 +109,13 @@ export function snapshotFromFeed(
   feed: WidgetFeed,
   now: number = Date.now(),
 ): WidgetSnapshot {
-  const wanted = new Set(ANDROID_WIDGETS.map((w) => w.feedKey));
+  // The union of both platforms' tiles: Android draws four (no `training`),
+  // iOS draws all five. One snapshot feeds both, so a row dropped here is a
+  // tile that can never paint on either.
+  const wanted = new Set([
+    ...ANDROID_WIDGETS.map((w) => w.feedKey),
+    ...IOS_WIDGETS.map((w) => w.feedKey),
+  ]);
   return {
     generatedAt: feed.generatedAt ?? now,
     todayKey: feed.todayKey ?? "",

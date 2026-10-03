@@ -21,6 +21,7 @@ import {
   drawAndroidWidgets,
   hasWidgetSurface,
   loadAndroidWidgetUpdater,
+  loadIosWidgetUpdaters,
 } from "@/lib/widgets/update";
 import type { WidgetFeedResult } from "@/lib/widgets/feed";
 import { snapshotFromFeed, type WidgetSnapshot } from "@/lib/widgets/snapshot";
@@ -314,10 +315,14 @@ describe("drawAndroidWidgets", () => {
     expect(updates[0]?.texts).not.toContain("12");
   });
 
-  // The invariant that keeps the two platform checks from drifting apart: a
+  // The invariant that keeps the platform checks from drifting apart: a
   // platform that claims a widget surface must have a module to draw with.
+  // Jest runs on iOS (the RN preset's default platform), so the surface here
+  // is the WidgetKit one and the module is the iOS loader's.
   it("only claims a surface where there is a module to draw with", () => {
-    expect(hasWidgetSurface()).toBe(loadAndroidWidgetUpdater() !== null);
+    expect(hasWidgetSurface()).toBe(true);
+    expect(loadIosWidgetUpdaters()).not.toBeNull();
+    expect(loadAndroidWidgetUpdater()).toBeNull();
   });
 
   it("does nothing, and says so, when there is no widget module (iOS, Expo Go)", async () => {
