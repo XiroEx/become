@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,7 +12,7 @@ import {
   ExerciseGroupNav,
   type ExerciseGroupType,
 } from "@/components/live/ExerciseGroupNav";
-import { getBellWeightInfo } from "@become/core";
+import { getBellWeightInfo, buildWorkoutFlow } from "@become/core";
 import { applySetUpdate } from "@/lib/live/liveWorkoutCache";
 import { FramedVideo } from "@/components/FramedVideo";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
@@ -172,6 +172,38 @@ export function LiveWorkoutClient({
   const [round, setRound] = useState<number>(1);
   const totalRounds = workout.groupRounds ?? 1;
 
+  /**
+   * The interleaved rounds for every grouped block (NP-172): the same
+   * `buildWorkoutFlow` the web live view runs, over the same consecutive
+   * `groupId` runs the builder saves. `flowIndexByKey` maps each
+   * `exerciseSlug:setIndex` to its position in the flow, so the rounds strip
+   * under a block header can walk the member through the block round by round
+   * instead of exercise by exercise.
+   */
+  const workoutFlow = useMemo(
+    () =>
+      buildWorkoutFlow(
+        workout.exercises.map((ex) => ({
+          name: ex.name,
+          exerciseSlug: ex.slug,
+          sets: ex.sets,
+          ...(ex.groupId ? { groupId: ex.groupId } : {}),
+          ...(ex.groupType ? { groupType: ex.groupType } : {}),
+          ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+          ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+        })),
+      ),
+    [workout.exercises],
+  );
+  const flowIndexByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    workoutFlow.forEach((step, flowIndex) => {
+      const slug = workout.exercises[step.exerciseIndex]?.slug ?? "";
+      map.set(`${slug}:${step.setIndex}`, flowIndex);
+    });
+    return map;
+  }, [workoutFlow, workout.exercises]);
+
   // Single rest countdown, (re)started whenever a set is completed.
   const rest = useRestTimer({
     setIntervalImpl: restTimerSetInterval,
@@ -219,15 +251,45 @@ export function LiveWorkoutClient({
           // superset/circuit/triset members render contiguously under a label.
           const prevGroup = workout.exercises[exIdx - 1]?.groupId;
           const showGroupHeader = !!ex.groupId && ex.groupId !== prevGroup;
+          // The interleaved rounds for this block (NP-172): consecutive rows
+          // sharing a groupId run A1 B1 A2 B2 …, so the header names each
+          // round and each set row names its round. `flowIndexByKey` is the
+          // same `buildWorkoutFlow` the web live view runs, keyed by
+          // exercise + set.
+          const groupRoundsForBlock = showGroupHeader
+            ? (() => {
+                const members = workout.exercises.filter(
+                  (member) => member.groupId === ex.groupId,
+                );
+                const maxSets = Math.max(
+                  ex.groupRounds ?? 0,
+                  ...members.map((member) => member.sets || 0),
+                );
+                return maxSets > 0 ? maxSets : members.length > 0 ? 1 : 0;
+              })()
+            : 0;
           return (
             <View key={ex.slug}>
               {showGroupHeader ? (
-                <Text
-                  testID={`${testID}-group-${ex.groupId}`}
-                  className="text-primary text-sm font-semibold mt-2"
+                <View
+                  testID={`${testID}-group-${ex.groupId}-header`}
+                  style={{ gap: 4, marginTop: 8 }}
                 >
-                  {ex.groupLabel ?? ex.groupId}
-                </Text>
+                  <Text
+                    testID={`${testID}-group-${ex.groupId}`}
+                    className="text-primary text-sm font-semibold"
+                  >
+                    {ex.groupLabel ?? ex.groupId}
+                  </Text>
+                  {groupRoundsForBlock > 1 ? (
+                    <Text
+                      testID={`${testID}-group-${ex.groupId}-rounds`}
+                      className="text-muted-foreground text-xs"
+                    >
+                      {`Runs as ${groupRoundsForBlock} interleaved rounds`}
+                    </Text>
+                  ) : null}
+                </View>
               ) : null}
               <Card
                 testID={`${testID}-exercise-${ex.slug}`}
@@ -255,38 +317,52 @@ export function LiveWorkoutClient({
                     {ex.notes}
                   </Text>
                 ) : null}
-                {sets.map((s, i) => (
-                  <LiveSetRow
-                    key={i}
-                    setIndex={i}
-                    bell={bell}
-                    exerciseName={ex.name}
-                    state={s}
-                    prefill={ex.prefill?.[i] ?? null}
-                    trackingType={ex.trackingType}
-                    testID={`${testID}-${ex.slug}-set-${i}`}
-                    onChange={(next) => {
-                      const justCompleted = !s.completed && next.completed;
-                      const updated = applySetUpdate(
-                        gridRef.current,
-                        ex.slug,
-                        i,
-                        next,
-                      );
-                      gridRef.current = updated;
-                      setGrid(updated);
-                      onGridChange?.(updated);
-                      if (justCompleted) {
-                        rest.start(ex.restSec ?? DEFAULT_REST_SEC);
-                        void onSetComplete?.({
-                          exerciseSlug: ex.slug,
-                          setIndex: i,
-                          state: next,
-                        });
+                {sets.map((s, i) => {
+                  const flowIndex = ex.groupId
+                    ? flowIndexByKey.get(`${ex.slug}:${i}`)
+                    : undefined;
+                  const flowStep =
+                    flowIndex !== undefined
+                      ? workoutFlow[flowIndex]
+                      : undefined;
+                  return (
+                    <LiveSetRow
+                      key={i}
+                      setIndex={i}
+                      bell={bell}
+                      exerciseName={ex.name}
+                      state={s}
+                      prefill={ex.prefill?.[i] ?? null}
+                      trackingType={ex.trackingType}
+                      testID={`${testID}-${ex.slug}-set-${i}`}
+                      roundLabel={
+                        ex.groupId && flowStep
+                          ? `Round ${flowStep.roundNumber + 1}`
+                          : undefined
                       }
-                    }}
-                  />
-                ))}
+                      onChange={(next) => {
+                        const justCompleted = !s.completed && next.completed;
+                        const updated = applySetUpdate(
+                          gridRef.current,
+                          ex.slug,
+                          i,
+                          next,
+                        );
+                        gridRef.current = updated;
+                        setGrid(updated);
+                        onGridChange?.(updated);
+                        if (justCompleted) {
+                          rest.start(ex.restSec ?? DEFAULT_REST_SEC);
+                          void onSetComplete?.({
+                            exerciseSlug: ex.slug,
+                            setIndex: i,
+                            state: next,
+                          });
+                        }
+                      }}
+                    />
+                  );
+                })}
                 <Pressable
                   testID={`${testID}-${ex.slug}-swap`}
                   onPress={() => onRequestSwap?.(ex.slug)}

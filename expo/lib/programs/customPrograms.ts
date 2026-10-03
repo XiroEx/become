@@ -96,8 +96,9 @@ export function customProgramDeletePath(programId: string): string {
  * NP-168 built the frame: program details, phases, sessions with their day
  * labels and titles, create, update and the local draft. NP-171 adds the thing
  * a program is actually made of — the exercise rows, with search, the
- * prescription fields and custom exercises. What is still missing is their
- * order and grouping (NP-172).
+ * prescription fields and custom exercises. NP-172 adds their order and
+ * grouping (drag reorder plus superset/circuit/triset/giant-set/EMOM/AMRAP
+ * blocks with a label, rest and rounds).
  *
  * Until the rows landed, a member sent to the native builder could save a
  * program with no exercises in it, which is strictly worse than the web editor

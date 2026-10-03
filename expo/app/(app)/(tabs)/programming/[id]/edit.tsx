@@ -36,8 +36,8 @@ import {
  *   • EXERCISES ARE EDITED, NOT JUST CARRIED. The GET answers HYDRATED
  *     exercises and the PUT runs the body back through `dehydrateProgram`, so
  *     the rows the frame used to send back unchanged are now the rows the
- *     member edits (NP-171): search picker, prescription, notes and removal.
- *     Reorder and grouping stay untouched for NP-172.
+ *     member edits (NP-171): search picker, prescription, notes, removal,
+ *     drag reorder and grouping (NP-172).
  */
 export default function EditProgramRoute() {
   const { colors } = useThemeTokens();
