@@ -48,6 +48,12 @@ import {
   type PlanAvailability,
   type PortalState,
 } from "@/lib/entitlements/billing";
+import {
+  activateFromCheckoutReturn,
+  consumeBillingHandover,
+  onAppForeground,
+  rememberBillingHandover,
+} from "@/lib/entitlements/billingReturn";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
@@ -751,13 +757,19 @@ export default function PlanScreen({
   const params = useLocalSearchParams<{
     checkout?: string;
     billing?: string;
+    portal?: string;
     session_id?: string;
   }>();
 
   const paidReturn = params.checkout === "success" || params.billing === "success";
   const paidSessionId = params.session_id;
+  // A portal return (`?billing=portal-return`, `?portal=return`) carries no
+  // session hint — whatever changed is already saved with Stripe — but the
+  // snapshot on this screen may predate it, so it re-reads on arrival too.
+  const portalReturn =
+    params.billing === "portal-return" || params.portal === "return";
 
-  const { data: hookSnapshot, loading: entitlementsLoading, refresh } =
+  const { data: hookSnapshot, loading: entitlementsLoading } =
     useEntitlements();
 
   const snapshot = initialSnapshot ?? hookSnapshot;
@@ -857,26 +869,40 @@ export default function PlanScreen({
   }, [checkoutAvailable, billingStatus, deps]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Consume return from checkout
+  // Consume return from checkout — the web's return-URL activation
+  // (`webapp/app/dashboard/plan/PlanPageClient.tsx`), ported: the status call
+  // activates from the session hint (the server checks it against the member)
+  // instead of waiting for the webhook, and the refresh is what makes THIS
+  // screen show it. A portal return carries no hint but still re-reads, so a
+  // cancellation (`subscription.cancelAtPeriodEnd`) shows on arrival. The
+  // return params arrive from outside React (the deep link that opened this
+  // screen), so syncing from them in an effect is the honest shape.
   useEffect(() => {
-    if (!paidReturn) return;
+    if (!paidReturn && !portalReturn) return;
     let cancelled = false;
 
     void (async () => {
-      try {
-        await refresh();
-      } catch {
-        // non-fatal
-      }
+      await activateFromCheckoutReturn(paidReturn ? paidSessionId : undefined, deps);
       if (!cancelled) {
-        setCheckoutReturn("confirmed");
+        setCheckoutReturn(paidReturn ? "confirmed" : "none");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [paidReturn, paidSessionId, refresh]);
+  }, [paidReturn, portalReturn, paidSessionId, deps]);
+
+  // Re-read when the app comes back to the foreground after a checkout or
+  // portal handover (NP-054). The member may return through the app switcher
+  // rather than the return button — no params, no activation — so the
+  // remembered handover is what triggers the refresh, retried until the tier
+  // changes (the webhook usually lands first).
+  useEffect(() => {
+    return onAppForeground(() => {
+      void consumeBillingHandover(deps);
+    });
+  }, [deps]);
 
   const onStart = useCallback(
     async (plan: BillingPlan) => {
@@ -892,7 +918,13 @@ export default function PlanScreen({
         }
         const opened = await openExternally(result.url, deps);
         setCheckout(opened ? "ready" : "error");
-        if (opened) setBrowserOpened(true);
+        // The purchase is now in the device browser. Remember the handover so
+        // the foreground re-read picks up the new tier even when the member
+        // comes back through the app switcher (NP-054).
+        if (opened) {
+          rememberBillingHandover("checkout");
+          setBrowserOpened(true);
+        }
       } catch {
         setCheckout("error");
       } finally {
@@ -907,6 +939,9 @@ export default function PlanScreen({
     try {
       const opened = await openBillingPortal(portalPath, deps);
       setPortalState(opened ? "idle" : "failed");
+      // Billing is now in the device browser — remember it for the foreground
+      // re-read (NP-054), so a portal cancellation shows on the way back in.
+      if (opened) rememberBillingHandover("portal");
     } catch {
       setPortalState("failed");
     }
