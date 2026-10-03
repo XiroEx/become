@@ -33,6 +33,8 @@ import {
   ProfileResponseSchema,
   TagsResponseSchema,
   apiFetch,
+  type Food,
+  type Meal,
   type MealLog,
   type ProfileResponse,
 } from "@become/api-client";
@@ -66,10 +68,20 @@ import {
   selectionKey,
   toggleSelection,
 } from "@/lib/nutrition/combineItems";
+import {
+  addToLoggedMeal,
+  logBasket,
+  logSavedMeal,
+} from "@/lib/nutrition/basketLog";
+import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
+import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
+import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 import { useEntitlements } from "@/lib/entitlements";
 import { useApiErrorHandler } from "@/lib/errors";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
+import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
+import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
 import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
@@ -1188,6 +1200,9 @@ export default function NutritionIndexRoute() {
   const openSearch = (tagToUse?: string, opts?: { barcode?: boolean }) => {
     setSearchTag(tagToUse ?? currentDefaultTag);
     setSearchBarcodeOpen(opts?.barcode === true);
+    // A fresh search starts a fresh basket; the sitting target is only for
+    // the explicit "add to this meal" affordance below.
+    setAddToLogId(null);
     setSearchOpen(true);
   };
 
@@ -1203,6 +1218,165 @@ export default function NutritionIndexRoute() {
   const handleEstimateLogged = useCallback(async () => {
     await Promise.all([refetchMealLogs(), refetchSideTables()]);
   }, [refetchMealLogs, refetchSideTables]);
+
+  // ── Basket: log several foods as one sitting (NP-094) ─────────────────────
+  //
+  // The web's basket (`FoodSearchModal` meal mode + `handleAddMany`): foods
+  // picked in the search sheet collect in a basket and are logged in ONE
+  // `POST /api/meal-logs` request, optionally kept as a reusable meal. The
+  // log goes first and a failed meal save never costs it.
+  const [basket, setBasket] = useState<BasketItem[]>([]);
+  const [basketOpen, setBasketOpen] = useState(false);
+  const [basketSubmitting, setBasketSubmitting] = useState(false);
+  const [basketError, setBasketError] = useState<string | null>(null);
+  const [basketNotice, setBasketNotice] = useState<string | null>(null);
+  // When set, the search sheet appends to THIS specific MealLog (the web's
+  // "add to this meal" on a logged sitting) instead of the basket.
+  const [addToLogId, setAddToLogId] = useState<string | null>(null);
+  // A saved meal picked from the Meals filter waits here for its portion.
+  const [mealToLog, setMealToLog] = useState<Meal | null>(null);
+  const [mealLogSubmitting, setMealLogSubmitting] = useState(false);
+  const [mealLogError, setMealLogError] = useState<string | null>(null);
+
+  const handleAddToBasket = (food: Food) => {
+    const variant = defaultVariantOf(food);
+    if (!variant) return;
+    const item = buildMealItemPayload({
+      food: food as unknown as Parameters<typeof buildMealItemPayload>[0]["food"],
+      variant,
+      quantity: 1,
+      unit: variant.servingUnit,
+    });
+    const key = `${String(food._id ?? food.id ?? "food")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const entry: BasketItem = { ...item, key };
+    setBasket((prev) => [...prev, entry]);
+  };
+
+  const handleRemoveBasketItem = (key: string) => {
+    setBasket((prev) => prev.filter((item) => item.key !== key));
+  };
+
+  const handleSubmitBasket = async (opts: {
+    mealName?: string | undefined;
+    saveAsMeal: boolean;
+  }) => {
+    if (basketSubmitting || basket.length === 0) return;
+    setBasketSubmitting(true);
+    setBasketError(null);
+    setBasketNotice(null);
+    try {
+      const count = basket.length;
+      const result = await logBasket({
+        items: basket.map(({ key: _key, ...item }) => item as MealItemPayload),
+        tag: searchTag ?? currentDefaultTag,
+        mealName: opts.saveAsMeal ? opts.mealName : undefined,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      // A saved meal consumed an allowance slot: re-read the snapshot so the
+      // next sheet shows the cap it just reached rather than the one before.
+      if (opts.saveAsMeal && !result.mealNotSaved) {
+        await refreshEntitlements().catch(() => {});
+      }
+      setBasket([]);
+      setBasketOpen(false);
+      setSearchOpen(false);
+      setSearchBarcodeOpen(false);
+      setBasketNotice(
+        result.mealNotSaved
+          ? `Logged ${count} item${count === 1 ? "" : "s"}. Could not save the meal.`
+          : null,
+      );
+      await refetchMealLogs();
+    } catch (err) {
+      // A plan gate goes to the upgrade sheet through the root handler; an
+      // ordinary refusal keeps the server's own words in the sheet.
+      const { handled, message } = handleApiError(err);
+      if (!handled) setBasketError(message);
+    } finally {
+      setBasketSubmitting(false);
+    }
+  };
+
+  // Log a saved meal from the Meals filter through `POST /api/meals/{id}/log`
+  // with portion, tag and time — the web's `MealApplySheet`.
+  const handleLogSavedMeal = async (opts: {
+    portion: number;
+    tag: string;
+    untimed: boolean;
+  }) => {
+    if (!mealToLog || mealLogSubmitting) return;
+    setMealLogSubmitting(true);
+    setMealLogError(null);
+    try {
+      await logSavedMeal({
+        mealId: mealToLog._id,
+        portion: opts.portion,
+        tag: opts.tag,
+        untimed: opts.untimed,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      setMealToLog(null);
+      setSearchOpen(false);
+      setSearchBarcodeOpen(false);
+      await refetchMealLogs();
+    } catch (err) {
+      const { handled, message } = handleApiError(err);
+      if (!handled) setMealLogError(message);
+    } finally {
+      setMealLogSubmitting(false);
+    }
+  };
+
+  // "Add to this meal" on a logged sitting: the search sheet appends to that
+  // specific MealLog (`POST /api/meal-logs/{id}/items`).
+  const handleAddToMeal = (logId: string, tag: string) => {
+    setAddToLogId(logId);
+    setSearchTag(tag);
+    setSearchBarcodeOpen(false);
+    setSearchOpen(true);
+  };
+
+  const handlePickMeal = (meal: Meal) => {
+    setMealLogError(null);
+    setMealToLog(meal);
+  };
+
+  const handlePickBasketFood = async (food: Food) => {
+    // Pinned to a sitting: log one food straight into it, like the web's
+    // `handleAddFood` with `addToLogId` set.
+    if (addToLogId) {
+      const variant = defaultVariantOf(food);
+      if (!variant) return;
+      const item = buildMealItemPayload({
+        food: food as unknown as Parameters<typeof buildMealItemPayload>[0]["food"],
+        variant,
+        quantity: 1,
+        unit: variant.servingUnit,
+      });
+      try {
+        await addToLoggedMeal({
+          logId: addToLogId,
+          item,
+          apiFetch,
+          token,
+          baseUrl: WEBAPP_BASE_URL,
+        });
+        setAddToLogId(null);
+        setSearchOpen(false);
+        setSearchBarcodeOpen(false);
+        await refetchMealLogs();
+      } catch (err) {
+        const { handled, message } = handleApiError(err);
+        if (!handled) setBasketError(message);
+      }
+      return;
+    }
+    handleAddToBasket(food);
+  };
 
   return (
     <SafeAreaView
@@ -1301,6 +1475,20 @@ export default function NutritionIndexRoute() {
           </Pressable>
         </View>
       </View>
+
+      {/* The basket's quiet word when the log landed but the keep did not. */}
+      {basketNotice ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          <Text
+            testID="nutrition-basket-notice"
+            accessibilityRole="alert"
+            className="text-muted-foreground text-xs"
+            onPress={() => setBasketNotice(null)}
+          >
+            {basketNotice}
+          </Text>
+        </View>
+      ) : null}
 
       {/* 4-segment View Selector (Day / Week / Month / Training) */}
       <View
@@ -1706,6 +1894,7 @@ export default function NutritionIndexRoute() {
               onFlagItem={handleFlagItem}
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
+              onAddToMeal={handleAddToMeal}
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
@@ -2233,10 +2422,44 @@ export default function NutritionIndexRoute() {
         onClose={() => {
           setSearchOpen(false);
           setSearchBarcodeOpen(false);
+          setAddToLogId(null);
         }}
         currentTag={searchTag}
-        activeDate={activeDate}
         initialBarcodeOpen={searchBarcodeOpen}
+        basketMode={addToLogId === null}
+        basketCount={basket.length}
+        onAddToBasket={handlePickBasketFood}
+        onOpenBasket={() => setBasketOpen(true)}
+        onPickMeal={handlePickMeal}
+      />
+
+      {/* Basket sheet (NP-094) */}
+      <BasketSheet
+        visible={basketOpen}
+        items={basket}
+        canSaveMeals={canSaveMeals}
+        submitting={basketSubmitting}
+        error={basketError}
+        onRemoveItem={handleRemoveBasketItem}
+        onClose={() => {
+          setBasketOpen(false);
+          setBasketError(null);
+        }}
+        onSubmit={handleSubmitBasket}
+      />
+
+      {/* Log a saved meal with a portion (NP-094) */}
+      <MealLogSheet
+        visible={mealToLog !== null}
+        meal={mealToLog}
+        currentTag={searchTag ?? currentDefaultTag}
+        submitting={mealLogSubmitting}
+        error={mealLogError}
+        onClose={() => {
+          setMealToLog(null);
+          setMealLogError(null);
+        }}
+        onSubmit={handleLogSavedMeal}
       />
 
       {/* Meal-photo / describe estimate (NP-089) */}

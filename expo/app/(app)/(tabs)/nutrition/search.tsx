@@ -29,7 +29,6 @@ export default function NutritionSearchRoute() {
             visible={true}
             onClose={() => router.back()}
             currentTag={params.tag}
-            activeDate={params.date}
             initialBarcodeOpen={params.barcode === "1"}
             testID="nutrition-search-sheet"
           />
