@@ -869,9 +869,8 @@ export function EstimateSheet({
         visible={addMoreOpen && phase === "review"}
         onClose={() => setAddMoreOpen(false)}
         currentTag={selectedTag}
-        activeDate={dateKey}
         onPickFood={handleAddMore}
-        onPickMeal={() => setAddMoreOpen(false)}
+        onPickMeal={(_meal) => setAddMoreOpen(false)}
         testID={`${testID}-add-more-sheet`}
       />
     </>
