@@ -12,21 +12,27 @@ import {
   BUILDER_TARGET_USER_OPTIONS,
   MAX_DURATION_WEEKS,
   MAX_TRAINING_DAYS_PER_WEEK,
+  type BuilderExercise,
   type CustomProgramBuilderPayload,
   type ProgramBuilderState,
+  addBuilderExercise,
   addPhase,
   addWorkout,
   clampDurationWeeks,
   emptyProgramBuilderState,
+  removeBuilderExercise,
   removePhase,
   removeWorkout,
   toCustomProgramPayload,
   totalWorkouts,
+  updateBuilderExercise,
   updatePhase,
   updateWorkout,
   validateProgram,
   withTrainingDays,
 } from "@/lib/programs/programBuilder";
+import type { ExercisePickerSelection } from "@/components/programs/ExercisePicker";
+import { BuilderWorkoutExercises } from "@/components/programs/BuilderExerciseRow";
 import type { ProgramDraftStore } from "@/lib/programs/programDraft";
 
 export type ProgramBuilderMode = "create" | "edit";
@@ -73,13 +79,16 @@ function slug(value: string): string {
 }
 
 /**
- * THE NATIVE PROGRAM BUILDER — the frame (NP-168).
+ * THE NATIVE PROGRAM BUILDER — the frame (NP-168) with the exercise rows (NP-171).
  *
  * Native counterpart of `ProgramCreator.tsx` + `PhaseEditor.tsx`: program
  * details, phases with their week ranges and focus, and the sessions inside
- * them with their day labels and titles. Exercise rows are NP-171 and drag
- * reorder NP-172; the exercises a workout already has are shown as a count and
- * ride through every save untouched.
+ * them with their day labels and titles — plus, inside each session, the rows
+ * from `WorkoutEditor.tsx` + `ExerciseEditor.tsx`: a search picker over the
+ * catalogue and the member's custom exercises, the prescription a coach
+ * writes (sets, reps, rest, tempo, RPE, percent of 1RM, duration), the role,
+ * the coach notes, and removal. Drag reorder and grouping are NP-172; rows
+ * render in saved order.
  *
  * Everything it knows about a program is in `lib/programs/programBuilder.ts`,
  * which is where the three rules live (schema fields only, unique day labels,
@@ -471,22 +480,53 @@ export function ProgramBuilder({
                           )
                         }
                       />
+                      <BuilderWorkoutExercises
+                        testID={`${testID}-phase-${phaseIndex}-workout-${workoutIndex}`}
+                        exercises={workout.exercises}
+                        onAdd={(selection: ExercisePickerSelection) =>
+                          setState((prev) =>
+                            addBuilderExercise(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              selection.exerciseSlug,
+                              selection.name,
+                            ),
+                          )
+                        }
+                        onChange={(
+                          exerciseIndex: number,
+                          patch: Partial<BuilderExercise>,
+                        ) =>
+                          setState((prev) =>
+                            updateBuilderExercise(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              exerciseIndex,
+                              patch,
+                            ),
+                          )
+                        }
+                        onRemove={(exerciseIndex: number) =>
+                          setState((prev) =>
+                            removeBuilderExercise(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              exerciseIndex,
+                            ),
+                          )
+                        }
+                      />
                       <View
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
-                          justifyContent: "space-between",
+                          justifyContent: "flex-end",
                           gap: 8,
                         }}
                       >
-                        <Text
-                          testID={`${testID}-phase-${phaseIndex}-workout-${workoutIndex}-exercises`}
-                          className="text-muted-foreground text-xs"
-                        >
-                          {workout.exercises.length === 0
-                            ? "No exercises yet"
-                            : `${workout.exercises.length} exercise${workout.exercises.length === 1 ? "" : "s"}`}
-                        </Text>
                         {phase.workouts.length > 1 ? (
                           <Pressable
                             testID={`${testID}-phase-${phaseIndex}-workout-${workoutIndex}-remove`}
@@ -586,7 +626,7 @@ export function ProgramBuilder({
                 testID={`${testID}-review-phase-${phaseIndex}`}
                 className="text-muted-foreground text-xs"
               >
-                {`${phase.phase}${phase.weeks.trim() ? ` · weeks ${phase.weeks.trim()}` : ""} · ${phase.workouts.map((w) => w.day.trim()).join(", ")}`}
+                {`${phase.phase}${phase.weeks.trim() ? ` · weeks ${phase.weeks.trim()}` : ""} · ${phase.workouts.map((w) => `${w.day.trim()} (${w.exercises.length})`).join(", ")}`}
               </Text>
             ))}
           </View>

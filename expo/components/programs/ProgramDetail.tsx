@@ -90,7 +90,7 @@ export interface ProgramDetailProps {
   onPauseResume?: () => void;
   /** Shift the schedule. Button renders only when provided. */
   onShift?: (days?: number) => void;
-  /** Open web editor for this custom program. Button renders only when provided. */
+  /** Open the editor for this custom program (native builder, NP-171). */
   onEdit?: () => void;
   /** Disables the action buttons while a mutation is in flight. */
   actionPending?: boolean;
@@ -562,10 +562,11 @@ export function ProgramDetail({
         <Button
           testID={`${testID}-edit`}
           variant="secondary"
+          accessibilityLabel="Edit program"
           onPress={onEdit}
           disabled={actionPending}
         >
-          Edit on web
+          Edit
         </Button>
       ) : null}
 

@@ -257,7 +257,7 @@ export default function MyProgramsRoute() {
             accessibilityRole="button"
             accessibilityLabel={
               mayCreate
-                ? "Create a program on the web"
+                ? "Create a program"
                 : "Create a program — at your free limit"
             }
             onPress={openCreate}

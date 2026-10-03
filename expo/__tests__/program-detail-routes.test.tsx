@@ -299,9 +299,10 @@ describe("ProgramDetailRoute", () => {
       expect(queryByTestId("program-detail-edit-in-browser")).toBeNull();
     });
     expect(queryByText("Edit in browser")).toBeNull();
+    expect(queryByText("Edit on web")).toBeNull();
   });
 
-  it("(id: e015c9b9) Custom owned program shows Edit on web and opens /dashboard/programs/{id}/edit", async () => {
+  it("(id: e015c9b9) Custom owned program shows Edit and opens the native builder", async () => {
     mockApiFetch.mockImplementation((path: string) => {
       if (path === "/api/programs/prog-1") {
         return Promise.resolve({
@@ -320,9 +321,8 @@ describe("ProgramDetailRoute", () => {
     });
 
     fireEvent.press(getByTestId("program-detail-edit"));
-    expect(mockOpenWebSignedIn).toHaveBeenCalledWith(
-      "/dashboard/programs/prog-1/edit",
-    );
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/prog-1/edit");
+    expect(mockOpenWebSignedIn).not.toHaveBeenCalled();
   });
 
   it("Custom program shared by trainer does not show Edit button", async () => {

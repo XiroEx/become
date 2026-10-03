@@ -443,26 +443,27 @@ describe("the payload the builder sends", () => {
 });
 
 describe("where Create and Edit go (NP-135's link, NP-171's condition)", () => {
-  it("stays on the web until a build has the exercise rows, then moves native", () => {
-    // This card ships the frame. The member-facing link only leaves the web
-    // on a build that also has NP-171's rows — one switch, both call sites.
-    expect(NATIVE_BUILDER_HAS_EXERCISE_ROWS).toBe(false);
+  it("goes native now that a build has the exercise rows, and stays on the web without them", () => {
+    // NP-168 shipped the frame with the switch off; NP-171 lands the rows and
+    // flips it, so the member-facing link leaves the web on this build — one
+    // switch, both call sites.
+    expect(NATIVE_BUILDER_HAS_EXERCISE_ROWS).toBe(true);
     expect(programCreateDestination()).toEqual({
-      surface: "web",
-      path: "/dashboard/programs/new",
-    });
-    expect(programEditDestination("custom-abc")).toEqual({
-      surface: "web",
-      path: "/dashboard/programs/custom-abc/edit",
-    });
-
-    expect(programCreateDestination(true)).toEqual({
       surface: "native",
       route: "/(tabs)/programming/new",
     });
-    expect(programEditDestination("custom-abc", true)).toEqual({
+    expect(programEditDestination("custom-abc")).toEqual({
       surface: "native",
       route: "/(tabs)/programming/custom-abc/edit",
+    });
+
+    expect(programCreateDestination(false)).toEqual({
+      surface: "web",
+      path: "/dashboard/programs/new",
+    });
+    expect(programEditDestination("custom-abc", false)).toEqual({
+      surface: "web",
+      path: "/dashboard/programs/custom-abc/edit",
     });
   });
 });

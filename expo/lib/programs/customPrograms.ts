@@ -93,22 +93,22 @@ export function customProgramDeletePath(programId: string): string {
 /**
  * Does THIS build carry the FULL builder?
  *
- * NP-168 builds the frame: program details, phases, sessions with their day
- * labels and titles, create, update and the local draft. What it does not yet
- * have is the thing a program is actually made of — the exercise rows, with
- * search, the prescription fields and custom exercises (NP-171) and their
+ * NP-168 built the frame: program details, phases, sessions with their day
+ * labels and titles, create, update and the local draft. NP-171 adds the thing
+ * a program is actually made of — the exercise rows, with search, the
+ * prescription fields and custom exercises. What is still missing is their
  * order and grouping (NP-172).
  *
- * Until those land, a member sent to the native builder could save a program
- * with no exercises in it, which is strictly worse than the web editor they
- * have today. So the member-facing link only moves off the web on a build that
- * has the rows, and this is the one switch that moves it: NP-171 flips it to
- * `true` and every caller below follows. The screens themselves ship now
- * (`app/(app)/(tabs)/programming/new.tsx`,
- * `app/(app)/(tabs)/programming/[id]/edit.tsx`) so that flip is a one-line
+ * Until the rows landed, a member sent to the native builder could save a
+ * program with no exercises in it, which is strictly worse than the web editor
+ * they have today. So the member-facing link only moves off the web on a build
+ * that has the rows, and this is the one switch that moves it: NP-171 flips it
+ * to `true` and every caller below follows. The screens themselves shipped
+ * with NP-168 (`app/(app)/(tabs)/programming/new.tsx`,
+ * `app/(app)/(tabs)/programming/[id]/edit.tsx`) so the flip is a one-line
  * change rather than a second port.
  */
-export const NATIVE_BUILDER_HAS_EXERCISE_ROWS = false;
+export const NATIVE_BUILDER_HAS_EXERCISE_ROWS = true;
 
 /** The native builder's own routes. */
 export const NATIVE_PROGRAM_CREATE_ROUTE = "/(tabs)/programming/new";
