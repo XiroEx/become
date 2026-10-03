@@ -20,9 +20,9 @@ export interface MyProgramsProps {
   onDelete?: (id: string) => void | Promise<void>;
   /** Open a program's detail screen. */
   onItemPress?: (id: string) => void;
-  /** Open the web editor for this owned program. */
+  /** Open the editor for this owned program (native builder, NP-171). */
   onEdit?: (id: string) => void | Promise<void>;
-  /** Open the web creator. */
+  /** Open the creator (native builder, NP-171). */
   onCreate?: () => void | Promise<void>;
   /** True while one enrol request is in flight (disables its row button). */
   enrollingId?: string | null;
@@ -193,7 +193,7 @@ export function MyPrograms({
                   testID={`${testID}-edit-${p.id}`}
                   onPress={() => void onEdit(p.id)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Edit ${p.name} on the web`}
+                  accessibilityLabel={`Edit ${p.name}`}
                   style={[
                     minTouchTarget,
                     {
