@@ -205,6 +205,32 @@ both work because `app.json` has:
 
 See P6 for the parse/verify flow.
 
+## Home-screen widgets (iOS half)
+
+`app.json` mounts `expo-widgets` (`~57.0.x`) with `bundleIdentifier`
+`io.redbtn.become.widgets`, `groupIdentifier` `group.io.redbtn.become`,
+`enableAndroid: false` (Android widgets are `react-native-android-widget`,
+NP-198 — expo-widgets must not touch Android), and one widget per feed key in
+`WidgetKeySchema` order (`StreakWidget`, `NutritionWidget`, `MindWidget`,
+`BecomingWidget`, `TrainingWidget`), `supportedFamilies: ["systemSmall"]`
+only — NP-182 adds the other sizes and Lock Screen families. The names live
+in one place, `lib/widgets/iosWidgets.ts` (`IOS_WIDGETS`), mirroring
+`androidWidgets.ts`; `__tests__/iosWidgetsConfig.test.ts` holds the plugin
+block equal to it.
+
+The plugin injects `extra.eas.build.experimental.ios.appExtensions` into the
+RESOLVED config at prebuild time. That is inert metadata — we never run EAS,
+there is no `eas.json`, no `expo-updates`, no expo.dev project — and
+`scripts/check-no-ota.mjs` reads `app.json` (not the resolved config), so it
+still passes. Do NOT add `extra.eas` to `app.json` yourself; the plugin puts
+it there when it needs it.
+
+Data flows app → extension, never the reverse: the app reads the feed,
+pushes props (`updateSnapshot` / `updateTimeline` / `reload`), and the
+extension reads them from the App Group. The widgets token stays in the app's
+SecureStore (`lib/widgets/token.ts`); there is no extension-side network call
+and no separate Swift module writing a token into the group.
+
 ## Verified by
 
 - `__tests__/iosConfig.test.ts` — app.json invariants + StatusBar style +
