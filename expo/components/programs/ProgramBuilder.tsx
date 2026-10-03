@@ -13,6 +13,7 @@ import {
   MAX_DURATION_WEEKS,
   MAX_TRAINING_DAYS_PER_WEEK,
   type BuilderExercise,
+  type BuilderGroupType,
   type CustomProgramBuilderPayload,
   type ProgramBuilderState,
   addBuilderExercise,
@@ -20,12 +21,17 @@ import {
   addWorkout,
   clampDurationWeeks,
   emptyProgramBuilderState,
+  groupBuilderExercises,
+  moveBuilderExercise,
   removeBuilderExercise,
+  removeBuilderExerciseFromGroup,
   removePhase,
   removeWorkout,
   toCustomProgramPayload,
   totalWorkouts,
+  ungroupBuilderExercises,
   updateBuilderExercise,
+  updateBuilderGroup,
   updatePhase,
   updateWorkout,
   validateProgram,
@@ -79,7 +85,8 @@ function slug(value: string): string {
 }
 
 /**
- * THE NATIVE PROGRAM BUILDER — the frame (NP-168) with the exercise rows (NP-171).
+ * THE NATIVE PROGRAM BUILDER — the frame (NP-168) with the exercise rows (NP-171),
+ * drag reorder and the group editor (NP-172).
  *
  * Native counterpart of `ProgramCreator.tsx` + `PhaseEditor.tsx`: program
  * details, phases with their week ranges and focus, and the sessions inside
@@ -87,8 +94,9 @@ function slug(value: string): string {
  * from `WorkoutEditor.tsx` + `ExerciseEditor.tsx`: a search picker over the
  * catalogue and the member's custom exercises, the prescription a coach
  * writes (sets, reps, rest, tempo, RPE, percent of 1RM, duration), the role,
- * the coach notes, and removal. Drag reorder and grouping are NP-172; rows
- * render in saved order.
+ * the coach notes, removal, drag reorder and grouping into supersets,
+ * circuits, trisets, giant sets, EMOM and AMRAP blocks with a label, rest and
+ * rounds.
  *
  * Everything it knows about a program is in `lib/programs/programBuilder.ts`,
  * which is where the three rules live (schema fields only, unique day labels,
@@ -515,6 +523,70 @@ export function ProgramBuilder({
                               phaseIndex,
                               workoutIndex,
                               exerciseIndex,
+                            ),
+                          )
+                        }
+                        onReorder={(fromIndex: number, toIndex: number) =>
+                          setState((prev) =>
+                            moveBuilderExercise(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              fromIndex,
+                              toIndex,
+                            ),
+                          )
+                        }
+                        onGroup={(
+                          indexes: number[],
+                          groupType: BuilderGroupType,
+                        ) =>
+                          setState((prev) =>
+                            groupBuilderExercises(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              indexes,
+                              groupType,
+                            ),
+                          )
+                        }
+                        onUngroup={(exerciseIndex: number) =>
+                          setState((prev) =>
+                            ungroupBuilderExercises(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              exerciseIndex,
+                            ),
+                          )
+                        }
+                        onRemoveFromGroup={(exerciseIndex: number) =>
+                          setState((prev) =>
+                            removeBuilderExerciseFromGroup(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              exerciseIndex,
+                            ),
+                          )
+                        }
+                        onUpdateGroup={(
+                          exerciseIndex: number,
+                          patch: Partial<
+                            Pick<
+                              BuilderExercise,
+                              "groupLabel" | "groupRest" | "groupRounds"
+                            >
+                          >,
+                        ) =>
+                          setState((prev) =>
+                            updateBuilderGroup(
+                              prev,
+                              phaseIndex,
+                              workoutIndex,
+                              exerciseIndex,
+                              patch,
                             ),
                           )
                         }
