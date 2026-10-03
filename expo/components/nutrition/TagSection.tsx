@@ -36,6 +36,13 @@ export interface TagSectionProps {
   onFlagItem?: (logId: string, item: MealLog["items"][number]) => void;
   onRemoveTag?: (tag: string) => void;
   onAddFood: (tag: string) => void;
+  /**
+   * Add a food INTO a specific logged sitting (NP-094). Offered on the
+   * section footer when the sitting holds logs; the screen opens the search
+   * sheet pinned to that log, and the pick goes through
+   * `POST /api/meal-logs/[id]/items`.
+   */
+  onAddToMeal?: (logId: string, tag: string) => void;
   onLogPlan?: (planId: string) => void;
   onRemovePlan?: (planId: string) => void;
   onSkipPlan?: (planId: string) => void;
@@ -87,6 +94,7 @@ export function TagSection({
   onFlagItem,
   onRemoveTag,
   onAddFood,
+  onAddToMeal,
   onLogPlan,
   onRemovePlan,
   onSkipPlan,
@@ -520,6 +528,23 @@ export function TagSection({
             Add to {capitalizeTag(sectionTag)}
           </Text>
         </Pressable>
+        {onAddToMeal && firstLog && !isPlannedOccurrence ? (
+          <Pressable
+            testID={`nutrition-add-to-meal-${sectionTag}`}
+            accessibilityLabel={`Add to this meal in ${sectionTag}`}
+            accessibilityRole="button"
+            onPress={() =>
+              onAddToMeal(
+                String(firstLog._id ?? (firstLog as { id?: unknown }).id ?? ""),
+                sectionTag,
+              )
+            }
+            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
+          >
+            <Plus size={16} color={colors.primary} />
+            <Text className="text-primary text-xs font-semibold">Add to this meal</Text>
+          </Pressable>
+        ) : null}
       </View>
     </Card>
   );

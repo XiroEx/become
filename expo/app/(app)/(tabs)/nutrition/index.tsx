@@ -33,6 +33,7 @@ import {
   ProfileResponseSchema,
   TagsResponseSchema,
   apiFetch,
+  type Meal,
   type MealLog,
   type ProfileResponse,
 } from "@become/api-client";
@@ -57,6 +58,9 @@ import {
   type TagWindow,
 } from "@/lib/nutrition/mealSchedule";
 import { nutritionGoalLine } from "@/lib/nutrition/goalLine";
+import { defaultVariantOf } from "@/lib/nutrition/foodMath";
+import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
+import { logBasket, logSavedMeal } from "@/lib/nutrition/basketLog";
 import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
 import {
   canCombine,
@@ -75,6 +79,8 @@ import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
+import { BasketSheet, type BasketEntry } from "@/components/nutrition/BasketSheet";
+import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
@@ -773,6 +779,7 @@ export default function NutritionIndexRoute() {
   // own rows is not (webapp/app/api/meal-logs/combine/route.ts:58-65). Read
   // `canCreate`, never recomputed from limit and used: `allowed` stays true for
   // a capped free member on purpose so they can still edit and delete theirs.
+  // The same check gates the basket's Save as meal half (NP-094).
   const canSaveMeals =
     !entitlements ||
     entitlements.enforced === false ||
@@ -1188,8 +1195,175 @@ export default function NutritionIndexRoute() {
   const openSearch = (tagToUse?: string, opts?: { barcode?: boolean }) => {
     setSearchTag(tagToUse ?? currentDefaultTag);
     setSearchBarcodeOpen(opts?.barcode === true);
+    // A fresh search starts a fresh basket; "add to this meal" pins the log.
+    setBasketEntries([]);
+    setBasketError(null);
+    setBasketMealNotice(null);
+    setAddToLogId(null);
     setSearchOpen(true);
   };
+
+  // ── Basket: log several foods at once, optionally as a meal (NP-094) ──────
+  //
+  // The web's search-sheet basket (`FoodSearchModal` mealMode + `handleAddMany`):
+  // picks accumulate as full item payloads, then log in ONE `POST
+  // /api/meal-logs` — optionally keeping the basket as a reusable meal through
+  // a best-effort `POST /api/meals`. The log goes first and a failed meal save
+  // never costs it.
+  const [basketEntries, setBasketEntries] = useState<BasketEntry[]>([]);
+  const [basketOpen, setBasketOpen] = useState(false);
+  const [basketSubmitting, setBasketSubmitting] = useState(false);
+  const [basketError, setBasketError] = useState<string | null>(null);
+  const [basketMealNotice, setBasketMealNotice] = useState<string | null>(null);
+  // "Add to this meal": the search sheet pins picks to this MealLog instead of
+  // the basket (webapp/app/dashboard/nutrition/page.tsx:694-703).
+  const [addToLogId, setAddToLogId] = useState<string | null>(null);
+  // Log a saved meal from the Meals filter with a portion (MealApplySheet).
+  const [mealLogTarget, setMealLogTarget] = useState<Meal | null>(null);
+  const [mealLogSubmitting, setMealLogSubmitting] = useState(false);
+  const [mealLogError, setMealLogError] = useState<string | null>(null);
+
+  const basketIds = useMemo(
+    () => new Set(basketEntries.map((e) => e.key)),
+    [basketEntries],
+  );
+
+  const handleAddToBasket = useCallback(
+    (food: Meal) => {
+      const variant = defaultVariantOf(food);
+      if (!variant) return;
+      // One of the food: the basket keeps the web's per-serving entry shape
+      // and lets `servings` carry the amount, so the day's own arithmetic
+      // (`nutrition × servings`) reads it exactly as the web's does.
+      const item = buildMealItemPayload({
+        food: food as unknown as Parameters<typeof buildMealItemPayload>[0]["food"],
+        variant,
+        quantity: variant.servingSize,
+        unit: variant.servingUnit,
+      });
+      const key = String(food._id ?? food.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+      setBasketEntries((prev) =>
+        prev.some((e) => e.key === key) ? prev : [...prev, { ...item, key }],
+      );
+      setBasketError(null);
+      setBasketMealNotice(null);
+    },
+    [],
+  );
+
+  const handleRemoveBasketEntry = useCallback((key: string) => {
+    setBasketEntries((prev) => prev.filter((e) => e.key !== key));
+  }, []);
+
+  const handleSubmitBasket = useCallback(
+    async (opts: { mealName?: string | undefined; saveAsMeal: boolean }) => {
+      if (basketSubmitting || basketEntries.length === 0) return;
+      setBasketSubmitting(true);
+      setBasketError(null);
+      setBasketMealNotice(null);
+      try {
+        const result = await logBasket({
+          items: basketEntries,
+          tag: searchTag ?? currentDefaultTag,
+          dateKey: activeDate,
+          mealName: opts.mealName,
+          saveAsMeal: opts.saveAsMeal,
+          apiFetch,
+          token,
+        });
+        // A saved meal consumed an allowance slot: re-read the snapshot so the
+        // next sheet shows the cap it just reached rather than the one before.
+        if (result.mealSaved) {
+          await refreshEntitlements().catch(() => {});
+        }
+        const mealNotice =
+          !result.mealSaved && opts.saveAsMeal && opts.mealName
+            ? "Logged, but the meal was not saved."
+            : null;
+        setBasketEntries([]);
+        setBasketOpen(mealNotice !== null);
+        if (mealNotice) setBasketMealNotice(mealNotice);
+        setSearchOpen(false);
+        setSearchBarcodeOpen(false);
+        await refetchMealLogs();
+      } catch (err) {
+        const { handled, message } = handleApiError(err);
+        if (!handled) setBasketError(message);
+      } finally {
+        setBasketSubmitting(false);
+      }
+    },
+    [
+      basketSubmitting,
+      basketEntries,
+      searchTag,
+      currentDefaultTag,
+      activeDate,
+      token,
+      refreshEntitlements,
+      refetchMealLogs,
+      handleApiError,
+    ],
+  );
+
+  const handlePickMeal = useCallback((meal: Meal) => {
+    setMealLogError(null);
+    setMealLogTarget(meal);
+  }, []);
+
+  const handleSubmitMealLog = useCallback(
+    async (opts: { portion: number }) => {
+      if (!mealLogTarget || mealLogSubmitting) return;
+      setMealLogSubmitting(true);
+      setMealLogError(null);
+      try {
+        await logSavedMeal({
+          mealId: String(mealLogTarget._id),
+          portion: opts.portion,
+          tag: searchTag ?? currentDefaultTag,
+          dateKey: activeDate,
+          apiFetch,
+          token,
+        });
+        setMealLogTarget(null);
+        setSearchOpen(false);
+        setSearchBarcodeOpen(false);
+        await refetchMealLogs();
+      } catch (err) {
+        const { handled, message } = handleApiError(err);
+        if (!handled) setMealLogError(message);
+      } finally {
+        setMealLogSubmitting(false);
+      }
+    },
+    [
+      mealLogTarget,
+      mealLogSubmitting,
+      searchTag,
+      currentDefaultTag,
+      activeDate,
+      token,
+      refetchMealLogs,
+      handleApiError,
+    ],
+  );
+
+  // Add a food INTO an existing logged sitting (webapp's openAddToMeal): pin
+  // the search sheet to that log; the detail screen's log call appends to it.
+  // The basket is cleared because the two targets are exclusive — a pick goes
+  // to the pinned log OR to the basket, never both.
+  const handleAddToMeal = useCallback(
+    (logId: string, tag: string) => {
+      setAddToLogId(logId);
+      setSearchTag(tag.toLowerCase());
+      setSearchBarcodeOpen(false);
+      setBasketEntries([]);
+      setBasketError(null);
+      setBasketMealNotice(null);
+      setSearchOpen(true);
+    },
+    [],
+  );
 
   // Meal-photo / describe estimate (NP-089): Take photo and Upload capture
   // inside the sheet (NP-059's capture helper); Describe opens on the text
@@ -1706,6 +1880,7 @@ export default function NutritionIndexRoute() {
               onFlagItem={handleFlagItem}
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
+              onAddToMeal={handleAddToMeal}
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
@@ -2227,16 +2402,53 @@ export default function NutritionIndexRoute() {
         </Pressable>
       </Modal>
 
-      {/* Food Search Sheet (NP-092) */}
+      {/* Food Search Sheet (NP-092, basket + saved-meal log NP-094) */}
       <FoodSearchSheet
         visible={searchOpen}
         onClose={() => {
           setSearchOpen(false);
           setSearchBarcodeOpen(false);
+          setAddToLogId(null);
         }}
         currentTag={searchTag}
         activeDate={activeDate}
         initialBarcodeOpen={searchBarcodeOpen}
+        onAddToBasket={handleAddToBasket}
+        basketCount={basketEntries.length}
+        basketIds={basketIds}
+        onOpenBasket={() => setBasketOpen(true)}
+        addToLogId={addToLogId}
+        onPickMeal={handlePickMeal}
+      />
+
+      {/* Basket: log several foods as one sitting, optionally saved (NP-094) */}
+      <BasketSheet
+        visible={basketOpen}
+        entries={basketEntries}
+        canSaveMeals={canSaveMeals}
+        submitting={basketSubmitting}
+        error={basketError}
+        mealNotice={basketMealNotice}
+        onRemoveEntry={handleRemoveBasketEntry}
+        onClose={() => {
+          setBasketOpen(false);
+          setBasketError(null);
+          setBasketMealNotice(null);
+        }}
+        onSubmit={handleSubmitBasket}
+      />
+
+      {/* Log a saved meal with a portion (NP-094) */}
+      <MealLogSheet
+        visible={mealLogTarget !== null}
+        meal={mealLogTarget}
+        submitting={mealLogSubmitting}
+        error={mealLogError}
+        onClose={() => {
+          setMealLogTarget(null);
+          setMealLogError(null);
+        }}
+        onSubmit={handleSubmitMealLog}
       />
 
       {/* Meal-photo / describe estimate (NP-089) */}

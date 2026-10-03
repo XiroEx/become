@@ -74,6 +74,23 @@ export interface FoodSearchSheetProps {
   activeDate?: string;
   onPickFood?: (food: Food) => void;
   onPickMeal?: (meal: Meal) => void;
+  /**
+   * Basket mode (NP-094): the web's "Build a meal" — every pick is added to
+   * the basket instead of opening the quantity picker, and the basket tray
+   * opens the log sheet. Omit and picks behave as before.
+   */
+  onAddToBasket?: (food: Food) => void;
+  /** Foods already in the basket, for the tray count and the added state. */
+  basketCount?: number;
+  basketIds?: ReadonlySet<string>;
+  /** Open the basket tray (the tray's own button). */
+  onOpenBasket?: () => void;
+  /**
+   * "Add to this meal" (NP-094): when set, food picks route to the detail
+   * screen pinned to this MealLog instead of the basket, and the detail
+   * screen appends through `POST /api/meal-logs/[id]/items`.
+   */
+  addToLogId?: string | null;
   debounceMs?: number;
   setTimeoutImpl?: typeof setTimeout;
   clearTimeoutImpl?: typeof clearTimeout;
@@ -91,6 +108,11 @@ export function FoodSearchSheet({
   activeDate,
   onPickFood,
   onPickMeal,
+  onAddToBasket,
+  basketCount = 0,
+  basketIds,
+  onOpenBasket,
+  addToLogId = null,
   debounceMs = 300,
   setTimeoutImpl,
   clearTimeoutImpl,
@@ -360,6 +382,9 @@ export function FoodSearchSheet({
   // Picking a food: runs import step if external before handing off.
   // `useCallback` (not a bare async fn) because the barcode path below
   // awaits the same pick — a searched food and a scanned food log identically.
+  // In basket mode the pick goes straight into the basket (the web's
+  // `mealMode`), so the sheet stays open for the next item.
+  const basketMode = onAddToBasket !== undefined;
   const handlePickFood = useCallback(
     async (food: Food) => {
       if (food.persistable === false) {
@@ -395,14 +420,23 @@ export function FoodSearchSheet({
         }
       }
 
+      if (onAddToBasket) {
+        onAddToBasket(targetFood);
+        return;
+      }
+      // "Add to this meal": carry the pinned log to the detail screen, which
+      // appends the pick to it instead of smart-appending.
+      const detailHref = addToLogId
+        ? `${foodDetailHref(targetFood._id, targetFood)}${foodDetailHref(targetFood._id, targetFood).includes("?") ? "&" : "?"}addToLogId=${encodeURIComponent(addToLogId)}`
+        : foodDetailHref(targetFood._id, targetFood);
       onClose();
       if (onPickFood) {
         onPickFood(targetFood);
       } else {
-        router.push(foodDetailHref(targetFood._id, targetFood));
+        router.push(detailHref);
       }
     },
-    [onClose, onPickFood, router, token],
+    [onClose, onPickFood, onAddToBasket, addToLogId, router, token],
   );
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
@@ -438,6 +472,9 @@ export function FoodSearchSheet({
       return;
     }
     try {
+      // The web's MealApplySheet: portion, tags, loggedAt and untimed travel
+      // together. The portion picker lives in the MealLogSheet the screen
+      // opens; this default path (no screen handler) logs the whole meal now.
       await apiFetch(
         `/api/meals/${encodeURIComponent(meal._id)}/log`,
         FoodOverviewResponseSchema.partial(),
@@ -446,9 +483,10 @@ export function FoodSearchSheet({
           baseUrl: WEBAPP_BASE_URL,
           getToken: () => token ?? undefined,
           body: {
-            tags: [currentTag ?? "snack"],
-            date: activeDate,
             portion: 1,
+            tags: [currentTag ?? "snack"],
+            loggedAt: new Date().toISOString(),
+            untimed: false,
           },
         },
       );
@@ -466,6 +504,7 @@ export function FoodSearchSheet({
     const source = narrowFoodSource(food.source);
     const calories = food.nutrition?.calories;
     const isImporting = importingRowId === id;
+    const inBasket = basketMode && basketIds?.has(id) === true;
 
     return (
       <Pressable
@@ -550,6 +589,37 @@ export function FoodSearchSheet({
               style={{ padding: 4 }}
             >
               <Flag size={18} color={colors["muted-foreground"]} />
+            </Pressable>
+          ) : null}
+          {basketMode ? (
+            <Pressable
+              testID={`food-basket-add-${id}`}
+              accessibilityRole="button"
+              accessibilityLabel={inBasket ? `${food.name} added` : `Add ${food.name} to basket`}
+              accessibilityState={{ disabled: inBasket }}
+              disabled={inBasket}
+              onPress={(e) => {
+                e?.stopPropagation?.();
+                void handlePickFood(food);
+              }}
+              hitSlop={8}
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: inBasket ? colors.muted : colors.primary,
+                opacity: isImporting ? 0.6 : 1,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: inBasket ? colors["muted-foreground"] : colors["primary-foreground"],
+                }}
+              >
+                {inBasket ? "Added" : "Add"}
+              </Text>
             </Pressable>
           ) : null}
           <Pressable
@@ -1125,6 +1195,37 @@ export function FoodSearchSheet({
           }
           onClose={() => setFlagFood(null)}
         />
+      ) : null}
+
+      {/* Basket tray (NP-094): the count rides over the list in basket mode. */}
+      {basketMode && basketCount > 0 && onOpenBasket ? (
+        <Pressable
+          testID="food-search-basket-tray"
+          accessibilityRole="button"
+          accessibilityLabel={`Open basket, ${basketCount} items`}
+          onPress={onOpenBasket}
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            borderRadius: 12,
+            backgroundColor: colors.primary,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Text
+            testID="food-search-basket-tray-label"
+            style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}
+          >
+            {basketCount} item{basketCount === 1 ? "" : "s"} in basket
+          </Text>
+          <Text style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}>
+            Review →
+          </Text>
+        </Pressable>
       ) : null}
 
       {/* Barcode scanner (NP-088): full-screen camera view over the sheet. */}

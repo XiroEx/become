@@ -35,6 +35,7 @@ import {
   logFoodItem,
   type MealItemPayload,
 } from "@/lib/nutrition/mealLogActions";
+import { addToLoggedMeal } from "@/lib/nutrition/basketLog";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function FoodDetailRoute() {
@@ -46,6 +47,7 @@ export default function FoodDetailRoute() {
     row?: string;
     tag?: string;
     date?: string;
+    addToLogId?: string;
   }>();
   const id = typeof params.id === "string" ? params.id : "";
   const { token } = useAuth();
@@ -121,6 +123,14 @@ export default function FoodDetailRoute() {
       pickedTime?: string | null;
     }) => {
       if (!food) return;
+      // "Add to this meal" (NP-094): the search sheet pinned this pick to a
+      // specific logged sitting, so append to it instead of smart-appending.
+      const pinnedLogId = typeof params.addToLogId === "string" ? params.addToLogId : "";
+      if (pinnedLogId) {
+        await addToLoggedMeal({ logId: pinnedLogId, item: result.item, apiFetch, token });
+        router.back();
+        return;
+      }
       await logFoodItem({
         item: result.item,
         tag: result.tag,
@@ -134,7 +144,7 @@ export default function FoodDetailRoute() {
       });
       router.back();
     },
-    [food, existingLogs, token, router],
+    [food, existingLogs, token, router, params.addToLogId],
   );
 
   // Submit via SaveAsMealButton
