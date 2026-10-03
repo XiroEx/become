@@ -1,10 +1,11 @@
 /**
- * ─── THE PROGRAM BUILDER, AS STATE (NP-168) ──────────────────────────────────
+ * ─── THE PROGRAM BUILDER, AS STATE (NP-168, exercise rows NP-171) ───────────
  *
  * Native counterpart of the frame inside
  * `webapp/app/dashboard/admin/programs/_editors/ProgramCreator.tsx` (plus
- * `PhaseEditor.tsx`), which members reach through
- * `/dashboard/programs/new` and `/dashboard/programs/[programId]/edit`.
+ * `PhaseEditor.tsx` and the rows in `WorkoutEditor.tsx` + `ExerciseEditor.tsx`),
+ * which members reach through `/dashboard/programs/new` and
+ * `/dashboard/programs/[programId]/edit`.
  *
  * EVERYTHING HERE IS PURE. The screen renders it, the draft serialises it and
  * the routes post it; none of that logic lives in a component, because the
@@ -29,8 +30,9 @@
  *      workout `day`, `title` and an `exercises` array, even when empty.
  *
  * Exercise ROWS are NP-171 and drag-reorder is NP-172: exercises ride through
- * this module byte-for-byte (`BuilderExercise` is deliberately opaque), so
- * editing a program built on the web never drops the prescription inside it.
+ * `toCustomProgramPayload` field-for-field (a `BuilderExercise` is the
+ * prescription the web editor writes), so editing a program built on the web
+ * never drops the prescription inside it.
  */
 
 /**
@@ -58,11 +60,262 @@ export const MAX_TRAINING_DAYS_PER_WEEK = 7;
 export const MAX_DURATION_WEEKS = 52;
 
 /**
- * One exercise, untouched. The frame neither reads nor writes a field of it
- * (NP-171 owns the rows, NP-172 their order); it exists so a program edited on
- * the phone keeps every prescription a coach or the web editor put in it.
+ * One exercise row: the prescription the web editor writes
+ * (`webapp/models/Program.ts` `IProgramExercise`), as the phone edits it.
+ *
+ * `exerciseSlug` is the link — the catalogue key hydration, PRs and demos
+ * resolve through — so a row without one cannot be saved. `name` rides along
+ * as the display copy (and as the dehydrate fallback the server reads when no
+ * slug resolves). Grouping fields (`groupId`, `groupType`, …) ride through
+ * untouched: drag reorder and grouping are NP-172.
  */
-export type BuilderExercise = Record<string, unknown>;
+export interface BuilderExercise {
+  exerciseSlug?: string;
+  name?: string;
+  category?: string;
+  sets?: number;
+  reps?: string;
+  rest?: string;
+  tempo?: string;
+  rpe?: number;
+  percentOf1RM?: number;
+  duration?: string;
+  role?: "compound" | "secondary" | "accessory";
+  details?: string;
+  groupId?: string;
+  groupType?: "superset" | "circuit" | "triset" | "giant_set" | "emom" | "amrap";
+  groupLabel?: string;
+  groupRest?: string;
+  groupRounds?: number;
+  [key: string]: unknown;
+}
+
+/** The prescription fields the rows edit (everything but identity/grouping). */
+export const BUILDER_EXERCISE_PRESCRIPTION_FIELDS = [
+  "sets",
+  "reps",
+  "rest",
+  "tempo",
+  "rpe",
+  "percentOf1RM",
+  "duration",
+  "role",
+  "details",
+] as const;
+
+export type BuilderExercisePrescriptionField =
+  (typeof BUILDER_EXERCISE_PRESCRIPTION_FIELDS)[number];
+
+/** RPE is 1–10 and percent of 1RM 0–100, as `webapp/models/Program.ts` enforces. */
+export const BUILDER_RPE_MIN = 1;
+export const BUILDER_RPE_MAX = 10;
+export const BUILDER_PERCENT_1RM_MIN = 0;
+export const BUILDER_PERCENT_1RM_MAX = 100;
+
+export const BUILDER_EXERCISE_ROLES = [
+  "compound",
+  "secondary",
+  "accessory",
+] as const;
+
+export type BuilderExerciseRole = (typeof BUILDER_EXERCISE_ROLES)[number];
+
+/** A blank row for a picked catalogue/custom exercise: slug saved, name shown. */
+export function createBuilderExercise(
+  exerciseSlug: string,
+  name?: string,
+): BuilderExercise {
+  return {
+    exerciseSlug,
+    ...(name !== undefined && name !== "" ? { name } : {}),
+    sets: 3,
+    reps: "10",
+    rest: "60s",
+  };
+}
+
+function asOptionalString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function asOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function asOptionalRole(value: unknown): BuilderExerciseRole | undefined {
+  return value === "compound" || value === "secondary" || value === "accessory"
+    ? value
+    : undefined;
+}
+
+function asOptionalGroupType(
+  value: unknown,
+): BuilderExercise["groupType"] | undefined {
+  return value === "superset" ||
+    value === "circuit" ||
+    value === "triset" ||
+    value === "giant_set" ||
+    value === "emom" ||
+    value === "amrap"
+    ? value
+    : undefined;
+}
+
+/**
+ * A server/hydrated/draft exercise read into a row. Unknown shapes stay rows
+ * (an edit must never drop a prescription it cannot render); grouping rides
+ * through untouched for NP-172.
+ */
+export function toBuilderExercise(raw: unknown): BuilderExercise {
+  if (!raw || typeof raw !== "object") return { exerciseSlug: "" };
+  const source = raw as Record<string, unknown>;
+  const row: BuilderExercise = {};
+  const slug = asOptionalString(source.exerciseSlug);
+  if (slug !== undefined) row.exerciseSlug = slug;
+  const name = asOptionalString(source.name);
+  if (name !== undefined) row.name = name;
+  const category = asOptionalString(source.category ?? source.type);
+  if (category !== undefined) row.category = category;
+  const sets = asOptionalNumber(source.sets);
+  if (sets !== undefined) row.sets = sets;
+  const reps = asOptionalString(source.reps);
+  if (reps !== undefined) row.reps = reps;
+  const rest = asOptionalString(source.rest);
+  if (rest !== undefined) row.rest = rest;
+  const tempo = asOptionalString(source.tempo);
+  if (tempo !== undefined) row.tempo = tempo;
+  const rpe = asOptionalNumber(source.rpe);
+  if (rpe !== undefined) row.rpe = rpe;
+  const percentOf1RM = asOptionalNumber(source.percentOf1RM);
+  if (percentOf1RM !== undefined) row.percentOf1RM = percentOf1RM;
+  const duration = asOptionalString(source.duration);
+  if (duration !== undefined) row.duration = duration;
+  const role = asOptionalRole(source.role);
+  if (role !== undefined) row.role = role;
+  const details = asOptionalString(source.details);
+  if (details !== undefined) row.details = details;
+  const groupId = asOptionalString(source.groupId);
+  if (groupId !== undefined) row.groupId = groupId;
+  const groupType = asOptionalGroupType(source.groupType);
+  if (groupType !== undefined) row.groupType = groupType;
+  const groupLabel = asOptionalString(source.groupLabel);
+  if (groupLabel !== undefined) row.groupLabel = groupLabel;
+  const groupRest = asOptionalString(source.groupRest);
+  if (groupRest !== undefined) row.groupRest = groupRest;
+  const groupRounds = asOptionalNumber(source.groupRounds);
+  if (groupRounds !== undefined) row.groupRounds = groupRounds;
+  // Anything else the server sent (hydrated video fields, `type`, `tip`)
+  // rides through so a save never drops what the phone cannot edit.
+  for (const [key, value] of Object.entries(source)) {
+    if (!(key in row)) row[key] = value;
+  }
+  return row;
+}
+
+/** Display name for a row: the coach's wording, else the slug read as words. */
+export function builderExerciseName(exercise: BuilderExercise): string {
+  const name = (exercise.name ?? "").trim();
+  if (name) return name;
+  const slug = (exercise.exerciseSlug ?? "").trim();
+  if (!slug) return "New exercise";
+  return slug
+    .replace(/^__protocol__/, "")
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+/**
+ * Why this row cannot be saved yet, if anything. A row without an
+ * `exerciseSlug` is a typed name hydration, PRs and demos cannot resolve, so
+ * it blocks the save; RPE outside 1–10 and percent of 1RM outside 0–100 are
+ * refused before saving, as the model enforces.
+ */
+export function validateBuilderExercise(
+  exercise: BuilderExercise,
+): string | null {
+  if (!exercise.exerciseSlug || !exercise.exerciseSlug.trim()) {
+    return "Pick an exercise from the catalogue or your custom exercises.";
+  }
+  if (exercise.rpe !== undefined && exercise.rpe !== null) {
+    const rpe = exercise.rpe;
+    if (
+      typeof rpe !== "number" ||
+      !Number.isFinite(rpe) ||
+      rpe < BUILDER_RPE_MIN ||
+      rpe > BUILDER_RPE_MAX
+    ) {
+      return `RPE must be between ${BUILDER_RPE_MIN} and ${BUILDER_RPE_MAX}.`;
+    }
+  }
+  if (exercise.percentOf1RM !== undefined && exercise.percentOf1RM !== null) {
+    const percent = exercise.percentOf1RM;
+    if (
+      typeof percent !== "number" ||
+      !Number.isFinite(percent) ||
+      percent < BUILDER_PERCENT_1RM_MIN ||
+      percent > BUILDER_PERCENT_1RM_MAX
+    ) {
+      return `Percent of 1RM must be between ${BUILDER_PERCENT_1RM_MIN} and ${BUILDER_PERCENT_1RM_MAX}.`;
+    }
+  }
+  return null;
+}
+
+/** Parse an RPE field: empty clears it, anything else must land in 1–10. */
+export function parseBuilderRpe(text: string): {
+  value?: number;
+  error?: string;
+} {
+  const trimmed = text.trim();
+  if (trimmed === "") return {};
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { error: `RPE must be between ${BUILDER_RPE_MIN} and ${BUILDER_RPE_MAX}.` };
+  }
+  if (parsed < BUILDER_RPE_MIN || parsed > BUILDER_RPE_MAX) {
+    return { error: `RPE must be between ${BUILDER_RPE_MIN} and ${BUILDER_RPE_MAX}.` };
+  }
+  return { value: parsed };
+}
+
+/** Parse a percent-of-1RM field: empty clears it, anything else 0–100. */
+export function parseBuilderPercentOf1RM(text: string): {
+  value?: number;
+  error?: string;
+} {
+  const trimmed = text.trim();
+  if (trimmed === "") return {};
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return {
+      error: `Percent of 1RM must be between ${BUILDER_PERCENT_1RM_MIN} and ${BUILDER_PERCENT_1RM_MAX}.`,
+    };
+  }
+  if (parsed < BUILDER_PERCENT_1RM_MIN || parsed > BUILDER_PERCENT_1RM_MAX) {
+    return {
+      error: `Percent of 1RM must be between ${BUILDER_PERCENT_1RM_MIN} and ${BUILDER_PERCENT_1RM_MAX}.`,
+    };
+  }
+  return { value: parsed };
+}
+
+/** Parse a sets field: empty clears it, the rest must be a finite number. */
+export function parseBuilderSets(text: string): {
+  value?: number;
+  error?: string;
+} {
+  const trimmed = text.trim();
+  if (trimmed === "") return {};
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return { error: "Sets must be a number." };
+  }
+  return { value: parsed };
+}
 
 export interface BuilderWorkout {
   /** The address (rule 2). Unique within its phase. */
@@ -202,7 +455,7 @@ export function fromCustomProgram(raw: unknown): ProgramBuilderState {
         day: day || dayLabel(workoutIndex + 1),
         title: asString(workout.title),
         exercises: Array.isArray(workout.exercises)
-          ? (workout.exercises as BuilderExercise[])
+          ? (workout.exercises as unknown[]).map(toBuilderExercise)
           : [],
       };
     });
@@ -410,6 +663,116 @@ export function withTrainingDays(
   };
 }
 
+// ─── Exercise-row edits (NP-171) ────────────────────────────────────────────
+// Every one of these returns a NEW state, like the phase/workout edits above.
+// Drag reorder and grouping are NP-172: rows are only added, edited and
+// removed here, never reordered.
+
+/** Append a picked catalogue/custom exercise to a workout. Slug saved, name shown. */
+export function addBuilderExercise(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseSlug: string,
+  name?: string,
+): ProgramBuilderState {
+  const phase = state.phases[phaseIndex];
+  if (!phase || !phase.workouts[workoutIndex]) return state;
+  const slug = exerciseSlug.trim();
+  if (!slug) return state;
+  return {
+    ...state,
+    phases: state.phases.map((p, i) =>
+      i === phaseIndex
+        ? {
+            ...p,
+            workouts: p.workouts.map((w, j) =>
+              j === workoutIndex
+                ? {
+                    ...w,
+                    exercises: [
+                      ...w.exercises,
+                      createBuilderExercise(slug, name),
+                    ],
+                  }
+                : w,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
+/** Patch one row's prescription fields. */
+export function updateBuilderExercise(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndex: number,
+  patch: Partial<BuilderExercise>,
+): ProgramBuilderState {
+  const phase = state.phases[phaseIndex];
+  const workout = phase?.workouts[workoutIndex];
+  if (!phase || !workout || !workout.exercises[exerciseIndex]) return state;
+  return {
+    ...state,
+    phases: state.phases.map((p, i) =>
+      i === phaseIndex
+        ? {
+            ...p,
+            workouts: p.workouts.map((w, j) =>
+              j === workoutIndex
+                ? {
+                    ...w,
+                    exercises: w.exercises.map((exercise, k) =>
+                      k === exerciseIndex ? { ...exercise, ...patch } : exercise,
+                    ),
+                  }
+                : w,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
+/**
+ * Remove one row. The last row of a workout stays removable — an empty session
+ * is what the web editor saves when every row is deleted, and a row the
+ * member cannot remove is a row they are stuck with.
+ */
+export function removeBuilderExercise(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  workoutIndex: number,
+  exerciseIndex: number,
+): ProgramBuilderState {
+  const phase = state.phases[phaseIndex];
+  const workout = phase?.workouts[workoutIndex];
+  if (!phase || !workout) return state;
+  if (exerciseIndex < 0 || exerciseIndex >= workout.exercises.length) {
+    return state;
+  }
+  return {
+    ...state,
+    phases: state.phases.map((p, i) =>
+      i === phaseIndex
+        ? {
+            ...p,
+            workouts: p.workouts.map((w, j) =>
+              j === workoutIndex
+                ? {
+                    ...w,
+                    exercises: w.exercises.filter((_, k) => k !== exerciseIndex),
+                  }
+                : w,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
 // ─── Validation ─────────────────────────────────────────────────────────────
 
 export interface BuilderValidation {
@@ -446,12 +809,12 @@ export function duplicateDayLabels(phase: BuilderPhase): string[] {
  * What the builder will and will not send.
  *
  * It asks for exactly what the WEB builder asks for — a name, a goal, a
- * duration, weeks and a focus per phase, a title per session — because a
- * program that fails the web's own step validation is a program a member
- * cannot then finish there. The one thing it does NOT require is an exercise
- * in every session: rows are NP-171, and until that lands the native builder
- * is a frame, which is also why the member-facing create link only moves off
- * the web on a build that has them (`customPrograms.ts`).
+ * duration, weeks and a focus per phase, a title per session, and per exercise
+ * a picked catalogue/custom row (`workout.exercises.every((ex) =>
+ * ex.name.trim() !== "")` in `ProgramCreator`) — because a program that fails
+ * the web's own step validation is a program a member cannot then finish
+ * there. Out-of-range RPE (1–10) and percent of 1RM (0–100) refuse the save
+ * before it, as `webapp/models/Program.ts` enforces.
  */
 export function validateProgram(state: ProgramBuilderState): BuilderValidation {
   const errors: string[] = [];
@@ -493,6 +856,15 @@ export function validateProgram(state: ProgramBuilderState): BuilderValidation {
         );
         phasesComplete = false;
       }
+      workout.exercises.forEach((exercise) => {
+        const problem = validateBuilderExercise(exercise);
+        if (problem) {
+          errors.push(
+            `${label}, ${workout.day.trim() || `workout ${workoutIndex + 1}`}, ${builderExerciseName(exercise)}: ${problem.charAt(0).toLowerCase()}${problem.slice(1)}`,
+          );
+          phasesComplete = false;
+        }
+      });
     });
     const dupes = duplicateDayLabels(phase);
     if (dupes.length > 0) {
@@ -551,7 +923,7 @@ export interface BuilderPayloadPhase {
 /**
  * The request body itself, typed here rather than taken from
  * `CustomProgramInput` for one reason: the wire schema types an exercise as the
- * HYDRATED shape, and this card deliberately treats an exercise as opaque. The
+ * HYDRATED shape, and the builder types the row as the phone edits it. The
  * body is still checked against `CustomProgramInputSchema` — in the test, by
  * parsing a real payload, which is a stronger statement than a type alias.
  */
@@ -573,9 +945,10 @@ export interface CustomProgramBuilderPayload {
  *
  * Strings are trimmed; `weeks`, `focus`, `day`, `title` and `exercises` are
  * ALWAYS present (rule 3 — the web editor calls `.trim()` on them during
- * render); exercises pass through untouched (NP-171/NP-172 own them). `tags`
- * rides along only when the program actually has some, so a native save never
- * writes an empty array over a list the phone cannot edit.
+ * render). Each row is written field-for-field — `exerciseSlug` first, so
+ * hydration, PRs and demos resolve — with grouping riding through untouched
+ * for NP-172. `tags` rides along only when the program actually has some, so
+ * a native save never writes an empty array over a list the phone cannot edit.
  */
 export function toCustomProgramPayload(
   state: ProgramBuilderState,
@@ -595,12 +968,49 @@ export function toCustomProgramPayload(
       workouts: phase.workouts.map((workout, workoutIndex) => ({
         day: workout.day.trim() || dayLabel(workoutIndex + 1),
         title: workout.title.trim(),
-        exercises: workout.exercises,
+        exercises: workout.exercises.map(toPayloadExercise),
       })),
     })),
   };
   if (state.tags.length > 0) payload.tags = [...state.tags];
   return payload;
+}
+
+/**
+ * One row as the server stores it (`dehydrateProgram` in
+ * `webapp/lib/hydrateExercises.ts` reads exactly these keys): the slug link,
+ * the display name, the prescription, the coach notes and the grouping. Empty
+ * strings and undefined clear a field rather than persisting a blank; hydrated
+ * extras the phone cannot edit (`videoUrl`, `type`, `tip`) never leave it.
+ */
+function toPayloadExercise(exercise: BuilderExercise): BuilderExercise {
+  const row: BuilderExercise = {};
+  const slug = (exercise.exerciseSlug ?? "").trim();
+  if (slug) row.exerciseSlug = slug;
+  const name = (exercise.name ?? "").trim();
+  if (name) row.name = name;
+  const category = (exercise.category ?? "").trim();
+  if (category) row.category = category;
+  if (exercise.sets !== undefined) row.sets = exercise.sets;
+  const reps = (exercise.reps ?? "").trim();
+  if (reps) row.reps = reps;
+  const rest = (exercise.rest ?? "").trim();
+  if (rest) row.rest = rest;
+  const tempo = (exercise.tempo ?? "").trim();
+  if (tempo) row.tempo = tempo;
+  if (exercise.rpe !== undefined) row.rpe = exercise.rpe;
+  if (exercise.percentOf1RM !== undefined) row.percentOf1RM = exercise.percentOf1RM;
+  const duration = (exercise.duration ?? "").trim();
+  if (duration) row.duration = duration;
+  if (exercise.role !== undefined) row.role = exercise.role;
+  const details = (exercise.details ?? "").trim();
+  if (details) row.details = details;
+  if (exercise.groupId !== undefined) row.groupId = exercise.groupId;
+  if (exercise.groupType !== undefined) row.groupType = exercise.groupType;
+  if (exercise.groupLabel !== undefined) row.groupLabel = exercise.groupLabel;
+  if (exercise.groupRest !== undefined) row.groupRest = exercise.groupRest;
+  if (exercise.groupRounds !== undefined) row.groupRounds = exercise.groupRounds;
+  return row;
 }
 
 /** How many sessions this program describes, across every phase. */

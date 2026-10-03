@@ -398,8 +398,8 @@ describe("(id: e015c9b8) Deleting one natively lets a free member at 3 of 3 crea
   });
 });
 
-describe("(id: e015c9b9) Create and Edit open the right web pages", () => {
-  it("create opens /dashboard/programs/new and edit opens /dashboard/programs/{id}/edit, signed in", async () => {
+describe("(id: e015c9b9) Create and Edit open the native builder", () => {
+  it("create pushes /(tabs)/programming/new and edit pushes /(tabs)/programming/{id}/edit", async () => {
     routeListFetch((path: string) => {
       if (path === "/api/programs/custom") {
         return { programs: [OWNED] };
@@ -414,13 +414,14 @@ describe("(id: e015c9b9) Create and Edit open the right web pages", () => {
 
     fireEvent.press(screen.getByTestId("my-programs-create"));
     await waitFor(() =>
-      expect(mockOpenWeb).toHaveBeenCalledWith("/dashboard/programs/new"),
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/new"),
     );
+    expect(mockOpenWeb).not.toHaveBeenCalled();
 
     fireEvent.press(screen.getByTestId("my-programs-edit-custom-abc"));
     await waitFor(() =>
-      expect(mockOpenWeb).toHaveBeenCalledWith(
-        "/dashboard/programs/custom-abc/edit",
+      expect(mockPush).toHaveBeenCalledWith(
+        "/(tabs)/programming/custom-abc/edit",
       ),
     );
   });

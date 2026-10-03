@@ -33,10 +33,11 @@ import {
  *   • NO DRAFT. The server's copy is the truth here, exactly as in the web
  *     builder (its edit modes skip both draft effects): a stale local copy
  *     would quietly revert a change made on another device.
- *   • EXERCISES RIDE THROUGH. The GET answers HYDRATED exercises and the PUT
- *     runs the body back through `dehydrateProgram`, so sending them back
- *     unchanged is what the web editor does too. The frame edits the program,
- *     the phases and the sessions; the rows inside a session are NP-171.
+ *   • EXERCISES ARE EDITED, NOT JUST CARRIED. The GET answers HYDRATED
+ *     exercises and the PUT runs the body back through `dehydrateProgram`, so
+ *     the rows the frame used to send back unchanged are now the rows the
+ *     member edits (NP-171): search picker, prescription, notes and removal.
+ *     Reorder and grouping stay untouched for NP-172.
  */
 export default function EditProgramRoute() {
   const { colors } = useThemeTokens();
