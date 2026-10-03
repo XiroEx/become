@@ -70,6 +70,8 @@ import { useEntitlements } from "@/lib/entitlements";
 import { useApiErrorHandler } from "@/lib/errors";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
+import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
+import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
@@ -211,7 +213,7 @@ export default function NutritionIndexRoute() {
   });
 
   // 3. GET /api/tags
-  useFetch("/api/tags", TagsResponseSchema, {
+  const { data: tagsData } = useFetch("/api/tags", TagsResponseSchema, {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !token,
@@ -420,6 +422,79 @@ export default function NutritionIndexRoute() {
     },
     [flagTarget, token, refetchMealLogs],
   );
+
+  // ── Edit a logged item or a whole logged meal (NP-095) ───────────────────
+  //
+  // The web's EditFoodModal / EditMealModal as sheets on the native quantity
+  // picker: change an item's quantity + unit, or move a whole logged meal to
+  // another tag or time — keeping the untimed choice. Both save through the
+  // same PATCH routes the web uses, then refetch the day.
+  const [editItemTarget, setEditItemTarget] = useState<{
+    logId: string;
+    item: MealLog["items"][number];
+    tag: string;
+  } | null>(null);
+  const [editMealTarget, setEditMealTarget] = useState<{
+    logId: string;
+    mealName?: string;
+    tag: string;
+  } | null>(null);
+
+  const editItemLog = useMemo(() => {
+    if (!editItemTarget) return null;
+    return (
+      displayedLogs.find(
+        (log) =>
+          String(log._id ?? (log as unknown as { id?: unknown }).id ?? "") ===
+          editItemTarget.logId,
+      ) ?? null
+    );
+  }, [displayedLogs, editItemTarget]);
+
+  const editMealLog = useMemo(() => {
+    if (!editMealTarget) return null;
+    return (
+      displayedLogs.find(
+        (log) =>
+          String(log._id ?? (log as unknown as { id?: unknown }).id ?? "") ===
+          editMealTarget.logId,
+      ) ?? null
+    );
+  }, [displayedLogs, editMealTarget]);
+
+  const availableTags = useMemo(
+    () => ({
+      defaults: Array.isArray(
+        (tagsData as unknown as { defaults?: unknown } | null)?.defaults,
+      )
+        ? ((tagsData as unknown as { defaults: string[] }).defaults ?? [])
+        : [],
+      userTags: Array.isArray(
+        (tagsData as unknown as { userTags?: unknown } | null)?.userTags,
+      )
+        ? ((tagsData as unknown as { userTags: string[] }).userTags ?? [])
+        : [],
+    }),
+    [tagsData],
+  );
+
+  const handleEditItem = useCallback(
+    (logId: string, item: MealLog["items"][number], tag: string) => {
+      setEditItemTarget({ logId, item, tag });
+    },
+    [],
+  );
+
+  const handleEditMeal = useCallback(
+    (logId: string, mealName: string | undefined, tag: string) => {
+      setEditMealTarget({ logId, mealName, tag });
+    },
+    [],
+  );
+
+  const handleEditSaved = useCallback(async () => {
+    await refetchMealLogs();
+  }, [refetchMealLogs]);
 
   // Log it — promote plan to untimed meal log (today only)
   const handleLogPlan = useCallback(
@@ -1603,6 +1678,8 @@ export default function NutritionIndexRoute() {
               empty={section.empty}
               removable={section.empty && sessionTags.includes(section.tag)}
               onRemoveItem={handleRemoveItem}
+              onEditItem={handleEditItem}
+              onEditMeal={handleEditMeal}
               onFlagItem={handleFlagItem}
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
@@ -2171,6 +2248,42 @@ export default function NutritionIndexRoute() {
           setReportsRefreshKey((k) => k + 1);
         }}
         token={token}
+      />
+
+      {/* Edit a logged item (NP-095) */}
+      <EditLogItemSheet
+        visible={editItemTarget !== null}
+        logId={editItemTarget?.logId ?? null}
+        item={editItemTarget?.item ?? null}
+        loggedAt={
+          typeof editItemLog?.loggedAt === "string"
+            ? editItemLog.loggedAt
+            : undefined
+        }
+        untimed={Boolean(editItemLog?.untimed)}
+        currentTag={editItemTarget?.tag ?? "snack"}
+        availableTags={availableTags}
+        token={token}
+        onClose={() => setEditItemTarget(null)}
+        onSaved={handleEditSaved}
+      />
+
+      {/* Edit a whole logged meal (NP-095) */}
+      <EditLoggedMealSheet
+        visible={editMealTarget !== null}
+        logId={editMealTarget?.logId ?? null}
+        mealName={editMealTarget?.mealName}
+        currentTag={editMealTarget?.tag ?? "snack"}
+        availableTags={availableTags}
+        loggedAt={
+          typeof editMealLog?.loggedAt === "string"
+            ? editMealLog.loggedAt
+            : undefined
+        }
+        untimed={Boolean(editMealLog?.untimed)}
+        token={token}
+        onClose={() => setEditMealTarget(null)}
+        onSaved={handleEditSaved}
       />
 
       {/* Flag sheet for a logged row (NP-174). */}
