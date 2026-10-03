@@ -1,5 +1,5 @@
 import { Pressable, View } from "react-native";
-import { Check, Plus, Trash2 } from "lucide-react-native";
+import { Check, Flag, Plus, Trash2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -20,6 +20,11 @@ export interface TagSectionProps {
   empty?: boolean;
   removable?: boolean;
   onRemoveItem: (logId: string, itemId: string) => void;
+  /**
+   * "Something look wrong?" on a logged row (NP-174). Offered only for rows
+   * with a real catalogue food behind them; the screen opens the flag sheet.
+   */
+  onFlagItem?: (logId: string, item: MealLog["items"][number]) => void;
   onRemoveTag?: (tag: string) => void;
   onAddFood: (tag: string) => void;
   onLogPlan?: (planId: string) => void;
@@ -68,6 +73,7 @@ export function TagSection({
   empty,
   removable,
   onRemoveItem,
+  onFlagItem,
   onRemoveTag,
   onAddFood,
   onLogPlan,
@@ -360,16 +366,36 @@ export function TagSection({
                         delete affordance is withheld — tapping to pick must
                         never delete a log. */}
                     {selectableRow ? null : (
-                      <Pressable
-                        testID={`day-totals-entry-${itemId}-remove`}
-                        accessibilityLabel={`Remove ${item.name}`}
-                        accessibilityRole="button"
-                        onPress={() => onRemoveItem(logId, itemId)}
-                        hitSlop={8}
-                        style={{ padding: 6 }}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
                       >
-                        <Trash2 size={16} color={colors.destructive} />
-                      </Pressable>
+                        {onFlagItem && item.foodId ? (
+                          <Pressable
+                            testID={`day-totals-entry-${itemId}-flag`}
+                            accessibilityLabel={`Report ${item.name}`}
+                            accessibilityHint="Something look wrong? Report this food without changing your entry"
+                            accessibilityRole="button"
+                            onPress={() => onFlagItem(logId, item)}
+                            hitSlop={8}
+                            style={{ padding: 6 }}
+                          >
+                            <Flag size={16} color={colors["muted-foreground"]} />
+                          </Pressable>
+                        ) : null}
+                        <Pressable
+                          testID={`day-totals-entry-${itemId}-remove`}
+                          accessibilityLabel={`Remove ${item.name}`}
+                          accessibilityRole="button"
+                          onPress={() => onRemoveItem(logId, itemId)}
+                          hitSlop={8}
+                          style={{ padding: 6 }}
+                        >
+                          <Trash2 size={16} color={colors.destructive} />
+                        </Pressable>
+                      </View>
                     )}
                   </>
                 );
