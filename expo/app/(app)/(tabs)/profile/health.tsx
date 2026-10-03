@@ -742,6 +742,11 @@ export default function HealthSettingsRoute() {
               onDeleted={() => {
                 router.replace("/login");
               }}
+              onKept={() => {
+                // This route holds no notification prefs; re-hydrating the
+                // session keeps whatever reads them elsewhere honest.
+                void refresh();
+              }}
             />
           </View>
         </ScrollView>

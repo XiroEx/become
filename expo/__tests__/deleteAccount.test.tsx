@@ -26,6 +26,8 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
 import { DangerZone } from "@/components/settings/DangerZone";
 import {
   DELETE_CONFIRMATION,
+  cancelAccountDeletion,
+  getAccountDeletionStatus,
   parseRestoreDeepLink,
   requestAccountDeletion,
   restoreAccount,
@@ -37,6 +39,8 @@ import {
  * here or in a browser.
  */
 describe("DangerZone", () => {
+  const idleStatus = async () => ({ ok: true, deletion: { pending: false } });
+
   it("does not delete anything until the confirmation is pressed", async () => {
     const requestImpl = jest.fn(async () => ({ ok: true }));
     const clearToken = jest.fn(async () => {});
@@ -48,6 +52,7 @@ describe("DangerZone", () => {
         requestImpl={requestImpl}
         clearToken={clearToken}
         onDeleted={onDeleted}
+        statusImpl={idleStatus}
         source="ios"
       />,
     );
@@ -75,6 +80,7 @@ describe("DangerZone", () => {
         requestImpl={requestImpl}
         clearToken={clearToken}
         onDeleted={onDeleted}
+        statusImpl={idleStatus}
         source="android"
       />,
     );
@@ -101,6 +107,7 @@ describe("DangerZone", () => {
         requestImpl={requestImpl}
         clearToken={clearToken}
         onDeleted={onDeleted}
+        statusImpl={async () => ({ ok: true, deletion: { pending: false } })}
       />,
     );
 
@@ -110,6 +117,95 @@ describe("DangerZone", () => {
     await waitFor(() => expect(getByTestId("delete-account-error")).toBeTruthy());
     expect(clearToken).not.toHaveBeenCalled();
     expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("(e015c992) a pending deletion shows the scheduled date and Keep my account instead of Delete account", async () => {
+    const statusImpl = jest.fn(async () => ({
+      ok: true,
+      deletion: {
+        pending: true,
+        requestedAt: "2026-09-30T00:00:00.000Z",
+        restorableUntil: "2026-10-07T00:00:00.000Z",
+        daysLeft: 5,
+        restoreWindowDays: 7,
+      },
+    }));
+    const cancelImpl = jest.fn(async () => ({ ok: true, status: 200 }));
+    const onKept = jest.fn();
+
+    const { getByTestId, queryByTestId } = render(
+      <DangerZone
+        token="jwt"
+        cancelImpl={cancelImpl}
+        statusImpl={statusImpl}
+        onKept={onKept}
+        source="ios"
+      />,
+    );
+
+    // The status read lands: the request surface is replaced by the pending
+    // date and the keep button.
+    await waitFor(() => expect(getByTestId("deletion-pending")).toBeTruthy());
+    expect(queryByTestId("delete-account")).toBeNull();
+    expect(getByTestId("keep-my-account")).toBeTruthy();
+
+    fireEvent.press(getByTestId("keep-my-account"));
+
+    // Cancel posts ONLY { cancel: true } — it must not touch notification
+    // prefs itself; the settings screen refetches the switch separately.
+    await waitFor(() => expect(cancelImpl).toHaveBeenCalledTimes(1));
+    expect(cancelImpl).toHaveBeenCalledWith({ jwt: "jwt" });
+    expect(onKept).toHaveBeenCalledTimes(1);
+
+    // The status is re-read after the cancel, so the request surface returns.
+    await waitFor(() => expect(statusImpl).toHaveBeenCalledTimes(2));
+  });
+
+  it("(e015c993) after keeping the account the notice points at the notification switch, which stays off", async () => {
+    let pending = true;
+    const statusImpl = jest.fn(async () => ({
+      ok: true,
+      deletion: pending
+        ? {
+            pending: true,
+            requestedAt: "2026-09-30T00:00:00.000Z",
+            restorableUntil: "2026-10-07T00:00:00.000Z",
+            daysLeft: 5,
+            restoreWindowDays: 7,
+          }
+        : { pending: false, requestedAt: null, restorableUntil: null, daysLeft: 0 },
+    }));
+    const cancelImpl = jest.fn(async () => {
+      pending = false;
+      return { ok: true, status: 200 };
+    });
+
+    const { getByTestId } = render(
+      <DangerZone token="jwt" cancelImpl={cancelImpl} statusImpl={statusImpl} source="ios" />,
+    );
+
+    await waitFor(() => expect(getByTestId("keep-my-account")).toBeTruthy());
+    fireEvent.press(getByTestId("keep-my-account"));
+
+    // The notice names the NP-068 switch the member must flip themselves.
+    await waitFor(() => expect(getByTestId("keep-account-notice")).toBeTruthy());
+    expect(getByTestId("keep-account-notice").props.children).toBeDefined();
+
+    // And the request surface is back — the account was kept, not deleted.
+    await waitFor(() => expect(getByTestId("delete-account")).toBeTruthy());
+  });
+
+  it("a failed status read leaves the delete surface drawn", async () => {
+    const statusImpl = jest.fn(async () => ({ ok: false, deletion: null }));
+
+    const { getByTestId, queryByTestId } = render(
+      <DangerZone token="jwt" statusImpl={statusImpl} source="ios" />,
+    );
+
+    await waitFor(() => expect(statusImpl).toHaveBeenCalledTimes(1));
+    // The server stays the gate: a blipped read must never hide the surface.
+    expect(getByTestId("delete-account")).toBeTruthy();
+    expect(queryByTestId("deletion-pending")).toBeNull();
   });
 });
 
@@ -152,6 +248,64 @@ describe("requestAccountDeletion", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     await expect(requestAccountDeletion({ jwt: "jwt", fetchImpl })).resolves.toEqual({ ok: false });
+  });
+});
+
+describe("getAccountDeletionStatus", () => {
+  it("reads GET /api/me/account with the session and returns the pending date", async () => {
+    const fetchImpl = jest.fn(async () =>
+      new Response(
+        JSON.stringify({
+          deletion: {
+            pending: true,
+            requestedAt: "2026-09-30T00:00:00.000Z",
+            restorableUntil: "2026-10-07T00:00:00.000Z",
+            daysLeft: 5,
+            restoreWindowDays: 7,
+          },
+        }),
+        { status: 200 },
+      ),
+    ) as unknown as typeof fetch;
+
+    const result = await getAccountDeletionStatus({
+      jwt: "jwt-123",
+      fetchImpl,
+      baseUrl: "https://example.test",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.deletion?.pending).toBe(true);
+    expect(result.deletion?.restorableUntil).toBe("2026-10-07T00:00:00.000Z");
+
+    const [url, init] = (fetchImpl as unknown as jest.Mock).mock.calls[0];
+    expect(url).toBe("https://example.test/api/me/account");
+    expect(init.method).toBe("GET");
+    expect(init.headers.Authorization).toBe("Bearer jwt-123");
+  });
+
+  it("reports a failed read instead of hiding the surface", async () => {
+    const fetchImpl = jest.fn(async () => new Response("{}", { status: 401 })) as unknown as typeof fetch;
+    const result = await getAccountDeletionStatus({ jwt: "stale", fetchImpl });
+    expect(result).toEqual({ ok: false, status: 401, deletion: null });
+  });
+});
+
+describe("cancelAccountDeletion", () => {
+  it("posts only { cancel: true } — it never touches notification prefs", async () => {
+    const fetchImpl = jest.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    const result = await cancelAccountDeletion({
+      jwt: "jwt-123",
+      fetchImpl,
+      baseUrl: "https://example.test",
+    });
+
+    expect(result.ok).toBe(true);
+    const [url, init] = (fetchImpl as unknown as jest.Mock).mock.calls[0];
+    expect(url).toBe("https://example.test/api/me/account");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ cancel: true });
+    expect(init.headers.Authorization).toBe("Bearer jwt-123");
   });
 });
 
