@@ -53,6 +53,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { rememberBillingHandover } from "@/lib/entitlements/billingReturn";
 import {
   PLUS_BENEFITS,
   allowanceLine,
@@ -384,7 +385,12 @@ export function UpgradeSheet({
       // return this sheet is still mounted — a spinner that never resolves is
       // the one thing it must not be left showing.
       setCheckout(opened ? "ready" : "error");
-      if (opened) setBrowserOpened(true);
+      // Remembered for the foreground re-read (NP-054): the member may come
+      // back through the app switcher, with no return params at all.
+      if (opened) {
+        rememberBillingHandover("checkout");
+        setBrowserOpened(true);
+      }
     })();
   }, [gate, checkout, deps]);
 
@@ -392,6 +398,9 @@ export function UpgradeSheet({
     setPortalState("opening");
     void openBillingPortal(portalPath, deps).then((opened) => {
       setPortalState(opened ? "idle" : "failed");
+      // Billing is now in the device browser — remembered for the foreground
+      // re-read (NP-054), so a portal cancellation shows on the way back in.
+      if (opened) rememberBillingHandover("portal");
     });
   }, [portalPath, deps]);
 

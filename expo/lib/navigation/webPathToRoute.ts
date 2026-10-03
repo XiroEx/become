@@ -95,6 +95,12 @@ export const NATIVE_ROUTES = {
   chat: "/(tabs)/chat",
   profile: "/(tabs)/profile",
   becoming: "/becoming",
+  /**
+   * The plan screen — `app/(app)/plan.tsx` (NP-053). The landing for every
+   * billing return (NP-054): the only screen that tells a member which plan
+   * they are on, so the only honest place for a buyer to land.
+   */
+  plan: "/plan",
 } as const;
 
 /**
@@ -194,6 +200,42 @@ function web(rawPathname: string, params: Record<string, string>): WebTarget {
     href: withQuery(rawPathname, params),
     fallback: "web-only",
   };
+}
+
+/**
+ * The plan-page landing for a billing return (NP-054).
+ *
+ * The public return pages (`/billing/return`, `/billing/cancelled`,
+ * `/billing/portal-return`) and the `become://?billing=…` links they carry
+ * back into the app have no native screen of their own — the plan page is the
+ * only screen that tells a member which plan they are on, so it is the only
+ * honest landing for somebody who has just paid, backed out, or changed
+ * something in the portal.
+ *
+ * The `session_id` rides along ONLY on a success return: it is the hint the
+ * plan page hands to `GET /api/billing/status?session_id=` so the server can
+ * activate from the session without waiting for the webhook. A cancel or a
+ * portal return carries nothing to activate, so nothing is carried — the plan
+ * page re-reads status and entitlements anyway when it mounts.
+ *
+ * The session id is only a hint and the server checks it against the signed-in
+ * member (`client_reference_id`); no amount or date is computed on the device.
+ */
+function billingReturnTarget(params: Record<string, string>): NativeTarget {
+  const billing = (params.billing ?? "").toLowerCase();
+  const checkout = (params.checkout ?? "").toLowerCase();
+  const isSuccess =
+    billing === "success" ||
+    checkout === "success" ||
+    (params.session_id ? true : false);
+  if (isSuccess && params.session_id) {
+    return native(
+      NATIVE_ROUTES.plan,
+      { billing: "success", session_id: params.session_id },
+      "exact",
+    );
+  }
+  return native(NATIVE_ROUTES.plan, {}, "nearest");
 }
 
 /**
@@ -306,9 +348,14 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   // ── The public app: launch, auth, account, billing return ─────────────────
   if (segments.length === 0) {
     // `/` — and `become://?billing=success&session_id=…`, which is how the
-    // billing return pages come back into the app. There is no native billing
-    // screen, so the params ride along to the launch route, which always
-    // resolves (sign-in, onboarding or Home) and is never blank.
+    // billing return pages come back into the app (NP-054). The plan page is
+    // the only screen that tells a member which plan they are on, so it is
+    // the landing — never the launch route, which would show a buyer nothing
+    // about the thing they just paid for.
+    const billing = lower(params.billing ?? "");
+    if (billing === "success" || billing === "cancelled" || billing === "portal-return") {
+      return billingReturnTarget(params);
+    }
     return native(NATIVE_ROUTES.launch, params, "exact");
   }
 
@@ -324,7 +371,11 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   if (head === "billing" || (head === "auth" && segments.length > 1)) {
     // `/billing/return`, `/billing/cancelled`, `/billing/portal-return` and
     // `/auth/finish|handoff` are web pages the app has no screen for. The
-    // launch route, carrying whatever they said, is the deliberate landing.
+    // BILLING returns land on the plan page (NP-054); the auth hand-offs land
+    // on the launch route, which always resolves and is never blank.
+    if (head === "billing") {
+      return billingReturnTarget(params);
+    }
     return native(NATIVE_ROUTES.launch, params, "nearest");
   }
 
@@ -388,6 +439,19 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
 
   // ── /dashboard ────────────────────────────────────────────────────────────
   if (segments.length === 1) return native(NATIVE_ROUTES.home, params, "exact");
+
+  // The web plan page's own return query (`?checkout=success&session_id=…`,
+  // `?checkout=cancelled`, `?portal=return`) — the fallback for a member
+  // without the app (NP-054). It lands on the native plan page, with the
+  // session hint carried only on a success return.
+  if (section === "plan") {
+    const checkout = lower(params.checkout ?? "");
+    const portal = lower(params.portal ?? "");
+    if (checkout === "success" || checkout === "cancelled" || portal === "return") {
+      return billingReturnTarget(params);
+    }
+    return native(NATIVE_ROUTES.plan, {}, "exact");
+  }
 
   if (section === "admin" || section === "dev") {
     return web(rawPathname, params);
@@ -506,12 +570,8 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return native(NATIVE_ROUTES.profile, params, "exact");
   }
 
-  // ── Home's own rooms: plan, settings, customize ─────────────────────────────
-  if (
-    section === "plan" ||
-    section === "settings" ||
-    section === "customize"
-  ) {
+  // ── Home's own rooms: settings, customize ───────────────────────────────────
+  if (section === "settings" || section === "customize") {
     return native(NATIVE_ROUTES.home, params, "nearest");
   }
 

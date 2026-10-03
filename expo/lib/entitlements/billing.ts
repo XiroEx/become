@@ -243,12 +243,23 @@ export async function probeCheckoutAvailable(
 /**
  * Query GET /api/billing/status for configured status, per-plan availability,
  * and subscription details.
+ *
+ * `sessionId` is the success-return hint: the status route activates from the
+ * session (after checking `client_reference_id` against the signed-in member)
+ * instead of waiting for the webhook. It is only a hint — a forged id is
+ * dropped server-side — and nothing about the response is trusted beyond what
+ * the server says.
  */
 export async function fetchBillingStatus(
   deps: BillingDeps = {},
+  sessionId?: string,
 ): Promise<BillingStatusResult | null> {
   try {
-    const body = await apiFetch(BILLING_STATUS_PATH, BillingStatusResponseSchema, {
+    const path =
+      sessionId && sessionId.length > 0
+        ? `${BILLING_STATUS_PATH}?session_id=${encodeURIComponent(sessionId)}`
+        : BILLING_STATUS_PATH;
+    const body = await apiFetch(path, BillingStatusResponseSchema, {
       method: "GET",
       ...requestOptions(deps),
     });
