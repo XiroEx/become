@@ -4,12 +4,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import ToolIntroGate from "@/components/mind/ToolIntroGate";
+import { TierGate } from "@/components/entitlements/TierGate";
 import StateShiftDashboard from "@/components/mind/StateShiftDashboard";
 import SelfImageDashboard from "@/components/mind/SelfImageDashboard";
 import MissionDashboard from "@/components/mind/MissionDashboard";
 import DisciplineDashboard from "@/components/mind/DisciplineDashboard";
 import AntiSabotageDashboard from "@/components/mind/AntiSabotageDashboard";
 import SocialDashboard from "@/components/mind/SocialDashboard";
+import VisionDashboard from "@/components/mind/VisionDashboard";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export const SECTION_LABELS: Record<string, string> = {
@@ -73,7 +75,26 @@ export default function MindSectionRoute() {
             {section === "discipline" && <DisciplineDashboard />}
             {section === "anti-sabotage" && <AntiSabotageDashboard />}
             {section === "social" && <SocialDashboard />}
-            {!["state-shift", "self-image", "mission", "discipline", "anti-sabotage", "social"].includes(section) && (
+            {/* Vision is the one tool that is a plan feature rather than a
+                chapter unlock. One wrap covers the whole surface — every action
+                inside it would otherwise 403. */}
+            {section === "vision" && (
+              <TierGate
+                feature="vision"
+                description="Paint the future you across five domains, then check your alignment daily."
+              >
+                <VisionDashboard />
+              </TierGate>
+            )}
+            {![
+              "state-shift",
+              "self-image",
+              "mission",
+              "discipline",
+              "anti-sabotage",
+              "social",
+              "vision",
+            ].includes(section) && (
               <View className="items-center justify-center p-8">
                 <Text className="text-center text-sm text-muted-foreground">
                   {label} is coming soon.
