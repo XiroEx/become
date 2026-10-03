@@ -64,6 +64,13 @@ export interface QuantityPickerProps {
   initialDate?: string;
   initialTimeMode?: "now" | "picked" | "none";
   initialPickedTime?: string;
+  /**
+   * Amount-only mode for the edit sheets (NP-095): hides the tag / time /
+   * date / log-button controls — the sheet owns those — and leaves the
+   * variant, serving-unit and quantity controls with their live preview.
+   * `onChange` still emits every amount edit.
+   */
+  showLogControls?: boolean;
   onChange?: (selection: QuantityPickerSelection) => void;
   onSubmit?: (result: {
     item: MealItemPayload;
@@ -93,6 +100,7 @@ export function QuantityPicker({
   initialDate,
   initialTimeMode = "now",
   initialPickedTime = "12:00",
+  showLogControls = true,
   onChange,
   onSubmit,
   testID = "quantity-picker",
@@ -570,47 +578,49 @@ export function QuantityPicker({
       </View>
 
       {/* Tag Selector */}
-      <View style={{ gap: 6 }}>
-        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-          Meal
-        </Text>
-        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-          {TAG_OPTIONS.map((t) => {
-            const isSelected = tag === t;
-            return (
-              <Pressable
-                key={t}
-                accessibilityRole="button"
-                accessibilityLabel={`Tag ${t}`}
-                testID={`tag-chip-${t}`}
-                onPress={() => setTag(t)}
-                style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                  borderRadius: 16,
-                  backgroundColor: isSelected ? colors.primary : colors.card,
-                  borderWidth: 1,
-                  borderColor: isSelected ? colors.primary : colors.border,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: isSelected ? "600" : "400",
-                    color: isSelected ? colors["primary-foreground"] : colors.foreground,
-                    textTransform: "capitalize",
-                  }}
-                >
-                  {t}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+      {showLogControls ? (
+        <>
+          <View style={{ gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+              Meal
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              {TAG_OPTIONS.map((t) => {
+                const isSelected = tag === t;
+                return (
+                  <Pressable
+                    key={t}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Tag ${t}`}
+                    testID={`tag-chip-${t}`}
+                    onPress={() => setTag(t)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      backgroundColor: isSelected ? colors.primary : colors.card,
+                      borderWidth: 1,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: isSelected ? "600" : "400",
+                        color: isSelected ? colors["primary-foreground"] : colors.foreground,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {t}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
-      {/* Time Mode Selector */}
-      <View style={{ gap: 6 }}>
+          {/* Time Mode Selector */}
+          <View style={{ gap: 6 }}>
         <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
           Time
         </Text>
@@ -714,61 +724,69 @@ export function QuantityPicker({
             />
           </View>
         )}
-      </View>
+          </View>
+        </>
+      ) : null}
 
       {/* Date */}
-      <View style={{ gap: 6 }}>
-        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-          Date
-        </Text>
-        <TextInput
-          testID="date-input"
-          accessibilityLabel="Log date"
-          value={date}
-          onChangeText={setDate}
-          placeholder="YYYY-MM-DD"
-          style={{
-            height: 40,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            paddingHorizontal: 12,
-            color: colors.foreground,
-          }}
-        />
-      </View>
+      {showLogControls ? (
+        <View style={{ gap: 6 }}>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+            Date
+          </Text>
+          <TextInput
+            testID="date-input"
+            accessibilityLabel="Log date"
+            value={date}
+            onChangeText={setDate}
+            placeholder="YYYY-MM-DD"
+            style={{
+              height: 40,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.card,
+              paddingHorizontal: 12,
+              color: colors.foreground,
+            }}
+          />
+        </View>
+      ) : null}
 
       {/* Log Food Button */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Log food item"
-        testID="log-food-button"
-        onPress={handleLog}
-        style={{
-          marginTop: 8,
-          height: 48,
-          borderRadius: 8,
-          backgroundColor: colors.primary,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ fontSize: 16, fontWeight: "bold", color: colors["primary-foreground"] }}>
-          Log Food
-        </Text>
-      </Pressable>
+      {showLogControls ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log food item"
+          testID="log-food-button"
+          onPress={handleLog}
+          style={{
+            marginTop: 8,
+            height: 48,
+            borderRadius: 8,
+            backgroundColor: colors.primary,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: colors["primary-foreground"] }}>
+            Log Food
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Backwards-compatible submit button for tests querying serving-picker-submit */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Submit serving"
-        testID="serving-picker-submit"
-        onPress={handleLog}
-        style={{ display: "none" }}
-      >
-        <Text>Submit</Text>
-      </Pressable>
+      {showLogControls ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Submit serving"
+          testID="serving-picker-submit"
+          onPress={handleLog}
+          style={{ display: "none" }}
+        >
+          <Text>Submit</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
