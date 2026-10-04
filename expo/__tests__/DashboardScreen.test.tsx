@@ -2,6 +2,23 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { DashboardScreen } from "@/components/DashboardScreen";
 import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
 
+jest.mock("@/lib/auth/useAuth", () => ({
+  useAuth: () => ({
+    user: { _id: "u1", email: "jon@example.com" },
+    token: "test-jwt",
+    loading: false,
+    isAuthed: true,
+    setToken: jest.fn(),
+    refresh: jest.fn(),
+    logout: jest.fn(),
+  }),
+}));
+
+jest.mock("@become/api-client", () => {
+  const actual = jest.requireActual("@become/api-client");
+  return { __esModule: true, ...actual, apiFetch: jest.fn() };
+});
+
 describe("DashboardScreen", () => {
   const baseProps = {
     streakDays: 7,
@@ -177,14 +194,13 @@ describe("DashboardScreen", () => {
     fireEvent.press(getByTestId("tile-nutrition"));
     expect(onOpenNutrition).toHaveBeenCalledTimes(1);
 
-    // Workout Now sheet opens in place (NP-076)
-    expect(queryByTestId("dashboard-workout-now-sheet-start")).toBeNull();
+    // Workout Now sheet opens in place (NP-076): the focus list, not a
+    // single start button.
+    expect(queryByTestId("dashboard-workout-now-sheet-body-focus-push")).toBeNull();
     fireEvent.press(getByTestId("tile-workoutNow"));
-    expect(getByTestId("dashboard-workout-now-sheet-start")).toBeTruthy();
-
-    // Press start session in sheet
-    fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
-    expect(onStartWorkout).toHaveBeenCalledTimes(1);
+    expect(
+      getByTestId("dashboard-workout-now-sheet-body-focus-push"),
+    ).toBeTruthy();
   });
 
   it("calls onSkipCheckIn when skip button is pressed in check-in modal", async () => {
