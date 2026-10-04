@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { Dumbbell, History, RefreshCw, Zap } from "lucide-react-native";
+import { Dumbbell, History, RefreshCw, Sparkles, Zap } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import {
   apiFetch,
@@ -26,16 +26,27 @@ import {
   quickSessionOverviewHref,
   stashQuickSession,
 } from "@/lib/quickSession/store";
+import { showAiConsentPrompt } from "@/lib/ai/aiConsentPrompt";
+import { useEntitlements } from "@/lib/entitlements";
+import {
+  aiFallbackNote,
+  generateAiSession,
+} from "@/lib/workout/aiGenerate";
 
 /**
- * WORKOUT NOW SHEET (NP-076).
+ * WORKOUT NOW SHEET (NP-076 + NP-136).
  *
- * Native port of `webapp/components/QuickSessionModal.tsx` WITHOUT the AI
- * switch (NP-136 adds it): the member picks a focus, gets a deterministic
- * preview from `POST /api/generate/session` (permanently unmetered, so it
- * works for every member including a free one past the AI allowance), can
- * Regenerate for a different session, can repeat one of the five most recent
- * quick sessions without regenerating, and hands off to the NP-227 overview.
+ * Native port of `webapp/components/QuickSessionModal.tsx`: the member picks
+ * a focus, gets a deterministic preview from `POST /api/generate/session`
+ * (permanently unmetered, so it works for every member including a free one
+ * past the AI allowance), can Regenerate for a different session, can repeat
+ * one of the five most recent quick sessions without regenerating, and hands
+ * off to the NP-227 overview.
+ *
+ * With the AI switch on (NP-136), the request goes through the AI run client
+ * (NP-038) to `POST /api/ai/workout/session` first and falls back to the
+ * standard generator — the web's AI path, with the web's fallback-note
+ * wording.
  *
  * Rules that travel from the web:
  *  - The coach-curated glutes session bypasses the generator entirely.
@@ -45,6 +56,12 @@ import {
  *  - `date` (a local YYYY-MM-DD, set when opened from a calendar day)
  *    pre-fills the overview's Log/Plan date via `?date=`; the heading reads
  *    "Schedule a Workout" (future) / "Log a Workout" (past) / "Workout Now".
+ *  - Consent is checked on the server before any charge: a consent refusal
+ *    opens the consent prompt (NP-046) and nothing else, and declining
+ *    leaves the standard generator working.
+ *  - An allowance refusal falls through to the standard generator and is a
+ *    note, never a wall; a 429 spend cap is never an upsell.
+ *  - Post once per member action and never retry the POST.
  */
 
 export const QUICK_FOCUS_ORDER = [
@@ -293,7 +310,17 @@ function WorkoutNowBody({
   const [generating, setGenerating] = useState(false);
   const [repeating, setRepeating] = useState(false);
   const [starting, setStarting] = useState(false);
+  // AI switch (NP-136): with it on, the request goes to
+  // `/api/ai/workout/session` first, then falls back to the standard
+  // generator. `aiUsed` marks a preview that really is AI-written.
+  const [useAi, setUseAi] = useState(false);
+  const [aiUsed, setAiUsed] = useState(false);
+  // An allowance refusal the member walked away from WITH a session: the
+  // unmetered deterministic builder ran instead. Shown inline, never as the
+  // upgrade sheet — there is a preview underneath it.
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
   const activeGenRef = useRef(0);
+  const { refresh: refreshEntitlements } = useEntitlements();
 
   // Load the five most recent quick sessions on mount — a network sync from
   // outside React, never derived during render.
@@ -328,8 +355,10 @@ function WorkoutNowBody({
   const generateFor = useCallback(
     async (focus: QuickFocusKey) => {
       setError(null);
+      setFallbackNote(null);
       setSelectedFocus(focus);
       setPreview(null);
+      setAiUsed(false);
       setGenerating(true);
       const genId = ++activeGenRef.current;
 
@@ -338,6 +367,55 @@ function WorkoutNowBody({
         setPreview(curatedGlutesSession());
         setGenerating(false);
         return;
+      }
+
+      // ── AI path (when toggled) ──────────────────────────────────────────
+      // Async run: POST returns a runId, the run client polls until the
+      // session lands. Posts exactly ONCE per member action — no retry here.
+      if (useAi) {
+        try {
+          const outcome = await generateAiSession(
+            QUICK_FOCUS_LABELS[focus],
+            focus,
+            { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+          );
+          if (genId !== activeGenRef.current) return; // stale
+          if (outcome.status === "ai") {
+            setPreview({
+              title: outcome.session.title,
+              focus: outcome.session.focus,
+              exercises: outcome.session.exercises,
+            });
+            setAiUsed(true);
+            void refreshEntitlements().catch(() => {});
+            setGenerating(false);
+            return;
+          }
+          if (outcome.status === "consent") {
+            // Permission, not pricing — the consent prompt and nothing else.
+            // Declining leaves the standard generator working: fall through.
+            showAiConsentPrompt({
+              onDecline: () => {
+                // The deterministic preview below is already on its way; the
+                // member simply keeps the standard path.
+              },
+            });
+          } else if (outcome.status === "gate") {
+            // Out of AI generations for the week. Fall THROUGH to the
+            // deterministic route: /api/generate/session is unmetered by
+            // design (it is the fallback every AI route degrades to), so the
+            // member still gets a session and the refusal is a note rather
+            // than a dead end.
+            setFallbackNote(
+              aiFallbackNote(outcome.gate?.error ?? "", "session"),
+            );
+            void refreshEntitlements().catch(() => {});
+          }
+          // A 429 spend cap or an unusable AI answer falls through silently.
+        } catch {
+          /* fall through to deterministic */
+        }
+        if (genId !== activeGenRef.current) return;
       }
 
       try {
@@ -359,6 +437,11 @@ function WorkoutNowBody({
         );
         if (genId !== activeGenRef.current) return;
         if (!data?.session) {
+          // The note was written a moment ago, on the assumption that this
+          // call always works. It didn't, so retract it rather than leave
+          // an amber "built you a standard session instead" above a red
+          // error and an empty preview.
+          setFallbackNote(null);
           setError("Couldn't build that session. Try again.");
           return;
         }
@@ -369,12 +452,14 @@ function WorkoutNowBody({
         });
       } catch {
         if (genId !== activeGenRef.current) return;
+        // Same retraction as above: no session, no note.
+        setFallbackNote(null);
         setError("Network error. Try again.");
       } finally {
         if (genId === activeGenRef.current) setGenerating(false);
       }
     },
-    [token],
+    [token, useAi, refreshEntitlements],
   );
 
   // Start the previewed session — stash, then hand off to the NP-227
@@ -543,9 +628,44 @@ function WorkoutNowBody({
 
         {/* 2. Quick start by focus */}
         <View>
-          <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide mb-2">
-            Quick start by focus
-          </Text>
+          <View className="flex-row items-center justify-between mb-2">
+            <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
+              Quick start by focus
+            </Text>
+            {/* AI toggle (NP-136): with it on, the request goes to
+                `/api/ai/workout/session` first, then falls back to the
+                standard generator. */}
+            <Pressable
+              testID={`${testID}-ai-toggle`}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: useAi, disabled: busy }}
+              accessibilityLabel={useAi ? "Disable AI generation" : "Enable AI generation"}
+              onPress={() => {
+                setUseAi((v) => !v);
+                // Reset the preview so the member re-taps a chip with the new setting.
+                setPreview(null);
+                setSelectedFocus(null);
+                setAiUsed(false);
+                setFallbackNote(null);
+              }}
+              disabled={busy}
+              className={`flex-row items-center rounded-full px-2.5 py-1 ${
+                useAi ? "bg-primary" : "border border-border bg-card"
+              }`}
+            >
+              <Sparkles
+                size={12}
+                color={useAi ? colors["primary-foreground"] : colors["muted-foreground"]}
+              />
+              <Text
+                className={`text-[11px] font-semibold ml-1 ${
+                  useAi ? "text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {useAi ? "AI on" : "AI"}
+              </Text>
+            </Pressable>
+          </View>
           <View className="flex-row flex-wrap" style={{ gap: 8 }}>
             {QUICK_FOCUS_ORDER.map((key) => {
               const active = selectedFocus === key;
@@ -585,22 +705,51 @@ function WorkoutNowBody({
                 <View className="flex-row items-center justify-center py-6" style={{ gap: 8 }}>
                   <ActivityIndicator testID={`${testID}-preview-loading`} />
                   <Text className="text-muted-foreground text-sm">
-                    Building your {QUICK_FOCUS_LABELS[selectedFocus].toLowerCase()} session…
+                    {useAi
+                      ? `Generating your ${QUICK_FOCUS_LABELS[selectedFocus].toLowerCase()} session with AI…`
+                      : `Building your ${QUICK_FOCUS_LABELS[selectedFocus].toLowerCase()} session…`}
                   </Text>
                 </View>
               ) : preview ? (
                 <>
                   <View className="flex-row items-center justify-between mb-2">
-                    <Text
-                      testID={`${testID}-preview-title`}
-                      className="text-foreground text-sm font-semibold flex-1 mr-2"
-                    >
-                      {preview.title}
-                    </Text>
+                    <View className="flex-row items-center flex-1 mr-2" style={{ gap: 6 }}>
+                      <Text
+                        testID={`${testID}-preview-title`}
+                        className="text-foreground text-sm font-semibold flex-1"
+                      >
+                        {preview.title}
+                      </Text>
+                      {aiUsed ? (
+                        <View
+                          testID={`${testID}-preview-ai-badge`}
+                          className="flex-row items-center rounded-full bg-primary/10 px-1.5 py-0.5"
+                        >
+                          <Sparkles size={10} color={colors.primary} />
+                          <Text className="text-primary text-[9px] font-semibold ml-0.5">
+                            AI
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <Text className="text-muted-foreground text-xs">
                       {preview.exercises.length} exercises
                     </Text>
                   </View>
+                  {/* Allowance spent, but a session was still built.
+                      Deliberately not the upgrade sheet: there IS a result
+                      on screen and a modal over it would read as a failure. */}
+                  {fallbackNote ? (
+                    <View
+                      testID={`${testID}-fallback-note`}
+                      className="flex-row rounded-xl border border-accent/40 bg-accent/10 px-3 py-2.5 mb-3"
+                    >
+                      <Sparkles size={14} color={colors.accent} />
+                      <Text className="text-accent text-xs flex-1 ml-2">
+                        {fallbackNote}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View style={{ gap: 4 }} className="mb-3">
                     {preview.exercises.map((ex, idx) => (
                       <View

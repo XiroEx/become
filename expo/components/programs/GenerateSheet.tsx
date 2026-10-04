@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { ChevronDown, ChevronUp, RefreshCw, Wand2, X } from "lucide-react-native";
+import { ChevronDown, ChevronUp, RefreshCw, Sparkles, Wand2, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Toggle } from "@/components/Toggle";
+import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
@@ -19,6 +20,7 @@ import {
   defaultProgramParams,
   defaultSessionParams,
   draftProgramToProgramBody,
+  generateFocusLabel,
   generateProgram as generateProgramCall,
   generateSession as generateSessionCall,
   savedProgramRoute,
@@ -39,8 +41,34 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { syntheticGate, useEntitlements } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import { showAiConsentPrompt } from "@/lib/ai/aiConsentPrompt";
 import { routeApiError } from "@/lib/errors";
 import { useRouter } from "expo-router";
+import {
+  aiFallbackNote,
+  generateAiSheetProgram,
+  generateAiSheetSession,
+  type AiProgramDay,
+} from "@/lib/workout/aiGenerate";
+import type { DraftExercise } from "@become/core";
+
+type GeneratedExercise = GeneratedSession["session"]["exercises"][number];
+type GeneratedDay = GeneratedProgram["program"]["days"][number];
+
+/**
+ * The AI path returns `DraftExercise` (a shared-core interface); the sheet's
+ * state holds the `.passthrough()` schema shape, whose index signature an
+ * interface never satisfies. Copying each row into a plain object carries
+ * every field (catalog extras included) and gives TypeScript the shape it
+ * needs, without widening anything to `any`.
+ */
+function toGeneratedExercises(list: readonly DraftExercise[]): GeneratedExercise[] {
+  return list.map((e) => ({ ...e }));
+}
+
+function toGeneratedDays(days: readonly AiProgramDay[]): GeneratedDay[] {
+  return days.map((d) => ({ ...d, exercises: toGeneratedExercises(d.exercises) }));
+}
 
 export interface GenerateSheetProps {
   visible: boolean;
@@ -50,13 +78,17 @@ export interface GenerateSheetProps {
 }
 
 /**
- * GENERATE SHEET (NP-133).
+ * GENERATE SHEET (NP-133 + NP-136).
  *
- * Native port of `webapp/components/GenerateModal.tsx` without the AI switch
- * (NP-136 adds it): session and program tabs over the standard generator,
- * preview, Regenerate, Start (through the NP-227 overview) and Save as
- * program with the refusal classifier (NP-010) and the upgrade sheet
- * (NP-052).
+ * Native port of `webapp/components/GenerateModal.tsx`: session and program
+ * tabs over the standard generator, preview, Regenerate, Start (through the
+ * NP-227 overview) and Save as program with the refusal classifier (NP-010)
+ * and the upgrade sheet (NP-052).
+ *
+ * With the AI switch on (NP-136), the request goes through the AI run client
+ * (NP-038) to `/api/ai/workout/session` or `/api/ai/workout/program` first
+ * and falls back to the standard generator — the web's AI path, with the
+ * web's fallback-note wording.
  *
  * Rules that travel:
  * - `/api/generate/*` is never metered: no allowance line, no gate check.
@@ -67,6 +99,12 @@ export interface GenerateSheetProps {
  *   and bails (no lock, no counter, no sheet) when `enforced` is false.
  * - A generated session starts through the quick-session overview:
  *   stash with `needsName: true`, push `quickSessionOverviewHref(id)`.
+ * - Consent is checked on the server before any charge: a consent refusal
+ *   opens the consent prompt (NP-046) and nothing else, and declining
+ *   leaves the standard generator working.
+ * - An allowance refusal falls through to the standard generator and is a
+ *   note, never a wall; a 429 spend cap is never an upsell.
+ * - Post once per member action and never retry the POST.
  */
 export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: GenerateSheetProps) {
   const { colors } = useThemeTokens();
@@ -98,6 +136,16 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // AI controls (NP-136): the switch plus the free-text prompt, the web's
+  // `useAi` / `aiPrompt` / `aiUsed`. `fallbackNote` is an allowance refusal
+  // the member walked away from WITH a result: the unmetered deterministic
+  // builder ran instead. Non-blocking on purpose — it sits beside a real
+  // result, so it must never raise the upgrade sheet over it.
+  const [useAi, setUseAi] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiUsed, setAiUsed] = useState(false);
+  const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+
   const {
     data: entitlements,
     canCreate,
@@ -106,6 +154,16 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
   const maySaveProgram = canCreate("custom-programs");
   const enforced = entitlements ? entitlements.enforced !== false : true;
 
+  // "1/3 this week" under Generate. Session and program share one weekly
+  // allowance, so the same line sits under both buttons. Nothing renders
+  // while enforcement is off, or for anyone uncapped.
+  const generationsLeft = (() => {
+    if (!entitlements?.enforced) return null;
+    const g = entitlements.features?.["workout-generation"] ?? null;
+    if (!g || g.limit === null || g.limit === undefined) return null;
+    return `${Math.min(g.used ?? 0, g.limit)}/${g.limit} this week`;
+  })();
+
   // Reset preview/error state when the sheet opens.
   useEffect(() => {
     if (!visible) return;
@@ -113,10 +171,12 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
     setSession(null);
     setProgram(null);
     setError(null);
+    setFallbackNote(null);
     setSaved(false);
     setLoading(false);
     setSaving(false);
     setStarting(false);
+    setAiUsed(false);
     setExpandedDay(0);
   }, [visible]);
 
@@ -125,7 +185,9 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
     setSession(null);
     setProgram(null);
     setError(null);
+    setFallbackNote(null);
     setSaved(false);
+    setAiUsed(false);
     setExpandedDay(0);
   }, []);
 
@@ -153,10 +215,75 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
     return handled ? null : message;
   }, []);
 
+  /**
+   * Handle an AI-task refusal the way the web does: consent opens the
+   * consent prompt (NP-046) and nothing else; a gate becomes the fallback
+   * note (never the upgrade sheet — a result is about to land underneath
+   * it); a 429 spend cap or any other failure falls through silently.
+   * Returns the note to show, or null.
+   */
+  const noteForAiOutcome = useCallback(
+    (
+      outcome: { status: string; gate?: { error: string } | null },
+      noun: "session" | "program",
+    ): string | null => {
+      if (outcome.status === "consent") {
+        showAiConsentPrompt({
+          onDecline: () => {
+            // The deterministic preview below is already on its way; the
+            // member simply keeps the standard path.
+          },
+        });
+        return null;
+      }
+      if (outcome.status === "gate") {
+        void refreshEntitlements().catch(() => {});
+        return aiFallbackNote(outcome.gate?.error ?? "", noun);
+      }
+      return null;
+    },
+    [refreshEntitlements],
+  );
+
   const runGenerateSession = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFallbackNote(null);
+    setAiUsed(false);
     try {
+      // ── AI path (when toggled) ──────────────────────────────────────────
+      // Async run: POST returns a runId, the run client polls until the
+      // session lands. Posts exactly ONCE per member action — no retry here.
+      if (useAi) {
+        try {
+          const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
+          const outcome = await generateAiSheetSession(
+            {
+              ...(aiPrompt.trim() ? { prompt: aiPrompt.trim() } : {}),
+              focus: generateFocusLabel(focus) ?? focus,
+              ...(equipmentStr ? { equipment: equipmentStr } : {}),
+              level: difficulty,
+            },
+            focus,
+            { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+          );
+          if (outcome.status === "ai") {
+            setSession({
+              title: outcome.session.title,
+              focus: outcome.session.focus,
+              exercises: toGeneratedExercises(outcome.session.exercises),
+            });
+            setAiUsed(true);
+            void refreshEntitlements().catch(() => {});
+            setLoading(false);
+            return;
+          }
+          const note = noteForAiOutcome(outcome, "session");
+          if (note) setFallbackNote(note);
+        } catch {
+          // Network / parse error — fall through to deterministic
+        }
+      }
       const params: GenerateSessionParams = {
         focus,
         difficulty,
@@ -166,23 +293,75 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
       };
       const data = await generateSessionCall(params, fetchOpts);
       if (!data?.session) {
+        // The note was written a moment ago, on the assumption that this
+        // call always works. It didn't, so retract it rather than leave an
+        // amber "built you a standard session instead" beside a red failure
+        // and an empty preview.
+        setFallbackNote(null);
         setError("Could not generate a session. Try again.");
         return;
       }
       setSession(data.session);
     } catch (err) {
+      // Same retraction as above: no session, no note.
+      setFallbackNote(null);
       const message = handleFailure(err);
       if (message) setError(message);
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, exerciseCount, includeCardio, fetchOpts, handleFailure]);
+  }, [focus, difficulty, equipment, exerciseCount, includeCardio, useAi, aiPrompt, fetchOpts, handleFailure, noteForAiOutcome, refreshEntitlements, token]);
 
   const runGenerateProgram = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setFallbackNote(null);
     setSaved(false);
+    setAiUsed(false);
     try {
+      // ── AI path (when toggled) ──────────────────────────────────────────
+      // Same weekly allowance as a session, same answer: note it and fall
+      // through to the unmetered deterministic builder.
+      if (useAi) {
+        try {
+          const equipmentStr = equipment.length ? equipment.join(", ") : undefined;
+          const focusLabel = generateFocusLabel(focus) ?? focus;
+          const goal = aiPrompt.trim() || `${focusLabel} training`;
+          const outcome = await generateAiSheetProgram(
+            {
+              goal,
+              daysPerWeek,
+              weeks,
+              level: difficulty,
+              ...(equipmentStr ? { equipment: equipmentStr } : {}),
+            },
+            focus,
+            `${focusLabel} ${daysPerWeek}-Day Program`,
+            { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
+          );
+          if (outcome.status === "ai-program") {
+            setProgram({
+              name: outcome.program.name ?? goal,
+              description:
+                outcome.program.description ??
+                `An AI-generated ${weeks}-week, ${daysPerWeek}-day program.`,
+              focus,
+              daysPerWeek: outcome.program.daysPerWeek ?? daysPerWeek,
+              weeks: outcome.program.weeks ?? weeks,
+              days: toGeneratedDays(outcome.program.days),
+            });
+            setExpandedDay(0);
+            setAiUsed(true);
+            void refreshEntitlements().catch(() => {});
+            setLoading(false);
+            return;
+          }
+          const note = noteForAiOutcome(outcome, "program");
+          if (note) setFallbackNote(note);
+        } catch {
+          // Network / parse error — fall through to deterministic
+        }
+      }
       const params: GenerateProgramParams = {
         focus,
         difficulty,
@@ -193,18 +372,23 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
       };
       const data = await generateProgramCall(params, fetchOpts);
       if (!data?.program) {
+        // The note was written a moment ago, on the assumption that this
+        // call always works. It didn't, so retract it.
+        setFallbackNote(null);
         setError("Could not generate a program. Try again.");
         return;
       }
       setProgram(data.program);
       setExpandedDay(0);
     } catch (err) {
+      // Same retraction as above: no program, no note.
+      setFallbackNote(null);
       const message = handleFailure(err);
       if (message) setError(message);
     } finally {
       setLoading(false);
     }
-  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay, fetchOpts, handleFailure]);
+  }, [focus, difficulty, equipment, daysPerWeek, weeks, exercisesPerDay, useAi, aiPrompt, fetchOpts, handleFailure, noteForAiOutcome, refreshEntitlements, token]);
 
   const startSession = useCallback(async () => {
     if (!session) return;
@@ -529,10 +713,20 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
               onPress={() => void runGenerateSession()}
               disabled={loading}
               loading={loading}
-              accessibilityLabel="Generate session"
+              accessibilityLabel={useAi ? "Generate with AI" : "Generate session"}
             >
-              Generate session
+              {loading && useAi ? "Generating your session…" : useAi ? "✨ Generate with AI" : "Generate session"}
             </Button>
+
+            {generationsLeft ? (
+              <Text
+                testID={`${testID}-allowance`}
+                className="text-muted-foreground text-xs font-medium"
+                style={{ textAlign: "center" }}
+              >
+                {generationsLeft}
+              </Text>
+            ) : null}
 
             {session ? (
               <View
@@ -546,9 +740,21 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   gap: 8,
                 }}
               >
-                <Text testID={`${testID}-session-title`} className="text-foreground text-base font-bold">
-                  {session.title}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text testID={`${testID}-session-title`} className="text-foreground text-base font-bold" style={{ flex: 1 }}>
+                    {session.title}
+                  </Text>
+                  {aiUsed ? (
+                    <View
+                      testID={`${testID}-session-ai-badge`}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+                      className="rounded-full bg-primary/10 px-2 py-0.5"
+                    >
+                      <Sparkles size={10} color={colors.primary} />
+                      <Text className="text-primary text-[10px] font-semibold">AI</Text>
+                    </View>
+                  ) : null}
+                </View>
                 {session.exercises.map((ex, i) => (
                   <View
                     key={`${ex.exerciseSlug}-${i}`}
@@ -640,10 +846,20 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
               onPress={() => void runGenerateProgram()}
               disabled={loading}
               loading={loading}
-              accessibilityLabel="Generate program"
+              accessibilityLabel={useAi ? "Generate with AI" : "Generate program"}
             >
-              Generate program
+              {loading && useAi ? "Generating your program…" : useAi ? "✨ Generate with AI" : "Generate program"}
             </Button>
+
+            {generationsLeft ? (
+              <Text
+                testID={`${testID}-allowance`}
+                className="text-muted-foreground text-xs font-medium"
+                style={{ textAlign: "center" }}
+              >
+                {generationsLeft}
+              </Text>
+            ) : null}
 
             {program ? (
               <View
@@ -657,9 +873,21 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   gap: 8,
                 }}
               >
-                <Text testID={`${testID}-program-name`} className="text-foreground text-base font-bold">
-                  {program.name}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text testID={`${testID}-program-name`} className="text-foreground text-base font-bold" style={{ flex: 1 }}>
+                    {program.name}
+                  </Text>
+                  {aiUsed ? (
+                    <View
+                      testID={`${testID}-program-ai-badge`}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
+                      className="rounded-full bg-primary/10 px-2 py-0.5"
+                    >
+                      <Sparkles size={10} color={colors.primary} />
+                      <Text className="text-primary text-[10px] font-semibold">AI</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text testID={`${testID}-program-meta`} className="text-muted-foreground text-xs">
                   {program.weeks} weeks · {program.daysPerWeek} days/week
                 </Text>
@@ -770,6 +998,68 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
             {error}
           </Text>
         ) : null}
+
+        {/* AI allowance spent, but a session/program was still built.
+            Deliberately not the upgrade sheet: there IS a result on screen
+            and a modal over it would read as a failure. */}
+        {fallbackNote ? (
+          <View
+            testID={`${testID}-fallback-note`}
+            className="flex-row rounded-xl border border-accent/40 bg-accent/10 px-3 py-2.5"
+          >
+            <Sparkles size={14} color={colors.accent} />
+            <Text className="text-accent text-xs flex-1 ml-2">
+              {fallbackNote}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* ── AI toggle + prompt ── */}
+        <View
+          testID={`${testID}-ai-section`}
+          style={{
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            padding: 12,
+            gap: 8,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Sparkles size={16} color={colors.primary} />
+              <Text className="text-foreground text-sm font-semibold">
+                Generate with AI
+              </Text>
+            </View>
+            <Toggle
+              value={useAi}
+              onValueChange={setUseAi}
+              accessibilityLabel={useAi ? "Disable AI generation" : "Enable AI generation"}
+              testID={`${testID}-ai-toggle`}
+            />
+          </View>
+          <Input
+            testID={`${testID}-ai-prompt`}
+            accessibilityLabel="Describe your goal for the AI"
+            placeholder={
+              activeTab === "session"
+                ? "Describe your ideal session… e.g. a 30-min chest + shoulders burnout"
+                : "Describe your goal… e.g. build strength for a first powerlifting meet"
+            }
+            value={aiPrompt}
+            onChangeText={setAiPrompt}
+            editable={useAi && !loading}
+            multiline
+            numberOfLines={2}
+          />
+          {useAi ? (
+            <Text className="text-muted-foreground text-[11px]">
+              AI generates first (~30-40 s); falls back to the standard builder automatically.
+            </Text>
+          ) : null}
+        </View>
       </ScrollView>
     </BottomSheet>
   );
