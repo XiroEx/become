@@ -302,7 +302,7 @@ export function AuthProvider({
       }
 
       // Drop on-device caches: last-known cache / offline queue (NP-036),
-      // the app icon badge, and any live workout drafts (NP-079).
+      // the app icon badge (NP-067), and any live workout drafts (NP-079).
       try {
         await clearAllLastKnownCache();
       } catch {
