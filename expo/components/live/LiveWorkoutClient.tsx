@@ -19,6 +19,10 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import type {
+  ExerciseHistoryEntry,
+  ExercisePRSummary,
+} from "@become/api-client";
 import { TrackWorkoutView } from "@/components/live/TrackWorkoutView";
 import { LiveStepView } from "@/components/live/LiveStepView";
 import {
@@ -130,6 +134,18 @@ export interface LiveWorkoutClientProps {
   /** Injected rest-timer interval impls for deterministic tests. */
   restTimerSetInterval?: typeof setInterval;
   restTimerClearInterval?: typeof clearInterval;
+  /**
+   * Best completed set per exercise NAME from a log before today
+   * (`exerciseHistory[name]` on the web). Threaded from `useLiveWorkout`;
+   * shown as the `Last:` reference on the Live step only.
+   */
+  exerciseHistory?: Record<string, ExerciseHistoryEntry>;
+  /**
+   * Persisted max-weight record per exercise NAME (`exercisePRs[name]` on
+   * the web). Threaded from `useLiveWorkout`; drives the `PR:` line and
+   * the NEW PR flag on the Live step only.
+   */
+  exercisePRs?: Record<string, ExercisePRSummary>;
   testID?: string;
 }
 
@@ -324,6 +340,8 @@ export function LiveWorkoutClient({
   positionStore,
   restTimerSetInterval,
   restTimerClearInterval,
+  exerciseHistory,
+  exercisePRs,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -693,6 +711,8 @@ export function LiveWorkoutClient({
             onSetChange={handleSetChange}
             onCompleteStep={handleCompleteStep}
             onRequestSwap={onRequestSwap}
+            exerciseHistory={exerciseHistory}
+            exercisePRs={exercisePRs}
           />
         )}
 

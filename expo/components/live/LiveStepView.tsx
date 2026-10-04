@@ -3,6 +3,7 @@ import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
+import { LiveSetReference } from "@/components/live/LiveSetReference";
 import { FramedVideo } from "@/components/FramedVideo";
 import {
   ExerciseGroupNav,
@@ -18,6 +19,10 @@ import type {
   LiveGrid,
   LiveWorkoutExercise,
 } from "@/components/live/LiveWorkoutClient";
+import type {
+  ExerciseHistoryEntry,
+  ExercisePRSummary,
+} from "@become/api-client";
 import {
   groupLabelForStep,
   liveCompleteLabel,
@@ -45,6 +50,17 @@ export interface LiveStepViewProps {
    */
   onCompleteStep?: () => void;
   onRequestSwap?: (slug: string) => void;
+  /**
+   * Best completed set per exercise NAME (`useLiveWorkout`'s
+   * `exerciseHistory`). Shown as the `Last:` reference under the set —
+   * a reference only, never prefill.
+   */
+  exerciseHistory?: Record<string, ExerciseHistoryEntry>;
+  /**
+   * Persisted max-weight record per exercise NAME (`useLiveWorkout`'s
+   * `exercisePRs`). Drives the `PR:` line and the NEW PR flag.
+   */
+  exercisePRs?: Record<string, ExercisePRSummary>;
   testID: string;
 }
 
@@ -73,6 +89,8 @@ export function LiveStepView({
   onSetChange,
   onCompleteStep,
   onRequestSwap,
+  exerciseHistory,
+  exercisePRs,
   testID,
 }: LiveStepViewProps) {
   const total = workoutFlow.length;
@@ -196,6 +214,15 @@ export function LiveStepView({
           trackingType={exercise.trackingType}
           testID={`${testID}-live-${exercise.slug}-set-${step.setIndex}`}
           onChange={(next) => onSetChange(step.exerciseIndex, step.setIndex, next)}
+        />
+        {/* The web's history + PR row (Live only; Track is unchanged). */}
+        <LiveSetReference
+          exerciseName={exercise.name}
+          trackingType={exercise.trackingType}
+          history={exerciseHistory?.[exercise.name] ?? null}
+          pr={exercisePRs?.[exercise.name] ?? null}
+          typedWeight={current.weight}
+          testID={`${testID}-live-${exercise.slug}-reference`}
         />
       </Card>
 
