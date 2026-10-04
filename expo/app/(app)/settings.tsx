@@ -23,6 +23,10 @@ import { ScreenState } from "@/components/ScreenState";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import {
+  defaultPushDeps,
+  enablePushFromExplicitAction,
+} from "@/lib/push/nativePush";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -95,7 +99,9 @@ export default function SettingsScreen() {
       setSavingNotif(true);
       try {
         if (!value) {
-          // Dropping notifications entirely via unsubscribe route
+          // Turning notifications off is account-wide: drop every device's
+          // subscription and flip the master switch (no endpoint), so
+          // background registration can never silently recreate one.
           await fetch(`${WEBAPP_BASE_URL}/api/notifications/unsubscribe`, {
             method: "POST",
             headers: {
@@ -105,14 +111,17 @@ export default function SettingsScreen() {
             body: JSON.stringify({}),
           });
         } else {
-          await fetch(`${WEBAPP_BASE_URL}/api/notifications/preferences`, {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ streakAtRisk: true, workoutReminder: true }),
-          });
+          // Explicit "Turn on": request the OS permission when undecided,
+          // then register the raw device token WITH `reenable: true` — the
+          // only path allowed to clear a prior opt-out server-side.
+          try {
+            await enablePushFromExplicitAction(
+              defaultPushDeps({ jwt: token }),
+            );
+          } catch {
+            // A simulator with no token, or a refused prompt, must not take
+            // Settings with it — the toggle still reflects the server below.
+          }
         }
         await notifPrefs.refetch();
       } catch {

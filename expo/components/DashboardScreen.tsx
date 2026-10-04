@@ -15,6 +15,7 @@ import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
 import { PlanCard } from "@/components/dashboard/PlanCard";
 import { MoodGatewayBanner } from "@/components/dashboard/MoodGatewayBanner";
+import { PushOptInCard } from "@/components/push/PushOptInCard";
 import { CustomizeDashboardModal } from "@/components/dashboard/CustomizeDashboardModal";
 import {
   CurrentProgramCard,
@@ -203,6 +204,14 @@ export interface DashboardScreenProps {
   goalCelebration?: GoalReached | null;
   onCloseGoalCelebration?: () => void;
   onSetNextGoal?: () => void;
+  /**
+   * Push opt-in card wiring (NP-065). The route passes the signed-in token's
+   * explicit "Turn on" registration; the card itself decides whether it shows
+   * (undecided + 30-day dismissal expired) and owns the denied reprompt.
+   */
+  pushCardDeps?: React.ComponentProps<typeof PushOptInCard>["deps"];
+  /** Test seam: force the push card visible regardless of stored dismissal. */
+  showPushCard?: boolean;
 }
 
 export function DashboardScreen({
@@ -276,6 +285,8 @@ export function DashboardScreen({
   goalCelebration,
   onCloseGoalCelebration,
   onSetNextGoal,
+  pushCardDeps,
+  showPushCard = false,
 }: DashboardScreenProps) {
   const { colors, tint } = useThemeTokens();
   const [internalGatewayMood, setInternalGatewayMood] =
@@ -616,6 +627,13 @@ export function DashboardScreen({
             onDismiss={handleDismissGatewayMood}
             onOpenMind={onOpenMind}
           />
+        ) : null}
+
+        {/* Push opt-in card (NP-065): undecided members only, 30-day
+            dismissal, never at first launch. The card reads its own state;
+            the route only wires the explicit "Turn on" registration. */}
+        {pushCardDeps || showPushCard ? (
+          <PushOptInCard deps={pushCardDeps} />
         ) : null}
 
         {/* The doorway to The Becoming (NP-192) */}
