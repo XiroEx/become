@@ -152,8 +152,12 @@ export function mealToEditorInitial(meal: Meal): MealEditorInitial {
         ...(it.nutrition?.sodium != null ? { sodium: it.nutrition.sodium } : {}),
       },
       ...(it.servingLabel ? { servingLabel: String(it.servingLabel) } : {}),
-      ...(it.loggedQuantity != null ? { loggedQuantity: it.loggedQuantity } : {}),
-      ...(it.loggedUnit ? { loggedUnit: String(it.loggedUnit) } : {}),
+      // An item saved before the picker wrote loggedQuantity/loggedUnit is
+      // read back the way EditLogItemSheet does it: the same physical amount
+      // (servings × servingSize) in the serving unit.
+      loggedQuantity:
+        it.loggedQuantity != null ? it.loggedQuantity : (it.servings ?? 1) * it.servingSize,
+      loggedUnit: it.loggedUnit ? String(it.loggedUnit) : it.servingUnit,
       ...(it.loggedGramsPerServing != null
         ? { loggedGramsPerServing: it.loggedGramsPerServing }
         : {}),
