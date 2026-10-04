@@ -85,11 +85,20 @@ export type GenerateSessionRequest = z.infer<typeof GenerateSessionRequestSchema
  * history route hands back for a repeat (`WorkoutDraftExercise`-shaped
  * exercises, `title` + optional `focus`).
  */
+/**
+ * One generated exercise: `WorkoutDraftExercise` plus the catalog's
+ * `primaryMuscles`, which `toDraftExercise` in
+ * `webapp/lib/quickSession/generate.ts` always copies onto the draft.
+ */
+export const GenerateDraftExerciseSchema = WorkoutDraftExerciseSchema.extend({
+  primaryMuscles: z.array(z.string()).optional(),
+});
+
 export const GenerateSessionDraftSchema = z
   .object({
     title: z.string(),
     focus: z.string().optional(),
-    exercises: z.array(WorkoutDraftExerciseSchema),
+    exercises: z.array(GenerateDraftExerciseSchema),
   })
   .passthrough();
 
