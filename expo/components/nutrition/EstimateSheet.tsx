@@ -11,12 +11,13 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
+import { PlateExtras } from "@/components/nutrition/PlateExtras";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PermissionDeniedNotice } from "@/components/media/PermissionDeniedNotice";
 import { AuthedImage } from "@/components/media/AuthedImage";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
-import { useEntitlements } from "@/lib/entitlements";
+import { useEntitlements, syntheticGate } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { showAiConsentPrompt } from "@/lib/ai/aiConsentPrompt";
 import {
@@ -39,6 +40,10 @@ import {
   ESTIMATE_UNAVAILABLE_MESSAGE,
   type EstimateOrigin,
 } from "@/lib/nutrition/plateEstimate";
+import {
+  savePlateAsMeal,
+  sendPlateFeedback,
+} from "@/lib/nutrition/plateSaveMeal";
 import {
   combinedServingLabel,
   formatAmount,
@@ -387,6 +392,61 @@ export function EstimateSheet({
 
   const totals = useMemo(() => runningTotal(items), [items]);
   const activeCount = useMemo(() => items.filter((it) => !it.removed).length, [items]);
+
+  // Saved-meal slots are full. Explanatory only — the server is the gate.
+  // Unlike the basket/combine sheets the save button STAYS at the cap and
+  // opens the upgrade sheet from a synthetic gate (the web's ReviewFooter).
+  const mealsAtCap =
+    !!entitlements?.enforced && entitlementFor("custom-meals")?.canCreate === false;
+
+  const handleCappedSave = useCallback(() => {
+    showUpgradeSheet(
+      syntheticGate("custom-meals", "plus", entitlementFor("custom-meals")),
+    );
+  }, [entitlementFor]);
+
+  // Keep the reviewed plate as a reusable meal (the web's handleSaveRecipe).
+  // A real 403 gate opens the upgrade sheet; any other refusal shows the
+  // server's words in the save row. Confirms in place (NP-142) — no meal
+  // page exists natively yet. Returns true on success.
+  const handleSaveMeal = useCallback(
+    async (name: string): Promise<boolean> => {
+      const result = await savePlateAsMeal(
+        { items, name, defaultTag: selectedTag },
+        { getToken },
+      );
+      if (result.status === "saved") {
+        void refreshEntitlements().catch(() => {});
+        return true;
+      }
+      if (result.status === "gate") {
+        showUpgradeSheet(result.gate as Parameters<typeof showUpgradeSheet>[0]);
+        void refreshEntitlements().catch(() => {});
+        return false;
+      }
+      throw new Error(result.message);
+    },
+    [items, selectedTag, getToken, refreshEntitlements],
+  );
+
+  // Report a bad estimate with the image and items attached (the web's
+  // GenerationFeedbackModal). Returns true on success.
+  const handleSendFeedback = useCallback(
+    async (message: string): Promise<boolean> => {
+      const result = await sendPlateFeedback(
+        {
+          items,
+          imageThumb,
+          tag: selectedTag,
+          scanId: savedScanIdRef.current,
+          message,
+        },
+        { getToken },
+      );
+      return result.status === "sent";
+    },
+    [items, imageThumb, selectedTag, getToken],
+  );
 
   const scansLine = useMemo(() => {
     if (!entitlements || entitlements.enforced === false) return null;
@@ -860,6 +920,15 @@ export function EstimateSheet({
                   </Button>
                 </View>
               </View>
+              {/* Save as meal + estimate feedback (the web's ReviewFooter). */}
+              <PlateExtras
+                activeCount={activeCount}
+                mealsAtCap={mealsAtCap}
+                onCappedSave={handleCappedSave}
+                onSaveMeal={handleSaveMeal}
+                onSendFeedback={handleSendFeedback}
+                testID={testID}
+              />
             </View>
           )}
         </ScrollView>
