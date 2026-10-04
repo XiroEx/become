@@ -357,7 +357,9 @@ export default function LiveWorkoutRoute({
           goal={summaryGoal}
           onDone={() => router.replace("/(tabs)/programming")}
           onViewJourney={() =>
-            router.replace(`/(tabs)/programming/${encodeURIComponent(id)}`)
+            router.push(
+              `/(tabs)/programming/${encodeURIComponent(id)}/journey`,
+            )
           }
           onViewLog={() => router.replace("/progress" as never)}
         />
