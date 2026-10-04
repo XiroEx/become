@@ -487,3 +487,79 @@ export const NUTRITION_SUMMARY_WEEK = {
     daysTracked: 1, totalDays: 7,
   },
 } as const;
+
+// ---------------------------------------------------------------------------
+// ESTIMATE HISTORY (NP-141) — saved AI scans.
+// ---------------------------------------------------------------------------
+//
+// Recorded from the real handlers (`GET /api/nutrition/scans` answers
+// `{ scans, total, offset, limit }` with PlateScan documents recent-first;
+// `GET /api/nutrition/scans/{id}` answers `{ scan }`). The photo scan keeps
+// both the inline `thumb` and the blob `imageUrl`; the describe scan keeps
+// neither. Items mirror the loggable shape so "Log again" is a repost.
+
+export const NUTRITION_SCAN_PHOTO = {
+  _id: '6ab1410000000000000f9001',
+  source: 'photo',
+  note: 'lunch bowl',
+  tag: 'lunch',
+  thumb: 'data:image/jpeg;base64,/9j/np141thumb',
+  imageUrl: '/api/blob/scans/np141photo',
+  items: [
+    {
+      _id: '6ab1410000000000000f9101',
+      foodId: '6ab0240000000000000f7f01',
+      name: 'NP141 Chicken bowl',
+      brand: 'NP141 Foods',
+      estimatedServing: '1 bowl',
+      servingSize: 1,
+      servingUnit: 'bowl',
+      servings: 2,
+      nutrition: { calories: 250, protein: 20, carbs: 20, fats: 8 },
+      confidence: 0.9,
+      matchKind: 'food',
+    },
+    {
+      _id: '6ab1410000000000000f9102',
+      name: 'NP141 Rice',
+      servingSize: 1,
+      servingUnit: 'cup',
+      servings: 1,
+      nutrition: { calories: 200, protein: 4, carbs: 44, fats: 0 },
+    },
+  ],
+  totalNutrition: { calories: 700, protein: 44, carbs: 84, fats: 16 },
+  loggedAt: '2026-09-28T12:00:00.000Z',
+  mealLogId: '6ab0240000000000000f8001',
+  createdAt: '2026-09-28T12:05:00.000Z',
+  updatedAt: '2026-09-28T12:05:00.000Z',
+  __v: 0,
+} as const;
+
+export const NUTRITION_SCAN_DESCRIBE = {
+  _id: '6ab1410000000000000f9002',
+  source: 'describe',
+  note: 'chicken burrito bowl with rice',
+  tag: 'dinner',
+  items: [
+    {
+      name: 'NP141 Burrito bowl',
+      servingSize: 1,
+      servingUnit: 'bowl',
+      servings: 1,
+      nutrition: { calories: 650, protein: 35, carbs: 70, fats: 20 },
+    },
+  ],
+  totalNutrition: { calories: 650, protein: 35, carbs: 70, fats: 20 },
+  createdAt: '2026-09-27T19:00:00.000Z',
+  updatedAt: '2026-09-27T19:00:00.000Z',
+} as const;
+
+export const NUTRITION_SCANS_LIST = {
+  scans: [NUTRITION_SCAN_PHOTO, NUTRITION_SCAN_DESCRIBE],
+  total: 2,
+  offset: 0,
+  limit: 60,
+} as const;
+
+export const NUTRITION_SCAN_DETAIL = { scan: NUTRITION_SCAN_PHOTO } as const;

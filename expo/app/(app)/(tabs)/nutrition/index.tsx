@@ -30,12 +30,14 @@ import {
   MealScheduleResponseSchema,
   NutritionGoalsResponseSchema,
   NutritionLogDayResponseSchema,
+  NutritionScanResponseSchema,
   ProfileResponseSchema,
   TagsResponseSchema,
   apiFetch,
   type Food,
   type Meal,
   type MealLog,
+  type NutritionScan,
   type ProfileResponse,
 } from "@become/api-client";
 import { Button } from "@/components/Button";
@@ -88,6 +90,7 @@ import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
+import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -1040,9 +1043,18 @@ export default function NutritionIndexRoute() {
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   // Meal-photo / describe estimate (NP-089): which surface the sheet opens on.
   const [estimateOpen, setEstimateOpen] = useState(false);
-  const [estimatePhase, setEstimatePhase] = useState<"chooser" | "describe">(
-    "chooser",
-  );
+  const [estimatePhase, setEstimatePhase] = useState<
+    "chooser" | "describe" | "review"
+  >("chooser");
+  // Estimate history (NP-141): the history list, and the re-opened scan the
+  // review opens on (the web's `?scan=<id>` into the review phase).
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [reopenedScan, setReopenedScan] = useState<{
+    items: NutritionScan["items"];
+    imageUrl: string | null;
+    scanId: string;
+    tag: string;
+  } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   // Barcode scan (NP-088): the camera menu opens the search sheet straight
@@ -1210,10 +1222,62 @@ export default function NutritionIndexRoute() {
   // inside the sheet (NP-059's capture helper); Describe opens on the text
   // surface. Capture needs no device check here — NP-093's code is on beta
   // and camera verification is deferred to NP-008.
-  const openEstimate = (phase: "chooser" | "describe") => {
-    setEstimatePhase(phase);
+  const openEstimate = (phase: "chooser" | "describe" | "review") => {
+    if (phase !== "review") setReopenedScan(null);
+    setEstimatePhase(phase === "review" ? "review" : phase);
     setEstimateOpen(true);
   };
+
+  // Estimate history (NP-141): reopen a saved estimate in the native review
+  // with its saved items — the native `?scan=<id>` into the review phase.
+  // The scan is re-read first so the review opens on the server's current
+  // items, not the list row's snapshot.
+  const handleReopenScan = useCallback(
+    async (scan: NutritionScan) => {
+      try {
+        const res = await apiFetch(
+          `/api/nutrition/scans/${encodeURIComponent(scan._id)}`,
+          NutritionScanResponseSchema,
+          {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        const full = res.scan ?? scan;
+        const items = Array.isArray(full.items) ? full.items : [];
+        if (items.length === 0) return;
+        setReopenedScan({
+          items,
+          imageUrl:
+            typeof full.imageUrl === "string" && full.imageUrl
+              ? full.imageUrl
+              : null,
+          scanId: full._id,
+          tag: (full.tag ?? "").trim().toLowerCase() || currentDefaultTag,
+        });
+      } catch {
+        const items = Array.isArray(scan.items) ? scan.items : [];
+        if (items.length === 0) return;
+        setReopenedScan({
+          items,
+          imageUrl:
+            typeof scan.imageUrl === "string" && scan.imageUrl
+              ? scan.imageUrl
+              : null,
+          scanId: scan._id,
+          tag: (scan.tag ?? "").trim().toLowerCase() || currentDefaultTag,
+        });
+      }
+      setHistoryOpen(false);
+      setEstimatePhase("review");
+      setEstimateOpen(true);
+    },
+    [token, currentDefaultTag],
+  );
+
+  const handleHistoryLogged = useCallback(async () => {
+    await Promise.all([refetchMealLogs(), refetchSideTables()]);
+  }, [refetchMealLogs, refetchSideTables]);
 
   const handleEstimateLogged = useCallback(async () => {
     await Promise.all([refetchMealLogs(), refetchSideTables()]);
@@ -2212,8 +2276,7 @@ export default function NutritionIndexRoute() {
               }}
               onPress={() => {
                 setTimelineMenuOpen(false);
-                // TODO(NP-140): Estimate history (/dashboard/nutrition/scans) is NP-140.
-                router.push("/(tabs)/nutrition/recipes");
+                setHistoryOpen(true);
               }}
             >
               <History size={16} color={colors.foreground} />
@@ -2465,9 +2528,12 @@ export default function NutritionIndexRoute() {
       {/* Meal-photo / describe estimate (NP-089) */}
       <EstimateSheet
         visible={estimateOpen}
-        onClose={() => setEstimateOpen(false)}
+        onClose={() => {
+          setEstimateOpen(false);
+          setReopenedScan(null);
+        }}
         onLogged={() => void handleEstimateLogged()}
-        tag={currentDefaultTag}
+        tag={reopenedScan?.tag ?? currentDefaultTag}
         tagOptions={[
           ...availableTags.defaults,
           ...availableTags.userTags,
@@ -2475,7 +2541,52 @@ export default function NutritionIndexRoute() {
         ]}
         dateKey={activeDate}
         todayKey={today}
-        initialPhase={estimatePhase}
+        initialPhase={reopenedScan ? "review" : estimatePhase}
+        initialReview={
+          reopenedScan
+            ? reopenedScan.items.map((it) => ({
+                ...(typeof it.foodId === "string" ? { foodId: it.foodId } : {}),
+                name: it.name,
+                ...(it.brand ? { brand: it.brand } : {}),
+                ...(it.estimatedServing
+                  ? { estimatedServing: it.estimatedServing }
+                  : {}),
+                ...(it.servingSize != null
+                  ? { servingSize: it.servingSize }
+                  : {}),
+                ...(it.servingUnit ? { servingUnit: it.servingUnit } : {}),
+                ...(it.servings != null ? { servings: it.servings } : {}),
+                nutrition: {
+                  calories: it.nutrition?.calories ?? 0,
+                  protein: it.nutrition?.protein ?? 0,
+                  carbs: it.nutrition?.carbs ?? 0,
+                  fats: it.nutrition?.fats ?? 0,
+                },
+                ...(it.confidence != null
+                  ? { confidence: it.confidence }
+                  : {}),
+                ...(it.matchKind ? { matchKind: it.matchKind } : {}),
+              }))
+            : null
+        }
+        initialImageUrl={reopenedScan?.imageUrl ?? null}
+        initialScanId={reopenedScan?.scanId ?? null}
+      />
+
+      {/* Estimate history (NP-141) */}
+      <ScanHistorySheet
+        visible={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        token={token}
+        todayKey={today}
+        windows={scheduleWindows}
+        tagOptions={[
+          ...availableTags.defaults,
+          ...availableTags.userTags,
+          ...sessionTags,
+        ]}
+        onReopen={(scan) => void handleReopenScan(scan)}
+        onLogged={() => void handleHistoryLogged()}
       />
 
       {/* Combine Sheet (NP-175) */}

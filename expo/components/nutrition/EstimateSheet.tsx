@@ -46,6 +46,9 @@ import {
   scaledNutrition,
   type ReviewItem,
 } from "@become/core";
+import {
+  reviewItemsFromScan,
+} from "@/lib/nutrition/scanHistory";
 import { servingQuantityStep } from "@become/core";
 import type { Food } from "@become/api-client";
 
@@ -71,12 +74,30 @@ export interface EstimateSheetProps {
   /** Today's YYYY-MM-DD — decides "now" vs noon stamping. */
   todayKey: string;
   /** Which surface to open on. */
-  initialPhase?: "chooser" | "describe" | "compose";
+  initialPhase?: "chooser" | "describe" | "compose" | "review";
   /** A captured image to open straight into the compose step. */
   initialImage?: CapturedImage | null;
   initialOrigin?: EstimateOrigin;
   /** Prefill text for the describe flow. */
   initialDescribe?: string | null;
+  /** Pre-loaded items to open straight into the review step — used when
+   *  re-opening a saved estimate from history to edit before re-logging. */
+  initialReview?: {
+    foodId?: string;
+    name: string;
+    brand?: string;
+    estimatedServing?: string;
+    servingSize?: number;
+    servingUnit?: string;
+    servings?: number;
+    nutrition: { calories: number; protein: number; carbs: number; fats: number };
+    confidence?: number;
+    matchKind?: string;
+  }[] | null;
+  /** Full-res image URL of a re-opened saved estimate (via AuthedImage). */
+  initialImageUrl?: string | null;
+  /** The re-opened estimate's id — edits/logs update it in place. */
+  initialScanId?: string | null;
   captureImpl?: typeof captureImage;
   testID?: string;
 }
@@ -108,6 +129,9 @@ export function EstimateSheet({
   initialImage = null,
   initialOrigin = "camera",
   initialDescribe = null,
+  initialReview = null,
+  initialImageUrl = null,
+  initialScanId = null,
   captureImpl = captureImage,
   testID = "estimate-sheet",
 }: EstimateSheetProps) {
@@ -147,27 +171,56 @@ export function EstimateSheet({
     setAddMoreOpen(false);
     setCorrectText("");
     setCorrecting(false);
-    setImageThumb("");
-    savedScanIdRef.current = null;
+    // Re-opening a saved estimate links its record so edits/logs update it;
+    // a fresh open starts with no record (the first generation creates one).
+    savedScanIdRef.current = initialScanId ?? null;
     noteRef.current = "";
-    if (initialPhase === "compose" && initialImage) {
+    if (initialPhase === "review" && initialReview && initialReview.length) {
+      // Re-opening a saved estimate to edit: rebuild review items from the
+      // scan, exactly the way the web's SnapPlateModal does for
+      // initialReview (per-serving nutrition kept, servings as the count,
+      // servingUnit as the unit, matched rows pre-checked).
+      const reopened = reviewItemsFromScan(
+        initialReview.map((si) => ({
+          ...(si.foodId ? { foodId: si.foodId } : {}),
+          name: si.name,
+          ...(si.brand ? { brand: si.brand } : {}),
+          ...(si.estimatedServing ? { estimatedServing: si.estimatedServing } : {}),
+          ...(si.servingSize != null ? { servingSize: si.servingSize } : {}),
+          ...(si.servingUnit ? { servingUnit: si.servingUnit } : {}),
+          ...(si.servings != null ? { servings: si.servings } : {}),
+          nutrition: si.nutrition,
+          ...(si.confidence != null ? { confidence: si.confidence } : {}),
+          ...(si.matchKind ? { matchKind: si.matchKind } : {}),
+        })),
+      );
+      setItems(reopened);
+      setImageThumb(initialImageUrl || "");
+      setPhase("review");
+      setDescribeText("");
+      setComposeNote("");
+      setCaptured(null);
+    } else if (initialPhase === "compose" && initialImage) {
       setCaptured(initialImage);
       setOrigin(initialOrigin);
       setComposeNote("");
       setPhase("compose");
       setDescribeText("");
+      setImageThumb("");
     } else if (initialPhase === "describe") {
       setDescribeText(initialDescribe ?? "");
       setComposeNote("");
       setCaptured(null);
       setPhase("describe");
+      setImageThumb("");
     } else {
       setPhase("chooser");
       setDescribeText("");
       setComposeNote("");
       setCaptured(null);
+      setImageThumb("");
     }
-  }, [visible, tag, initialPhase, initialImage, initialOrigin, initialDescribe]);
+  }, [visible, tag, initialPhase, initialImage, initialOrigin, initialDescribe, initialReview, initialImageUrl, initialScanId]);
 
   const getToken = useCallback(
     () => (token ?? undefined),
