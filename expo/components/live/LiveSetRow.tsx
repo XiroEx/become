@@ -7,12 +7,14 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   bellWeightLabel,
   defaultDurationUnit,
+  equipmentAssumption,
   isFloorsExercise,
   normalizeTracking,
   secondsToUnitDisplay,
   tracksSpeed,
   tracksTime,
   unitDisplayToSeconds,
+  weightQuickPicks,
   type BellWeightInfo,
   type DurationUnit,
 } from "@become/core";
@@ -78,6 +80,18 @@ export interface LiveSetRowProps {
   bell?: BellWeightInfo;
   /** The exercise's displayed name, for the Floors-vs-metres distance label. */
   exerciseName?: string;
+  /**
+   * Catalog `equipment` ids for the exercise (e.g. `["dumbbell", "bench"]`).
+   * Feeds the "Logging as …" chip when the name does not already state the
+   * implement — the web's `EquipmentAssumptionRow`, disclosure only.
+   */
+  equipment?: string[];
+  /**
+   * When true, render the web's quick-pick loads under the weight box
+   * (`weightQuickPicks`: 10–50 per DB, 18–53 per KB, 45–225 otherwise).
+   * The typed number is always per implement; the picks only fill it in.
+   */
+  showQuickPicks?: boolean;
   state: LiveSetState;
   /** Last completed performance of this set (prefill source). */
   prefill?: LiveSetState | null;
@@ -104,6 +118,8 @@ export function LiveSetRow({
   setIndex,
   bell = NO_BELL,
   exerciseName,
+  equipment,
+  showQuickPicks = false,
   state,
   prefill,
   trackingType,
@@ -140,6 +156,17 @@ export function LiveSetRow({
     bell.showTotal && typeof perBell === "number" && Number.isFinite(perBell) && perBell > 0
       ? `= ${perBell * 2} lbs total`
       : null;
+  // The web's "Logging as Dumbbell" disclosure
+  // (`EquipmentAssumptionRow` ← `equipmentAssumption`): shown only when the
+  // app applies an implement the displayed name does not state. "Dumbbell
+  // Bench Press" needs no chip; "Rear Delt Fly" does. Aliases never count as
+  // disclosure — the member was shown the name, not the alias.
+  const assumption = equipmentAssumption({ name: exerciseName, equipment });
+  const assumptionLabel =
+    assumption.assumed && assumption.label ? `Logging as ${assumption.label}` : null;
+  // The web's quick-pick loads for the weight box (`weightQuickPicks`): a
+  // tap fills the per-implement number, exactly as if it had been typed.
+  const quickPicks = showQuickPicks ? weightQuickPicks(bell.style) : [];
 
   return (
     <View
@@ -183,6 +210,35 @@ export function LiveSetRow({
             >
               {helper}
             </Text>
+          ) : null}
+          {assumptionLabel ? (
+            <Text
+              testID={`${tid}-assumption`}
+              className="text-muted-foreground text-xs mt-1"
+            >
+              {assumptionLabel}
+            </Text>
+          ) : null}
+          {quickPicks.length > 0 ? (
+            <View
+              testID={`${tid}-quick-picks`}
+              style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}
+            >
+              {quickPicks.map((pick) => (
+                <Pressable
+                  key={pick}
+                  testID={`${tid}-quick-pick-${pick}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Log ${pick} pounds`}
+                  onPress={() => onChange({ ...state, weight: pick })}
+                  className="rounded-full bg-muted px-3 py-1.5"
+                >
+                  <Text className="text-muted-foreground text-xs font-semibold">
+                    {String(pick)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           ) : null}
           {prefill ? (
             <Text
