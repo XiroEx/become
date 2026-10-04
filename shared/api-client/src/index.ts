@@ -16,6 +16,7 @@ export * from './schemas/becoming';
 export * from './schemas/workouts';
 export * from './schemas/schedule';
 export * from './schemas/programs';
+export * from './schemas/share';
 export * from './schemas/streak';
 export * from './schemas/exercises';
 export * from './schemas/nutrition';
