@@ -32,6 +32,10 @@ import type { CheckInPayload, MoodLevel } from "@/components/CheckInModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useLocalDay, useOnForeground, tzOffsetMinutes, withTz } from "@/lib/time/localDay";
+import {
+  defaultPushDeps,
+  enablePushFromExplicitAction,
+} from "@/lib/push/nativePush";
 import { mirrorWeighInToHealth, weighInClientId } from "@/lib/health/sync";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useUnits } from "@/lib/hooks/useUnits";
@@ -441,6 +445,20 @@ export default function DashboardRoute() {
   useOnForeground(() => {
     void refetchAll();
   });
+
+  // The Home push card's explicit "Turn on" (NP-065): the ONLY path besides
+  // web Settings that may send `reenable: true` and flip the master switch
+  // back on. Background registration (PushSyncBridge) never does.
+  const pushCardDeps = useMemo(
+    () => ({
+      enable: async () => {
+        const jwt = token ?? null;
+        if (!jwt) return { kind: "no-token" };
+        return enablePushFromExplicitAction(defaultPushDeps({ jwt }));
+      },
+    }),
+    [token],
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -889,6 +907,7 @@ export default function DashboardRoute() {
         setGoalCelebration(null);
         onOpenNutrition();
       }}
+      pushCardDeps={pushCardDeps}
     />
   );
 }

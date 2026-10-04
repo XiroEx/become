@@ -94,4 +94,12 @@ describe("Android config — app.json", () => {
       expect.arrayContaining(["BROWSABLE", "DEFAULT"]),
     );
   });
+
+  // POST_NOTIFICATIONS is declared (not install-granted on Android 13+) so the
+  // OS prompt can fire at the considered moment — end of onboarding / the Home
+  // card — instead of at install time (NP-065).
+  it("declares POST_NOTIFICATIONS for the considered-moment prompt", () => {
+    const permissions = parsed.expo.android?.permissions ?? [];
+    expect(permissions).toContain("android.permission.POST_NOTIFICATIONS");
+  });
 });
