@@ -125,7 +125,11 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       const cachedBefore = await readBecomingCache(memberId)
       expect(cachedBefore).toBeNull()
 
-      await writeBecomingCache(memberId, MOCK_JOURNEY)
+      // readBecomingCache only returns a payload whose todayKey is in the
+      // current local week, so stamp it with today rather than a fixed date.
+      const now = new Date()
+      const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+      await writeBecomingCache(memberId, { ...MOCK_JOURNEY, todayKey })
       const cachedAfter = await readBecomingCache(memberId)
       expect(cachedAfter).not.toBeNull()
       expect(cachedAfter?.becomingScore).toBe(1250)
