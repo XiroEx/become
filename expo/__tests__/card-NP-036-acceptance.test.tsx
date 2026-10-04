@@ -11,6 +11,11 @@ jest.mock("expo-router", () => ({
     back: jest.fn(),
   }),
   useLocalSearchParams: () => ({}),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // Run the focus effect on mount, like the tab coming into view.
+    const React = jest.requireActual("react");
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 let mockCurrentUser: { _id: string; email: string; name?: string; onboardingCompleted?: boolean } | null = {

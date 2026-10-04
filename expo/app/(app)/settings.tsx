@@ -1,11 +1,13 @@
-import { useCallback, useState } from "react";
-import { View, ScrollView, Pressable } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, Linking, View, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   ConsentStatusSchema,
   NotificationPreferencesResponseSchema,
+  type NotificationPreferenceKey,
 } from "@become/api-client";
 import {
   AI_PROVIDER,
@@ -26,7 +28,24 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import {
   defaultPushDeps,
   enablePushFromExplicitAction,
+  ensurePushRegistration,
 } from "@/lib/push/nativePush";
+import {
+  PUSH_CARD_DENIED_AT_KEY,
+  PUSH_CARD_REPROMPT_SHOWN_AT_KEY,
+  parseStoredTimestamp,
+  resolveDeniedAt,
+} from "@/lib/push/denialReminder";
+import {
+  applyNotificationPrefDefaults,
+  buildNotifPrefPatch,
+  nativeNotifStatusDescription,
+  resolveNativeNotifAction,
+  resolveNativeNotifStatus,
+  visibleNotificationToggles,
+  type NativeNotifPermission,
+} from "@/lib/settings/notificationPreferences";
+import { shouldShowDeniedRepromptAt } from "@/lib/push/reprompt";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -37,11 +56,42 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * Native Settings screen: Account, Notifications (NP-068), AI features (NP-046),
  * Legal & support, and Delete account at the bottom (two taps away).
  */
-export default function SettingsScreen() {
+export interface SettingsNotifDeps {
+  /** OS permission probe. Defaults to NP-065's `defaultPushDeps` reader. */
+  getPermission?: () => Promise<NativeNotifPermission>;
+  /** Explicit enable (NP-065's flow, WITH `reenable: true`). */
+  enablePush?: (jwt: string) => Promise<{ kind: string }>;
+  /** Silent re-register of this device (no `reenable`). */
+  repairPush?: (jwt: string) => Promise<{ kind: string }>;
+  /** Open the OS Settings app at Become's permissions. */
+  openSettings?: () => Promise<void>;
+}
+
+async function defaultGetPermission(): Promise<NativeNotifPermission> {
+  const Notifications = await import("expo-notifications");
+  const res = await Notifications.getPermissionsAsync();
+  if (res.granted) return "granted";
+  return res.canAskAgain === false ? "denied" : "undetermined";
+}
+
+export default function SettingsScreen({
+  notifDeps,
+}: {
+  notifDeps?: SettingsNotifDeps;
+} = {}) {
   const { colors } = useThemeTokens();
   const router = useRouter();
   const { token, user, logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
+  // `expo-notifications` (no native module under Jest — even a dynamic
+  // `import()` throws without --experimental-vm-modules), so they inject
+  // `notifDeps`. Production uses the defaults below.
+  const depsRef = useRef(notifDeps);
+  // Keep the seam current without writing the ref during render.
+  useEffect(() => {
+    depsRef.current = notifDeps;
+  }, [notifDeps]);
 
   const fetchOpts = {
     baseUrl: WEBAPP_BASE_URL,
@@ -65,10 +115,254 @@ export default function SettingsScreen() {
     await Promise.all([consent.refetch(), notifPrefs.refetch()]);
   }, [consent, notifPrefs]);
 
-  // Notifications (NP-068) state
+  // Notifications (NP-068) state — the web's section, ported to the OS
+  // permission: status from permission + master switch + whether this
+  // device's token is registered; "Enable"/"Turn on" run NP-065's explicit
+  // flow; "Turn off" unsubscribes account-wide (no endpoint); denied members
+  // get a button to iOS Settings plus the web's reminder cadence.
   const [savingNotif, setSavingNotif] = useState(false);
+  const [notifPermission, setNotifPermission] =
+    useState<NativeNotifPermission>("undetermined");
+  const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [enablingNotif, setEnablingNotif] = useState(false);
+  const [disablingNotif, setDisablingNotif] = useState(false);
+  const [deniedReminderVisible, setDeniedReminderVisible] = useState(false);
+  const [togglingKey, setTogglingKey] = useState<NotificationPreferenceKey | null>(null);
+  const [optimisticPrefs, setOptimisticPrefs] = useState<Partial<
+    Record<NotificationPreferenceKey, boolean>
+  > | null>(null);
+  const permissionProbeInFlight = useRef(false);
   const notificationsEnabled = notifPrefs.data?.notificationsEnabled !== false;
   const emailEngagement = notifPrefs.data?.emailEngagement !== false;
+  const storedPrefs = useMemo(
+    () =>
+      applyNotificationPrefDefaults(
+        notifPrefs.data?.preferences as
+          | Partial<Record<NotificationPreferenceKey, boolean>>
+          | undefined,
+      ),
+    // The preferences object identity follows the fetch result.
+    [notifPrefs.data],
+  );
+  const notifPrefsView = useMemo(
+    () => ({ ...storedPrefs, ...(optimisticPrefs ?? {}) }),
+    [storedPrefs, optimisticPrefs],
+  );
+  const notifStatus = resolveNativeNotifStatus({
+    permission: notifPermission,
+    notificationsEnabled,
+    deviceRegistered,
+  });
+  const notifAction = resolveNativeNotifAction({
+    permission: notifPermission,
+    notificationsEnabled,
+    deviceRegistered,
+  });
+
+  const probeNotifPermission = useCallback(async () => {
+    if (permissionProbeInFlight.current) return;
+    permissionProbeInFlight.current = true;
+    try {
+      const getPermission =
+        depsRef.current?.getPermission ?? defaultGetPermission;
+      const next = await getPermission();
+      setNotifPermission(next);
+      if (next === "denied") {
+        // Idempotent: the FIRST observed denial anchors the cadence, so the
+        // 7-day/monthly reminder counts from when the member said no.
+        try {
+          const stored = await AsyncStorage.getItem(PUSH_CARD_DENIED_AT_KEY);
+          if (parseStoredTimestamp(stored) === null) {
+            await AsyncStorage.setItem(PUSH_CARD_DENIED_AT_KEY, String(Date.now()));
+          }
+        } catch {
+          /* storage is best-effort */
+        }
+      }
+      if (next === "granted" && token) {
+        // "Granted" only means the member said yes once — reconcile whether
+        // this device still holds a working subscription, like the web's
+        // `ensurePushSubscription` does on load.
+        try {
+          const repairPush =
+            depsRef.current?.repairPush ??
+            (async (jwt: string) => {
+              const outcome = await ensurePushRegistration(
+                defaultPushDeps({ jwt }),
+              );
+              return { kind: outcome.kind };
+            });
+          const outcome = await repairPush(token);
+          setDeviceRegistered(
+            outcome.kind !== "failed" && outcome.kind !== "no-permission",
+          );
+        } catch {
+          setDeviceRegistered(false);
+        }
+      } else if (next !== "granted") {
+        setDeviceRegistered(null);
+      }
+    } catch {
+      /* a permission probe may never take Settings with it */
+    } finally {
+      permissionProbeInFlight.current = false;
+    }
+  }, [token]);
+
+  // Re-probe when the screen gains focus: the member may have flipped the
+  // switch in iOS Settings and come back.
+  useFocusEffect(
+    useCallback(() => {
+      void probeNotifPermission();
+    }, [probeNotifPermission]),
+  );
+
+  // Foreground returns re-probe too, for the same reason.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (status) => {
+      if (status === "active") void probeNotifPermission();
+    });
+    return () => subscription.remove();
+  }, [probeNotifPermission]);
+
+  // The denied-permission reminder, on the web's cadence (7 days, then
+  // monthly): the OS will not show its dialog again, so the only lever is a
+  // nudge toward Settings.
+  useEffect(() => {
+    // The visible flag only matters while permission is denied (the render
+    // gates on both), so there is nothing to reset when it flips away.
+    if (notifPermission !== "denied") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [deniedRaw, shownRaw] = await Promise.all([
+          AsyncStorage.getItem(PUSH_CARD_DENIED_AT_KEY),
+          AsyncStorage.getItem(PUSH_CARD_REPROMPT_SHOWN_AT_KEY),
+        ]);
+        const now = Date.now();
+        const deniedAt = resolveDeniedAt(deniedRaw, now);
+        const lastShownAt = parseStoredTimestamp(shownRaw);
+        if (cancelled) return;
+        if (shouldShowDeniedRepromptAt(deniedAt, lastShownAt, now)) {
+          try {
+            await AsyncStorage.setItem(
+              PUSH_CARD_REPROMPT_SHOWN_AT_KEY,
+              String(now),
+            );
+          } catch {
+            /* best-effort */
+          }
+          if (!cancelled) setDeniedReminderVisible(true);
+        } else {
+          if (!cancelled) setDeniedReminderVisible(false);
+        }
+      } catch {
+        /* storage failure hides the reminder, never the section */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [notifPermission]);
+
+  const onEnableNotifications = useCallback(async () => {
+    if (!token) return;
+    setEnablingNotif(true);
+    try {
+      const enablePush =
+        depsRef.current?.enablePush ??
+        (async (jwt: string) =>
+          enablePushFromExplicitAction(defaultPushDeps({ jwt })));
+      const result = await enablePush(token);
+      await probeNotifPermission();
+      if (result.kind === "registered" || result.kind === "already-registered") {
+        setDeviceRegistered(true);
+      } else if (result.kind === "no-permission") {
+        setDeviceRegistered(null);
+      } else {
+        setDeviceRegistered(false);
+      }
+      await notifPrefs.refetch();
+    } catch {
+      /* the toggle below still reflects the server */
+    } finally {
+      setEnablingNotif(false);
+    }
+  }, [notifPrefs, probeNotifPermission, token]);
+
+  const onRepairNotifications = useCallback(async () => {
+    if (!token) return;
+    setRepairing(true);
+    try {
+      const repairPush =
+        depsRef.current?.repairPush ??
+        (async (jwt: string) => {
+          const outcome = await ensurePushRegistration(
+            defaultPushDeps({ jwt }),
+          );
+          return { kind: outcome.kind };
+        });
+      const outcome = await repairPush(token);
+      const ok =
+        outcome.kind !== "failed" && outcome.kind !== "no-permission";
+      setDeviceRegistered(ok);
+    } catch {
+      setDeviceRegistered(false);
+    } finally {
+      setRepairing(false);
+    }
+  }, [token]);
+
+  const onOpenSystemSettings = useCallback(() => {
+    void (async () => {
+      try {
+        if (depsRef.current?.openSettings) {
+          await depsRef.current.openSettings();
+        } else {
+          await Linking.openSettings();
+        }
+      } catch {
+        /* a Settings link that fails does not take the screen with it */
+      }
+    })();
+  }, []);
+
+  const onToggleNotifPref = useCallback(
+    async (key: NotificationPreferenceKey, value: boolean) => {
+      if (!token) return;
+      const previous = notifPrefsView[key];
+      setTogglingKey(key);
+      setOptimisticPrefs((prev) => ({ ...(prev ?? {}), [key]: value }));
+      try {
+        const res = await fetch(
+          `${WEBAPP_BASE_URL}/api/notifications/preferences`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(buildNotifPrefPatch(key, value)),
+          },
+        );
+        if (!res.ok) throw new Error("PATCH failed");
+        setOptimisticPrefs((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return Object.keys(next).length > 0 ? next : null;
+        });
+        await notifPrefs.refetch();
+      } catch {
+        // Revert the optimistic flip so the switch never lies.
+        setOptimisticPrefs((prev) => ({ ...(prev ?? {}), [key]: previous }));
+      } finally {
+        setTogglingKey(null);
+      }
+    },
+    [notifPrefs, notifPrefsView, token],
+  );
 
   const onToggleEmail = useCallback(
     async (value: boolean) => {
@@ -96,12 +390,12 @@ export default function SettingsScreen() {
   const onToggleNotifications = useCallback(
     async (value: boolean) => {
       if (!token) return;
-      setSavingNotif(true);
-      try {
-        if (!value) {
-          // Turning notifications off is account-wide: drop every device's
-          // subscription and flip the master switch (no endpoint), so
-          // background registration can never silently recreate one.
+      if (!value) {
+        // Turning notifications off is account-wide: drop every device's
+        // subscription and flip the master switch (no endpoint), so
+        // background registration can never silently recreate one.
+        setDisablingNotif(true);
+        try {
           await fetch(`${WEBAPP_BASE_URL}/api/notifications/unsubscribe`, {
             method: "POST",
             headers: {
@@ -110,27 +404,21 @@ export default function SettingsScreen() {
             },
             body: JSON.stringify({}),
           });
-        } else {
-          // Explicit "Turn on": request the OS permission when undecided,
-          // then register the raw device token WITH `reenable: true` — the
-          // only path allowed to clear a prior opt-out server-side.
-          try {
-            await enablePushFromExplicitAction(
-              defaultPushDeps({ jwt: token }),
-            );
-          } catch {
-            // A simulator with no token, or a refused prompt, must not take
-            // Settings with it — the toggle still reflects the server below.
-          }
+          setDeviceRegistered(null);
+          await notifPrefs.refetch();
+        } catch {
+          // ignore
+        } finally {
+          setDisablingNotif(false);
         }
-        await notifPrefs.refetch();
-      } catch {
-        // ignore
-      } finally {
-        setSavingNotif(false);
+        return;
       }
+      // Explicit "Turn on": NP-065's flow — request the OS permission when
+      // undecided, then register the raw device token WITH `reenable: true`,
+      // the only path allowed to clear a prior opt-out server-side.
+      await onEnableNotifications();
     },
-    [notifPrefs, token],
+    [notifPrefs, onEnableNotifications, token],
   );
 
   // AI features (NP-046) state
@@ -325,6 +613,109 @@ export default function SettingsScreen() {
           >
             Notifications
           </Text>
+          {/* Status row — the OS permission, the master switch and whether
+              this device's token is registered, in the web's vocabulary. */}
+          <View
+            testID="notifications-status-row"
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <View
+                  testID="notifications-status-dot"
+                  accessibilityLabel={`Notifications status: ${notifStatus}`}
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor:
+                      notifStatus === "Active"
+                        ? colors.success
+                        : notifStatus === "Blocked" ||
+                            (notifPermission === "granted" &&
+                              notificationsEnabled)
+                          ? colors.destructive
+                          : colors["muted-foreground"],
+                  }}
+                />
+                <Text
+                  testID="notifications-status"
+                  className="text-foreground font-medium text-sm"
+                >
+                  {notifStatus}
+                </Text>
+              </View>
+              <Text className="text-muted-foreground text-xs">
+                {nativeNotifStatusDescription({
+                  permission: notifPermission,
+                  notificationsEnabled,
+                  deviceRegistered,
+                })}
+              </Text>
+            </View>
+            {notifAction === "enable" || notifAction === "turn-on" ? (
+              <Button
+                testID="notifications-enable-button"
+                size="sm"
+                onPress={() => {
+                  void onEnableNotifications();
+                }}
+                disabled={enablingNotif}
+                loading={enablingNotif}
+              >
+                {notifAction === "turn-on" ? "Turn on" : "Enable"}
+              </Button>
+            ) : null}
+            {notifAction === "repair" ? (
+              <Button
+                testID="notifications-repair-button"
+                size="sm"
+                onPress={() => {
+                  void onRepairNotifications();
+                }}
+                disabled={repairing}
+                loading={repairing}
+              >
+                Repair
+              </Button>
+            ) : null}
+          </View>
+          {/* Denied: the OS will not show its dialog again, so the member
+              goes to iOS Settings. Shown on the web's cadence (7 days, then
+              monthly) — the status row above always names the state. */}
+          {notifPermission === "denied" && deniedReminderVisible ? (
+            <View
+              testID="notifications-denied-reminder"
+              className="rounded-xl border border-border bg-card p-3"
+              style={{ gap: 8 }}
+            >
+              <Text className="text-foreground font-medium text-sm">
+                Notifications are off
+              </Text>
+              <Text className="text-muted-foreground text-xs">
+                Turn Become back on in Settings to get workout reminders and
+                streak alerts.
+              </Text>
+              <Button
+                testID="notifications-open-settings"
+                size="sm"
+                onPress={onOpenSystemSettings}
+                accessibilityHint="Opens the Settings app at Become's permissions"
+              >
+                Open Settings
+              </Button>
+            </View>
+          ) : null}
+          {/* Master switch — account-wide. Off stops notifications to every
+              device of this member; the per-type switches below stay visible
+              so the member can tune first, like the web. */}
           <View
             style={{
               flexDirection: "row",
@@ -348,9 +739,53 @@ export default function SettingsScreen() {
               onValueChange={(val) => {
                 void onToggleNotifications(val);
               }}
-              disabled={savingNotif}
+              disabled={savingNotif || enablingNotif || disablingNotif}
             />
           </View>
+          {disablingNotif ? (
+            <Text
+              testID="notifications-disabling-note"
+              className="text-muted-foreground text-xs"
+            >
+              Turning off…
+            </Text>
+          ) : null}
+
+          {/* Per-type switches — the web's ten keys and defaults, PATCHed
+              flat. `chatMessage` stays hidden while NP-032 keeps chat out. */}
+          {notificationsEnabled ? (
+            <View style={{ gap: 12 }}>
+              {visibleNotificationToggles().map(({ key, label, sublabel }) => (
+                <View
+                  key={key}
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text className="text-foreground font-medium text-sm">
+                      {label}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">
+                      {sublabel}
+                    </Text>
+                  </View>
+                  <Toggle
+                    testID={`notification-toggle-${key}`}
+                    accessibilityLabel={label}
+                    value={notifPrefsView[key] ?? false}
+                    onValueChange={(val) => {
+                      void onToggleNotifPref(key, val);
+                    }}
+                    disabled={togglingKey !== null}
+                  />
+                </View>
+              ))}
+            </View>
+          ) : null}
 
           <View
             style={{
