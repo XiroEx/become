@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View } from "react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
@@ -49,6 +50,8 @@ export interface LiveStepViewProps {
    * it enters the existing finish flow (`onFinish`).
    */
   onCompleteStep?: () => void;
+  onRequestSkip?: () => void;
+  isSkipping?: boolean;
   onRequestSwap?: (slug: string) => void;
   /**
    * Best completed set per exercise NAME (`useLiveWorkout`'s
@@ -88,6 +91,8 @@ export function LiveStepView({
   onStepChange,
   onSetChange,
   onCompleteStep,
+  onRequestSkip,
+  isSkipping = false,
   onRequestSwap,
   exerciseHistory,
   exercisePRs,
@@ -97,6 +102,7 @@ export function LiveStepView({
   const safeIndex = Math.min(Math.max(stepIndex, 0), Math.max(total - 1, 0));
   const step = workoutFlow[safeIndex];
   const exercise = step ? exercises[step.exerciseIndex] : undefined;
+  const [inputsOpen, setInputsOpen] = useState(true);
 
   if (!step || !exercise) {
     return (
@@ -143,7 +149,12 @@ export function LiveStepView({
   })();
   const totalRounds = totalRoundsForStep(step, exercise, exercises);
   const currentRound = step.roundNumber + 1;
-  const completeLabel = liveCompleteLabel(isLastStep, exercise.trackingType);
+  const completeLabelBase = liveCompleteLabel(isLastStep, exercise.trackingType);
+  const completeLabel = isLastStep
+    ? completeLabelBase
+    : isSkipping
+      ? `Skip ${unit} →`
+      : completeLabelBase;
   const isInterval = normalizeTracking(exercise.trackingType ?? null) === "intervals";
 
   return (
@@ -205,18 +216,28 @@ export function LiveStepView({
             {exercise.notes}
           </Text>
         ) : null}
-        <LiveSetRow
-          setIndex={step.setIndex}
-          bell={bell}
-          exerciseName={exercise.name}
-          equipment={exercise.equipment}
-          showQuickPicks
-          state={current}
-          prefill={exercise.prefill?.[step.setIndex] ?? null}
-          trackingType={exercise.trackingType}
-          testID={`${testID}-live-${exercise.slug}-set-${step.setIndex}`}
-          onChange={(next) => onSetChange(step.exerciseIndex, step.setIndex, next)}
-        />
+        {inputsOpen ? (
+          <LiveSetRow
+            setIndex={step.setIndex}
+            bell={bell}
+            exerciseName={exercise.name}
+            equipment={exercise.equipment}
+            showQuickPicks
+            state={current}
+            prefill={exercise.prefill?.[step.setIndex] ?? null}
+            trackingType={exercise.trackingType}
+            testID={`${testID}-live-${exercise.slug}-set-${step.setIndex}`}
+            onChange={(next) => onSetChange(step.exerciseIndex, step.setIndex, next)}
+          />
+        ) : null}
+        <Button
+          testID={`${testID}-live-inputs-toggle`}
+          variant="ghost"
+          size="sm"
+          onPress={() => setInputsOpen((open) => !open)}
+          accessibilityLabel={inputsOpen ? "Hide inputs" : "Show inputs"}>
+          {inputsOpen ? "Hide inputs" : "Show inputs"}
+        </Button>
         {/* The web's history + PR row (Live only; Track is unchanged). */}
         <LiveSetReference
           exerciseName={exercise.name}
@@ -251,11 +272,13 @@ export function LiveStepView({
         </View>
       </View>
 
-      {/* The web's primary action: Complete <unit> → / Done → / Finish Workout. */}
+      {/* The web's primary action: Complete <unit> → / Skip <unit> → /
+          Done → / Finish Workout. Blank inputs open the skip sheet
+          (`onRequestSkip`); otherwise the button always completes. */}
       <Button
         testID={`${testID}-live-complete`}
         variant="primary"
-        onPress={() => onCompleteStep?.()}
+        onPress={() => (isSkipping && !isLastStep && onRequestSkip ? onRequestSkip() : onCompleteStep?.())}
         accessibilityHint={
           isInterval
             ? undefined
