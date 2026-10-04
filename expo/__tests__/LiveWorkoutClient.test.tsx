@@ -298,6 +298,9 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
   });
 
   it("starts a rest timer that ticks down when a set is completed", () => {
+    // The timer derives what is left from the clock (NP-082): drive the
+    // clock forward so the display ticks read the new time.
+    let nowMs = 1_000_000;
     const { setI, clearI, tick } = mockInterval();
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
@@ -308,6 +311,7 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
         }}
         restTimerSetInterval={setI}
         restTimerClearInterval={clearI}
+        restTimerNow={() => nowMs}
       />,
     );
     expect(queryByTestId("live-workout-rest")).toBeNull();
@@ -315,7 +319,10 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
     fireEvent.press(getByTestId("live-workout-a-set-0-complete"));
     expect(getByTestId("live-workout-rest")).toBeTruthy();
     expect(getByTestId("live-workout-rest-time").props.children).toBe("0:05");
-    act(() => tick(2));
+    act(() => {
+      nowMs += 2_000;
+      tick(2);
+    });
     expect(getByTestId("live-workout-rest-time").props.children).toBe("0:03");
   });
 });

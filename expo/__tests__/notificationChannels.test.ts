@@ -7,7 +7,7 @@ import {
 describe("getNotificationChannels", () => {
   const channels = getNotificationChannels();
 
-  it("every channel id is a server notification tag", () => {
+  it("every server-sent channel id is a server notification tag", () => {
     const serverTags = [
       "workout-reminder",
       "meal-reminder",
@@ -24,10 +24,21 @@ describe("getNotificationChannels", () => {
     for (const tag of serverTags) {
       expect(ids).toContain(tag);
     }
-    // No channel id the server never sends.
+    // No channel id the server never sends — except the local-only rest
+    // timer channel (NP-082), which the server never sends by design.
     for (const id of ids) {
+      if (id === CHANNEL_IDS.restTimer) continue;
       expect(serverTags).toContain(id);
     }
+  });
+
+  it("rest-timer is a local-only high-importance channel with sound + vibrate", () => {
+    const c = channels.find((ch) => ch.id === CHANNEL_IDS.restTimer);
+    expect(c).toBeDefined();
+    expect(c?.name).toBe("Rest Timer");
+    expect(c?.importance).toBe("high");
+    expect(c?.sound).toBe(true);
+    expect(c?.vibrate).toBe(true);
   });
 
   it("workout-reminder is high-importance with sound + vibrate", () => {
