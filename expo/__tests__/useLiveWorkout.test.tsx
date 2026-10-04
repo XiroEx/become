@@ -397,4 +397,134 @@ describe("useLiveWorkout", () => {
     expect(set?.reps == null || set?.reps === 0).toBe(true);
     expect(set?.completed).toBe(false);
   });
+
+  it("(id: e5ced228) a loaded exercise with tip exposes it on exercises[0].tip", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            title: "Coaching Fields",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench",
+                name: "Bench Press",
+                sets: 3,
+                reps: "5",
+                trackingType: "reps_weight",
+                tip: "Keep shoulder blades pinched",
+                tempo: "3-1-1",
+                rpe: 8,
+                duration: "30s",
+                primaryMuscles: ["chest", "triceps"],
+              },
+            ],
+          },
+          phase: 1,
+          day: "Day 1",
+        });
+      }
+      if (url.startsWith("/api/workouts/last-performance")) {
+        return Promise.resolve({ performances: {}, prs: {} });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: false,
+          workout: null,
+          exerciseHistory: {},
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() =>
+      useLiveWorkout("prog-1", "Day 1", null),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const ex = result.current.workout?.exercises[0];
+    expect(ex?.tip).toBe("Keep shoulder blades pinched");
+    expect(ex?.tempo).toBe("3-1-1");
+    expect(ex?.rpe).toBe(8);
+    expect(ex?.durationLabel).toBe("30s");
+    expect(ex?.primaryMuscles).toEqual(["chest", "triceps"]);
+  });
+
+  it("(id: e5ced229) a resumed workout keeps coaching fields through the saved-log merge", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            title: "Coaching Fields Resume",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench",
+                name: "Bench Press",
+                sets: 2,
+                reps: "5",
+                trackingType: "reps_weight",
+                tip: "Keep shoulder blades pinched",
+                tempo: "3-1-1",
+                rpe: 8,
+                duration: "30s",
+                primaryMuscles: ["chest", "triceps"],
+              },
+            ],
+          },
+          phase: 1,
+          day: "Day 1",
+        });
+      }
+      if (url.startsWith("/api/workouts/last-performance")) {
+        return Promise.resolve({ performances: {}, prs: {} });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: true,
+          workout: {
+            programId: "prog-1",
+            day: "Day 1",
+            phase: 1,
+            activeSeconds: 60,
+            date: "2026-10-01T12:00:00.000Z",
+            exercises: [
+              {
+                name: "Bench Press",
+                exerciseSlug: "bench",
+                sets: [
+                  { setNumber: 1, reps: 5, weight: 185, completed: true },
+                  { setNumber: 2, reps: 0, weight: 0, completed: false },
+                ],
+              },
+            ],
+          },
+          exerciseHistory: {},
+          exercisePRs: {},
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() =>
+      useLiveWorkout("prog-1", "Day 1", null),
+    );
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.isResuming).toBe(true);
+    const ex = result.current.workout?.exercises[0];
+    expect(ex?.tip).toBe("Keep shoulder blades pinched");
+    expect(ex?.tempo).toBe("3-1-1");
+    expect(ex?.rpe).toBe(8);
+    expect(ex?.durationLabel).toBe("30s");
+    expect(ex?.primaryMuscles).toEqual(["chest", "triceps"]);
+  });
 });
