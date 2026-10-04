@@ -247,7 +247,7 @@ describe("the table", () => {
     ["/dashboard/workout/hub", "/(tabs)/programming", "nearest"],
     ["/dashboard/workout/library", "/(tabs)/programming", "nearest"],
     ["/dashboard/workout/p1", "/(tabs)/programming/p1", "exact"],
-    ["/dashboard/workout/p1/journey", "/(tabs)/programming/p1", "nearest"],
+    ["/dashboard/workout/p1/journey", "/(tabs)/programming/p1/journey", "exact"],
     ["/dashboard/workout/p1/schedule", "/(tabs)/calendar/settings", "nearest"],
     ["/dashboard/workout/p1/workout?day=Day%201", "/(tabs)/programming/p1/workout/0?day=Day%201", "exact"],
     [
