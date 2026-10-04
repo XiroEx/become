@@ -36,6 +36,7 @@ import {
 } from "@become/core";
 import NutritionGoalsRoute from "../app/(app)/(tabs)/nutrition/goals";
 import { NutritionPlanCard } from "@/components/goals/NutritionPlanCard";
+import { Text } from "@/components/Text";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -327,5 +328,61 @@ describe("NutritionGoalsRoute (NP-148)", () => {
     await waitFor(() => {
       expect(getByTestId("weight-log-sheet")).toBeTruthy();
     });
+  });
+
+  it("Macro Split options use theme-aware text in every state (NP-237)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-preset-recommended")).toBeTruthy();
+    });
+
+    // Every option row — selected and unselected — carries the theme-aware
+    // text token, so the labels stay readable in light and dark mode.
+    const presetKeys = ["recommended", "balanced", "high_protein", "low_carb", "custom"];
+    for (const key of presetKeys) {
+      const row = getByTestId(`nutrition-goals-preset-${key}`);
+      const labels = row.findAllByType(Text);
+      expect(labels.length).toBeGreaterThan(0);
+      for (const text of labels) {
+        expect(String((text.props as { className?: string }).className ?? "")).toContain(
+          "text-foreground",
+        );
+      }
+    }
+
+    // The selected row reads selected; picking another row moves selection
+    // and keeps the token on both rows.
+    expect(
+      getByTestId("nutrition-goals-preset-recommended").props.accessibilityState,
+    ).toEqual({ selected: true });
+    fireEvent.press(getByTestId("nutrition-goals-preset-balanced"));
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-preset-balanced").props.accessibilityState).toEqual({
+        selected: true,
+      });
+    });
+    expect(
+      getByTestId("nutrition-goals-preset-recommended").props.accessibilityState,
+    ).toEqual({ selected: false });
+    for (const key of ["recommended", "balanced"]) {
+      const row = getByTestId(`nutrition-goals-preset-${key}`);
+      for (const label of row.findAllByType(Text)) {
+        expect(
+          String((label.props as { className?: string }).className ?? ""),
+        ).toContain("text-foreground");
+      }
+    }
+
+    // The sibling option lists on the same screen carry the same token —
+    // the audit that found the Macro Split row found no other offender.
+    const activityRow = getByTestId("nutrition-goals-activity-moderate");
+    const activityLabels = activityRow.findAllByType(Text);
+    expect(activityLabels.length).toBeGreaterThan(0);
+    for (const label of activityLabels) {
+      expect(String((label.props as { className?: string }).className ?? "")).toContain(
+        "text-foreground",
+      );
+    }
   });
 });
