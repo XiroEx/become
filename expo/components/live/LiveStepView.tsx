@@ -5,13 +5,23 @@ import { Button } from "@/components/Button";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
 import { FramedVideo } from "@/components/FramedVideo";
 import {
+  ExerciseGroupNav,
+  type ExerciseGroupType,
+} from "@/components/live/ExerciseGroupNav";
+import {
   getBellWeightInfo,
+  normalizeTracking,
   setUnitLabel,
   type WorkoutStep,
 } from "@become/core";
 import type {
   LiveGrid,
   LiveWorkoutExercise,
+} from "@/components/live/LiveWorkoutClient";
+import {
+  groupLabelForStep,
+  liveCompleteLabel,
+  totalRoundsForStep,
 } from "@/components/live/LiveWorkoutClient";
 
 export interface LiveStepViewProps {
@@ -27,6 +37,13 @@ export interface LiveStepViewProps {
     setIndex: number,
     next: LiveSetState,
   ) => void;
+  /**
+   * The web's primary action (`completeSet` / `advanceStep`): mark the
+   * current set done with exactly what was typed and move to the next
+   * step of `workoutFlow`. Wired by `LiveWorkoutClient`; on the last step
+   * it enters the existing finish flow (`onFinish`).
+   */
+  onCompleteStep?: () => void;
   onRequestSwap?: (slug: string) => void;
   testID: string;
 }
@@ -54,6 +71,7 @@ export function LiveStepView({
   stepIndex,
   onStepChange,
   onSetChange,
+  onCompleteStep,
   onRequestSwap,
   testID,
 }: LiveStepViewProps) {
@@ -85,6 +103,29 @@ export function LiveStepView({
   };
   const unit = setUnitLabel(exercise.trackingType, 1);
   const bell = getBellWeightInfo(exercise);
+  const isLastStep = safeIndex >= total - 1;
+  // The group label comes from the CURRENT exercise — `workout.groupType`
+  // is never set by the route, so `ExerciseGroupNav` would otherwise never
+  // render. R = max(groupRounds, sets), the same max the flow walks.
+  const groupLabel = groupLabelForStep(step, exercise);
+  const groupType = ((): ExerciseGroupType | null => {
+    const t = (exercise.groupType ?? "").toLowerCase();
+    return t === "superset" ||
+      t === "circuit" ||
+      t === "triset" ||
+      t === "giantset" ||
+      t === "giant_set" ||
+      t === "emom" ||
+      t === "amrap"
+      ? (t === "giant_set" ? "giantset" : (t as ExerciseGroupType))
+      : groupLabel
+        ? "superset"
+        : null;
+  })();
+  const totalRounds = totalRoundsForStep(step, exercise, exercises);
+  const currentRound = step.roundNumber + 1;
+  const completeLabel = liveCompleteLabel(isLastStep, exercise.trackingType);
+  const isInterval = normalizeTracking(exercise.trackingType ?? null) === "intervals";
 
   return (
     <View testID={`${testID}-live`} style={{ gap: 12 }}>
@@ -94,6 +135,24 @@ export function LiveStepView({
       >
         {`Step ${safeIndex + 1} of ${total}`}
       </Text>
+      {groupLabel ? (
+        <Text
+          testID={`${testID}-live-group-label`}
+          className="text-primary text-sm font-semibold"
+        >
+          {groupLabel}
+        </Text>
+      ) : null}
+      {groupType ? (
+        <ExerciseGroupNav
+          testID={`${testID}-live-group-nav`}
+          groupType={groupType}
+          currentRound={currentRound}
+          totalRounds={totalRounds}
+          onPrev={() => onStepChange(Math.max(0, safeIndex - 1))}
+          onNext={() => onStepChange(Math.min(total - 1, safeIndex + 1))}
+        />
+      ) : null}
 
       <Card
         testID={`${testID}-live-exercise-${exercise.slug}`}
@@ -161,6 +220,20 @@ export function LiveStepView({
           </Button>
         </View>
       </View>
+
+      {/* The web's primary action: Complete <unit> → / Done → / Finish Workout. */}
+      <Button
+        testID={`${testID}-live-complete`}
+        variant="primary"
+        onPress={() => onCompleteStep?.()}
+        accessibilityHint={
+          isInterval
+            ? undefined
+            : "Completes with exactly what was typed; blank stays blank"
+        }
+      >
+        {completeLabel}
+      </Button>
 
       <Button
         testID={`${testID}-live-swap`}
