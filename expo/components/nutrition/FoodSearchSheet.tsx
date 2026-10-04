@@ -415,12 +415,16 @@ export function FoodSearchSheet({
         return;
       }
 
-      onClose();
+      // A pick handler takes the food even when the basket is hidden (plan
+      // mode on a future day routes through `PlanFoodSheet`, NP-232).
       if (onPickFood) {
+        onClose();
         onPickFood(targetFood);
-      } else {
-        router.push(foodDetailHref(targetFood._id, targetFood));
+        return;
       }
+
+      onClose();
+      router.push(foodDetailHref(targetFood._id, targetFood));
     },
     [basketMode, onAddToBasket, onClose, onPickFood, router, token],
   );
