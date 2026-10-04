@@ -26,6 +26,8 @@ import {
   type PermissionDeniedCapture,
 } from "@/lib/media/capture";
 import {
+  correctDescribeEstimate,
+  correctPhotoEstimate,
   estimateFromDescription,
   estimateFromPhoto,
   logEstimate,
@@ -130,9 +132,17 @@ export function EstimateSheet({
   const [addMoreOpen, setAddMoreOpen] = useState(false);
   const [correctText, setCorrectText] = useState("");
   const [correcting, setCorrecting] = useState(false);
+  const [correctNotice, setCorrectNotice] = useState<string | null>(null);
   const [imageThumb, setImageThumb] = useState<string>("");
   const savedScanIdRef = useRef<string | null>(null);
   const noteRef = useRef("");
+  // The signed follow-up ticket that came back with the estimate on screen
+  // (NP-090, web parity with SnapPlateModal's allowanceTicketRef). Handed
+  // back on a CORRECTION so "it was 6 tacos, not 3" spends a bounded
+  // follow-up instead of a whole second scan. Only ever attached to a
+  // correction of the run it came from — a ref, not state, because it never
+  // affects rendering.
+  const allowanceTicketRef = useRef<string | undefined>(undefined);
 
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS;
 
@@ -147,9 +157,11 @@ export function EstimateSheet({
     setAddMoreOpen(false);
     setCorrectText("");
     setCorrecting(false);
+    setCorrectNotice(null);
     setImageThumb("");
     savedScanIdRef.current = null;
     noteRef.current = "";
+    allowanceTicketRef.current = undefined;
     if (initialPhase === "compose" && initialImage) {
       setCaptured(initialImage);
       setOrigin(initialOrigin);
@@ -201,6 +213,11 @@ export function EstimateSheet({
     ) => {
       if (outcome.status === "estimated") {
         const fresh = reviewItemsFor(outcome.estimate);
+        // A new outcome — the previous estimate's ticket must not ride along.
+        // Keep the ticket this estimate was issued with, so a correction of
+        // it costs a follow-up rather than tomorrow's scan.
+        allowanceTicketRef.current = outcome.estimate.allowanceTicket;
+        setCorrectNotice(null);
         setImageThumb(imageThumb);
         setItems(fresh);
         setPhase("review");
@@ -242,6 +259,9 @@ export function EstimateSheet({
     async (image: CapturedImage, note: string) => {
       setPhase("estimating");
       savedScanIdRef.current = null;
+      // A new photo is a new scan — it never presents the previous
+      // estimate's ticket, however valid it still is.
+      allowanceTicketRef.current = undefined;
       const trimmed = note.trim();
       noteRef.current = trimmed;
       try {
@@ -266,6 +286,9 @@ export function EstimateSheet({
       if (!t) return;
       setPhase("estimating");
       savedScanIdRef.current = null;
+      // A new description is a new estimate — it never presents the
+      // previous estimate's ticket.
+      allowanceTicketRef.current = undefined;
       noteRef.current = t;
       setOrigin("describe");
       try {
@@ -279,6 +302,71 @@ export function EstimateSheet({
     },
     [getToken, handleOutcome],
   );
+
+  const handleCorrect = useCallback(async () => {
+    const c = correctText.trim();
+    if (!c || correcting) return;
+    // Snapshot the review BEFORE the spinner: a refused correction keeps
+    // these exact rows on screen, unchanged.
+    const prior = items;
+    const thumb = imageThumb;
+    const ticket = allowanceTicketRef.current;
+    setCorrectText("");
+    setCorrectNotice(null);
+    setCorrecting(true);
+    try {
+      // The ticket proving the estimate being refined was already charged.
+      // Only this path sends one; a fresh estimate must never present it.
+      // A photo estimate is re-read with the same image plus the correction
+      // as `note` plus the ticket; a describe estimate sends
+      // `priorEstimate`, `correction` and the ticket with no `description`.
+      const outcome = thumb.startsWith("data:")
+        ? await correctPhotoEstimate(thumb, c, ticket, { getToken })
+        : await correctDescribeEstimate(prior, c, ticket, { getToken });
+      if (outcome.status === "estimated") {
+        // A correction is charged in the same window, so it comes back with
+        // a ticket of its own — keep it so the NEXT correction rides a
+        // follow-up too.
+        allowanceTicketRef.current =
+          outcome.estimate.allowanceTicket ?? ticket;
+        const fresh = reviewItemsFor(outcome.estimate);
+        setItems(fresh);
+        void reconcileEstimateItems(fresh, { getToken }).then(
+          (reconciled) => {
+            setItems(reconciled);
+            void persistCurrent(reconciled);
+          },
+        );
+        return;
+      }
+      if (outcome.status === "empty") {
+        // The model answered and could not act on the wording. Rephrasing
+        // helps — the prior items stay on screen.
+        setCorrectNotice("Couldn't apply that. Try rephrasing.");
+        return;
+      }
+      if (outcome.status === "gate") {
+        // A refused correction must never cost the work it was refining:
+        // the previous estimate stays on screen, unchanged, behind the
+        // upgrade sheet.
+        showUpgradeSheet(outcome.gate as Parameters<typeof showUpgradeSheet>[0]);
+        void refreshEntitlements().catch(() => {});
+        return;
+      }
+      if (outcome.status === "consent") {
+        // Permission, not pricing — the consent prompt and nothing else.
+        showAiConsentPrompt();
+        return;
+      }
+      // Nothing came back at all. Rephrasing cannot fix a backend that is
+      // not answering, so do not ask for it.
+      setCorrectNotice("Couldn't reach the food AI. Try again in a minute.");
+    } catch {
+      setCorrectNotice("Couldn't reach the food AI. Try again in a minute.");
+    } finally {
+      setCorrecting(false);
+    }
+  }, [correctText, correcting, items, imageThumb, getToken, persistCurrent, refreshEntitlements]);
 
   const captureFrom = useCallback(
     async (source: CaptureSource) => {
@@ -620,30 +708,7 @@ export function EstimateSheet({
                   accessibilityRole="button"
                   accessibilityLabel="Apply correction"
                   disabled={!correctText.trim() || correcting}
-                  onPress={() => {
-                    const t = correctText.trim();
-                    if (!t || correcting) return;
-                    setCorrectText("");
-                    setCorrecting(true);
-                    // Corrections ride the describe door on the same allowance
-                    // ticket rules as the web; NP-090 owns the ticketed flow.
-                    // The current estimate stays on screen behind the spinner.
-                    void estimateFromDescription(t, { getToken })
-                      .then(async (outcome) => {
-                        if (outcome.status === "estimated") {
-                          const fresh = reviewItemsFor(outcome.estimate);
-                          setItems(fresh);
-                          void reconcileEstimateItems(fresh, { getToken }).then(
-                            (reconciled) => {
-                              setItems(reconciled);
-                              void persistCurrent(reconciled);
-                            },
-                          );
-                        }
-                      })
-                      .catch(() => {})
-                      .finally(() => setCorrecting(false));
-                  }}
+                  onPress={() => void handleCorrect()}
                   style={{
                     width: 44,
                     height: 44,
@@ -657,6 +722,14 @@ export function EstimateSheet({
                   <Send size={16} color={colors["primary-foreground"]} />
                 </Pressable>
               </View>
+              {correctNotice ? (
+                <Text
+                  testID={`${testID}-correct-notice`}
+                  className="text-muted-foreground text-xs text-center"
+                >
+                  {correctNotice}
+                </Text>
+              ) : null}
               {items.map((item, idx) => {
                 const scaled = scaledNutrition(item, item.multiplier);
                 const badge = item.match
