@@ -8,7 +8,9 @@ import type { ExerciseGroupType } from "@/components/live/ExerciseGroupNav";
 import {
   buildWorkoutFlow,
   isSetFilled,
+  normalizeTracking,
   resolveStartStep,
+  setUnitLabel,
   type WorkoutPosition,
 } from "@become/core";
 import { applySetUpdate, type KeyValueStore } from "@/lib/live/liveWorkoutCache";
@@ -56,6 +58,8 @@ export interface LiveWorkoutExercise {
   groupRounds?: number;
   /** Rest between sets in seconds (defaults to 90). */
   restSec?: number;
+  /** Group-level rest between rounds (web `groupRest`, e.g. "60s"). */
+  groupRest?: string;
   /** Last completed performance per set, used as prefill. */
   prefill?: (LiveSetState | null)[];
   addedAdHoc?: boolean;
@@ -130,6 +134,97 @@ export interface LiveWorkoutClientProps {
 }
 
 const DEFAULT_REST_SEC = 90;
+
+/**
+ * Parse a web-style rest string ("90s", "3min", "120") into seconds — the
+ * web live client's `parseRestTime`, verbatim.
+ */
+export function parseRestSeconds(rest: string | null | undefined): number {
+  if (!rest) return 60;
+  const match = rest.match(/(\d+)/);
+  if (!match) return 60;
+  const num = parseInt(match[1]!, 10);
+  if (rest.includes("min")) return num * 60;
+  return num;
+}
+
+/** Smart rest default by tracking type — the web live client's rule. */
+function smartRestDefault(exercise?: LiveWorkoutExercise): string {
+  const t = normalizeTracking(exercise?.trackingType ?? null);
+  if (t === "reps_weight") return "3min";
+  if (t === "reps_bodyweight" || t === "reps_only") return "90s";
+  return "60s";
+}
+
+/**
+ * Rest AFTER this step, in seconds — the web live client's `getRestDuration`
+ * (line ~1283): no rest between exercises inside a round; after a round's
+ * last exercise rest `groupRest || rest || smart default`. Ungrouped steps
+ * rest their own `rest` (or the smart default). Only gates WHEN the existing
+ * rest bar starts; the timer itself is NP-082's.
+ */
+export function restAfterStep(
+  step: { groupId: string | null; isLastInRound: boolean },
+  exercise?: LiveWorkoutExercise,
+): number {
+  if (step.groupId && !step.isLastInRound) return 0;
+  if (step.groupId && step.isLastInRound) {
+    return parseRestSeconds(
+      exercise?.groupRest ??
+        (exercise?.restSec != null ? `${exercise.restSec}s` : undefined) ??
+        smartRestDefault(exercise),
+    );
+  }
+  return parseRestSeconds(
+    exercise?.restSec != null ? `${exercise.restSec}s` : smartRestDefault(exercise),
+  );
+}
+
+/**
+ * The group label for the current step — the web live client's
+ * `supersetLabel`: the exercise's own `groupLabel` first, else the group
+ * type + round number. Driven from the CURRENT EXERCISE (the route never
+ * sets `workout.groupType`), so a superset block reads as one.
+ */
+export function groupLabelForStep(
+  step: { groupId: string | null; roundNumber: number } | undefined,
+  exercise?: LiveWorkoutExercise,
+): string | null {
+  if (!step?.groupId || !exercise) return null;
+  const round = step.roundNumber + 1;
+  if (exercise.groupLabel) return `${exercise.groupLabel} · ${round}`;
+  const gtype = exercise.groupType?.toUpperCase() ?? "ROUND";
+  return `${gtype} ${round}`;
+}
+
+/**
+ * Total rounds for the current step's block: R = max(groupRounds, sets) —
+ * the same max the shared `buildWorkoutFlow` walks, so the nav reads
+ * "Round r of R" over exactly the rounds the member will walk.
+ */
+export function totalRoundsForStep(
+  step: { groupId: string | null } | undefined,
+  exercise: LiveWorkoutExercise | undefined,
+  exercises: LiveWorkoutExercise[],
+): number {
+  if (!step?.groupId || !exercise) return 1;
+  const members = exercises.filter((m) => m.groupId === step.groupId);
+  const maxSets = Math.max(
+    exercise.groupRounds ?? 0,
+    ...members.map((m) => m.sets || 0),
+  );
+  return maxSets > 0 ? maxSets : 1;
+}
+
+/** The web live client's primary-action label for the current step. */
+export function liveCompleteLabel(
+  isLastStep: boolean,
+  trackingType?: string | null,
+): string {
+  if (isLastStep) return "Finish Workout";
+  if (normalizeTracking(trackingType ?? null) === "intervals") return "Done →";
+  return `Complete ${setUnitLabel(trackingType ?? null, 1)} →`;
+}
 
 function initialGrid(
   exercises: LiveWorkoutExercise[],
@@ -274,6 +369,7 @@ export function LiveWorkoutClient({
           ...(ex.groupType ? { groupType: ex.groupType } : {}),
           ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
           ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+          ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
         })),
       ),
     [workout.exercises],
@@ -401,7 +497,14 @@ export function LiveWorkoutClient({
       onGridChange?.(updated);
       rememberAfterEdit(exerciseIndex, setIndex, resolved.completed);
       if (justCompleted) {
-        rest.start(ex.restSec ?? DEFAULT_REST_SEC);
+        // The web's rest rule: only the round's LAST exercise starts the
+        // bar. `rest.start` is the only thing gated — the timer is NP-082's.
+        const flowIndex = flowIndexByKey.get(`${exerciseIndex}:${setIndex}`);
+        const step = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
+        const restSec = step
+          ? restAfterStep(step, ex)
+          : (ex.restSec ?? DEFAULT_REST_SEC);
+        if (restSec > 0) rest.start(restSec);
         void onSetComplete?.({
           exerciseSlug: ex.slug,
           setIndex,
@@ -409,7 +512,7 @@ export function LiveWorkoutClient({
         });
       }
     },
-    [workout.exercises, onGridChange, onSetComplete, rememberAfterEdit, rest],
+    [workout.exercises, workoutFlow, flowIndexByKey, onGridChange, onSetComplete, rememberAfterEdit, rest],
   );
 
   const handleStepChange = useCallback(
@@ -420,6 +523,70 @@ export function LiveWorkoutClient({
     },
     [workoutFlow, rememberPosition],
   );
+
+  /**
+   * The web's primary action (`completeSet` / `advanceStep`): mark the
+   * CURRENT step's set done with exactly what was typed — blank stays
+   * blank, never last time's numbers — through the existing set-change
+   * path, then move to the next step of `workoutFlow`. On the last step
+   * there is nowhere to move to, so it enters the existing finish flow
+   * (`onFinish`: the incomplete prompt and midnight choice from NP-085,
+   * then the NP-086 summary). The checkbox tap stays the member's own
+   * call for every other set; this button is the call for THIS one.
+   */
+  const handleCompleteStep = useCallback(() => {
+    const step = workoutFlow[liveStepIndex];
+    if (!step) return;
+    const ex = workout.exercises[step.exerciseIndex];
+    if (!ex) return;
+    const isLastStep = liveStepIndex >= workoutFlow.length - 1;
+    const prev = gridRef.current[ex.slug]?.[step.setIndex];
+    const current: LiveSetState = prev ?? {
+      reps: null,
+      weight: null,
+      durationSec: null,
+      distance: null,
+      completed: false,
+    };
+    // Exactly what was typed — blank stays blank. `handleSetChange` would
+    // re-ask `isSetFilled` and refuse to tick an empty set; the web's
+    // Complete button always completes, so this path always does.
+    const resolved: LiveSetState = { ...current, completed: true };
+    const updated = applySetUpdate(gridRef.current, ex.slug, step.setIndex, resolved);
+    gridRef.current = updated;
+    setGrid(updated);
+    onGridChange?.(updated);
+    // The web's rest rule, same as the checkbox path: only the round's
+    // last exercise starts the bar — including on the last step, where the
+    // finish flow opens AND the bar runs behind it (the web's `completeSet`
+    // saves, advances to the summary, and leaves the rest running).
+    const restSec = restAfterStep(step, ex);
+    if (restSec > 0) rest.start(restSec);
+    void onSetComplete?.({
+      exerciseSlug: ex.slug,
+      setIndex: step.setIndex,
+      state: resolved,
+    });
+    if (isLastStep) {
+      rememberPosition(step.exerciseIndex, step.setIndex);
+      onFinish?.(updated);
+      return;
+    }
+    const nextStep = workoutFlow[liveStepIndex + 1];
+    if (nextStep) {
+      setLiveStepIndex(liveStepIndex + 1);
+      rememberPosition(nextStep.exerciseIndex, nextStep.setIndex);
+    }
+  }, [
+    workoutFlow,
+    liveStepIndex,
+    workout.exercises,
+    onGridChange,
+    onFinish,
+    onSetComplete,
+    rememberPosition,
+    rest,
+  ]);
 
   const handleViewChange = useCallback(
     (nextView: WorkoutView) => {
@@ -460,18 +627,21 @@ export function LiveWorkoutClient({
     [workout.exercises, grid],
   );
   // The web's rule verbatim: the button exists at 100% and nowhere else.
+  // Live has no separate Finish button — completing the last step IS the
+  // finish (the web has no always-visible Complete Workout in Live either).
   const allSetsDone = totalSets > 0 && completedSets === totalSets;
 
-  const finishButton = allSetsDone ? (
-    <Button
-      testID={`${testID}-finish`}
-      variant="primary"
-      disabled={finishing}
-      onPress={() => onFinish?.(gridRef.current)}
-    >
-      {finishing ? "Saving…" : "Complete Workout! 🎉"}
-    </Button>
-  ) : null;
+  const finishButton =
+    allSetsDone && view === "track" ? (
+      <Button
+        testID={`${testID}-finish`}
+        variant="primary"
+        disabled={finishing}
+        onPress={() => onFinish?.(gridRef.current)}
+      >
+        {finishing ? "Saving…" : "Complete Workout! 🎉"}
+      </Button>
+    ) : null;
 
   return (
     <SafeAreaView
@@ -521,6 +691,7 @@ export function LiveWorkoutClient({
             stepIndex={liveStepIndex}
             onStepChange={handleStepChange}
             onSetChange={handleSetChange}
+            onCompleteStep={handleCompleteStep}
             onRequestSwap={onRequestSwap}
           />
         )}
