@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
 import { LiveSetReference } from "@/components/live/LiveSetReference";
+import { ExerciseHint } from "@/components/live/ExerciseHint";
 import { FramedVideo } from "@/components/FramedVideo";
 import {
   ExerciseGroupNav,
@@ -64,6 +65,16 @@ export interface LiveStepViewProps {
    * `exercisePRs`). Drives the `PR:` line and the NEW PR flag.
    */
   exercisePRs?: Record<string, ExercisePRSummary>;
+  /**
+   * In-workout hints keyed by lowercase exercise slug (the web's
+   * `exerciseNudges`). Rendered under the exercise header, beside the
+   * Last/PR lines — a reference, never prefill. Only the CURRENT
+   * exercise's hint shows (the web shows each hint only while its exercise
+   * is current).
+   */
+  exerciseHints?: Record<string, { id: string; title: string; body: string }>;
+  /** Dismiss the current exercise's hint on the account. */
+  onDismissHint?: (slug: string) => void;
   testID: string;
 }
 
@@ -96,6 +107,8 @@ export function LiveStepView({
   onRequestSwap,
   exerciseHistory,
   exercisePRs,
+  exerciseHints,
+  onDismissHint,
   testID,
 }: LiveStepViewProps) {
   const total = workoutFlow.length;
@@ -247,6 +260,20 @@ export function LiveStepView({
           typedWeight={current.weight}
           testID={`${testID}-live-${exercise.slug}-reference`}
         />
+        {/* The web's contextual nudge for THIS exercise only
+            (progression / plateau) — beside the Last/PR lines. */}
+        {(() => {
+          const hint = exerciseHints?.[exercise.slug.toLowerCase()];
+          if (!hint) return null;
+          return (
+            <ExerciseHint
+              hint={hint}
+              exerciseSlug={exercise.slug}
+              onDismiss={() => onDismissHint?.(exercise.slug.toLowerCase())}
+              testID={`${testID}-live-${exercise.slug}-hint`}
+            />
+          );
+        })()}
       </Card>
 
       <View style={{ flexDirection: "row", gap: 8 }}>

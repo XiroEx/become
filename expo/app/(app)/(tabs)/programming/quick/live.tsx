@@ -27,6 +27,7 @@ import {
 } from "@become/core";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useQuickLiveWorkout } from "@/lib/quickSession/useQuickLiveWorkout";
+import { useExerciseHints } from "@/lib/live/useExerciseHints";
 
 export interface QuickLiveRouteProps {
   /** DI for tests — defaults to the AsyncStorage-backed store. */
@@ -140,6 +141,22 @@ export default function QuickLiveRoute({
   const summaryHistory: Record<string, (typeof exerciseHistory)[string]> =
     exerciseHistory ?? {};
 
+  // In-workout hints (NP-173): one fetch per session load, dismissed on the
+  // account — the same `useExerciseHints` the program live route uses.
+  const quickSlugs = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (workout?.exercises ?? [])
+            .map((e) => (e.slug || "").toLowerCase())
+            .filter(Boolean),
+        ),
+      ),
+    [workout?.exercises],
+  );
+  const { hints: quickHints, dismissHint: dismissQuickHint } =
+    useExerciseHints(quickSlugs);
+
   if (!sessionId) {
     return (
       <SafeAreaView
@@ -241,6 +258,8 @@ export default function QuickLiveRoute({
         finishing={finishing || promptFinishing}
         saveError={saveError}
         exerciseHistory={exerciseHistory}
+        exerciseHints={quickHints}
+        onDismissHint={(slug) => void dismissQuickHint(slug)}
       />
       {pendingCompletion ? (
         <QuickSessionNamePrompt
