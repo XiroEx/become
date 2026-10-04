@@ -12,6 +12,11 @@ jest.mock("expo-router", () => ({
     replace: mockReplace,
     back: jest.fn(),
   }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // Run the focus effect on mount, like the screen coming into view.
+    const React = jest.requireActual("react");
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 function makeJwt(expiresAtMs: number, marker = "a"): string {

@@ -28,6 +28,11 @@ jest.mock("expo-router", () => ({
     back: mockBack,
   }),
   useLocalSearchParams: () => ({}),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // Run the focus effect on mount, like the screen coming into view.
+    const React = jest.requireActual("react");
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 const REPO_ROOT = path.resolve(__dirname, "../..");
