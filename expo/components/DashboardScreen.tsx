@@ -11,6 +11,10 @@ import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
+import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
+import { MissedWorkoutsCard } from "@/components/dashboard/MissedWorkoutsCard";
+import { DashboardQuickLinks } from "@/components/dashboard/DashboardQuickLinks";
+import type { MissedWorkoutSummary } from "@/lib/dashboard/trainingCards";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
 import { PlanCard } from "@/components/dashboard/PlanCard";
@@ -143,6 +147,34 @@ export interface DashboardScreenProps {
   todaysMood?: MoodLevel | null;
   /** Upcoming scheduled workout for Up Next card. */
   upcomingWorkout?: UpcomingWorkoutSummary | null;
+  /**
+   * Resume pill override (NP-071, shared with the web's ResumeWorkoutButton).
+   * The pill fetches its own in-progress workout and needs a session, so it
+   * renders only when the route opts in by passing `resumeEnabled`. Unit
+   * tests render DashboardScreen without an AuthProvider, where the pill
+   * would throw — hence opt-in rather than always-on.
+   */
+  resumeEnabled?: boolean;
+  /** Missed sessions with Skip (NP-106, web NextWorkoutCard parity). */
+  missedWorkouts?: MissedWorkoutSummary[] | null;
+  /** The day marker currently being skipped; disables its Skip button. */
+  skippingDate?: string | null;
+  /** Opens a missed session's exact slot (Track with day + sd). */
+  onDoMissedWorkout?: (workout: MissedWorkoutSummary) => void;
+  /** Skips a missed session (PATCH /api/schedule { action: 'skip' }). */
+  onSkipMissedWorkout?: (workout: MissedWorkoutSummary) => void;
+  /** Opens the next workout's exact slot; falls back to onStartWorkout. */
+  onStartNextWorkout?: () => void;
+  /** First-time empty state: no program and no logged workouts. */
+  showEmptyState?: boolean;
+  /** Opens the Workout tab (empty-state Browse + All Programs link). */
+  onBrowsePrograms?: () => void;
+  /** Opens the Workout tab (All Programs quick link). */
+  onOpenPrograms?: () => void;
+  /** Opens History (NP-112) — where Progress points until NP-130 exists. */
+  onOpenHistory?: () => void;
+  /** Nutrition quick-link description (calories today when known). */
+  quickLinksNutritionDescription?: string | null;
   /** Action tile callback: opens Mind tab / session. */
   onOpenMind?: () => void;
   /** Doorway to The Becoming (NP-192). */
@@ -253,6 +285,17 @@ export function DashboardScreen({
   mind,
   todaysMood,
   upcomingWorkout,
+  resumeEnabled = false,
+  missedWorkouts,
+  skippingDate,
+  onDoMissedWorkout,
+  onSkipMissedWorkout,
+  onStartNextWorkout,
+  showEmptyState = false,
+  onBrowsePrograms,
+  onOpenPrograms,
+  onOpenHistory,
+  quickLinksNutritionDescription,
   onOpenMind,
   onOpenBecoming,
   onOpenNutrition,
@@ -654,11 +697,28 @@ export function DashboardScreen({
           onOpenMind={onOpenMind}
         />
 
+        {/* Resume an in-progress workout (NP-071, shared with the web's
+            ResumeWorkoutButton): sits between the tiles and Up Next, exactly
+            where the web renders it. Opt-in via `resumeEnabled` because the
+            pill needs a session (AuthProvider). */}
+        {resumeEnabled ? <ResumeWorkoutPill /> : null}
+
+        {/* Missed sessions with Skip (NP-106, web NextWorkoutCard parity) */}
+        {missedWorkouts && missedWorkouts.length > 0 ? (
+          <MissedWorkoutsCard
+            missed={missedWorkouts}
+            skippingDate={skippingDate}
+            onDoIt={onDoMissedWorkout}
+            onSkip={onSkipMissedWorkout}
+            onViewAll={onOpenCalendar}
+          />
+        ) : null}
+
         {/* Up Next training card (NP-106) */}
         <UpNextCard
           workout={upcomingWorkout}
           onOpenCalendar={onOpenCalendar}
-          onPressWorkout={onStartWorkout}
+          onPressWorkout={onStartNextWorkout ?? onStartWorkout}
         />
 
         {/* Progress Chart: Weight | BMI | Mood (NP-211) */}
@@ -700,9 +760,22 @@ export function DashboardScreen({
           <CurrentProgramCard
             program={currentProgram}
             onView={() => onViewProgram?.(currentProgram.programId)}
-            onContinue={onStartWorkout}
+            onContinue={onStartNextWorkout ?? onStartWorkout}
           />
         ) : null}
+
+        {/* First-time empty state + quick links (NP-106, web
+            DashboardClient parity): All Programs, Nutrition, Progress
+            (→ History until NP-130). No Connect link — chat is on hold
+            for the store release. */}
+        <DashboardQuickLinks
+          showEmptyState={showEmptyState}
+          onBrowsePrograms={onBrowsePrograms}
+          onOpenPrograms={onOpenPrograms ?? onBrowsePrograms}
+          onOpenNutrition={onOpenNutrition}
+          onOpenHistory={onOpenHistory}
+          nutritionDescription={quickLinksNutritionDescription}
+        />
 
         {/* Member plan & allowance meters (NP-158) */}
         <PlanCard onOpenPlan={onOpenPlan} />
