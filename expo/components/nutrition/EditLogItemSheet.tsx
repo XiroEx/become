@@ -25,16 +25,60 @@ import {
   mealLogTimePatch,
   type EditLogItemNutrition,
 } from "@/lib/nutrition/editLoggedEntry";
+import {
+  updateMealPlanItems,
+  type MealPlanItemInput,
+} from "@/lib/nutrition/mealPlanApi";
 import type { MealLog } from "@become/api-client";
 
 export type EditLogItem = MealLog["items"][number];
 
+/**
+ * One planned row, exactly the web's `EditFoodModal` plan-mode item shape
+ * (`IMealItem & { _id?: string }`): per-serving `nutrition` + a `servings`
+ * multiplier, with the `logged*` provenance quartet the picker restores from.
+ */
+export type EditPlanItem = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  brand?: string;
+  servingSize?: number | string;
+  servingUnit?: string;
+  servings?: number;
+  nutrition?: {
+    calories?: number;
+    protein?: number;
+    carbs?: number;
+    fats?: number;
+    fiber?: number;
+    sugar?: number;
+    sodium?: number;
+    saturatedFat?: number;
+    [k: string]: unknown;
+  };
+  loggedQuantity?: number;
+  loggedUnit?: string;
+  loggedGramsPerServing?: number;
+  loggedMlPerServing?: number;
+  [k: string]: unknown;
+};
+
 export interface EditLogItemSheetProps {
   visible: boolean;
-  /** The log this item belongs to. */
+  /** The log this item belongs to (log mode). */
   logId: string | null;
   /** The item to edit. */
-  item: EditLogItem | null;
+  item: EditLogItem | EditPlanItem | null;
+  /**
+   * Plan mode (NP-233): PATCH /api/meal-plans/{planId} with the FULL `items[]`
+   * — the web's `EditFoodModal.tsx:242-283` port. `planItems` is the plan's
+   * current array; the edited item is replaced by `_id` and the whole array
+   * is sent. Requires `planId` + `planItems`; when set, `logId` is ignored
+   * and the tag/time controls are hidden (plans carry no clock).
+   */
+  planId?: string | null;
+  planItems?: readonly EditPlanItem[] | null;
   /** The log's own time metadata — a blank time means untimed. */
   loggedAt?: string;
   untimed?: boolean;
@@ -72,7 +116,9 @@ function tagLabel(tag: string): string {
  * loggedUnit (old write), synthesize `loggedQuantity = servingSize ×
  * multiplier` so the picker opens at the same physical amount.
  */
-export function deriveEditVariantAndInitial(item: EditLogItem): {
+export function deriveEditVariantAndInitial(
+  item: EditLogItem | EditPlanItem,
+): {
   variant: {
     servingSize: number;
     servingUnit: string;
@@ -82,18 +128,27 @@ export function deriveEditVariantAndInitial(item: EditLogItem): {
   };
   initial: { quantity: number; unit: string };
 } {
+  const nutrition = (item.nutrition ?? {}) as EditLogItemNutrition;
+  const servingSize =
+    typeof item.servingSize === "number"
+      ? item.servingSize
+      : Number(item.servingSize) || 1;
+  const servingUnit =
+    typeof item.servingUnit === "string" && item.servingUnit
+      ? item.servingUnit
+      : "serving";
   const variant = {
-    servingSize: item.servingSize,
-    servingUnit: item.servingUnit,
+    servingSize,
+    servingUnit,
     nutrition: {
-      calories: item.nutrition.calories,
-      protein: item.nutrition.protein,
-      carbs: item.nutrition.carbs,
-      fats: item.nutrition.fats,
-      fiber: item.nutrition.fiber,
-      sugar: item.nutrition.sugar,
-      sodium: item.nutrition.sodium,
-      saturatedFat: item.nutrition.saturatedFat,
+      calories: nutrition.calories ?? 0,
+      protein: nutrition.protein ?? 0,
+      carbs: nutrition.carbs ?? 0,
+      fats: nutrition.fats ?? 0,
+      fiber: nutrition.fiber,
+      sugar: nutrition.sugar,
+      sodium: nutrition.sodium,
+      saturatedFat: nutrition.saturatedFat,
     },
     gramsPerServing: item.loggedGramsPerServing,
     mlPerServing: item.loggedMlPerServing,
@@ -104,11 +159,67 @@ export function deriveEditVariantAndInitial(item: EditLogItem): {
       initial: { quantity: item.loggedQuantity, unit: item.loggedUnit },
     };
   }
-  const synthesizedQty = (item.servings ?? 1) * item.servingSize;
+  const synthesizedQty = (item.servings ?? 1) * servingSize;
   return {
     variant,
-    initial: { quantity: synthesizedQty, unit: item.servingUnit },
+    initial: { quantity: synthesizedQty, unit: servingUnit },
   };
+}
+
+/**
+ * Rebuild a plan's FULL `items[]` with the edited item replaced by `_id`
+ * (port of `webapp/components/nutrition/EditFoodModal.tsx:242-283`):
+ * `servings` is the picker's multiplier, `loggedQuantity`/`loggedUnit` are
+ * what the member typed, the grams/ml bridge rolls forward, and the
+ * per-serving nutrition is the picker's scaled total divided back by the
+ * multiplier. Items without a matching `_id` pass through untouched.
+ */
+export function buildUpdatedPlanItems(
+  planItems: readonly EditPlanItem[],
+  itemId: string,
+  selection: {
+    quantity: number;
+    unit: string;
+    multiplier: number;
+    nutrition: EditLogItemNutrition;
+    variant?: {
+      gramsPerServing?: number | null;
+      mlPerServing?: number | null;
+    } | null;
+  },
+  bridge?: { gramsPerServing?: number; mlPerServing?: number },
+): EditPlanItem[] {
+  return planItems.map((it) => {
+    if (String((it as { _id?: unknown })._id ?? "") !== itemId) return it;
+    const m = selection.multiplier;
+    const scaled = selection.nutrition;
+    const prevNutrition = ((it.nutrition ?? {}) as Record<string, unknown>);
+    return {
+      ...it,
+      servings: m,
+      loggedQuantity: selection.quantity,
+      loggedUnit: selection.unit,
+      loggedGramsPerServing:
+        selection.variant?.gramsPerServing ??
+        bridge?.gramsPerServing ??
+        it.loggedGramsPerServing,
+      loggedMlPerServing:
+        selection.variant?.mlPerServing ??
+        bridge?.mlPerServing ??
+        it.loggedMlPerServing,
+      nutrition: {
+        ...prevNutrition,
+        calories: scaled.calories / m,
+        protein: scaled.protein / m,
+        carbs: scaled.carbs / m,
+        fats: scaled.fats / m,
+        fiber: (scaled.fiber ?? 0) / m,
+        sugar: (scaled.sugar ?? 0) / m,
+        sodium: (scaled.sodium ?? 0) / m,
+        saturatedFat: (scaled.saturatedFat ?? 0) / m,
+      },
+    };
+  });
 }
 
 /**
@@ -120,11 +231,19 @@ export function deriveEditVariantAndInitial(item: EditLogItem): {
  * entry inside the item editor arrives with NP-174, so this sheet does not
  * offer macro correction: `nutrition` is never sent and the stored block is
  * left untouched.
+ *
+ * Plan mode (NP-233): with `planId` + `planItems` the sheet edits a PLANNED
+ * item instead — same picker, but save rebuilds the whole `items[]` via
+ * `buildUpdatedPlanItems` and PATCHes `/api/meal-plans/{id}` with `{ items }`.
+ * A 409 `plan_already_promoted` surfaces the server's refusal as the sheet
+ * error (the plan already lives in the log).
  */
 export function EditLogItemSheet({
   visible,
   logId,
   item,
+  planId = null,
+  planItems = null,
   loggedAt,
   untimed = false,
   currentTag = "snack",
@@ -186,6 +305,8 @@ export function EditLogItemSheet({
 
   const effectiveSelection = selection ?? derivedSelection;
 
+  const isPlanMode = planId != null && planItems != null;
+
   const tagOptions = useMemo(() => {
     const tags = [
       normalizedCurrentTag,
@@ -218,15 +339,62 @@ export function EditLogItemSheet({
   };
 
   const handleSave = async () => {
-    if (!item || !logId || !effectiveSelection) return;
+    if (!item || !effectiveSelection) return;
     const next = effectiveSelection;
     if (next.quantity <= 0 || !(next.multiplier > 0)) {
+      setError("Amount must be greater than 0");
+      return;
+    }
+    // Guard the plan-mode divide below: per-serving nutrition is the scaled
+    // total / multiplier — a 0/invalid multiplier would write Infinity/NaN.
+    if (isPlanMode && !(next.multiplier > 0)) {
       setError("Amount must be greater than 0");
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      if (isPlanMode) {
+        const itemId = String((item as { _id?: unknown })._id ?? "");
+        if (!itemId) {
+          setError("Plan context missing.");
+          setSaving(false);
+          return;
+        }
+        const updated = buildUpdatedPlanItems(
+          planItems as readonly EditPlanItem[],
+          itemId,
+          {
+            quantity: next.quantity,
+            unit: next.unit,
+            multiplier: next.multiplier,
+            nutrition: next.nutrition,
+            variant: next.variant as {
+              gramsPerServing?: number | null;
+              mlPerServing?: number | null;
+            } | null,
+          },
+        );
+        try {
+          await updateMealPlanItems(
+            planId as string,
+            updated as unknown as MealPlanItemInput[],
+            { token },
+          );
+        } catch (err) {
+          // The server refuses edits on an already-promoted plan — show its
+          // refusal rather than a generic failure.
+          setError(
+            err instanceof Error ? err.message : "Failed to save. Please try again.",
+          );
+          setSaving(false);
+          return;
+        }
+        await onSaved();
+        onClose();
+        return;
+      }
+      if (!logId) return;
       const tagPatch = mealLogTagPatch(normalizedCurrentTag, selectedTag);
       const timePatch = mealLogTimePatch(loggedAt, logTime);
       await editLoggedItem({
@@ -324,93 +492,97 @@ export function EditLogItemSheet({
             </View>
           ) : null}
 
-          <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-              Meal
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              {tagOptions.map((tag) => {
-                const isSelected = selectedTag === tag;
-                return (
-                  <Pressable
-                    key={tag}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Move to ${tagLabel(tag)}`}
-                    testID={`${testID}-tag-${tag}`}
-                    onPress={() => setSelectedTag(tag)}
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 6,
-                      borderRadius: 16,
-                      backgroundColor: isSelected ? colors.primary : colors.card,
-                      borderWidth: 1,
-                      borderColor: isSelected ? colors.primary : colors.border,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        fontWeight: isSelected ? "600" : "400",
-                        color: isSelected
-                          ? colors["primary-foreground"]
-                          : colors.foreground,
-                      }}
-                    >
-                      {tagLabel(tag)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
+          {isPlanMode ? null : (
+            <>
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                  Meal
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                  {tagOptions.map((tag) => {
+                    const isSelected = selectedTag === tag;
+                    return (
+                      <Pressable
+                        key={tag}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Move to ${tagLabel(tag)}`}
+                        testID={`${testID}-tag-${tag}`}
+                        onPress={() => setSelectedTag(tag)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 16,
+                          backgroundColor: isSelected ? colors.primary : colors.card,
+                          borderWidth: 1,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: isSelected ? "600" : "400",
+                            color: isSelected
+                              ? colors["primary-foreground"]
+                              : colors.foreground,
+                          }}
+                        >
+                          {tagLabel(tag)}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
 
-          <View style={{ gap: 6 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                Time
-              </Text>
-              {logTime ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Clear time"
-                  testID={`${testID}-clear-time`}
-                  onPress={() => setLogTime("")}
-                  hitSlop={8}
+              <View style={{ gap: 6 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
                 >
-                  <Text className="text-muted-foreground text-xs font-medium underline">
-                    Clear time
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                    Time
                   </Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <TextInput
-              testID={`${testID}-time`}
-              accessibilityLabel="Logged time in HH:mm"
-              value={logTime}
-              onChangeText={setLogTime}
-              placeholder="HH:mm"
-              style={{
-                height: 40,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                paddingHorizontal: 12,
-                color: colors.foreground,
-              }}
-            />
-            <Text className="text-muted-foreground text-xs">
-              {logTime
-                ? "Change when this was logged."
-                : "No time set — it stays anchored to this meal tag."}
-            </Text>
-          </View>
+                  {logTime ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear time"
+                      testID={`${testID}-clear-time`}
+                      onPress={() => setLogTime("")}
+                      hitSlop={8}
+                    >
+                      <Text className="text-muted-foreground text-xs font-medium underline">
+                        Clear time
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <TextInput
+                  testID={`${testID}-time`}
+                  accessibilityLabel="Logged time in HH:mm"
+                  value={logTime}
+                  onChangeText={setLogTime}
+                  placeholder="HH:mm"
+                  style={{
+                    height: 40,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    paddingHorizontal: 12,
+                    color: colors.foreground,
+                  }}
+                />
+                <Text className="text-muted-foreground text-xs">
+                  {logTime
+                    ? "Change when this was logged."
+                    : "No time set — it stays anchored to this meal tag."}
+                </Text>
+              </View>
+            </>
+          )}
 
           {error ? (
             <Text testID={`${testID}-error`} className="text-destructive text-sm font-medium">

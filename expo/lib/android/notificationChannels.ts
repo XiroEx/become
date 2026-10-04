@@ -1,12 +1,16 @@
 /**
- * Android notification channels, named after the server's notification types.
+ * Android notification channels, named after the server's notification types —
+ * plus the local-only rest-timer channel (NP-082).
  *
  * The server's notify cron (`webapp/app/api/cron/notify/route.ts`) tags every
  * push it sends — `workout-reminder`, `meal-reminder`, `mind-reminder`,
  * `streak-at-risk`, `super-streak-at-risk`, `goal-nudge`, `checkin-reminder`,
  * `schedule-setup`, `daily-glance`, `re-engagement` — and the channel id IS
  * the tag, so each category the server sends maps to a channel the member can
- * tune (sound / vibrate / importance) in Android settings.
+ * tune (sound / vibrate / importance) in Android settings. `rest-timer` is
+ * the one channel the server never sends: it carries the local rest-end
+ * alert scheduled on-device when a rest starts, so the member can tune the
+ * rest alarm without touching workout reminders.
  *
  * The factory is pure so it can be tested without booting the native module;
  * `ensureAndroidChannels` creates them at app boot via expo-notifications.
@@ -42,6 +46,9 @@ export const CHANNEL_IDS = {
   scheduleSetup: "schedule-setup",
   dailyGlance: "daily-glance",
   reEngagement: "re-engagement",
+  /** The rest timer's locked-phone alert (NP-082) — its own channel so the
+   * member can tune the rest alarm without touching workout reminders. */
+  restTimer: "rest-timer",
 } as const;
 
 export function getNotificationChannels(): NotificationChannel[] {
@@ -125,6 +132,14 @@ export function getNotificationChannels(): NotificationChannel[] {
       importance: "default",
       sound: false,
       vibrate: false,
+    },
+    {
+      id: CHANNEL_IDS.restTimer,
+      name: "Rest Timer",
+      description: "Alerts when your rest between sets is over.",
+      importance: "high",
+      sound: true,
+      vibrate: true,
     },
   ];
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
+import { useKeepAwake } from "expo-keep-awake";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -28,6 +29,7 @@ import {
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
+import { useExerciseHints } from "@/lib/live/useExerciseHints";
 import { programScope } from "@become/core";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -39,6 +41,7 @@ import {
   type NewPR,
 } from "@become/api-client";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
+import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -101,6 +104,9 @@ export default function LiveWorkoutRoute({
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+  // The screen must not dim mid-set (NP-082): keep the display awake while
+  // the live view is open. Released automatically on unmount.
+  useKeepAwake("live-workout");
   const params = useLocalSearchParams<{
     id?: string;
     programId?: string;
@@ -182,6 +188,31 @@ export default function LiveWorkoutRoute({
   });
 
   const showSummary = finishedGrid !== null;
+
+  // In-workout hints (NP-173): one fetch per workout load, rendered under
+  // the exercise header in Live and Track, dismissed on the account — the
+  // web's `exerciseNudges` / `dismissNudge` pair.
+  const workoutSlugs = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (workout?.exercises ?? [])
+            .map((e) => (e.slug || "").toLowerCase())
+            .filter(Boolean),
+        ),
+      ),
+    [workout?.exercises],
+  );
+  const { hints: exerciseHints, dismissHint } = useExerciseHints(workoutSlugs);
+
+  // Leaving with unsaved sets loses the workout (NP-082): confirm first.
+  // Android hardware back is intercepted through the shared hook; the iOS
+  // swipe-back is disabled on this route while there is unsaved work.
+  // `finishedGrid` is outside React's render output here, so the guard
+  // subscribes in an effect (inside `useLiveBackGuard`).
+  useLiveBackGuard({
+    enabled: !showSummary && !loading && workout !== null,
+  });
 
   // The web fetches streak + goal when the summary appears — the save
   // response's streak block is the activity result, not the milestone ladder
@@ -428,6 +459,8 @@ export default function LiveWorkoutRoute({
         onRequestSwap={onRequestSwap}
         exerciseHistory={exerciseHistory}
         exercisePRs={exercisePRs}
+        exerciseHints={exerciseHints}
+        onDismissHint={(slug) => void dismissHint(slug)}
       />
       <ExerciseSwapModal
         visible={swapSlug !== null}

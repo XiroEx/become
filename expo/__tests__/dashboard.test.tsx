@@ -503,10 +503,10 @@ describe("DashboardRoute navigation", () => {
     fireEvent.press(getByTestId("tile-nutrition"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition");
 
-    // Workout Now opens NP-076's sheet
-    expect(queryByTestId("dashboard-workout-now-sheet-start")).toBeNull();
+    // Workout Now opens NP-076's sheet (focus list, not a start button)
+    expect(queryByTestId("dashboard-workout-now-sheet-body-focus-push")).toBeNull();
     fireEvent.press(getByTestId("tile-workoutNow"));
-    expect(getByTestId("dashboard-workout-now-sheet-start")).toBeTruthy();
+    expect(getByTestId("dashboard-workout-now-sheet-body-focus-push")).toBeTruthy();
   });
 
   it("relaunching with no network renders the cached layout", async () => {

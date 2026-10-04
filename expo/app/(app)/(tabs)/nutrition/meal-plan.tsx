@@ -19,12 +19,16 @@ import {
   TagsResponseSchema,
   NutritionGoalsResponseSchema,
   type Food,
+  type Meal,
 } from "@become/api-client";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
+import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
 import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -38,7 +42,10 @@ import {
   tintForCalories,
   TINT_BG_CLASSES,
 } from "@/lib/nutrition/timelinePlanning";
-import { deleteMealPlan } from "@/lib/nutrition/mealPlanApi";
+import {
+  createMealPlan,
+  deleteMealPlan,
+} from "@/lib/nutrition/mealPlanApi";
 import {
   activePlans,
   addableTags,
@@ -94,6 +101,13 @@ export default function MealPlanRoute() {
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
   const [picker, setPicker] = useState<PickerTarget | null>(null);
   const [pickedFood, setPickedFood] = useState<QuantityPickerFood | null>(null);
+  // A saved meal picked from the search sheet waits here for its portion in
+  // `MealLogSheet mode="plan"` (NP-232): the meal-plan week plans through the
+  // same sheet the nutrition day uses, posting
+  // `POST /api/meal-plans { plannedDate, tag, mealId }`.
+  const [pickedMeal, setPickedMeal] = useState<Meal | null>(null);
+  const [mealPlanSubmitting, setMealPlanSubmitting] = useState(false);
+  const [mealPlanError, setMealPlanError] = useState<string | null>(null);
   const [groceryOpen, setGroceryOpen] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   // Per-day meal slots the user has revealed beyond the default Breakfast (+
@@ -103,6 +117,11 @@ export default function MealPlanRoute() {
   const [addingSlotFor, setAddingSlotFor] = useState<string | null>(null);
   const [removedPlanIds, setRemovedPlanIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  // Schedule-meals tools (NP-177): copy a day forward + repeat a meal across
+  // days, from the meal plan. `copySource` / `applyFrom` root the sheets at
+  // the day the member acted on.
+  const [copySource, setCopySource] = useState<string | null>(null);
+  const [applyFrom, setApplyFrom] = useState<string | null>(null);
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const range = useMemo(() => weekRangeKeys(weekStart), [weekStart]);
@@ -180,10 +199,47 @@ export default function MealPlanRoute() {
     setPickedFood(food as QuantityPickerFood);
   }, []);
 
+  const handlePickMeal = useCallback((meal: Meal) => {
+    setMealPlanError(null);
+    setPickedMeal(meal);
+  }, []);
+
+  // Plan the picked saved meal through `MealLogSheet mode="plan"`:
+  // `POST /api/meal-plans { plannedDate, tag, mealId }` for the picker's
+  // day + slot, then refetch and show the plan toast.
+  const handlePlanPickedMeal = useCallback(
+    async (opts: { portion: number; tag: string; untimed: boolean }) => {
+      if (!picker || !pickedMeal || mealPlanSubmitting) return;
+      setMealPlanSubmitting(true);
+      setMealPlanError(null);
+      try {
+        await createMealPlan({
+          plannedDate: picker.dateKey,
+          tag: opts.tag,
+          mealId: pickedMeal._id,
+          token: token ?? undefined,
+          baseUrl: WEBAPP_BASE_URL,
+        });
+        setPickedMeal(null);
+        setPicker(null);
+        setNotice(`Planned for ${picker.tag}`);
+        void refetchPlans();
+      } catch {
+        setMealPlanError("Could not plan meal.");
+      } finally {
+        setMealPlanSubmitting(false);
+      }
+    },
+    [picker, pickedMeal, mealPlanSubmitting, token, refetchPlans],
+  );
+
   const handlePlanned = useCallback(
     (toast: string) => {
       setPickedFood(null);
+      setPickedMeal(null);
       setPicker(null);
+      setCopySource(null);
+      setApplyFrom(null);
       setNotice(toast);
       void refetchPlans();
     },
@@ -192,6 +248,7 @@ export default function MealPlanRoute() {
 
   const closePlanFlow = useCallback(() => {
     setPickedFood(null);
+    setPickedMeal(null);
     setPicker(null);
   }, []);
 
@@ -379,15 +436,47 @@ export default function MealPlanRoute() {
                       </Text>
                       {isToday ? " · Today" : ""}
                     </Text>
-                    {cals > 0 ? (
-                      <Text
-                        testID={`meal-plan-day-cals-${dayKey}`}
-                        className="text-muted-foreground text-xs font-medium"
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      {cals > 0 ? (
+                        <Text
+                          testID={`meal-plan-day-cals-${dayKey}`}
+                          className="text-muted-foreground text-xs font-medium"
+                        >
+                          {cals}
+                          {goalCal > 0 ? ` / ${goalCal}` : ""} cal
+                        </Text>
+                      ) : null}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Copy ${dayKey} to other days`}
+                        testID={`meal-plan-copy-day-${dayKey}`}
+                        onPress={() => setCopySource(dayKey)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
                       >
-                        {cals}
-                        {goalCal > 0 ? ` / ${goalCal}` : ""} cal
-                      </Text>
-                    ) : null}
+                        <Text className="text-muted-foreground text-xs font-semibold">
+                          Copy day…
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Repeat a meal across days from ${dayKey}`}
+                        testID={`meal-plan-repeat-meal-${dayKey}`}
+                        onPress={() => setApplyFrom(dayKey)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text className="text-muted-foreground text-xs font-semibold">
+                          Repeat meal…
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                   <View>
                     {slotList.map((slot) => {
@@ -704,11 +793,12 @@ export default function MealPlanRoute() {
 
       {/* Plan a food into the chosen day + slot (plan mode = no time picker) */}
       <FoodSearchSheet
-        visible={picker !== null && pickedFood === null}
+        visible={picker !== null && pickedFood === null && pickedMeal === null}
         onClose={() => setPicker(null)}
         currentTag={picker?.tag}
         basketMode={false}
         onPickFood={handlePickFood}
+        onPickMeal={handlePickMeal}
         testID="meal-plan-food-search"
       />
       <PlanFoodSheet
@@ -719,6 +809,39 @@ export default function MealPlanRoute() {
         onClose={closePlanFlow}
         onPlanned={handlePlanned}
       />
+      {/* Plan a saved meal into the chosen day + slot through
+          `MealLogSheet mode="plan"` (NP-232). */}
+      <MealLogSheet
+        visible={picker !== null && pickedMeal !== null}
+        meal={pickedMeal}
+        currentTag={picker?.tag ?? "snack"}
+        submitting={mealPlanSubmitting}
+        error={mealPlanError}
+        mode="plan"
+        plannedDate={picker?.dateKey}
+        onClose={closePlanFlow}
+        onSubmit={handlePlanPickedMeal}
+      />
+      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
+          across days, from the meal plan. */}
+      {copySource ? (
+        <CopyDaySheet
+          visible={copySource !== null}
+          defaultSourceDate={copySource}
+          onClose={() => setCopySource(null)}
+          onApplied={handlePlanned}
+        />
+      ) : null}
+      {applyFrom ? (
+        <ApplyMealSheet
+          visible={applyFrom !== null}
+          defaultFromDate={applyFrom}
+          defaultToDate={applyFrom}
+          availableTags={{ defaults: tagDefaults, userTags: tagUserTags }}
+          onClose={() => setApplyFrom(null)}
+          onApplied={handlePlanned}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

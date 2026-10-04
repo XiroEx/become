@@ -30,12 +30,14 @@ import {
   MealScheduleResponseSchema,
   NutritionGoalsResponseSchema,
   NutritionLogDayResponseSchema,
+  NutritionScanResponseSchema,
   ProfileResponseSchema,
   TagsResponseSchema,
   apiFetch,
   type Food,
   type Meal,
   type MealLog,
+  type NutritionScan,
   type ProfileResponse,
 } from "@become/api-client";
 import { Button } from "@/components/Button";
@@ -60,6 +62,21 @@ import {
 } from "@/lib/nutrition/mealSchedule";
 import { nutritionGoalLine } from "@/lib/nutrition/goalLine";
 import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
+import { createMealPlan } from "@/lib/nutrition/mealPlanApi";
+import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
+import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
+/**
+ * The web's "Planned for <weekday, Mon d>" toast
+ * (`webapp/app/dashboard/nutrition/page.tsx:1509-1512`): the planned day
+ * formatted `en-US` with weekday long, month short, day numeric.
+ */
+function plannedForToast(date: Date): string {
+  return `Planned for ${date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  })}`;
+}
 import {
   canCombine,
   combineLoggedItems,
@@ -82,17 +99,21 @@ import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
 import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
+import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
+import type { MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
 import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
 import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
@@ -539,11 +560,25 @@ export default function NutritionIndexRoute() {
   );
 
   const handleRemovePlan = useCallback(
-    async (planId: string) => {
-      setRemovedPlanIds((prev) => new Set(prev).add(planId));
+    async (planId: string, scope: "one" | "series" = "one") => {
+      // A whole-series remove drops every sibling sharing the seriesId
+      // optimistically (the web's `timeline/page.tsx:839-860` port); a single
+      // remove hides just the one card.
+      const seriesId =
+        scope === "series"
+          ? activePlans.find((p) => p._id === planId)?.seriesId
+          : undefined;
+      const hiddenIds =
+        scope === "series" && seriesId
+          ? activePlans
+              .filter((p) => p.seriesId === seriesId)
+              .map((p) => p._id)
+          : [planId];
+      setRemovedPlanIds((prev) => new Set([...prev, ...hiddenIds]));
       try {
+        const qs = scope === "series" ? "?series=true" : "";
         await apiFetch(
-          `/api/meal-plans/${encodeURIComponent(planId)}`,
+          `/api/meal-plans/${encodeURIComponent(planId)}${qs}`,
           z.any(),
           {
             method: "DELETE",
@@ -555,13 +590,35 @@ export default function NutritionIndexRoute() {
       } catch {
         setRemovedPlanIds((prev) => {
           const next = new Set(prev);
-          next.delete(planId);
+          for (const id of hiddenIds) next.delete(id);
           return next;
         });
       }
     },
-    [token, refetchMealPlans],
+    [activePlans, token, refetchMealPlans],
   );
+
+  // ── Edit one planned item (NP-233) ───────────────────────────────────────
+  //
+  // The card hands back the plan id + the item + the plan's full items array;
+  // the sheet (in `planId` + `planItems` mode) rebuilds `items[]` and PATCHes
+  // `/api/meal-plans/{id}` with `{ items }`, then the day refetches.
+  const [editPlanTarget, setEditPlanTarget] = useState<{
+    planId: string;
+    item: MealPlanItem;
+    planItems: MealPlanItem[];
+  } | null>(null);
+
+  const handleEditPlanItem = useCallback(
+    (planId: string, item: MealPlanItem, planItems: MealPlanItem[]) => {
+      setEditPlanTarget({ planId, item, planItems });
+    },
+    [],
+  );
+
+  const handleEditPlanSaved = useCallback(async () => {
+    await refetchMealPlans();
+  }, [refetchMealPlans]);
 
   const handleSkipPlan = useCallback(
     async (planId: string) => {
@@ -1040,15 +1097,32 @@ export default function NutritionIndexRoute() {
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
   // Meal-photo / describe estimate (NP-089): which surface the sheet opens on.
   const [estimateOpen, setEstimateOpen] = useState(false);
-  const [estimatePhase, setEstimatePhase] = useState<"chooser" | "describe">(
-    "chooser",
-  );
+  const [estimatePhase, setEstimatePhase] = useState<
+    "chooser" | "describe" | "review"
+  >("chooser");
+  // Estimate history (NP-141): the history list, and the re-opened scan the
+  // review opens on (the web's `?scan=<id>` into the review phase).
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [reopenedScan, setReopenedScan] = useState<{
+    items: NutritionScan["items"];
+    imageUrl: string | null;
+    scanId: string;
+    tag: string;
+  } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTag, setSearchTag] = useState<string | undefined>(undefined);
   // Barcode scan (NP-088): the camera menu opens the search sheet straight
   // onto the scanner instead of the name search.
   const [searchBarcodeOpen, setSearchBarcodeOpen] = useState(false);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
+  // Schedule-meals tools (NP-177): the two bulk sheets ported from the web's
+  // ScheduleMealsDrawer / PlanToolsSheets. `copyDayOpen` copies a day forward
+  // (from the meal plan and from a future day); `applyMealOpen` repeats one
+  // saved meal across days. `planToolsNotice` carries the success toast until
+  // the refetch lands, mirroring the web's `showSuccessToast` + refetch.
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
+  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  const [planToolsNotice, setPlanToolsNotice] = useState<string | null>(null);
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
   // after the list marks outcomes read.
@@ -1210,10 +1284,62 @@ export default function NutritionIndexRoute() {
   // inside the sheet (NP-059's capture helper); Describe opens on the text
   // surface. Capture needs no device check here — NP-093's code is on beta
   // and camera verification is deferred to NP-008.
-  const openEstimate = (phase: "chooser" | "describe") => {
-    setEstimatePhase(phase);
+  const openEstimate = (phase: "chooser" | "describe" | "review") => {
+    if (phase !== "review") setReopenedScan(null);
+    setEstimatePhase(phase === "review" ? "review" : phase);
     setEstimateOpen(true);
   };
+
+  // Estimate history (NP-141): reopen a saved estimate in the native review
+  // with its saved items — the native `?scan=<id>` into the review phase.
+  // The scan is re-read first so the review opens on the server's current
+  // items, not the list row's snapshot.
+  const handleReopenScan = useCallback(
+    async (scan: NutritionScan) => {
+      try {
+        const res = await apiFetch(
+          `/api/nutrition/scans/${encodeURIComponent(scan._id)}`,
+          NutritionScanResponseSchema,
+          {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
+        );
+        const full = res.scan ?? scan;
+        const items = Array.isArray(full.items) ? full.items : [];
+        if (items.length === 0) return;
+        setReopenedScan({
+          items,
+          imageUrl:
+            typeof full.imageUrl === "string" && full.imageUrl
+              ? full.imageUrl
+              : null,
+          scanId: full._id,
+          tag: (full.tag ?? "").trim().toLowerCase() || currentDefaultTag,
+        });
+      } catch {
+        const items = Array.isArray(scan.items) ? scan.items : [];
+        if (items.length === 0) return;
+        setReopenedScan({
+          items,
+          imageUrl:
+            typeof scan.imageUrl === "string" && scan.imageUrl
+              ? scan.imageUrl
+              : null,
+          scanId: scan._id,
+          tag: (scan.tag ?? "").trim().toLowerCase() || currentDefaultTag,
+        });
+      }
+      setHistoryOpen(false);
+      setEstimatePhase("review");
+      setEstimateOpen(true);
+    },
+    [token, currentDefaultTag],
+  );
+
+  const handleHistoryLogged = useCallback(async () => {
+    await Promise.all([refetchMealLogs(), refetchSideTables()]);
+  }, [refetchMealLogs, refetchSideTables]);
 
   const handleEstimateLogged = useCallback(async () => {
     await Promise.all([refetchMealLogs(), refetchSideTables()]);
@@ -1237,6 +1363,14 @@ export default function NutritionIndexRoute() {
   const [mealToLog, setMealToLog] = useState<Meal | null>(null);
   const [mealLogSubmitting, setMealLogSubmitting] = useState(false);
   const [mealLogError, setMealLogError] = useState<string | null>(null);
+  // Plan mode on a future day (NP-232): a food picked from the search sheet
+  // waits here for its portion + tag in `PlanFoodSheet` (the web's
+  // `FoodSearchModal` plan mode, `page.tsx:1474-1519`), and a saved meal waits
+  // in `mealToLog` for `MealLogSheet mode="plan"`. The web hides the basket
+  // in plan mode (`FoodSearchModal.tsx:2495`), so the search sheet opens with
+  // `basketMode={false}` and nothing on this screen calls `/api/meal-logs`
+  // or `/api/meals/{id}/log` for a future date.
+  const [foodToPlan, setFoodToPlan] = useState<Food | null>(null);
 
   const handleAddToBasket = (food: Food) => {
     const variant = defaultVariantOf(food);
@@ -1341,11 +1475,80 @@ export default function NutritionIndexRoute() {
   };
 
   const handlePickMeal = (meal: Meal) => {
+    // On a future day the meal is PLANNED, not logged (the web's plan-mode
+    // `MealApplySheet`, `page.tsx:1474-1519`): open `MealLogSheet mode="plan"`
+    // rooted at this day. Never call `/api/meals/{id}/log` for a future date.
+    if (isFuture) {
+      setMealLogError(null);
+      setMealToLog(meal);
+      setPlanToolsNotice(null);
+      return;
+    }
     setMealLogError(null);
     setMealToLog(meal);
   };
 
+  // Plan a saved meal from the Meals filter on a future day through
+  // `POST /api/meal-plans { plannedDate, tag, mealId }` — the web's
+  // `MealApplySheet` plan branch (`MealApplySheet.tsx:213-235`). The portion
+  // the sheet collected is a display choice only: the server snapshots the
+  // meal's items at plan-create time. After the plan lands, refetch plans and
+  // show the web's "Planned for <weekday, Mon d>" toast (`page.tsx:1509-1512`).
+  const handlePlanSavedMeal = async (opts: {
+    portion: number;
+    tag: string;
+    untimed: boolean;
+  }) => {
+    if (!mealToLog || mealLogSubmitting) return;
+    setMealLogSubmitting(true);
+    setMealLogError(null);
+    try {
+      await createMealPlan({
+        plannedDate: activeDate,
+        tag: opts.tag,
+        mealId: mealToLog._id,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      setMealToLog(null);
+      setSearchOpen(false);
+      setSearchBarcodeOpen(false);
+      // The web's toast names the planned day (`page.tsx:1509-1512`):
+      // "Planned for <weekday, Mon d>".
+      setPlanToolsNotice(plannedForToast(activeDateObj));
+      await refetchMealPlans();
+    } catch (err) {
+      const { handled, message } = handleApiError(err);
+      if (!handled) setMealLogError(message);
+    } finally {
+      setMealLogSubmitting(false);
+    }
+  };
+
+  // Bulk tools applied: show the web's toast text and refetch the day, like
+  // `timeline/page.tsx#onApplied` (toast + month reload + fetchData).
+  const handleBulkApplied = useCallback(
+    (toast: string) => {
+      setPlanToolsNotice(toast);
+      setCopyDayOpen(false);
+      setApplyMealOpen(false);
+      if (showPlans) {
+        void refetchMealPlans();
+      }
+      void refetchMealLogs();
+    },
+    [showPlans, refetchMealPlans, refetchMealLogs],
+  );
+
   const handlePickBasketFood = async (food: Food) => {
+    // On a future day the food is PLANNED, not logged (the web's plan-mode
+    // `FoodSearchModal`, `page.tsx:1474-1519`): open `PlanFoodSheet` for this
+    // day. Never call `/api/meal-logs` for a future date.
+    if (isFuture) {
+      setFoodToPlan(food);
+      return;
+    }
     // Pinned to a sitting: log one food straight into it, like the web's
     // `handleAddFood` with `addToLogId` set.
     if (addToLogId) {
@@ -1475,6 +1678,20 @@ export default function NutritionIndexRoute() {
           </Pressable>
         </View>
       </View>
+
+      {/* The bulk tools' word when plans landed (NP-177). */}
+      {planToolsNotice ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          <Text
+            testID="nutrition-plan-tools-notice"
+            accessibilityRole="alert"
+            className="text-muted-foreground text-xs"
+            onPress={() => setPlanToolsNotice(null)}
+          >
+            {planToolsNotice}
+          </Text>
+        </View>
+      ) : null}
 
       {/* The basket's quiet word when the log landed but the keep did not. */}
       {basketNotice ? (
@@ -1898,6 +2115,7 @@ export default function NutritionIndexRoute() {
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
+              onEditPlanItem={handleEditPlanItem}
               onStartSelect={handleStartSelect}
               selecting={selectSectionKey === section.key}
               selectedKeys={combineSelection}
@@ -1978,8 +2196,32 @@ export default function NutritionIndexRoute() {
               testID="nutrition-find-food"
               onPress={() => openSearch()}
             >
-              Find a food
+              {isFuture ? "Schedule food" : "Find a food"}
             </Button>
+            {isFuture ? (
+              <>
+                <Button
+                  testID="nutrition-copy-day-button"
+                  variant="secondary"
+                  onPress={() => {
+                    setPlanToolsNotice(null);
+                    setCopyDayOpen(true);
+                  }}
+                >
+                  Copy day…
+                </Button>
+                <Button
+                  testID="nutrition-repeat-meal-button"
+                  variant="secondary"
+                  onPress={() => {
+                    setPlanToolsNotice(null);
+                    setApplyMealOpen(true);
+                  }}
+                >
+                  Repeat a meal…
+                </Button>
+              </>
+            ) : null}
             <Button
               testID="nutrition-quick-add-button"
               variant="secondary"
@@ -2017,6 +2259,7 @@ export default function NutritionIndexRoute() {
               onLogPlan={handleLogPlan}
               onSkipPlan={handleSkipPlan}
               onRemovePlan={handleRemovePlan}
+              onEditPlanItem={handleEditPlanItem}
             />
           ) : viewMode === "month" ? (
             <TimelineMonthView
@@ -2222,8 +2465,7 @@ export default function NutritionIndexRoute() {
               }}
               onPress={() => {
                 setTimelineMenuOpen(false);
-                // TODO(NP-140): Estimate history (/dashboard/nutrition/scans) is NP-140.
-                router.push("/(tabs)/nutrition/recipes");
+                setHistoryOpen(true);
               }}
             >
               <History size={16} color={colors.foreground} />
@@ -2426,7 +2668,9 @@ export default function NutritionIndexRoute() {
         </Pressable>
       </Modal>
 
-      {/* Food Search Sheet (NP-092) */}
+      {/* Food Search Sheet (NP-092). On a future day the basket is hidden
+          (the web hides it in plan mode, `FoodSearchModal.tsx:2495`): picks
+          open `PlanFoodSheet` / `MealLogSheet mode="plan"` instead. */}
       <FoodSearchSheet
         visible={searchOpen}
         onClose={() => {
@@ -2436,9 +2680,10 @@ export default function NutritionIndexRoute() {
         }}
         currentTag={searchTag}
         initialBarcodeOpen={searchBarcodeOpen}
-        basketMode={addToLogId === null}
+        basketMode={addToLogId === null && !isFuture}
         basketCount={basket.length}
         onAddToBasket={handlePickBasketFood}
+        onPickFood={isFuture ? handlePickBasketFood : undefined}
         onOpenBasket={() => setBasketOpen(true)}
         onPickMeal={handlePickMeal}
       />
@@ -2458,26 +2703,70 @@ export default function NutritionIndexRoute() {
         onSubmit={handleSubmitBasket}
       />
 
-      {/* Log a saved meal with a portion (NP-094) */}
+      {/* Log a saved meal with a portion (NP-094); on a future day the same
+          sheet plans it instead (NP-232, the web's plan-mode `MealApplySheet`).
+          The plan branch posts through `createMealPlan`, refetches plans, and
+          shows the web's "Planned for <weekday, Mon d>" toast. */}
       <MealLogSheet
         visible={mealToLog !== null}
         meal={mealToLog}
         currentTag={searchTag ?? currentDefaultTag}
         submitting={mealLogSubmitting}
         error={mealLogError}
+        mode={isFuture ? "plan" : "log"}
+        plannedDate={isFuture ? activeDate : undefined}
         onClose={() => {
           setMealToLog(null);
           setMealLogError(null);
         }}
-        onSubmit={handleLogSavedMeal}
+        onSubmit={isFuture ? handlePlanSavedMeal : handleLogSavedMeal}
+      />
+
+      {/* Plan a food on a future day (NP-232, NP-230's sheet): the pick lands
+          through `createMealPlan`, then plans refetch and the web's
+          "Planned for <weekday, Mon d>" toast shows. */}
+      <PlanFoodSheet
+        visible={foodToPlan !== null}
+        food={foodToPlan as QuantityPickerFood | null}
+        plannedDate={activeDate}
+        tag={searchTag ?? currentDefaultTag}
+        onClose={() => setFoodToPlan(null)}
+        onPlanned={(toast) => {
+          setFoodToPlan(null);
+          setSearchOpen(false);
+          setSearchBarcodeOpen(false);
+          setPlanToolsNotice(toast);
+          void refetchMealPlans();
+        }}
+      />
+
+      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
+          across days, from the meal plan and from a future day. */}
+      <CopyDaySheet
+        visible={copyDayOpen}
+        defaultSourceDate={activeDate}
+        onClose={() => setCopyDayOpen(false)}
+        onApplied={handleBulkApplied}
+      />
+      <ApplyMealSheet
+        visible={applyMealOpen}
+        defaultFromDate={activeDate}
+        defaultToDate={activeDate}
+        defaultTag={searchTag ?? currentDefaultTag}
+        availableTags={availableTags}
+        onClose={() => setApplyMealOpen(false)}
+        onApplied={handleBulkApplied}
       />
 
       {/* Meal-photo / describe estimate (NP-089) */}
       <EstimateSheet
         visible={estimateOpen}
-        onClose={() => setEstimateOpen(false)}
+        onClose={() => {
+          setEstimateOpen(false);
+          setReopenedScan(null);
+        }}
         onLogged={() => void handleEstimateLogged()}
-        tag={currentDefaultTag}
+        tag={reopenedScan?.tag ?? currentDefaultTag}
         tagOptions={[
           ...availableTags.defaults,
           ...availableTags.userTags,
@@ -2485,7 +2774,52 @@ export default function NutritionIndexRoute() {
         ]}
         dateKey={activeDate}
         todayKey={today}
-        initialPhase={estimatePhase}
+        initialPhase={reopenedScan ? "review" : estimatePhase}
+        initialReview={
+          reopenedScan
+            ? reopenedScan.items.map((it) => ({
+                ...(typeof it.foodId === "string" ? { foodId: it.foodId } : {}),
+                name: it.name,
+                ...(it.brand ? { brand: it.brand } : {}),
+                ...(it.estimatedServing
+                  ? { estimatedServing: it.estimatedServing }
+                  : {}),
+                ...(it.servingSize != null
+                  ? { servingSize: it.servingSize }
+                  : {}),
+                ...(it.servingUnit ? { servingUnit: it.servingUnit } : {}),
+                ...(it.servings != null ? { servings: it.servings } : {}),
+                nutrition: {
+                  calories: it.nutrition?.calories ?? 0,
+                  protein: it.nutrition?.protein ?? 0,
+                  carbs: it.nutrition?.carbs ?? 0,
+                  fats: it.nutrition?.fats ?? 0,
+                },
+                ...(it.confidence != null
+                  ? { confidence: it.confidence }
+                  : {}),
+                ...(it.matchKind ? { matchKind: it.matchKind } : {}),
+              }))
+            : null
+        }
+        initialImageUrl={reopenedScan?.imageUrl ?? null}
+        initialScanId={reopenedScan?.scanId ?? null}
+      />
+
+      {/* Estimate history (NP-141) */}
+      <ScanHistorySheet
+        visible={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        token={token}
+        todayKey={today}
+        windows={scheduleWindows}
+        tagOptions={[
+          ...availableTags.defaults,
+          ...availableTags.userTags,
+          ...sessionTags,
+        ]}
+        onReopen={(scan) => void handleReopenScan(scan)}
+        onLogged={() => void handleHistoryLogged()}
       />
 
       {/* Combine Sheet (NP-175) */}
@@ -2538,6 +2872,20 @@ export default function NutritionIndexRoute() {
         token={token}
         onClose={() => setEditItemTarget(null)}
         onSaved={handleEditSaved}
+      />
+
+      {/* Edit a planned item (NP-233): planId + planItems mode rebuilds the
+          whole items[] and PATCHes /api/meal-plans/{id} with { items }. */}
+      <EditLogItemSheet
+        visible={editPlanTarget !== null}
+        logId={null}
+        planId={editPlanTarget?.planId ?? null}
+        planItems={editPlanTarget?.planItems ?? null}
+        item={editPlanTarget?.item ?? null}
+        token={token}
+        onClose={() => setEditPlanTarget(null)}
+        onSaved={handleEditPlanSaved}
+        testID="edit-plan-item"
       />
 
       {/* Edit a whole logged meal (NP-095) */}

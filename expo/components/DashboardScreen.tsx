@@ -12,6 +12,7 @@ import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { UpNextCard } from "@/components/dashboard/UpNextCard";
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { MissedWorkoutsCard } from "@/components/dashboard/MissedWorkoutsCard";
 import { DashboardQuickLinks } from "@/components/dashboard/DashboardQuickLinks";
 import type { MissedWorkoutSummary } from "@/lib/dashboard/trainingCards";
@@ -858,20 +859,11 @@ export function DashboardScreen({
         onClose={() => setWorkoutNowOpen(false)}
         title="Workout Now"
       >
-        <View style={{ padding: 16, gap: 12 }}>
-          <Text className="text-foreground text-base">
-            Start a quick workout session.
-          </Text>
-          <Button
-            testID="dashboard-workout-now-sheet-start"
-            onPress={() => {
-              setWorkoutNowOpen(false);
-              onStartWorkout();
-            }}
-          >
-            Start Session
-          </Button>
-        </View>
+        <WorkoutNowSheet
+          visible={isWorkoutNowOpen}
+          onClose={() => setWorkoutNowOpen(false)}
+          testID="dashboard-workout-now-sheet-body"
+        />
       </BottomSheet>
 
       <CustomizeDashboardModal

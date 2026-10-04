@@ -25,6 +25,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import { prHaptic, setCompleteHaptic } from "@/lib/feedback/haptics";
 import type {
   ExerciseHistoryEntry,
   ExercisePRSummary,
@@ -140,6 +141,17 @@ export interface LiveWorkoutClientProps {
   /** Injected rest-timer interval impls for deterministic tests. */
   restTimerSetInterval?: typeof setInterval;
   restTimerClearInterval?: typeof clearInterval;
+  /** Clock injection point for the rest timer (tests). Defaults to `Date.now`. */
+  restTimerNow?: () => number;
+  /** Rest-alert seam override for tests (production default talks to expo-notifications). */
+  restAlertDeps?: import("@/lib/live/restAlert").RestAlertDeps;
+  /** Fired when a rest countdown reaches zero. */
+  onRestEnd?: () => void;
+  /**
+   * PR ids the save just reported (all-time records). Fires the PR haptic
+   * once per new record — the celebration half of NP-082's haptics.
+   */
+  celebratedPrIds?: string[];
   /**
    * Best completed set per exercise NAME from a log before today
    * (`exerciseHistory[name]` on the web). Threaded from `useLiveWorkout`;
@@ -152,6 +164,15 @@ export interface LiveWorkoutClientProps {
    * the NEW PR flag on the Live step only.
    */
   exercisePRs?: Record<string, ExercisePRSummary>;
+  /**
+   * In-workout hints keyed by lowercase exercise slug
+   * (`useExerciseHints`, the web's `exerciseNudges`). Rendered under the
+   * exercise header in BOTH views — beside the Last/PR lines in Live, in
+   * the exercise card in Track. Omitted, no hint renders.
+   */
+  exerciseHints?: Record<string, { id: string; title: string; body: string }>;
+  /** Dismiss a hint for `slug` on the account (the web's `dismissNudge`). */
+  onDismissHint?: (slug: string) => void;
   /**
    * True when this workout resumed in-progress work (the server's open log
    * or a fresh on-device draft). Renders the web's resume indicator - a
@@ -396,8 +417,14 @@ export function LiveWorkoutClient({
   positionStore,
   restTimerSetInterval,
   restTimerClearInterval,
+  restTimerNow,
+  restAlertDeps,
+  onRestEnd,
+  celebratedPrIds,
   exerciseHistory,
   exercisePRs,
+  exerciseHints,
+  onDismissHint,
   resumed = false,
   enableSkipFlow = false,
   testID = "live-workout",
@@ -490,11 +517,30 @@ export function LiveWorkoutClient({
   const [liveStepIndex, setLiveStepIndex] = useState<number>(0);
 
   // Single rest countdown, (re)started whenever a set is completed, and shared
-  // by the two views for the same reason the grid is.
+  // by the two views for the same reason the grid is. The timer stores
+  // `endsAt` and derives what is left from the clock (NP-082), so a locked
+  // phone shows the right remainder on return; the locked-phone alert is
+  // scheduled only when notification permission is already granted.
   const rest = useRestTimer({
     setIntervalImpl: restTimerSetInterval,
     clearIntervalImpl: restTimerClearInterval,
+    ...(restTimerNow !== undefined ? { now: restTimerNow } : {}),
+    ...(restAlertDeps !== undefined ? { restAlertDeps } : {}),
+    ...(onRestEnd !== undefined ? { onRestEnd } : {}),
   });
+
+  // A new PR from the save feels like one: a heavy impact per record id the
+  // screen has not celebrated yet. Ids (never the count) so a re-render with
+  // the same records stays silent.
+  const celebratedPrIdsRef = useRef<string[]>([]);
+  useEffect(() => {
+    if (!celebratedPrIds || celebratedPrIds.length === 0) return;
+    const seen = new Set(celebratedPrIdsRef.current);
+    const fresh = celebratedPrIds.filter((id) => !seen.has(id));
+    if (fresh.length === 0) return;
+    celebratedPrIdsRef.current = [...celebratedPrIdsRef.current, ...fresh];
+    for (let i = 0; i < fresh.length; i++) prHaptic();
+  }, [celebratedPrIds]);
 
   // Re-seed when the workout identity or the restored snapshot changes (e.g. a
   // cache load resolves after mount). Canonical identity-change-driven reset;
@@ -615,6 +661,8 @@ export function LiveWorkoutClient({
       if (justCompleted) {
         // The web's rest rule: only the round's LAST exercise starts the
         // bar. `rest.start` is the only thing gated — the timer is NP-082's.
+        // The tap is the physical tick that the set landed.
+        setCompleteHaptic();
         const flowIndex = flowIndexByKey.get(`${exerciseIndex}:${setIndex}`);
         const step = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
         const restSec = step
@@ -700,6 +748,7 @@ export function LiveWorkoutClient({
     // last exercise starts the bar — including on the last step, where the
     // finish flow opens AND the bar runs behind it (the web's `completeSet`
     // saves, advances to the summary, and leaves the rest running).
+    setCompleteHaptic();
     const restSec = restAfterStep(step, ex);
     if (restSec > 0) rest.start(restSec);
     void onSetComplete?.({
@@ -753,6 +802,7 @@ export function LiveWorkoutClient({
       const restSec = atStep
         ? restAfterStep(atStep, target)
         : (target.restSec ?? DEFAULT_REST_SEC);
+      setCompleteHaptic();
       if (restSec > 0) rest.start(restSec);
       void onSetComplete?.({ exerciseSlug: target.slug, setIndex, state: resolved });
       if (advance === null) {
@@ -818,6 +868,7 @@ export function LiveWorkoutClient({
     gridRef.current = updated;
     setGrid(updated);
     onGridChange?.(updated);
+    setCompleteHaptic();
     const restSec = restAfterStep(step, ex);
     if (restSec > 0) rest.start(restSec);
     void onSetComplete?.({ exerciseSlug: ex.slug, setIndex: step.setIndex, state: skippedSetState() });
@@ -1026,6 +1077,8 @@ export function LiveWorkoutClient({
             notes={notes}
             onNotesChange={handleNotesChange}
             showNotes={completedSets > 0}
+            exerciseHints={exerciseHints}
+            onDismissHint={onDismissHint}
           />
         ) : (
           <>
@@ -1055,6 +1108,8 @@ export function LiveWorkoutClient({
             onRequestSwap={onRequestSwap}
             exerciseHistory={exerciseHistory}
             exercisePRs={exercisePRs}
+            exerciseHints={exerciseHints}
+            onDismissHint={onDismissHint}
           />
           <LiveExerciseSheet
             visible={sheetOpen}

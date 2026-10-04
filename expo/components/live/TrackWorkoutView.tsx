@@ -3,6 +3,7 @@ import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
+import { ExerciseHint } from "@/components/live/ExerciseHint";
 import {
   ExerciseGroupNav,
   type ExerciseGroupType,
@@ -36,6 +37,14 @@ export interface TrackWorkoutViewProps {
   onNotesChange: (notes: string) => void;
   /** The web shows the notes box once any set is done. */
   showNotes: boolean;
+  /**
+   * In-workout hints keyed by lowercase exercise slug (the web's
+   * `exerciseNudges`). Rendered inside the exercise's own card, in
+   * context — each hint only on its own exercise.
+   */
+  exerciseHints?: Record<string, { id: string; title: string; body: string }>;
+  /** Dismiss an exercise's hint on the account. */
+  onDismissHint?: (slug: string) => void;
   testID: string;
 }
 
@@ -69,6 +78,8 @@ export function TrackWorkoutView({
   notes,
   onNotesChange,
   showNotes,
+  exerciseHints,
+  onDismissHint,
   testID,
 }: TrackWorkoutViewProps) {
   return (
@@ -157,6 +168,20 @@ export function TrackWorkoutView({
                   {ex.notes}
                 </Text>
               ) : null}
+              {/* The web's contextual nudge for THIS exercise
+                  (progression / plateau), inside its own card. */}
+              {(() => {
+                const hint = exerciseHints?.[ex.slug.toLowerCase()];
+                if (!hint) return null;
+                return (
+                  <ExerciseHint
+                    hint={hint}
+                    exerciseSlug={ex.slug}
+                    onDismiss={() => onDismissHint?.(ex.slug.toLowerCase())}
+                    testID={`${testID}-${ex.slug}-hint`}
+                  />
+                );
+              })()}
               {sets.map((s, i) => {
                 const flowIndex = ex.groupId
                   ? flowIndexByKey.get(`${exIdx}:${i}`)

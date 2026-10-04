@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -9,6 +9,8 @@ import {
 } from "@become/api-client";
 import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
+import { DaySummarySheets } from "@/components/schedule/DaySummarySheets";
+import { QuickSessionMenu } from "@/components/schedule/QuickSessionMenu";
 import { ScheduledList } from "@/components/schedule/ScheduledList";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
 import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
@@ -18,6 +20,17 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { toScheduledSlots } from "@/lib/schedule/scheduleSlots";
+import {
+  addLocalDaysToKey,
+  deleteQuickSession,
+  moveQuickSession,
+  skipQuickSession,
+} from "@/lib/schedule/quickSessionDay";
+import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
+import {
+  quickSessionOverviewHref,
+  stashQuickSessionWithId,
+} from "@/lib/quickSession/store";
 import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
 import {
   slotKey,
@@ -25,6 +38,7 @@ import {
   quickSessionsForDate,
   isMakeupWorkout,
   toQuickCalItems,
+  type QuickCalItem,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
 import {
@@ -35,6 +49,7 @@ import {
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 
 const MONTH_NAMES = [
   "January",
@@ -224,15 +239,28 @@ export default function CalendarIndexRoute() {
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduledSlot | null>(
     null,
   );
+  // Workout Now from a calendar day: the sheet pre-fills that day for Log it
+  // or Plan it (web `quickSessionDate`), mirroring QuickSessionModal's `date`.
+  const [workoutNowDate, setWorkoutNowDate] = useState<string | null>(null);
   // The Manage sheet (web's action-menu modal) and the confirm gates behind
   // the destructive rows. `confirmKind` names which confirm is open; the slot
   // it acts on is `menuSlot` so the dialog never drifts from the row that
   // opened it. Shift has its own modal (a day count, not a yes/no).
   const [menuSlot, setMenuSlot] = useState<ScheduledSlot | null>(null);
   const [confirmKind, setConfirmKind] = useState<
-    "uncomplete" | "skip" | "pause" | null
+    "uncomplete" | "skip" | "pause" | "quick-skip" | "quick-delete" | null
   >(null);
   const [shiftOpen, setShiftOpen] = useState(false);
+  // Quick-session day state (NP-115): the Manage sheet's session, its move
+  // date picker, the two summaries, and the continue-in-flight marker.
+  const [quickMenu, setQuickMenu] = useState<QuickCalItem | null>(null);
+  const [quickDateOpen, setQuickDateOpen] = useState(false);
+  const [quickPending, setQuickPending] = useState(false);
+  const [summarySlot, setSummarySlot] = useState<ScheduledSlot | null>(null);
+  const [summaryQuick, setSummaryQuick] = useState<QuickCalItem | null>(null);
+  const [quickOpening, setQuickOpening] = useState<string | null>(null);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const getToken = useCallback(() => token ?? undefined, [token]);
   const onConfirmReschedule = useCallback(
     (slot: ScheduledSlot, newDate: string) => {
       void mutations
@@ -275,6 +303,10 @@ export default function CalendarIndexRoute() {
 
   const closeMenu = useCallback(() => setMenuSlot(null), []);
   const closeConfirm = useCallback(() => setConfirmKind(null), []);
+  const closeQuickMenu = useCallback(() => {
+    setQuickMenu(null);
+    setQuickDateOpen(false);
+  }, []);
 
   // Slot-level writes: the slot is identified by its marker date + program,
   // exactly the web's `{ programId, action, workoutDate }` body. `tz` travels
@@ -369,6 +401,136 @@ export default function CalendarIndexRoute() {
       setMenuSlot(null);
     },
     [mutations],
+  );
+
+  // Quick-session writes (NP-115) — the web's reDateQuick / skipQuick /
+  // deleteQuick through `@/lib/schedule/quickSessionDay`, then a re-pull of
+  // the grid so the session lands on its new day on both apps.
+  const refreshQuick = useCallback(() => {
+    void refetch();
+    void refetchLogs();
+  }, [refetch, refetchLogs]);
+
+  const doQuickMove = useCallback(
+    async (session: QuickCalItem, date: string) => {
+      if (!session.sessionId || quickPending) return;
+      setQuickPending(true);
+      setQuickError(null);
+      try {
+        const ok = await moveQuickSession(session.sessionId, date, {
+          getToken,
+        });
+        if (ok) {
+          closeQuickMenu();
+          refreshQuick();
+        } else {
+          setQuickError("Couldn't move this session.");
+        }
+      } catch {
+        setQuickError("Couldn't move this session.");
+      } finally {
+        setQuickPending(false);
+      }
+    },
+    [closeQuickMenu, getToken, quickPending, refreshQuick],
+  );
+
+  const doQuickMoveNextDay = useCallback(
+    (session: QuickCalItem) => {
+      const next = addLocalDaysToKey(session.date.slice(0, 10), 1);
+      if (next) void doQuickMove(session, next);
+    },
+    [doQuickMove],
+  );
+
+  const doQuickSkip = useCallback(
+    async (session: QuickCalItem, skipped: boolean) => {
+      if (!session.sessionId || quickPending) return;
+      setQuickPending(true);
+      setQuickError(null);
+      try {
+        const ok = await skipQuickSession(session.sessionId, skipped, {
+          getToken,
+        });
+        if (ok) {
+          setConfirmKind(null);
+          closeQuickMenu();
+          refreshQuick();
+        } else {
+          setQuickError("Couldn't update this session.");
+        }
+      } catch {
+        setQuickError("Couldn't update this session.");
+      } finally {
+        setQuickPending(false);
+      }
+    },
+    [closeQuickMenu, getToken, quickPending, refreshQuick],
+  );
+
+  const doQuickDelete = useCallback(
+    async (session: QuickCalItem) => {
+      if (!session.sessionId || quickPending) return;
+      setQuickPending(true);
+      setQuickError(null);
+      try {
+        const ok = await deleteQuickSession(session.sessionId, { getToken });
+        if (ok) {
+          setConfirmKind(null);
+          closeQuickMenu();
+          refreshQuick();
+        } else {
+          setQuickError("Couldn't delete this session.");
+        }
+      } catch {
+        setQuickError("Couldn't delete this session.");
+      } finally {
+        setQuickPending(false);
+      }
+    },
+    [closeQuickMenu, getToken, quickPending, refreshQuick],
+  );
+
+  // Continue a quick session under its OWN sessionId (the web's
+  // `continueQuickSession`): rebuilding stashes the draft under the same id,
+  // so finishing it completes the same log. Opens the NP-227 overview with
+  // saved=1&started=1 — the log already exists server-side.
+  const continueQuick = useCallback(
+    async (session: QuickCalItem) => {
+      if (!session.sessionId || quickOpening) return;
+      setQuickOpening(session.sessionId);
+      setQuickError(null);
+      try {
+        const rebuilt = await rebuildQuickSession(session.sessionId, {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken,
+        });
+        if (!rebuilt) {
+          setQuickError("This session isn't available.");
+          return;
+        }
+        await stashQuickSessionWithId(
+          {
+            title: rebuilt.title,
+            ...(rebuilt.focus ? { focus: rebuilt.focus } : {}),
+            exercises: rebuilt.exercises,
+          },
+          session.sessionId,
+          { needsName: rebuilt.needsName },
+        );
+        router.push(
+          quickSessionOverviewHref(session.sessionId, {
+            saved: true,
+            started: true,
+          }) as never,
+        );
+      } catch {
+        setQuickError("Couldn't open this session.");
+      } finally {
+        setQuickOpening(null);
+      }
+    },
+    [getToken, quickOpening, router],
   );
 
   const onSelectDay = useCallback((date: string) => {
@@ -469,56 +631,120 @@ export default function CalendarIndexRoute() {
                     testID={`day-detail-quick-${q.sessionId ?? idx}`}
                     className="rounded-xl border border-purple-400/40 bg-purple-400/10 p-3"
                   >
+                    <Pressable
+                      testID={`day-detail-quick-open-${q.sessionId ?? idx}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        q.status === "completed"
+                          ? `View summary for ${q.title}`
+                          : `Continue ${q.title}`
+                      }
+                      disabled={!q.sessionId}
+                      onPress={() => {
+                        if (!q.sessionId) return;
+                        if (q.status === "completed") {
+                          setSummaryQuick(q);
+                        } else {
+                          void continueQuick(q);
+                        }
+                      }}
+                    >
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "flex-start",
+                          justifyContent: "space-between",
+                          gap: 8,
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text className="text-foreground font-medium text-sm">
+                            {q.title}
+                          </Text>
+                          <Text className="text-muted-foreground text-xs mt-1">
+                            Quick session · {q.exerciseCount}{" "}
+                            {q.exerciseCount === 1 ? "exercise" : "exercises"}
+                            {q.duration ? ` · ${q.duration} min` : ""}
+                          </Text>
+                        </View>
+                        <View
+                          testID={`day-detail-quick-badge-${q.sessionId ?? idx}`}
+                          className={`px-2 py-0.5 rounded-full ${
+                            q.status === "completed"
+                              ? "bg-accent"
+                              : q.status === "planned"
+                                ? "bg-primary/20"
+                                : q.status === "skipped"
+                                  ? "bg-amber-500/20"
+                                  : "bg-destructive/20"
+                          }`}
+                        >
+                          <Text
+                            className={`text-[10px] font-semibold ${
+                              q.status === "completed"
+                                ? "text-accent-foreground"
+                                : q.status === "planned"
+                                  ? "text-primary"
+                                  : q.status === "skipped"
+                                    ? "text-amber-500"
+                                    : "text-destructive"
+                            }`}
+                          >
+                            {q.status === "completed"
+                              ? "Done"
+                              : q.status === "planned"
+                                ? "Scheduled"
+                                : q.status === "skipped"
+                                  ? "Skipped"
+                                  : "Incomplete"}
+                          </Text>
+                        </View>
+                      </View>
+                    </Pressable>
                     <View
                       style={{
                         flexDirection: "row",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
+                        flexWrap: "wrap",
                         gap: 8,
+                        marginTop: 10,
                       }}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text className="text-foreground font-medium text-sm">
-                          {q.title}
-                        </Text>
-                        <Text className="text-muted-foreground text-xs mt-1">
-                          Quick session · {q.exerciseCount}{" "}
-                          {q.exerciseCount === 1 ? "exercise" : "exercises"}
-                          {q.duration ? ` · ${q.duration} min` : ""}
-                        </Text>
-                      </View>
-                      <View
-                        testID={`day-detail-quick-badge-${q.sessionId ?? idx}`}
-                        className={`px-2 py-0.5 rounded-full ${
-                          q.status === "completed"
-                            ? "bg-accent"
-                            : q.status === "planned"
-                              ? "bg-primary/20"
-                              : q.status === "skipped"
-                                ? "bg-amber-500/20"
-                                : "bg-destructive/20"
-                        }`}
-                      >
-                        <Text
-                          className={`text-[10px] font-semibold ${
-                            q.status === "completed"
-                              ? "text-accent-foreground"
-                              : q.status === "planned"
-                                ? "text-primary"
-                                : q.status === "skipped"
-                                  ? "text-amber-500"
-                                  : "text-destructive"
-                          }`}
+                      {q.status === "completed" ? (
+                        <Button
+                          testID={`day-detail-quick-summary-${q.sessionId ?? idx}`}
+                          variant="secondary"
+                          size="sm"
+                          disabled={!q.sessionId}
+                          onPress={() => setSummaryQuick(q)}
                         >
-                          {q.status === "completed"
-                            ? "Done"
-                            : q.status === "planned"
-                              ? "Scheduled"
-                              : q.status === "skipped"
-                                ? "Skipped"
-                                : "Incomplete"}
-                        </Text>
-                      </View>
+                          View Summary
+                        </Button>
+                      ) : (
+                        <Button
+                          testID={`day-detail-quick-continue-${q.sessionId ?? idx}`}
+                          size="sm"
+                          disabled={!q.sessionId || quickOpening === q.sessionId}
+                          loading={quickOpening === q.sessionId}
+                          onPress={() => {
+                            if (q.sessionId) void continueQuick(q);
+                          }}
+                        >
+                          {q.status === "incomplete" ? "Continue" : "Start Workout"}
+                        </Button>
+                      )}
+                      <Button
+                        testID={`day-detail-quick-manage-${q.sessionId ?? idx}`}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!q.sessionId}
+                        onPress={() => {
+                          setQuickMenu(q);
+                          setQuickDateOpen(false);
+                          setQuickError(null);
+                        }}
+                      >
+                        Manage
+                      </Button>
                     </View>
                   </View>
                 ))}
@@ -681,6 +907,16 @@ export default function CalendarIndexRoute() {
                             Un-complete
                           </Button>
                         ) : null}
+                        {slot.status === "completed" ? (
+                          <Button
+                            testID={`day-detail-summary-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => setSummarySlot(slot)}
+                          >
+                            View Summary
+                          </Button>
+                        ) : null}
                         {slot.status === "skipped" ? (
                           <Button
                             testID={`day-detail-unskip-${slot.programId}-${slot.workoutIndex}`}
@@ -722,6 +958,23 @@ export default function CalendarIndexRoute() {
                 Rest day — no workouts scheduled.
               </Text>
             ) : null}
+            {quickError ? (
+              <Text testID="day-detail-quick-error" className="text-destructive text-sm mt-2">
+                {quickError}
+              </Text>
+            ) : null}
+
+            {/* Workout Now for this day — pre-fills it for Log/Plan (NP-076). */}
+            <View style={{ marginTop: 12 }}>
+              <Button
+                testID="day-detail-workout-now"
+                variant="secondary"
+                size="sm"
+                onPress={() => selectedDate && setWorkoutNowDate(selectedDate)}
+              >
+                Workout Now
+              </Button>
+            </View>
           </View>
         ) : null}
 
@@ -833,6 +1086,79 @@ export default function CalendarIndexRoute() {
         }}
         onClose={closeConfirm}
         testID="slot-confirm-pause"
+      />
+      <WorkoutNowSheet
+        visible={workoutNowDate !== null}
+        onClose={() => setWorkoutNowDate(null)}
+        date={workoutNowDate ?? undefined}
+        testID="calendar-workout-now-sheet"
+      />
+      {/* Quick-session Manage sheet (NP-115): move / skip / delete. */}
+      <QuickSessionMenu
+        key={quickMenu?.sessionId ?? "no-quick"}
+        visible={quickMenu !== null}
+        session={quickMenu}
+        pending={quickPending}
+        datePickerOpen={quickDateOpen}
+        onToggleDatePicker={() => setQuickDateOpen((v) => !v)}
+        onMoveNextDay={() => {
+          if (quickMenu) doQuickMoveNextDay(quickMenu);
+        }}
+        onMoveToDate={(date) => {
+          if (quickMenu) void doQuickMove(quickMenu, date);
+        }}
+        onSkip={() => setConfirmKind("quick-skip")}
+        onUnskip={() => {
+          if (quickMenu) void doQuickSkip(quickMenu, false);
+        }}
+        onDelete={() => setConfirmKind("quick-delete")}
+        onClose={closeQuickMenu}
+      />
+      {/* Skip / delete confirm gates for a quick session — the native
+          `window.confirm` (the web asks before both). */}
+      <SlotConfirmDialog
+        visible={confirmKind === "quick-skip" && quickMenu !== null}
+        title="Skip session?"
+        message="It’ll be marked skipped and won’t count as done."
+        confirmLabel="Skip"
+        pending={quickPending}
+        onConfirm={() => {
+          if (quickMenu) void doQuickSkip(quickMenu, true);
+        }}
+        onClose={closeConfirm}
+        testID="quick-confirm-skip"
+      />
+      <SlotConfirmDialog
+        visible={confirmKind === "quick-delete" && quickMenu !== null}
+        title="Delete session?"
+        message="This can’t be undone."
+        confirmLabel="Delete"
+        pending={quickPending}
+        onConfirm={() => {
+          if (quickMenu) void doQuickDelete(quickMenu);
+        }}
+        onClose={closeConfirm}
+        testID="quick-confirm-delete"
+      />
+      {/* Past-day summaries (NP-115): the program log on its completion date
+          through the NP-086 summary, and the quick session read. */}
+      <DaySummarySheets
+        programSlot={summarySlot}
+        quickSession={summaryQuick}
+        getToken={getToken}
+        onCloseProgram={() => setSummarySlot(null)}
+        onCloseQuick={() => setSummaryQuick(null)}
+        onViewLog={() => {
+          setSummarySlot(null);
+          setSummaryQuick(null);
+          router.replace("/progress" as never);
+        }}
+        onViewJourney={(programId) => {
+          setSummarySlot(null);
+          router.push(
+            `/(tabs)/programming/${encodeURIComponent(programId)}/journey` as never,
+          );
+        }}
       />
     </SafeAreaView>
   );
