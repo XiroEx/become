@@ -62,6 +62,21 @@ import {
 } from "@/lib/nutrition/mealSchedule";
 import { nutritionGoalLine } from "@/lib/nutrition/goalLine";
 import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
+import { createMealPlan } from "@/lib/nutrition/mealPlanApi";
+import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
+import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
+/**
+ * The web's "Planned for <weekday, Mon d>" toast
+ * (`webapp/app/dashboard/nutrition/page.tsx:1509-1512`): the planned day
+ * formatted `en-US` with weekday long, month short, day numeric.
+ */
+function plannedForToast(date: Date): string {
+  return `Planned for ${date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  })}`;
+}
 import {
   canCombine,
   combineLoggedItems,
@@ -1311,6 +1326,14 @@ export default function NutritionIndexRoute() {
   const [mealToLog, setMealToLog] = useState<Meal | null>(null);
   const [mealLogSubmitting, setMealLogSubmitting] = useState(false);
   const [mealLogError, setMealLogError] = useState<string | null>(null);
+  // Plan mode on a future day (NP-232): a food picked from the search sheet
+  // waits here for its portion + tag in `PlanFoodSheet` (the web's
+  // `FoodSearchModal` plan mode, `page.tsx:1474-1519`), and a saved meal waits
+  // in `mealToLog` for `MealLogSheet mode="plan"`. The web hides the basket
+  // in plan mode (`FoodSearchModal.tsx:2495`), so the search sheet opens with
+  // `basketMode={false}` and nothing on this screen calls `/api/meal-logs`
+  // or `/api/meals/{id}/log` for a future date.
+  const [foodToPlan, setFoodToPlan] = useState<Food | null>(null);
 
   const handleAddToBasket = (food: Food) => {
     const variant = defaultVariantOf(food);
@@ -1415,18 +1438,55 @@ export default function NutritionIndexRoute() {
   };
 
   const handlePickMeal = (meal: Meal) => {
-    // On a future day the meal is SCHEDULED (the web's plan-mode
-    // `MealApplySheet`): open the repeat-across-days sheet rooted at this
-    // day instead of the log-a-meal sheet.
+    // On a future day the meal is PLANNED, not logged (the web's plan-mode
+    // `MealApplySheet`, `page.tsx:1474-1519`): open `MealLogSheet mode="plan"`
+    // rooted at this day. Never call `/api/meals/{id}/log` for a future date.
     if (isFuture) {
       setMealLogError(null);
-      setMealToLog(null);
+      setMealToLog(meal);
       setPlanToolsNotice(null);
-      setApplyMealOpen(true);
       return;
     }
     setMealLogError(null);
     setMealToLog(meal);
+  };
+
+  // Plan a saved meal from the Meals filter on a future day through
+  // `POST /api/meal-plans { plannedDate, tag, mealId }` — the web's
+  // `MealApplySheet` plan branch (`MealApplySheet.tsx:213-235`). The portion
+  // the sheet collected is a display choice only: the server snapshots the
+  // meal's items at plan-create time. After the plan lands, refetch plans and
+  // show the web's "Planned for <weekday, Mon d>" toast (`page.tsx:1509-1512`).
+  const handlePlanSavedMeal = async (opts: {
+    portion: number;
+    tag: string;
+    untimed: boolean;
+  }) => {
+    if (!mealToLog || mealLogSubmitting) return;
+    setMealLogSubmitting(true);
+    setMealLogError(null);
+    try {
+      await createMealPlan({
+        plannedDate: activeDate,
+        tag: opts.tag,
+        mealId: mealToLog._id,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      setMealToLog(null);
+      setSearchOpen(false);
+      setSearchBarcodeOpen(false);
+      // The web's toast names the planned day (`page.tsx:1509-1512`):
+      // "Planned for <weekday, Mon d>".
+      setPlanToolsNotice(plannedForToast(activeDateObj));
+      await refetchMealPlans();
+    } catch (err) {
+      const { handled, message } = handleApiError(err);
+      if (!handled) setMealLogError(message);
+    } finally {
+      setMealLogSubmitting(false);
+    }
   };
 
   // Bulk tools applied: show the web's toast text and refetch the day, like
@@ -1445,6 +1505,13 @@ export default function NutritionIndexRoute() {
   );
 
   const handlePickBasketFood = async (food: Food) => {
+    // On a future day the food is PLANNED, not logged (the web's plan-mode
+    // `FoodSearchModal`, `page.tsx:1474-1519`): open `PlanFoodSheet` for this
+    // day. Never call `/api/meal-logs` for a future date.
+    if (isFuture) {
+      setFoodToPlan(food);
+      return;
+    }
     // Pinned to a sitting: log one food straight into it, like the web's
     // `handleAddFood` with `addToLogId` set.
     if (addToLogId) {
@@ -2562,7 +2629,9 @@ export default function NutritionIndexRoute() {
         </Pressable>
       </Modal>
 
-      {/* Food Search Sheet (NP-092) */}
+      {/* Food Search Sheet (NP-092). On a future day the basket is hidden
+          (the web hides it in plan mode, `FoodSearchModal.tsx:2495`): picks
+          open `PlanFoodSheet` / `MealLogSheet mode="plan"` instead. */}
       <FoodSearchSheet
         visible={searchOpen}
         onClose={() => {
@@ -2572,9 +2641,10 @@ export default function NutritionIndexRoute() {
         }}
         currentTag={searchTag}
         initialBarcodeOpen={searchBarcodeOpen}
-        basketMode={addToLogId === null}
+        basketMode={addToLogId === null && !isFuture}
         basketCount={basket.length}
         onAddToBasket={handlePickBasketFood}
+        onPickFood={isFuture ? handlePickBasketFood : undefined}
         onOpenBasket={() => setBasketOpen(true)}
         onPickMeal={handlePickMeal}
       />
@@ -2594,18 +2664,41 @@ export default function NutritionIndexRoute() {
         onSubmit={handleSubmitBasket}
       />
 
-      {/* Log a saved meal with a portion (NP-094) */}
+      {/* Log a saved meal with a portion (NP-094); on a future day the same
+          sheet plans it instead (NP-232, the web's plan-mode `MealApplySheet`).
+          The plan branch posts through `createMealPlan`, refetches plans, and
+          shows the web's "Planned for <weekday, Mon d>" toast. */}
       <MealLogSheet
-        visible={mealToLog !== null && !isFuture}
+        visible={mealToLog !== null}
         meal={mealToLog}
         currentTag={searchTag ?? currentDefaultTag}
         submitting={mealLogSubmitting}
         error={mealLogError}
+        mode={isFuture ? "plan" : "log"}
+        plannedDate={isFuture ? activeDate : undefined}
         onClose={() => {
           setMealToLog(null);
           setMealLogError(null);
         }}
-        onSubmit={handleLogSavedMeal}
+        onSubmit={isFuture ? handlePlanSavedMeal : handleLogSavedMeal}
+      />
+
+      {/* Plan a food on a future day (NP-232, NP-230's sheet): the pick lands
+          through `createMealPlan`, then plans refetch and the web's
+          "Planned for <weekday, Mon d>" toast shows. */}
+      <PlanFoodSheet
+        visible={foodToPlan !== null}
+        food={foodToPlan as QuantityPickerFood | null}
+        plannedDate={activeDate}
+        tag={searchTag ?? currentDefaultTag}
+        onClose={() => setFoodToPlan(null)}
+        onPlanned={(toast) => {
+          setFoodToPlan(null);
+          setSearchOpen(false);
+          setSearchBarcodeOpen(false);
+          setPlanToolsNotice(toast);
+          void refetchMealPlans();
+        }}
       />
 
       {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
