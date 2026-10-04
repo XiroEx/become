@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { currentProgramPercent } from "@/lib/dashboard/trainingCards";
 
 export interface CurrentProgramData {
   programId: string;
@@ -32,14 +33,14 @@ export function CurrentProgramCard({
 }: CurrentProgramCardProps) {
   const { colors } = useThemeTokens();
 
-  const pct =
-    program.totalWorkouts &&
-    program.totalWorkouts > 0 &&
-    program.completedWorkouts != null
-      ? Math.round((program.completedWorkouts / program.totalWorkouts) * 100)
-      : program.totalWeeks > 0
-        ? Math.round((program.currentWeek / program.totalWeeks) * 100)
-        : 0;
+  // Session-based %, falling back to the week ratio only when the counts are
+  // missing — the same rule the web's Current Program card uses.
+  const pct = currentProgramPercent({
+    completedWorkouts: program.completedWorkouts,
+    totalWorkouts: program.totalWorkouts,
+    currentWeek: program.currentWeek,
+    totalWeeks: program.totalWeeks,
+  });
 
   const continueLabel = program.nextWorkout
     ? `Continue: ${program.nextWorkout}`

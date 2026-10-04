@@ -6,7 +6,11 @@ import { useRouter } from "expo-router";
 import { CalendarDays, ChevronRight, Dumbbell } from "lucide-react-native";
 import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
 
-// TODO: NP-106 owns dashboard training cards: next workout with missed sessions, resume, current program
+/**
+ * NP-106 owns the dashboard training cards: the next workout (by slot
+ * marker, with Today / Tomorrow / date labels), the missed sessions with
+ * Skip, the resume pill, the current program card and the empty state.
+ */
 
 export interface UpNextCardProps {
   workout?: UpcomingWorkoutSummary | null;

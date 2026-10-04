@@ -10,6 +10,8 @@ export * from "./ProgressChart";
 export * from "./UpNextCard";
 export * from "./NutritionCard";
 export * from "./CurrentProgramCard";
+export * from "./MissedWorkoutsCard";
+export * from "./DashboardQuickLinks";
 export * from "./MindsetCard";
 export * from "./PlanCard";
 export * from "./MoodGatewayBanner";
