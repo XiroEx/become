@@ -53,6 +53,7 @@ import {
 
 import User from '../../../models/User'
 import ExerciseModel from '../../../models/Exercise'
+import type { Equipment, MovementPattern, MuscleGroup } from '../../../models/Exercise'
 import { invalidateExerciseCache } from '../../../lib/hydrateExercises'
 import { signToken } from '../../../lib/auth'
 
@@ -158,13 +159,20 @@ before(async () => {
   }
 
   // Six upper-body strength rows, so a push-focus draw has room to vary.
-  const rows = [
+  const rows: Array<{
+    slug: string
+    name: string
+    movementPatterns: MovementPattern[]
+    primaryMuscles: MuscleGroup[]
+    equipment: Equipment[]
+    trackingType?: 'time'
+  }> = [
     { slug: BENCH_SLUG, name: 'Barbell Bench Press', movementPatterns: ['horizontal_push'], primaryMuscles: ['chest'], equipment: ['barbell', 'flat_bench'] },
     { slug: ROW_SLUG, name: 'Seated Cable Row', movementPatterns: ['horizontal_pull'], primaryMuscles: ['lats'], equipment: ['cable'] },
     { slug: PRESS_SLUG, name: 'Overhead Press', movementPatterns: ['vertical_push'], primaryMuscles: ['front_delts'], equipment: ['barbell'] },
     { slug: CURL_SLUG, name: 'Dumbbell Curl', movementPatterns: ['elbow_flexion'], primaryMuscles: ['biceps'], equipment: ['dumbbell'] },
     { slug: SQUAT_SLUG, name: 'Barbell Back Squat', movementPatterns: ['squat'], primaryMuscles: ['quads'], equipment: ['barbell', 'squat_rack'] },
-    { slug: PLANK_SLUG, name: 'Plank', movementPatterns: ['anti_extension'], primaryMuscles: ['abs'], equipment: ['bodyweight'], trackingType: 'time' as const },
+    { slug: PLANK_SLUG, name: 'Plank', movementPatterns: ['anti_extension'], primaryMuscles: ['abs'], equipment: [], trackingType: 'time' },
   ]
   for (const row of rows) {
     await ExerciseModel.create({
