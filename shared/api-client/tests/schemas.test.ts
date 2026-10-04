@@ -53,6 +53,8 @@ import {
   NutritionGoalsWriteResponseSchema,
   MealScheduleResponseSchema,
   MealScheduleWriteRequestSchema,
+  NutritionScanResponseSchema,
+  NutritionScansResponseSchema,
   RecipesListResponseSchema,
   RecipeDetailResponseSchema,
   ConversationsResponseSchema,
@@ -511,6 +513,8 @@ const NUTRITION_ROUTE_FIXTURES: ReadonlyArray<
   ['POST /api/nutrition/goals', NutritionGoalsWriteResponseSchema, nutritionFixtures.NUTRITION_GOALS_WRITE],
   ['GET /api/nutrition/meal-schedule', MealScheduleResponseSchema, nutritionFixtures.MEAL_SCHEDULE],
   ['PUT /api/nutrition/meal-schedule (request)', MealScheduleWriteRequestSchema, nutritionFixtures.MEAL_SCHEDULE_WRITE_REQUEST],
+  ['GET /api/nutrition/scans', NutritionScansResponseSchema, nutritionFixtures.NUTRITION_SCANS_LIST],
+  ['GET /api/nutrition/scans/[id]', NutritionScanResponseSchema, nutritionFixtures.NUTRITION_SCAN_DETAIL],
 ];
 
 for (const [label, schema, body] of NUTRITION_ROUTE_FIXTURES) {
@@ -523,14 +527,15 @@ for (const [label, schema, body] of NUTRITION_ROUTE_FIXTURES) {
 test('nutrition: every route the v1 food log calls has a recorded fixture', () => {
   // The 20 routes NP-024 covers, some recorded more than once (a barcode miss,
   // a never-saved goals row) and five with their request body beside the
-  // response. The webapp harness holds the same list as a manifest and fails if
-  // one of them is never CALLED.
+  // response — plus the two NP-141 estimate-history routes. The webapp
+  // harness holds the same list as a manifest and fails if one of them is
+  // never CALLED.
   const routes = new Set(
     NUTRITION_ROUTE_FIXTURES.map(([label]) =>
       label.replace(/ \((request|miss|preview|default)\)$/, '').replace(/\?.*$/, ''),
     ),
   );
-  assert.equal(routes.size, 20, [...routes].sort().join('\n'));
+  assert.equal(routes.size, 22, [...routes].sort().join('\n'));
 });
 
 test('Rule 1: a Food carries its SERVING BASIS, not a bare per-100 block', () => {
@@ -669,6 +674,33 @@ test('a barcode miss is `{ food: null }`, and a preview is not persistable', () 
   const preview = FoodBarcodeResponseSchema.parse(nutritionFixtures.FOOD_BARCODE_PREVIEW);
   assert.equal(preview.food?.persistable, false);
   assert.equal(preview.food?._id.startsWith('preview-off-'), true);
+});
+
+test('estimate history: the recorded scans list and detail parse, photo and describe', () => {
+  // NP-141. The list is recent-first with the inline thumb + blob imageUrl
+  // on the photo scan and neither on the describe one; the detail answers
+  // the same scan under `{ scan }` for the review re-open.
+  const list = NutritionScansResponseSchema.parse(nutritionFixtures.NUTRITION_SCANS_LIST);
+  assert.equal(list.scans.length, 2);
+  assert.equal(list.scans[0]?.source, 'photo');
+  assert.equal(list.scans[0]?.thumb, 'data:image/jpeg;base64,/9j/np141thumb');
+  assert.equal(list.scans[0]?.imageUrl, '/api/blob/scans/np141photo');
+  assert.equal(list.scans[0]?.items.length, 2);
+  assert.equal(list.scans[0]?.items[0]?.foodId, '6ab0240000000000000f7f01');
+  assert.equal(list.scans[0]?.items[0]?.matchKind, 'food');
+  assert.equal(list.scans[0]?.totalNutrition.calories, 700);
+  assert.equal(list.scans[1]?.source, 'describe');
+  assert.equal(list.scans[1]?.thumb, undefined);
+  assert.equal(list.scans[1]?.imageUrl, undefined);
+
+  const detail = NutritionScanResponseSchema.parse(nutritionFixtures.NUTRITION_SCAN_DETAIL);
+  assert.equal(detail.scan._id, list.scans[0]?._id);
+
+  // A scan item keeps its per-serving basis: nutrition × servings is the row.
+  const item = list.scans[0]?.items[0];
+  assert.ok(item);
+  assert.equal(item.servings, 2);
+  assert.equal(item.nutrition.calories, 250);
 });
 
 test('list schemas default their array to [] and still require a name', () => {

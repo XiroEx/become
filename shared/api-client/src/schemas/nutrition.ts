@@ -1010,3 +1010,82 @@ export type MealLogMeal = z.infer<typeof LegacyLogMealSchema>;
 export type NutritionLogWriteResponse = z.infer<typeof NutritionLogWriteResponseSchema>;
 export type NutritionSummaryDay = z.infer<typeof NutritionSummaryDaySchema>;
 export type NutritionSummaryResponse = z.infer<typeof NutritionSummaryResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Estimate history — saved AI scans (NP-141)
+// ---------------------------------------------------------------------------
+//
+// The wire contract for `GET /api/nutrition/scans?limit=` (recent first),
+// `GET /api/nutrition/scans/{id}` (re-open into the review), and
+// `DELETE /api/nutrition/scans/{id}` (optimistic removal).
+//
+// Items mirror the loggable shape (name/brand/serving/nutrition + optional
+// foodId for matched DB foods) so \"Log again\" is a straight repost through
+// `POST /api/meal-logs` (`webapp/models/PlateScan.ts`).
+// ---------------------------------------------------------------------------
+
+/** One item inside a saved estimate. `nutrition` is PER-SERVING. */
+export const NutritionScanItemSchema = z
+  .object({
+    _id: z.string().optional(),
+    foodId: z.string().optional(),
+    name: z.string(),
+    brand: z.string().optional(),
+    /** The AI's serving phrase (\"1 cup\", \"~150 g\") — display only. */
+    estimatedServing: z.string().optional(),
+    servingSize: z.number().optional(),
+    servingUnit: z.string().optional(),
+    servings: z.number().optional(),
+    nutrition: MealNutritionSchema,
+    confidence: z.number().optional(),
+    /** Set when this item was reconciled to a DB entry. */
+    matchKind: z.string().optional(),
+  })
+  .passthrough();
+
+/**
+ * A saved estimate. `source` is `photo` | `describe` on the wire (a library
+ * upload is stored as `photo`); it stays a plain string so a server that
+ * grows a kind cannot make a shipped build drop the whole list.
+ */
+export const NutritionScanSchema = z
+  .object({
+    _id: z.string(),
+    source: z.string(),
+    note: z.string().optional(),
+    tag: z.string().optional(),
+    /** Small inline data-URL thumbnail (photo scans only). */
+    thumb: z.string().optional(),
+    /** Full-res scan image in blob storage (`/api/blob/…`), via AuthedImage. */
+    imageUrl: z.string().optional(),
+    items: z.array(NutritionScanItemSchema).default([]),
+    totalNutrition: MealNutritionSchema,
+    loggedAt: z.string().optional(),
+    mealLogId: z.string().optional(),
+    createdAt: z.string().optional(),
+    updatedAt: z.string().optional(),
+    __v: z.number().optional(),
+  })
+  .passthrough();
+
+/** `GET /api/nutrition/scans?limit=&offset=` — recent first. */
+export const NutritionScansResponseSchema = z
+  .object({
+    scans: z.array(NutritionScanSchema).default([]),
+    total: z.number().optional(),
+    offset: z.number().optional(),
+    limit: z.number().optional(),
+  })
+  .passthrough();
+
+/** `GET /api/nutrition/scans/{id}` — one saved estimate for the review. */
+export const NutritionScanResponseSchema = z
+  .object({
+    scan: NutritionScanSchema,
+  })
+  .passthrough();
+
+export type NutritionScanItem = z.infer<typeof NutritionScanItemSchema>;
+export type NutritionScan = z.infer<typeof NutritionScanSchema>;
+export type NutritionScansResponse = z.infer<typeof NutritionScansResponseSchema>;
+export type NutritionScanResponse = z.infer<typeof NutritionScanResponseSchema>;
