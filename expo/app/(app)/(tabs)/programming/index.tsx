@@ -1,5 +1,5 @@
-import React from "react";
-import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import {
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 
@@ -30,6 +31,20 @@ import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
+  const params = useLocalSearchParams<{ quick?: string; date?: string }>();
+  const quickParam = Array.isArray(params.quick)
+    ? params.quick[0]
+    : params.quick;
+  const dateParam = Array.isArray(params.date)
+    ? params.date[0]
+    : params.date;
+  // The Workout Now sheet opens in place on `?quick=true` (dashboard tile,
+  // Workout tab button, smart tile) and pre-fills `?date=` when a calendar
+  // day sent the member here. It is state (not derived during render): the
+  // sheet must stay open while the member picks a focus and previews.
+  const [quickOpen, setQuickOpen] = useState(quickParam === "true");
+  const quickDate =
+    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : undefined;
 
   const handleOpenHistory = () => {
     router.push(nativeRouteFor("/dashboard/history") as never);
@@ -48,7 +63,10 @@ export default function ProgrammingIndexRoute() {
   };
 
   const handleWorkoutNow = () => {
-    router.push("/(tabs)/programming?quick=true" as never);
+    // Opens the sheet in place (web's QuickSessionModal), not a route.
+    // Syncs from an explicit user action, not a render cascade.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setQuickOpen(true);
   };
 
   return (
@@ -194,6 +212,13 @@ export default function ProgrammingIndexRoute() {
           <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
         </View>
       </ScrollView>
+
+      {/* Workout Now sheet (NP-076): focus → deterministic preview → overview. */}
+      <WorkoutNowSheet
+        visible={quickOpen}
+        onClose={() => setQuickOpen(false)}
+        date={quickDate}
+      />
     </SafeAreaView>
   );
 }

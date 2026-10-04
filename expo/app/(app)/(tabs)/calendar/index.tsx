@@ -35,6 +35,8 @@ import {
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
+import { logPlanAvailability } from "@/lib/quickSession/logPlan";
 
 const MONTH_NAMES = [
   "January",
@@ -233,6 +235,9 @@ export default function CalendarIndexRoute() {
     "uncomplete" | "skip" | "pause" | null
   >(null);
   const [shiftOpen, setShiftOpen] = useState(false);
+  // The day Workout Now is pre-dated to (web's `quickSessionDate`): set by
+  // the Log/Schedule-a-Workout buttons on the selected day, cleared on close.
+  const [quickSessionDate, setQuickSessionDate] = useState<string | null>(null);
   const onConfirmReschedule = useCallback(
     (slot: ScheduledSlot, newDate: string) => {
       void mutations
@@ -722,6 +727,40 @@ export default function CalendarIndexRoute() {
                 Rest day — no workouts scheduled.
               </Text>
             ) : null}
+            {/* Log / Schedule a Workout on this day (web's QuickSessionModal
+                pre-dated to the tapped day): past days log, future days plan,
+                today allows both. */}
+            {(() => {
+              if (!selectedDate) return null;
+              const { canLog, canPlan } = logPlanAvailability(
+                selectedDate,
+                todayDate,
+              );
+              if (!canLog && !canPlan) return null;
+              return (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {canLog ? (
+                    <Button
+                      testID="day-detail-log-workout"
+                      size="sm"
+                      onPress={() => setQuickSessionDate(selectedDate)}
+                    >
+                      Log a Workout
+                    </Button>
+                  ) : null}
+                  {canPlan ? (
+                    <Button
+                      testID="day-detail-schedule-workout"
+                      variant="secondary"
+                      size="sm"
+                      onPress={() => setQuickSessionDate(selectedDate)}
+                    >
+                      Schedule a Workout
+                    </Button>
+                  ) : null}
+                </View>
+              );
+            })()}
           </View>
         ) : null}
 
@@ -833,6 +872,14 @@ export default function CalendarIndexRoute() {
         }}
         onClose={closeConfirm}
         testID="slot-confirm-pause"
+      />
+      {/* Workout Now pre-dated to the selected day (NP-076): the sheet hands
+          the date to the NP-227 overview's Log/Plan panel via `?date=`. */}
+      <WorkoutNowSheet
+        testID="calendar-workout-now-sheet"
+        visible={quickSessionDate !== null}
+        onClose={() => setQuickSessionDate(null)}
+        date={quickSessionDate ?? undefined}
       />
     </SafeAreaView>
   );

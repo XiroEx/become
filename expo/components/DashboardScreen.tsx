@@ -6,7 +6,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Sliders } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
 import { BecomingDoor } from "@/components/dashboard/BecomingDoor";
 import { MindsetCard } from "@/components/dashboard/MindsetCard";
@@ -52,6 +51,7 @@ import { kgToUnit, type WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 
 export interface TodayWorkoutSummary {
   programName: string;
@@ -851,27 +851,11 @@ export function DashboardScreen({
         currentMood={statData?.todaysMood}
       />
 
-      <BottomSheet
+      <WorkoutNowSheet
         testID="dashboard-workout-now-sheet"
         visible={isWorkoutNowOpen}
         onClose={() => setWorkoutNowOpen(false)}
-        title="Workout Now"
-      >
-        <View style={{ padding: 16, gap: 12 }}>
-          <Text className="text-foreground text-base">
-            Start a quick workout session.
-          </Text>
-          <Button
-            testID="dashboard-workout-now-sheet-start"
-            onPress={() => {
-              setWorkoutNowOpen(false);
-              onStartWorkout();
-            }}
-          >
-            Start Session
-          </Button>
-        </View>
-      </BottomSheet>
+      />
 
       <CustomizeDashboardModal
         testID="dashboard-customize-modal"

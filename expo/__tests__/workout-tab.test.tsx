@@ -3,9 +3,14 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { act } from "react";
 
 const mockPush = jest.fn();
+const mockSearchParams: Record<string, string> = {
+  id: "prog-1",
+  idx: "1",
+  phase: "0",
+};
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
-  useLocalSearchParams: () => ({ id: "prog-1", idx: "1", phase: "0" }),
+  useLocalSearchParams: () => mockSearchParams,
 }));
 
 const mockToken = "test-jwt";
@@ -45,6 +50,13 @@ import type { ScheduleApiResponse, WorkoutHistoryResponse } from "@become/api-cl
 describe("Workout tab: acceptance criteria tests", () => {
   beforeEach(() => {
     mockPush.mockReset();
+    // The live-route params are the default; the tab-root tests clear and
+    // re-set them per case (see below).
+    mockSearchParams.id = "prog-1";
+    mockSearchParams.idx = "1";
+    mockSearchParams.phase = "0";
+    delete mockSearchParams.quick;
+    delete mockSearchParams.date;
     mockApiFetch.mockReset();
   });
 
@@ -403,6 +415,9 @@ describe("Workout tab: acceptance criteria tests", () => {
   // Tab Root Integration & Header Links
   describe("Workout Tab Root (ProgrammingIndexRoute)", () => {
     it("renders header links to History, Browse, Workout Now, Calendar, Search, and Saved", async () => {
+      // The Workout tab route reads ?quick=/ ?date= for the sheet; the live
+      // route params above must not leak in here.
+      for (const k of Object.keys(mockSearchParams)) delete mockSearchParams[k];
       mockApiFetch.mockImplementation(async (path: string) => {
         if (path.startsWith("/api/workouts/in-progress")) {
           return { workout: null, planned: null };
@@ -443,9 +458,36 @@ describe("Workout tab: acceptance criteria tests", () => {
       fireEvent.press(getByTestId("workout-open-history"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
 
-      // Workout Now button in hub
+      // Workout Now button opens the sheet in place (NP-076)
       fireEvent.press(getByTestId("workout-open-workout-now"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming?quick=true");
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(getByTestId("workout-now-sheet-focus-push")).toBeTruthy();
+
+      // ?quick=true opens the sheet on mount (dashboard tile / smart tile entry)
+      mockSearchParams.quick = "true";
+      const { getByTestId: getByTestIdQuick } = render(
+        <ProgrammingIndexRoute />,
+      );
+      expect(getByTestIdQuick("workout-now-sheet")).toBeTruthy();
+      delete mockSearchParams.quick;
+    });
+  });
+
+  // NP-076: ?quick=true opens the sheet on mount (dashboard tile entry).
+  describe("(id: e015c853) Opening Workout Now pre-fills the sheet", () => {
+    it("opens the sheet when ?quick=true is present", async () => {
+      for (const k of Object.keys(mockSearchParams)) delete mockSearchParams[k];
+      mockSearchParams.quick = "true";
+      mockApiFetch.mockImplementation(async (path: string) => {
+        if (String(path).startsWith("/api/workouts/logs")) {
+          return { logs: [], favoriteSessionOrder: [] };
+        }
+        return {};
+      });
+      const { getByTestId } = render(<ProgrammingIndexRoute />);
+      expect(getByTestId("workout-now-sheet")).toBeTruthy();
+      expect(getByTestId("workout-now-sheet-focus-push")).toBeTruthy();
+      delete mockSearchParams.quick;
     });
   });
 });

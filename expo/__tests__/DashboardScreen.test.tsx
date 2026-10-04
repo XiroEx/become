@@ -149,6 +149,7 @@ describe("DashboardScreen", () => {
     const onStartWorkout = jest.fn();
     const onOpenMind = jest.fn();
     const onOpenNutrition = jest.fn();
+    void onStartWorkout;
 
     const { getByTestId, queryByTestId } = render(
       <DashboardScreen
@@ -177,14 +178,11 @@ describe("DashboardScreen", () => {
     fireEvent.press(getByTestId("tile-nutrition"));
     expect(onOpenNutrition).toHaveBeenCalledTimes(1);
 
-    // Workout Now sheet opens in place (NP-076)
-    expect(queryByTestId("dashboard-workout-now-sheet-start")).toBeNull();
+    // Workout Now sheet opens in place (NP-076): the focus chips render inside it
+    expect(queryByTestId("dashboard-workout-now-sheet")).toBeNull();
     fireEvent.press(getByTestId("tile-workoutNow"));
-    expect(getByTestId("dashboard-workout-now-sheet-start")).toBeTruthy();
-
-    // Press start session in sheet
-    fireEvent.press(getByTestId("dashboard-workout-now-sheet-start"));
-    expect(onStartWorkout).toHaveBeenCalledTimes(1);
+    expect(getByTestId("dashboard-workout-now-sheet")).toBeTruthy();
+    expect(getByTestId("workout-now-sheet-focus-push")).toBeTruthy();
   });
 
   it("calls onSkipCheckIn when skip button is pressed in check-in modal", async () => {
