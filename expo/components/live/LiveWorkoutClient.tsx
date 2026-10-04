@@ -49,6 +49,16 @@ export interface LiveWorkoutExercise {
   sets: number;
   repsLabel?: string;
   notes?: string;
+  /** Coaching tip / cue (the web's `tip`, green). Nothing fills it yet (NP-235). */
+  tip?: string;
+  /** Tempo prescription (the web's `tempo`, e.g. "3-1-1"). */
+  tempo?: string;
+  /** RPE prescription (the web's `rpe`). */
+  rpe?: number;
+  /** Timed prescription string (the web's `duration`, e.g. "30s"). */
+  durationLabel?: string;
+  /** Target muscles (the web's `primaryMuscles`); up to 3 shown as pills. */
+  primaryMuscles?: string[];
   /** Canonical Exercise trackingType — selects per-set inputs (reps/weight/duration/distance). */
   trackingType?: string | null;
   /**
