@@ -82,6 +82,7 @@ export function buildWorkoutSaveRequest(
         completed: boolean;
         duration?: number;
         distance?: number;
+        speed?: number;
       } = {
         setNumber: i + 1,
         reps: timed ? 0 : (s.reps ?? 0),
@@ -95,6 +96,11 @@ export function buildWorkoutSaveRequest(
       }
       if (t === "time_distance" && s.distance != null && s.distance > 0) {
         set.distance = s.distance;
+      }
+      // Speed rides along only when positive, like duration and distance —
+      // the web's save body does the same (`parseFloat(set.speed) > 0`).
+      if (s.speed != null && s.speed > 0) {
+        set.speed = s.speed;
       }
       return set;
     });

@@ -762,6 +762,7 @@ export function useLiveWorkout(
           weight: null,
           durationSec: null,
           distance: null,
+          speed: null,
           completed: false,
         }),
       );
@@ -1118,6 +1119,9 @@ export function useLiveWorkout(
                   t === "time_distance" && s.distance && s.distance > 0
                     ? s.distance
                     : null,
+                // The web restores `s.speed` the same way (LiveWorkoutClient
+                // resume: `speed: s.speed && s.speed > 0 ? … : ""`).
+                speed: s.speed && s.speed > 0 ? s.speed : null,
                 completed: Boolean(s.completed),
               }));
             } else {
@@ -1126,6 +1130,7 @@ export function useLiveWorkout(
                 weight: null,
                 durationSec: null,
                 distance: null,
+                speed: null,
                 completed: false,
               }));
             }
@@ -1150,6 +1155,7 @@ export function useLiveWorkout(
                   weight: s.weight != null ? String(s.weight) : "",
                   duration: s.durationSec != null ? String(s.durationSec) : "",
                   distance: s.distance != null ? String(s.distance) : "",
+                  speed: s.speed != null ? String(s.speed) : "",
                   completed: s.completed,
                 })),
               ),
@@ -1162,6 +1168,7 @@ export function useLiveWorkout(
                       weight: null,
                       durationSec: null,
                       distance: null,
+                      speed: null,
                       completed: false,
                     }
                   : s,
@@ -1209,6 +1216,7 @@ export function useLiveWorkout(
               weight: null,
               durationSec: null,
               distance: null,
+              speed: null,
               completed: false,
             }));
           });

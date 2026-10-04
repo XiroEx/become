@@ -346,6 +346,7 @@ describe("Card NP-083 Acceptance Criteria", () => {
       reps: true,
       duration: false,
       distance: false,
+      speed: false,
     });
 
     // 2. Swap to Plank (time) -> duration only
@@ -371,6 +372,7 @@ describe("Card NP-083 Acceptance Criteria", () => {
       reps: false,
       duration: true,
       distance: false,
+      speed: false,
     });
 
     // 3. Swap to Treadmill Run (time_distance) -> duration & distance
@@ -396,6 +398,7 @@ describe("Card NP-083 Acceptance Criteria", () => {
       reps: false,
       duration: true,
       distance: true,
+      speed: true,
     });
 
     // 4. Swap to Bodyweight Squat (reps_bodyweight) -> reps only
@@ -421,6 +424,7 @@ describe("Card NP-083 Acceptance Criteria", () => {
       reps: true,
       duration: false,
       distance: false,
+      speed: false,
     });
   });
 });

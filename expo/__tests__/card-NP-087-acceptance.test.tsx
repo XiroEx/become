@@ -506,7 +506,7 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
 
     fireEvent.changeText(
       getByTestId("live-workout-treadmill-set-0-duration"),
-      "600",
+      "10",
     );
     grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.treadmill![0]!.durationSec).toBe(600);

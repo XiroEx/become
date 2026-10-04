@@ -81,6 +81,7 @@ export function LiveStepView({
     weight: null,
     durationSec: null,
     distance: null,
+    speed: null,
     completed: false,
   };
   const unit = setUnitLabel(exercise.trackingType, 1);
