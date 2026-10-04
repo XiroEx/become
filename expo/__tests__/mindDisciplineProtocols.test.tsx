@@ -671,7 +671,7 @@ describe("Mind Discipline, Anti-Sabotage and Social (NP-152)", () => {
       });
       mockedRunAiTask.mockRejectedValue(new Error("AI service unavailable"));
 
-      const { getByTestId } = render(<AntiSabotageDashboard />);
+      const { getByTestId, getAllByTestId } = render(<AntiSabotageDashboard />);
 
       await waitFor(() => {
         expect(getByTestId("mind-adaptive-session")).toBeTruthy();
@@ -681,9 +681,15 @@ describe("Mind Discipline, Anti-Sabotage and Social (NP-152)", () => {
         fireEvent.press(getByTestId("mind-adaptive-session"));
       });
 
+      // The fallback is the day-rotated featured protocol (dailyPick), so its
+      // first step may be an info/input step (Next), a pick-one (choices) or a
+      // scale: accept any actionable control rather than pinning to one day.
       await waitFor(() => {
         expect(getByTestId("guided-flow-screen")).toBeTruthy();
-        expect(getByTestId("guided-flow-next")).toBeTruthy();
+        expect(getByTestId("guided-flow-step")).toBeTruthy();
+        expect(
+          getAllByTestId(/^guided-flow-(next|choice-\d+|scale-\d+)$/).length,
+        ).toBeGreaterThan(0);
       });
     });
 
@@ -694,7 +700,7 @@ describe("Mind Discipline, Anti-Sabotage and Social (NP-152)", () => {
       });
       mockedRunAiTask.mockRejectedValue(new Error("AI service unavailable"));
 
-      const { getByTestId } = render(<SocialDashboard />);
+      const { getByTestId, getAllByTestId } = render(<SocialDashboard />);
 
       await waitFor(() => {
         expect(getByTestId("mind-adaptive-session")).toBeTruthy();
@@ -704,9 +710,15 @@ describe("Mind Discipline, Anti-Sabotage and Social (NP-152)", () => {
         fireEvent.press(getByTestId("mind-adaptive-session"));
       });
 
+      // The fallback is the day-rotated featured protocol (dailyPick), so its
+      // first step may be an info/input step (Next), a pick-one (choices) or a
+      // scale: accept any actionable control rather than pinning to one day.
       await waitFor(() => {
         expect(getByTestId("guided-flow-screen")).toBeTruthy();
-        expect(getByTestId("guided-flow-next")).toBeTruthy();
+        expect(getByTestId("guided-flow-step")).toBeTruthy();
+        expect(
+          getAllByTestId(/^guided-flow-(next|choice-\d+|scale-\d+)$/).length,
+        ).toBeGreaterThan(0);
       });
     });
   });
