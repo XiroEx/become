@@ -17,6 +17,7 @@
  */
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import type { ComponentProps } from "react";
 import { ApiError } from "@become/api-client";
 import type { EntitlementsSnapshot, ReviewItem } from "@become/core";
 
@@ -282,7 +283,7 @@ describe("sendPlateFeedback (lib)", () => {
 });
 
 describe("PlateExtras (sheet)", () => {
-  function renderExtras(overrides?: Partial<React.ComponentProps<typeof PlateExtras>>) {
+  function renderExtras(overrides?: Partial<ComponentProps<typeof PlateExtras>>) {
     return render(
       <PlateExtras
         activeCount={1}
