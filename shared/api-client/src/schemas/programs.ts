@@ -836,3 +836,60 @@ export type ProgramJourneyPR = z.infer<typeof ProgramJourneyPRSchema>;
 export type ProgramJourneyResponse = z.infer<
   typeof ProgramJourneyResponseSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Public shares: POST /api/share — a public, read-only snapshot of a program,
+// a single program workout, or a one-off / generated session.
+// Mirrors webapp/app/api/share/route.ts. Answers 201 with `{ shareId, url }`
+// where `url` is a RELATIVE path (`/share/<shareId>`); the native share sheet
+// opens the absolute URL on the web's domain so a signed-out recipient lands
+// on the public web page (`webapp/app/share/[shareId]`).
+// ---------------------------------------------------------------------------
+
+/** The loose draft shape a one-off / generated session snapshots. */
+export const ShareSessionExerciseSchema = z
+  .object({
+    exerciseSlug: z.string().optional(),
+    name: z.string().optional(),
+    sets: z.number().optional(),
+    reps: z.string().optional(),
+    rest: z.string().optional(),
+    details: z.string().optional(),
+    videoUrl: z.string().optional(),
+    thumbnailUrl: z.string().optional(),
+    groupId: z.string().optional(),
+    groupType: z.string().optional(),
+    groupLabel: z.string().optional(),
+    groupRest: z.string().optional(),
+    groupRounds: z.number().optional(),
+  })
+  .passthrough();
+
+export const ShareSessionSchema = z
+  .object({
+    title: z.string(),
+    focus: z.string().optional(),
+    exercises: z.array(ShareSessionExerciseSchema),
+  })
+  .passthrough();
+
+export const ShareCreateRequestSchema = z.object({
+  kind: z.enum(['program', 'workout', 'session']),
+  programId: z.string().optional(),
+  day: z.string().optional(),
+  phase: z.string().optional(),
+  session: ShareSessionSchema.optional(),
+});
+
+export const ShareCreateResponseSchema = z
+  .object({
+    shareId: z.string(),
+    /** A RELATIVE path — `/share/<shareId>`, not an absolute URL. */
+    url: z.string(),
+  })
+  .passthrough();
+
+export type ShareSessionExercise = z.infer<typeof ShareSessionExerciseSchema>;
+export type ShareSession = z.infer<typeof ShareSessionSchema>;
+export type ShareCreateRequest = z.infer<typeof ShareCreateRequestSchema>;
+export type ShareCreateResponse = z.infer<typeof ShareCreateResponseSchema>;

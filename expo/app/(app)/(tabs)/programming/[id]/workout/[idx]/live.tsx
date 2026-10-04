@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View } from "react-native";
+import { Share, View } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -35,12 +35,15 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import {
   ProfileResponseSchema,
+  ShareCreateResponseSchema,
   StreakResponseSchema,
+  apiFetch,
   type ExerciseHistoryEntry,
   type NewPR,
 } from "@become/api-client";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
+import { workoutShareViewerUrl } from "@/lib/share/workoutShare";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -335,6 +338,43 @@ export default function LiveWorkoutRoute({
     exercises: [],
   };
 
+  // Share the workout natively (NP-165, the Track view — NP-087): create the
+  // public, read-only snapshot (`POST /api/share { kind: 'workout',
+  // programId, phase?, day }`, the same contract as the web's ShareButton on
+  // the Track page) and open React Native's `Share` with the absolute URL on
+  // the web's domain. The public page stays on the web (`/share/[shareId]`,
+  // signed out); JSON export stays web-only. Offered only once the workout
+  // loaded (a program the member cannot open never loads — NP-029's rule,
+  // enforced server-side by POST /api/share too).
+  const [shareWorkoutPending, setShareWorkoutPending] = useState(false);
+  const [shareWorkoutError, setShareWorkoutError] = useState<string | null>(null);
+
+  const onShareWorkout = useCallback(async () => {
+    if (shareWorkoutPending) return;
+    setShareWorkoutPending(true);
+    setShareWorkoutError(null);
+    try {
+      const share = await apiFetch("/api/share", ShareCreateResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: {
+          kind: "workout",
+          programId: id,
+          ...(resolvedDay ? { day: resolvedDay } : {}),
+        },
+      });
+      await Share.share({
+        message: workoutShareViewerUrl(share),
+        title: "A Become workout for you",
+      });
+    } catch {
+      setShareWorkoutError("Could not create a share link.");
+    } finally {
+      setShareWorkoutPending(false);
+    }
+  }, [shareWorkoutPending, token, id, resolvedDay]);
+
   if (showSummary) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -442,7 +482,19 @@ export default function LiveWorkoutRoute({
         onRequestSwap={onRequestSwap}
         exerciseHistory={exerciseHistory}
         exercisePRs={exercisePRs}
+        onShareWorkout={workout ? () => void onShareWorkout() : undefined}
+        shareWorkoutPending={shareWorkoutPending}
       />
+      {shareWorkoutError ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <Text
+            testID="live-workout-share-error"
+            className="text-destructive text-xs"
+          >
+            {shareWorkoutError}
+          </Text>
+        </View>
+      ) : null}
       <ExerciseSwapModal
         visible={swapSlug !== null}
         sourceName={swapSourceName}

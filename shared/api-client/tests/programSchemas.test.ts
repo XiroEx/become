@@ -45,6 +45,8 @@ import {
   SavedProgramsReorderRequestSchema,
   SavedProgramsReorderResponseSchema,
   SavedProgramsResponseSchema,
+  ShareCreateRequestSchema,
+  ShareCreateResponseSchema,
   TRACKING_TYPES,
 } from '../src/index';
 
@@ -673,4 +675,32 @@ test('ProgramRecommendResponseSchema: the nulls are NULL, not absent', () => {
     false,
     'experienceLevel/weeklyAvailability are nullable, not optional',
   );
+});
+
+test('ShareCreateRequestSchema: program, workout and session bodies', () => {
+  // Mirrors webapp/app/api/share/route.ts: program takes programId, workout
+  // takes programId + day (+ optional phase), session takes the snapshot.
+  assert.equal(
+    ShareCreateRequestSchema.safeParse({ kind: 'program', programId: 'strength-foundation' }).success,
+    true,
+  );
+  assert.equal(
+    ShareCreateRequestSchema.safeParse({ kind: 'workout', programId: 'strength-foundation', day: 'Day 1' }).success,
+    true,
+  );
+  assert.equal(
+    ShareCreateRequestSchema.safeParse({
+      kind: 'session',
+      session: { title: 'Quick Pump', focus: 'push', exercises: [{ name: 'Push-Up', sets: 3 }] },
+    }).success,
+    true,
+  );
+  assert.equal(ShareCreateRequestSchema.safeParse({ kind: 'nope' }).success, false);
+});
+
+test('ShareCreateResponseSchema: shareId plus the RELATIVE public path', () => {
+  // The route answers `{ shareId, url: '/share/<shareId>' }` — native builds
+  // the absolute URL on the web's domain for the share sheet.
+  const result = ShareCreateResponseSchema.safeParse({ shareId: 'abc123', url: '/share/abc123' });
+  assert.equal(result.success, true, JSON.stringify(result, null, 2));
 });

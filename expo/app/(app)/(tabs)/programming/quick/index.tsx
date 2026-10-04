@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, Share, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CalendarClock, Check, ChevronLeft, Pencil, Play } from "lucide-react-native";
+import { CalendarClock, Check, ChevronLeft, Pencil, Play, Share2 } from "lucide-react-native";
 import {
   apiFetch,
   QuickSessionPatchResponseSchema,
+  ShareCreateResponseSchema,
   WorkoutSaveResponseSchema,
   type WorkoutQuickSaveRequest,
 } from "@become/api-client";
@@ -40,6 +41,7 @@ import {
   QUICK_SESSION_DATE_RE,
   logPlanAvailability,
 } from "@/lib/quickSession/logPlan";
+import { workoutShareViewerUrl } from "@/lib/share/workoutShare";
 
 /**
  * QUICK SESSION OVERVIEW (NP-227).
@@ -141,6 +143,43 @@ export default function QuickSessionOverviewRoute() {
   const [editing, setEditing] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  // Share the session natively (NP-165): snapshot the stashed draft as a
+  // public, read-only link (`POST /api/share { kind: 'session', session }`,
+  // the same contract as the web's ShareButton on the quick-session page)
+  // and open React Native's `Share` with the absolute URL on the web's
+  // domain. The public page stays on the web (`/share/[shareId]`, signed
+  // out); JSON export stays web-only.
+  const onShare = useCallback(async () => {
+    if (!session || sharing) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const share = await apiFetch("/api/share", ShareCreateResponseSchema, {
+        method: "POST",
+        body: {
+          kind: "session",
+          session: {
+            title: session.title,
+            ...(session.focus ? { focus: session.focus } : {}),
+            exercises: session.exercises.map((ex) => ({ ...ex })),
+          },
+        },
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+      });
+      await Share.share({
+        message: workoutShareViewerUrl(share),
+        title: "A Become workout for you",
+      });
+    } catch {
+      setShareError("Could not create a share link.");
+    } finally {
+      setSharing(false);
+    }
+  }, [session, sharing, token]);
 
   // Past days can only be logged, future days can only be planned, today
   // allows both (web `logPlanAvailability`).
@@ -521,8 +560,48 @@ export default function QuickSessionOverviewRoute() {
                 Log or plan
               </Text>
             </Pressable>
+            <Pressable
+              testID="quick-session-overview-share"
+              accessibilityRole="button"
+              accessibilityLabel={sharing ? "Creating link…" : "Share this session"}
+              accessibilityState={{ disabled: sharing }}
+              disabled={sharing}
+              onPress={() => void onShare()}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: sharing ? 0.6 : 1,
+              }}
+            >
+              <Share2 size={16} color={colors.foreground} />
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "500",
+                  color: colors.foreground,
+                }}
+              >
+                {sharing ? "Sharing…" : "Share"}
+              </Text>
+            </Pressable>
           </View>
         </View>
+
+        {shareError ? (
+          <Text
+            testID="quick-session-overview-share-error"
+            style={{ fontSize: 12, color: colors.destructive }}
+          >
+            {shareError}
+          </Text>
+        ) : null}
 
         {logOpen && !editing ? (
           <View

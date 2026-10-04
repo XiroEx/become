@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View } from "react-native";
+import { Share, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -13,6 +13,8 @@ import {
   SavedProgramsResponseSchema,
   SaveToggleResponseSchema,
   ScheduleApiResponseSchema,
+  ShareCreateResponseSchema,
+  apiFetch,
   type ProgramAbandonRequest,
   type ProgramAbandonResponse,
   type ProgramStartDateRequest,
@@ -39,6 +41,7 @@ import { withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { programEditDestination } from "@/lib/programs/customPrograms";
+import { workoutShareViewerUrl } from "@/lib/share/workoutShare";
 
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
@@ -66,6 +69,44 @@ export default function ProgramDetailRoute() {
     isCustomProgram &&
       (data?.isOwner ?? (data?.createdBy ? data.createdBy === user?._id : true)),
   );
+
+  // Share is offered only on programs the member can open (NP-029's rule
+  // travels: catalogue programs, their own custom programs, and ones shared
+  // with them). The detail route 404s otherwise, so `data` is null and no
+  // button renders; the server enforces the same rule in POST /api/share.
+  const canShare = Boolean(
+    data && (!isCustomProgram || isOwner || data?.sharedWith?.includes(user?._id ?? "")),
+  );
+
+  const [sharePending, setSharePending] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  // Share the program natively (NP-165): create the public, read-only
+  // snapshot (`POST /api/share { kind: 'program', programId }`, the same
+  // contract as the web's ShareButton) and open React Native's `Share` with
+  // the absolute URL on the web's domain. The public page stays on the web
+  // (`/share/[shareId]`, signed out); JSON export stays web-only.
+  const onShare = useCallback(async () => {
+    if (!id || sharePending) return;
+    setSharePending(true);
+    setShareError(null);
+    try {
+      const share = await apiFetch("/api/share", ShareCreateResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        method: "POST",
+        body: { kind: "program", programId: id },
+      });
+      await Share.share({
+        message: workoutShareViewerUrl(share),
+        title: "A Become program for you",
+      });
+    } catch {
+      setShareError("Could not create a share link.");
+    } finally {
+      setSharePending(false);
+    }
+  }, [id, sharePending, token]);
 
   // The native builder (NP-168) or the web editor signed in, decided in one
   // place — `programEditDestination` moves off the web with NP-171's rows.
@@ -489,6 +530,13 @@ export default function ProgramDetailRoute() {
           </Text>
         </View>
       ) : null}
+      {shareError ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+          <Text testID="programming-detail-share-error" className="text-destructive">
+            {shareError}
+          </Text>
+        </View>
+      ) : null}
       <ProgramDetail
         program={program}
         isEnrolled={isEnrolled}
@@ -510,6 +558,8 @@ export default function ProgramDetailRoute() {
         isSaved={isSaved}
         onToggleSave={onToggleSave}
         onEdit={isOwner ? onEdit : undefined}
+        onShare={canShare ? () => void onShare() : undefined}
+        sharePending={sharePending}
         actionPending={actionPending}
       />
       <EnrollmentModal

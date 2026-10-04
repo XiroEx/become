@@ -180,6 +180,15 @@ export interface LiveWorkoutClientProps {
    * per case.
    */
   enableSkipFlow?: boolean;
+  /**
+   * Share the workout through the native share sheet (NP-165, the Track
+   * view — NP-087). The route passes `onShareWorkout` only when the member
+   * can open the program (NP-029's rule, enforced server-side by POST
+   * /api/share too); the header button renders only when provided.
+   */
+  onShareWorkout?: () => void;
+  /** True while the workout share link is being created. */
+  shareWorkoutPending?: boolean;
   testID?: string;
 }
 
@@ -416,6 +425,8 @@ export function LiveWorkoutClient({
   exercisePRs,
   resumed = false,
   enableSkipFlow = false,
+  onShareWorkout,
+  shareWorkoutPending = false,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -1032,15 +1043,38 @@ export function LiveWorkoutClient({
           active={view}
           onChange={handleViewChange}
         />
-        <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
-          {workout.workoutTitle}
-        </Text>
-        <Text
-          testID={`${testID}-progress`}
-          className="text-muted-foreground text-xs"
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
         >
-          {`${completedSets} of ${totalSets} sets done`}
-        </Text>
+          <View style={{ flex: 1 }}>
+            <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
+              {workout.workoutTitle}
+            </Text>
+            <Text
+              testID={`${testID}-progress`}
+              className="text-muted-foreground text-xs"
+            >
+              {`${completedSets} of ${totalSets} sets done`}
+            </Text>
+          </View>
+          {onShareWorkout ? (
+            <Button
+              testID={`${testID}-share`}
+              variant="secondary"
+              size="sm"
+              onPress={onShareWorkout}
+              disabled={shareWorkoutPending}
+              accessibilityLabel="Share this workout"
+            >
+              {shareWorkoutPending ? "Sharing…" : "Share"}
+            </Button>
+          ) : null}
+        </View>
         {showResumed ? (
           <Text
             testID={`${testID}-resume-indicator`}

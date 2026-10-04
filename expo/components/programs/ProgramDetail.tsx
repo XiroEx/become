@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { View, ScrollView, Pressable } from "react-native";
 import { Text } from "@/components/Text";
-import { Check, Clock, Heart, Play } from "lucide-react-native";
+import { Check, Clock, Heart, Play, Share2 } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -72,7 +72,6 @@ export interface ProgramDetailProps {
   /** Enrolled state: true if member is actively enrolled in this program. */
   isEnrolled?: boolean;
   activeProgram?: ActiveProgramSummary | null;
-  /** Completed days set (built from GET /api/workouts/logs with completed: true). */
   completedDays?: Set<string>;
   /** In-progress state: true if a workout is in-progress (isResume: true). */
   hasInProgressWorkout?: boolean;
@@ -98,6 +97,15 @@ export interface ProgramDetailProps {
   isSaved?: boolean;
   /** Save or unsave this program. */
   onToggleSave?: () => void | Promise<void>;
+  /**
+   * Share the program through the native share sheet (NP-165). The route
+   * passes `onShare` only when the member can open the program (catalogue,
+   * own custom, or shared with them — NP-029's rule, enforced server-side
+   * by POST /api/share too); the button renders only when provided.
+   */
+  onShare?: () => void;
+  /** True while the share link is being created. */
+  sharePending?: boolean;
   testID?: string;
 }
 
@@ -134,6 +142,8 @@ export function ProgramDetail({
   actionPending = false,
   isSaved = false,
   onToggleSave,
+  onShare,
+  sharePending = false,
   testID = "program-detail",
 }: ProgramDetailProps) {
   const { colors, tint } = useThemeTokens();
@@ -453,6 +463,23 @@ export function ProgramDetail({
             <Heart
               color={isSaved ? colors.primary : colors["muted-foreground"]}
               fill={isSaved ? colors.primary : "transparent"}
+              size={22}
+              strokeWidth={1.5}
+            />
+          </Pressable>
+        ) : null}
+        {onShare ? (
+          <Pressable
+            testID={`${testID}-share`}
+            accessibilityRole="button"
+            accessibilityLabel={`Share program ${program.name}`}
+            accessibilityState={{ disabled: sharePending }}
+            onPress={onShare}
+            disabled={actionPending || sharePending}
+            className="rounded-xl border border-border p-3"
+          >
+            <Share2
+              color={colors["muted-foreground"]}
               size={22}
               strokeWidth={1.5}
             />
