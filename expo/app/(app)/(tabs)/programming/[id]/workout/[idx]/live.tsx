@@ -41,6 +41,7 @@ import {
 } from "@become/api-client";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
+import { NativeShareButton } from "@/components/share/NativeShareButton";
 
 export interface LiveWorkoutRouteProps {
   /** DI for tests — defaults to the SecureStore-backed cache. */
@@ -187,6 +188,14 @@ export default function LiveWorkoutRoute({
   });
 
   const showSummary = finishedGrid !== null;
+
+  // Share (NP-165): the web's Track header shares `{ kind: 'workout',
+  // programId, day }` — no phase NAME travels (the route matches `ph.phase`
+  // verbatim and skips the filter when absent, so day alone resolves the
+  // workout). The day prefers the resolved server day, then the param.
+  const shareDay = resolvedDay || day;
+  const workoutShareBody =
+    valid && shareDay ? { kind: "workout" as const, programId: id, day: shareDay } : null;
 
   // Leaving with unsaved sets loses the workout (NP-082): confirm first.
   // Android hardware back is intercepted through the shared hook; the iOS
@@ -424,6 +433,15 @@ export default function LiveWorkoutRoute({
         initialView={initialView}
         notes={notes}
         onNotesChange={setNotes}
+        headerAction={
+          workoutShareBody ? (
+            <NativeShareButton
+              body={workoutShareBody}
+              getToken={() => token ?? undefined}
+              testID="live-workout-share"
+            />
+          ) : undefined
+        }
         positionScope={programScope(id, resolvedDay)}
         positionStore={
           positionStore !== undefined

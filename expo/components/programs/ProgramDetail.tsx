@@ -6,6 +6,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
+import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
 import type { ActiveProgramSummary } from "@become/api-client";
 
@@ -98,6 +99,15 @@ export interface ProgramDetailProps {
   isSaved?: boolean;
   /** Save or unsave this program. */
   onToggleSave?: () => void | Promise<void>;
+  /**
+   * Share affordance (NP-165): the exact `POST /api/share` body for this
+   * program (`{ kind: 'program', programId }`), or omitted to hide the
+   * button. The caller gates it with `canShareProgram` — catalogue, own
+   * custom, or shared-with-me — the server re-checks and 404s otherwise.
+   */
+  shareBody?: { kind: "program"; programId: string };
+  /** Bearer token getter for the share create. */
+  shareGetToken?: () => string | undefined | Promise<string | undefined>;
   testID?: string;
 }
 
@@ -134,6 +144,8 @@ export function ProgramDetail({
   actionPending = false,
   isSaved = false,
   onToggleSave,
+  shareBody,
+  shareGetToken,
   testID = "program-detail",
 }: ProgramDetailProps) {
   const { colors, tint } = useThemeTokens();
@@ -457,6 +469,13 @@ export function ProgramDetail({
               strokeWidth={1.5}
             />
           </Pressable>
+        ) : null}
+        {shareBody ? (
+          <NativeShareButton
+            body={shareBody}
+            getToken={shareGetToken}
+            testID={`${testID}-share`}
+          />
         ) : null}
       </View>
 

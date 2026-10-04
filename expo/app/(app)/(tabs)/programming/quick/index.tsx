@@ -18,6 +18,7 @@ import {
 } from "@become/core";
 import { Text } from "@/components/Text";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
+import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { DatePicker } from "@/components/programs/DatePicker";
 import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePrompt";
 import { SessionEditor } from "@/components/workout/SessionEditor";
@@ -319,6 +320,28 @@ export default function QuickSessionOverviewRoute() {
     () => focusLabelFor(session?.focus),
     [session?.focus],
   );
+
+  // Share (NP-165): the web's quick-session page shares `{ kind: 'session',
+  // session: { title, focus, exercises } }` — the client-supplied snapshot
+  // the server sanitizes. One-off content has no visibility gate.
+  const sessionShareBody = useMemo(() => {
+    if (!session) return null;
+    return {
+      kind: "session" as const,
+      session: {
+        title: session.title,
+        ...(session.focus ? { focus: session.focus } : {}),
+        exercises: session.exercises.map((ex) => ({
+          exerciseSlug: ex.exerciseSlug,
+          name: ex.name,
+          sets: ex.sets,
+          reps: ex.reps,
+          ...(ex.rest ? { rest: ex.rest } : {}),
+          ...(ex.duration ? { duration: ex.duration } : {}),
+        })),
+      },
+    };
+  }, [session]);
 
   if (session === undefined) {
     return (
@@ -664,6 +687,15 @@ export default function QuickSessionOverviewRoute() {
           >
             {session.title}
           </Text>
+          {sessionShareBody ? (
+            <View style={{ marginTop: 8, alignItems: "flex-start" }}>
+              <NativeShareButton
+                body={sessionShareBody}
+                getToken={() => token ?? undefined}
+                testID="quick-session-overview-share"
+              />
+            </View>
+          ) : null}
           <Text
             style={{
               marginTop: 4,
