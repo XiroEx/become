@@ -131,6 +131,7 @@
       ],
       "expo-image-picker",
       "expo-speech-recognition",
+      "./plugins/withAndroidxWorkAlignment",
       [
         "expo-build-properties",
         {
