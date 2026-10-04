@@ -4,6 +4,7 @@ import { AuthGuard } from "@/lib/auth/AuthGuard";
 import { ConsentGate } from "@/components/auth/ConsentGate";
 import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 import { MindSessionWarmer } from "@/components/mind/MindSessionWarmer";
+import { PushSyncBridge } from "@/components/push/PushSyncBridge";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -68,6 +69,11 @@ export default function AppGroupLayout() {
           {/* Pre-composes the AI Mind session in the background on app open
               and when returning to the foreground (NP-102). Silent and non-blocking. */}
           <MindSessionWarmer />
+          {/* Re-registers this device's raw push token on app open and every
+              foreground return, and unsubscribes it when the OS permission is
+              revoked (NP-065). Renders nothing; background registration never
+              re-enables. */}
+          <PushSyncBridge />
           <Stack
             screenOptions={{
               headerShown: false,

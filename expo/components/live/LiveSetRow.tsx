@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { Check } from "lucide-react-native";
@@ -5,10 +6,15 @@ import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   bellWeightLabel,
+  defaultDurationUnit,
   isFloorsExercise,
   normalizeTracking,
+  secondsToUnitDisplay,
+  tracksSpeed,
   tracksTime,
+  unitDisplayToSeconds,
   type BellWeightInfo,
+  type DurationUnit,
 } from "@become/core";
 
 /** A set with nothing in it — no bell, no total hint. */
@@ -19,6 +25,8 @@ export interface SetInputs {
   reps: boolean;
   duration: boolean;
   distance: boolean;
+  /** mph — for `time_distance` and `intervals` (the web's speed input). */
+  speed: boolean;
 }
 
 /**
@@ -33,8 +41,10 @@ export interface SetInputs {
  * see webapp/app/dashboard/workout/[programId]/workout/live/
  * LiveWorkoutClient.tsx, `showWeightInput` … `tracking === "time_distance"`.
  *
- * The web also offers a speed input and a sec/min toggle for cardio; those are
- * NP-080's UI, not this card's logic.
+ * Speed follows the same screen (`showSpeedInput`): `time_distance` and
+ * `intervals` ask for it. Duration follows `tracksTime` (time,
+ * time_distance, intervals — optional for intervals, like the web's
+ * "Log time or just tap Done to move on" hint).
  */
 export function setInputsFor(trackingType?: string | null): SetInputs {
   const t = normalizeTracking(trackingType);
@@ -43,6 +53,7 @@ export function setInputsFor(trackingType?: string | null): SetInputs {
     reps: t === "reps_weight" || t === "reps_bodyweight" || t === "reps_only",
     duration: tracksTime(t),
     distance: t === "time_distance",
+    speed: tracksSpeed(t),
   };
 }
 
@@ -54,6 +65,8 @@ export interface LiveSetState {
   durationSec?: number | null;
   /** Meters — for time_distance / distance tracking types. */
   distance?: number | null;
+  /** mph — for time_distance / intervals tracking types. */
+  speed?: number | null;
 }
 
 export interface LiveSetRowProps {
@@ -101,6 +114,23 @@ export function LiveSetRow({
   const { colors } = useThemeTokens();
   const tid = testID ?? `live-set-${setIndex}`;
   const inputs: SetInputs = setInputsFor(trackingType);
+  // The web's sec/min toggle for duration (`durationUnit.ts` in
+  // `@become/core` ← webapp/lib/workout/durationUnit.ts): the stored value
+  // is always seconds; the toggle only changes what the member types into.
+  // Cardio machines are prescribed in minutes almost everywhere else in the
+  // app, so `time_distance` opens in minutes and short timed work in seconds.
+  // Derived during render (not in an effect): the Live view reuses one row
+  // across steps, so when the exercise changes the toggle resets to that
+  // exercise's default — the web's `useEffect … [currentExerciseIndex]`
+  // rule — while a manual toggle sticks for the exercise it was made on.
+  const [unitOverride, setUnitOverride] = useState<{
+    forType?: string | null;
+    unit: DurationUnit;
+  } | null>(null);
+  const durationUnit =
+    unitOverride && unitOverride.forType === trackingType
+      ? unitOverride.unit
+      : defaultDurationUnit(trackingType);
   // The web's rule, verbatim: the doubled total is shown when the implement is
   // one of a loaded PAIR and a positive weight has been entered. A goblet
   // squat, a carry and any single-arm dumbbell work are one implement, so
@@ -182,20 +212,48 @@ export function LiveSetRow({
       ) : null}
       {inputs.duration ? (
         <View style={{ flex: 1 }}>
+          <View
+            testID={`${tid}-duration-header`}
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+          >
+            <Text
+              testID={`${tid}-duration-label`}
+              className="text-foreground text-sm font-medium mb-1"
+            >
+              {`Time (${durationUnit})`}
+            </Text>
+            <Pressable
+              testID={`${tid}-duration-toggle`}
+              accessibilityRole="button"
+              accessibilityLabel={`Show duration in ${durationUnit === "sec" ? "minutes" : "seconds"}`}
+              onPress={() =>
+                setUnitOverride({
+                  forType: trackingType,
+                  unit: durationUnit === "sec" ? "min" : "sec",
+                })
+              }
+              className="rounded-full bg-muted px-2 py-0.5"
+            >
+              <Text className="text-muted-foreground text-xs font-semibold">
+                {durationUnit === "sec" ? "min" : "sec"}
+              </Text>
+            </Pressable>
+          </View>
           <Input
             testID={`${tid}-duration`}
-            label="Time (s)"
-            keyboardType="number-pad"
-            value={
-              state.durationSec !== null && state.durationSec !== undefined
-                ? String(state.durationSec)
-                : ""
-            }
-            onChangeText={(text) =>
-              onChange({ ...state, durationSec: parseNum(text) })
-            }
+            keyboardType="decimal-pad"
+            value={secondsToUnitDisplay(state.durationSec, durationUnit)}
+            onChangeText={(text) => {
+              const seconds = unitDisplayToSeconds(text, durationUnit);
+              onChange({
+                ...state,
+                durationSec: seconds === "" ? null : Number(seconds),
+              });
+            }}
             placeholder={
-              prefill?.durationSec != null ? String(prefill.durationSec) : "0"
+              prefill?.durationSec != null
+                ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
+                : "0"
             }
           />
         </View>
@@ -216,6 +274,26 @@ export function LiveSetRow({
             }
             placeholder={
               prefill?.distance != null ? String(prefill.distance) : "0"
+            }
+          />
+        </View>
+      ) : null}
+      {inputs.speed ? (
+        <View style={{ flex: 1 }}>
+          <Input
+            testID={`${tid}-speed`}
+            label="Speed (mph)"
+            keyboardType="decimal-pad"
+            value={
+              state.speed !== null && state.speed !== undefined
+                ? String(state.speed)
+                : ""
+            }
+            onChangeText={(text) =>
+              onChange({ ...state, speed: parseNum(text) })
+            }
+            placeholder={
+              prefill?.speed != null ? String(prefill.speed) : "0.0"
             }
           />
         </View>

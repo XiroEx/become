@@ -268,7 +268,8 @@ describe("(id: e015c89b) Complete Workout appears only once every set is done, a
         initialView="live"
       />,
     );
-    // Live opens on set 1 with nothing logged, and there is no finish button.
+    // Live opens on set 1 with nothing logged, and there is no separate
+    // finish button — NP-220: completing the last step IS the finish.
     expect(getByTestId("live-workout-live")).toBeTruthy();
 
     for (let i = 0; i < 4; i++) {
@@ -278,9 +279,15 @@ describe("(id: e015c89b) Complete Workout appears only once every set is done, a
         "225",
         "5",
       );
-      if (i < 3) fireEvent.press(getByTestId("live-workout-live-next"));
+      // The last step's button reads Finish Workout and enters the finish
+      // flow; every earlier step advances with Complete Set.
+      if (i < 3) fireEvent.press(getByTestId("live-workout-live-complete"));
     }
-    fireEvent.press(getByTestId("live-workout-finish"));
+    expect(
+      getByTestId("live-workout-live-complete").props.accessibilityLabel,
+    ).toBe("Finish Workout");
+    fireEvent.press(getByTestId("live-workout-live-complete"));
+    expect(onFinish).toHaveBeenCalledTimes(1);
     const fromLive = onFinish.mock.calls[0]![0] as LiveGrid;
 
     // The same workout logged in Track hands over an identical grid.
@@ -358,10 +365,27 @@ describe("(id: e015c89b) Complete Workout appears only once every set is done, a
         await act(async () => {
           fireEvent.press(screen.getByTestId("live-workout-view-live"));
         });
+        // NP-220: Live has no separate Finish button — the last step's
+        // Complete IS the finish. The first press completes step 1 and
+        // advances to step 2; the second press finishes the workout.
+        // (The sets were already ticked in Track above, so each press
+        // only advances — exactly what was typed is kept either way.)
+        await act(async () => {
+          fireEvent.press(screen.getByTestId("live-workout-live-complete"));
+        });
+        // After the first press the client may already show the summary
+        // (both sets were ticked in Track, so the flow's last step is the
+        // finish) — only press again if Live is still on screen.
+        if (screen.queryByTestId("live-workout-live-complete")) {
+          await act(async () => {
+            fireEvent.press(screen.getByTestId("live-workout-live-complete"));
+          });
+        }
+      } else {
+        await act(async () => {
+          fireEvent.press(screen.getByTestId("live-workout-finish"));
+        });
       }
-      await act(async () => {
-        fireEvent.press(screen.getByTestId("live-workout-finish"));
-      });
       // The same summary, from either view.
       await waitFor(() => {
         expect(screen.getByTestId("workout-summary-title")).toBeTruthy();
@@ -506,7 +530,7 @@ describe("(id: e015c89c) Cardio exercises in Track use the duration and distance
 
     fireEvent.changeText(
       getByTestId("live-workout-treadmill-set-0-duration"),
-      "600",
+      "10",
     );
     grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.treadmill![0]!.durationSec).toBe(600);

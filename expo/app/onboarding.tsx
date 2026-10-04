@@ -285,10 +285,12 @@ export default function OnboardingRoute() {
 
         // The considered moment for the notification permission ask
         // (NP-065): after onboarding completes, before Home — never at
-        // first launch. A refusal (or NP-065 not being filled in yet)
-        // must never block landing Home.
+        // first launch. A refusal (or a simulator with no token) must
+        // never block landing Home.
         try {
-          await askNotificationPermissionAfterOnboarding();
+          await askNotificationPermissionAfterOnboarding({
+            getJwt: () => Promise.resolve(token ?? null),
+          });
         } catch {
           // ignore — permission is optional
         }

@@ -31,6 +31,7 @@ import {
   mergeAdHocFromLog,
   type WorkoutExercise,
 } from "@become/core";
+import { parseRestSeconds } from "@/components/live/LiveWorkoutClient";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -762,6 +763,7 @@ export function useLiveWorkout(
           weight: null,
           durationSec: null,
           distance: null,
+          speed: null,
           completed: false,
         }),
       );
@@ -924,7 +926,8 @@ export function useLiveWorkout(
             groupLabel: ex.groupLabel ?? ex.groupType,
             groupType: ex.groupType,
             groupRounds: ex.groupRounds,
-            restSec: ex.rest ? parseInt(ex.rest, 10) || 90 : 90,
+            groupRest: ex.groupRest,
+            restSec: ex.rest ? parseRestSeconds(ex.rest) || 90 : 90,
             videoUrl: ex.videoUrl ?? null,
             thumbnailUrl: ex.thumbnailUrl ?? null,
             videoWidth: ex.videoWidth ?? null,
@@ -1042,6 +1045,7 @@ export function useLiveWorkout(
               groupLabel: (m as any).groupLabel ?? existing?.groupLabel,
               groupType: (m as any).groupType ?? existing?.groupType,
               groupRounds: (m as any).groupRounds ?? existing?.groupRounds,
+              groupRest: (m as any).groupRest ?? existing?.groupRest,
               restSec: existing?.restSec ?? 90,
               addedAdHoc: Boolean((m as any).addedAdHoc),
               videoUrl: existing?.videoUrl ?? null,
@@ -1118,6 +1122,9 @@ export function useLiveWorkout(
                   t === "time_distance" && s.distance && s.distance > 0
                     ? s.distance
                     : null,
+                // The web restores `s.speed` the same way (LiveWorkoutClient
+                // resume: `speed: s.speed && s.speed > 0 ? … : ""`).
+                speed: s.speed && s.speed > 0 ? s.speed : null,
                 completed: Boolean(s.completed),
               }));
             } else {
@@ -1126,6 +1133,7 @@ export function useLiveWorkout(
                 weight: null,
                 durationSec: null,
                 distance: null,
+                speed: null,
                 completed: false,
               }));
             }
@@ -1150,6 +1158,7 @@ export function useLiveWorkout(
                   weight: s.weight != null ? String(s.weight) : "",
                   duration: s.durationSec != null ? String(s.durationSec) : "",
                   distance: s.distance != null ? String(s.distance) : "",
+                  speed: s.speed != null ? String(s.speed) : "",
                   completed: s.completed,
                 })),
               ),
@@ -1162,6 +1171,7 @@ export function useLiveWorkout(
                       weight: null,
                       durationSec: null,
                       distance: null,
+                      speed: null,
                       completed: false,
                     }
                   : s,
@@ -1209,6 +1219,7 @@ export function useLiveWorkout(
               weight: null,
               durationSec: null,
               distance: null,
+              speed: null,
               completed: false,
             }));
           });
