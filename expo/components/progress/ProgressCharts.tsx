@@ -22,11 +22,15 @@ import { View, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import Svg, {
+  Path,
   Rect,
   Line,
   Text as SvgText,
 } from "react-native-svg";
-import type { ProgressWeeklyVolume } from "@become/api-client";
+import type {
+  DashboardMetricPoint,
+  ProgressWeeklyVolume,
+} from "@become/api-client";
 
 /** `1.2K` / `3.4M`, the web's `fmt()` in `ProgressClient.tsx`. */
 export function formatVolume(lbs: number): string {
@@ -292,6 +296,170 @@ export function MonthGrid({
           );
         })}
       </View>
+    </View>
+  );
+}
+
+/* ========================================================================== *
+ * Tile-sized charts — the body of a 2x1 metric tile (NP-156).
+ *
+ * The web draws these with Recharts in a fixed ink (`LineTileChart` strokes
+ * `#22d3ee`, `BarTileChart` fills `#a855f7` — leftovers from the old dark-only
+ * intelligence tiles). This kit does not port an ink: the line is the `primary`
+ * token and the bars the `accent` token, so both read in light and dark mode.
+ * Everything else matches the web: no axes, no dots, no tooltip, points evenly
+ * spaced (the web's hidden `XAxis` is a category axis), and a point whose `t`
+ * or `value` is unusable is dropped rather than drawn at NaN.
+ * ========================================================================== */
+
+/**
+ * The plottable values of a metric series, in order — the web's
+ * `data.map(…).filter(Number.isFinite)` in `LineTileChart` / `BarTileChart`.
+ * `t` arrives as an ISO string over JSON (it is a `Date` on the server), so it
+ * is coerced defensively and an unparseable point is dropped.
+ */
+export function metricChartValues(
+  data: readonly DashboardMetricPoint[] | undefined,
+): number[] {
+  const out: number[] = [];
+  for (const p of data ?? []) {
+    if (!p) continue;
+    const t: unknown = p.t;
+    const ms = t instanceof Date ? t.getTime() : new Date(String(t)).getTime();
+    const value = typeof p.value === "number" ? p.value : Number.NaN;
+    if (Number.isFinite(ms) && Number.isFinite(value)) out.push(value);
+  }
+  return out;
+}
+
+export interface MetricTileChartProps {
+  data: readonly DashboardMetricPoint[];
+  /** Fixed height in px; the tile gives the chart the room it has left. */
+  height?: number;
+  /** Overrides the token colour (tests resolve the token themselves). */
+  color?: string;
+  testID?: string;
+}
+
+const TILE_CHART_HEIGHT = 44;
+const TILE_CHART_PAD = 3;
+
+/** `M x y L x y …` for evenly-spaced values inside `width` × `height`. */
+export function sparklinePath(
+  values: readonly number[],
+  width: number,
+  height: number,
+  pad = TILE_CHART_PAD,
+): string {
+  if (values.length === 0) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const plotW = Math.max(1, width - pad * 2);
+  const plotH = Math.max(1, height - pad * 2);
+  const x = (i: number): number =>
+    values.length <= 1 ? pad + plotW / 2 : pad + (i / (values.length - 1)) * plotW;
+  const y = (v: number): number => pad + plotH - ((v - min) / span) * plotH;
+  return values
+    .map((v, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(2)} ${y(v).toFixed(2)}`)
+    .join(" ");
+}
+
+/** A metric's series as a theme-coloured line — the web's `LineTileChart`. */
+export function MetricLineChart({
+  data,
+  height = TILE_CHART_HEIGHT,
+  color,
+  testID = "metric-line-chart",
+}: MetricTileChartProps) {
+  const { colors } = useThemeTokens();
+  const [width, setWidth] = useState<number>(140);
+  const values = metricChartValues(data);
+  const stroke = color ?? colors.primary;
+  const d = sparklinePath(values, width, height);
+
+  return (
+    <View
+      testID={testID}
+      accessibilityRole="image"
+      accessibilityLabel={`Trend line, ${values.length} points`}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - width) > 1) setWidth(w);
+      }}
+      style={{ width: "100%", height }}
+    >
+      <Svg width={width} height={height}>
+        {d ? (
+          <Path
+            testID={`${testID}-path`}
+            d={d}
+            stroke={stroke}
+            strokeWidth={2}
+            fill="none"
+          />
+        ) : null}
+      </Svg>
+    </View>
+  );
+}
+
+/** A metric's series as theme-coloured bars — the web's `BarTileChart`. */
+export function MetricBarChart({
+  data,
+  height = TILE_CHART_HEIGHT,
+  color,
+  testID = "metric-bar-chart",
+}: MetricTileChartProps) {
+  const { colors } = useThemeTokens();
+  const [width, setWidth] = useState<number>(140);
+  const values = metricChartValues(data);
+  const fill = color ?? colors.accent;
+
+  const pad = TILE_CHART_PAD;
+  const plotW = Math.max(1, width - pad * 2);
+  const plotH = Math.max(1, height - pad * 2);
+  // Bars read from zero when the series is non-negative (the web's bar chart
+  // does), so the baseline is 0 unless the data goes below it.
+  const max = values.length > 0 ? Math.max(...values, 0) : 0;
+  const min = values.length > 0 ? Math.min(...values, 0) : 0;
+  const span = max - min || 1;
+  const slot = values.length > 0 ? plotW / values.length : plotW;
+  const barWidth = Math.max(2, Math.min(14, slot * 0.7));
+
+  return (
+    <View
+      testID={testID}
+      accessibilityRole="image"
+      accessibilityLabel={`Bar chart, ${values.length} bars`}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 0 && Math.abs(w - width) > 1) setWidth(w);
+      }}
+      style={{ width: "100%", height }}
+    >
+      <Svg width={width} height={height}>
+        {values.map((v, i) => {
+          const zeroY = pad + plotH - ((0 - min) / span) * plotH;
+          const valueY = pad + plotH - ((v - min) / span) * plotH;
+          const barH = Math.max(1, Math.abs(zeroY - valueY));
+          const barY = Math.min(zeroY, valueY);
+          const barX = pad + i * slot + (slot - barWidth) / 2;
+          return (
+            <Rect
+              key={`metric-bar-${i}`}
+              testID={`${testID}-bar-${i}`}
+              x={barX}
+              y={barY}
+              width={barWidth}
+              height={barH}
+              rx={2}
+              ry={2}
+              fill={fill}
+            />
+          );
+        })}
+      </Svg>
     </View>
   );
 }

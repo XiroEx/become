@@ -12,6 +12,13 @@ export interface StatActionTileProps {
   onOpenNutrition?: () => void;
   onOpenWorkoutNow?: () => void;
   onOpenWeight?: () => void;
+  /**
+   * Fired on press BEFORE the tile's own action, never instead of it — the
+   * smart tile's engagement signal (NP-156).
+   */
+  onTap?: () => void;
+  /** Defaults to `tile-<id>`; the smart tile renames its rotated card. */
+  testID?: string;
 }
 
 export function StatActionTile({
@@ -20,6 +27,8 @@ export function StatActionTile({
   onOpenNutrition,
   onOpenWorkoutNow,
   onOpenWeight,
+  onTap,
+  testID,
 }: StatActionTileProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
@@ -91,11 +100,14 @@ export function StatActionTile({
 
   return (
     <Pressable
-      testID={`tile-${tile.id}`}
+      testID={testID ?? `tile-${tile.id}`}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${actionValue}`}
       accessibilityHint={subtitle}
-      onPress={handlePress}
+      onPress={() => {
+        onTap?.();
+        handlePress();
+      }}
       style={({ pressed }) => [
         styles.card,
         {
