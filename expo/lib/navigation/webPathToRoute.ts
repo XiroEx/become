@@ -82,6 +82,8 @@ export const NATIVE_ROUTES = {
   browsePrograms: "/(tabs)/programming/browse",
   savedPrograms: "/(tabs)/programming/saved",
   programSearch: "/(tabs)/programming/search",
+  /** Training history — `app/(app)/(tabs)/programming/history.tsx` (NP-112). */
+  history: "/(tabs)/programming/history",
   mind: "/(tabs)/mind",
   nutrition: "/(tabs)/nutrition",
   nutritionSearch: "/(tabs)/nutrition/search",
@@ -549,8 +551,11 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
   if (section === "history" || section === "insights") {
-    // Training history and single-metric insights: the Workout tab owns
-    // the subject until those screens exist.
+    // Training history (NP-112): the native history screen. Insights stays
+    // on the Workout tab — no native screen yet.
+    if (section === "history") {
+      return native(NATIVE_ROUTES.history, params, "exact");
+    }
     return native(NATIVE_ROUTES.workout, params, "nearest");
   }
   if (section === "progress") {

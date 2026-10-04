@@ -1207,7 +1207,7 @@ describe("DashboardRoute navigation", () => {
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
     });
 
-    it("Progress quick link opens History (NP-112) until native progress exists", async () => {
+    it("Progress quick link opens the training history (NP-112)", async () => {
       wireSchedule();
       const { getByTestId } = render(<DashboardRoute />);
 
@@ -1215,7 +1215,7 @@ describe("DashboardRoute navigation", () => {
         expect(getByTestId("dashboard-quick-link-progress")).toBeTruthy();
       });
       fireEvent.press(getByTestId("dashboard-quick-link-progress"));
-      expect(mockPush).toHaveBeenCalledWith("/progress");
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/history");
     });
   });
 });

@@ -32,6 +32,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
 import { notifyProgramUpdated } from "@/lib/programs/programEvents";
+import { canShareProgram } from "@/lib/share/shareLink";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
 import { enrollProgram, suggestStartDate } from "@/lib/programs/enrollment";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
@@ -341,6 +342,27 @@ export default function ProgramDetailRoute() {
       : { id, name: "Loading…", description: "", phases: [] };
   }, [data, id]);
 
+  // Share (NP-165): only programs the member can open — catalogue, their own
+  // custom, or shared-with-them. The server re-checks (404 otherwise).
+  // `createdBy` may arrive populated (`{ _id, name }` from the custom list)
+  // or as a bare id — either way `.toString()` is the comparison.
+  const shareable = canShareProgram(
+    data
+      ? {
+          isCustom: data.isCustom,
+          createdBy:
+            typeof data.createdBy === "string" ||
+            (typeof data.createdBy === "object" && data.createdBy !== null)
+              ? (data.createdBy as string | { toString(): string })
+              : null,
+          sharedWith: Array.isArray(data.sharedWith)
+            ? (data.sharedWith as (string | { toString(): string } | null)[])
+            : null,
+        }
+      : null,
+    user?._id,
+  );
+
   // Derive phase and day tab defaults
   const defaultPhaseIndex = useMemo(() => {
     if (isEnrolled && activeProgram?.currentPhase) {
@@ -511,6 +533,8 @@ export default function ProgramDetailRoute() {
         onToggleSave={onToggleSave}
         onEdit={isOwner ? onEdit : undefined}
         actionPending={actionPending}
+        shareBody={shareable ? { kind: "program", programId: id } : undefined}
+        shareGetToken={() => token ?? undefined}
       />
       <EnrollmentModal
         key={suggestedStartDate}

@@ -19,7 +19,6 @@ import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSe
 import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
 
 /**
@@ -60,7 +59,7 @@ export default function ProgrammingIndexRoute() {
   const [showGenerate, setShowGenerate] = useState(false);
 
   const handleOpenHistory = () => {
-    router.push(nativeRouteFor("/dashboard/history") as never);
+    router.push("/(tabs)/programming/history" as never);
   };
 
   const handleOpenBrowse = () => {

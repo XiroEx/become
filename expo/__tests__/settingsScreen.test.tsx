@@ -9,6 +9,11 @@ jest.mock("expo-router", () => ({
     replace: mockReplace,
     back: jest.fn(),
   }),
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    // Run the focus effect on mount, like the tab coming into view.
+    const React = jest.requireActual("react");
+    React.useEffect(effect, [effect]);
+  },
 }));
 
 const mockOpenBrowserAsync = jest.fn(async (_url?: string, _options?: unknown) => ({ type: "dismiss" }));
@@ -52,6 +57,7 @@ import { setStoredPushToken, getStoredPushToken } from "@/lib/push/pushTokenStor
 import { createLiveWorkoutCache, liveCacheKey } from "@/lib/live/liveWorkoutCache";
 import { getOfflineWrites } from "@/lib/offline/writes";
 import { HEALTH_DISCLAIMER_SHORT } from "@become/core";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import SettingsScreen from "../app/(app)/settings";
 /* eslint-enable import/first */
 
@@ -85,6 +91,9 @@ describe("SettingsScreen", () => {
     mockReplace.mockClear();
     mockPush.mockClear();
     mockOpenBrowserAsync.mockClear();
+    jest.clearAllMocks();
+    // Fresh denial-reminder storage per test.
+    await AsyncStorage.clear();
 
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -147,10 +156,15 @@ describe("SettingsScreen", () => {
     }) as typeof fetch;
   });
 
-  function renderScreen() {
+  function renderScreen(notifDeps?: {
+    getPermission?: () => Promise<"granted" | "denied" | "undetermined">;
+    enablePush?: (jwt: string) => Promise<{ kind: string }>;
+    repairPush?: (jwt: string) => Promise<{ kind: string }>;
+    openSettings?: () => Promise<void>;
+  }) {
     return render(
       <AuthProvider fetchImpl={globalThis.fetch}>
-        <SettingsScreen />
+        <SettingsScreen notifDeps={notifDeps} />
       </AuthProvider>,
     );
   }
@@ -276,6 +290,109 @@ describe("SettingsScreen", () => {
       expect(patchCall).toBeDefined();
       expect(JSON.parse(patchCall?.init?.body as string)).toEqual({ emailEngagement: false });
     });
+  });
+
+  it("(e015c821) a per-type switch PATCHes its own key flat, like the web", async () => {
+    const { getByTestId } = renderScreen();
+
+    await waitFor(() => {
+      expect(getByTestId("notification-toggle-workoutReminder")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("notification-toggle-workoutReminder"));
+    });
+
+    await waitFor(() => {
+      const patchCall = fetchCalls.find(
+        (c) =>
+          c.url.includes("/api/notifications/preferences") &&
+          c.init?.method === "PATCH" &&
+          String(c.init?.body).includes("workoutReminder"),
+      );
+      expect(patchCall).toBeDefined();
+      // Flat body — the shape the server reads per key, so the web reads it back.
+      expect(JSON.parse(patchCall?.init?.body as string)).toEqual({
+        workoutReminder: false,
+      });
+    });
+  });
+
+  it("(e015c821) chatMessage stays hidden while NP-032 keeps chat out", async () => {
+    const { getByTestId, queryByTestId } = renderScreen();
+
+    await waitFor(() => {
+      expect(getByTestId("notification-toggle-workoutReminder")).toBeTruthy();
+    });
+
+    expect(queryByTestId("notification-toggle-chatMessage")).toBeNull();
+    // The other nine per-type switches are visible.
+    for (const key of [
+      "dailyGlance",
+      "checkInReminder",
+      "mindReminder",
+      "goalNudge",
+      "superStreakAtRisk",
+      "streakAtRisk",
+      "mealReminder",
+      "reEngagement",
+    ]) {
+      expect(getByTestId(`notification-toggle-${key}`)).toBeTruthy();
+    }
+  });
+
+  it("(e015c823) turning notifications off posts unsubscribe with no endpoint (account-wide)", async () => {
+    const { getByTestId } = renderScreen();
+
+    await waitFor(() => {
+      expect(getByTestId("notifications-toggle")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("notifications-toggle"));
+    });
+
+    await waitFor(() => {
+      const unsubCall = fetchCalls.find((c) =>
+        c.url.includes("/api/notifications/unsubscribe"),
+      );
+      expect(unsubCall).toBeDefined();
+      expect(unsubCall?.init?.method).toBe("POST");
+      // No endpoint = the server drops EVERY device and latches the master
+      // switch off — notifications stop on all of the member's devices.
+      expect(JSON.parse(unsubCall?.init?.body as string)).toEqual({});
+    });
+  });
+
+  it("(e015c822) a denied member is shown the way to iOS Settings", async () => {
+    // Past the 7-day silence so the reminder shows.
+    const storage = AsyncStorage;
+    const { PUSH_CARD_DENIED_AT_KEY } = jest.requireActual(
+      "../components/push/PushOptInCard",
+    );
+    await storage.setItem(
+      PUSH_CARD_DENIED_AT_KEY,
+      String(Date.now() - 8 * 24 * 60 * 60 * 1000),
+    );
+
+    const openSettings = jest.fn(async () => {});
+    const { getByTestId } = renderScreen({
+      getPermission: async () => "denied",
+      openSettings,
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("notifications-status").props.children).toBe("Blocked");
+    });
+    await waitFor(() => {
+      expect(getByTestId("notifications-denied-reminder")).toBeTruthy();
+    });
+    expect(getByTestId("notifications-open-settings")).toBeTruthy();
+    // The button opens the OS Settings app at Become's permissions.
+    await act(async () => {
+      fireEvent.press(getByTestId("notifications-open-settings"));
+    });
+    expect(openSettings).toHaveBeenCalledTimes(1);
   });
 
   it("toggles AI consent with DELETE /api/me/ai-consent", async () => {

@@ -189,6 +189,12 @@ export interface LiveWorkoutClientProps {
    * per case.
    */
   enableSkipFlow?: boolean;
+  /**
+   * Action rendered beside the title (the Track header on the web carries
+   * the Share button — NP-165 passes `NativeShareButton` here from the
+   * route, which owns the share body). Omitted, the title stands alone.
+   */
+  headerAction?: React.ReactNode;
   testID?: string;
 }
 
@@ -427,6 +433,7 @@ export function LiveWorkoutClient({
   onDismissHint,
   resumed = false,
   enableSkipFlow = false,
+  headerAction,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -1046,6 +1053,9 @@ export function LiveWorkoutClient({
         <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
           {workout.workoutTitle}
         </Text>
+        {headerAction ? (
+          <View testID={`${testID}-header-action`}>{headerAction}</View>
+        ) : null}
         <Text
           testID={`${testID}-progress`}
           className="text-muted-foreground text-xs"

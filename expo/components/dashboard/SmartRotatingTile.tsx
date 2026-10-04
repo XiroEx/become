@@ -77,6 +77,8 @@ export interface SmartRotatingTileProps {
   onMoodChange?: (mood: MoodLevel) => Promise<void> | void;
   onOpenSettings?: () => void;
   onOpenStreaks?: () => void;
+  /** Opens training history (NP-112). The This Week + Total Workouts tiles. */
+  onOpenHistory?: () => void;
   testID?: string;
 }
 
@@ -99,6 +101,7 @@ export function SmartRotatingTile({
   onMoodChange,
   onOpenSettings,
   onOpenStreaks,
+  onOpenHistory,
   testID,
 }: SmartRotatingTileProps) {
   const { colors } = useThemeTokens();
@@ -206,6 +209,7 @@ export function SmartRotatingTile({
         onMoodChange={onMoodChange}
         onOpenSettings={onOpenSettings}
         onOpenStreaks={onOpenStreaks}
+        onOpenHistory={onOpenHistory}
         onTap={handleTap}
         testID={cardTestId}
       />

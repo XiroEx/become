@@ -32,7 +32,7 @@ import { SavedFoodLogSheet } from "@/components/nutrition/SavedFoodLogSheet";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
-import { useApiErrorHandler } from "@/lib/errors";
+import { useApiErrorHandler, routeApiError } from "@/lib/errors";
 import {
   syntheticGate,
   useEntitlements,
@@ -41,6 +41,14 @@ import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { logSavedMeal } from "@/lib/nutrition/basketLog";
 import { logFoodItem } from "@/lib/nutrition/mealLogActions";
+import {
+  createSavedMeal,
+} from "@/lib/nutrition/savedMeals";
+import { uploadMealImage } from "@/lib/media/upload";
+import {
+  MealEditorSheet,
+  type MealEditorSubmit,
+} from "@/components/nutrition/MealEditorSheet";
 import { defaultTagAt, minutesOfDay, titleCase } from "@/lib/nutrition/mealSchedule";
 import {
   filterSavedFoodsByQuery,
@@ -70,7 +78,11 @@ import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
  *   • A refused save-as-food at the `custom-foods` cap raises the upgrade
  *     sheet (plan-gates story) — the web only toasts the server's sentence.
  *   • Create buttons read `canCreate` and show the upgrade sheet on a real
- *     gate. Create opens the web editors signed in (allow-listed paths).
+ *     gate. Meal create is native (NP-143): the editor sheet posts
+ *     `POST /api/meals` (quota-gated), uploads a fresh photo after the
+ *     create, and refreshes entitlements so the cap the create just spent
+ *     shows at once. Tapping a meal opens its native page (log, plan,
+ *     edit, delete with confirmation, to-recipe, sync-plans after an edit).
  */
 
 type MyStuffTab = "meals" | "recipes" | "foods";
@@ -120,6 +132,11 @@ export default function MyStuffRoute() {
   const [foodLogSubmitting, setFoodLogSubmitting] = useState(false);
   const [foodLogError, setFoodLogError] = useState<string | null>(null);
 
+  // ── Native meal create (NP-143): the editor sheet + the gated create ─────
+  const [mealEditorOpen, setMealEditorOpen] = useState(false);
+  const [mealEditorSaving, setMealEditorSaving] = useState(false);
+  const [mealEditorError, setMealEditorError] = useState<string | null>(null);
+
   const fetchOpts = useMemo(
     () => ({
       baseUrl: WEBAPP_BASE_URL,
@@ -142,6 +159,7 @@ export default function MyStuffRoute() {
   const {
     data: mealsData,
     loading: mealsLoading,
+    refetch: refetchMeals,
   } = useFetch<z.infer<typeof MealsListResponseSchema>>(
     mealsPath,
     MealsListResponseSchema,
@@ -396,12 +414,70 @@ export default function MyStuffRoute() {
       raiseCapSheet("custom-meals");
       return;
     }
-    // The meal editor is web-only (NP-012 builds My Stuff natively but keeps
-    // creation on the web). `/dashboard/meals/new` is not on the handoff
-    // allow-list, so `openWebSignedIn` falls back to the plain (signed-out)
-    // open — exactly today's behaviour for a non-allow-listed path.
-    void openWebSignedIn("/dashboard/meals/new");
+    // Native meal editor (NP-143): the sheet posts `POST /api/meals`
+    // itself. The server is still the gate — a 403 that arrives anyway
+    // raises the same sheet from the server's own words.
+    setMealEditorError(null);
+    setMealEditorOpen(true);
   }, [isAtCap, raiseCapSheet]);
+
+  const handleMealEditorSubmit = useCallback(
+    async (submit: MealEditorSubmit) => {
+      if (mealEditorSaving) return;
+      setMealEditorSaving(true);
+      setMealEditorError(null);
+      try {
+        const { mealId } = await createSavedMeal(submit.input, {
+          apiFetch,
+          token,
+          baseUrl: WEBAPP_BASE_URL,
+        });
+        // A fresh capture uploads after the create (the web's MealForm
+        // holds the blob until it has a mealId). Non-fatal — the meal
+        // saved fine.
+        if (mealId && submit.pendingPhoto) {
+          try {
+            await uploadMealImage(mealId, {
+              uri: submit.pendingPhoto.uri,
+              fileName: submit.pendingPhoto.fileName,
+              mimeType: submit.pendingPhoto.mimeType,
+            });
+          } catch {
+            // non-fatal
+          }
+        }
+        // A create spends a custom-meals slot — re-read the snapshot so
+        // the cap the create just spent shows at once.
+        await refreshEntitlements().catch(() => {});
+        await refetchMeals();
+        setMealEditorOpen(false);
+        if (mealId) {
+          router.push(
+            `/(tabs)/nutrition/meals/${encodeURIComponent(mealId)}` as never,
+          );
+        } else {
+          setBanner("Meal saved");
+        }
+      } catch (err) {
+        const routed = routeApiError(err, {
+          onPlanGate: (gate) => {
+            showUpgradeSheet(gate.gate);
+          },
+        });
+        // A refusal means the snapshot disagrees with the server; re-read
+        // it so the lock matches what just happened.
+        await refreshEntitlements().catch(() => {});
+        if (!routed.handled) setMealEditorError(routed.message);
+        else setMealEditorOpen(false);
+      } finally {
+        setMealEditorSaving(false);
+      }
+    },
+    [mealEditorSaving, refetchMeals, refreshEntitlements, router, token],
+  );
+
+  // The create-body helper lives in `lib/nutrition/savedMeals` beside the
+  // editor; the delete side marks the snapshot stale from the meal page.
 
   const handleCreateRecipe = useCallback(() => {
     if (isAtCap("custom-foods")) {
@@ -651,26 +727,53 @@ export default function MyStuffRoute() {
                 const id = mealIdOf(meal);
                 const kcal = meal.totalNutrition?.calories;
                 return (
-                  <Card key={id} title={meal.name} subtitle={meal.description ?? ""}>
-                    <View testID={`my-stuff-meal-${id}`}>
-                      <Text className="text-muted-foreground text-xs">
-                        {(meal.items?.length ?? 0)} items
-                        {typeof kcal === "number" ? ` · ${Math.round(kcal)} kcal` : ""}
-                      </Text>
-                      <View style={{ marginTop: 8 }}>
-                        <Button
-                          testID={`my-stuff-meal-log-${id}`}
-                          variant="primary"
-                          onPress={() => {
-                            setMealLogError(null);
-                            setMealToLog(meal);
-                          }}
-                        >
-                          Log
-                        </Button>
+                  <Pressable
+                    key={id}
+                    testID={`my-stuff-meal-open-${id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${meal.name}`}
+                    onPress={() =>
+                      router.push(
+                        `/(tabs)/nutrition/meals/${encodeURIComponent(id)}` as never,
+                      )
+                    }
+                  >
+                    <Card title={meal.name} subtitle={meal.description ?? ""}>
+                      <View testID={`my-stuff-meal-${id}`}>
+                        <Text className="text-muted-foreground text-xs">
+                          {(meal.items?.length ?? 0)} items
+                          {typeof kcal === "number" ? ` · ${Math.round(kcal)} kcal` : ""}
+                        </Text>
+                        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                          <View style={{ flex: 1 }}>
+                            <Button
+                              testID={`my-stuff-meal-open-button-${id}`}
+                              variant="secondary"
+                              onPress={() =>
+                                router.push(
+                                  `/(tabs)/nutrition/meals/${encodeURIComponent(id)}` as never,
+                                )
+                              }
+                            >
+                              Open
+                            </Button>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Button
+                              testID={`my-stuff-meal-log-${id}`}
+                              variant="primary"
+                              onPress={() => {
+                                setMealLogError(null);
+                                setMealToLog(meal);
+                              }}
+                            >
+                              Log
+                            </Button>
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </Pressable>
                 );
               })}
             </View>
@@ -809,6 +912,22 @@ export default function MyStuffRoute() {
           setFoodLogError(null);
         }}
         onSubmit={handleLogSavedFood}
+      />
+
+      {/* Native meal create (NP-143): the editor sheet posts POST /api/meals */}
+      <MealEditorSheet
+        visible={mealEditorOpen}
+        availableTags={{
+          defaults: tagsData?.defaults ?? [],
+          userTags: (tagsData?.userTags ?? []) as string[],
+        }}
+        submitting={mealEditorSaving}
+        error={mealEditorError}
+        onClose={() => {
+          setMealEditorOpen(false);
+          setMealEditorError(null);
+        }}
+        onSubmit={handleMealEditorSubmit}
       />
     </SafeAreaView>
   );
