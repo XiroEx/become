@@ -11,6 +11,8 @@ import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
 import { ScheduledList } from "@/components/schedule/ScheduledList";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
+import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
+import { SlotConfirmDialog } from "@/components/schedule/SlotConfirmDialog";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -221,22 +223,129 @@ export default function CalendarIndexRoute() {
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduledSlot | null>(
     null,
   );
+  const [manageSlot, setManageSlot] = useState<ScheduledSlot | null>(null);
+  const [uncompleteSlot, setUncompleteSlot] =
+    useState<ScheduledSlot | null>(null);
   const onConfirmReschedule = useCallback(
     (slot: ScheduledSlot, newDate: string) => {
-      void mutations.reschedule({
-        programId: slot.programId,
-        workoutDate: slot.date,
-        newDate,
-      });
+      void mutations
+        .patch({
+          programId: slot.programId,
+          action: "reschedule",
+          workoutDate: slot.date,
+          newDate,
+        })
+        .catch(() => {
+          // The grid re-pulls on success; a failure leaves the day as-is.
+        });
       setRescheduleSlot(null);
+    },
+    [mutations],
+  );
+
+  /**
+   * Move one slot to the next calendar day — the web's "Move to Next Day"
+   * row, which parses the slot's LOCAL marker date and advances one day.
+   * The marker is a YYYY-MM-DD day, so plain calendar arithmetic on the
+   * parts (never `new Date(iso)`, which reads it as UTC midnight and shifts
+   * it a day backwards west of UTC) names the intended next day.
+   */
+  const onMoveNextDay = useCallback(
+    (slot: ScheduledSlot) => {
+      const [y, m, d] = slot.date.split("-").map(Number);
+      const next = new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1, 12, 0, 0);
+      next.setDate(next.getDate() + 1);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const nextKey = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+      setManageSlot(null);
+      void mutations
+        .patch({
+          programId: slot.programId,
+          action: "reschedule",
+          workoutDate: slot.date,
+          newDate: nextKey,
+        })
+        .catch(() => undefined);
+    },
+    [mutations],
+  );
+
+  const onSkipSlot = useCallback(
+    (slot: ScheduledSlot) => {
+      setManageSlot(null);
+      void mutations
+        .patch({
+          programId: slot.programId,
+          action: "skip",
+          workoutDate: slot.date,
+        })
+        .catch(() => undefined);
+    },
+    [mutations],
+  );
+
+  const onUnskipSlot = useCallback(
+    (slot: ScheduledSlot) => {
+      setManageSlot(null);
+      void mutations
+        .patch({
+          programId: slot.programId,
+          action: "unskip",
+          workoutDate: slot.date,
+        })
+        .catch(() => undefined);
+    },
+    [mutations],
+  );
+
+  const onConfirmUncomplete = useCallback(() => {
+    const slot = uncompleteSlot;
+    if (!slot) return;
+    setUncompleteSlot(null);
+    void mutations
+      .patch({
+        programId: slot.programId,
+        action: "uncomplete",
+        workoutDate: slot.date,
+      })
+      .catch(() => undefined);
+  }, [mutations, uncompleteSlot]);
+
+  const onConfirmShift = useCallback(
+    (slot: ScheduledSlot, days: number) => {
+      setManageSlot(null);
+      void mutations
+        .patch({ programId: slot.programId, action: "shift", days })
+        .catch(() => undefined);
+    },
+    [mutations],
+  );
+
+  const onPauseSlot = useCallback(
+    (slot: ScheduledSlot) => {
+      setManageSlot(null);
+      void mutations
+        .patch({ programId: slot.programId, action: "pause" })
+        .catch(() => undefined);
+    },
+    [mutations],
+  );
+
+  const onResumeSlot = useCallback(
+    (slot: ScheduledSlot) => {
+      setManageSlot(null);
+      void mutations
+        .patch({ programId: slot.programId, action: "resume" })
+        .catch(() => undefined);
     },
     [mutations],
   );
 
   const openSlot = useCallback(
     (slot: ScheduledSlot) => {
-      // Only future or today, still-scheduled slots are actionable.
-      if (slot.status !== "scheduled" || slot.date < todayDate) return;
+      // Never by array index: the route is addressed by the slot's own
+      // `dayLabel` and marker date (`sd`), so completing it resolves THAT
+      // slot and not a neighbouring same-label one (NP-078).
       const dayParam = slot.dayLabel
         ? `&day=${encodeURIComponent(slot.dayLabel)}`
         : "";
@@ -248,7 +357,29 @@ export default function CalendarIndexRoute() {
         `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}/live?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
       );
     },
-    [router, todayDate],
+    [router],
+  );
+
+  // The day sheet starts anything not done and not frozen: scheduled slots
+  // (Start Workout), missed/skipped slots the member wants to do now
+  // (Do It Now, like the web). Completed slots are done — they get
+  // Un-complete instead. The Upcoming list keeps its old rule: only
+  // today-or-future scheduled slots open Track.
+  const canStartSlot = useCallback(
+    (slot: ScheduledSlot) =>
+      slot.programStatus !== "paused" &&
+      (slot.status === "scheduled" ||
+        slot.status === "missed" ||
+        slot.status === "skipped"),
+    [],
+  );
+
+  const canStartUpcoming = useCallback(
+    (slot: ScheduledSlot) =>
+      slot.status === "scheduled" &&
+      slot.date >= todayDate &&
+      slot.programStatus !== "paused",
+    [todayDate],
   );
 
   const onSelectDay = useCallback((date: string) => {
@@ -414,10 +545,21 @@ export default function CalendarIndexRoute() {
                     !!slot.completedAt &&
                     isMakeupWorkout(slot.date, slot.completedAt);
                   const isPaused = slot.programStatus === "paused";
-                  const isActionable =
-                    slot.status === "scheduled" &&
-                    slot.date >= todayDate &&
-                    !isPaused;
+                  // The web's day sheet: scheduled slots get Start + Manage;
+                  // missed/skipped slots get Do It Now + Skip/Un-skip +
+                  // Manage; completed slots get Un-complete + Manage.
+                  // Past-day summaries and quick-session items are NP-115.
+                  const startLabel =
+                    slot.status === "scheduled"
+                      ? "Start Workout"
+                      : "Do It Now";
+                  const showStart = canStartSlot(slot);
+                  const showManage =
+                    !isPaused &&
+                    (slot.status === "scheduled" ||
+                      slot.status === "missed" ||
+                      slot.status === "skipped" ||
+                      slot.status === "completed");
 
                   return (
                     <View
@@ -500,21 +642,62 @@ export default function CalendarIndexRoute() {
                         </Text>
                       ) : null}
 
-                      {/* Actions */}
+                      {/* Actions — mirrors the web's per-status day-sheet rows. */}
                       <View
                         style={{
                           flexDirection: "row",
+                          flexWrap: "wrap",
                           gap: 8,
                           marginTop: 10,
                         }}
                       >
-                        {isActionable ? (
+                        {showStart ? (
                           <Button
                             testID={`day-detail-start-${slot.programId}-${slot.workoutIndex}`}
                             size="sm"
                             onPress={() => openSlot(slot)}
                           >
-                            Start Workout
+                            {startLabel}
+                          </Button>
+                        ) : null}
+                        {slot.status === "completed" && !isPaused ? (
+                          <Button
+                            testID={`day-detail-uncomplete-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => setUncompleteSlot(slot)}
+                          >
+                            Un-complete
+                          </Button>
+                        ) : null}
+                        {slot.status === "skipped" && !isPaused ? (
+                          <Button
+                            testID={`day-detail-unskip-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => onUnskipSlot(slot)}
+                          >
+                            Un-skip
+                          </Button>
+                        ) : null}
+                        {slot.status === "missed" && !isPaused ? (
+                          <Button
+                            testID={`day-detail-skip-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => onSkipSlot(slot)}
+                          >
+                            Skip It
+                          </Button>
+                        ) : null}
+                        {showManage ? (
+                          <Button
+                            testID={`day-detail-manage-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => setManageSlot(slot)}
+                          >
+                            Manage
                           </Button>
                         ) : null}
                         <Button
@@ -554,7 +737,9 @@ export default function CalendarIndexRoute() {
           <Text className="text-foreground font-semibold mb-2">Upcoming</Text>
           <ScheduledList
             slots={slots}
-            onSelectSlot={openSlot}
+            onSelectSlot={(slot) => {
+              if (canStartUpcoming(slot)) openSlot(slot);
+            }}
             onReschedule={setRescheduleSlot}
           />
         </View>
@@ -572,6 +757,31 @@ export default function CalendarIndexRoute() {
         slot={rescheduleSlot}
         onConfirm={onConfirmReschedule}
         onClose={() => setRescheduleSlot(null)}
+      />
+      <SlotActionMenu
+        key={manageSlot ? slotKey(manageSlot) : "no-manage-slot"}
+        slot={manageSlot}
+        loading={mutations.pending}
+        onClose={() => setManageSlot(null)}
+        onSkip={onSkipSlot}
+        onUnskip={onUnskipSlot}
+        onMoveNextDay={onMoveNextDay}
+        onRescheduleToDate={(slot) => {
+          setManageSlot(null);
+          setRescheduleSlot(slot);
+        }}
+        onShift={(slot, days) => {
+          onConfirmShift(slot, days);
+        }}
+        onPause={onPauseSlot}
+        onResume={onResumeSlot}
+      />
+      <SlotConfirmDialog
+        kind={uncompleteSlot ? "uncomplete" : null}
+        slot={uncompleteSlot}
+        loading={mutations.pending}
+        onConfirm={onConfirmUncomplete}
+        onClose={() => setUncompleteSlot(null)}
       />
     </SafeAreaView>
   );
