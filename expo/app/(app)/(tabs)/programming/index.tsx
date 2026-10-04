@@ -1,5 +1,5 @@
-import React from "react";
-import { useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,8 +15,10 @@ import {
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
+import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
 
 /**
  * Workout Tab Root Route (NP-071)
@@ -30,6 +32,28 @@ import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
+  // `?quick=1` opens the Workout Now sheet in place (dashboard tile, Workout
+  // tab button); `?quickDate=YYYY-MM-DD` pre-fills the overview's Log/Plan
+  // date when opened from a calendar day. Both arrive as route params — an
+  // external navigation — so the sheet syncs from them via effect.
+  const params = useLocalSearchParams<{ quick?: string; quickDate?: string }>();
+  const quickParam = Array.isArray(params.quick) ? params.quick[0] : params.quick;
+  const quickDateParam = Array.isArray(params.quickDate)
+    ? params.quickDate[0]
+    : params.quickDate;
+  const [workoutNowOpen, setWorkoutNowOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (quickParam === "true" || quickParam === "1") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWorkoutNowOpen(true);
+    }
+  }, [quickParam]);
+
+  const quickDate =
+    quickDateParam && QUICK_SESSION_DATE_RE.test(quickDateParam)
+      ? quickDateParam
+      : undefined;
 
   const handleOpenHistory = () => {
     router.push(nativeRouteFor("/dashboard/history") as never);
@@ -47,9 +71,9 @@ export default function ProgrammingIndexRoute() {
     router.push("/(tabs)/programming/exercises");
   };
 
-  const handleWorkoutNow = () => {
-    router.push("/(tabs)/programming?quick=true" as never);
-  };
+  const handleWorkoutNow = useCallback(() => {
+    setWorkoutNowOpen(true);
+  }, []);
 
   return (
     <SafeAreaView
@@ -194,6 +218,13 @@ export default function ProgrammingIndexRoute() {
           <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
         </View>
       </ScrollView>
+
+      {/* Workout Now sheet (NP-076): focus → deterministic preview → NP-227 overview */}
+      <WorkoutNowSheet
+        visible={workoutNowOpen}
+        onClose={() => setWorkoutNowOpen(false)}
+        date={quickDate}
+      />
     </SafeAreaView>
   );
 }
