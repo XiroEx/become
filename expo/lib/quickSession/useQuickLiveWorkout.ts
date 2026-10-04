@@ -20,7 +20,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ExerciseHydrateResponseSchema,
+  LastPerformanceResponseSchema,
   WorkoutSaveResponseSchema,
+  type ExerciseHistoryEntry,
   type ExerciseHydrateVideoFields,
   type WorkoutSaveResponse,
 } from "@become/api-client";
@@ -52,6 +54,10 @@ import {
 } from "@/lib/quickSession/store";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
 import { buildQuickSaveRequest } from "@/lib/quickSession/quickSave";
+import {
+  buildQuickHistory,
+  quickHistorySlugs,
+} from "@/lib/quickSession/quickHistory";
 
 export { quickScope };
 
@@ -122,6 +128,13 @@ export interface UseQuickLiveWorkoutResult {
   stored: StoredQuickSession | null;
   needsName: boolean;
   restoredGrid: LiveGrid | null;
+  /**
+   * Last-time numbers keyed by exercise NAME (`quickHistory.ts`) — the
+   * `exerciseHistory` prop `LiveWorkoutClient` and `WorkoutSummary` already
+   * take. Best-effort: `{}` when the fetch fails or nothing is recorded.
+   * References only, never prefill.
+   */
+  exerciseHistory: Record<string, ExerciseHistoryEntry>;
   finishing: boolean;
   finishedGrid: LiveGrid | null;
   finishedElapsedSeconds: number;
@@ -235,6 +248,9 @@ export function useQuickLiveWorkout(
   const [stored, setStored] = useState<StoredQuickSession | null>(null);
   const [needsName, setNeedsName] = useState(false);
   const [restoredGrid, setRestoredGrid] = useState<LiveGrid | null>(null);
+  const [exerciseHistory, setExerciseHistory] = useState<
+    Record<string, ExerciseHistoryEntry>
+  >({});
   const [finishing, setFinishing] = useState(false);
   const [finishedGrid, setFinishedGrid] = useState<LiveGrid | null>(null);
   const [finishedElapsedSeconds, setFinishedElapsedSeconds] = useState(0);
@@ -358,6 +374,7 @@ export function useQuickLiveWorkout(
           setStored(null);
           setWorkout(null);
           setRestoredGrid(null);
+          setExerciseHistory({});
           setNeedsName(false);
           setLoading(false);
           return;
@@ -414,6 +431,37 @@ export function useQuickLiveWorkout(
           exercises: live,
         });
         setLoading(false);
+
+        // Last-time numbers (slug-based — works without a program), keyed by
+        // NAME for `LiveWorkoutClient` and `WorkoutSummary` (quickHistory.ts).
+        // Best-effort: a failure leaves the map empty and the references
+        // simply don't show. Inputs stay blank — this is never prefill.
+        try {
+          const slugs = quickHistorySlugs(live);
+          if (slugs.length > 0) {
+            const impl = fetchImpl ?? fetch;
+            const res = await impl(
+              `${WEBAPP_BASE_URL}/api/workouts/last-performance?slugs=${encodeURIComponent(slugs.join(","))}`,
+              {
+                headers: {
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+              },
+            );
+            if (res.ok && alive) {
+              const parsed = LastPerformanceResponseSchema.safeParse(
+                await res.json(),
+              );
+              if (parsed.success) {
+                setExerciseHistory(
+                  buildQuickHistory(live, parsed.data.performances),
+                );
+              }
+            }
+          }
+        } catch {
+          /* best-effort — the Last/PR references just won't show */
+        }
 
         // The opening save: the session is in progress server-side within
         // seconds of this screen opening, even before any set is logged.
@@ -538,6 +586,7 @@ export function useQuickLiveWorkout(
     stored,
     needsName,
     restoredGrid,
+    exerciseHistory,
     finishing,
     finishedGrid,
     finishedElapsedSeconds,
