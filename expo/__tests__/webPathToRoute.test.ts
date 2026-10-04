@@ -260,7 +260,7 @@ describe("the table", () => {
     ["/dashboard/programs/mine", "/(tabs)/programming/saved", "nearest"],
     ["/dashboard/programs/new", "/(tabs)/programming", "nearest"],
     ["/dashboard/programs/p1/edit", "/(tabs)/programming", "nearest"],
-    ["/dashboard/history", "/(tabs)/programming", "nearest"],
+    ["/dashboard/history", "/(tabs)/programming/history", "exact"],
     ["/dashboard/progress", "/progress", "exact"],
     ["/dashboard/progress#records", "/progress", "exact"],
     ["/dashboard/progress/bench-press", "/(tabs)/programming", "nearest"],

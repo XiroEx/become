@@ -172,7 +172,7 @@ export interface DashboardScreenProps {
   onBrowsePrograms?: () => void;
   /** Opens the Workout tab (All Programs quick link). */
   onOpenPrograms?: () => void;
-  /** Opens History (NP-112) — where Progress points until NP-130 exists. */
+  /** Opens the training history (NP-112). */
   onOpenHistory?: () => void;
   /** Nutrition quick-link description (calories today when known). */
   quickLinksNutritionDescription?: string | null;
@@ -633,6 +633,7 @@ export function DashboardScreen({
           onMoodChange={onSubmitMood}
           onOpenSettings={onOpenSettings}
           onOpenStreaks={onOpenStreaks}
+          onOpenHistory={onOpenHistory}
         />
 
         {/* Customize tiles link (NP-211 / NP-157) */}
@@ -767,7 +768,7 @@ export function DashboardScreen({
 
         {/* First-time empty state + quick links (NP-106, web
             DashboardClient parity): All Programs, Nutrition, Progress
-            (→ History until NP-130). No Connect link — chat is on hold
+            (→ training history, NP-112). No Connect link — chat is on hold
             for the store release. */}
         <DashboardQuickLinks
           showEmptyState={showEmptyState}
