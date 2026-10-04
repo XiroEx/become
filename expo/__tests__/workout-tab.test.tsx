@@ -441,7 +441,7 @@ describe("Workout tab: acceptance criteria tests", () => {
 
       // History link
       fireEvent.press(getByTestId("workout-open-history"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/history");
 
       // Workout Now button in hub
       fireEvent.press(getByTestId("workout-open-workout-now"));

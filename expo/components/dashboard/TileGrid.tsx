@@ -58,6 +58,8 @@ export interface TileGridProps {
   onOpenSettings?: () => void;
   /** Opens streaks detail screen (NP-108). */
   onOpenStreaks?: () => void;
+  /** Opens training history (NP-112). The This Week + Total Workouts tiles. */
+  onOpenHistory?: () => void;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -96,6 +98,7 @@ export function TileGrid({
   onMoodChange,
   onOpenSettings,
   onOpenStreaks,
+  onOpenHistory,
   testID,
   style,
 }: TileGridProps) {
@@ -354,6 +357,7 @@ export function TileGrid({
                 onMoodChange={onMoodChange}
                 onOpenSettings={onOpenSettings}
                 onOpenStreaks={onOpenStreaks}
+                onOpenHistory={onOpenHistory}
               />
             );
           } else if (tile.kind === "metric") {
@@ -394,6 +398,7 @@ export function TileGrid({
                 onMoodChange={onMoodChange}
                 onOpenSettings={onOpenSettings}
                 onOpenStreaks={onOpenStreaks}
+                onOpenHistory={onOpenHistory}
               />
             );
           } else {

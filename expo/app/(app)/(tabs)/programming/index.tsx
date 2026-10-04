@@ -18,7 +18,6 @@ import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 
 /**
  * Workout Tab Root Route (NP-071)
@@ -36,7 +35,7 @@ export default function ProgrammingIndexRoute() {
   const [showGenerate, setShowGenerate] = useState(false);
 
   const handleOpenHistory = () => {
-    router.push(nativeRouteFor("/dashboard/history") as never);
+    router.push("/(tabs)/programming/history" as never);
   };
 
   const handleOpenBrowse = () => {

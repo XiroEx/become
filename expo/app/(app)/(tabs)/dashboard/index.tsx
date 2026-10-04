@@ -882,9 +882,8 @@ export default function DashboardRoute() {
   );
 
   const onOpenHistory = useCallback(() => {
-    // Progress points at History (NP-112) until native progress (NP-130)
-    // exists: the Training Log at /progress is the closest shipped screen.
-    router.push("/progress" as never);
+    // The training history (NP-112): every completed program + quick session.
+    router.push("/(tabs)/programming/history" as never);
   }, [router]);
 
   const onBrowsePrograms = useCallback(() => {

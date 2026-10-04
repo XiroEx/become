@@ -38,6 +38,8 @@ export interface StatTileProps {
   onOpenSettings?: () => void;
   /** Opens streaks detail screen (NP-108). */
   onOpenStreaks?: () => void;
+  /** Opens training history (NP-112). The This Week + Total Workouts tiles. */
+  onOpenHistory?: () => void;
   onPress?: () => void;
   /**
    * Fired on press BEFORE the tile's own action, and never instead of it — the
@@ -60,6 +62,7 @@ export function StatTile({
   onMoodChange,
   onOpenSettings,
   onOpenStreaks,
+  onOpenHistory,
   onPress,
   onTap,
   testID,
@@ -203,7 +206,9 @@ export function StatTile({
       pct = Math.min(100, Math.round((done / target) * 100));
       const remaining = Math.max(0, target - done);
       footer = remaining === 0 ? "Weekly target hit 🎉" : `${remaining} to weekly target`;
-      handlePress = handlePress ?? onOpenCalendar;
+      // The training log — the sessions this number counts (web
+      // `dashboardTiles.tsx#renderWeekly` hrefs `/dashboard/history`).
+      handlePress = handlePress ?? onOpenHistory ?? onOpenCalendar;
     }
   } else if (tile.id === "goal") {
     IconComponent = Target;
@@ -306,7 +311,9 @@ export function StatTile({
     iconColor = colors["muted-foreground"];
     badgeBg = tint("muted", 0.3);
     barColor = colors["muted-foreground"];
-    handlePress = handlePress ?? onOpenCalendar;
+    // The training log — the sessions this number counts (web
+    // `dashboardTiles.tsx#renderWorkouts` hrefs `/dashboard/history`).
+    handlePress = handlePress ?? onOpenHistory ?? onOpenCalendar;
 
     const total = statData?.totalWorkouts ?? 0;
     value = String(total);

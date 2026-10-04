@@ -22,9 +22,8 @@ import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
  * ready / Browse"), opening the Workout tab.
  *
  * Quick links mirror the web's 2×2 grid minus Connect: chat is on hold for
- * the store release, so there is no chat link. Progress points at History
- * (NP-112) until native progress (NP-130) exists — the Training Log at
- * `/progress` is the closest shipped screen that means "your history".
+ * the store release, so there is no chat link. Progress opens the training
+ * history (NP-112) — every completed program + quick session.
  */
 export interface DashboardQuickLinksProps {
   showEmptyState?: boolean;
