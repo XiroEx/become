@@ -55,15 +55,37 @@ describe("RecipesIndexRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockPush.mockReset();
-    mockApiFetch.mockResolvedValue({ recipes: [recipe], total: 1 });
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (String(path).startsWith("/api/nutrition/recipes")) {
+        return { recipes: [recipe], total: 1 };
+      }
+      if (String(path).startsWith("/api/meals")) return { meals: [], total: 0 };
+      if (String(path) === "/api/me/foods") return { foods: [] };
+      if (String(path) === "/api/tags") {
+        return { defaults: [], userTags: [] };
+      }
+      if (String(path) === "/api/nutrition/meal-schedule") return { windows: [] };
+      return {};
+    });
   });
 
   it("GETs /api/nutrition/recipes with baseUrl + token and renders the list", async () => {
     const { getByTestId } = render(<RecipesIndexRoute />);
+    // My Stuff (NP-142) defaults to the Meals tab; the member's own recipes
+    // live behind the Recipes tab (`GET /api/nutrition/recipes?mine=true`,
+    // the web's fetchRecipes).
+    fireEvent.press(getByTestId("my-stuff-tab-recipes"));
     await waitFor(() => {
-      expect(callsTo("/api/nutrition/recipes").length).toBeGreaterThan(0);
+      const calls = mockApiFetch.mock.calls.filter((c) =>
+        String(c[0]).startsWith("/api/nutrition/recipes?"),
+      );
+      expect(calls.length).toBeGreaterThan(0);
     });
-    const opts = callsTo("/api/nutrition/recipes")[0]![2] as {
+    const calls = mockApiFetch.mock.calls.filter((c) =>
+      String(c[0]).startsWith("/api/nutrition/recipes?"),
+    );
+    expect(String(calls[0]![0])).toContain("mine=true");
+    const opts = calls[0]![2] as {
       baseUrl?: string;
       getToken?: () => string | undefined;
     };
@@ -71,10 +93,17 @@ describe("RecipesIndexRoute", () => {
     expect(opts.getToken?.()).toBe(mockToken);
 
     await waitFor(() => {
-      expect(getByTestId("recipes-list-item-r1")).toBeTruthy();
+      expect(getByTestId("my-stuff-recipe-r1")).toBeTruthy();
     });
-    fireEvent.press(getByTestId("recipes-list-item-r1"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/recipes/r1");
+    // The recipe tap rule: an unsaved recipe is saved as a Food first, never
+    // logged directly (the web's save-or-log).
+    fireEvent.press(getByTestId("my-stuff-recipe-save-or-log-r1"));
+    await waitFor(() => {
+      const saveCalls = mockApiFetch.mock.calls.filter(
+        (c) => String(c[0]) === "/api/nutrition/recipes/r1/save-as-food",
+      );
+      expect(saveCalls.length).toBeGreaterThan(0);
+    });
   });
 });
 
