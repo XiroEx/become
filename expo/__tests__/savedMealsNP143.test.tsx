@@ -71,6 +71,7 @@ import {
   resetEntitlementsSnapshot,
   setEntitlementsToken,
   getEntitlementsSnapshot,
+  loadEntitlements,
 } from "@/lib/entitlements";
 import {
   getUpgradeSheetGate,
@@ -496,10 +497,17 @@ describe("(id: e015c9e6) A free member at 3/3 can still edit and delete a meal n
     await waitFor(() => {
       expect(callsTo("/api/meals/m1", "DELETE")).toHaveLength(1);
     });
-    // The delete frees the slot: the snapshot is stale so the next gated
-    // surface re-reads instead of showing the cleared lock.
-    expect(getEntitlementsSnapshot()).toBeNull();
     expect(mockBack).toHaveBeenCalled();
+    // The delete frees the slot: the snapshot is marked stale (kept, not
+    // dropped — see invalidateEntitlements), so the next gated surface
+    // re-reads instead of answering from the TTL with the cleared lock.
+    const readsBefore = callsTo("/api/me/entitlements").length;
+    entitlementsBody = ROOM_LEFT;
+    await act(async () => {
+      await loadEntitlements(false);
+    });
+    expect(callsTo("/api/me/entitlements").length).toBe(readsBefore + 1);
+    expect(getEntitlementsSnapshot()?.features?.["custom-meals"]?.canCreate).toBe(true);
   });
 
   it("sync-plans posts POST /api/meals/{id}/sync-plans after an edit in the plan", async () => {
