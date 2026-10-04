@@ -139,6 +139,7 @@ export default function LiveWorkoutRoute({
     notes,
     setNotes,
     restoredGrid,
+    isResuming,
     onGridChange,
     onSetComplete,
     onFinish,
@@ -152,6 +153,7 @@ export default function LiveWorkoutRoute({
     finishedElapsedSeconds,
     activeSeconds,
     exerciseHistory,
+    exercisePRs,
     onRequestSwap,
     swapSlug,
     swapSourceName,
@@ -357,7 +359,9 @@ export default function LiveWorkoutRoute({
           goal={summaryGoal}
           onDone={() => router.replace("/(tabs)/programming")}
           onViewJourney={() =>
-            router.replace(`/(tabs)/programming/${encodeURIComponent(id)}`)
+            router.push(
+              `/(tabs)/programming/${encodeURIComponent(id)}/journey`,
+            )
           }
           onViewLog={() => router.replace("/progress" as never)}
         />
@@ -413,6 +417,8 @@ export default function LiveWorkoutRoute({
             : (cacheStore ?? asyncStorageKeyValueStore)
         }
         restoredGrid={restoredGrid}
+        resumed={isResuming}
+        enableSkipFlow
         onGridChange={onGridChange}
         onSetComplete={onSetComplete}
         onFinish={(g: LiveGrid) => void onFinish(g)}
@@ -420,6 +426,8 @@ export default function LiveWorkoutRoute({
         saveError={saveError}
         pendingSync={pendingSync}
         onRequestSwap={onRequestSwap}
+        exerciseHistory={exerciseHistory}
+        exercisePRs={exercisePRs}
       />
       <ExerciseSwapModal
         visible={swapSlug !== null}

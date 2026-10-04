@@ -247,6 +247,11 @@ export function AuthProvider({
 
   const dropPushSubscription = useCallback(
     async (jwt: string, endpoint?: string): Promise<void> => {
+      // Sign-out removes THIS device's row and no other: the stored raw
+      // device token is this installation's endpoint, and the unsubscribe
+      // call carries exactly that endpoint (NP-065). A member-wide wipe
+      // (no endpoint) is the web Settings "turn everything off" path, never
+      // sign-out.
       const config = configRef.current;
       const send = config.fetchImpl ?? fetch;
       const targetEndpoint = endpoint ?? (await getStoredPushToken());
@@ -297,7 +302,7 @@ export function AuthProvider({
       }
 
       // Drop on-device caches: last-known cache / offline queue (NP-036),
-      // the app icon badge, and any live workout drafts (NP-079).
+      // the app icon badge (NP-067), and any live workout drafts (NP-079).
       try {
         await clearAllLastKnownCache();
       } catch {

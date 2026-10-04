@@ -1,25 +1,45 @@
 import {
   CHANNEL_IDS,
+  ensureAndroidChannels,
   getNotificationChannels,
 } from "@/lib/android/notificationChannels";
 
 describe("getNotificationChannels", () => {
   const channels = getNotificationChannels();
 
-  it("returns exactly 4 channels", () => {
-    expect(channels).toHaveLength(4);
+  it("every channel id is a server notification tag", () => {
+    const serverTags = [
+      "workout-reminder",
+      "meal-reminder",
+      "mind-reminder",
+      "streak-at-risk",
+      "super-streak-at-risk",
+      "goal-nudge",
+      "checkin-reminder",
+      "schedule-setup",
+      "daily-glance",
+      "re-engagement",
+    ];
+    const ids = channels.map((ch) => ch.id);
+    for (const tag of serverTags) {
+      expect(ids).toContain(tag);
+    }
+    // No channel id the server never sends.
+    for (const id of ids) {
+      expect(serverTags).toContain(id);
+    }
   });
 
-  it("workout-reminders is high-importance with sound + vibrate", () => {
-    const c = channels.find((ch) => ch.id === CHANNEL_IDS.workoutReminders);
+  it("workout-reminder is high-importance with sound + vibrate", () => {
+    const c = channels.find((ch) => ch.id === CHANNEL_IDS.workoutReminder);
     expect(c).toBeDefined();
     expect(c?.importance).toBe("high");
     expect(c?.sound).toBe(true);
     expect(c?.vibrate).toBe(true);
   });
 
-  it("streak-alerts is high-importance with sound + vibrate", () => {
-    const c = channels.find((ch) => ch.id === CHANNEL_IDS.streakAlerts);
+  it("streak-at-risk is high-importance with sound + vibrate", () => {
+    const c = channels.find((ch) => ch.id === CHANNEL_IDS.streakAtRisk);
     expect(c?.importance).toBe("high");
     expect(c?.sound).toBe(true);
     expect(c?.vibrate).toBe(true);
@@ -32,10 +52,10 @@ describe("getNotificationChannels", () => {
     expect(c?.vibrate).toBe(false);
   });
 
-  it("streak-saved is default-importance with sound but no vibrate", () => {
-    const c = channels.find((ch) => ch.id === CHANNEL_IDS.streakSaved);
+  it("daily-glance is default-importance with no sound + no vibrate", () => {
+    const c = channels.find((ch) => ch.id === CHANNEL_IDS.dailyGlance);
     expect(c?.importance).toBe("default");
-    expect(c?.sound).toBe(true);
+    expect(c?.sound).toBe(false);
     expect(c?.vibrate).toBe(false);
   });
 
@@ -49,5 +69,43 @@ describe("getNotificationChannels", () => {
       expect(c.name.length).toBeGreaterThan(0);
       expect(c.description.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("ensureAndroidChannels", () => {
+  it("is a no-op off Android", async () => {
+    const setChannel = jest.fn();
+    const result = await ensureAndroidChannels({
+      platform: "ios",
+      create: { setChannel },
+    });
+    expect(result).toMatchObject({ kind: "skipped" });
+    expect(setChannel).not.toHaveBeenCalled();
+  });
+
+  it("creates every channel on Android", async () => {
+    const setChannel = jest.fn(async () => null);
+    const result = await ensureAndroidChannels({
+      platform: "android",
+      create: { setChannel },
+    });
+    expect(result.kind).toBe("created");
+    expect(setChannel).toHaveBeenCalledTimes(getNotificationChannels().length);
+    const ids = (setChannel.mock.calls as unknown[][]).map((c) => c[0] as string);
+    expect(ids).toContain("workout-reminder");
+    expect(ids).toContain("re-engagement");
+  });
+
+  it("a channel failure is caught, never a crash", async () => {
+    const result = await ensureAndroidChannels({
+      platform: "android",
+      create: {
+        setChannel: async () => {
+          throw new Error("no native module");
+        },
+      },
+      log: () => {},
+    });
+    expect(result).toMatchObject({ kind: "failed" });
   });
 });

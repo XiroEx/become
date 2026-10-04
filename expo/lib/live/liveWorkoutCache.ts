@@ -15,6 +15,8 @@ export interface LiveSetSnapshot {
   /** Optional, for duration/distance tracking types (inputs land later). */
   durationSec?: number | null;
   distance?: number | null;
+  /** mph — for time_distance / intervals tracking types. */
+  speed?: number | null;
 }
 
 /** exerciseSlug → ordered set snapshots. */
@@ -42,7 +44,8 @@ export function hasWorkoutProgress(grid: LiveWorkoutSnapshot): boolean {
           s?.reps != null ||
           s?.weight != null ||
           s?.durationSec != null ||
-          s?.distance != null,
+          s?.distance != null ||
+          s?.speed != null,
       ),
   );
 }

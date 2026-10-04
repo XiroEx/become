@@ -1,9 +1,12 @@
 import { routeForNotification } from "@/lib/push/deepLinkRouter";
 
 // THE SERVER SENDS A URL. Every push from `webapp/app/api/cron/notify/route.ts`
-// carries `url: '/dashboard…'`; the categories below were never on the wire, so
-// the url is tried first and the category switch is what is left for a payload
-// that has none.
+// carries `url: '/dashboard…'`; the streak-freeze push (`webapp/lib/streak.ts`)
+// carries `url: '/dashboard'` with `tag: 'streak-freeze-used'`; chat pushes
+// carry `url: '/dashboard/chat'`. The `tag` identifies the notification for
+// replacement/dedup and never routes — so the url is tried first and only,
+// and a payload with no url opens Home.
+
 describe("routeForNotification with the url the server actually sends", () => {
   it.each([
     ["/dashboard", "/(tabs)/dashboard"],
@@ -22,67 +25,37 @@ describe("routeForNotification with the url the server actually sends", () => {
     expect(routeForNotification({ url })).toBe(route);
   });
 
-  it("prefers the url over the category", () => {
-    expect(
-      routeForNotification({ category: "re-engagement", url: "/dashboard/calendar" }),
-    ).toBe("/(tabs)/calendar");
-  });
-
-  it("sends a web-only url Home — a tap handler does not open browsers", () => {
+  it("sends a web-only url Home — a tap router does not open browsers", () => {
     expect(routeForNotification({ url: "/dashboard/admin/users" })).toBe(
       "/(tabs)/dashboard",
     );
   });
 
-  it("falls back to the category when the url is empty", () => {
-    expect(routeForNotification({ category: "re-engagement", url: "  " })).toBe(
-      "/(tabs)/mind",
+  it("resolves the chat url to Home while NP-032 keeps chat out", () => {
+    expect(routeForNotification({ url: "/dashboard/chat" })).toBe(
+      "/(tabs)/dashboard",
+    );
+    expect(routeForNotification({ url: "/dashboard/chat/c1" })).toBe(
+      "/(tabs)/dashboard",
     );
   });
 
-  it("has an answer for a payload with neither", () => {
+  it("resolves the streak-freeze url to Home", () => {
+    expect(routeForNotification({ url: "/dashboard" })).toBe(
+      "/(tabs)/dashboard",
+    );
+  });
+
+  it("opens Home for a payload with no url — never nowhere", () => {
     expect(routeForNotification({})).toBe("/(tabs)/dashboard");
-  });
-});
-
-describe("routeForNotification", () => {
-  it("workout-reminder with IDs → live workout route", () => {
-    expect(
-      routeForNotification({
-        category: "workout-reminder",
-        programId: "p1",
-        phaseIndex: 0,
-        workoutIndex: 2,
-      }),
-    ).toBe("/(tabs)/programming/p1/workout/2/live");
+    expect(routeForNotification({ url: "  " })).toBe("/(tabs)/dashboard");
   });
 
-  it("workout-reminder without IDs → dashboard fallback", () => {
-    expect(routeForNotification({ category: "workout-reminder" })).toBe(
+  it("opens Home for an unknown url", () => {
+    expect(routeForNotification({ url: "/dashboard/not-a-real-page" })).toBe(
       "/(tabs)/dashboard",
     );
-  });
-
-  it("streak-at-risk → dashboard", () => {
-    expect(routeForNotification({ category: "streak-at-risk" })).toBe(
-      "/(tabs)/dashboard",
-    );
-  });
-
-  it("streak-saved → dashboard", () => {
-    expect(routeForNotification({ category: "streak-saved" })).toBe(
-      "/(tabs)/dashboard",
-    );
-  });
-
-  it("re-engagement → mind tab", () => {
-    expect(routeForNotification({ category: "re-engagement" })).toBe(
-      "/(tabs)/mind",
-    );
-  });
-
-  it("unknown category → dashboard fallback", () => {
-    expect(routeForNotification({ category: "alien-event" })).toBe(
+    expect(routeForNotification({ url: "/not-a-real-page" })).toBe(
       "/(tabs)/dashboard",
     );
   });

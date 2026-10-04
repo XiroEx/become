@@ -8,15 +8,27 @@ import type { ExerciseGroupType } from "@/components/live/ExerciseGroupNav";
 import {
   buildWorkoutFlow,
   isSetFilled,
+  normalizeTracking,
   resolveStartStep,
+  setUnitLabel,
   type WorkoutPosition,
 } from "@become/core";
 import { applySetUpdate, type KeyValueStore } from "@/lib/live/liveWorkoutCache";
 import { writeWorkoutPosition, readWorkoutPosition } from "@/lib/live/workoutPosition";
+import { skippedSetState } from "@/lib/live/liveSkip";
+import { LiveExerciseSheet } from "@/components/live/LiveExerciseSheet";
+import {
+  LiveEditConfirmModal,
+  LiveSkipModal,
+} from "@/components/live/LiveSkipModals";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import type {
+  ExerciseHistoryEntry,
+  ExercisePRSummary,
+} from "@become/api-client";
 import { TrackWorkoutView } from "@/components/live/TrackWorkoutView";
 import { LiveStepView } from "@/components/live/LiveStepView";
 import {
@@ -56,6 +68,8 @@ export interface LiveWorkoutExercise {
   groupRounds?: number;
   /** Rest between sets in seconds (defaults to 90). */
   restSec?: number;
+  /** Group-level rest between rounds (web `groupRest`, e.g. "60s"). */
+  groupRest?: string;
   /** Last completed performance per set, used as prefill. */
   prefill?: (LiveSetState | null)[];
   addedAdHoc?: boolean;
@@ -126,10 +140,129 @@ export interface LiveWorkoutClientProps {
   /** Injected rest-timer interval impls for deterministic tests. */
   restTimerSetInterval?: typeof setInterval;
   restTimerClearInterval?: typeof clearInterval;
+  /**
+   * Best completed set per exercise NAME from a log before today
+   * (`exerciseHistory[name]` on the web). Threaded from `useLiveWorkout`;
+   * shown as the `Last:` reference on the Live step only.
+   */
+  exerciseHistory?: Record<string, ExerciseHistoryEntry>;
+  /**
+   * Persisted max-weight record per exercise NAME (`exercisePRs[name]` on
+   * the web). Threaded from `useLiveWorkout`; drives the `PR:` line and
+   * the NEW PR flag on the Live step only.
+   */
+  exercisePRs?: Record<string, ExercisePRSummary>;
+  /**
+   * True when this workout resumed in-progress work (the server's open log
+   * or a fresh on-device draft). Renders the web's resume indicator - a
+   * small "Resuming where you left off" line under the progress count -
+   * for the first seconds of the session.
+   */
+  resumed?: boolean;
+  /**
+   * Open the skip sheet when the primary button is pressed with blank
+   * inputs (the web's `handleCompleteOrSkipSet`). Off, the button always
+   * completes (NP-220's contract, and what its tests assert). On, a blank
+   * step reads `Skip <unit>` and the press opens the skip sheet instead
+   * of writing zeros silently. The route leaves it on; unit tests opt in
+   * per case.
+   */
+  enableSkipFlow?: boolean;
   testID?: string;
 }
 
 const DEFAULT_REST_SEC = 90;
+
+/**
+ * Parse a web-style rest string ("90s", "3min", "120") into seconds — the
+ * web live client's `parseRestTime`, verbatim.
+ */
+export function parseRestSeconds(rest: string | null | undefined): number {
+  if (!rest) return 60;
+  const match = rest.match(/(\d+)/);
+  if (!match) return 60;
+  const num = parseInt(match[1]!, 10);
+  if (rest.includes("min")) return num * 60;
+  return num;
+}
+
+/** Smart rest default by tracking type — the web live client's rule. */
+function smartRestDefault(exercise?: LiveWorkoutExercise): string {
+  const t = normalizeTracking(exercise?.trackingType ?? null);
+  if (t === "reps_weight") return "3min";
+  if (t === "reps_bodyweight" || t === "reps_only") return "90s";
+  return "60s";
+}
+
+/**
+ * Rest AFTER this step, in seconds — the web live client's `getRestDuration`
+ * (line ~1283): no rest between exercises inside a round; after a round's
+ * last exercise rest `groupRest || rest || smart default`. Ungrouped steps
+ * rest their own `rest` (or the smart default). Only gates WHEN the existing
+ * rest bar starts; the timer itself is NP-082's.
+ */
+export function restAfterStep(
+  step: { groupId: string | null; isLastInRound: boolean },
+  exercise?: LiveWorkoutExercise,
+): number {
+  if (step.groupId && !step.isLastInRound) return 0;
+  if (step.groupId && step.isLastInRound) {
+    return parseRestSeconds(
+      exercise?.groupRest ??
+        (exercise?.restSec != null ? `${exercise.restSec}s` : undefined) ??
+        smartRestDefault(exercise),
+    );
+  }
+  return parseRestSeconds(
+    exercise?.restSec != null ? `${exercise.restSec}s` : smartRestDefault(exercise),
+  );
+}
+
+/**
+ * The group label for the current step — the web live client's
+ * `supersetLabel`: the exercise's own `groupLabel` first, else the group
+ * type + round number. Driven from the CURRENT EXERCISE (the route never
+ * sets `workout.groupType`), so a superset block reads as one.
+ */
+export function groupLabelForStep(
+  step: { groupId: string | null; roundNumber: number } | undefined,
+  exercise?: LiveWorkoutExercise,
+): string | null {
+  if (!step?.groupId || !exercise) return null;
+  const round = step.roundNumber + 1;
+  if (exercise.groupLabel) return `${exercise.groupLabel} · ${round}`;
+  const gtype = exercise.groupType?.toUpperCase() ?? "ROUND";
+  return `${gtype} ${round}`;
+}
+
+/**
+ * Total rounds for the current step's block: R = max(groupRounds, sets) —
+ * the same max the shared `buildWorkoutFlow` walks, so the nav reads
+ * "Round r of R" over exactly the rounds the member will walk.
+ */
+export function totalRoundsForStep(
+  step: { groupId: string | null } | undefined,
+  exercise: LiveWorkoutExercise | undefined,
+  exercises: LiveWorkoutExercise[],
+): number {
+  if (!step?.groupId || !exercise) return 1;
+  const members = exercises.filter((m) => m.groupId === step.groupId);
+  const maxSets = Math.max(
+    exercise.groupRounds ?? 0,
+    ...members.map((m) => m.sets || 0),
+  );
+  return maxSets > 0 ? maxSets : 1;
+}
+
+/** The web live client's primary-action label for the current step. */
+export function liveCompleteLabel(
+  isLastStep: boolean,
+  trackingType?: string | null,
+): string {
+  if (isLastStep) return "Finish Workout";
+  if (normalizeTracking(trackingType ?? null) === "intervals") return "Done →";
+  return `Complete ${setUnitLabel(trackingType ?? null, 1)} →`;
+}
 
 function initialGrid(
   exercises: LiveWorkoutExercise[],
@@ -152,6 +285,7 @@ function initialGrid(
         reps: null,
         durationSec: null,
         distance: null,
+        speed: null,
         completed: false,
       };
     });
@@ -169,6 +303,7 @@ function typedSet(state: LiveSetState): {
   weight: string;
   duration: string;
   distance: string;
+  speed: string;
 } {
   const s = (v: number | null | undefined) =>
     v === null || v === undefined ? "" : String(v);
@@ -177,6 +312,7 @@ function typedSet(state: LiveSetState): {
     weight: s(state.weight),
     duration: s(state.durationSec),
     distance: s(state.distance),
+    speed: s(state.speed),
   };
 }
 
@@ -186,6 +322,40 @@ function setsByExercise(
   grid: LiveGrid,
 ): LiveSetState[][] {
   return exercises.map((ex) => grid[ex.slug] ?? []);
+}
+
+/**
+ * A set in words for the edit-confirm modal's Before / After boxes - the
+ * web shows `weight lbs x reps` beside each. Timed work reads as its
+ * duration; anything with neither reads as logged.
+ */
+function describeSet(state: LiveSetState, trackingType?: string | null): string {
+  const num = (v: number | null | undefined) =>
+    v === null || v === undefined ? null : String(v);
+  const reps = num(state.reps);
+  const weight = num(state.weight);
+  if (reps !== null && weight !== null) return weight + " lbs x " + reps;
+  if (reps !== null) return reps + " " + setUnitLabel(trackingType ?? null, 1).toLowerCase();
+  if (weight !== null) return weight + " lbs";
+  if (state.durationSec !== null && state.durationSec !== undefined)
+    return String(state.durationSec) + "s";
+  return "logged";
+}
+
+/**
+ * Did the member change the numbers since the set was marked done? The
+ * web's edit-confirm gate compares saved vs inputs field by field; native
+ * compares the completion snapshot with the row. `completed` itself is
+ * not compared — both sides are done by construction.
+ */
+function sameSetValues(a: LiveSetState, b: LiveSetState): boolean {
+  return (
+    (a.reps ?? null) === (b.reps ?? null) &&
+    (a.weight ?? null) === (b.weight ?? null) &&
+    (a.durationSec ?? null) === (b.durationSec ?? null) &&
+    (a.distance ?? null) === (b.distance ?? null) &&
+    (a.speed ?? null) === (b.speed ?? null)
+  );
 }
 
 /**
@@ -226,6 +396,10 @@ export function LiveWorkoutClient({
   positionStore,
   restTimerSetInterval,
   restTimerClearInterval,
+  exerciseHistory,
+  exercisePRs,
+  resumed = false,
+  enableSkipFlow = false,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -236,6 +410,11 @@ export function LiveWorkoutClient({
   // compose instead of clobbering each other (the closure `grid` would be stale
   // for the second edit).
   const gridRef = useRef<LiveGrid>(grid);
+  // What each completed set held the moment it was marked done (the web's
+  // edit-confirm rule compares the saved values with the inputs: same
+  // values re-save silently, changed values ask first). Keyed
+  // `slug:setIndex`; cleared whenever the set becomes incomplete again.
+  const completedSnapshot = useRef<Map<string, LiveSetState>>(new Map());
   // The mirror is maintained AFTER commit, never during render: writing a ref
   // while rendering is what `react-hooks/refs` reports, and under a re-render
   // that React throws away it leaves the ref holding a grid the UI never
@@ -250,6 +429,24 @@ export function LiveWorkoutClient({
   const totalRounds = workout.groupRounds ?? 1;
   const [view, setView] = useState<WorkoutView>(initialView);
   const [notes, setNotes] = useState<string>(notesProp ?? "");
+  // The web shows its "Resuming" pill for 3s after a resume; native shows
+  // the same line until it ages out. Timer-free: the flag arrives as a
+  // prop and clears on the first edit, which is the first thing a resumed
+  // member does.
+  const [showResumed, setShowResumed] = useState(resumed);
+  // The web live client's two overlays: the exercise list sheet (tap to
+  // jump) and the skip confirmation modal (this set / this exercise).
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [skipOpen, setSkipOpen] = useState(false);
+  // Re-completing a finished step asks first (the web's edit-confirm
+  // modal), showing Before → After. Held here so the modal can read the
+  // saved values after the member has already typed the new ones.
+  const [editConfirm, setEditConfirm] = useState<{
+    exerciseIndex: number;
+    setIndex: number;
+    before: string;
+    after: string;
+  } | null>(null);
 
   /**
    * The interleaved rounds for every grouped block (NP-172): the same
@@ -271,6 +468,7 @@ export function LiveWorkoutClient({
           ...(ex.groupType ? { groupType: ex.groupType } : {}),
           ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
           ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+          ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
         })),
       ),
     [workout.exercises],
@@ -304,6 +502,12 @@ export function LiveWorkoutClient({
   useEffect(() => {
     const seeded = initialGrid(workout.exercises, restoredGrid);
     gridRef.current = seeded;
+    completedSnapshot.current = new Map();
+    for (const ex of workout.exercises) {
+      (seeded[ex.slug] ?? []).forEach((st, i) => {
+        if (st.completed) completedSnapshot.current.set(ex.slug + ":" + i, { ...st });
+      });
+    }
     /* eslint-disable react-hooks/set-state-in-effect */
     setGrid(seeded);
     setRound(1);
@@ -386,6 +590,16 @@ export function LiveWorkoutClient({
         ? next
         : { ...next, completed: isSetFilled(ex.trackingType, typedSet(next)) };
       const justCompleted = !prev?.completed && resolved.completed;
+      const key = ex.slug + ":" + setIndex;
+      if (manualToggle && !resolved.completed) {
+        // The member explicitly reopened the set: forget what was done.
+        completedSnapshot.current.delete(key);
+      } else if (justCompleted && !completedSnapshot.current.has(key)) {
+        // First completion records what was done; further typing into a
+        // done set dirties it against this snapshot (the web's Before vs
+        // inputs) instead of moving the goalposts.
+        completedSnapshot.current.set(key, { ...resolved });
+      }
 
       const updated = applySetUpdate(
         gridRef.current,
@@ -395,10 +609,18 @@ export function LiveWorkoutClient({
       );
       gridRef.current = updated;
       setGrid(updated);
+      setShowResumed(false);
       onGridChange?.(updated);
       rememberAfterEdit(exerciseIndex, setIndex, resolved.completed);
       if (justCompleted) {
-        rest.start(ex.restSec ?? DEFAULT_REST_SEC);
+        // The web's rest rule: only the round's LAST exercise starts the
+        // bar. `rest.start` is the only thing gated — the timer is NP-082's.
+        const flowIndex = flowIndexByKey.get(`${exerciseIndex}:${setIndex}`);
+        const step = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
+        const restSec = step
+          ? restAfterStep(step, ex)
+          : (ex.restSec ?? DEFAULT_REST_SEC);
+        if (restSec > 0) rest.start(restSec);
         void onSetComplete?.({
           exerciseSlug: ex.slug,
           setIndex,
@@ -406,7 +628,7 @@ export function LiveWorkoutClient({
         });
       }
     },
-    [workout.exercises, onGridChange, onSetComplete, rememberAfterEdit, rest],
+    [workout.exercises, workoutFlow, flowIndexByKey, onGridChange, onSetComplete, rememberAfterEdit, rest],
   );
 
   const handleStepChange = useCallback(
@@ -417,6 +639,252 @@ export function LiveWorkoutClient({
     },
     [workoutFlow, rememberPosition],
   );
+
+  /**
+   * The web's primary action (`completeSet` / `advanceStep`): mark the
+   * CURRENT step's set done with exactly what was typed — blank stays
+   * blank, never last time's numbers — through the existing set-change
+   * path, then move to the next step of `workoutFlow`. On the last step
+   * there is nowhere to move to, so it enters the existing finish flow
+   * (`onFinish`: the incomplete prompt and midnight choice from NP-085,
+   * then the NP-086 summary). The checkbox tap stays the member's own
+   * call for every other set; this button is the call for THIS one.
+   */
+  const handleCompleteStep = useCallback(() => {
+    const step = workoutFlow[liveStepIndex];
+    if (!step) return;
+    const ex = workout.exercises[step.exerciseIndex];
+    if (!ex) return;
+    const isLastStep = liveStepIndex >= workoutFlow.length - 1;
+    const prev = gridRef.current[ex.slug]?.[step.setIndex];
+    const snap = completedSnapshot.current.get(ex.slug + ":" + step.setIndex);
+    const changedSinceDone =
+      !!prev?.completed && (!snap || !sameSetValues(snap, prev));
+    if (changedSinceDone) {
+      setEditConfirm({
+        exerciseIndex: step.exerciseIndex,
+        setIndex: step.setIndex,
+        before: describeSet(prev, ex.trackingType),
+        after: describeSet(
+          {
+            reps: prev.reps ?? null,
+            weight: prev.weight ?? null,
+            durationSec: prev.durationSec ?? null,
+            distance: prev.distance ?? null,
+            speed: prev.speed ?? null,
+            completed: true,
+          },
+          ex.trackingType,
+        ),
+      });
+      return;
+    }
+    const current: LiveSetState = prev ?? {
+      reps: null,
+      weight: null,
+      durationSec: null,
+      distance: null,
+      speed: null,
+      completed: false,
+    };
+    // Exactly what was typed — blank stays blank. `handleSetChange` would
+    // re-ask `isSetFilled` and refuse to tick an empty set; the web's
+    // Complete button always completes, so this path always does.
+    const resolved: LiveSetState = { ...current, completed: true };
+    const updated = applySetUpdate(gridRef.current, ex.slug, step.setIndex, resolved);
+    gridRef.current = updated;
+    completedSnapshot.current.set(ex.slug + ":" + step.setIndex, { ...resolved });
+    setGrid(updated);
+    onGridChange?.(updated);
+    // The web's rest rule, same as the checkbox path: only the round's
+    // last exercise starts the bar — including on the last step, where the
+    // finish flow opens AND the bar runs behind it (the web's `completeSet`
+    // saves, advances to the summary, and leaves the rest running).
+    const restSec = restAfterStep(step, ex);
+    if (restSec > 0) rest.start(restSec);
+    void onSetComplete?.({
+      exerciseSlug: ex.slug,
+      setIndex: step.setIndex,
+      state: resolved,
+    });
+    if (isLastStep) {
+      rememberPosition(step.exerciseIndex, step.setIndex);
+      onFinish?.(updated);
+      return;
+    }
+    const nextStep = workoutFlow[liveStepIndex + 1];
+    if (nextStep) {
+      setLiveStepIndex(liveStepIndex + 1);
+      rememberPosition(nextStep.exerciseIndex, nextStep.setIndex);
+    }
+  }, [
+    workoutFlow,
+    liveStepIndex,
+    workout.exercises,
+    onGridChange,
+    onFinish,
+    onSetComplete,
+    rememberPosition,
+    rest,
+  ]);
+
+  /**
+   * Write one set through the existing set-change path - grid, cache,
+   * position, rest and the debounced save - then move the Live step.
+   * `advance` decides where the member stands afterwards: the next step,
+   * a jump target, or the finish flow (null means finish).
+   */
+  const commitSetAndMove = useCallback(
+    (
+      exerciseIndex: number,
+      setIndex: number,
+      resolved: LiveSetState,
+      advance: { exerciseIndex: number; setIndex: number } | null | undefined,
+    ) => {
+      const target = workout.exercises[exerciseIndex];
+      if (!target) return;
+      const updated = applySetUpdate(gridRef.current, target.slug, setIndex, resolved);
+      gridRef.current = updated;
+      completedSnapshot.current.set(target.slug + ":" + setIndex, { ...resolved });
+      setGrid(updated);
+      onGridChange?.(updated);
+      const flowIndex = flowIndexByKey.get(exerciseIndex + ":" + setIndex);
+      const atStep = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
+      const restSec = atStep
+        ? restAfterStep(atStep, target)
+        : (target.restSec ?? DEFAULT_REST_SEC);
+      if (restSec > 0) rest.start(restSec);
+      void onSetComplete?.({ exerciseSlug: target.slug, setIndex, state: resolved });
+      if (advance === null) {
+        rememberPosition(exerciseIndex, setIndex);
+        onFinish?.(updated);
+        return;
+      }
+      if (advance) {
+        const at = flowIndexByKey.get(advance.exerciseIndex + ":" + advance.setIndex);
+        if (at !== undefined) setLiveStepIndex(at);
+        rememberPosition(advance.exerciseIndex, advance.setIndex);
+      }
+    },
+    [workout.exercises, workoutFlow, flowIndexByKey, onGridChange, onFinish, onSetComplete, rememberPosition, rest],
+  );
+
+  /**
+   * The web's `skipSet`: the current step's set is saved as completed with
+   * reps 0 and weight 0 - the shape history, PR detection and the calendar
+   * read as "skipped" rather than "unfinished" - then the flow advances
+   * exactly as a completion does, including the finish flow on the last
+   * step.
+   */
+  const handleSkipSet = useCallback(() => {
+    const step = workoutFlow[liveStepIndex];
+    if (!step) return;
+    const isLastStep = liveStepIndex >= workoutFlow.length - 1;
+    setSkipOpen(false);
+    if (isLastStep) {
+      commitSetAndMove(step.exerciseIndex, step.setIndex, skippedSetState(), null);
+      return;
+    }
+    const nextStep = workoutFlow[liveStepIndex + 1];
+    commitSetAndMove(step.exerciseIndex, step.setIndex, skippedSetState(), nextStep);
+  }, [workoutFlow, liveStepIndex, commitSetAndMove]);
+
+  /**
+   * The web's `skipExercise`: every set of the current exercise is saved
+   * as skipped (reps 0, weight 0, completed), then the member stands on
+   * the next exercise - or enters the finish flow when the skipped
+   * exercise was the last one with work left.
+   */
+  const handleSkipExercise = useCallback(() => {
+    const step = workoutFlow[liveStepIndex];
+    if (!step) return;
+    const skippedExerciseIndex = step.exerciseIndex;
+    const ex = workout.exercises[skippedExerciseIndex];
+    if (!ex) return;
+    setSkipOpen(false);
+    let updated = gridRef.current;
+    const count = updated[ex.slug]?.length ?? ex.sets;
+    for (let i = 0; i < count; i++) {
+      updated = applySetUpdate(updated, ex.slug, i, skippedSetState());
+      completedSnapshot.current.set(ex.slug + ":" + i, skippedSetState());
+    }
+    let nextIdx = liveStepIndex + 1;
+    while (
+      nextIdx < workoutFlow.length &&
+      workoutFlow[nextIdx]?.exerciseIndex === skippedExerciseIndex
+    ) {
+      nextIdx++;
+    }
+    gridRef.current = updated;
+    setGrid(updated);
+    onGridChange?.(updated);
+    const restSec = restAfterStep(step, ex);
+    if (restSec > 0) rest.start(restSec);
+    void onSetComplete?.({ exerciseSlug: ex.slug, setIndex: step.setIndex, state: skippedSetState() });
+    if (nextIdx >= workoutFlow.length) {
+      rememberPosition(step.exerciseIndex, step.setIndex);
+      onFinish?.(updated);
+      return;
+    }
+    const nextStep = workoutFlow[nextIdx];
+    if (nextStep) {
+      setLiveStepIndex(nextIdx);
+      rememberPosition(nextStep.exerciseIndex, nextStep.setIndex);
+    }
+  }, [workoutFlow, liveStepIndex, workout.exercises, onGridChange, onFinish, onSetComplete, rememberPosition, rest]);
+
+  /**
+   * Jump to an exercise: its first set that still needs doing (the web's
+   * `goToExercise`). When everything of it is done, its first set - so
+   * the member can review rather than landing nowhere.
+   */
+  const handleJumpToExercise = useCallback(
+    (exerciseIndex: number) => {
+      const target = workoutFlow.findIndex(
+        (st) =>
+          st.exerciseIndex === exerciseIndex &&
+          !gridRef.current[workout.exercises[st.exerciseIndex]?.slug ?? ""]?.[st.setIndex]?.completed,
+      );
+      const at =
+        target === -1
+          ? workoutFlow.findIndex((st) => st.exerciseIndex === exerciseIndex)
+          : target;
+      if (at === -1) return;
+      setSheetOpen(false);
+      setLiveStepIndex(at);
+      const landed = workoutFlow[at];
+      if (landed) rememberPosition(landed.exerciseIndex, landed.setIndex);
+    },
+    [workoutFlow, workout.exercises, rememberPosition],
+  );
+
+  /** The edit-confirm modal's Save Changes: overwrite the finished set. */
+  const handleConfirmEdit = useCallback(() => {
+    if (!editConfirm) return;
+    const ex = workout.exercises[editConfirm.exerciseIndex];
+    if (!ex) {
+      setEditConfirm(null);
+      return;
+    }
+    const prev = gridRef.current[ex.slug]?.[editConfirm.setIndex];
+    const resolved: LiveSetState = {
+      reps: prev?.reps ?? null,
+      weight: prev?.weight ?? null,
+      durationSec: prev?.durationSec ?? null,
+      distance: prev?.distance ?? null,
+      speed: prev?.speed ?? null,
+      completed: true,
+    };
+    const updated = applySetUpdate(gridRef.current, ex.slug, editConfirm.setIndex, resolved);
+    const at = { exerciseIndex: editConfirm.exerciseIndex, setIndex: editConfirm.setIndex };
+    completedSnapshot.current.set(ex.slug + ":" + at.setIndex, { ...resolved });
+    setEditConfirm(null);
+    gridRef.current = updated;
+    setGrid(updated);
+    onGridChange?.(updated);
+    rememberPosition(at.exerciseIndex, at.setIndex);
+    void onSetComplete?.({ exerciseSlug: ex.slug, setIndex: at.setIndex, state: resolved });
+  }, [editConfirm, workout.exercises, onGridChange, onSetComplete, rememberPosition]);
 
   const handleViewChange = useCallback(
     (nextView: WorkoutView) => {
@@ -444,6 +912,45 @@ export function LiveWorkoutClient({
     [onNotesChange],
   );
 
+  // The web's `isSkipping` rule, read off the CURRENT Live step's inputs:
+  // blank inputs mean the primary button offers to skip rather than
+  // complete. Intervals never skip - there is nothing required to be
+  // blank. On the last step the web finishes instead of asking.
+  const liveStep = workoutFlow[liveStepIndex];
+  const liveExercise = liveStep ? workout.exercises[liveStep.exerciseIndex] : undefined;
+  // `grid` (state), never `gridRef`: refs cannot be read during render,
+  // and the ref mirrors the state after every commit anyway. A step the
+  // member has never typed into has no row yet — blank, like the web's
+  // empty strings — except a set already restored as done, which is never
+  // a skip candidate.
+  const liveRow = liveStep && liveExercise
+    ? grid[liveExercise.slug]?.[liveStep.setIndex]
+    : undefined;
+  const liveCurrent: LiveSetState | undefined = liveRow;
+  const liveTracking = normalizeTracking(liveExercise?.trackingType ?? null);
+  // The web's `isSkipping`, read off the step's inputs: blank means the
+  // primary button offers to skip rather than complete. Intervals never
+  // skip - there is nothing required to be blank - and a finished step
+  // never skips either (it opens the edit-confirm modal instead).
+  const isSkippingLive =
+    !enableSkipFlow || liveCurrent?.completed
+      ? false
+      : liveTracking === "intervals"
+        ? false
+        : liveTracking === "reps_weight"
+          ? (liveCurrent?.reps ?? null) === null &&
+            (liveCurrent?.weight ?? null) === null
+          : liveTracking === "time" || liveTracking === "time_distance"
+            ? (liveCurrent?.durationSec ?? null) === null &&
+              (liveCurrent?.distance ?? null) === null &&
+              (liveCurrent?.speed ?? null) === null &&
+              (liveCurrent?.reps ?? null) === null
+            : (liveCurrent?.reps ?? null) === null;
+  const skipStep = liveStep && liveExercise ? { exercise: liveExercise, setIndex: liveStep.setIndex } : null;
+  const exerciseDoneFlags = workout.exercises.map((ex) =>
+    (grid[ex.slug] ?? []).length > 0 && (grid[ex.slug] ?? []).every((st) => st.completed),
+  );
+
   const totalSets = useMemo(
     () => workout.exercises.reduce((acc, ex) => acc + (grid[ex.slug]?.length ?? 0), 0),
     [workout.exercises, grid],
@@ -457,18 +964,21 @@ export function LiveWorkoutClient({
     [workout.exercises, grid],
   );
   // The web's rule verbatim: the button exists at 100% and nowhere else.
+  // Live has no separate Finish button — completing the last step IS the
+  // finish (the web has no always-visible Complete Workout in Live either).
   const allSetsDone = totalSets > 0 && completedSets === totalSets;
 
-  const finishButton = allSetsDone ? (
-    <Button
-      testID={`${testID}-finish`}
-      variant="primary"
-      disabled={finishing}
-      onPress={() => onFinish?.(gridRef.current)}
-    >
-      {finishing ? "Saving…" : "Complete Workout! 🎉"}
-    </Button>
-  ) : null;
+  const finishButton =
+    allSetsDone && view === "track" ? (
+      <Button
+        testID={`${testID}-finish`}
+        variant="primary"
+        disabled={finishing}
+        onPress={() => onFinish?.(gridRef.current)}
+      >
+        {finishing ? "Saving…" : "Complete Workout! 🎉"}
+      </Button>
+    ) : null;
 
   return (
     <SafeAreaView
@@ -491,6 +1001,14 @@ export function LiveWorkoutClient({
         >
           {`${completedSets} of ${totalSets} sets done`}
         </Text>
+        {showResumed ? (
+          <Text
+            testID={`${testID}-resume-indicator`}
+            className="text-muted-foreground text-xs"
+          >
+            Resuming where you left off
+          </Text>
+        ) : null}
 
         {view === "track" ? (
           <TrackWorkoutView
@@ -510,6 +1028,19 @@ export function LiveWorkoutClient({
             showNotes={completedSets > 0}
           />
         ) : (
+          <>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                testID={`${testID}-live-exercises`}
+                variant="secondary"
+                onPress={() => setSheetOpen(true)}
+                accessibilityLabel="Open exercise list"
+              >
+                Exercises
+              </Button>
+            </View>
+          </View>
           <LiveStepView
             testID={testID}
             exercises={workout.exercises}
@@ -518,8 +1049,45 @@ export function LiveWorkoutClient({
             stepIndex={liveStepIndex}
             onStepChange={handleStepChange}
             onSetChange={handleSetChange}
+            onCompleteStep={handleCompleteStep}
+            onRequestSkip={enableSkipFlow ? () => setSkipOpen(true) : undefined}
+            isSkipping={isSkippingLive}
             onRequestSwap={onRequestSwap}
+            exerciseHistory={exerciseHistory}
+            exercisePRs={exercisePRs}
           />
+          <LiveExerciseSheet
+            visible={sheetOpen}
+            onClose={() => setSheetOpen(false)}
+            exercises={workout.exercises}
+            completed={exerciseDoneFlags}
+            currentExerciseIndex={liveStep?.exerciseIndex ?? 0}
+            onJump={handleJumpToExercise}
+            testID={testID}
+          />
+          {skipStep ? (
+            <LiveSkipModal
+              visible={skipOpen}
+              onClose={() => setSkipOpen(false)}
+              onSkipSet={handleSkipSet}
+              onSkipExercise={handleSkipExercise}
+              exercise={skipStep.exercise}
+              setIndex={skipStep.setIndex}
+              testID={testID}
+            />
+          ) : null}
+          <LiveEditConfirmModal
+            visible={editConfirm !== null}
+            onClose={() => setEditConfirm(null)}
+            onConfirm={handleConfirmEdit}
+            exerciseName={
+              editConfirm ? workout.exercises[editConfirm.exerciseIndex]?.name : undefined
+            }
+            beforeLabel={editConfirm?.before}
+            afterLabel={editConfirm?.after}
+            testID={testID}
+          />
+          </>
         )}
 
         {rest.active && rest.remainingSec > 0 ? (

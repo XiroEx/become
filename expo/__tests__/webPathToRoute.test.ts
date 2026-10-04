@@ -225,7 +225,7 @@ describe("the table", () => {
     // Nutrition
     ["/dashboard/nutrition", "/(tabs)/nutrition", "exact"],
     ["/dashboard/nutrition?date=2026-09-29", "/(tabs)/nutrition?date=2026-09-29", "exact"],
-    ["/dashboard/nutrition/goals", "/(tabs)/nutrition", "nearest"],
+    ["/dashboard/nutrition/goals", "/(tabs)/nutrition/goals", "exact"],
     ["/dashboard/nutrition/meal-schedule", "/(tabs)/nutrition/meal-schedule", "exact"],
     ["/dashboard/nutrition/recipes", "/(tabs)/nutrition/recipes", "exact"],
     ["/dashboard/recipes/r1", "/(tabs)/nutrition/recipes/r1", "exact"],
@@ -247,7 +247,7 @@ describe("the table", () => {
     ["/dashboard/workout/hub", "/(tabs)/programming", "nearest"],
     ["/dashboard/workout/library", "/(tabs)/programming", "nearest"],
     ["/dashboard/workout/p1", "/(tabs)/programming/p1", "exact"],
-    ["/dashboard/workout/p1/journey", "/(tabs)/programming/p1", "nearest"],
+    ["/dashboard/workout/p1/journey", "/(tabs)/programming/p1/journey", "exact"],
     ["/dashboard/workout/p1/schedule", "/(tabs)/calendar/settings", "nearest"],
     ["/dashboard/workout/p1/workout?day=Day%201", "/(tabs)/programming/p1/workout/0?day=Day%201", "exact"],
     [

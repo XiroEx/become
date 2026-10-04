@@ -12,6 +12,7 @@ import {
 } from "@/lib/account/deleteAccount";
 import { sessionStore } from "@/lib/auth/secureStoreToken";
 import { clearAll as clearAllLastKnownCache, setCacheMemberId } from "@/lib/cache/lastKnown";
+import { clearAppBadge } from "@/lib/widgets/badge";
 
 /**
  * Delete account, on the settings screen of both store builds.
@@ -46,6 +47,8 @@ export interface DangerZoneProps {
   requestImpl?: typeof requestAccountDeletion;
   cancelImpl?: typeof cancelAccountDeletion;
   statusImpl?: typeof getAccountDeletionStatus;
+  /** Clears the app-icon badge (NP-067). Defaults to the real clear. */
+  clearBadge?: () => Promise<void>;
   /**
    * Drops the session. Omitted → `sessionStore` (`become.session`), named
    * explicitly so this can only ever clear the session key.
@@ -63,6 +66,7 @@ export function DangerZone({
   requestImpl = requestAccountDeletion,
   cancelImpl = cancelAccountDeletion,
   statusImpl = getAccountDeletionStatus,
+  clearBadge = () => clearAppBadge(),
   clearToken = () => sessionStore.clear(),
   source,
   testID = "danger-zone",
@@ -115,6 +119,14 @@ export function DangerZone({
     // Drop the session before navigating: the account is on its way out and
     // the push token for this install is already gone server-side.
     await clearToken();
+    // The icon badge is one member's unfinished day (NP-067): it must not
+    // outlive the account, exactly like the cached dashboard data below.
+    // Fire-and-forget — deletion must not wait on decoration, or fail with it.
+    try {
+      await clearBadge();
+    } catch {
+      /* ignore */
+    }
     try {
       await clearAllLastKnownCache();
     } catch {

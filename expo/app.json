@@ -82,7 +82,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.WRITE_WEIGHT",
-        "android.permission.health.WRITE_EXERCISE"
+        "android.permission.health.WRITE_EXERCISE",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -249,7 +250,8 @@
             }
           ]
         }
-      ]
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

@@ -12,6 +12,8 @@
  */
 
 import {
+  correctDescribeEstimate,
+  correctPhotoEstimate,
   estimateFromDescription,
   estimateFromPhoto,
   logEstimate,
@@ -132,8 +134,111 @@ describe("estimateFromPhoto / estimateFromDescription outcome split", () => {
   });
 });
 
-describe("reviewItemsFor", () => {
-  it("builds review rows with the web's maths (per-unit nutrition × count)", () => {
+describe("correction ticket routing (NP-090)", () => {
+  const estimate: PlateEstimate = {
+    items: [
+      {
+        name: "Tacos",
+        estimatedServing: "3 tacos",
+        nutrition: { calories: 600, protein: 30, carbs: 50, fats: 20 },
+        confidence: 0.9,
+      },
+    ],
+    allowanceTicket: "ticket_estimate_1",
+  };
+
+  it("a fresh photo estimate never presents a ticket", async () => {
+    const runTask = jest.fn().mockResolvedValue({ ok: true, result: estimate });
+    await estimateFromPhoto(IMAGE, "extra salsa", {
+      runTask: runTask as never,
+    });
+    expect(runTask).toHaveBeenCalledWith(
+      "/api/ai/nutrition/plate",
+      expect.not.objectContaining({ allowanceTicket: expect.anything() }),
+    );
+  });
+
+  it("a fresh description never presents a ticket", async () => {
+    const runTask = jest.fn().mockResolvedValue({ ok: true, result: estimate });
+    await estimateFromDescription("three tacos", {
+      runTask: runTask as never,
+    });
+    expect(runTask).toHaveBeenCalledWith(
+      "/api/ai/nutrition/describe",
+      expect.not.objectContaining({ allowanceTicket: expect.anything() }),
+    );
+  });
+
+  it("the estimate carries the POST's ticket for its own correction", async () => {
+    const runTask = jest.fn().mockResolvedValue({
+      ok: true,
+      result: { items: estimate.items },
+      allowanceTicket: "ticket_post_1",
+    });
+    const outcome = await estimateFromPhoto(IMAGE, undefined, {
+      runTask: runTask as never,
+    });
+    expect(outcome.status).toBe("estimated");
+    if (outcome.status === "estimated") {
+      expect(outcome.estimate.allowanceTicket).toBe("ticket_post_1");
+    }
+  });
+
+  it("a photo correction re-reads the same image with note + ticket", async () => {
+    const runTask = jest.fn().mockResolvedValue({ ok: true, result: estimate });
+    await correctPhotoEstimate(IMAGE.dataUrl, "it was 6 tacos", "ticket_1", {
+      runTask: runTask as never,
+    });
+    expect(runTask).toHaveBeenCalledWith("/api/ai/nutrition/plate", {
+      image: IMAGE.dataUrl,
+      note: "it was 6 tacos",
+      allowanceTicket: "ticket_1",
+    });
+  });
+
+  it("a describe correction sends correction + priorEstimate + ticket, no description", async () => {
+    const runTask = jest.fn().mockResolvedValue({ ok: true, result: estimate });
+    const rows = reviewItemsFor(estimate);
+    await correctDescribeEstimate(rows, "it was 6 tacos", "ticket_1", {
+      runTask: runTask as never,
+    });
+    const body = runTask.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.correction).toBe("it was 6 tacos");
+    expect(body.allowanceTicket).toBe("ticket_1");
+    expect(Array.isArray(body.priorEstimate)).toBe(true);
+    expect(body).not.toHaveProperty("description");
+  });
+
+  it("a describe correction skips removed rows in priorEstimate", async () => {
+    const runTask = jest.fn().mockResolvedValue({ ok: true, result: estimate });
+    const rows = [
+      ...reviewItemsFor(estimate),
+      { ...reviewItemsFor(estimate)[0]!, removed: true },
+    ];
+    await correctDescribeEstimate(rows, "less rice", undefined, {
+      runTask: runTask as never,
+    });
+    const body = runTask.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect((body.priorEstimate as unknown[])).toHaveLength(1);
+    expect(body).not.toHaveProperty("allowanceTicket");
+  });
+
+  it("a refused correction surfaces as a gate (upgrade sheet), not an outage", async () => {
+    const gate = { error: "Out of free scans", requiresTier: "plus" };
+    const runTask = jest
+      .fn()
+      .mockResolvedValue({ ok: false, error: "entitlement", gate });
+    const outcome = await correctDescribeEstimate(
+      reviewItemsFor(estimate),
+      "it was 6 tacos",
+      "ticket_1",
+      { runTask: runTask as never },
+    );
+    expect(outcome).toEqual({ status: "gate", gate });
+  });
+});
+
+describe("reviewItemsFor", () => {  it("builds review rows with the web's maths (per-unit nutrition × count)", () => {
     const rows = reviewItemsFor({
       items: [
         {

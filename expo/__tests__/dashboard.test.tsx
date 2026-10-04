@@ -962,4 +962,260 @@ describe("DashboardRoute navigation", () => {
       mockUser = null;
     });
   });
+
+  describe("Training cards parity (NP-106)", () => {
+    function scheduleFixture() {
+      const now = new Date();
+      const key = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const iso = (d: Date) => `${key(d)}T00:00:00.000Z`;
+      const at = (deltaDays: number) => {
+        const d = new Date(now);
+        d.setDate(d.getDate() + deltaDays);
+        return d;
+      };
+      // Rest day today: no slot dated today; the next session is tomorrow.
+      return {
+        schedules: [
+          {
+            programId: "p1",
+            programName: "Hypertrophy",
+            programStatus: "in-progress",
+            scheduledWorkouts: [
+              {
+                date: iso(at(-2)),
+                dayLabel: "Day 1",
+                workoutTitle: "Upper A",
+                status: "missed",
+                phase: 1,
+              },
+              {
+                date: iso(at(1)),
+                dayLabel: "Day 3",
+                workoutTitle: "Upper B",
+                status: "scheduled",
+                phase: 1,
+              },
+              {
+                date: iso(at(3)),
+                dayLabel: "Day 4",
+                workoutTitle: "Lower B",
+                status: "scheduled",
+                phase: 2,
+              },
+            ],
+          },
+        ],
+      };
+    }
+
+    function wireSchedule(extra?: (path: string) => unknown) {
+      mockApiFetch.mockImplementation((path: string) => {
+        if (typeof path === "string" && path.startsWith("/api/schedule")) {
+          const method = undefined;
+          void method;
+          return Promise.resolve(scheduleFixture());
+        }
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+          });
+        }
+        if (path === "/api/streak") {
+          return Promise.resolve({
+            streakDays: 5,
+            longestStreak: 9,
+            streakFreezes: 1,
+          });
+        }
+        if (path === "/api/programs/active") {
+          return Promise.resolve({
+            activePrograms: [{ programId: "p1", programName: "Hypertrophy" }],
+          });
+        }
+        if (path.startsWith("/api/programs/current-workout")) {
+          return Promise.resolve(currentWorkout);
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({ layout: [] });
+        }
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({
+            due: false,
+            reason: "complete",
+            daysSinceMood: 0,
+            daysSinceWeight: 0,
+            lastWeight: null,
+          });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            stats: { totalWorkouts: 3, thisWeekWorkouts: 1 },
+            currentProgram: {
+              programId: "p1",
+              name: "Hypertrophy",
+              currentPhase: 1,
+              currentWeek: 2,
+              totalWeeks: 4,
+              completedWorkouts: 4,
+              totalWorkouts: 16,
+              nextWorkout: "Upper B",
+              nextWorkoutDay: "Day 3",
+            },
+          });
+        }
+        if (extra) {
+          const v = extra(path);
+          if (v !== undefined) return Promise.resolve(v);
+        }
+        return Promise.resolve({});
+      });
+    }
+
+    it("(id: e015c910) on a rest day Up Next names Tomorrow with the next workout", async () => {
+      wireSchedule();
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("up-next-card")).toBeTruthy();
+      });
+      // Rest day: no slot dated today, so the card names the next session's
+      // day — Tomorrow — exactly as the web's NextWorkoutCard does.
+      expect(getByTestId("up-next-day").props.children).toBe(
+        "Tomorrow: Day 3",
+      );
+
+      // The schedule window matches the web: ±14 days with the caller's tz.
+      const scheduleCall = mockApiFetch.mock.calls.find((c) =>
+        String(c[0]).startsWith("/api/schedule"),
+      );
+      expect(scheduleCall).toBeTruthy();
+      const url = String(scheduleCall![0]);
+      expect(url).toContain("from=");
+      expect(url).toContain("to=");
+      expect(url).toContain("tz=");
+    });
+
+    it("(id: e015c911) skipping a missed session PATCHes { action: 'skip', workoutDate } and refetches", async () => {
+      wireSchedule();
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("missed-workouts-card")).toBeTruthy();
+      });
+      const scheduleCallsBefore = callsTo("/api/schedule").length;
+
+      await act(async () => {
+        fireEvent.press(
+          getByTestId(
+            `missed-workout-skip-${(() => {
+              const d = new Date();
+              d.setDate(d.getDate() - 2);
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            })()}`,
+          ),
+        );
+      });
+
+      await waitFor(() => {
+        const skipCall = mockApiFetch.mock.calls.find(
+          (c) =>
+            c[0] === "/api/schedule" &&
+            (c[2] as { method?: string })?.method === "PATCH" &&
+            (c[2] as { body?: { action?: string } })?.body?.action === "skip",
+        );
+        expect(skipCall).toBeTruthy();
+      });
+      const skipCall = mockApiFetch.mock.calls.find(
+        (c) =>
+          c[0] === "/api/schedule" &&
+          (c[2] as { method?: string })?.method === "PATCH",
+      )!;
+      const body = (skipCall[2] as { body: Record<string, unknown> }).body;
+      expect(body.programId).toBe("p1");
+      expect(body.workoutDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      // The web sends tz in the skip body (`PATCH /api/schedule
+      // { action: 'skip', workoutDate, tz }`); apiFetch merges it per
+      // request in the app, and the mocked apiFetch in this test does not
+      // run that merge — so assert the route contract on the wire shape
+      // the app hands apiFetch: programId + action + workoutDate.
+      expect(body.action).toBe("skip");
+
+      // The schedule is re-pulled so the skipped slot leaves the list —
+      // which is what removes it from the web's list too (same route).
+      await waitFor(() => {
+        expect(callsTo("/api/schedule").length).toBeGreaterThan(
+          scheduleCallsBefore,
+        );
+      });
+    });
+
+    it("(id: e015c912) Start opens that exact slot (Track with day + sd)", async () => {
+      wireSchedule();
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("up-next-card")).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId("up-next-card"));
+
+      // Track (NP-087) for the exact slot: index + phase with the web's day
+      // label and slot date carried through, so finishing completes THAT slot.
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      const sd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      expect(mockPush).toHaveBeenCalledWith(
+        `/(tabs)/programming/p1/workout/2?phase=0&day=${encodeURIComponent("Day 3")}&sd=${encodeURIComponent(sd)}`,
+      );
+    });
+
+    it("shows the first-time empty state when there is no program and no workouts", async () => {
+      mockApiFetch.mockImplementation((path: string) => {
+        if (typeof path === "string" && path.startsWith("/api/schedule")) {
+          return Promise.resolve({ schedules: [] });
+        }
+        if (path === "/api/auth/me") {
+          return Promise.resolve({
+            user: { _id: "u1", email: "jon@example.com", name: "Jon" },
+          });
+        }
+        if (path === "/api/programs/active") {
+          return Promise.resolve({ activePrograms: [] });
+        }
+        if (path.startsWith("/api/progress")) {
+          return Promise.resolve({
+            stats: { totalWorkouts: 0, thisWeekWorkouts: 0 },
+            currentProgram: null,
+          });
+        }
+        if (path.startsWith("/api/dashboard/layout")) {
+          return Promise.resolve({ layout: [] });
+        }
+        if (path.startsWith("/api/checkin")) {
+          return Promise.resolve({ due: false, reason: "complete" });
+        }
+        return Promise.resolve({});
+      });
+
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-empty-state")).toBeTruthy();
+      });
+      fireEvent.press(getByTestId("dashboard-empty-state-browse"));
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
+    });
+
+    it("Progress quick link opens History (NP-112) until native progress exists", async () => {
+      wireSchedule();
+      const { getByTestId } = render(<DashboardRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("dashboard-quick-link-progress")).toBeTruthy();
+      });
+      fireEvent.press(getByTestId("dashboard-quick-link-progress"));
+      expect(mockPush).toHaveBeenCalledWith("/progress");
+    });
+  });
 });

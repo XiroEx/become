@@ -85,6 +85,7 @@ export const NATIVE_ROUTES = {
   mind: "/(tabs)/mind",
   nutrition: "/(tabs)/nutrition",
   nutritionSearch: "/(tabs)/nutrition/search",
+  nutritionGoals: "/(tabs)/nutrition/goals",
   recipes: "/(tabs)/nutrition/recipes",
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
   calendar: "/(tabs)/calendar",
@@ -491,7 +492,9 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     }
     if (sub === "recipes") return native(NATIVE_ROUTES.recipes, params, "exact");
     if (sub === "meal-schedule") return native(NATIVE_ROUTES.mealSchedule, params, "exact");
-    // goals, scans — nothing native yet (NP-091 and friends).
+    // The goals editor is native now (NP-148) — deep links land on it exactly.
+    if (sub === "goals") return native(NATIVE_ROUTES.nutritionGoals, params, "exact");
+    // scans — nothing native yet (NP-091 and friends).
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
   if (section === "recipes") {
@@ -621,7 +624,11 @@ function matchWorkout(
     // Picking training days: native does it in the schedule settings screen.
     return native(NATIVE_ROUTES.scheduleSettings, params, "nearest");
   }
-  if (third === "journey") return native(program, params, "nearest");
+  if (third === "journey") {
+    // The end-of-program recap (NP-167): the native journey screen reads the
+    // same GET /api/programs/[programId]/journey as the web page.
+    return native(`${program}/journey`, params, "exact");
+  }
   if (third !== "workout") return native(program, params, "nearest");
 
   const live = lower(segments[4]) === "live";
