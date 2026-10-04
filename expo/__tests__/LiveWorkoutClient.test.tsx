@@ -245,6 +245,22 @@ describe("LiveWorkoutClient", () => {
     );
     expect(queryByTestId("live-workout-group-nav")).toBeNull();
   });
+
+  it("with activeSeconds the header shows elapsed time and 0% overall progress", () => {
+    const { getByTestId, getByText } = render(
+      <LiveWorkoutClient workout={baseWorkout} activeSeconds={125} />,
+    );
+    expect(getByTestId("live-workout-elapsed").props.children).toBe("2:05");
+    expect(getByTestId("live-workout-overall-progress")).toBeTruthy();
+    expect(getByText("0%")).toBeTruthy();
+  });
+
+  it("without activeSeconds no elapsed text renders", () => {
+    const { queryByTestId } = render(
+      <LiveWorkoutClient workout={baseWorkout} />,
+    );
+    expect(queryByTestId("live-workout-elapsed")).toBeNull();
+  });
 });
 
 function mockInterval() {
