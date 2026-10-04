@@ -42,6 +42,8 @@ export const CHANNEL_IDS = {
   scheduleSetup: "schedule-setup",
   dailyGlance: "daily-glance",
   reEngagement: "re-engagement",
+  /** The locked-phone rest-over alert (NP-082). Local only, never pushed. */
+  restTimer: "rest-timer",
 } as const;
 
 export function getNotificationChannels(): NotificationChannel[] {
@@ -125,6 +127,14 @@ export function getNotificationChannels(): NotificationChannel[] {
       importance: "default",
       sound: false,
       vibrate: false,
+    },
+    {
+      id: CHANNEL_IDS.restTimer,
+      name: "Rest Timer",
+      description: "Alerts you when your rest between sets is over, even with the phone locked.",
+      importance: "high",
+      sound: true,
+      vibrate: true,
     },
   ];
 }

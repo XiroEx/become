@@ -248,6 +248,10 @@ describe("LiveWorkoutClient", () => {
 });
 
 function mockInterval() {
+  // The wall-clock timer derives the remainder from `nowImpl`, so the mock
+  // clock advances 1 s per tick — the cadence the production
+  // `setInterval(_, 1000)` ticks at.
+  let now = 1_000_000;
   let fn: (() => void) | null = null;
   const setI = ((f: () => void) => {
     fn = f;
@@ -256,7 +260,13 @@ function mockInterval() {
   const clearI = (() => {
     fn = null;
   }) as unknown as typeof clearInterval;
-  return { setI, clearI, tick: (n: number) => { for (let i = 0; i < n; i++) fn?.(); } };
+  const nowImpl = () => now;
+  return {
+    setI,
+    clearI,
+    nowImpl,
+    tick: (n: number) => { for (let i = 0; i < n; i++) { now += 1000; fn?.(); } },
+  };
 }
 
 describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
@@ -298,7 +308,7 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
   });
 
   it("starts a rest timer that ticks down when a set is completed", () => {
-    const { setI, clearI, tick } = mockInterval();
+    const { setI, clearI, nowImpl, tick } = mockInterval();
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={{
@@ -308,6 +318,7 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
         }}
         restTimerSetInterval={setI}
         restTimerClearInterval={clearI}
+        restTimerOptions={{ nowImpl }}
       />,
     );
     expect(queryByTestId("live-workout-rest")).toBeNull();

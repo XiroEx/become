@@ -46,3 +46,36 @@ export function celebrationHaptic(): void {
     /* module unavailable (web, a build without it) */
   }
 }
+
+/**
+ * REST-OVER HAPTIC (NP-082).
+ *
+ * The web vibrates (`navigator.vibrate([100, 50, 100])`) when the rest
+ * countdown hits zero. Natively that is the success notification buzz — the
+ * in-app half of the locked-phone alert (the local notification is the other
+ * half). Same never-throw contract as every haptic in this file.
+ */
+export function restOverHaptic(): void {
+  celebrationHaptic();
+}
+
+/**
+ * SET-COMPLETE HAPTIC (NP-082).
+ *
+ * One light tap confirming the set landed and the rest started. Same
+ * never-throw contract as every haptic in this file.
+ */
+export function setCompleteHaptic(): void {
+  lightHaptic();
+}
+
+/**
+ * PR HAPTIC (NP-082).
+ *
+ * A new personal record lands with the success buzz — the same celebration
+ * the streak milestone uses. Same never-throw contract as every haptic in
+ * this file.
+ */
+export function prHaptic(): void {
+  celebrationHaptic();
+}

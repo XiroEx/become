@@ -23,7 +23,7 @@ import {
 } from "@/components/live/LiveSkipModals";
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
-import { useRestTimer } from "@/lib/live/useRestTimer";
+import { useRestTimer, type UseRestTimerOptions } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import type {
   ExerciseHistoryEntry,
@@ -140,6 +140,15 @@ export interface LiveWorkoutClientProps {
   /** Injected rest-timer interval impls for deterministic tests. */
   restTimerSetInterval?: typeof setInterval;
   restTimerClearInterval?: typeof clearInterval;
+  /** Rest-timer alert + haptics wiring (DI for tests; NP-082). */
+  restTimerOptions?: Pick<
+    UseRestTimerOptions,
+    | "nowImpl"
+    | "subscribeToAppState"
+    | "restAlertDeps"
+    | "hapticOnSetComplete"
+    | "hapticOnRestEnd"
+  >;
   /**
    * Best completed set per exercise NAME from a log before today
    * (`exerciseHistory[name]` on the web). Threaded from `useLiveWorkout`;
@@ -396,6 +405,7 @@ export function LiveWorkoutClient({
   positionStore,
   restTimerSetInterval,
   restTimerClearInterval,
+  restTimerOptions,
   exerciseHistory,
   exercisePRs,
   resumed = false,
@@ -490,10 +500,12 @@ export function LiveWorkoutClient({
   const [liveStepIndex, setLiveStepIndex] = useState<number>(0);
 
   // Single rest countdown, (re)started whenever a set is completed, and shared
-  // by the two views for the same reason the grid is.
+  // by the two views for the same reason the grid is. NP-082: wall-clock
+  // based (`endsAt`), with the locked-phone alert + haptics inside.
   const rest = useRestTimer({
     setIntervalImpl: restTimerSetInterval,
     clearIntervalImpl: restTimerClearInterval,
+    ...restTimerOptions,
   });
 
   // Re-seed when the workout identity or the restored snapshot changes (e.g. a

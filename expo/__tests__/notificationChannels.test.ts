@@ -7,7 +7,7 @@ import {
 describe("getNotificationChannels", () => {
   const channels = getNotificationChannels();
 
-  it("every channel id is a server notification tag", () => {
+  it("every channel id is a server notification tag, plus the local rest-timer channel", () => {
     const serverTags = [
       "workout-reminder",
       "meal-reminder",
@@ -20,13 +20,16 @@ describe("getNotificationChannels", () => {
       "daily-glance",
       "re-engagement",
     ];
+    // `rest-timer` is local-only (NP-082): the locked-phone rest-over alert
+    // is scheduled on-device, never pushed, so the server never sends it.
+    const localOnly = [CHANNEL_IDS.restTimer];
     const ids = channels.map((ch) => ch.id);
     for (const tag of serverTags) {
       expect(ids).toContain(tag);
     }
-    // No channel id the server never sends.
+    // No channel id the server never sends, except local-only ones.
     for (const id of ids) {
-      expect(serverTags).toContain(id);
+      expect([...serverTags, ...localOnly]).toContain(id);
     }
   });
 
@@ -94,6 +97,8 @@ describe("ensureAndroidChannels", () => {
     const ids = (setChannel.mock.calls as unknown[][]).map((c) => c[0] as string);
     expect(ids).toContain("workout-reminder");
     expect(ids).toContain("re-engagement");
+    // NP-082: the locked-phone rest-over alert rides its own channel.
+    expect(ids).toContain(CHANNEL_IDS.restTimer);
   });
 
   it("a channel failure is caught, never a crash", async () => {

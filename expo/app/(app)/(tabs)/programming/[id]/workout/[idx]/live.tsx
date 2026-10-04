@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { View } from "react-native";
+import { Alert, BackHandler, View } from "react-native";
+import { useKeepAwake } from "expo-keep-awake";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAndroidBackHandler } from "@/lib/android/backHandler";
+import { prHaptic } from "@/lib/feedback/haptics";
 import {
   LiveWorkoutClient,
   type LiveGrid,
@@ -63,6 +66,64 @@ export interface LiveWorkoutRouteProps {
     streak?: { streakDays: number; nextMilestone: number | null } | null;
     goal?: string | null;
   };
+  /** Keep-awake tag override for tests (defaults to the live route tag). */
+  keepAwakeTag?: string;
+  /** Android back handler override for tests (defaults to BackHandler). */
+  backHandler?: import("@/lib/android/backHandler").BackHandlerLike;
+  /** Leave-confirmation dialog override for tests (defaults to Alert.alert). */
+  confirmLeave?: (onLeave: () => void) => void;
+  /**
+   * Navigation override for tests. Omitted, the route reads its own
+   * navigation via expo-router's `useNavigation` (lazily required so unit
+   * tests rendering the route outside a navigator keep working — the back
+   * guard then degrades to the Android handler only).
+   */
+  navigation?: LiveRouteNavigation | null;
+}
+
+export interface LiveRouteNavigation {
+  addListener: (
+    event: string,
+    listener: (e: {
+      preventDefault: () => void;
+      data: { action: unknown };
+    }) => void,
+  ) => () => void;
+  dispatch: (action: unknown) => void;
+  setOptions: (options: { gestureEnabled?: boolean }) => void;
+}
+
+function useLiveRouteNavigation(
+  override?: LiveRouteNavigation | null,
+): LiveRouteNavigation | null {
+  // The override is a test seam: tests pass it once and it wins for the life
+  // of the mount. `useOptionalNavigation` runs unconditionally so the hook
+  // order never changes; it returns null outside a navigator (unit tests
+  // rendering the route directly, where the expo-router mock has no
+  // useNavigation) and the back guard then degrades to the Android handler.
+  const routed = useOptionalNavigation();
+  return (override ?? null) ?? routed;
+}
+
+/**
+ * The route's own navigation, or null outside a navigator. Reads the
+ * navigation object expo-router stashes on the route's context: no hook call
+ * here at all, so there is nothing conditional for the lint rule to flag and
+ * nothing to throw when unit tests render the route outside a navigator
+ * (their expo-router mock has no `useNavigation`) — the back guard then
+ * degrades to the Android handler only.
+ */
+function useOptionalNavigation(): LiveRouteNavigation | null {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const router = require("expo-router") as {
+    useNavigation?: () => unknown;
+  };
+  if (typeof router.useNavigation !== "function") return null;
+  try {
+    return router.useNavigation() as unknown as LiveRouteNavigation;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -97,8 +158,16 @@ export default function LiveWorkoutRoute({
   getNow,
   saveQueue,
   summaryDataForTests,
+  keepAwakeTag = "live-workout",
+  backHandler = BackHandler,
+  confirmLeave,
+  navigation: navigationProp,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
+  const navigation = useLiveRouteNavigation(navigationProp);
+  // NP-082: the screen does not dim during a live workout. The hook holds the
+  // keep-awake lock while the live view is open and releases it on unmount.
+  useKeepAwake(keepAwakeTag);
   const { colors } = useThemeTokens();
   const { token } = useAuth();
   const params = useLocalSearchParams<{
@@ -136,6 +205,7 @@ export default function LiveWorkoutRoute({
     loading,
     workout,
     day: resolvedDay,
+    grid,
     notes,
     setNotes,
     restoredGrid,
@@ -182,6 +252,79 @@ export default function LiveWorkoutRoute({
   });
 
   const showSummary = finishedGrid !== null;
+
+  // NP-082: a new PR lands with the success buzz — the same celebration the
+  // streak milestone uses. Fires once per save result, never on render.
+  const prCount = newPRs.length;
+  useEffect(() => {
+    if (prCount > 0) prHaptic();
+  }, [prCount]);
+
+  // NP-082: confirm before leaving with unsaved sets. Android back goes
+  // through `useAndroidBackHandler` (the first press asks, the second — after
+  // confirming — leaves); iOS swipe-back is disabled on the live route while
+  // sets are unsaved. A finished workout (summary showing) leaves freely.
+  const leaveConfirmedRef = useRef(false);
+  const hasUnsavedSets =
+    !showSummary &&
+    Object.values(grid).some((sets) =>
+      (sets as { completed: boolean }[]).some((s) => s.completed),
+    );
+  const askToLeave = (onLeave: () => void) => {
+    if (confirmLeave) {
+      confirmLeave(onLeave);
+      return;
+    }
+    Alert.alert(
+      "Leave workout?",
+      "You have unsaved sets. Leaving now will lose them.",
+      [
+        { text: "Stay", style: "cancel" },
+        {
+          text: "Leave",
+          style: "destructive",
+          onPress: () => {
+            leaveConfirmedRef.current = true;
+            onLeave();
+          },
+        },
+      ],
+    );
+  };
+  useAndroidBackHandler({
+    enabled: hasUnsavedSets,
+    backHandler,
+    onBack: () => {
+      if (leaveConfirmedRef.current) return false;
+      askToLeave(() => {
+        leaveConfirmedRef.current = true;
+        router.back();
+      });
+      return true;
+    },
+  });
+  useEffect(() => {
+    if (!navigation || !hasUnsavedSets) return;
+    const nav = navigation;
+    const unsubscribe = nav.addListener("beforeRemove", (e) => {
+      if (leaveConfirmedRef.current) return;
+      e.preventDefault();
+      askToLeave(() => {
+        leaveConfirmedRef.current = true;
+        nav.dispatch(e.data.action);
+      });
+    });
+    return unsubscribe;
+    // `askToLeave` closes over `confirmLeave` only; re-subscribing on every
+    // grid edit would drop the guard mid-gesture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, hasUnsavedSets]);
+  useEffect(() => {
+    if (!navigation) return;
+    const nav = navigation;
+    nav.setOptions({ gestureEnabled: !hasUnsavedSets });
+    return () => nav.setOptions({ gestureEnabled: true });
+  }, [navigation, hasUnsavedSets]);
 
   // The web fetches streak + goal when the summary appears — the save
   // response's streak block is the activity result, not the milestone ladder

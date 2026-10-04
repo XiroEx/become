@@ -28,15 +28,47 @@ function makeMockIntervalImpl(): {
   return { setI, clearI, scheduled, advanceTicks };
 }
 
+/**
+ * The wall-clock timer derives the remainder from `nowImpl`, so a tick only
+ * moves the count when the clock moves too. Each case below pairs the mock
+ * interval with a controllable clock and advances it 1 s per tick — the same
+ * cadence the production `setInterval(_, 1000)` ticks at.
+ */
+function makeWallClock(startMs = 0): {
+  now: () => number;
+  advance: (ms: number) => void;
+} {
+  let t = startMs;
+  return {
+    now: () => t,
+    advance: (ms: number) => {
+      t += ms;
+    },
+  };
+}
+
+function tickSeconds(
+  m: ReturnType<typeof makeMockIntervalImpl>,
+  clock: ReturnType<typeof makeWallClock>,
+  n: number,
+): void {
+  for (let i = 0; i < n; i++) {
+    clock.advance(1000);
+    m.advanceTicks(1);
+  }
+}
+
 describe("createRestTimer", () => {
   it("does not start ticking until start() is called", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const onTick = jest.fn();
     createRestTimer({
       durationSec: 60,
       onTick,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     expect(m.scheduled.length).toBe(0);
     expect(onTick).not.toHaveBeenCalled();
@@ -44,17 +76,19 @@ describe("createRestTimer", () => {
 
   it("start() begins ticking and fires onTick with remaining", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const onTick = jest.fn();
     const t = createRestTimer({
       durationSec: 60,
       onTick,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
     expect(t.isRunning()).toBe(true);
     expect(t.getRemaining()).toBe(60);
-    m.advanceTicks(3);
+    tickSeconds(m, clock, 3);
     expect(t.getRemaining()).toBe(57);
     expect(onTick).toHaveBeenCalledTimes(3);
     expect(onTick).toHaveBeenLastCalledWith(57);
@@ -62,15 +96,17 @@ describe("createRestTimer", () => {
 
   it("fires onComplete when remaining hits 0 and stops the interval", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const onComplete = jest.fn();
     const t = createRestTimer({
       durationSec: 3,
       onComplete,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
-    m.advanceTicks(3);
+    tickSeconds(m, clock, 3);
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(t.isRunning()).toBe(false);
     expect(m.scheduled.length).toBe(0);
@@ -78,51 +114,58 @@ describe("createRestTimer", () => {
 
   it("pause() stops ticks and resume() restarts at the same remaining", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const t = createRestTimer({
       durationSec: 10,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
-    m.advanceTicks(2);
+    tickSeconds(m, clock, 2);
     expect(t.getRemaining()).toBe(8);
     t.pause();
     expect(t.isRunning()).toBe(false);
     expect(m.scheduled.length).toBe(0);
     t.resume();
     expect(t.isRunning()).toBe(true);
-    m.advanceTicks(3);
+    tickSeconds(m, clock, 3);
     expect(t.getRemaining()).toBe(5);
   });
 
-  it("skip() jumps to 0 and fires onComplete once", () => {
+  it("skip() jumps to 0 without firing onComplete (a dismissal, not a finish)", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const onComplete = jest.fn();
     const t = createRestTimer({
       durationSec: 60,
       onComplete,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
-    m.advanceTicks(5);
+    tickSeconds(m, clock, 5);
     t.skip();
     expect(t.getRemaining()).toBe(0);
     expect(t.isRunning()).toBe(false);
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(t.getEndsAt()).toBeNull();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it("reset() restores duration without firing onComplete", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const onComplete = jest.fn();
     const t = createRestTimer({
       durationSec: 60,
       onComplete,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
-    m.advanceTicks(20);
+    tickSeconds(m, clock, 20);
     t.reset();
     expect(t.getRemaining()).toBe(60);
     expect(t.isRunning()).toBe(false);
@@ -131,10 +174,12 @@ describe("createRestTimer", () => {
 
   it("resume() is a no-op when already running", () => {
     const m = makeMockIntervalImpl();
+    const clock = makeWallClock();
     const t = createRestTimer({
       durationSec: 60,
       setIntervalImpl: m.setI,
       clearIntervalImpl: m.clearI,
+      nowImpl: clock.now,
     });
     t.start();
     expect(m.scheduled.length).toBe(1);

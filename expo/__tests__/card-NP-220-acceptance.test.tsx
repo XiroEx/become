@@ -69,6 +69,10 @@ function logRepsWeightSet(
 }
 
 function mockInterval() {
+  // The wall-clock timer derives the remainder from `nowImpl`, so the mock
+  // clock advances 1 s per tick — the cadence the production
+  // `setInterval(_, 1000)` ticks at.
+  let now = 1_000_000;
   let fn: (() => void) | null = null;
   const setI = ((f: () => void) => {
     fn = f;
@@ -77,11 +81,13 @@ function mockInterval() {
   const clearI = (() => {
     fn = null;
   }) as unknown as typeof clearInterval;
+  const nowImpl = () => now;
   return {
     setI,
     clearI,
+    nowImpl,
     tick: (n: number) => {
-      for (let i = 0; i < n; i++) fn?.();
+      for (let i = 0; i < n; i++) { now += 1000; fn?.(); }
     },
   };
 }
@@ -281,7 +287,7 @@ describe("(id: e5cece4c) No rest inside a round; the round's rest follows its la
   };
 
   it("completing A (inside the round) starts no rest; completing B (last in round) starts the round rest", () => {
-    const { setI, clearI } = mockInterval();
+    const { setI, clearI, nowImpl } = mockInterval();
     const { getByTestId, queryByTestId } = render(
       <LiveWorkoutClient
         workout={RESTED}
@@ -289,6 +295,7 @@ describe("(id: e5cece4c) No rest inside a round; the round's rest follows its la
         onFinish={jest.fn()}
         restTimerSetInterval={setI}
         restTimerClearInterval={clearI}
+        restTimerOptions={{ nowImpl }}
       />,
     );
     expect(queryByTestId("live-workout-rest")).toBeNull();
