@@ -621,7 +621,12 @@ function matchWorkout(
     // Picking training days: native does it in the schedule settings screen.
     return native(NATIVE_ROUTES.scheduleSettings, params, "nearest");
   }
-  if (third === "journey") return native(program, params, "nearest");
+  if (third === "journey") {
+    // The end-of-program recap (NP-167): the native journey screen reads the
+    // same `GET /api/programs/[programId]/journey` the web's journey page
+    // reads, so the numbers match by construction.
+    return native(`${program}/journey`, params, "exact");
+  }
   if (third !== "workout") return native(program, params, "nearest");
 
   const live = lower(segments[4]) === "live";
