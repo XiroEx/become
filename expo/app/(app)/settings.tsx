@@ -17,6 +17,7 @@ import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
+import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ScreenState } from "@/components/ScreenState";
@@ -30,8 +31,9 @@ import { ChevronRight, ExternalLink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
- * Native Settings screen: Account, Notifications (NP-068), AI features (NP-046),
- * Legal & support, and Delete account at the bottom (two taps away).
+ * Native Settings screen: Account, Security (NP-187), Notifications (NP-068),
+ * AI features (NP-046), Legal & support, and Delete account at the bottom
+ * (two taps away).
  */
 export default function SettingsScreen() {
   const { colors } = useThemeTokens();
@@ -304,7 +306,10 @@ export default function SettingsScreen() {
           </Button>
         </View>
 
-        {/* 2. Notifications Section (NP-068) */}
+        {/* 2. Security Section (NP-187) */}
+        <BiometricUnlockSection />
+
+        {/* 3. Notifications Section (NP-068) */}
         <View
           testID="settings-notifications-section"
           className="rounded-xl border border-border bg-card p-4"
@@ -371,7 +376,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 3. AI Features Section (NP-046) */}
+        {/* 4. AI Features Section (NP-046) */}
         <View
           testID="settings-ai-section"
           className="rounded-xl border border-border bg-card p-4"
@@ -446,7 +451,7 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
 
-        {/* 4. Legal & support Section */}
+        {/* 5. Legal & support Section */}
         <View
           testID="settings-legal-section"
           className="rounded-xl border border-border bg-card p-4"
@@ -490,7 +495,7 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
-        {/* 5. Delete account (always at the bottom, 2 taps away) */}
+        {/* 6. Delete account (always at the bottom, 2 taps away) */}
         <View
           testID="settings-danger-section"
           className="border-t border-border pt-4 mt-2"

@@ -5,10 +5,9 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import {
-  noopBiometricsCapability,
-  useColdOpenRedirect,
-} from "@/lib/auth/coldOpenRedirect";
+import { useColdOpenRedirect } from "@/lib/auth/coldOpenRedirect";
+import { realBiometricsCapability } from "@/lib/auth/localAuthentication";
+import { useAppLock } from "@/lib/auth/useAppLock";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { useAuth } from "@/lib/auth/useAuth";
 import {
@@ -78,6 +77,12 @@ function raiseUpgradeSheet(error: PlanGateError): void {
  * `become.optin.biometrics`; a failed unlock clears the first and not the
  * second, which is why they are different keys).
  *
+ * The capability is the real one (`expo-local-authentication`), which degrades
+ * to the no-hardware answers where the module is absent (Expo Go) or the
+ * phone has nothing enrolled — so opting in on such a phone never prompts.
+ * `noopBiometricsCapability` remains the documented no-op for tests and for
+ * environments without the module.
+ *
  * WHAT IT NO LONGER DOES IS NAVIGATE. It used to `router.replace` the verdict
  * — `/login` or the dashboard — guarded only by "is the current pathname
  * still `/`". The flow is asynchronous, so a cold start on `/verify?token=…`
@@ -90,6 +95,9 @@ function raiseUpgradeSheet(error: PlanGateError): void {
  * the consequence of a FAILED unlock: the flow has already dropped the JWT,
  * so the session object has to be told, and `index.tsx` then sends the member
  * to sign-in with "Become stayed locked."
+ *
+ * The warm case — backgrounded past the grace period, then foregrounded — is
+ * `useAppLock` below: same flow, same consequence.
  */
 function ColdOpenUnlock() {
   const { signOut } = useAuth();
@@ -106,8 +114,21 @@ function ColdOpenUnlock() {
   useColdOpenRedirect({
     tokenStore: sessionStore,
     optInStore: biometricsOptInSecureStore,
-    biometrics: noopBiometricsCapability,
+    biometrics: realBiometricsCapability,
     onResolve,
+  });
+
+  // Re-ask after a set time in the background when the switch is on. A failed
+  // re-unlock drops the JWT through the same flow, so the session is told the
+  // same way.
+  const onLocked = useCallback(() => {
+    void signOut("biometric-fail");
+  }, [signOut]);
+  useAppLock({
+    tokenStore: sessionStore,
+    optInStore: biometricsOptInSecureStore,
+    biometrics: realBiometricsCapability,
+    onLocked,
   });
   return null;
 }
