@@ -22,6 +22,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { reportRequestError } from "@/lib/auth/unauthorized";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { createMemoryTokenStore } from "@/lib/auth/secureStoreToken";
+import * as badgeModule from "@/lib/widgets/badge";
 
 const NOW_MS = Date.UTC(2026, 8, 29, 12, 0, 0);
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -247,6 +248,35 @@ describe("AuthProvider — signing in", () => {
     expect(result.current.status).toBe("signed-out");
     expect(result.current.signedOutReason).toBeNull();
     expect(await store.get()).toBeNull();
+  });
+
+  it("(e015c81d) signOut clears the app-icon badge, so the next member sees a clean icon", async () => {
+    // The badge is one member's unfinished day (NP-067): it must not outlive
+    // their session on a shared device. Spying the real module pins the
+    // wiring rather than a mock of it.
+    const cleared: number[] = [];
+    const clearSpy = jest
+      .spyOn(badgeModule, "clearAppBadge")
+      .mockImplementation(async () => {
+        cleared.push(1);
+      });
+
+    try {
+      const store = trackedStore(FRESH_JWT);
+      const fetchImpl = jest.fn(async () => jsonResponse(200, { user: USER }));
+
+      const { result } = renderAuth(store, fetchImpl);
+      await waitFor(() => expect(result.current.status).toBe("signed-in"));
+
+      await act(async () => {
+        await result.current.logout();
+      });
+
+      expect(result.current.status).toBe("signed-out");
+      expect(cleared).toHaveLength(1);
+    } finally {
+      clearSpy.mockRestore();
+    }
   });
 
   it("signOut('member') tells the server, so a widgets token dies with it", async () => {

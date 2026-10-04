@@ -180,10 +180,13 @@ describe("where it is mounted", () => {
 
   it("is in the ROOT layout, inside AuthProvider", () => {
     expect(layout).toMatch(/<WidgetsBridge \/>/);
+    expect(layout).toMatch(/<AppBadgeSync \/>/);
     const provider = layout.indexOf("<AuthProvider>");
     const bridge = layout.indexOf("<WidgetsBridge />");
+    const badge = layout.indexOf("<AppBadgeSync />");
     expect(provider).toBeGreaterThan(-1);
     expect(bridge).toBeGreaterThan(provider);
+    expect(badge).toBeGreaterThan(provider);
   });
 
   it("is not inside the (app) group, which a sign-out unmounts", () => {

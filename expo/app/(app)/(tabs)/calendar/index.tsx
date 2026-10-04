@@ -11,6 +11,9 @@ import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
 import { ScheduledList } from "@/components/schedule/ScheduledList";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
+import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
+import { SlotConfirmDialog } from "@/components/schedule/SlotConfirmDialog";
+import { ShiftScheduleModal } from "@/components/programs/ShiftScheduleModal";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -221,34 +224,151 @@ export default function CalendarIndexRoute() {
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduledSlot | null>(
     null,
   );
+  // The Manage sheet (web's action-menu modal) and the confirm gates behind
+  // the destructive rows. `confirmKind` names which confirm is open; the slot
+  // it acts on is `menuSlot` so the dialog never drifts from the row that
+  // opened it. Shift has its own modal (a day count, not a yes/no).
+  const [menuSlot, setMenuSlot] = useState<ScheduledSlot | null>(null);
+  const [confirmKind, setConfirmKind] = useState<
+    "uncomplete" | "skip" | "pause" | null
+  >(null);
+  const [shiftOpen, setShiftOpen] = useState(false);
   const onConfirmReschedule = useCallback(
     (slot: ScheduledSlot, newDate: string) => {
-      void mutations.reschedule({
-        programId: slot.programId,
-        workoutDate: slot.date,
-        newDate,
-      });
+      void mutations
+        .patch({
+          action: "reschedule",
+          programId: slot.programId,
+          workoutDate: slot.date,
+          newDate,
+        })
+        .catch(() => {});
       setRescheduleSlot(null);
+      setMenuSlot(null);
     },
     [mutations],
+  );
+
+  // Start / Do-it-now: open Track for THAT slot's day label + marker date,
+  // never by array index — two slots can share a label, and the index is what
+  // used to complete the neighbour (NP-087 addresses by day + sd).
+  const startSlot = useCallback(
+    (slot: ScheduledSlot) => {
+      const dayParam = slot.dayLabel
+        ? `&day=${encodeURIComponent(slot.dayLabel)}`
+        : "";
+      router.push(
+        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}/live?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
+      );
+    },
+    [router],
   );
 
   const openSlot = useCallback(
     (slot: ScheduledSlot) => {
       // Only future or today, still-scheduled slots are actionable.
       if (slot.status !== "scheduled" || slot.date < todayDate) return;
-      const dayParam = slot.dayLabel
-        ? `&day=${encodeURIComponent(slot.dayLabel)}`
-        : "";
-      // A tapped slot opens the TRACK view (NP-087) — the web's calendar links
-      // to `/dashboard/workout/{id}/workout?day=…&sd=…`, every set on one
-      // screen, with Live on the toggle. `sd` still names the exact slot so the
-      // completion resolves THAT day and not a neighbouring same-label one.
-      router.push(
-        `/(tabs)/programming/${slot.programId}/workout/${slot.workoutIndex}/live?phase=${slot.phaseIndex}&sd=${encodeURIComponent(slot.date)}${dayParam}`,
-      );
+      startSlot(slot);
     },
-    [router, todayDate],
+    [startSlot, todayDate],
+  );
+
+  const closeMenu = useCallback(() => setMenuSlot(null), []);
+  const closeConfirm = useCallback(() => setConfirmKind(null), []);
+
+  // Slot-level writes: the slot is identified by its marker date + program,
+  // exactly the web's `{ programId, action, workoutDate }` body. `tz` travels
+  // in every body via apiFetch — screens never set it (see
+  // useScheduleMutations).
+  const doSkip = useCallback(
+    (slot: ScheduledSlot) => {
+      void mutations
+        .patch({
+          action: "skip",
+          programId: slot.programId,
+          workoutDate: slot.date,
+        })
+        .catch(() => {});
+      setConfirmKind(null);
+      setMenuSlot(null);
+    },
+    [mutations],
+  );
+  const doUnskip = useCallback(
+    (slot: ScheduledSlot) => {
+      void mutations
+        .patch({
+          action: "unskip",
+          programId: slot.programId,
+          workoutDate: slot.date,
+        })
+        .catch(() => {});
+    },
+    [mutations],
+  );
+  // Un-complete moves the slot back to scheduled and removes that day's
+  // completed log on the server (route `uncomplete`), after a confirmation.
+  const doUncomplete = useCallback(
+    (slot: ScheduledSlot) => {
+      void mutations
+        .patch({
+          action: "uncomplete",
+          programId: slot.programId,
+          workoutDate: slot.date,
+        })
+        .catch(() => {});
+      setConfirmKind(null);
+    },
+    [mutations],
+  );
+  const doMoveNextDay = useCallback(
+    (slot: ScheduledSlot) => {
+      const [y, m, d] = slot.date.split("-").map(Number);
+      const next = new Date(y ?? 2026, (m ?? 1) - 1, d ?? 1, 12, 0, 0);
+      next.setDate(next.getDate() + 1);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const nextKey = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`;
+      void mutations
+        .patch({
+          action: "reschedule",
+          programId: slot.programId,
+          workoutDate: slot.date,
+          newDate: nextKey,
+        })
+        .catch(() => {});
+      setMenuSlot(null);
+    },
+    [mutations],
+  );
+  const doShift = useCallback(
+    (slot: ScheduledSlot, days: number) => {
+      if (!Number.isInteger(days) || days === 0) return;
+      void mutations
+        .patch({ action: "shift", programId: slot.programId, days })
+        .catch(() => {});
+      setShiftOpen(false);
+      setMenuSlot(null);
+    },
+    [mutations],
+  );
+  const doPause = useCallback(
+    (slot: ScheduledSlot) => {
+      void mutations
+        .patch({ action: "pause", programId: slot.programId })
+        .catch(() => {});
+      setConfirmKind(null);
+      setMenuSlot(null);
+    },
+    [mutations],
+  );
+  const doResume = useCallback(
+    (slot: ScheduledSlot) => {
+      void mutations
+        .patch({ action: "resume", programId: slot.programId })
+        .catch(() => {});
+      setMenuSlot(null);
+    },
+    [mutations],
   );
 
   const onSelectDay = useCallback((date: string) => {
@@ -418,6 +538,10 @@ export default function CalendarIndexRoute() {
                     slot.status === "scheduled" &&
                     slot.date >= todayDate &&
                     !isPaused;
+                  const startLabel =
+                    slot.status === "missed" || slot.status === "skipped"
+                      ? "Do It Now"
+                      : "Start Workout";
 
                   return (
                     <View
@@ -500,10 +624,14 @@ export default function CalendarIndexRoute() {
                         </Text>
                       ) : null}
 
-                      {/* Actions */}
+                      {/* Actions — mirrors the web day sheet: start/do-it-now by
+                          day label + marker date, skip/unskip, un-complete
+                          (confirmed), and the Manage sheet for reschedule /
+                          shift / pause / resume. */}
                       <View
                         style={{
                           flexDirection: "row",
+                          flexWrap: "wrap",
                           gap: 8,
                           marginTop: 10,
                         }}
@@ -512,11 +640,65 @@ export default function CalendarIndexRoute() {
                           <Button
                             testID={`day-detail-start-${slot.programId}-${slot.workoutIndex}`}
                             size="sm"
-                            onPress={() => openSlot(slot)}
+                            onPress={() => startSlot(slot)}
                           >
                             Start Workout
                           </Button>
                         ) : null}
+                        {slot.status === "missed" ||
+                        slot.status === "skipped" ? (
+                          <Button
+                            testID={`day-detail-start-${slot.programId}-${slot.workoutIndex}`}
+                            size="sm"
+                            onPress={() => startSlot(slot)}
+                          >
+                            {startLabel}
+                          </Button>
+                        ) : null}
+                        {slot.status === "missed" && !isPaused ? (
+                          <Button
+                            testID={`day-detail-skip-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => {
+                              setMenuSlot(slot);
+                              setConfirmKind("skip");
+                            }}
+                          >
+                            Skip It
+                          </Button>
+                        ) : null}
+                        {slot.status === "completed" ? (
+                          <Button
+                            testID={`day-detail-uncomplete-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => {
+                              setMenuSlot(slot);
+                              setConfirmKind("uncomplete");
+                            }}
+                          >
+                            Un-complete
+                          </Button>
+                        ) : null}
+                        {slot.status === "skipped" ? (
+                          <Button
+                            testID={`day-detail-unskip-${slot.programId}-${slot.workoutIndex}`}
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => doUnskip(slot)}
+                          >
+                            Un-skip
+                          </Button>
+                        ) : null}
+                        <Button
+                          testID={`day-detail-manage-${slot.programId}-${slot.workoutIndex}`}
+                          variant="secondary"
+                          size="sm"
+                          onPress={() => setMenuSlot(slot)}
+                        >
+                          Manage
+                        </Button>
                         <Button
                           testID={`day-detail-reschedule-${slot.programId}-${slot.workoutIndex}`}
                           variant="secondary"
@@ -572,6 +754,85 @@ export default function CalendarIndexRoute() {
         slot={rescheduleSlot}
         onConfirm={onConfirmReschedule}
         onClose={() => setRescheduleSlot(null)}
+      />
+      {/* Manage sheet for the slot: skip / move-to-next-day / move-to-date /
+          shift / pause / resume. No swap row — the server accepts it but
+          neither app has a screen that sends it. */}
+      <SlotActionMenu
+        visible={menuSlot !== null}
+        slot={menuSlot}
+        programPaused={menuSlot?.programStatus === "paused"}
+        pending={mutations.pending}
+        onClose={closeMenu}
+        onSkip={() => {
+          if (!menuSlot) return;
+          if (menuSlot.status === "completed") return;
+          if (menuSlot.status === "skipped") {
+            doUnskip(menuSlot);
+            setMenuSlot(null);
+            return;
+          }
+          setConfirmKind("skip");
+        }}
+        onMoveNextDay={() => {
+          if (menuSlot) doMoveNextDay(menuSlot);
+        }}
+        onRescheduleToDate={() => {
+          if (menuSlot) setRescheduleSlot(menuSlot);
+        }}
+        onShift={() => setShiftOpen(true)}
+        onPause={() => setConfirmKind("pause")}
+        onResume={() => {
+          if (menuSlot) doResume(menuSlot);
+        }}
+      />
+      {/* Shift modal: delay the whole program by N days (web default 7). */}
+      <ShiftScheduleModal
+        visible={shiftOpen}
+        initialDays={7}
+        loading={mutations.pending}
+        onClose={() => setShiftOpen(false)}
+        onConfirm={(days) => {
+          if (menuSlot) doShift(menuSlot, days);
+        }}
+      />
+      {/* Confirm gates — the native `window.confirm` for skip (web asks),
+          un-complete (web asks) and pause (web asks). */}
+      <SlotConfirmDialog
+        visible={confirmKind === "uncomplete" && menuSlot !== null}
+        title="Un-complete workout?"
+        message="The sets you logged for it will be removed and it returns to scheduled."
+        confirmLabel="Un-complete"
+        pending={mutations.pending}
+        onConfirm={() => {
+          if (menuSlot) doUncomplete(menuSlot);
+        }}
+        onClose={closeConfirm}
+        testID="slot-confirm-uncomplete"
+      />
+      <SlotConfirmDialog
+        visible={confirmKind === "skip" && menuSlot !== null}
+        title="Skip workout?"
+        message="It’ll be marked skipped and won’t count as completed."
+        confirmLabel="Skip"
+        pending={mutations.pending}
+        onConfirm={() => {
+          if (menuSlot) doSkip(menuSlot);
+        }}
+        onClose={closeConfirm}
+        testID="slot-confirm-skip"
+      />
+      <SlotConfirmDialog
+        visible={confirmKind === "pause" && menuSlot !== null}
+        title="Pause program?"
+        message="All its workouts are frozen until you resume."
+        confirmLabel="Pause"
+        pending={mutations.pending}
+        onConfirm={() => {
+          if (menuSlot) doPause(menuSlot);
+        }}
+        onClose={closeConfirm}
+        testID="slot-confirm-pause"
       />
     </SafeAreaView>
   );

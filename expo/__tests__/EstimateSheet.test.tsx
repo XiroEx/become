@@ -298,3 +298,205 @@ describe("EstimateSheet (NP-089)", () => {
     expect(reviewItemsFor).toBeDefined();
   });
 });
+
+describe("EstimateSheet correction ticket (NP-090)", () => {
+  const FIRST = {
+    items: [
+      {
+        name: "Tacos",
+        estimatedServing: "3 tacos",
+        nutrition: { calories: 600, protein: 30, carbs: 50, fats: 20 },
+        confidence: 0.9,
+      },
+    ],
+    allowanceTicket: "ticket_first",
+  };
+  const REVISED = {
+    items: [
+      {
+        name: "Tacos",
+        estimatedServing: "6 tacos",
+        nutrition: { calories: 1200, protein: 60, carbs: 100, fats: 40 },
+        confidence: 0.9,
+      },
+    ],
+    allowanceTicket: "ticket_revised",
+  };
+
+  async function estimateThenReview(describeSpy: jest.SpyInstance) {
+    describeSpy.mockResolvedValue({ status: "estimated", estimate: FIRST });
+    jest
+      .spyOn(plateEstimate, "reconcileEstimateItems")
+      .mockImplementation(async (rows) => rows);
+    const { getByTestId, queryByTestId } = renderSheet({
+      initialPhase: "describe",
+    });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-describe-input"),
+      "three tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-describe-estimate"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-review")).toBeTruthy();
+    });
+    return { getByTestId, queryByTestId };
+  }
+
+  it("(id: e015c8ad) a free member at 1/1 corrects today's estimate and gets a revised estimate without the upgrade sheet", async () => {
+    const describeSpy = jest.spyOn(plateEstimate, "estimateFromDescription");
+    const { getByTestId } = await estimateThenReview(describeSpy);
+    // The fresh estimate never presents a ticket.
+    expect(describeSpy).toHaveBeenCalledWith(
+      "three tacos",
+      expect.anything(),
+    );
+    expect(describeSpy.mock.calls[0]?.[0]).toBe("three tacos");
+
+    const correctSpy = jest.spyOn(plateEstimate, "correctDescribeEstimate");
+    correctSpy.mockResolvedValue({ status: "estimated", estimate: REVISED });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-correct-input"),
+      "it was 6 tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-correct-send"));
+    await waitFor(() => {
+      expect(correctSpy).toHaveBeenCalled();
+    });
+    // The correction rides the estimate's ticket — no upgrade sheet.
+    const args = correctSpy.mock.calls[0];
+    expect(args?.[1]).toBe("it was 6 tacos");
+    expect(args?.[2]).toBe("ticket_first");
+    expect(showUpgradeSheet).not.toHaveBeenCalled();
+    // The revised estimate replaces the review.
+    await waitFor(() => {
+      expect(
+        getByTestId("estimate-sheet-item-0-amount").props.children,
+      ).toContain("6");
+    });
+    expect(
+      getByTestId("estimate-sheet-review"),
+    ).toBeTruthy();
+  });
+
+  it("(id: e015c8ae) starting a fresh estimate after that shows the upgrade sheet (the ticket did not leak)", async () => {
+    const describeSpy = jest.spyOn(plateEstimate, "estimateFromDescription");
+    const { getByTestId } = await estimateThenReview(describeSpy);
+    const correctSpy = jest.spyOn(plateEstimate, "correctDescribeEstimate");
+    correctSpy.mockResolvedValue({ status: "estimated", estimate: REVISED });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-correct-input"),
+      "it was 6 tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-correct-send"));
+    await waitFor(() => {
+      expect(correctSpy).toHaveBeenCalled();
+    });
+    // Start over → a fresh estimate goes through the unticketed door…
+    fireEvent.press(getByTestId("estimate-sheet-retry"));
+    const gate = { error: "Out of free scans", requiresTier: "plus" };
+    describeSpy.mockResolvedValue({ status: "gate", gate });
+    fireEvent.press(getByTestId("estimate-sheet-describe"));
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-describe-input"),
+      "a burger",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-describe-estimate"));
+    await waitFor(() => {
+      expect(showUpgradeSheet).toHaveBeenCalledWith(gate);
+    });
+    // …and the fresh call carried no ticket.
+    const freshCall = describeSpy.mock.calls.find(
+      (c) => c[0] === "a burger",
+    );
+    expect(freshCall).toBeDefined();
+  });
+
+  it("(id: e015c8af) a refused correction leaves the previous estimate on screen, unchanged", async () => {
+    const describeSpy = jest.spyOn(plateEstimate, "estimateFromDescription");
+    const { getByTestId } = await estimateThenReview(describeSpy);
+    const before = getByTestId("estimate-sheet-item-0-amount").props.children;
+    const gate = { error: "Out of free scans", requiresTier: "plus" };
+    const correctSpy = jest.spyOn(plateEstimate, "correctDescribeEstimate");
+    correctSpy.mockResolvedValue({ status: "gate", gate });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-correct-input"),
+      "it was 6 tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-correct-send"));
+    await waitFor(() => {
+      expect(showUpgradeSheet).toHaveBeenCalledWith(gate);
+    });
+    // Gate (upgrade sheet), not an outage toast line: the review stays.
+    expect(getByTestId("estimate-sheet-review")).toBeTruthy();
+    expect(getByTestId("estimate-sheet-item-0-amount").props.children).toBe(
+      before,
+    );
+    expect(getByTestId("estimate-sheet-item-0")).toBeTruthy();
+  });
+
+  it("a photo correction re-reads the same image with the ticket", async () => {
+    mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+    const photoSpy = jest.spyOn(plateEstimate, "estimateFromPhoto");
+    photoSpy.mockResolvedValue({ status: "estimated", estimate: FIRST });
+    jest
+      .spyOn(plateEstimate, "reconcileEstimateItems")
+      .mockImplementation(async (rows) => rows);
+    const { getByTestId } = render(
+      <EstimateSheet
+        visible
+        onClose={() => {}}
+        onLogged={() => {}}
+        tag="lunch"
+        dateKey="2026-10-03"
+        todayKey="2026-10-03"
+      />,
+    );
+    fireEvent.press(getByTestId("estimate-sheet-take-photo"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("estimate-sheet-compose-estimate"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-review")).toBeTruthy();
+    });
+    const correctPhotoSpy = jest.spyOn(plateEstimate, "correctPhotoEstimate");
+    correctPhotoSpy.mockResolvedValue({
+      status: "estimated",
+      estimate: REVISED,
+    });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-correct-input"),
+      "it was 6 tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-correct-send"));
+    await waitFor(() => {
+      expect(correctPhotoSpy).toHaveBeenCalled();
+    });
+    const args = correctPhotoSpy.mock.calls[0];
+    expect(args?.[0]).toBe(IMAGE.dataUrl);
+    expect(args?.[1]).toBe("it was 6 tacos");
+    expect(args?.[2]).toBe("ticket_first");
+    expect(showUpgradeSheet).not.toHaveBeenCalled();
+  });
+
+  it("an outage correction keeps the review and shows a toast line, not the upgrade sheet", async () => {
+    const describeSpy = jest.spyOn(plateEstimate, "estimateFromDescription");
+    const { getByTestId } = await estimateThenReview(describeSpy);
+    const before = getByTestId("estimate-sheet-item-0-amount").props.children;
+    const correctSpy = jest.spyOn(plateEstimate, "correctDescribeEstimate");
+    correctSpy.mockResolvedValue({ status: "unavailable" });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-correct-input"),
+      "it was 6 tacos",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-correct-send"));
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-correct-notice")).toBeTruthy();
+    });
+    expect(showUpgradeSheet).not.toHaveBeenCalled();
+    expect(getByTestId("estimate-sheet-review")).toBeTruthy();
+    expect(getByTestId("estimate-sheet-item-0-amount").props.children).toBe(
+      before,
+    );
+  });
+});

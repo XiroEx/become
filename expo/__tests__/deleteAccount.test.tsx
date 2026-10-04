@@ -72,6 +72,7 @@ describe("DangerZone", () => {
   it("requests deletion, clears the session, and leaves the screen", async () => {
     const requestImpl = jest.fn(async () => ({ ok: true }));
     const clearToken = jest.fn(async () => {});
+    const clearBadge = jest.fn(async () => {});
     const onDeleted = jest.fn();
 
     const { getByTestId } = render(
@@ -79,6 +80,7 @@ describe("DangerZone", () => {
         token="jwt"
         requestImpl={requestImpl}
         clearToken={clearToken}
+        clearBadge={clearBadge}
         onDeleted={onDeleted}
         statusImpl={idleStatus}
         source="android"
@@ -94,11 +96,15 @@ describe("DangerZone", () => {
     // installation's push token, so a stored JWT would show a signed-in app
     // for an account on its way out.
     expect(clearToken).toHaveBeenCalledTimes(1);
+    // The icon badge is one member's unfinished day (NP-067): it must not
+    // outlive the account either.
+    expect(clearBadge).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the session when the request fails, and says so", async () => {
     const requestImpl = jest.fn(async () => ({ ok: false, status: 500 }));
     const clearToken = jest.fn(async () => {});
+    const clearBadge = jest.fn(async () => {});
     const onDeleted = jest.fn();
 
     const { getByTestId } = render(
@@ -106,6 +112,7 @@ describe("DangerZone", () => {
         token="jwt"
         requestImpl={requestImpl}
         clearToken={clearToken}
+        clearBadge={clearBadge}
         onDeleted={onDeleted}
         statusImpl={async () => ({ ok: true, deletion: { pending: false } })}
       />,
@@ -116,6 +123,8 @@ describe("DangerZone", () => {
 
     await waitFor(() => expect(getByTestId("delete-account-error")).toBeTruthy());
     expect(clearToken).not.toHaveBeenCalled();
+    // A request that never landed changes nothing — the badge stays as it was.
+    expect(clearBadge).not.toHaveBeenCalled();
     expect(onDeleted).not.toHaveBeenCalled();
   });
 

@@ -6,15 +6,41 @@
  * and BEFORE the app routes Home. The web asks for notification permission
  * at this same hand-off, never at first launch.
  *
- * NP-065 owns the real implementation (expo-notifications permission probe +
- * token registration). Until it lands, this is a deliberate no-op so the
- * onboarding hand-off compiles and ships without prompting early.
- *
- * NP-065: replace the body with the real permission ask. Keep the signature
- * (no required args, Promise<void>) so NP-057's call site does not change.
+ * The ask runs behind a short in-app explanation (the caller's UI), and a
+ * refusal — or a simulator with no token — never blocks landing Home:
+ * everything here is caught, and nothing in the app requires notifications.
  */
-export async function askNotificationPermissionAfterOnboarding(): Promise<void> {
-  return undefined;
+
+import { defaultPushDeps, ensurePushRegistration } from "./nativePush";
+
+export interface AfterOnboardingPushDeps {
+  getJwt: () => Promise<string | null>;
+  ensureRegistration?: () => Promise<unknown>;
+}
+
+/**
+ * End-of-onboarding registration: probe the OS permission, and if it is
+ * already granted (a reinstall, a second account), register the raw device
+ * token. When the permission is still undetermined the OS prompt is NOT
+ * shown here — the dismissible Home card owns that conversation, with the
+ * web's 30-day dismissal for members who have not decided.
+ */
+export async function askNotificationPermissionAfterOnboarding(
+  deps?: AfterOnboardingPushDeps,
+): Promise<void> {
+  try {
+    if (deps?.ensureRegistration) {
+      await deps.ensureRegistration();
+      return;
+    }
+    const jwt = await deps?.getJwt?.() ?? null;
+    if (!jwt) return;
+    await ensurePushRegistration(defaultPushDeps({ jwt }), {
+      reenable: false,
+    });
+  } catch {
+    // ignore — permission is optional
+  }
 }
 
 /**

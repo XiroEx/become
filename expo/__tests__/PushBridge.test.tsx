@@ -15,7 +15,7 @@ describe("PushBridge", () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  it("routes a workout-reminder tap to the live workout screen", () => {
+  it("routes a tap's url to its screen", () => {
     const holder: { listener: ((p: NotificationPayload) => void) | null } = {
       listener: null,
     };
@@ -29,18 +29,11 @@ describe("PushBridge", () => {
         navigate={navigate}
       />,
     );
-    holder.listener?.({
-      category: "workout-reminder",
-      programId: "p1",
-      phaseIndex: 0,
-      workoutIndex: 3,
-    });
-    expect(navigate).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/3/live",
-    );
+    holder.listener?.({ url: "/dashboard/calendar" });
+    expect(navigate).toHaveBeenCalledWith("/(tabs)/calendar");
   });
 
-  it("routes a re-engagement tap to the mind tab", () => {
+  it("opens Home for a tap with no url", () => {
     const holder: { listener: ((p: NotificationPayload) => void) | null } = {
       listener: null,
     };
@@ -54,7 +47,20 @@ describe("PushBridge", () => {
         navigate={navigate}
       />,
     );
-    holder.listener?.({ category: "re-engagement" });
-    expect(navigate).toHaveBeenCalledWith("/(tabs)/mind");
+    holder.listener?.({});
+    expect(navigate).toHaveBeenCalledWith("/(tabs)/dashboard");
+  });
+
+  it("starts the tap router when no subscribeToTap is injected", async () => {
+    const navigate = jest.fn();
+    const stop = jest.fn();
+    const startRouter = jest.fn(async () => stop);
+    const { unmount } = render(
+      <PushBridge navigate={navigate} startRouter={startRouter} />,
+    );
+    await Promise.resolve();
+    expect(startRouter).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(stop).toHaveBeenCalledTimes(1);
   });
 });

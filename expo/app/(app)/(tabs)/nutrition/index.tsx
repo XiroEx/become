@@ -1414,7 +1414,7 @@ export default function NutritionIndexRoute() {
             accessibilityRole="button"
             accessibilityLabel="My Stuff"
             onPress={() => {
-              // TODO(NP-142): My Stuff (meals, recipes, saved foods tabs) is NP-142. Currently wired to existing recipes screen.
+              // My Stuff (NP-142): meals, own recipes and saved foods tabs.
               router.push("/(tabs)/nutrition/recipes");
             }}
             style={{
@@ -2118,6 +2118,16 @@ export default function NutritionIndexRoute() {
                 }}
               >
                 Meal Schedule
+              </Button>
+              <Button
+                testID="nutrition-menu-meal-plan"
+                variant="ghost"
+                onPress={() => {
+                  setMenuOpen(false);
+                  router.push("/(tabs)/nutrition/meal-plan");
+                }}
+              >
+                Meal plan
               </Button>
             </View>
           </View>

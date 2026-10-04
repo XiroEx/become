@@ -16,6 +16,7 @@ import {
 } from "@/lib/auth/secureStoreToken";
 import type { ColdOpenResult } from "@/lib/auth/biometrics";
 import { TimezoneReporter } from "@/components/TimezoneReporter";
+import { AppBadgeSync } from "@/components/widgets/AppBadgeSync";
 import { ConnectivityBanner } from "@/components/offline/ConnectivityBanner";
 import { VersionGate } from "@/components/version/VersionGate";
 import { WidgetsBridge } from "@/components/widgets/WidgetsBridge";
@@ -170,6 +171,12 @@ export default function RootLayout() {
               stored, and a workout save used to be the only thing that wrote
               one. */}
           <TimezoneReporter />
+          {/* Draws the widgets feed's `badgeCount` on the app icon at launch
+              and on each foreground (NP-067): the number of daily commitments
+              still open, cleared at zero and on sign-out. At the ROOT on
+              purpose — a screen-mounted sync would miss every other tab's
+              completions, and the sign-out transition unmounts (app). */}
+          <AppBadgeSync />
           {/* Keeps the Android home-screen widgets in step with the session
               (NP-198): a signed-in open hands the read-only widgets token over
               and redraws the four tiles from the feed; a sign-out forgets it and
