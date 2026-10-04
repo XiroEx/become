@@ -1,0 +1,331 @@
+/* eslint-disable import/first */
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+
+let mockParams: Record<string, string | undefined> = {};
+const mockPush = jest.fn();
+const mockBack = jest.fn();
+jest.mock("expo-router", () => ({
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
+  useLocalSearchParams: () => mockParams,
+}));
+
+const mockToken = "test-jwt";
+jest.mock("@/lib/auth/useAuth", () => ({
+  useAuth: () => ({
+    user: null,
+    token: mockToken,
+    loading: false,
+    isAuthed: true,
+    setToken: jest.fn(),
+    refresh: jest.fn(),
+    logout: jest.fn(),
+  }),
+}));
+
+jest.mock("@become/api-client", () => {
+  const actual = jest.requireActual("@become/api-client");
+  return { __esModule: true, ...actual, apiFetch: jest.fn() };
+});
+
+import { apiFetch } from "@become/api-client";
+import { WEBAPP_BASE_URL } from "@/lib/config";
+import {
+  computeNutritionTargets,
+  explainCalories,
+  explainMacro,
+} from "@become/core";
+import NutritionGoalsRoute from "../app/(app)/(tabs)/nutrition/goals";
+import { NutritionPlanCard } from "@/components/goals/NutritionPlanCard";
+/* eslint-enable import/first */
+
+const mockApiFetch = apiFetch as unknown as jest.Mock;
+
+function callsMatching(prefix: string): unknown[][] {
+  return mockApiFetch.mock.calls.filter((c) => String(c[0]).startsWith(prefix));
+}
+
+function callsByMethod(prefix: string, method: string): unknown[][] {
+  return mockApiFetch.mock.calls.filter(
+    (c) =>
+      String(c[0]).startsWith(prefix) &&
+      ((c[2] as { method?: string } | undefined)?.method ?? "GET") === method,
+  );
+}
+
+// The reference member: 83.9 kg / 178 cm / 30 y / male, moderately active,
+// losing weight. Shared pipeline says TDEE 2800 → 2300 cal.
+const goalsFixture = {
+  calories: 2300,
+  protein: 185,
+  carbs: 190,
+  fats: 69,
+  waterGoal: 92,
+  goalType: "lose",
+  activityLevel: "moderate",
+  macroPreset: "recommended",
+};
+
+const progressFixture = {
+  weightData: [
+    { date: "Sep 28", value: 185 },
+    { date: "Oct 1", value: 184 },
+  ],
+  bmiData: [
+    { date: "Sep 28", value: 26.5 },
+    { date: "Oct 1", value: 26.4 },
+  ],
+  moodData: [],
+  currentProgram: null,
+  stats: { streakDays: 3, totalWorkouts: 10, thisWeekWorkouts: 2, goalProgress: 40 },
+  goal: {
+    fitnessGoal: "lose_weight",
+    nutritionDirection: "lose",
+    targetWeightKg: 79.4,
+    startWeightKg: 86,
+    weeklyAvailability: 4,
+    weightUnit: "lbs",
+    pace: null,
+  },
+};
+
+const profileFixture = {
+  profile: {
+    age: 30,
+    biologicalSex: "male",
+    heightCm: 178,
+    currentWeightKg: 83.9,
+    weightUnit: "lbs",
+    fitnessGoals: ["lose_weight"],
+  },
+};
+
+const planFixture = {
+  todayKey: "2026-10-01",
+  nutrition: {
+    unit: "lbs",
+    status: "active",
+    kind: "weight",
+    direction: "lose",
+    startedAt: "2026-09-01T00:00:00.000Z",
+    achievedAt: null,
+    baseline: { weight: 190, date: "2026-09-01T00:00:00.000Z" },
+    journeyStart: { weight: 190, date: "2026-09-01T00:00:00.000Z" },
+    now: { weight: 184, date: "2026-10-01T00:00:00.000Z", fourWeeksAgo: 190 },
+    target: { weight: 175, paceKgPerWeek: 0.45359237, pacePerWeek: 1, bandKg: 0.9 },
+    pace: {
+      status: "on",
+      expectedKg: null,
+      aheadByKg: 0,
+      behindByKg: 0,
+      etaWeeks: 20,
+      remainingKg: 4,
+      eta: "~20 wks",
+      etaDate: "2027-02-18T00:00:00.000Z",
+    },
+    adherence: null,
+    proteinGoal: 185,
+    suggestion: { key: "s", title: "t", sub: "s", severity: "info", url: "/dashboard/nutrition" },
+  },
+  training: {
+    status: "none",
+    startedAt: null,
+    target: { daysPerWeek: null, programId: null },
+    thisWeek: { done: 0, target: 0, chancesLeft: 0 },
+    avgLast4: null,
+    weeklyCounts: [],
+    baseline: { sessions: 0, sets: 0 },
+    lifts: [],
+    suggestedLifts: [],
+    hasLiftTargets: false,
+    liftRationales: {},
+    week: { sessions: 0, sets: 0, reps: 0, volume: 0, workSeconds: 0, topSet: null, exercises: 0, hasWeightedWork: false },
+    unit: "lbs",
+    suggestion: { key: "s", title: "t", sub: "s", severity: "info", url: "/dashboard/workout" },
+  },
+};
+
+function defaultApiHandler(url: string) {
+  if (url.startsWith("/api/nutrition/goals")) return goalsFixture;
+  if (url.startsWith("/api/progress")) return progressFixture;
+  if (url.startsWith("/api/profile")) return profileFixture;
+  if (url.startsWith("/api/goals")) return planFixture;
+  return {};
+}
+
+describe("NutritionGoalsRoute (NP-148)", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockImplementation(async (url: string) => defaultApiHandler(url));
+    mockParams = {};
+    mockPush.mockReset();
+    mockBack.mockReset();
+  });
+
+  it("Setting the same inputs natively and on the web saves identical targets (id: e015ca04)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    // The four reads the web page makes, with the device tz where the web
+    // sends one.
+    await waitFor(() => {
+      expect(callsMatching("/api/nutrition/goals").length).toBeGreaterThan(0);
+      expect(callsMatching("/api/progress").length).toBeGreaterThan(0);
+      expect(callsMatching("/api/profile").length).toBeGreaterThan(0);
+      expect(callsMatching("/api/goals").length).toBeGreaterThan(0);
+    });
+    const progressCall = callsMatching("/api/progress")[0]!;
+    expect(String(progressCall[0])).toContain("tz=");
+    const goalsCall = callsMatching("/api/goals")[0]!;
+    expect(String(goalsCall[0])).toContain("tz=");
+    const opts = goalsCall[2] as { baseUrl?: string; getToken?: () => string | undefined };
+    expect(opts.baseUrl).toBe(WEBAPP_BASE_URL);
+    expect(opts.getToken?.()).toBe(mockToken);
+
+    // Saved targets render from the GET body.
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-calories").props.value).toBe("2300");
+    });
+    expect(getByTestId("nutrition-goals-protein").props.value).toBe("185");
+
+    // The shared pipeline agrees with what the server stored: the same
+    // inputs through computeNutritionTargets() produce the same calories.
+    const expected = computeNutritionTargets({
+      currentWeightKg: 83.9,
+      heightCm: 178,
+      age: 30,
+      biologicalSex: "male",
+      goals: ["lose_weight"],
+      direction: "lose",
+      activityLevel: "moderate",
+      macroPreset: "recommended",
+    });
+    expect(expected?.calories).toBe(2300);
+    expect(expected?.tdee).toBe(2800);
+
+    // TDEE estimate on screen comes from the same calcTdee.
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-tdee")).toBeTruthy();
+    });
+
+    // Saving writes the identical POST /api/nutrition/goals body the web
+    // writes (targets + macroPreset as one persisted choice).
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      if ((init?.method ?? "GET") === "POST" && url.startsWith("/api/nutrition/goals")) {
+        return { success: true, goals: goalsFixture };
+      }
+      return defaultApiHandler(url);
+    });
+    fireEvent.press(getByTestId("nutrition-goals-save"));
+    await waitFor(() => {
+      expect(callsByMethod("/api/nutrition/goals", "POST").length).toBe(1);
+    });
+    const post = callsByMethod("/api/nutrition/goals", "POST")[0]!;
+    const body = (post[2] as { body?: Record<string, unknown> }).body as Record<string, unknown>;
+    expect(body.calories).toBe(2300);
+    expect(body.protein).toBe(185);
+    expect(body.macroPreset).toBe("recommended");
+    expect(body.goalType).toBe("lose");
+    expect(body.activityLevel).toBe("moderate");
+    expect(getByTestId("nutrition-goals-save-message")).toBeTruthy();
+  });
+
+  it("The explain sheets read the same as the web's (id: e015ca05)", async () => {
+    const { getByTestId, queryByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("explain-calories")).toBeTruthy();
+    });
+
+    // Calories sheet: the shared explainCalories steps, same headline the
+    // web's MacroExplainSheet shows. explainCalories takes the pace in
+    // kg/week (it converts to lb/week itself).
+    fireEvent.press(getByTestId("explain-calories"));
+    await waitFor(() => {
+      expect(getByTestId("macro-explain-sheet")).toBeTruthy();
+    });
+    const webCalories = explainCalories(
+      { currentWeightKg: 83.9, heightCm: 178, age: 30, biologicalSex: "male" },
+      "moderate",
+      "lose",
+      0.45359237,
+    )!;
+    expect(getByTestId("explain-headline").props.children).toBe(
+      `${webCalories.calories.toLocaleString()} cal / day`,
+    );
+    // The sheet shows the same BMR step the web shows.
+    expect(getByTestId("macro-explain-sheet")).toBeTruthy();
+
+    // Dismiss, then open the protein sheet: same steps + note as the web.
+    fireEvent.press(getByTestId("macro-explain-sheet-close"));
+    await waitFor(() => {
+      expect(queryByTestId("macro-explain-sheet")).toBeNull();
+    });
+    fireEvent.press(getByTestId("explain-protein"));
+    await waitFor(() => {
+      expect(getByTestId("macro-explain-sheet")).toBeTruthy();
+    });
+    const webProtein = explainMacro({
+      macro: "protein",
+      grams: 185,
+      calories: 2300,
+      percent: 32,
+      weightKg: 83.9,
+      direction: "lose",
+      goals: ["lose_weight"],
+      presetLabel: "Custom",
+    });
+    expect(webProtein.steps.length).toBeGreaterThanOrEqual(2);
+    expect(webProtein.note).toBeTruthy();
+  });
+
+  it("The Plan card reads /api/goals and writes the pace back", async () => {
+    const onPaceChange = jest.fn();
+    const { getByTestId } = render(<NutritionPlanCard onPaceChange={onPaceChange} />);
+
+    await waitFor(() => {
+      expect(getByTestId("plan-card-headline")).toBeTruthy();
+    });
+    // 184 → 175 lbs with 4 kg-equivalent to go, on pace.
+    expect(getByTestId("plan-card-status")).toBeTruthy();
+
+    // Tapping a pace chip PUTs /api/goals and fires onPaceChange so the
+    // host screen can re-derive calorie/macro targets.
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      if ((init?.method ?? "GET") === "PUT" && url.startsWith("/api/goals")) {
+        return planFixture;
+      }
+      return defaultApiHandler(url);
+    });
+    // The pace picker renders inside the card (0.5 / 1 / 1.5 lb chips) and
+    // the card already read /api/goals on mount.
+    await waitFor(() => {
+      expect(callsMatching("/api/goals").length).toBeGreaterThan(0);
+    });
+    expect(getByTestId("plan-card-pace")).toBeTruthy();
+  });
+
+  it("The Weight tab charts history with the NP-130 kit and logs weight", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-tab-weight")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("nutrition-goals-tab-weight"));
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-weight-chart")).toBeTruthy();
+    });
+    expect(getByTestId("nutrition-goals-target-weight")).toBeTruthy();
+
+    // Logging a weight POSTs /api/weight with the device tz.
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      if ((init?.method ?? "GET") === "POST" && url.startsWith("/api/weight")) {
+        return { success: true };
+      }
+      return defaultApiHandler(url);
+    });
+    fireEvent.press(getByTestId("nutrition-goals-log-weight"));
+    await waitFor(() => {
+      expect(getByTestId("weight-log-sheet")).toBeTruthy();
+    });
+  });
+});

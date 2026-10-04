@@ -85,6 +85,7 @@ export const NATIVE_ROUTES = {
   mind: "/(tabs)/mind",
   nutrition: "/(tabs)/nutrition",
   nutritionSearch: "/(tabs)/nutrition/search",
+  nutritionGoals: "/(tabs)/nutrition/goals",
   recipes: "/(tabs)/nutrition/recipes",
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
   calendar: "/(tabs)/calendar",
@@ -491,7 +492,9 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     }
     if (sub === "recipes") return native(NATIVE_ROUTES.recipes, params, "exact");
     if (sub === "meal-schedule") return native(NATIVE_ROUTES.mealSchedule, params, "exact");
-    // goals, scans — nothing native yet (NP-091 and friends).
+    // The goals editor is native now (NP-148) — deep links land on it exactly.
+    if (sub === "goals") return native(NATIVE_ROUTES.nutritionGoals, params, "exact");
+    // scans — nothing native yet (NP-091 and friends).
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
   if (section === "recipes") {
