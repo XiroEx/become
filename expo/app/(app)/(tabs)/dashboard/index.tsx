@@ -16,13 +16,13 @@ import {
   GoalProgressResponseSchema,
   MindSummaryResponseSchema,
   ScheduleApiResponseSchema,
+  SchedulePatchResponseSchema,
   SuggestionDismissResponseSchema,
   ProgramNudgeResponseSchema,
   DashboardLayoutPatchResponseSchema,
   type DashboardTile,
   type GoalReached,
   apiFetch,
-  type ScheduledWorkout,
 } from "@become/api-client";
 import {
   DashboardScreen,
@@ -48,6 +48,11 @@ import {
   LAYOUT_CACHE_KEY,
   writeCachedLayout,
 } from "@/lib/dashboard/tileLayout";
+import {
+  selectTrainingCards,
+  type MissedWorkoutSummary,
+  type NextWorkoutSummary,
+} from "@/lib/dashboard/trainingCards";
 import type {
   DashboardStatData,
   UpcomingWorkoutSummary,
@@ -133,8 +138,22 @@ export default function DashboardRoute() {
     MindSummaryResponseSchema,
     fetchOpts,
   );
+  // The web's NextWorkoutCard window: past 14 days (to catch missed) + next
+  // 14 days (for the next session), with the caller's tz so "today" is the
+  // device's local day on both sides.
+  const schedulePath = useMemo(() => {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - 14);
+    const to = new Date(now);
+    to.setDate(to.getDate() + 14);
+    const tz = tzOffsetMinutes();
+    let url = `/api/schedule?from=${from.toISOString()}&to=${to.toISOString()}`;
+    if (typeof tz === "number") url += `&tz=${tz}`;
+    return url;
+  }, []);
   const schedule = useFetch(
-    ready ? "/api/schedule" : null,
+    ready ? schedulePath : null,
     ScheduleApiResponseSchema,
     fetchOpts,
   );
@@ -752,85 +771,135 @@ export default function DashboardRoute() {
 
   const currentProgram = progress.data?.currentProgram ?? null;
 
+  // NP-106: the web's NextWorkoutCard selection, shared with the presentational
+  // cards through `lib/dashboard/trainingCards.ts` so the route and the tests
+  // cannot disagree: the earliest `scheduled` slot on or after the device's
+  // local today by slot marker is next (Today / Tomorrow / date), and
+  // `missed` slots list newest first. Slot dates are markers (`slice(0, 10)`).
+  const trainingCards = useMemo(
+    () => selectTrainingCards(schedule.data, new Date()),
+    // `today` (useLocalDay) re-renders this route at local midnight and on
+    // foreground resume; the memo re-selects then. The dep is read via the
+    // date construction below rather than referenced directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [schedule.data, today],
+  );
+  const missedWorkouts = trainingCards.missed;
+
   const upcomingWorkout: UpcomingWorkoutSummary | null = (() => {
-    const schedules = schedule.data?.schedules ?? [];
-    const now = new Date();
-    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    const tom = new Date(now);
-    tom.setDate(tom.getDate() + 1);
-    const tomorrowKey = `${tom.getFullYear()}-${String(tom.getMonth() + 1).padStart(2, "0")}-${String(tom.getDate()).padStart(2, "0")}`;
-
-    let earliest: {
-      workout: ScheduledWorkout;
-      programName: string;
-      programId: string;
-    } | null = null;
-    let earliestKey = "";
-
-    for (const sched of schedules) {
-      if (
-        sched.programStatus !== "in-progress" &&
-        sched.programStatus !== "active"
-      ) {
-        continue;
-      }
-      for (const w of sched.scheduledWorkouts) {
-        const wKey =
-          typeof w.date === "string"
-            ? w.date.split("T")[0]
-            : new Date(w.date).toISOString().split("T")[0];
-        if (w.status === "scheduled" && wKey && wKey >= todayKey) {
-          if (!earliest || wKey < earliestKey) {
-            earliest = {
-              workout: w,
-              programName: sched.programName ?? "",
-              programId: sched.programId ?? "",
-            };
-            earliestKey = wKey;
-          }
-        }
-      }
+    const next: NextWorkoutSummary | null = trainingCards.next;
+    if (next) {
+      return {
+        dateLabel: next.dateLabel,
+        dayLabel: next.dayLabel,
+        workoutTitle: next.workoutTitle,
+        programName: next.programName,
+        programId: next.programId,
+        date: `${next.date}T00:00:00.000Z`,
+        phase: next.phase ?? next.phaseIndex + 1,
+        workoutIndex: next.workoutIndex,
+      };
     }
 
-    if (!earliest) {
-      if (todayWorkout && programId) {
-        return {
-          dateLabel: "Today",
-          dayLabel: currentDayLabel || "",
-          workoutTitle: todayWorkout.workoutTitle,
-          programName: todayWorkout.programName,
-          programId,
-          workoutIndex,
-          phase: workoutPhaseIndex + 1,
-        };
-      }
-      return null;
+    if (todayWorkout && programId) {
+      return {
+        dateLabel: "Today",
+        dayLabel: currentDayLabel || "",
+        workoutTitle: todayWorkout.workoutTitle,
+        programName: todayWorkout.programName,
+        programId,
+        workoutIndex,
+        phase: workoutPhaseIndex + 1,
+      };
     }
-
-    let dateLabel = "";
-    if (earliestKey === todayKey) dateLabel = "Today";
-    else if (earliestKey === tomorrowKey) dateLabel = "Tomorrow";
-    else {
-      const parsedDate = new Date(`${earliestKey}T12:00:00`);
-      dateLabel = parsedDate.toLocaleDateString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-      });
-    }
-
-    return {
-      dateLabel,
-      dayLabel: earliest.workout.dayLabel || "",
-      workoutTitle: earliest.workout.workoutTitle || "",
-      programName: earliest.programName || "",
-      programId: earliest.programId || "",
-      date:
-        typeof earliest.workout.date === "string"
-          ? earliest.workout.date
-          : new Date(earliest.workout.date).toISOString(),
-    };
+    return null;
   })();
+
+  // WHERE "Start workout" GOES (NP-106).
+  //
+  // Every start opens Track (NP-087) for that EXACT slot: the native workout
+  // routes address a session by index + phase, while the web addresses it by
+  // DAY LABEL + slot date (`?day=<label>&sd=<YYYY-MM-DD>`). Both travel on
+  // the query so the Track screen prints the label and the save completes
+  // THAT slot (`scheduledDate`) rather than a neighbouring same-label one.
+  const openTrainingSlot = useCallback(
+    (slot: {
+      programId: string;
+      workoutIndex: number;
+      phaseIndex: number;
+      dayLabel?: string;
+      date?: string;
+    }) => {
+      const q: string[] = [`phase=${slot.phaseIndex}`];
+      if (slot.dayLabel) q.push(`day=${encodeURIComponent(slot.dayLabel)}`);
+      if (slot.date) {
+        const sd = slot.date.slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(sd)) q.push(`sd=${encodeURIComponent(sd)}`);
+      }
+      router.push(
+        `/(tabs)/programming/${encodeURIComponent(slot.programId)}/workout/${slot.workoutIndex}?${q.join("&")}` as never,
+      );
+    },
+    [router],
+  );
+
+  const onStartNextWorkout = useCallback(() => {
+    const next = trainingCards.next;
+    if (next) {
+      openTrainingSlot(next);
+      return;
+    }
+    onStartWorkout();
+  }, [trainingCards.next, openTrainingSlot, onStartWorkout]);
+
+  const onDoMissedWorkout = useCallback(
+    (w: MissedWorkoutSummary) => {
+      openTrainingSlot(w);
+    },
+    [openTrainingSlot],
+  );
+
+  const [skippingDate, setSkippingDate] = useState<string | null>(null);
+  const onSkipMissedWorkout = useCallback(
+    async (w: MissedWorkoutSummary) => {
+      if (!token || skippingDate) return;
+      setSkippingDate(w.date);
+      try {
+        await apiFetch("/api/schedule", SchedulePatchResponseSchema, {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+          method: "PATCH",
+          body: { programId: w.programId, action: "skip", workoutDate: w.date },
+        });
+        await schedule.refetch();
+      } catch (err) {
+        console.error("Failed to skip missed workout:", err);
+      } finally {
+        setSkippingDate(null);
+      }
+    },
+    [token, skippingDate, schedule],
+  );
+
+  const onOpenHistory = useCallback(() => {
+    // Progress points at History (NP-112) until native progress (NP-130)
+    // exists: the Training Log at /progress is the closest shipped screen.
+    router.push("/progress" as never);
+  }, [router]);
+
+  const onBrowsePrograms = useCallback(() => {
+    router.push("/(tabs)/programming" as never);
+  }, [router]);
+
+  const showEmptyState =
+    ready &&
+    !activeProgram &&
+    !currentProgram &&
+    (progress.data?.stats?.totalWorkouts ?? 0) === 0;
+
+  const quickLinksNutritionDescription = nutritionData
+    ? `${nutritionData.calories.consumed.toLocaleString()} / ${nutritionData.calories.goal.toLocaleString()} cal today`
+    : null;
 
   return (
     <DashboardScreen
@@ -840,6 +909,16 @@ export default function DashboardRoute() {
       todayWorkout={todayWorkout}
       onStartWorkout={onStartWorkout}
       onOpenCalendar={onOpenCalendar}
+      missedWorkouts={missedWorkouts}
+      skippingDate={skippingDate}
+      onDoMissedWorkout={onDoMissedWorkout}
+      onSkipMissedWorkout={onSkipMissedWorkout}
+      onStartNextWorkout={onStartNextWorkout}
+      showEmptyState={showEmptyState}
+      onBrowsePrograms={onBrowsePrograms}
+      onOpenPrograms={onBrowsePrograms}
+      onOpenHistory={onOpenHistory}
+      quickLinksNutritionDescription={quickLinksNutritionDescription}
       loading={initialLoading}
       errorText={errorText}
       refreshing={refreshing}
@@ -867,6 +946,7 @@ export default function DashboardRoute() {
       mind={mind.data ?? null}
       todaysMood={todaysMood}
       upcomingWorkout={upcomingWorkout}
+      resumeEnabled
       onOpenMind={onOpenMind}
       onOpenBecoming={onOpenBecoming}
       onOpenNutrition={onOpenNutrition}

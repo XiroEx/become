@@ -105,6 +105,10 @@ function taskOf(deps: EstimateDeps): typeof runAiTask {
 /**
  * Run the plate (photo + optional note) estimate through the AI client.
  * Never throws for a classified refusal — those come back as outcomes.
+ *
+ * A FRESH estimate never presents a ticket: the signed follow-up ticket
+ * belongs strictly to the outcome it came with, and only a correction of
+ * that same outcome may send it back (NP-090).
  */
 export async function estimateFromPhoto(
   image: CapturedImage,
@@ -123,7 +127,10 @@ export async function estimateFromPhoto(
   return toOutcome(r);
 }
 
-/** Run the describe (typed description) estimate through the AI client. */
+/**
+ * Run the describe (typed description) estimate through the AI client.
+ * A fresh description never presents a ticket — see estimateFromPhoto.
+ */
 export async function estimateFromDescription(
   description: string,
   deps: EstimateDeps = {},
@@ -135,17 +142,81 @@ export async function estimateFromDescription(
   return toOutcome(r);
 }
 
+/**
+ * Correct a PHOTO estimate (NP-090): re-read the SAME image with the
+ * correction as the note, plus the estimate's allowance ticket — the web's
+ * `handleCorrect` photo branch. The plate route honours the ticket only
+ * when a note is present, so a photo correction without a note is a new
+ * scan; the sheet guards the box to non-empty text, so this always sends
+ * one. Never throws for a classified refusal.
+ */
+export async function correctPhotoEstimate(
+  imageDataUrl: string,
+  correction: string,
+  ticket: string | undefined,
+  deps: EstimateDeps = {},
+): Promise<EstimateOutcome> {
+  const runTask = taskOf(deps);
+  const r = await runTask("/api/ai/nutrition/plate", {
+    image: imageDataUrl,
+    note: correction.trim(),
+    ...(ticket ? { allowanceTicket: ticket } : {}),
+  });
+  return toOutcome(r);
+}
+
+/**
+ * Correct a DESCRIBE estimate (NP-090): send `correction`, `priorEstimate`
+ * and the ticket with NO `description` — the web's `handleCorrect` text
+ * branch. The describe route counts only that shape as a refinement; a
+ * ticket beside a fresh `description` is a new outcome riding a previous
+ * charge. Never throws for a classified refusal.
+ */
+export async function correctDescribeEstimate(
+  priorItems: ReviewItem[],
+  correction: string,
+  ticket: string | undefined,
+  deps: EstimateDeps = {},
+): Promise<EstimateOutcome> {
+  const runTask = taskOf(deps);
+  const priorEstimate = priorItems
+    .filter((it) => !it.removed)
+    .map(({ name, estimatedServing, nutrition, confidence }) => ({
+      name,
+      estimatedServing,
+      nutrition,
+      confidence,
+    }));
+  const r = await runTask("/api/ai/nutrition/describe", {
+    priorEstimate,
+    correction: correction.trim(),
+    ...(ticket ? { allowanceTicket: ticket } : {}),
+  });
+  return toOutcome(r);
+}
+
 function toOutcome(r: {
   ok: boolean;
   result?: unknown;
   error?: string;
   gate?: unknown;
+  allowanceTicket?: string;
 }): EstimateOutcome {
   if (r.ok) {
     const est = r.result as PlateEstimate | undefined;
     if (est && Array.isArray(est.items)) {
       if (est.items.length === 0) return { status: "empty" };
-      return { status: "estimated", estimate: est };
+      // The ticket rides the POST body (NP-038), not the polled result —
+      // carry it onto the estimate so a correction of THIS outcome can
+      // spend a bounded follow-up instead of tomorrow's scan.
+      const ticket =
+        typeof r.allowanceTicket === "string" && r.allowanceTicket
+          ? r.allowanceTicket
+          : est.allowanceTicket;
+      return {
+        status: "estimated",
+        estimate: ticket ? { ...est, allowanceTicket: ticket } : est,
+      };
     }
     return { status: "unavailable" };
   }
