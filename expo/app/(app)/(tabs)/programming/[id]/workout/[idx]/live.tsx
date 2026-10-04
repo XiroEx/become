@@ -139,6 +139,7 @@ export default function LiveWorkoutRoute({
     notes,
     setNotes,
     restoredGrid,
+    isResuming,
     onGridChange,
     onSetComplete,
     onFinish,
@@ -416,6 +417,8 @@ export default function LiveWorkoutRoute({
             : (cacheStore ?? asyncStorageKeyValueStore)
         }
         restoredGrid={restoredGrid}
+        resumed={isResuming}
+        enableSkipFlow
         onGridChange={onGridChange}
         onSetComplete={onSetComplete}
         onFinish={(g: LiveGrid) => void onFinish(g)}
