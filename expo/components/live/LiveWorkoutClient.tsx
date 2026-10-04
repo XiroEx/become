@@ -165,6 +165,15 @@ export interface LiveWorkoutClientProps {
    */
   exercisePRs?: Record<string, ExercisePRSummary>;
   /**
+   * In-workout hints keyed by lowercase exercise slug
+   * (`useExerciseHints`, the web's `exerciseNudges`). Rendered under the
+   * exercise header in BOTH views — beside the Last/PR lines in Live, in
+   * the exercise card in Track. Omitted, no hint renders.
+   */
+  exerciseHints?: Record<string, { id: string; title: string; body: string }>;
+  /** Dismiss a hint for `slug` on the account (the web's `dismissNudge`). */
+  onDismissHint?: (slug: string) => void;
+  /**
    * True when this workout resumed in-progress work (the server's open log
    * or a fresh on-device draft). Renders the web's resume indicator - a
    * small "Resuming where you left off" line under the progress count -
@@ -420,6 +429,8 @@ export function LiveWorkoutClient({
   celebratedPrIds,
   exerciseHistory,
   exercisePRs,
+  exerciseHints,
+  onDismissHint,
   resumed = false,
   enableSkipFlow = false,
   headerAction,
@@ -1076,6 +1087,8 @@ export function LiveWorkoutClient({
             notes={notes}
             onNotesChange={handleNotesChange}
             showNotes={completedSets > 0}
+            exerciseHints={exerciseHints}
+            onDismissHint={onDismissHint}
           />
         ) : (
           <>
@@ -1105,6 +1118,8 @@ export function LiveWorkoutClient({
             onRequestSwap={onRequestSwap}
             exerciseHistory={exerciseHistory}
             exercisePRs={exercisePRs}
+            exerciseHints={exerciseHints}
+            onDismissHint={onDismissHint}
           />
           <LiveExerciseSheet
             visible={sheetOpen}
