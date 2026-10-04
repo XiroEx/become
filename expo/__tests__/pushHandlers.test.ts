@@ -1,5 +1,4 @@
 import {
-  buildForegroundDisplay,
   ensureNotificationPermission,
   handleNotificationTap,
   type PermissionFetcher,
@@ -57,49 +56,18 @@ describe("ensureNotificationPermission", () => {
   });
 });
 
-describe("buildForegroundDisplay", () => {
-  it("returns category-specific copy for workout-reminder", () => {
-    const d = buildForegroundDisplay({ category: "workout-reminder" });
-    expect(d.title).toMatch(/train/i);
-  });
-  it("returns category-specific copy for streak-at-risk", () => {
-    const d = buildForegroundDisplay({ category: "streak-at-risk" });
-    expect(d.title).toMatch(/streak/i);
-  });
-  it("returns category-specific copy for re-engagement", () => {
-    const d = buildForegroundDisplay({ category: "re-engagement" });
-    expect(d.title).toMatch(/come back/i);
-  });
-  it("falls back to a generic Become title for unknown categories", () => {
-    const d = buildForegroundDisplay({ category: "alien-event" });
-    expect(d.title).toBe("Become");
-  });
-});
-
 describe("handleNotificationTap", () => {
-  it("forwards the resolved route through the provided navigator", () => {
+  it("routes the payload's url — the only routing input", () => {
     const navigate = jest.fn();
-    const route = handleNotificationTap(
-      { category: "re-engagement" },
-      navigate,
-    );
+    const route = handleNotificationTap({ url: "/dashboard/mind" }, navigate);
     expect(route).toBe("/(tabs)/mind");
     expect(navigate).toHaveBeenCalledWith("/(tabs)/mind");
   });
 
-  it("forwards live-workout route when payload carries program + workout IDs", () => {
+  it("opens Home for a payload with no url", () => {
     const navigate = jest.fn();
-    handleNotificationTap(
-      {
-        category: "workout-reminder",
-        programId: "p1",
-        workoutIndex: 4,
-        phaseIndex: 1,
-      },
-      navigate,
-    );
-    expect(navigate).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/4/live",
-    );
+    const route = handleNotificationTap({}, navigate);
+    expect(route).toBe("/(tabs)/dashboard");
+    expect(navigate).toHaveBeenCalledWith("/(tabs)/dashboard");
   });
 });
