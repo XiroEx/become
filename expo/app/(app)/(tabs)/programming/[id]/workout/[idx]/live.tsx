@@ -468,6 +468,7 @@ export default function LiveWorkoutRoute({
         restoredGrid={restoredGrid}
         resumed={isResuming}
         enableSkipFlow
+        activeSeconds={activeSeconds}
         onGridChange={onGridChange}
         onSetComplete={onSetComplete}
         onFinish={(g: LiveGrid) => void onFinish(g)}

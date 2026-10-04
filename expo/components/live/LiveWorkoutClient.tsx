@@ -37,6 +37,7 @@ import {
   type WorkoutView,
 } from "@/components/live/WorkoutViewToggle";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 
 export type { WorkoutView };
 
@@ -205,6 +206,12 @@ export interface LiveWorkoutClientProps {
    * route, which owns the share body). Omitted, the title stands alone.
    */
   headerAction?: React.ReactNode;
+  /**
+   * Elapsed workout seconds, ticked by the route from `useLiveWorkout`
+   * (the web's `elapsedTime`). Optional: the quick session has no timer
+   * yet, so omitting it renders no elapsed line at all.
+   */
+  activeSeconds?: number;
   testID?: string;
 }
 
@@ -444,6 +451,7 @@ export function LiveWorkoutClient({
   resumed = false,
   enableSkipFlow = false,
   headerAction,
+  activeSeconds,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -1072,6 +1080,45 @@ export function LiveWorkoutClient({
         >
           {`${completedSets} of ${totalSets} sets done`}
         </Text>
+        {/* Overall progress bar + N% (the web's header progress bar,
+            ~line 2457-2468): SETS, not steps, in both views. */}
+        <View
+          testID={`${testID}-overall-progress`}
+          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+        >
+          <View
+            style={{
+              flex: 1,
+              height: 6,
+              overflow: "hidden",
+              borderRadius: 999,
+              backgroundColor: colors.muted,
+            }}
+          >
+            <View
+              style={{
+                height: "100%",
+                borderRadius: 999,
+                width: `${overallProgressPercent(grid)}%`,
+                backgroundColor: colors.primary,
+              }}
+            />
+          </View>
+          <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+            {`${overallProgressPercent(grid)}%`}
+          </Text>
+        </View>
+        {/* Elapsed time (the web's header timer, ~line 2039-2042): only
+            when the route passes a number — the quick session has no
+            timer yet, so it renders nothing here. */}
+        {typeof activeSeconds === "number" ? (
+          <Text
+            testID={`${testID}-elapsed`}
+            className="text-muted-foreground font-mono text-sm tabular-nums"
+          >
+            {formatElapsed(activeSeconds)}
+          </Text>
+        ) : null}
         {showResumed ? (
           <Text
             testID={`${testID}-resume-indicator`}
