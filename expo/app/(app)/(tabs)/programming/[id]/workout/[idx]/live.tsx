@@ -152,6 +152,7 @@ export default function LiveWorkoutRoute({
     finishedElapsedSeconds,
     activeSeconds,
     exerciseHistory,
+    exercisePRs,
     onRequestSwap,
     swapSlug,
     swapSourceName,
@@ -422,6 +423,8 @@ export default function LiveWorkoutRoute({
         saveError={saveError}
         pendingSync={pendingSync}
         onRequestSwap={onRequestSwap}
+        exerciseHistory={exerciseHistory}
+        exercisePRs={exercisePRs}
       />
       <ExerciseSwapModal
         visible={swapSlug !== null}
