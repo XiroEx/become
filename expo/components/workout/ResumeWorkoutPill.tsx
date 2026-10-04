@@ -21,6 +21,7 @@ import { ConfirmModal } from "@/components/workout/ConfirmModal";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
+import { quickSessionOverviewHref } from "@/lib/quickSession/store";
 
 export interface ResumeWorkoutPillProps {
   className?: string;
@@ -130,12 +131,17 @@ export function ResumeWorkoutPill({
         );
       } else if (workout.sessionId) {
         router.push(
-          `/(tabs)/programming?session=${encodeURIComponent(workout.sessionId)}`,
+          quickSessionOverviewHref(workout.sessionId, {
+            saved: true,
+            started: true,
+          }) as never,
         );
       }
     } else if (planned?.sessionId) {
       router.push(
-        `/(tabs)/programming?session=${encodeURIComponent(planned.sessionId)}`,
+        quickSessionOverviewHref(planned.sessionId, {
+          saved: true,
+        }) as never,
       );
     }
   };
