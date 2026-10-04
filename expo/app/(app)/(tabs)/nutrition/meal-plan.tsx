@@ -25,6 +25,8 @@ import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
 import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -103,6 +105,11 @@ export default function MealPlanRoute() {
   const [addingSlotFor, setAddingSlotFor] = useState<string | null>(null);
   const [removedPlanIds, setRemovedPlanIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  // Schedule-meals tools (NP-177): copy a day forward + repeat a meal across
+  // days, from the meal plan. `copySource` / `applyFrom` root the sheets at
+  // the day the member acted on.
+  const [copySource, setCopySource] = useState<string | null>(null);
+  const [applyFrom, setApplyFrom] = useState<string | null>(null);
 
   const days = useMemo(() => weekDays(weekStart), [weekStart]);
   const range = useMemo(() => weekRangeKeys(weekStart), [weekStart]);
@@ -184,6 +191,8 @@ export default function MealPlanRoute() {
     (toast: string) => {
       setPickedFood(null);
       setPicker(null);
+      setCopySource(null);
+      setApplyFrom(null);
       setNotice(toast);
       void refetchPlans();
     },
@@ -379,15 +388,47 @@ export default function MealPlanRoute() {
                       </Text>
                       {isToday ? " · Today" : ""}
                     </Text>
-                    {cals > 0 ? (
-                      <Text
-                        testID={`meal-plan-day-cals-${dayKey}`}
-                        className="text-muted-foreground text-xs font-medium"
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      {cals > 0 ? (
+                        <Text
+                          testID={`meal-plan-day-cals-${dayKey}`}
+                          className="text-muted-foreground text-xs font-medium"
+                        >
+                          {cals}
+                          {goalCal > 0 ? ` / ${goalCal}` : ""} cal
+                        </Text>
+                      ) : null}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Copy ${dayKey} to other days`}
+                        testID={`meal-plan-copy-day-${dayKey}`}
+                        onPress={() => setCopySource(dayKey)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
                       >
-                        {cals}
-                        {goalCal > 0 ? ` / ${goalCal}` : ""} cal
-                      </Text>
-                    ) : null}
+                        <Text className="text-muted-foreground text-xs font-semibold">
+                          Copy day…
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Repeat a meal across days from ${dayKey}`}
+                        testID={`meal-plan-repeat-meal-${dayKey}`}
+                        onPress={() => setApplyFrom(dayKey)}
+                        style={{
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text className="text-muted-foreground text-xs font-semibold">
+                          Repeat meal…
+                        </Text>
+                      </Pressable>
+                    </View>
                   </View>
                   <View>
                     {slotList.map((slot) => {
@@ -719,6 +760,26 @@ export default function MealPlanRoute() {
         onClose={closePlanFlow}
         onPlanned={handlePlanned}
       />
+      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
+          across days, from the meal plan. */}
+      {copySource ? (
+        <CopyDaySheet
+          visible={copySource !== null}
+          defaultSourceDate={copySource}
+          onClose={() => setCopySource(null)}
+          onApplied={handlePlanned}
+        />
+      ) : null}
+      {applyFrom ? (
+        <ApplyMealSheet
+          visible={applyFrom !== null}
+          defaultFromDate={applyFrom}
+          defaultToDate={applyFrom}
+          availableTags={{ defaults: tagDefaults, userTags: tagUserTags }}
+          onClose={() => setApplyFrom(null)}
+          onApplied={handlePlanned}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
