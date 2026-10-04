@@ -79,6 +79,7 @@ export default function QuickLiveRoute({
     workout,
     stored,
     restoredGrid,
+    exerciseHistory,
     finishing,
     finishedGrid,
     finishedElapsedSeconds,
@@ -135,6 +136,9 @@ export default function QuickLiveRoute({
   };
 
   const showSummary = finishedGrid !== null;
+
+  const summaryHistory: Record<string, (typeof exerciseHistory)[string]> =
+    exerciseHistory ?? {};
 
   if (!sessionId) {
     return (
@@ -212,7 +216,7 @@ export default function QuickLiveRoute({
           elapsedSeconds={finishedElapsedSeconds}
           exercises={summaryExercises}
           setsByExercise={summarySets}
-          exerciseHistory={{}}
+          exerciseHistory={summaryHistory}
           streak={null}
           goal={null}
           onDone={() => router.replace("/(tabs)/programming")}
@@ -236,6 +240,7 @@ export default function QuickLiveRoute({
         onFinish={handleFinish}
         finishing={finishing || promptFinishing}
         saveError={saveError}
+        exerciseHistory={exerciseHistory}
       />
       {pendingCompletion ? (
         <QuickSessionNamePrompt
