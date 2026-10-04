@@ -169,6 +169,8 @@ export function TrackWorkoutView({
                     setIndex={i}
                     bell={bell}
                     exerciseName={ex.name}
+                    equipment={ex.equipment}
+                    showQuickPicks
                     state={s}
                     prefill={ex.prefill?.[i] ?? null}
                     trackingType={ex.trackingType}

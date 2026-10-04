@@ -209,6 +209,8 @@ export function LiveStepView({
           setIndex={step.setIndex}
           bell={bell}
           exerciseName={exercise.name}
+          equipment={exercise.equipment}
+          showQuickPicks
           state={current}
           prefill={exercise.prefill?.[step.setIndex] ?? null}
           trackingType={exercise.trackingType}
