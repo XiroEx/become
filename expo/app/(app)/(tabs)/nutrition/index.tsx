@@ -84,6 +84,8 @@ import { CalorieRing } from "@/components/nutrition/CalorieRing";
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
 import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
@@ -1061,6 +1063,14 @@ export default function NutritionIndexRoute() {
   // onto the scanner instead of the name search.
   const [searchBarcodeOpen, setSearchBarcodeOpen] = useState(false);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
+  // Schedule-meals tools (NP-177): the two bulk sheets ported from the web's
+  // ScheduleMealsDrawer / PlanToolsSheets. `copyDayOpen` copies a day forward
+  // (from the meal plan and from a future day); `applyMealOpen` repeats one
+  // saved meal across days. `planToolsNotice` carries the success toast until
+  // the refetch lands, mirroring the web's `showSuccessToast` + refetch.
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
+  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  const [planToolsNotice, setPlanToolsNotice] = useState<string | null>(null);
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
   // after the list marks outcomes read.
@@ -1405,9 +1415,34 @@ export default function NutritionIndexRoute() {
   };
 
   const handlePickMeal = (meal: Meal) => {
+    // On a future day the meal is SCHEDULED (the web's plan-mode
+    // `MealApplySheet`): open the repeat-across-days sheet rooted at this
+    // day instead of the log-a-meal sheet.
+    if (isFuture) {
+      setMealLogError(null);
+      setMealToLog(null);
+      setPlanToolsNotice(null);
+      setApplyMealOpen(true);
+      return;
+    }
     setMealLogError(null);
     setMealToLog(meal);
   };
+
+  // Bulk tools applied: show the web's toast text and refetch the day, like
+  // `timeline/page.tsx#onApplied` (toast + month reload + fetchData).
+  const handleBulkApplied = useCallback(
+    (toast: string) => {
+      setPlanToolsNotice(toast);
+      setCopyDayOpen(false);
+      setApplyMealOpen(false);
+      if (showPlans) {
+        void refetchMealPlans();
+      }
+      void refetchMealLogs();
+    },
+    [showPlans, refetchMealPlans, refetchMealLogs],
+  );
 
   const handlePickBasketFood = async (food: Food) => {
     // Pinned to a sitting: log one food straight into it, like the web's
@@ -1539,6 +1574,20 @@ export default function NutritionIndexRoute() {
           </Pressable>
         </View>
       </View>
+
+      {/* The bulk tools' word when plans landed (NP-177). */}
+      {planToolsNotice ? (
+        <View style={{ marginHorizontal: 16, marginBottom: 8 }}>
+          <Text
+            testID="nutrition-plan-tools-notice"
+            accessibilityRole="alert"
+            className="text-muted-foreground text-xs"
+            onPress={() => setPlanToolsNotice(null)}
+          >
+            {planToolsNotice}
+          </Text>
+        </View>
+      ) : null}
 
       {/* The basket's quiet word when the log landed but the keep did not. */}
       {basketNotice ? (
@@ -2042,8 +2091,32 @@ export default function NutritionIndexRoute() {
               testID="nutrition-find-food"
               onPress={() => openSearch()}
             >
-              Find a food
+              {isFuture ? "Schedule food" : "Find a food"}
             </Button>
+            {isFuture ? (
+              <>
+                <Button
+                  testID="nutrition-copy-day-button"
+                  variant="secondary"
+                  onPress={() => {
+                    setPlanToolsNotice(null);
+                    setCopyDayOpen(true);
+                  }}
+                >
+                  Copy day…
+                </Button>
+                <Button
+                  testID="nutrition-repeat-meal-button"
+                  variant="secondary"
+                  onPress={() => {
+                    setPlanToolsNotice(null);
+                    setApplyMealOpen(true);
+                  }}
+                >
+                  Repeat a meal…
+                </Button>
+              </>
+            ) : null}
             <Button
               testID="nutrition-quick-add-button"
               variant="secondary"
@@ -2523,7 +2596,7 @@ export default function NutritionIndexRoute() {
 
       {/* Log a saved meal with a portion (NP-094) */}
       <MealLogSheet
-        visible={mealToLog !== null}
+        visible={mealToLog !== null && !isFuture}
         meal={mealToLog}
         currentTag={searchTag ?? currentDefaultTag}
         submitting={mealLogSubmitting}
@@ -2533,6 +2606,24 @@ export default function NutritionIndexRoute() {
           setMealLogError(null);
         }}
         onSubmit={handleLogSavedMeal}
+      />
+
+      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
+          across days, from the meal plan and from a future day. */}
+      <CopyDaySheet
+        visible={copyDayOpen}
+        defaultSourceDate={activeDate}
+        onClose={() => setCopyDayOpen(false)}
+        onApplied={handleBulkApplied}
+      />
+      <ApplyMealSheet
+        visible={applyMealOpen}
+        defaultFromDate={activeDate}
+        defaultToDate={activeDate}
+        defaultTag={searchTag ?? currentDefaultTag}
+        availableTags={availableTags}
+        onClose={() => setApplyMealOpen(false)}
+        onApplied={handleBulkApplied}
       />
 
       {/* Meal-photo / describe estimate (NP-089) */}
