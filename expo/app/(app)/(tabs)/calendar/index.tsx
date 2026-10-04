@@ -9,6 +9,12 @@ import {
 } from "@become/api-client";
 import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
+import { DaySummarySheets, useDaySummaries } from "@/components/schedule/DaySummarySheets";
+import {
+  QuickSessionConfirms,
+  QuickSessionMenu,
+  useQuickSessionActions,
+} from "@/components/schedule/QuickSessionMenu";
 import { ScheduledList } from "@/components/schedule/ScheduledList";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
 import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
@@ -32,6 +38,7 @@ import {
   useOnForeground,
   tzOffsetMinutes,
 } from "@/lib/time/localDay";
+import { logPlanAvailability } from "@/lib/quickSession/logPlan";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
@@ -221,6 +228,20 @@ export default function CalendarIndexRoute() {
       void refetchLogs();
     },
   });
+
+  const refreshDay = useCallback(() => {
+    void refetch();
+    void refetchLogs();
+  }, [refetch, refetchLogs]);
+
+  // Past-day summaries (NP-115): a completed program workout opens its log
+  // from GET /api/workouts/log (completion date for a makeup); a completed
+  // quick session opens GET /api/workouts/session. Same numbers as the web.
+  const daySummaries = useDaySummaries();
+
+  // Quick-session manage actions (NP-115): continue (rebuild under its own
+  // id), move (re-date only), skip/unskip, delete (confirmed).
+  const quickActions = useQuickSessionActions({ onSuccess: refreshDay });
 
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduledSlot | null>(
     null,
@@ -467,7 +488,12 @@ export default function CalendarIndexRoute() {
                   marginBottom: daySlots.length > 0 ? 12 : 0,
                 }}
               >
-                {dayQuick.map((q, idx) => (
+                {dayQuick.map((q, idx) => {
+                  const quickKey = q.sessionId ?? `idx-${idx}`;
+                  const isContinuing =
+                    !!q.sessionId &&
+                    quickActions.continuingId === q.sessionId;
+                  return (
                   <View
                     key={q.sessionId ?? idx}
                     testID={`day-detail-quick-${q.sessionId ?? idx}`}
@@ -524,8 +550,53 @@ export default function CalendarIndexRoute() {
                         </Text>
                       </View>
                     </View>
+                    {/* Quick actions — the web's Start/Continue + Manage rows:
+                        a completed session opens its summary; anything else
+                        rebuilds the draft under its OWN session id so
+                        finishing completes the same log. */}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        marginTop: 10,
+                      }}
+                    >
+                      {q.status === "completed" ? (
+                        <Button
+                          testID={`day-detail-quick-summary-${quickKey}`}
+                          variant="secondary"
+                          size="sm"
+                          onPress={() => daySummaries.openQuickSummary(q)}
+                        >
+                          View Summary
+                        </Button>
+                      ) : (
+                        <Button
+                          testID={`day-detail-quick-continue-${quickKey}`}
+                          size="sm"
+                          disabled={!q.sessionId || isContinuing}
+                          loading={isContinuing}
+                          onPress={() => quickActions.continueSession(q)}
+                        >
+                          {q.status === "incomplete"
+                            ? "Continue"
+                            : "Start Workout"}
+                        </Button>
+                      )}
+                      <Button
+                        testID={`day-detail-quick-manage-${quickKey}`}
+                        variant="secondary"
+                        size="sm"
+                        disabled={!q.sessionId}
+                        onPress={() => quickActions.openMenu(q)}
+                      >
+                        Manage
+                      </Button>
+                    </View>
                   </View>
-                ))}
+                  );
+                })}
               </View>
             ) : null}
 
@@ -673,17 +744,26 @@ export default function CalendarIndexRoute() {
                           </Button>
                         ) : null}
                         {slot.status === "completed" ? (
-                          <Button
-                            testID={`day-detail-uncomplete-${slot.programId}-${slot.workoutIndex}`}
-                            variant="secondary"
-                            size="sm"
-                            onPress={() => {
-                              setMenuSlot(slot);
-                              setConfirmKind("uncomplete");
-                            }}
-                          >
-                            Un-complete
-                          </Button>
+                          <>
+                            <Button
+                              testID={`day-detail-summary-${slot.programId}-${slot.workoutIndex}`}
+                              size="sm"
+                              onPress={() => daySummaries.openProgramSummary(slot)}
+                            >
+                              View Summary
+                            </Button>
+                            <Button
+                              testID={`day-detail-uncomplete-${slot.programId}-${slot.workoutIndex}`}
+                              variant="secondary"
+                              size="sm"
+                              onPress={() => {
+                                setMenuSlot(slot);
+                                setConfirmKind("uncomplete");
+                              }}
+                            >
+                              Un-complete
+                            </Button>
+                          </>
                         ) : null}
                         {slot.status === "skipped" ? (
                           <Button
@@ -719,15 +799,59 @@ export default function CalendarIndexRoute() {
             ) : null}
 
             {daySlots.length === 0 && dayQuick.length === 0 ? (
-              <Text
-                testID="day-detail-rest"
-                className="text-muted-foreground text-sm"
-              >
-                Rest day — no workouts scheduled.
-              </Text>
+              <>
+                <Text
+                  testID="day-detail-rest"
+                  className="text-muted-foreground text-sm"
+                >
+                  Rest day — no workouts scheduled.
+                </Text>
+                {(() => {
+                  const { canLog, canPlan } = logPlanAvailability(
+                    selectedDate,
+                    todayDate,
+                  );
+                  return (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 8,
+                        marginTop: 10,
+                      }}
+                    >
+                      {canLog ? (
+                        <Button
+                          testID="day-detail-log-workout"
+                          size="sm"
+                          onPress={() =>
+                            selectedDate && setWorkoutNowDate(selectedDate)
+                          }
+                        >
+                          Log a Workout
+                        </Button>
+                      ) : null}
+                      {canPlan ? (
+                        <Button
+                          testID="day-detail-schedule-workout"
+                          variant="secondary"
+                          size="sm"
+                          onPress={() =>
+                            selectedDate && setWorkoutNowDate(selectedDate)
+                          }
+                        >
+                          Schedule a Workout
+                        </Button>
+                      ) : null}
+                    </View>
+                  );
+                })()}
+              </>
             ) : null}
 
-            {/* Workout Now for this day — pre-fills it for Log/Plan (NP-076). */}
+            {/* Workout Now for this day — pre-fills it for Log/Plan (NP-076).
+                On an empty day the Log/Schedule rows above carry the date; on
+                a non-empty day this still offers Workout Now for that date. */}
             <View style={{ marginTop: 12 }}>
               <Button
                 testID="day-detail-workout-now"
@@ -855,6 +979,37 @@ export default function CalendarIndexRoute() {
         onClose={() => setWorkoutNowDate(null)}
         date={workoutNowDate ?? undefined}
         testID="calendar-workout-now-sheet"
+      />
+      {/* Past-day summaries: program log (completion date for a makeup) and
+          quick session read — the web's WorkoutSummary / QuickSessionSummary
+          overlays, same numbers. */}
+      <DaySummarySheets
+        programSummary={daySummaries.programSummary}
+        quickSummary={daySummaries.quickSummary}
+        loadingKind={daySummaries.loadingKind}
+        onCloseProgram={daySummaries.closeProgram}
+        onCloseQuick={daySummaries.closeQuick}
+      />
+      {/* Quick-session Manage sheet + its confirm gates (web's quickMenu). */}
+      <QuickSessionMenu
+        visible={quickActions.menuItem !== null}
+        item={quickActions.menuItem}
+        pending={quickActions.pending}
+        onClose={quickActions.closeMenu}
+        onMoveNextDay={quickActions.moveNextDay}
+        onMoveToDate={quickActions.moveToDate}
+        onSkip={quickActions.requestSkip}
+        onUnskip={quickActions.unskip}
+        onDelete={quickActions.requestDelete}
+      />
+      <QuickSessionConfirms
+        skipOpen={quickActions.skipConfirmOpen}
+        deleteOpen={quickActions.deleteConfirmOpen}
+        pending={quickActions.pending}
+        onConfirmSkip={quickActions.confirmSkip}
+        onCancelSkip={quickActions.cancelSkip}
+        onConfirmDelete={quickActions.confirmDelete}
+        onCancelDelete={quickActions.cancelDelete}
       />
     </SafeAreaView>
   );
