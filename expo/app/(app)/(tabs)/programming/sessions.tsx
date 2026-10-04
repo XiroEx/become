@@ -80,9 +80,9 @@ import {
  *     back to regenerating (`POST /api/generate/session`, never metered).
  *   • Tapping a planned session starts it under its OWN session id, so
  *     finishing it consumes the plan rather than creating a new log.
- *   • Entry points to the session builder (NP-137) and import (NP-170) live
- *     on the web until those cards land, opened signed in (NP-121); the
- *     Generate sheet (NP-133) is native and opens in place.
+ *   • Entry points to the session builder (NP-137, native) and import
+ *     (NP-170, still on the web until that card lands, opened signed in
+ *     via NP-121); the Generate sheet (NP-133) is native and opens in place.
  */
 
 type HistoryResponse = z.infer<typeof WorkoutHistoryResponseSchema>;
@@ -369,13 +369,12 @@ export default function SessionsHubRoute() {
     [opening, fetchOpts, handleFailure, router],
   );
 
-  // The session builder (NP-137) and import (NP-170) live on the web until
-  // those cards land — opened signed in (NP-121), exactly like the program
-  // editor links. The hub path carries `?tab=sessions&build=1` so the web
-  // opens straight into the builder instead of needing a second tap.
+  // The session builder (NP-137) is native now — the Build button opens the
+  // in-app builder route. Import (NP-170) still lives on the web until that
+  // card lands, opened signed in (NP-121).
   const openBuilder = useCallback(() => {
-    void openWebSignedIn("/dashboard/workout/hub");
-  }, []);
+    router.push("/(tabs)/programming/quick/build" as never);
+  }, [router]);
   const openImport = useCallback(() => {
     void openWebSignedIn("/dashboard/workout/hub");
   }, []);

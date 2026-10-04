@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CalendarClock, Check, ChevronLeft, Play } from "lucide-react-native";
+import { CalendarClock, Check, ChevronLeft, Pencil, Play } from "lucide-react-native";
 import {
   apiFetch,
+  QuickSessionPatchResponseSchema,
   WorkoutSaveResponseSchema,
   type WorkoutQuickSaveRequest,
 } from "@become/api-client";
@@ -19,6 +20,7 @@ import { Text } from "@/components/Text";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { DatePicker } from "@/components/programs/DatePicker";
 import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePrompt";
+import { SessionEditor } from "@/components/workout/SessionEditor";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -26,6 +28,7 @@ import {
   clearQuickSession,
   quickSessionLiveHref,
   readQuickSession,
+  updateQuickSession,
   type StoredQuickSession,
 } from "@/lib/quickSession/store";
 import {
@@ -53,9 +56,17 @@ import {
  * is ignored (web `DATE_RE`). The date panel opens automatically when `date`
  * was passed.
  *
- * Editing before start (the web's `SessionEditor`) stays with NP-137; Share
- * stays with NP-165. After a Log it the stash and progress are cleared; after
- * a Plan it the member lands back on the Workout tab.
+ * Editing before start (the web's `SessionEditor`, NP-137) is native here:
+ * the Edit toggle swaps the read-only list for the editor; saving always
+ * updates the stash (that is what Start and "Log it" read) and additionally
+ * writes back to the server log when this session already exists there
+ * (`saved=1`, a planned session — still a plan, not a performed workout, so
+ * no `performedAt`, and the scheduled date stays where it was). A repeat
+ * reopened under a fresh id keeps its `sourceSessionId`, so a rename also
+ * patches the original log's title without touching its recorded exercises,
+ * date or completion state. Share stays with NP-165. After a Log it the
+ * stash and progress are cleared; after a Plan it the member lands back on
+ * the Workout tab.
  */
 
 const FOCUS_LABELS: Record<string, string> = {
@@ -127,6 +138,9 @@ export default function QuickSessionOverviewRoute() {
   const [logging, setLogging] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Past days can only be logged, future days can only be planned, today
   // allows both (web `logPlanAvailability`).
@@ -246,6 +260,60 @@ export default function QuickSessionOverviewRoute() {
     if (!session) return;
     void saveLog(session.title, false).catch(() => {});
   }, [session, saveLog]);
+
+  // Apply an edit: always update the local stash (that is what Start workout
+  // and "Log it" read), and additionally write back to the server log when
+  // this session already exists there (web page.tsx `saveEdit`).
+  const saveEdit = useCallback(
+    async ({ title, exercises }: { title: string; exercises: DraftExercise[] }) => {
+      if (!session) return;
+      setSavingEdit(true);
+      setEditError(null);
+      try {
+        if (isSaved) {
+          const body: WorkoutQuickSaveRequest = {
+            kind: "quick",
+            sessionId: session.sessionId,
+            title,
+            needsName: false,
+            ...(session.focus ? { focus: session.focus } : {}),
+            // Still a plan, not a performed workout — no performedAt, so the
+            // route leaves the scheduled date exactly where it was.
+            exercises: buildLoggedExercises(exercises, false),
+            completed: false,
+            tz: new Date().getTimezoneOffset(),
+          };
+          await apiFetch("/api/workouts", WorkoutSaveResponseSchema, {
+            method: "POST",
+            body,
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          });
+        } else if (session.sourceSessionId && title.trim() !== session.title.trim()) {
+          // A completed session is reopened under a fresh id so starting it
+          // again cannot overwrite history. Its source id is retained solely
+          // so a rename can update the original log without touching its
+          // recorded exercises, date, or completion state.
+          await apiFetch("/api/workouts/session", QuickSessionPatchResponseSchema, {
+            method: "PATCH",
+            body: { id: session.sourceSessionId, title: title.trim() },
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          });
+        }
+        // Commit the local draft only after any required server write
+        // succeeds; a failed request must not look saved after a reload.
+        const next = await updateQuickSession(session.sessionId, { title, exercises });
+        setSession(next ?? { ...session, title, exercises });
+        setEditing(false);
+      } catch (e) {
+        setEditError(e instanceof Error ? e.message : "Failed to save changes");
+      } finally {
+        setSavingEdit(false);
+      }
+    },
+    [session, isSaved, token],
+  );
 
   const focusLabel = useMemo(
     () => focusLabelFor(session?.focus),
@@ -380,43 +448,83 @@ export default function QuickSessionOverviewRoute() {
               Back
             </Text>
           </Pressable>
-          <Pressable
-            testID="quick-session-overview-log-toggle"
-            accessibilityRole="button"
-            accessibilityLabel="Log or plan"
-            accessibilityState={{ expanded: logOpen }}
-            onPress={() => setLogOpen((v) => !v)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              borderRadius: 999,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              backgroundColor: logOpen ? colors.primary : colors.card,
-              borderWidth: 1,
-              borderColor: logOpen ? colors.primary : colors.border,
-            }}
-          >
-            <CalendarClock
-              size={16}
-              color={logOpen ? colors["primary-foreground"] : colors.foreground}
-            />
-            <Text
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
+              testID="quick-session-overview-edit-toggle"
+              accessibilityRole="button"
+              accessibilityLabel={editing ? "Close editor" : "Edit session"}
+              accessibilityState={{ expanded: editing }}
+              onPress={() => {
+                setEditing((v) => !v);
+                setLogOpen(false);
+              }}
               style={{
-                fontSize: 14,
-                fontWeight: "500",
-                color: logOpen
-                  ? colors["primary-foreground"]
-                  : colors.foreground,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: editing ? colors.primary : colors.card,
+                borderWidth: 1,
+                borderColor: editing ? colors.primary : colors.border,
               }}
             >
-              Log or plan
-            </Text>
-          </Pressable>
+              <Pencil
+                size={16}
+                color={editing ? colors["primary-foreground"] : colors.foreground}
+              />
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "500",
+                  color: editing ? colors["primary-foreground"] : colors.foreground,
+                }}
+              >
+                Edit
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="quick-session-overview-log-toggle"
+              accessibilityRole="button"
+              accessibilityLabel="Log or plan"
+              accessibilityState={{ expanded: logOpen }}
+              onPress={() => {
+                setLogOpen((v) => !v);
+                setEditing(false);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: logOpen ? colors.primary : colors.card,
+                borderWidth: 1,
+                borderColor: logOpen ? colors.primary : colors.border,
+              }}
+            >
+              <CalendarClock
+                size={16}
+                color={logOpen ? colors["primary-foreground"] : colors.foreground}
+              />
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "500",
+                  color: logOpen
+                    ? colors["primary-foreground"]
+                    : colors.foreground,
+                }}
+              >
+                Log or plan
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
-        {logOpen ? (
+        {logOpen && !editing ? (
           <View
             testID="quick-session-overview-log-panel"
             style={{
@@ -568,14 +676,29 @@ export default function QuickSessionOverviewRoute() {
         </View>
 
         <View style={{ gap: 8 }}>
-          {session.exercises.map((ex, i) => (
-            <ExerciseAccordion
-              key={`${ex.exerciseSlug || ex.name}-${i}`}
-              index={i}
-              exercise={toAccordionExercise(ex, i)}
-              testID="quick-session-overview"
+          {editing ? (
+            <SessionEditor
+              title={session.title}
+              exercises={session.exercises}
+              onSave={(next) => void saveEdit(next)}
+              onCancel={() => {
+                setEditing(false);
+                setEditError(null);
+              }}
+              saving={savingEdit}
+              error={editError}
+              testID="quick-session-overview-editor"
             />
-          ))}
+          ) : (
+            session.exercises.map((ex, i) => (
+              <ExerciseAccordion
+                key={`${ex.exerciseSlug || ex.name}-${i}`}
+                index={i}
+                exercise={toAccordionExercise(ex, i)}
+                testID="quick-session-overview"
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 
