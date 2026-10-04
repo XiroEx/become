@@ -37,7 +37,7 @@ export interface TimelineMonthViewProps {
   onOpenDay: (dateKey: string) => void;
   onLogPlan?: (planId: string) => void;
   onSkipPlan?: (planId: string) => void;
-  onRemovePlan?: (planId: string) => void;
+  onRemovePlan?: (planId: string, scope?: "one" | "series") => void;
   testID?: string;
 }
 
