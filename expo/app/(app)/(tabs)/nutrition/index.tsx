@@ -1414,7 +1414,7 @@ export default function NutritionIndexRoute() {
             accessibilityRole="button"
             accessibilityLabel="My Stuff"
             onPress={() => {
-              // TODO(NP-142): My Stuff (meals, recipes, saved foods tabs) is NP-142. Currently wired to existing recipes screen.
+              // NP-142: My Stuff (meals, my recipes, saved foods tabs).
               router.push("/(tabs)/nutrition/recipes");
             }}
             style={{
