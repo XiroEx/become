@@ -24,7 +24,7 @@ import {
   isSameLocalDay,
 } from "@/lib/nutrition/calendarDays";
 import { weeklyChartBarHeightPct } from "@/lib/nutrition/weekChart";
-import { NutritionPlanCard } from "@/components/nutrition/NutritionPlanCard";
+import { NutritionPlanCard, type MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 
 export interface TimelineWeekViewProps {
   selectedDate: string; // YYYY-MM-DD
@@ -32,7 +32,12 @@ export interface TimelineWeekViewProps {
   onOpenDay: (dateKey: string) => void;
   onLogPlan?: (planId: string) => void;
   onSkipPlan?: (planId: string) => void;
-  onRemovePlan?: (planId: string) => void;
+  onRemovePlan?: (planId: string, scope?: "one" | "series") => void;
+  onEditPlanItem?: (
+    planId: string,
+    item: MealPlanItem,
+    planItems: MealPlanItem[],
+  ) => void;
   testID?: string;
 }
 
@@ -43,6 +48,7 @@ export function TimelineWeekView({
   onLogPlan,
   onSkipPlan,
   onRemovePlan,
+  onEditPlanItem,
   testID = "timeline-week-view",
 }: TimelineWeekViewProps) {
   const { colors } = useThemeTokens();
@@ -401,6 +407,7 @@ export function TimelineWeekView({
                           onLogPlan={onLogPlan}
                           onSkipPlan={onSkipPlan}
                           onRemovePlan={onRemovePlan}
+                          onEditPlanItem={onEditPlanItem}
                         />
                       ))}
                     </View>

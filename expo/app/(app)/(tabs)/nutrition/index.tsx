@@ -113,6 +113,7 @@ import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAd
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
+import type { MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
 import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
 import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
@@ -559,11 +560,25 @@ export default function NutritionIndexRoute() {
   );
 
   const handleRemovePlan = useCallback(
-    async (planId: string) => {
-      setRemovedPlanIds((prev) => new Set(prev).add(planId));
+    async (planId: string, scope: "one" | "series" = "one") => {
+      // A whole-series remove drops every sibling sharing the seriesId
+      // optimistically (the web's `timeline/page.tsx:839-860` port); a single
+      // remove hides just the one card.
+      const seriesId =
+        scope === "series"
+          ? activePlans.find((p) => p._id === planId)?.seriesId
+          : undefined;
+      const hiddenIds =
+        scope === "series" && seriesId
+          ? activePlans
+              .filter((p) => p.seriesId === seriesId)
+              .map((p) => p._id)
+          : [planId];
+      setRemovedPlanIds((prev) => new Set([...prev, ...hiddenIds]));
       try {
+        const qs = scope === "series" ? "?series=true" : "";
         await apiFetch(
-          `/api/meal-plans/${encodeURIComponent(planId)}`,
+          `/api/meal-plans/${encodeURIComponent(planId)}${qs}`,
           z.any(),
           {
             method: "DELETE",
@@ -575,13 +590,35 @@ export default function NutritionIndexRoute() {
       } catch {
         setRemovedPlanIds((prev) => {
           const next = new Set(prev);
-          next.delete(planId);
+          for (const id of hiddenIds) next.delete(id);
           return next;
         });
       }
     },
-    [token, refetchMealPlans],
+    [activePlans, token, refetchMealPlans],
   );
+
+  // ── Edit one planned item (NP-233) ───────────────────────────────────────
+  //
+  // The card hands back the plan id + the item + the plan's full items array;
+  // the sheet (in `planId` + `planItems` mode) rebuilds `items[]` and PATCHes
+  // `/api/meal-plans/{id}` with `{ items }`, then the day refetches.
+  const [editPlanTarget, setEditPlanTarget] = useState<{
+    planId: string;
+    item: MealPlanItem;
+    planItems: MealPlanItem[];
+  } | null>(null);
+
+  const handleEditPlanItem = useCallback(
+    (planId: string, item: MealPlanItem, planItems: MealPlanItem[]) => {
+      setEditPlanTarget({ planId, item, planItems });
+    },
+    [],
+  );
+
+  const handleEditPlanSaved = useCallback(async () => {
+    await refetchMealPlans();
+  }, [refetchMealPlans]);
 
   const handleSkipPlan = useCallback(
     async (planId: string) => {
@@ -2078,6 +2115,7 @@ export default function NutritionIndexRoute() {
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
+              onEditPlanItem={handleEditPlanItem}
               onStartSelect={handleStartSelect}
               selecting={selectSectionKey === section.key}
               selectedKeys={combineSelection}
@@ -2221,6 +2259,7 @@ export default function NutritionIndexRoute() {
               onLogPlan={handleLogPlan}
               onSkipPlan={handleSkipPlan}
               onRemovePlan={handleRemovePlan}
+              onEditPlanItem={handleEditPlanItem}
             />
           ) : viewMode === "month" ? (
             <TimelineMonthView
@@ -2833,6 +2872,20 @@ export default function NutritionIndexRoute() {
         token={token}
         onClose={() => setEditItemTarget(null)}
         onSaved={handleEditSaved}
+      />
+
+      {/* Edit a planned item (NP-233): planId + planItems mode rebuilds the
+          whole items[] and PATCHes /api/meal-plans/{id} with { items }. */}
+      <EditLogItemSheet
+        visible={editPlanTarget !== null}
+        logId={null}
+        planId={editPlanTarget?.planId ?? null}
+        planItems={editPlanTarget?.planItems ?? null}
+        item={editPlanTarget?.item ?? null}
+        token={token}
+        onClose={() => setEditPlanTarget(null)}
+        onSaved={handleEditPlanSaved}
+        testID="edit-plan-item"
       />
 
       {/* Edit a whole logged meal (NP-095) */}

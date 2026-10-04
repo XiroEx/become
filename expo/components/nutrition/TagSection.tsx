@@ -6,7 +6,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { Occurrence } from "@/lib/nutrition/dayOrder";
 import type { MealLog } from "@become/api-client";
 import type { MealPlan } from "@/lib/nutrition/mealPlans";
-import { NutritionPlanCard } from "@/components/nutrition/NutritionPlanCard";
+import { NutritionPlanCard, type MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import {
   canCombine,
   combineTotals,
@@ -43,8 +43,18 @@ export interface TagSectionProps {
    */
   onAddToMeal?: (logId: string, tag: string) => void;
   onLogPlan?: (planId: string) => void;
-  onRemovePlan?: (planId: string) => void;
+  onRemovePlan?: (planId: string, scope?: "one" | "series") => void;
   onSkipPlan?: (planId: string) => void;
+  /**
+   * Edit one planned item (NP-233). The screen opens `EditLogItemSheet` in
+   * `planId` + `planItems` mode; the card hands back the plan id, the item,
+   * and the plan's full items array.
+   */
+  onEditPlanItem?: (
+    planId: string,
+    item: MealPlanItem,
+    planItems: MealPlanItem[],
+  ) => void;
   /**
    * ── Select mode (NP-175) ──────────────────────────────────────────────────
    *
@@ -97,6 +107,7 @@ export function TagSection({
   onLogPlan,
   onRemovePlan,
   onSkipPlan,
+  onEditPlanItem,
   onStartSelect,
   selecting = false,
   selectedKeys,
@@ -499,6 +510,7 @@ export function TagSection({
                   onLogPlan={onLogPlan}
                   onSkipPlan={onSkipPlan}
                   onRemovePlan={onRemovePlan}
+                  onEditPlanItem={onEditPlanItem}
                 />
               ))}
             </View>
