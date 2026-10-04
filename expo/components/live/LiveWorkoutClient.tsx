@@ -152,6 +152,7 @@ function initialGrid(
         reps: null,
         durationSec: null,
         distance: null,
+        speed: null,
         completed: false,
       };
     });
@@ -169,6 +170,7 @@ function typedSet(state: LiveSetState): {
   weight: string;
   duration: string;
   distance: string;
+  speed: string;
 } {
   const s = (v: number | null | undefined) =>
     v === null || v === undefined ? "" : String(v);
@@ -177,6 +179,7 @@ function typedSet(state: LiveSetState): {
     weight: s(state.weight),
     duration: s(state.durationSec),
     distance: s(state.distance),
+    speed: s(state.speed),
   };
 }
 

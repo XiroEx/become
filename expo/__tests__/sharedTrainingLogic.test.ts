@@ -79,6 +79,7 @@ describe("setInputsFor — the web's per-set input rules", () => {
       reps: true,
       duration: false,
       distance: false,
+      speed: false,
     });
   });
 
@@ -88,12 +89,14 @@ describe("setInputsFor — the web's per-set input rules", () => {
       reps: true,
       duration: false,
       distance: false,
+      speed: false,
     });
     expect(inputs("reps_only")).toEqual({
       weight: false,
       reps: true,
       duration: false,
       distance: false,
+      speed: false,
     });
   });
 
@@ -103,24 +106,27 @@ describe("setInputsFor — the web's per-set input rules", () => {
       reps: false,
       duration: true,
       distance: false,
+      speed: false,
     });
   });
 
-  it("time_distance asks for duration and distance", () => {
+  it("time_distance asks for duration, distance and speed", () => {
     expect(inputs("time_distance")).toEqual({
       weight: false,
       reps: false,
       duration: true,
       distance: true,
+      speed: true,
     });
   });
 
-  it("intervals are timed work without a distance", () => {
+  it("intervals are timed work with a speed, without a distance", () => {
     expect(inputs("intervals")).toEqual({
       weight: false,
       reps: false,
       duration: true,
       distance: false,
+      speed: true,
     });
   });
 
@@ -130,6 +136,7 @@ describe("setInputsFor — the web's per-set input rules", () => {
       reps: false,
       duration: false,
       distance: false,
+      speed: false,
     });
   });
 
@@ -152,6 +159,7 @@ describe("setInputsFor — the web's per-set input rules", () => {
         reps: true,
         duration: false,
         distance: false,
+        speed: false,
       });
     }
   });

@@ -282,7 +282,9 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     const { getByTestId } = render(
       <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
     );
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
+    // A `time_distance` row opens in minutes (the web's `defaultDurationUnit`
+    // rule), so typing 10 stores 600 s — the stored value is always seconds.
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
     fireEvent.changeText(getByTestId("live-workout-run-set-0-distance"), "1500");
     const lastGrid = onGridChange.mock.calls.at(-1)![0];
     expect(lastGrid.run[0].durationSec).toBe(600);
@@ -300,7 +302,7 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
       <LiveWorkoutClient workout={trackedWorkout} onGridChange={onGridChange} />,
     );
     fireEvent.changeText(getByTestId("live-workout-plank-set-0-duration"), "45");
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
     fireEvent.changeText(getByTestId("live-workout-pushup-set-0-reps"), "12");
     const lastGrid = onGridChange.mock.calls.at(-1)![0];
     expect(lastGrid.plank[0].durationSec).toBe(45);
@@ -318,7 +320,8 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     // Complete Workout only exists once every set is done (NP-087) — each of
     // these three sets ticks itself the moment its tracking type is satisfied,
     // so the cardio row has to be logged too before the button is there.
-    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "600");
+    // The run row opens in minutes, so 10 min stores 600 s.
+    fireEvent.changeText(getByTestId("live-workout-run-set-0-duration"), "10");
     fireEvent.press(getByTestId("live-workout-finish"));
     expect(onFinish).toHaveBeenCalledTimes(1);
     const finished = onFinish.mock.calls[0]![0];
@@ -328,6 +331,7 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
 
   it("rehydrates logged duration/distance from a restored grid across remount", () => {
     // Simulate the SecureStore cache returning a prior snapshot on re-entry.
+    // The run row opens in minutes, so 600 s reads back as "10".
     const restoredGrid = {
       run: [{ reps: null, weight: null, durationSec: 600, distance: 1500, completed: true }],
     };
@@ -336,7 +340,7 @@ describe("LiveWorkoutClient — trackingType-aware set logging + cache rehydrate
     );
     expect(
       getByTestId("live-workout-run-set-0-duration").props.value,
-    ).toBe("600");
+    ).toBe("10");
     expect(
       getByTestId("live-workout-run-set-0-distance").props.value,
     ).toBe("1500");
