@@ -5,6 +5,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
 import { LiveSetReference } from "@/components/live/LiveSetReference";
+import { LiveExerciseDetails } from "@/components/live/LiveExerciseDetails";
 import { ExerciseHint } from "@/components/live/ExerciseHint";
 import { FramedVideo } from "@/components/FramedVideo";
 import {
@@ -229,6 +230,14 @@ export function LiveStepView({
             {exercise.notes}
           </Text>
         ) : null}
+        <LiveExerciseDetails
+          tip={exercise.tip}
+          tempo={exercise.tempo}
+          rpe={exercise.rpe}
+          durationLabel={exercise.durationLabel}
+          primaryMuscles={exercise.primaryMuscles}
+          testID={`${testID}-live-${exercise.slug}-details`}
+        />
         {inputsOpen ? (
           <LiveSetRow
             setIndex={step.setIndex}
