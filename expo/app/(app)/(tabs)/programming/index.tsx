@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
@@ -10,11 +10,13 @@ import {
   History,
   Search,
   Sparkles,
+  Wand2,
   Zap,
 } from "lucide-react-native";
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
+import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
 
@@ -26,10 +28,12 @@ import { nativeRouteFor } from "@/lib/navigation/webPathToRoute";
  * - Upcoming week strip with status icons and calendar link
  * - Continue Training cards showing active programs with progress % and paused state
  * - Quick links to History (NP-112), Browse (NP-072), Workout Now (NP-076), and Calendar
+ * - Generate (NP-133): the standard-generator sheet (session or program, no AI switch)
  */
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const handleOpenHistory = () => {
     router.push(nativeRouteFor("/dashboard/history") as never);
@@ -177,6 +181,19 @@ export default function ProgrammingIndexRoute() {
               Workout Now
             </Text>
           </Pressable>
+
+          <Pressable
+            testID="workout-open-generate"
+            accessibilityRole="button"
+            accessibilityLabel="Generate a workout"
+            onPress={() => setShowGenerate(true)}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-600"
+          >
+            <Wand2 size={14} color={colors["primary-foreground"]} />
+            <Text className="text-white text-xs font-semibold">
+              Generate
+            </Text>
+          </Pressable>
         </View>
 
         {/* 1. Resume Workout Pill (if active or planned) */}
@@ -194,6 +211,7 @@ export default function ProgrammingIndexRoute() {
           <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
         </View>
       </ScrollView>
+      <GenerateSheet visible={showGenerate} onClose={() => setShowGenerate(false)} />
     </SafeAreaView>
   );
 }
