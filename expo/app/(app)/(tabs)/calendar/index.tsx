@@ -35,6 +35,7 @@ import {
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { subscribeProgramUpdates } from "@/lib/programs/programEvents";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
+import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 
 const MONTH_NAMES = [
   "January",
@@ -224,6 +225,9 @@ export default function CalendarIndexRoute() {
   const [rescheduleSlot, setRescheduleSlot] = useState<ScheduledSlot | null>(
     null,
   );
+  // Workout Now from a calendar day: the sheet pre-fills that day for Log it
+  // or Plan it (web `quickSessionDate`), mirroring QuickSessionModal's `date`.
+  const [workoutNowDate, setWorkoutNowDate] = useState<string | null>(null);
   // The Manage sheet (web's action-menu modal) and the confirm gates behind
   // the destructive rows. `confirmKind` names which confirm is open; the slot
   // it acts on is `menuSlot` so the dialog never drifts from the row that
@@ -722,6 +726,18 @@ export default function CalendarIndexRoute() {
                 Rest day — no workouts scheduled.
               </Text>
             ) : null}
+
+            {/* Workout Now for this day — pre-fills it for Log/Plan (NP-076). */}
+            <View style={{ marginTop: 12 }}>
+              <Button
+                testID="day-detail-workout-now"
+                variant="secondary"
+                size="sm"
+                onPress={() => selectedDate && setWorkoutNowDate(selectedDate)}
+              >
+                Workout Now
+              </Button>
+            </View>
           </View>
         ) : null}
 
@@ -833,6 +849,12 @@ export default function CalendarIndexRoute() {
         }}
         onClose={closeConfirm}
         testID="slot-confirm-pause"
+      />
+      <WorkoutNowSheet
+        visible={workoutNowDate !== null}
+        onClose={() => setWorkoutNowDate(null)}
+        date={workoutNowDate ?? undefined}
+        testID="calendar-workout-now-sheet"
       />
     </SafeAreaView>
   );

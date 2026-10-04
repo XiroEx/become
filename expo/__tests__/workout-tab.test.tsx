@@ -443,9 +443,9 @@ describe("Workout tab: acceptance criteria tests", () => {
       fireEvent.press(getByTestId("workout-open-history"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
 
-      // Workout Now button in hub
+      // Workout Now button opens the sheet in place (NP-076)
       fireEvent.press(getByTestId("workout-open-workout-now"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming?quick=true");
+      expect(getByTestId("workout-now-sheet-focus-push")).toBeTruthy();
     });
   });
 });
