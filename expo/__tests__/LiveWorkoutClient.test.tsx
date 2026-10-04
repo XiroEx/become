@@ -62,13 +62,123 @@ describe("LiveWorkoutClient", () => {
   });
 
   it("dumbbell label appears on db-row, barbell label on bench", () => {
-    const { getByTestId } = render(<LiveWorkoutClient workout={baseWorkout} />);
+    const dbWorkout: LiveWorkoutViewModel = {
+      ...baseWorkout,
+      exercises: [
+        { ...baseWorkout.exercises[0]!, equipment: ["barbell", "bench"] },
+        {
+          ...baseWorkout.exercises[1]!,
+          equipment: ["dumbbell", "bench"],
+        },
+      ],
+    };
+    const { getByTestId } = render(<LiveWorkoutClient workout={dbWorkout} />);
     expect(
       getByTestId("live-workout-db-row-set-0-weight-label").props.children,
     ).toBe("Weight per DB (lbs)");
     expect(
       getByTestId("live-workout-bench-set-0-weight-label").props.children,
     ).toBe("Weight (lbs)");
+  });
+
+  it("equipment-aware weight logging: per-DB labels, totals, quick picks, assumption chip", () => {
+    const workout: LiveWorkoutViewModel = {
+      programId: "prog-1",
+      workoutTitle: "Arms",
+      exercises: [
+        {
+          slug: "single-arm-row",
+          name: "Single-Arm Dumbbell Row",
+          sets: 1,
+          equipment: ["dumbbell", "bench"],
+          laterality: "unilateral",
+        },
+        {
+          slug: "db-bench",
+          name: "Dumbbell Bench Press",
+          sets: 1,
+          equipment: ["dumbbell", "bench"],
+        },
+        {
+          slug: "bb-bench",
+          name: "Barbell Bench Press",
+          sets: 1,
+          equipment: ["barbell", "bench"],
+        },
+        {
+          slug: "rear-delt-fly",
+          name: "Rear Delt Fly",
+          sets: 1,
+          equipment: ["dumbbell"],
+        },
+      ],
+    };
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutClient workout={workout} />,
+    );
+    // Single-Arm Dumbbell Row: per-DB label, no doubled total.
+    expect(
+      getByTestId("live-workout-single-arm-row-set-0-weight-label").props
+        .children,
+    ).toBe("Weight per DB (lbs)");
+    expect(queryByTestId("live-workout-single-arm-row-set-0-helper")).toBeNull();
+    // Dumbbell Bench Press: per-DB label with the doubled total once a
+    // weight is typed (the total is a hint; the saved number stays per-DB).
+    expect(
+      getByTestId("live-workout-db-bench-set-0-weight-label").props.children,
+    ).toBe("Weight per DB (lbs)");
+    expect(
+      getByTestId("live-workout-db-bench-set-0-quick-picks"),
+    ).toBeTruthy();
+    expect(
+      getByTestId("live-workout-db-bench-set-0-quick-pick-30"),
+    ).toBeTruthy();
+    // Barbell Bench Press: plain label and the barbell quick picks.
+    expect(
+      getByTestId("live-workout-bb-bench-set-0-weight-label").props.children,
+    ).toBe("Weight (lbs)");
+    expect(
+      getByTestId("live-workout-bb-bench-set-0-quick-pick-135"),
+    ).toBeTruthy();
+    // Rear Delt Fly: the name never says dumbbell, so the assumption chip shows.
+    expect(
+      getByTestId("live-workout-rear-delt-fly-set-0-assumption").props.children,
+    ).toBe("Logging as Dumbbell");
+    // …while the self-disclosing names get no chip.
+    expect(
+      queryByTestId("live-workout-db-bench-set-0-assumption"),
+    ).toBeNull();
+    expect(
+      queryByTestId("live-workout-bb-bench-set-0-assumption"),
+    ).toBeNull();
+  });
+
+  it("quick picks fill the per-implement weight without changing the convention", () => {
+    const onGridChange = jest.fn();
+    const workout: LiveWorkoutViewModel = {
+      programId: "prog-1",
+      workoutTitle: "Press",
+      exercises: [
+        {
+          slug: "db-bench",
+          name: "Dumbbell Bench Press",
+          sets: 1,
+          equipment: ["dumbbell", "bench"],
+        },
+      ],
+    };
+    const { getByTestId } = render(
+      <LiveWorkoutClient workout={workout} onGridChange={onGridChange} />,
+    );
+    fireEvent.press(getByTestId("live-workout-db-bench-set-0-quick-pick-30"));
+    expect(onGridChange).toHaveBeenCalled();
+    const lastGrid =
+      onGridChange.mock.calls[onGridChange.mock.calls.length - 1]![0];
+    // The saved number is the per-DB pick itself — never the doubled total.
+    expect(lastGrid["db-bench"]![0]!.weight).toBe(30);
+    expect(
+      getByTestId("live-workout-db-bench-set-0-helper").props.children,
+    ).toBe("= 60 lbs total");
   });
 
   it("marking a set complete fires onSetComplete", async () => {
