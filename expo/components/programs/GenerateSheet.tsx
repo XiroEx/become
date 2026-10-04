@@ -48,7 +48,27 @@ import {
   aiFallbackNote,
   generateAiSheetProgram,
   generateAiSheetSession,
+  type AiProgramDay,
 } from "@/lib/workout/aiGenerate";
+import type { DraftExercise } from "@become/core";
+
+type GeneratedExercise = GeneratedSession["session"]["exercises"][number];
+type GeneratedDay = GeneratedProgram["program"]["days"][number];
+
+/**
+ * The AI path returns `DraftExercise` (a shared-core interface); the sheet's
+ * state holds the `.passthrough()` schema shape, whose index signature an
+ * interface never satisfies. Copying each row into a plain object carries
+ * every field (catalog extras included) and gives TypeScript the shape it
+ * needs, without widening anything to `any`.
+ */
+function toGeneratedExercises(list: readonly DraftExercise[]): GeneratedExercise[] {
+  return list.map((e) => ({ ...e }));
+}
+
+function toGeneratedDays(days: readonly AiProgramDay[]): GeneratedDay[] {
+  return days.map((d) => ({ ...d, exercises: toGeneratedExercises(d.exercises) }));
+}
 
 export interface GenerateSheetProps {
   visible: boolean;
@@ -251,7 +271,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
             setSession({
               title: outcome.session.title,
               focus: outcome.session.focus,
-              exercises: outcome.session.exercises,
+              exercises: toGeneratedExercises(outcome.session.exercises),
             });
             setAiUsed(true);
             void refreshEntitlements().catch(() => {});
@@ -328,7 +348,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
               focus,
               daysPerWeek: outcome.program.daysPerWeek ?? daysPerWeek,
               weeks: outcome.program.weeks ?? weeks,
-              days: outcome.program.days,
+              days: toGeneratedDays(outcome.program.days),
             });
             setExpandedDay(0);
             setAiUsed(true);
