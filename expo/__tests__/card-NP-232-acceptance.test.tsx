@@ -16,7 +16,17 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const TODAY = "2026-10-04";
-const FUTURE = "2026-10-08";
+// `isFuture` on the screen is `isFutureLocalDate(activeDate)`, which compares
+// against the REAL clock — so a hard-coded future date stops being future as
+// the calendar moves and the plan-mode assertions below would silently flip
+// back to the log path. Derive it: four days after today, always future.
+const FUTURE = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 4);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+})();
 
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();

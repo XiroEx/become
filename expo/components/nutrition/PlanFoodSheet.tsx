@@ -43,7 +43,9 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * - Repeat mirrors the web's disclosure (state 434-436, UI 2398-2440):
  *   closed by default, `week x 6` when opened, clamped to 30 by day and 52
  *   by week, and sent only when open with count > 1 (1179-1180).
- * - CTA reads `Plan <Tag>` and `Planning...` while submitting. A 409
+ * - CTA reads `Plan <Tag>` — `Plan <Tag> ×N` while a recurrence is open with
+ *   a count > 1, like the web (2478-2484) — and `Planning...` while
+ *   submitting. A 409
  *   `plan_exists` retries once with `mode: 'merge'` (the web's default
  *   outcome); `onPlanned` receives the toast text (`planResultToast`).
  *
@@ -86,7 +88,15 @@ export function PlanFoodSheet({
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(
     null,
   );
-  const [sheetTag, setSheetTag] = useState<string>(tag);
+  // The chip the member tapped, remembered against the slot it was tapped FOR.
+  // The sheet stays mounted between openings, so a plain `useState(tag)` would
+  // freeze the very first `tag` prop and plan every later pick under it — the
+  // Thursday-lunch slot would file a snack. Keying the choice to the slot makes
+  // a re-open for another day/tag fall back to the incoming prop, with no
+  // effect and no state write during render.
+  const [tagChoice, setTagChoice] = useState<{ slot: string; tag: string } | null>(
+    null,
+  );
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [repeatEvery, setRepeatEvery] =
     useState<MealPlanRepeatEvery>("week");
@@ -94,6 +104,8 @@ export function PlanFoodSheet({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const slotKey = `${plannedDate}|${tag}`;
+  const sheetTag = tagChoice?.slot === slotKey ? tagChoice.tag : tag;
   const useTag = (sheetTag || tag || "snack").trim().toLowerCase() || "snack";
 
   const handleClose = () => {
@@ -171,7 +183,14 @@ export function PlanFoodSheet({
     onPlanned,
   ]);
 
-  const ctaLabel = submitting ? "Planning..." : `Plan ${titleCaseTag(useTag)}`;
+  // The web's plan CTA counts the series it is about to create:
+  // `Plan ${tagLabel} ×${repeatCount}` when the recurrence disclosure is open
+  // with a count > 1, plain `Plan ${tagLabel}` otherwise
+  // (`FoodSearchModal.tsx:2478-2484`).
+  const repeatSuffix = repeatOpen && repeatCount > 1 ? ` ×${repeatCount}` : "";
+  const ctaLabel = submitting
+    ? "Planning..."
+    : `Plan ${titleCaseTag(useTag)}${repeatSuffix}`;
   const canSubmit = Boolean(food && selection) && !submitting;
 
   return (
@@ -226,7 +245,7 @@ export function PlanFoodSheet({
                     accessibilityRole="button"
                     accessibilityLabel={`Tag ${t}`}
                     testID={`tag-chip-${t}`}
-                    onPress={() => setSheetTag(t)}
+                    onPress={() => setTagChoice({ slot: slotKey, tag: t })}
                     style={{
                       paddingHorizontal: 12,
                       paddingVertical: 6,
