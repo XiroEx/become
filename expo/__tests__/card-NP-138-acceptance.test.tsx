@@ -121,9 +121,9 @@ describe("(id: e015c9c9) An exercise added natively mid-session is still there a
       grid,
       completed: false,
     });
-    expect(req.exercises[2]).toEqual(
-      expect.objectContaining({ groupId: "g1", addedAdHoc: undefined }),
-    );
+    expect(req.exercises[2]).toEqual(expect.objectContaining({ groupId: "g1" }));
+    // The mutation does not flag the row; the caller marks it `addedAdHoc`.
+    expect(req.exercises[2]).not.toHaveProperty("addedAdHoc");
   });
 
   it("quick saves carry the same ad-hoc + group fields (groupRest included)", () => {
