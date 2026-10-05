@@ -27,6 +27,12 @@ import {
   type WorkoutSaveResponse,
 } from "@become/api-client";
 import { quickScope, shouldPromptForQuickSessionName } from "@become/core";
+import {
+  addIntoGroup,
+  appendExercise,
+  applyOrder,
+  type GroupKind,
+} from "@become/core";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { localDateKey } from "@/lib/time/localDay";
@@ -145,6 +151,29 @@ export interface UseQuickLiveWorkoutResult {
   /** Finish under this title with `needsName: false` (prompt Confirm/Skip). */
   finishWithTitle: (title: string) => Promise<boolean>;
   reload: () => void;
+  /**
+   * Reshape the session mid-workout (NP-138, build as you go): the new
+   * exercise list plus the `order` permutation through the shared rules.
+   * The grid, the stash, the progress snapshot and the server save all
+   * follow at once — the same "saved at once" the web's `applyWorkoutChange`
+   * gives — so an added exercise survives a resume on either client.
+   */
+  applyExerciseChange: (input: {
+    exercises: LiveWorkoutExercise[];
+    order: number[];
+  }) => void;
+  /**
+   * Add an exercise mid-session: `placement: 'end'` appends it,
+   * `placement: 'group'` slides it into the group at `anchorIndex` (or
+   * starts a superset of the two when the anchor has none) — the web's
+   * `handleAddExercise` in `LiveWorkoutClient`.
+   */
+  addExercise: (input: {
+    exercise: LiveWorkoutExercise;
+    placement: "end" | "group";
+    groupKind?: GroupKind;
+    anchorIndex?: number;
+  }) => void;
 }
 
 function parseRestSeconds(rest: string | null | undefined): number {
@@ -190,6 +219,9 @@ function draftToLiveExercise(d: {
     ...(d.groupRest ? { groupRest: d.groupRest } : {}),
     ...(d.groupRounds ? { groupRounds: d.groupRounds } : {}),
     ...(d.rest ? { restSec: parseRestSeconds(d.rest) } : {}),
+    // A timed prescription travels as `duration` (the web's `prescriptionOf`
+    // reads `ex.duration`); without it a resumed plank comes back untimed.
+    ...(d.duration ? { durationLabel: d.duration } : {}),
     ...(d.addedAdHoc ? { addedAdHoc: true } : {}),
   };
 }
@@ -247,8 +279,7 @@ export function useQuickLiveWorkout(
   const [workout, setWorkout] = useState<LiveWorkoutViewModel | null>(null);
   const [stored, setStored] = useState<StoredQuickSession | null>(null);
   const [needsName, setNeedsName] = useState(false);
-  const [restoredGrid, setRestoredGrid] = useState<LiveGrid | null>(null);
-  const [exerciseHistory, setExerciseHistory] = useState<
+  const [restoredGrid, setRestoredGrid] = useState<LiveGrid | null>(null);  const [exerciseHistory, setExerciseHistory] = useState<
     Record<string, ExerciseHistoryEntry>
   >({});
   const [finishing, setFinishing] = useState(false);
@@ -578,6 +609,130 @@ export function useQuickLiveWorkout(
     setReloadToken((t) => t + 1);
   }, []);
 
+  /**
+   * Persist a reshaped session everywhere it lives: the stash (the shape the
+   * overview and the live view both read), the progress snapshot (keyed by
+   * slug, so it is rebuilt from the permuted grid rather than kept), and the
+   * server (an incomplete `kind: 'quick'` save, so today's calendar and the
+   * sessions list show what is actually being trained). The web's
+   * `applyWorkoutChange` does the same three writes.
+   */
+  const persistReshape = useCallback(
+    (nextExercises: LiveWorkoutExercise[], nextGrid: LiveGrid) => {
+      exercisesRef.current = nextExercises;
+      gridRef.current = nextGrid;
+      setWorkout((w) => (w ? { ...w, exercises: nextExercises } : w));
+      setRestoredGrid(nextGrid);
+      const draft = nextExercises.map((ex) => ({
+        exerciseSlug: ex.slug,
+        name: ex.name,
+        trackingType: ex.trackingType ?? "reps_weight",
+        sets: ex.sets,
+        reps: ex.repsLabel ?? "",
+        ...(ex.restSec != null ? { rest: `${ex.restSec}s` } : {}),
+        ...(ex.durationLabel ? { duration: ex.durationLabel } : {}),
+        ...(ex.equipment ? { equipment: ex.equipment } : {}),
+        ...(ex.laterality ? { laterality: ex.laterality } : {}),
+        ...(ex.movementPatterns ? { movementPatterns: ex.movementPatterns } : {}),
+        ...(ex.groupId ? { groupId: ex.groupId } : {}),
+        ...(ex.groupType ? { groupType: ex.groupType } : {}),
+        ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+        ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
+        ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+        ...(ex.addedAdHoc ? { addedAdHoc: true as const } : {}),
+      }));
+      void updateQuickSession(sessionId, { exercises: draft }, store).then(
+        (next) => {
+          if (next) {
+            storedRef.current = next;
+            setStored(next);
+          }
+        },
+      );
+      void writeQuickProgress(sessionId, liveGridToProgress(nextGrid), store);
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        void (async () => {
+          try {
+            await postSave(gridRef.current, false);
+            if (mountedRef.current) setSaveError(null);
+          } catch (cause) {
+            if (mountedRef.current) {
+              setSaveError(
+                cause instanceof Error
+                  ? cause
+                  : new Error("Could not save the workout"),
+              );
+            }
+          }
+        })();
+      }, autoSaveDelayMs);
+    },
+    [autoSaveDelayMs, postSave, sessionId, store],
+  );
+
+  const applyExerciseChange = useCallback(
+    (input: { exercises: LiveWorkoutExercise[]; order: number[] }) => {
+      const prev = exercisesRef.current;
+      const rows = prev.map((ex) => gridRef.current[ex.slug] ?? []);
+      const nextRows = applyOrder<LiveSetState[]>(
+        rows,
+        input.order,
+        (newIdx) => {
+          const next = input.exercises[newIdx];
+          return Array.from(
+            { length: Math.max(1, next?.sets || 1) },
+            (): LiveSetState => ({ reps: null, weight: null, completed: false }),
+          );
+        },
+      );
+      const nextGrid: LiveGrid = {};
+      input.exercises.forEach((ex, i) => {
+        nextGrid[ex.slug] = nextRows[i] ?? [];
+      });
+      persistReshape(input.exercises, nextGrid);
+    },
+    [persistReshape],
+  );
+
+  const addExercise = useCallback(
+    (input: {
+      exercise: LiveWorkoutExercise;
+      placement: "end" | "group";
+      groupKind?: GroupKind;
+      anchorIndex?: number;
+    }) => {
+      const list = exercisesRef.current;
+      const fresh: LiveWorkoutExercise = {
+        ...input.exercise,
+        addedAdHoc: true,
+      };
+      const anchor = input.anchorIndex ?? list.length - 1;
+      const res =
+        input.placement === "group" && list[anchor]
+          ? addIntoGroup(list, anchor, fresh, input.groupKind ?? "superset")
+          : appendExercise(list, fresh);
+      const rows = list.map((ex) => gridRef.current[ex.slug] ?? []);
+      const nextRows = applyOrder<LiveSetState[]>(
+        rows,
+        res.order,
+        (newIdx) => {
+          const next = res.exercises[newIdx];
+          return Array.from(
+            { length: Math.max(1, next?.sets || 1) },
+            (): LiveSetState => ({ reps: null, weight: null, completed: false }),
+          );
+        },
+      );
+      const nextGrid: LiveGrid = {};
+      res.exercises.forEach((ex, i) => {
+        nextGrid[ex.slug] = nextRows[i] ?? [];
+      });
+      persistReshape(res.exercises, nextGrid);
+    },
+    [persistReshape],
+  );
+
   return {
     loading,
     error,
@@ -596,5 +751,7 @@ export function useQuickLiveWorkout(
     onFinish,
     finishWithTitle,
     reload,
+    applyExerciseChange,
+    addExercise,
   };
 }

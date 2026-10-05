@@ -28,7 +28,12 @@ import {
   findPhantomPrefilledSets,
   normalizeTracking,
   tracksTime,
+  addIntoGroup,
+  appendExercise,
+  applyOrder,
+  applyOrderToRecord,
   mergeAdHocFromLog,
+  type GroupKind,
   type WorkoutExercise,
 } from "@become/core";
 import { parseRestSeconds } from "@/components/live/LiveWorkoutClient";
@@ -202,6 +207,32 @@ export interface UseLiveWorkoutResult {
   streakMilestone: number | null;
   workoutStreakDays: number;
   clearStreakMilestone: () => void;
+  /**
+   * Reshape the workout mid-session (NP-138, build as you go): add an
+   * exercise at the end or into the group at `anchorIndex`, permuting the
+   * grid and the swap trail with the mutation's `order` so set data follows
+   * its exercise, then saving immediately with `addedAdHoc` and the group
+   * fields — the same body the web sends, so the exercise is still there
+   * after a resume on the web. Removing changes today's session only, never
+   * the program.
+   */
+  applyExerciseChange: (input: {
+    exercises: LiveWorkoutExercise[];
+    order: number[];
+    swappedExercises?: Record<number, { originalSlug: string; originalName: string }>;
+  }) => void;
+  /**
+   * Add an exercise mid-session: `placement: 'end'` appends it,
+   * `placement: 'group'` slides it into the group at `anchorIndex` (or
+   * starts a superset of the two when the anchor has none) — the web's
+   * `handleAddExercise` in `LiveWorkoutClient`.
+   */
+  addExercise: (input: {
+    exercise: LiveWorkoutExercise;
+    placement: "end" | "group";
+    groupKind?: GroupKind;
+    anchorIndex?: number;
+  }) => void;
 }
 
 export function useLiveWorkout(
@@ -1350,6 +1381,174 @@ export function useLiveWorkout(
     [staleIncomplete, programId, phase, token, cache, cacheKey, load],
   );
 
+  /**
+   * Reshape the workout mid-session (NP-138). The caller computed the new
+   * exercise list plus the `order` permutation through the shared
+   * build-as-you-go rules; the grid and the swap trail follow their exercise
+   * through `applyOrder` / `applyOrderToRecord`, and the change saves
+   * immediately — an exercise that only exists on this phone is one the
+   * calendar and the history never hear about. Removing changes today's
+   * session only, never the program.
+   */
+  const applyExerciseChange = useCallback(
+    (input: {
+      exercises: LiveWorkoutExercise[];
+      order: number[];
+      swappedExercises?: Record<number, { originalSlug: string; originalName: string }>;
+    }) => {
+      if (!workout) return;
+      const nextExercises = input.exercises;
+      const nextGrid: LiveGrid = {};
+      for (let newIdx = 0; newIdx < input.order.length; newIdx++) {
+        const oldIdx = input.order[newIdx];
+        if (oldIdx === undefined) continue;
+        const next = nextExercises[newIdx];
+        if (!next) continue;
+        if (oldIdx === -1) {
+          nextGrid[next.slug] = Array.from(
+            { length: Math.max(1, next.sets || 1) },
+            (): LiveSetState => ({
+              reps: null,
+              weight: null,
+              durationSec: null,
+              distance: null,
+              speed: null,
+              completed: false,
+            }),
+          );
+          continue;
+        }
+        const prev = workout.exercises[oldIdx];
+        const rows = prev ? (gridRef.current[prev.slug] ?? []) : [];
+        const want = Math.max(1, next.sets || 1);
+        const kept: LiveSetState[] = rows.slice(0, want);
+        while (kept.length < want) {
+          kept.push({
+            reps: null,
+            weight: null,
+            durationSec: null,
+            distance: null,
+            speed: null,
+            completed: false,
+          });
+        }
+        nextGrid[next.slug] = kept;
+      }
+      const nextSwapped = applyOrderToRecord(
+        input.swappedExercises ?? swappedExercises,
+        input.order,
+      );
+      gridRef.current = nextGrid;
+      setGrid(nextGrid);
+      setSwappedExercises(nextSwapped);
+      setWorkout({ ...workout, exercises: nextExercises });
+      const elapsed =
+        activeSecondsBaseline +
+        Math.floor((Date.now() - sessionStartTime) / 1000);
+      void cache.save(
+        cacheKey,
+        nextGrid as LiveWorkoutSnapshot,
+        elapsed,
+        attemptId,
+      );
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      void save(false, nextGrid, nextExercises, nextSwapped);
+    },
+    [
+      workout,
+      swappedExercises,
+      activeSecondsBaseline,
+      sessionStartTime,
+      cache,
+      cacheKey,
+      attemptId,
+      save,
+    ],
+  );
+
+  /**
+   * Add an exercise mid-session — the web's `handleAddExercise`: append at
+   * the end, or slide into the group at `anchorIndex` (starting a superset
+   * of the two when the anchor has none). The new exercise is flagged
+   * `addedAdHoc` so the resume merge brings it back on any client.
+   */
+  const addExercise = useCallback(
+    (input: {
+      exercise: LiveWorkoutExercise;
+      placement: "end" | "group";
+      groupKind?: GroupKind;
+      anchorIndex?: number;
+    }) => {
+      if (!workout) return;
+      const list = workout.exercises;
+      const fresh: LiveWorkoutExercise = {
+        ...input.exercise,
+        addedAdHoc: true,
+      };
+      const anchor = input.anchorIndex ?? list.length - 1;
+      const res =
+        input.placement === "group" && list[anchor]
+          ? addIntoGroup(list, anchor, fresh, input.groupKind ?? "superset")
+          : appendExercise(list, fresh);
+      // `applyOrder` permutes the grid through the same `order`; the swap
+      // trail follows through `applyOrderToRecord` inside the change.
+      const nextGrid = applyOrder<LiveSetState[]>(
+        list.map((ex) => gridRef.current[ex.slug] ?? []),
+        res.order,
+        (newIdx) => {
+          const next = res.exercises[newIdx];
+          return Array.from(
+            { length: Math.max(1, next?.sets || 1) },
+            (): LiveSetState => ({
+              reps: null,
+              weight: null,
+              durationSec: null,
+              distance: null,
+              speed: null,
+              completed: false,
+            }),
+          );
+        },
+      );
+      const bySlug: LiveGrid = {};
+      res.exercises.forEach((ex, i) => {
+        bySlug[ex.slug] = nextGrid[i] ?? [];
+      });
+      const nextSwapped = applyOrderToRecord(swappedExercises, res.order);
+      gridRef.current = bySlug;
+      setGrid(bySlug);
+      setSwappedExercises(nextSwapped);
+      setWorkout({ ...workout, exercises: res.exercises });
+      const elapsed =
+        activeSecondsBaseline +
+        Math.floor((Date.now() - sessionStartTime) / 1000);
+      void cache.save(
+        cacheKey,
+        bySlug as LiveWorkoutSnapshot,
+        elapsed,
+        attemptId,
+      );
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+      void save(false, bySlug, res.exercises, nextSwapped);
+    },
+    [
+      workout,
+      swappedExercises,
+      activeSecondsBaseline,
+      sessionStartTime,
+      cache,
+      cacheKey,
+      attemptId,
+      save,
+    ],
+  );
+
   return {
     loading,
     error,
@@ -1398,5 +1597,7 @@ export function useLiveWorkout(
     workoutOriginKey,
     logDateOverrideRef,
     reload: load,
+    applyExerciseChange,
+    addExercise,
   };
 }
