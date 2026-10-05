@@ -2939,6 +2939,8 @@ export default function LiveWorkoutPage() {
         anchorName={currentExercise?.name}
         anchorSlug={currentExercise?.exerciseSlug}
         anchorInGroup={!!currentExercise?.groupId}
+        anchorSets={currentExercise?.sets}
+        anchorGroupType={currentExercise?.groupType}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         tone="dark"
       />
