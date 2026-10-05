@@ -180,6 +180,7 @@ function storedSnapshotForToday(): WidgetSnapshot {
         caption: "2 days to 14",
         state: "done",
         progress: 0.85,
+        rings: [],
         deepLink: "/dashboard/streaks",
       },
     ],
