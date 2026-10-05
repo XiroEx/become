@@ -38,8 +38,10 @@ import { ScreenState } from "@/components/ScreenState";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
+import { PasteImportSheet, type ImportOutcome } from "@/components/workout/PasteImportSheet";
 import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
 import { correctableFromQuickSession, type CorrectableWorkout } from "@/lib/workout/correction";
+import { importSessionFromText } from "@/lib/workout/importWorkoutRun";
 import { useEntitlements } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { routeApiError } from "@/lib/errors";
@@ -48,7 +50,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
+import { setImportedSessionDraft } from "@/lib/quickSession/importHandoff";
 import {
   quickSessionOverviewHref,
   stashQuickSession,
@@ -87,8 +89,9 @@ import {
  *   • Tapping a planned session starts it under its OWN session id, so
  *     finishing it consumes the plan rather than creating a new log.
  *   • Entry points to the session builder (NP-137, native) and import
- *     (NP-170, still on the web until that card lands, opened signed in
- *     via NP-121); the Generate sheet (NP-133) is native and opens in place.
+ *     (NP-243, native — the paste sheet opens in place and hands a
+ *     resolved draft to the builder); the Generate sheet (NP-133) is native
+ *     and opens in place too.
  */
 
 type HistoryResponse = z.infer<typeof WorkoutHistoryResponseSchema>;
@@ -165,6 +168,7 @@ export default function SessionsHubRoute() {
   const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // The log being corrected: the row plus its logged sets, fetched from the
   // session read (the hub list carries prescriptions, not logged sets).
   const [correcting, setCorrecting] = useState<CorrectableWorkout | null>(null);
@@ -429,14 +433,37 @@ export default function SessionsHubRoute() {
   );
 
   // The session builder (NP-137) is native now — the Build button opens the
-  // in-app builder route. Import (NP-170) still lives on the web until that
-  // card lands, opened signed in (NP-121).
+  // in-app builder route. Import (NP-243) opens the paste sheet in place.
   const openBuilder = useCallback(() => {
     router.push("/(tabs)/programming/quick/build" as never);
   }, [router]);
   const openImport = useCallback(() => {
-    void openWebSignedIn("/dashboard/workout/hub");
+    setShowImport(true);
   }, []);
+
+  // Runs the AI import once (NP-242) and, on a resolved session, sets the
+  // handoff and navigates to the builder BEFORE this resolves — so by the
+  // time the sheet sees `ok` and closes itself, the builder is already the
+  // active screen underneath it. A gate refusal raises the existing upgrade
+  // path; the sheet treats that the same as `consent` (close, let the other
+  // sheet take over) rather than inventing a second error state for it.
+  const handleImportSubmit = useCallback(
+    async (text: string): Promise<ImportOutcome> => {
+      const outcome = await importSessionFromText(text, fetchOpts);
+      if (outcome.status === "ok") {
+        setImportedSessionDraft({
+          title: outcome.session.title,
+          exercises: outcome.session.exercises,
+          unresolved: outcome.session.unresolved,
+        });
+        router.push("/(tabs)/programming/quick/build" as never);
+      } else if (outcome.status === "gate") {
+        showUpgradeSheet(outcome.gate);
+      }
+      return outcome;
+    },
+    [fetchOpts, router],
+  );
 
   const loading = (history.loading && sessions.length === 0) || (plannedFetch.loading && planned.length === 0);
   const fetchError = history.error ?? plannedFetch.error;
@@ -903,6 +930,13 @@ export default function SessionsHubRoute() {
       </ScrollView>
 
       <GenerateSheet visible={showGenerate} onClose={() => setShowGenerate(false)} testID="sessions-generate-sheet" />
+      <PasteImportSheet
+        visible={showImport}
+        kind="session"
+        onSubmit={handleImportSubmit}
+        onClose={() => setShowImport(false)}
+        testID="sessions-import-sheet"
+      />
       {correcting ? (
         <TrainingLogCorrectionSheet
           key={correcting.sessionId ?? correcting.rawDate}

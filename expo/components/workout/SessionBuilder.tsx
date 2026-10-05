@@ -98,10 +98,25 @@ export interface SessionBuilderExercise extends ExerciseSearchResult {
   isCustom: boolean;
 }
 
+/**
+ * A resolved paste-import draft (NP-243), handed off through
+ * `@/lib/quickSession/importHandoff.ts`. Seeds the title (marked as already
+ * chosen, same as typing it) and the matched exercises; `unresolved` names
+ * (no exact library match) show as a dismissable note rather than being
+ * silently dropped.
+ */
+export interface InitialSessionDraft {
+  title: string;
+  exercises: DraftExercise[];
+  unresolved?: string[];
+}
+
 export interface SessionBuilderProps {
   /** Fired right before navigating away (e.g. close a sheet). */
   onLaunch?: () => void;
   testID?: string;
+  /** Seeds the draft from a paste-import result (NP-243). */
+  initialDraft?: InitialSessionDraft;
 }
 
 function toDraftExercise(r: {
@@ -140,6 +155,7 @@ function stripGroup(ex: DraftExercise): DraftExercise {
 export function SessionBuilder({
   onLaunch,
   testID = "session-builder",
+  initialDraft,
 }: SessionBuilderProps) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
@@ -152,12 +168,17 @@ export function SessionBuilder({
     [token],
   );
 
-  const [title, setTitle] = useState("Quick Session");
-  const [titleWasEdited, setTitleWasEdited] = useState(false);
+  const [title, setTitle] = useState(initialDraft?.title || "Quick Session");
+  // A seeded title counts as already chosen — same as the member typing it —
+  // so starting/logging never pops the name prompt for an import.
+  const [titleWasEdited, setTitleWasEdited] = useState(!!initialDraft?.title);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ExerciseSearchResult[]>([]);
   const [customs, setCustoms] = useState<CustomExercise[]>([]);
-  const [chosen, setChosen] = useState<DraftExercise[]>([]);
+  const [chosen, setChosen] = useState<DraftExercise[]>(initialDraft?.exercises ?? []);
+  const [unresolvedNote, setUnresolvedNote] = useState<string[] | null>(
+    initialDraft?.unresolved && initialDraft.unresolved.length > 0 ? initialDraft.unresolved : null,
+  );
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
   const [logOpen, setLogOpen] = useState(false);
   const [logDate, setLogDate] = useState(localDateStr());
@@ -479,6 +500,35 @@ export function SessionBuilder({
         }}
         autoCapitalize="words"
       />
+
+      {unresolvedNote ? (
+        <View
+          testID={`${testID}-unresolved-note`}
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-start",
+            gap: 8,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.muted,
+            padding: 12,
+          }}
+        >
+          <Text className="text-muted-foreground text-xs" style={{ flex: 1 }}>
+            Not found, add by hand: {unresolvedNote.join(", ")}
+          </Text>
+          <Pressable
+            testID={`${testID}-unresolved-dismiss`}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+            onPress={() => setUnresolvedNote(null)}
+            style={{ padding: 4, ...minTouchTarget }}
+          >
+            <Text className="text-muted-foreground text-xs font-semibold">✕</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View>
         <Input

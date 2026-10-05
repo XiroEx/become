@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { ChevronLeft, Dumbbell } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { SessionBuilder } from "@/components/workout/SessionBuilder";
+import { takeImportedSessionDraft } from "@/lib/quickSession/importHandoff";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
@@ -17,10 +19,17 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
  * Starting, logging (past date) or planning (future date) hands off to the
  * quick-session overview / live routes through the stash, exactly as the web
  * hands off through its stash.
+ *
+ * Reached pre-filled from the Sessions hub's Import (NP-243): the handoff
+ * (`@/lib/quickSession/importHandoff.ts`) is taken exactly once, on mount —
+ * a lazy `useState` initializer rather than an effect, so a draft is never
+ * read twice and a cold re-entry (deep link, reload) never replays a stale
+ * one.
  */
 export default function SessionBuildRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
+  const [initialDraft] = useState(() => takeImportedSessionDraft() ?? undefined);
 
   return (
     <SafeAreaView
@@ -50,7 +59,7 @@ export default function SessionBuildRoute() {
           </View>
         </View>
 
-        <SessionBuilder testID="session-builder" />
+        <SessionBuilder testID="session-builder" initialDraft={initialDraft} />
       </ScrollView>
     </SafeAreaView>
   );
