@@ -292,6 +292,154 @@ describe("SettingsScreen", () => {
     });
   });
 
+  // NP-238: native showed the "Streak and milestone emails" toggle OFF while
+  // the web showed it ON for the same account. Root cause: the Settings tab
+  // stays mounted across navigations (expo-router tabs don't remount on
+  // focus), so `notifPrefs` was only ever fetched once, at the FIRST mount —
+  // a value changed on the web (same backend, same account) or by an earlier
+  // native session never reached the screen again until the app relaunched.
+  // These pin the three `emailEngagement` shapes the GET route can answer
+  // with, and that a stale first read self-corrects via the focus/foreground
+  // refetch instead of latching forever.
+  describe("NP-238: emailEngagement toggle matches the GET response", () => {
+    function mockPreferencesOnce(body: Record<string, unknown>) {
+      globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        fetchCalls.push({ url, init });
+        if (url.includes("/api/auth/me")) {
+          return jsonResponse(200, { user: mockCurrentUser });
+        }
+        if (url.includes("/api/me/consent")) {
+          return jsonResponse(200, {
+            termsVersion: "v1.2.0",
+            acceptedVersion: "v1.2.0",
+            acceptedAt: "2026-09-24T12:00:00.000Z",
+            current: true,
+            ai: { granted: true, decided: true, decidedAt: "2026-09-24T12:00:00.000Z" },
+          });
+        }
+        if (url.includes("/api/notifications/preferences")) {
+          return jsonResponse(200, body);
+        }
+        return jsonResponse(200, {});
+      }) as typeof fetch;
+    }
+
+    it("renders ON when emailEngagement is true", async () => {
+      mockPreferencesOnce({ notificationsEnabled: true, emailEngagement: true, preferences: {} });
+      const { getByTestId } = renderScreen();
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(true);
+      });
+    });
+
+    it("renders OFF when emailEngagement is false", async () => {
+      mockPreferencesOnce({ notificationsEnabled: true, emailEngagement: false, preferences: {} });
+      const { getByTestId } = renderScreen();
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(false);
+      });
+    });
+
+    it("renders ON when emailEngagement is absent (absent means on)", async () => {
+      mockPreferencesOnce({ notificationsEnabled: true, preferences: {} });
+      const { getByTestId } = renderScreen();
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(true);
+      });
+    });
+
+    it("a stale first read self-corrects after the screen's focus/foreground refetch", async () => {
+      // Simulates the exact review bug: the FIRST response (what an earlier
+      // mount, or a cached session, saw) says OFF; the account was flipped ON
+      // since (on the web, same backend). The screen must not latch the
+      // first answer — it has to re-read and show the current truth.
+      let prefsCalls = 0;
+      globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        fetchCalls.push({ url, init });
+        if (url.includes("/api/auth/me")) return jsonResponse(200, { user: mockCurrentUser });
+        if (url.includes("/api/me/consent")) {
+          return jsonResponse(200, {
+            termsVersion: "v1.2.0",
+            acceptedVersion: "v1.2.0",
+            acceptedAt: "2026-09-24T12:00:00.000Z",
+            current: true,
+            ai: { granted: true, decided: true, decidedAt: "2026-09-24T12:00:00.000Z" },
+          });
+        }
+        if (url.includes("/api/notifications/preferences")) {
+          prefsCalls += 1;
+          const emailEngagement = prefsCalls === 1 ? false : true;
+          return jsonResponse(200, { notificationsEnabled: true, emailEngagement, preferences: {} });
+        }
+        return jsonResponse(200, {});
+      }) as typeof fetch;
+
+      const { getByTestId } = renderScreen();
+
+      // The focus/foreground refetch must actually fire — more than the one
+      // GET a single mount would make.
+      await waitFor(() => {
+        expect(prefsCalls).toBeGreaterThan(1);
+      });
+
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(true);
+      });
+    });
+
+    it("reflects the server after toggling off and back on", async () => {
+      let serverEmailEngagement = true;
+      globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        fetchCalls.push({ url, init });
+        if (url.includes("/api/auth/me")) return jsonResponse(200, { user: mockCurrentUser });
+        if (url.includes("/api/me/consent")) {
+          return jsonResponse(200, {
+            termsVersion: "v1.2.0",
+            acceptedVersion: "v1.2.0",
+            acceptedAt: "2026-09-24T12:00:00.000Z",
+            current: true,
+            ai: { granted: true, decided: true, decidedAt: "2026-09-24T12:00:00.000Z" },
+          });
+        }
+        if (url.includes("/api/notifications/preferences") && init?.method === "PATCH") {
+          const body = JSON.parse(init.body as string);
+          if (typeof body.emailEngagement === "boolean") serverEmailEngagement = body.emailEngagement;
+          return jsonResponse(200, { success: true });
+        }
+        if (url.includes("/api/notifications/preferences")) {
+          return jsonResponse(200, {
+            notificationsEnabled: true,
+            emailEngagement: serverEmailEngagement,
+            preferences: {},
+          });
+        }
+        return jsonResponse(200, {});
+      }) as typeof fetch;
+
+      const { getByTestId } = renderScreen();
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(true);
+      });
+
+      await act(async () => {
+        fireEvent.press(getByTestId("email-engagement-toggle"));
+      });
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(false);
+      });
+
+      await act(async () => {
+        fireEvent.press(getByTestId("email-engagement-toggle"));
+      });
+      await waitFor(() => {
+        expect(getByTestId("email-engagement-toggle").props.accessibilityState.checked).toBe(true);
+      });
+    });
+  });
+
   it("(e015c821) a per-type switch PATCHes its own key flat, like the web", async () => {
     const { getByTestId } = renderScreen();
 

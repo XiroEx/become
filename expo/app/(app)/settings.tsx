@@ -228,6 +228,29 @@ export default function SettingsScreen({
     return () => subscription.remove();
   }, [probeNotifPermission]);
 
+  // NP-238: the Settings tab stays mounted across navigations (expo-router
+  // tabs do not remount on focus), so without this the per-type switches and
+  // the "Streak and milestone emails" toggle keep showing whatever
+  // `notifPrefs` held at the LAST mount — stale against a change made on the
+  // web (same account, same backend) or an earlier native session. Re-read on
+  // focus and on foreground return, exactly like the other list screens
+  // ("coming back from the web ... must not paint a stale value"). Gated on
+  // `token`: `refetch` (= useFetch's `run`) does not itself honor `skip`, so
+  // calling it while signed out would fire an unauthenticated request.
+  const refetchNotifPrefs = notifPrefs.refetch;
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      void refetchNotifPrefs();
+    }, [refetchNotifPrefs, token]),
+  );
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (status) => {
+      if (status === "active" && token) void refetchNotifPrefs();
+    });
+    return () => subscription.remove();
+  }, [refetchNotifPrefs, token]);
+
   // The denied-permission reminder, on the web's cadence (7 days, then
   // monthly): the OS will not show its dialog again, so the only lever is a
   // nudge toward Settings.
