@@ -1,17 +1,10 @@
-import { ScrollView, View, Image, Pressable } from "react-native";
+import { ScrollView, View, Pressable } from "react-native";
 import { Text } from "@/components/Text";
-import { ExternalLink } from "lucide-react-native";
+import { Pencil, Trash2, ArrowLeftRight, BookmarkPlus, Check } from "lucide-react-native";
+import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
+import { AuthedImage } from "@/components/media/AuthedImage";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import {
-  defaultBrowserLauncher,
-  type BrowserLauncher,
-} from "@/lib/programs/browserLauncher";
-import {
-  openRecipeEditInBrowser,
-  recipeEditUrl,
-} from "@/lib/nutrition/recipeLinks";
 import type { MealType, MacroBreakdown } from "@/lib/nutrition/daySelector";
 
 export interface RecipeIngredient {
@@ -29,31 +22,60 @@ export interface RecipeDetailViewModel {
   perServing: MacroBreakdown;
   servings: number;
   thumbnailUrl?: string | null;
+  /** Tags, title-cased at render like the web's `titleCaseTag`. */
+  tags?: string[];
+  prepTime?: number;
+  cookTime?: number;
+  /** True when the signed-in member owns this recipe (`createdBy`). */
+  isOwner?: boolean;
 }
 
 export interface RecipeDetailProps {
   recipe: RecipeDetailViewModel;
-  onSaveAsMeal: (mealType: MealType) => Promise<void> | void;
-  browserLauncher?: BrowserLauncher;
+  /** Save-as-food (first tap) or log the saved food (once saved). */
+  savedFoodId?: string | null;
+  savingFood?: boolean;
+  onSaveOrLogFood: () => void | Promise<void>;
+  /** Convert to a meal (`POST .../to-meal`, `custom-meals`-gated). */
+  converting?: boolean;
+  onConvertToMeal: () => void | Promise<void>;
+  onEdit: () => void;
+  onDelete: () => void;
+  /** Kept so existing suites keep compiling; unused by the screen. */
+  onSaveAsMeal?: (mealType: MealType) => Promise<void> | void;
   testID?: string;
+}
+
+function titleCaseTag(tag: string): string {
+  return tag
+    .split(/[-_\s]+/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
+    .join("-");
 }
 
 export function RecipeDetail({
   recipe,
-  onSaveAsMeal,
-  browserLauncher = defaultBrowserLauncher,
+  savedFoodId,
+  savingFood = false,
+  onSaveOrLogFood,
+  converting = false,
+  onConvertToMeal,
+  onEdit,
+  onDelete,
   testID = "recipe-detail",
 }: RecipeDetailProps) {
   const { colors } = useThemeTokens();
+  const isSaved = Boolean(savedFoodId);
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }} testID={testID}>
       <View>
         {recipe.thumbnailUrl ? (
-          <Image
+          <AuthedImage
+            source={recipe.thumbnailUrl}
+            accessibilityLabel={`${recipe.name} photo`}
             testID={`${testID}-thumb`}
-            source={{ uri: recipe.thumbnailUrl }}
-            style={{ width: "100%", height: 220, borderRadius: 12, marginBottom: 12 }}
-            accessibilityLabel={`${recipe.name} thumbnail`}
+            containerStyle={{ height: 220, borderRadius: 12, marginBottom: 12 }}
+            style={{ width: "100%", height: 220, borderRadius: 12 }}
           />
         ) : null}
         <Text testID={`${testID}-name`} className="text-foreground text-2xl font-bold mb-1">
@@ -62,6 +84,42 @@ export function RecipeDetail({
         <Text testID={`${testID}-description`} className="text-muted-foreground text-sm">
           {recipe.description}
         </Text>
+        {recipe.prepTime != null || recipe.cookTime != null || recipe.servings != null ? (
+          <Text testID={`${testID}-meta`} className="text-muted-foreground text-xs mt-1">
+            {[
+              recipe.prepTime != null ? `Prep ${recipe.prepTime}m` : null,
+              recipe.cookTime != null ? `Cook ${recipe.cookTime}m` : null,
+              recipe.servings != null
+                ? `${recipe.servings} serving${recipe.servings === 1 ? "" : "s"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </Text>
+        ) : null}
+        {(recipe.tags?.length ?? 0) > 0 ? (
+          <View
+            testID={`${testID}-tags`}
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}
+          >
+            {(recipe.tags ?? []).map((tag) => (
+              <View
+                key={tag}
+                testID={`${testID}-tag-${tag}`}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  backgroundColor: colors.muted,
+                }}
+              >
+                <Text className="text-muted-foreground text-xs font-medium">
+                  {titleCaseTag(tag)}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
       </View>
 
       <Card testID={`${testID}-nutrition`} title="Per serving">
@@ -112,28 +170,73 @@ export function RecipeDetail({
         ))}
       </Card>
 
-      <SaveAsMealButton
-        testID={`${testID}-save-as-meal`}
-        onSave={onSaveAsMeal}
-      />
+      {/* Owner actions — the web's To meal / Edit / Delete header row. */}
+      {recipe.isOwner ? (
+        <View
+          testID={`${testID}-owner-actions`}
+          style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+        >
+          <Pressable
+            testID={`${testID}-to-meal`}
+            accessibilityRole="button"
+            accessibilityLabel="Convert to a meal"
+            disabled={converting}
+            onPress={() => void onConvertToMeal()}
+            style={{ paddingHorizontal: 8, paddingVertical: 6, opacity: converting ? 0.5 : 1 }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <ArrowLeftRight size={14} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-xs font-medium">
+                {converting ? "Converting…" : "To meal"}
+              </Text>
+            </View>
+          </Pressable>
+          <Pressable
+            testID={`${testID}-edit`}
+            accessibilityRole="button"
+            accessibilityLabel="Edit recipe"
+            onPress={onEdit}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Pencil size={14} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-xs font-medium">Edit</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            testID={`${testID}-delete`}
+            accessibilityRole="button"
+            accessibilityLabel="Delete recipe"
+            onPress={onDelete}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Trash2 size={14} color={colors.destructive} />
+              <Text className="text-destructive text-xs font-medium">Delete</Text>
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
 
-      <Pressable
-        testID={`${testID}-edit-in-browser`}
-        onPress={() => {
-          void openRecipeEditInBrowser(recipe.id, browserLauncher);
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Edit this recipe in the browser"
-        accessibilityHint={recipeEditUrl(recipe.id)}
-        className="flex-row items-center justify-center gap-2 py-3 border border-border rounded-xl"
+      {/* Save-or-Log CTA — recipes become a food, then log that food. */}
+      <Button
+        testID={`${testID}-save-or-log`}
+        variant="primary"
+        loading={savingFood}
+        disabled={savingFood}
+        onPress={() => void onSaveOrLogFood()}
       >
-        <ExternalLink
-          color={colors["muted-foreground"]}
-          size={16}
-          strokeWidth={1.5}
-        />
-        <Text className="text-muted-foreground text-sm">Edit in browser</Text>
-      </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          {isSaved ? (
+            <Check size={16} color={colors["primary-foreground"]} />
+          ) : (
+            <BookmarkPlus size={16} color={colors["primary-foreground"]} />
+          )}
+          <Text className="text-primary-foreground text-sm font-semibold">
+            {isSaved ? "Log this food" : "Save as food"}
+          </Text>
+        </View>
+      </Button>
     </ScrollView>
   );
 }
