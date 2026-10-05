@@ -9,7 +9,7 @@ export interface GuidedStep {
 
 /** Drop surrounding quotes a model sometimes wraps a single line in. */
 export function stripQuotes(text: string): string {
-  return text.trim().replace(/^["“'']+|["”'']+$/g, "").trim();
+  return text.trim().replace(/^["“'‘’]+|["”'‘’]+$/g, "").trim();
 }
 
 function clampTextLen(s: string, max: number): string {
@@ -18,7 +18,7 @@ function clampTextLen(s: string, max: number): string {
 
 /** Does this line actually pose a question? */
 function isQuestion(s: string): boolean {
-  return /\?["'”’)\\]]*\s*$/.test(s.trim());
+  return /\?["'”’)\]]*\s*$/.test(s.trim());
 }
 
 /**
@@ -26,7 +26,7 @@ function isQuestion(s: string): boolean {
  * "You said you'd lead. What does that cost you today?" → the second sentence.
  */
 export function trailingQuestion(body: string): string | null {
-  const m = body.trim().match(/([^.!?]+\?)["'”’)\\]*\s*$/);
+  const m = body.trim().match(/([^.!?]+\?)["'”’)\]]*\s*$/);
   if (!m) return null;
   const q = m[1]!.trim();
   return q.split(/\s+/).length >= 3 ? q : null;
@@ -110,4 +110,43 @@ export function validateGuidedSteps(raw: unknown): GuidedStep[] | null {
   }
 
   return out.length >= 2 ? out.slice(0, 8) : null;
+}
+
+/**
+ * Strip markdown formatting to plain text (`webapp/lib/ai/sanitize.ts`,
+ * ported verbatim). CoachChat renders plain text, so a stray bold/italic/
+ * header/code marker would otherwise show up literally in the bubble.
+ */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, "") // fenced code blocks
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "") // images
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1") // links → link text
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "") // headers
+    .replace(/^\s{0,3}>\s?/gm, "") // blockquotes
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // **bold**
+    .replace(/__([^_]+)__/g, "$1") // __bold__
+    .replace(/\*([^*\n]+)\*/g, "$1") // *italic*
+    .replace(/(?<=\s|^)_([^_\n]+)_(?=\s|$|[.,!?])/g, "$1") // _italic_
+    .replace(/^\s*[-*+]\s+/gm, "") // bullet markers
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+/** Strip any leaked "as an AI / language model" disclaimer phrasing. */
+export function stripAiLeakage(text: string): string {
+  return text
+    .replace(/\b(as an? (AI|language model|assistant)[^.!?]*[.!?])/gi, "")
+    .replace(
+      /\bI('?m| am) (just )?an? (AI|language model|assistant)\b[^.!?]*[.!?]/gi,
+      "",
+    )
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** Chat-ready cleanup: drop AI disclaimers + markdown (CoachChat, NP-155). */
+export function cleanReply(text: string): string {
+  return stripMarkdown(stripAiLeakage(text));
 }
