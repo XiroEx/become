@@ -527,4 +527,139 @@ describe("useLiveWorkout", () => {
     expect(ex?.durationLabel).toBe("30s");
     expect(ex?.primaryMuscles).toEqual(["chest", "triceps"]);
   });
+
+  it("(id: e015c87c) leaves restSec unset for an exercise with no explicit rest, so the smart tracking-type default (not a flat 90) decides its rest, and parses an explicit \"2 min\" rest to 120", async () => {
+    // Rules that travel from the web's `getRestDuration`/`getSmartRestDefault`:
+    // an exercise with no `rest` field must NOT get a flat 90s here — that
+    // would silently skip the web's trackingType-based default (3min for
+    // reps_weight, 90s bodyweight/reps_only, 60s otherwise) and rest the
+    // native app for a different amount of time than the web for the same
+    // exercise.
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            title: "Push Day",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench",
+                name: "Barbell Bench Press",
+                sets: 3,
+                reps: "5",
+                trackingType: "reps_weight",
+                // no `rest` field — must fall through to the smart default,
+                // not a hardcoded 90.
+              },
+              {
+                exerciseSlug: "plank",
+                name: "Plank",
+                sets: 3,
+                reps: "",
+                trackingType: "reps_only",
+                rest: "2 min",
+              },
+            ],
+          },
+          phase: 1,
+          day: "Day 1",
+        });
+      }
+      if (url.startsWith("/api/workouts/last-performance")) {
+        return Promise.resolve({ performances: {}, prs: {} });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({ isResume: false, workout: null, exerciseHistory: {} });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useLiveWorkout("prog-1", "Day 1", null));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const exercises = result.current.workout?.exercises;
+    // No `rest` on a reps_weight exercise: restSec must be left undefined so
+    // `restAfterStep`'s smart default (3 min) applies instead of a flat 90.
+    expect(exercises?.[0]?.restSec).toBeUndefined();
+    // An explicit "2 min" rest parses exactly as the web's `parseRestTime`.
+    expect(exercises?.[1]?.restSec).toBe(120);
+  });
+
+  it("(id: e015c87c) resuming carries an ad-hoc exercise's own rest, and leaves a programmed exercise's rest unset rather than a flat 90", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/current-workout")) {
+        return Promise.resolve({
+          workout: {
+            title: "Push Day",
+            day: "Day 1",
+            exercises: [
+              {
+                exerciseSlug: "bench",
+                name: "Barbell Bench Press",
+                sets: 2,
+                reps: "5",
+                trackingType: "reps_weight",
+              },
+            ],
+          },
+          phase: 1,
+          day: "Day 1",
+        });
+      }
+      if (url.startsWith("/api/workouts/last-performance")) {
+        return Promise.resolve({ performances: {}, prs: {} });
+      }
+      if (url.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: true,
+          workout: {
+            programId: "prog-1",
+            day: "Day 1",
+            phase: 1,
+            activeSeconds: 60,
+            date: "2026-10-01T12:00:00.000Z",
+            exercises: [
+              {
+                name: "Barbell Bench Press",
+                exerciseSlug: "bench",
+                sets: [{ setNumber: 1, reps: 5, weight: 185, completed: true }],
+              },
+              {
+                name: "Face Pull",
+                exerciseSlug: "face-pull",
+                addedAdHoc: true,
+                prescription: {
+                  sets: 3,
+                  reps: "15",
+                  rest: "45s",
+                  trackingType: "reps_bodyweight",
+                },
+                sets: [{ setNumber: 1, reps: 15, weight: 0, completed: false }],
+              },
+            ],
+          },
+          exerciseHistory: {},
+          exercisePRs: {},
+        });
+      }
+      return Promise.resolve({});
+    });
+
+    const { result } = renderHook(() => useLiveWorkout("prog-1", "Day 1", null));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    const exercises = result.current.workout?.exercises;
+    expect(exercises?.[0]?.name).toBe("Barbell Bench Press");
+    expect(exercises?.[0]?.restSec).toBeUndefined();
+    expect(exercises?.[1]?.name).toBe("Face Pull");
+    expect(exercises?.[1]?.restSec).toBe(45);
+  });
 });

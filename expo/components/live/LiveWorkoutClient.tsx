@@ -78,7 +78,8 @@ export interface LiveWorkoutExercise {
   groupLabel?: string;
   groupType?: string;
   groupRounds?: number;
-  /** Rest between sets in seconds (defaults to 90). */
+  /** Rest between sets in seconds. Undefined falls back to the smart
+   * tracking-type default (`smartRestDefault`) rather than a flat number. */
   restSec?: number;
   /** Group-level rest between rounds (web `groupRest`, e.g. "60s"). */
   groupRest?: string;
