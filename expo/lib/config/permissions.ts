@@ -32,11 +32,26 @@
  * voice, as a sentence a person reading a system alert would understand. Not
  * "This app requires access to the camera." The rules below are the mechanical
  * part of that (it names Become, it is a sentence, it is not a placeholder);
- * the judgement part is yours.
+ * the judgement part is yours — and it has to stay honest about what v1
+ * actually does. NP-206 rewrote the camera string because it named a
+ * "progress photo" no v1 screen takes and never mentioned the barcode
+ * scanner, the heaviest camera use in the build; the photo-library string
+ * dropped the same phantom "progress shot". A sentence that promises a
+ * feature that does not exist fails App Review under guideline 5.1.1 just
+ * as surely as a vague one.
  *
- * Android is deliberately absent: Android has no equivalent of a usage string
- * in the manifest — the rationale is a screen the app shows before it asks, so
- * it belongs with the feature, not here.
+ * ANDROID LIVES HERE TOO (NP-206). Android has no usage string in the
+ * manifest — the rationale is the screen the app shows before it asks — but
+ * the release candidate still has exactly one auditable list of what it may
+ * ask, and each entry still needs its reason in the member's language. That
+ * list is `V1_ANDROID_RUNTIME_PERMISSIONS` below: every `android.permission.*`
+ * the v1 build may request at runtime, each with the in-app surface that
+ * explains it before the OS prompt fires. `android.permissions` in `app.json`
+ * must declare exactly these (plus install-time normal permissions, which
+ * never prompt — `USE_BIOMETRIC`, `USE_FINGERPRINT` — and never a dangerous
+ * permission v1 does not use). `__tests__/releaseCandidatePermissions.test.ts`
+ * holds the manifest, the table and the screens equal; add your permission
+ * AND its reason with your feature, or the suite fails.
  */
 
 export interface PermissionBearingModule {
@@ -162,6 +177,159 @@ export const PERMISSION_BEARING_MODULES: readonly PermissionBearingModule[] = [
     what: "write a weigh-in back to Apple Health",
     card: "NP-185",
   },
+];
+
+/**
+ * Every runtime permission the v1 release candidate may ask for on Android
+ * (NP-206 audit, verified against the installed config plugins and the
+ * modules' own Android sources on 2026-10-05).
+ *
+ * A row is a promise in three places at once: the manifest declares it
+ * (`android.permissions` in `app.json`), the OS may prompt for it, and the
+ * `rationaleAnchors` name the in-app surface that tells the member WHY before
+ * the prompt fires — the Android half of the iOS usage string. Each anchor is
+ * a `file#symbol` the release-candidate suite greps for, so moving the copy
+ * without moving the anchor fails CI instead of shipping a prompt with no
+ * reason behind it.
+ *
+ * Deliberately NOT here: anything no v1 code path requests. `READ_MEDIA_*`
+ * (the photo picker needs no storage permission on SDK 33+ — it launches the
+ * system picker — and `getMediaLibraryPermissions` returns empty above
+ * Tiramisu), `ACCESS_FINE_LOCATION` / `COARSE_LOCATION` (no location module),
+ * `READ_CONTACTS` / `READ_CALENDAR` (no such module), `SCHEDULE_EXACT_ALARM`
+ * (the rest alert degrades to an inexact alarm when exact alarms are off),
+ * `FOREGROUND_SERVICE*` (no background playback — `expo-video` ships with no
+ * props), and `CAMERA`/`RECORD_AUDIO` beyond the rows below. The AARs also
+ * merge in install-time permissions that never prompt (`INTERNET`, `VIBRATE`,
+ * `RECEIVE_BOOT_COMPLETED`, `READ/WRITE_EXTERNAL_STORAGE` capped at SDK 32);
+ * those are manifest facts, not runtime asks, and Play does not review them.
+ */
+export interface V1AndroidPermission {
+  /** The exact `android.permission.*` string in `app.json`. */
+  permission: string;
+  /** The native module whose code triggers the OS prompt. */
+  module: string;
+  /** What Become does with it, in the member's language. */
+  reason: string;
+  /**
+   * In-app surfaces that state the reason BEFORE the OS prompt can fire.
+   * `file#symbol` — the suite asserts each file contains each symbol.
+   */
+  rationaleAnchors: readonly string[];
+  /** The board card that owns the ask. */
+  card: string;
+  /** When the OS prompt may fire. Never at first launch. */
+  timing: string;
+}
+
+export const V1_ANDROID_RUNTIME_PERMISSIONS: readonly V1AndroidPermission[] = [
+  {
+    permission: "android.permission.CAMERA",
+    module: "expo-camera / expo-image-picker",
+    reason:
+      "Photograph a meal for its estimate, scan a food barcode, photograph a food label being reported, or mirror the member in a Mind session.",
+    rationaleAnchors: [
+      "components/nutrition/EstimateSheet.tsx#Take photo",
+      "components/nutrition/BarcodeScanner.tsx#Scan Barcode",
+      "components/mind/session/scenes/MirrorScene.tsx#Camera off",
+    ],
+    card: "NP-059 / NP-088 / NP-100",
+    timing:
+      "Only from the feature surface (Take photo, the scanner sheet, the mirror beat) — never at launch.",
+  },
+  {
+    permission: "android.permission.RECORD_AUDIO",
+    module: "expo-speech-recognition",
+    reason:
+      "Follow along as the member speaks their affirmation out loud in a Mind session, lighting the words as they say them.",
+    rationaleAnchors: [
+      "components/mind/session/scenes/SpeakScene.tsx#Tap, then say it out loud",
+      "hooks/useSpeechRecognition.ts#requestPermissionsAsync",
+    ],
+    card: "NP-099",
+    timing:
+      "Only when the member taps Start in a Speak / Mirror beat — never at launch, with hold-to-affirm and write-instead fallbacks.",
+  },
+  {
+    permission: "android.permission.health.READ_WEIGHT",
+    module: "react-native-health-connect",
+    reason:
+      "Import weigh-ins the member's scale or another app already recorded, so they appear in Become without being typed twice.",
+    rationaleAnchors: [
+      "components/settings/HealthSyncSection.tsx#Read weight from",
+      "lib/health/sync.ts#permissionsForSession",
+    ],
+    card: "NP-199",
+    timing:
+      "Only after the member turns the read direction on in Settings; asked once per launch at most, for exactly what the switches justify.",
+  },
+  {
+    permission: "android.permission.health.WRITE_WEIGHT",
+    module: "react-native-health-connect",
+    reason:
+      "Write a weigh-in logged in Become back out, so it is available to the member's other health apps.",
+    rationaleAnchors: [
+      "components/settings/HealthSyncSection.tsx#Write weight and workouts",
+      "lib/health/sync.ts#permissionsForSession",
+    ],
+    card: "NP-199",
+    timing:
+      "Only after the member turns the write direction on in Settings; asked once per launch at most.",
+  },
+  {
+    permission: "android.permission.health.WRITE_EXERCISE",
+    module: "react-native-health-connect",
+    reason:
+      "Write a workout finished in Become out as an exercise session, alongside the rest of the member's activity.",
+    rationaleAnchors: [
+      "components/settings/HealthSyncSection.tsx#Write weight and workouts",
+      "lib/health/sync.ts#permissionsForSession",
+    ],
+    card: "NP-199",
+    timing:
+      "Only after the member turns the write direction on in Settings; asked once per launch at most.",
+  },
+  {
+    permission: "android.permission.POST_NOTIFICATIONS",
+    module: "expo-notifications",
+    reason:
+      "Remind the member when it is time to train and warn them before their streak breaks — each category tunable on its own channel.",
+    rationaleAnchors: [
+      "components/push/PushOptInCard.tsx#Never miss a workout",
+      "lib/push/afterOnboarding.ts#askNotificationPermissionAfterOnboarding",
+    ],
+    card: "NP-065",
+    timing:
+      "At the considered moment — end of onboarding, or the Home card's explicit Turn on — never at first launch.",
+  },
+];
+
+/**
+ * Android permissions that are declared but never prompt: install-time
+ * "normal" permissions the biometric plugin contributes. They ride the
+ * manifest because `expo-local-authentication`'s config plugin adds them, and
+ * the release-candidate suite pins them as the ONLY non-runtime extras —
+ * anything else dangerous landing here fails the build.
+ */
+export const V1_ANDROID_INSTALL_TIME_PERMISSIONS: readonly string[] = [
+  "android.permission.USE_BIOMETRIC",
+  "android.permission.USE_FINGERPRINT",
+];
+
+/**
+ * Every iOS usage-string key the v1 release candidate ships (NP-206 audit).
+ * Push needs no key on iOS; HealthKit ships no key until NP-185 installs its
+ * module; nothing is saved back to the photo library so there is no
+ * `NSPhotoLibraryAddUsageDescription`; no location, contacts, calendar,
+ * tracking or background-mode keys exist because no v1 module touches those
+ * resources.
+ */
+export const V1_IOS_USAGE_STRING_KEYS: readonly string[] = [
+  "NSCameraUsageDescription",
+  "NSPhotoLibraryUsageDescription",
+  "NSMicrophoneUsageDescription",
+  "NSSpeechRecognitionUsageDescription",
+  "NSFaceIDUsageDescription",
 ];
 
 /** A plugin entry in `expo.plugins`: a name, or a name with props. */

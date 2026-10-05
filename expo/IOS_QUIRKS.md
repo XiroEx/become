@@ -77,8 +77,15 @@ of that (it names Become, it is long enough to be a sentence, it is not a
 placeholder) and the unused half of the rule too: a usage string with no module
 behind it is a question from App Review, so it fails as well.
 
-Today the app installs none of those modules and there are no usage strings;
-each later feature brings its own with its code.
+The v1 set is five keys (NP-206 audit): camera (meal photo, barcode scan,
+food-label evidence, Mind mirror preview), photo library (meal, food label,
+avatar, feedback screenshot — picked, never scanned), microphone + speech
+recognition (speaking the affirmation out loud), and Face ID (unlock instead
+of a fresh sign-in link). Push needs no key on iOS; HealthKit ships no key
+until NP-185 installs its module; nothing is saved to the library so there is
+no `NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
+pins the whole set — add a key with the module that needs it, or the suite
+fails.
 
 ## Safe area
 
@@ -212,8 +219,10 @@ See P6 for the parse/verify flow.
 `enableAndroid: false` (Android widgets are `react-native-android-widget`,
 NP-198 — expo-widgets must not touch Android), and one widget per feed key in
 `WidgetKeySchema` order (`StreakWidget`, `NutritionWidget`, `MindWidget`,
-`BecomingWidget`, `TrainingWidget`), `supportedFamilies: ["systemSmall"]`
-only — NP-182 adds the other sizes and Lock Screen families. The names live
+`BecomingWidget`, `TrainingWidget`), each with `supportedFamilies`
+`systemSmall`, `systemMedium`, `accessoryCircular`, `accessoryRectangular`
+and `accessoryInline` (NP-182: small and medium Home Screen tiles plus the
+Lock Screen sizes). The names live
 in one place, `lib/widgets/iosWidgets.ts` (`IOS_WIDGETS`), mirroring
 `androidWidgets.ts`; `__tests__/iosWidgetsConfig.test.ts` holds the plugin
 block equal to it.
@@ -230,6 +239,25 @@ pushes props (`updateSnapshot` / `updateTimeline` / `reload`), and the
 extension reads them from the App Group. The widgets token stays in the app's
 SecureStore (`lib/widgets/token.ts`); there is no extension-side network call
 and no separate Swift module writing a token into the group.
+
+## Background refresh
+
+One task, `become-widgets-refresh` (`lib/widgets/iosBackgroundRefresh.ts`):
+read the stored widgets token, read the feed, compact it, push the timelines.
+Registered at app start from `expo/index.js` on iOS only, with
+`expo-background-task` — an Expo LIBRARY on BGTaskScheduler, not a hosted
+service, so it is fine under the NP-040 rules (no EAS, no expo.dev project,
+no Expo Push). Its config plugin writes `UIBackgroundModes: [processing]`
+and the `BGTaskSchedulerPermittedIdentifiers` entry at prebuild time; never
+add those keys to `app.json` by hand.
+
+iOS decides when the task actually runs. `minimumInterval` is a minimum
+delay, not a schedule: the system treats the feed's `refreshAfterSeconds`
+(clamped to >= 15 min, the BGTaskScheduler floor) as a hint and typically
+runs background tasks in its own windows, such as overnight. A widget the OS
+has not woken keeps painting the last pushed timeline — which is why every
+push carries the prompt at the next local midnight (`iosTimeline.ts`), so a
+stale day can never show as today no matter how long the gap.
 
 ## Verified by
 

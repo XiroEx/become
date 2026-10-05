@@ -92,7 +92,10 @@ function tapTargets(node: Host | null, out: string[] = []): string[] {
   return out;
 }
 
-type LayoutFn = (props: IosWidgetProps) => React.ReactElement;
+type LayoutFn = (
+  props: IosWidgetProps,
+  environment?: { widgetFamily?: string },
+) => React.ReactElement;
 
 /**
  * The layout source back into a function, the way the extension evaluates it:
@@ -122,8 +125,11 @@ function layoutFn(): LayoutFn {
   return factory(...names.map((name) => scope[name]));
 }
 
-function rendered(props: IosWidgetProps): Host | null {
-  const { toJSON } = render(layoutFn()(props) as never);
+function rendered(
+  props: IosWidgetProps,
+  environment?: { widgetFamily?: string },
+): Host | null {
+  const { toJSON } = render(layoutFn()(props, environment) as never);
   return hostOf(toJSON());
 }
 
@@ -136,9 +142,28 @@ function signedInProps(over: Partial<IosWidgetProps> = {}): IosWidgetProps {
     caption: "2 days to 14",
     state: "done",
     progress: 0.85,
+    rings: [],
     url: "become://dashboard/streaks",
     ...over,
   } as IosWidgetProps;
+}
+
+function nutritionProps(): IosWidgetProps {
+  return signedInProps({
+    title: "Nutrition",
+    headline: "820",
+    headlineUnit: "cal left",
+    caption: "P 120/160g · C 180/240g · F 40/60g",
+    state: "todo",
+    progress: 0.59,
+    rings: [
+      ["Cal", 1180, 0.59, "cal"],
+      ["Protein", 120, 0.75, "g"],
+      ["Carbs", 180, 0.75, "g"],
+      ["Fat", 40, 0.67, "g"],
+    ],
+    url: "become://dashboard/nutrition",
+  });
 }
 
 describe("iosWidgetStateTint", () => {
@@ -204,6 +229,70 @@ describe("BecomeWidget — signed in", () => {
       expect(layout).toMatch(new RegExp(`\\b${primitive}\\b`));
     }
   });
+
+  it("inlines the sign-in prompt — a free import would be a red box natively", () => {
+    // The stringified layout runs in a bare JSContext: module-scope bindings
+    // do not survive, so the prompt must appear as a literal. This pins the
+    // literal to the constant the timeline builder sends.
+    const layout = BecomeWidget as unknown as string;
+    expect(typeof layout === "string" ? layout : "").toContain(
+      IOS_WIDGET_SIGN_IN_PROMPT,
+    );
+  });
+
+  it("references no module-scope helper — only views, modifiers and literals", () => {
+    // Anything the layout calls but the extension's scope does not provide is
+    // a ReferenceError at paint time. The scope is the `@expo/ui` views, the
+    // modifiers, React and the jsx runtime (see the test harness above) —
+    // these are the only free names the layout may use.
+    const layout = BecomeWidget as unknown as string;
+    expect(typeof layout === "string" ? layout : "").not.toMatch(
+      /\biosWidget(StateTint|InlineLine)\b/,
+    );
+  });
+
+  it("renders every size with nothing but the extension's own scope", () => {
+    // The proof of the scoping rule above: evaluate the layout WITHOUT the
+    // prompt constant (or anything else from this repo) in scope. A free
+    // reference would throw a ReferenceError here — natively that is a red
+    // box with no error anywhere.
+    const src = BecomeWidget as unknown as string;
+    if (typeof src !== "string") throw new Error("expected layout source");
+    const scope: Record<string, unknown> = {
+      ...swiftUI,
+      ...modifiers,
+      React,
+      _jsx: jsx,
+      _jsxs: jsxs,
+      jsx,
+      jsxs,
+    };
+    const names = Object.keys(scope);
+    const factory = new Function(
+      ...names,
+      `"use strict"; return (${src});`,
+    ) as (...args: unknown[]) => LayoutFn;
+    const bare = factory(...names.map((name) => scope[name]));
+    const families = [
+      "systemSmall",
+      "systemMedium",
+      "accessoryCircular",
+      "accessoryRectangular",
+      "accessoryInline",
+      undefined,
+    ];
+    for (const widgetFamily of families) {
+      const element = bare(signedInProps(), { widgetFamily });
+      expect(() => render(element as never)).not.toThrow();
+      const out: IosWidgetProps = {
+        signedIn: false,
+        title: "Become · Streak",
+        prompt: IOS_WIDGET_SIGN_IN_PROMPT,
+        url: "become://login",
+      };
+      expect(() => render(bare(out, { widgetFamily }) as never)).not.toThrow();
+    }
+  });
 });
 
 describe("BecomeWidget — signed out", () => {
@@ -225,5 +314,173 @@ describe("BecomeWidget — signed out", () => {
     const targets = tapTargets(rendered(signedOut));
     expect(targets).toContain("become://login");
     expect(targets.filter((t) => t === "become://login").length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("BecomeWidget — medium (systemMedium)", () => {
+  const medium = { widgetFamily: "systemMedium" };
+
+  it("draws the feed's strings verbatim, like small", () => {
+    const found = texts(rendered(signedInProps(), medium));
+    expect(found).toContain("Streak");
+    expect(found).toContain("12");
+    expect(found).toContain("days");
+    expect(found).toContain("2 days to 14");
+  });
+
+  it("draws the nutrition macros from the rings, with one bar per ring", () => {
+    const found = texts(rendered(nutritionProps(), medium));
+    expect(found).toContain("Nutrition");
+    expect(found).toContain("820");
+    expect(found).toContain("cal left");
+    for (const macro of ["Cal 1180cal", "Protein 120g", "Carbs 180g", "Fat 40g"]) {
+      expect(found).toContain(macro);
+    }
+    // Four ring bars plus the overall progress bar.
+    expect(bars(rendered(nutritionProps(), medium))).toEqual([
+      0.59, 0.75, 0.75, 0.67, 0.59,
+    ]);
+  });
+
+  it("draws no macro rows when the widget ships no rings", () => {
+    const found = texts(rendered(signedInProps(), medium));
+    expect(found).not.toContain("Cal 1180cal");
+    expect(bars(rendered(signedInProps(), medium))).toEqual([0.85]);
+  });
+
+  it("draws a ring value with no bar when the member has no target for it", () => {
+    const props = nutritionProps();
+    if (props.signedIn !== true) throw new Error("expected signed-in props");
+    const targetless = {
+      ...props,
+      rings: [["Carbs", 180, null, "g"] as [string, number, null, string]],
+    };
+    const found = texts(rendered(targetless, medium));
+    expect(found).toContain("Carbs 180g");
+    // The overall progress bar only — the target-less ring draws no bar.
+    expect(bars(rendered(targetless, medium))).toEqual([0.59]);
+  });
+
+  it("draws the state words and carries the tap target both ways", () => {
+    for (const [state, label] of [
+      ["done", "Done"],
+      ["todo", "To do"],
+      ["at-risk", "Needs attention today"],
+      ["none", "Not set up yet"],
+    ] as const) {
+      expect(texts(rendered(signedInProps({ state }), medium))).toContain(label);
+    }
+    const targets = tapTargets(rendered(signedInProps(), medium));
+    expect(targets.filter((t) => t === "become://dashboard/streaks").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("signs out to the prompt, never a number", () => {
+    const props: IosWidgetProps = {
+      signedIn: false,
+      title: "Become · Streak",
+      prompt: IOS_WIDGET_SIGN_IN_PROMPT,
+      url: "become://login",
+    };
+    const found = texts(rendered(props, medium));
+    expect(found).toContain(IOS_WIDGET_SIGN_IN_PROMPT);
+    expect(found).not.toContain("12");
+  });
+});
+
+describe("BecomeWidget — Lock Screen (accessory families)", () => {
+  it("circular draws the headline and unit, verbatim", () => {
+    const found = texts(
+      rendered(signedInProps(), { widgetFamily: "accessoryCircular" }),
+    );
+    expect(found).toContain("12");
+    expect(found).toContain("days");
+  });
+
+  it("circular omits the unit when there is none", () => {
+    const found = texts(
+      rendered(signedInProps({ headlineUnit: null }), {
+        widgetFamily: "accessoryCircular",
+      }),
+    );
+    expect(found).toContain("12");
+    expect(found).not.toContain("days");
+  });
+
+  it("circular signs out to words, never a number", () => {
+    const props: IosWidgetProps = {
+      signedIn: false,
+      title: "Become · Streak",
+      prompt: IOS_WIDGET_SIGN_IN_PROMPT,
+      url: "become://login",
+    };
+    const found = texts(rendered(props, { widgetFamily: "accessoryCircular" }));
+    expect(found).not.toContain("12");
+    expect(found.length).toBeGreaterThan(0);
+  });
+
+  it("rectangular draws headline plus caption, verbatim", () => {
+    const found = texts(
+      rendered(signedInProps(), { widgetFamily: "accessoryRectangular" }),
+    );
+    expect(found).toContain("12");
+    expect(found).toContain("days");
+    expect(found).toContain("2 days to 14");
+  });
+
+  it("rectangular signs out to the prompt, never a number", () => {
+    const props: IosWidgetProps = {
+      signedIn: false,
+      title: "Become · Streak",
+      prompt: IOS_WIDGET_SIGN_IN_PROMPT,
+      url: "become://login",
+    };
+    const found = texts(
+      rendered(props, { widgetFamily: "accessoryRectangular" }),
+    );
+    expect(found).toContain(IOS_WIDGET_SIGN_IN_PROMPT);
+    expect(found).not.toContain("12");
+  });
+
+  it("inline draws one line from the feed's words", () => {
+    const found = texts(
+      rendered(signedInProps(), { widgetFamily: "accessoryInline" }),
+    );
+    expect(found).toContain("Streak: 12 days · 2 days to 14");
+  });
+
+  it("inline without a unit joins the words that are there", () => {
+    const found = texts(
+      rendered(signedInProps({ headlineUnit: null }), {
+        widgetFamily: "accessoryInline",
+      }),
+    );
+    expect(found).toContain("Streak: 12 · 2 days to 14");
+  });
+
+  it("every Lock Screen size carries the tap target both ways", () => {
+    for (const widgetFamily of [
+      "accessoryCircular",
+      "accessoryRectangular",
+      "accessoryInline",
+    ]) {
+      const targets = tapTargets(rendered(signedInProps(), { widgetFamily }));
+      expect(
+        targets.filter((t) => t === "become://dashboard/streaks").length,
+      ).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
+describe("BecomeWidget — family fallback", () => {
+  it("draws small with no environment, and with a family it does not know", () => {
+    for (const environment of [undefined, {}, { widgetFamily: "systemLarge" }]) {
+      const found = texts(rendered(signedInProps(), environment));
+      expect(found).toContain("Streak");
+      expect(found).toContain("12");
+      expect(found).toContain("2 days to 14");
+      // Small draws the state words and the overall bar.
+      expect(found).toContain("Done");
+      expect(bars(rendered(signedInProps(), environment))).toEqual([0.85]);
+    }
   });
 });

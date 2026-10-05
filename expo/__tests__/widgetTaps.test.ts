@@ -24,6 +24,7 @@ import {
   widgetTapUri,
 } from "@/lib/widgets/taps";
 import { ANDROID_WIDGETS } from "@/lib/widgets/androidWidgets";
+import { IOS_WIDGETS } from "@/lib/widgets/iosWidgets";
 
 const FEED_SOURCE = fs.readFileSync(
   path.resolve(__dirname, "..", "..", "webapp", "lib", "widgets", "feed.ts"),
@@ -124,5 +125,36 @@ describe("the signed-out tap", () => {
       pathname: NATIVE_ROUTES.login,
       fallback: "exact",
     });
+  });
+});
+
+describe("all five iOS widgets open their screens", () => {
+  // iOS draws all five feed keys (Android deliberately has no training tile),
+  // and every size of a tile carries the same `props.url` — so one gate per
+  // feed key covers small, medium and the Lock Screen sizes together.
+  const links = serverDeepLinks();
+
+  it("every iOS widget has a server deep link", () => {
+    for (const definition of IOS_WIDGETS) {
+      expect(links.get(definition.feedKey)).toMatch(/^\/dashboard/);
+    }
+  });
+
+  it("every iOS tap resolves to its own native screen, never a guess", () => {
+    const expected: Record<string, string> = {
+      streak: NATIVE_ROUTES.streaks,
+      nutrition: NATIVE_ROUTES.nutrition,
+      mind: NATIVE_ROUTES.mind,
+      becoming: NATIVE_ROUTES.becoming,
+      training: NATIVE_ROUTES.workout,
+    };
+    for (const definition of IOS_WIDGETS) {
+      const link = links.get(definition.feedKey)!;
+      const target = resolveWebPath(widgetTapUri(link));
+      expect(target.kind).toBe("native");
+      if (target.kind !== "native") continue;
+      expect(target.pathname).toBe(expected[definition.feedKey]);
+      expect(target.fallback).not.toBe("unknown");
+    }
   });
 });
