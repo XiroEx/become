@@ -132,6 +132,7 @@ export async function rebuildQuickSession(
         ...(ex.groupId ? { groupId: ex.groupId } : {}),
         ...(ex.groupType ? { groupType: ex.groupType } : {}),
         ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+        ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
         ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
         ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
       };

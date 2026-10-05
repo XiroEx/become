@@ -903,6 +903,7 @@ export const QuickSessionExerciseSchema = z
     groupType: z.string().optional(),
     groupLabel: z.string().optional(),
     groupRounds: z.number().optional(),
+    groupRest: z.string().optional(),
     addedAdHoc: z.boolean().optional(),
     prescription: WorkoutPrescriptionSchema.optional(),
   })

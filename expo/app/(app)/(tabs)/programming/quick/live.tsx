@@ -14,18 +14,22 @@ import {
   type WorkoutSummarySet,
 } from "@/components/live/WorkoutSummary";
 import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePrompt";
+import { AddExerciseSheet, type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
+import { ThinSessionModal } from "@/components/workout/ThinSessionModal";
+import { WorkoutExerciseList } from "@/components/workout/WorkoutExerciseList";
+import {
+  fallbackQuickSessionName,
+  quickScope,
+  shouldPromptForQuickSessionName,
+  shouldWarnBeforeFinish,
+} from "@become/core";
+import type { LiveSetState } from "@/components/live/LiveSetRow";
 import {
   asyncStorageKeyValueStore,
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import {
-  fallbackQuickSessionName,
-  quickScope,
-  shouldPromptForQuickSessionName,
-} from "@become/core";
-import type { LiveSetState } from "@/components/live/LiveSetRow";
 import { useQuickLiveWorkout } from "@/lib/quickSession/useQuickLiveWorkout";
 import { useExerciseHints } from "@/lib/live/useExerciseHints";
 
@@ -87,6 +91,8 @@ export default function QuickLiveRoute({
     onGridChange,
     onFinish,
     finishWithTitle,
+    applyExerciseChange,
+    addExercise,
   } = useQuickLiveWorkout(sessionId, {
     store: resolvedStore,
     ...(fetchImpl ? { fetchImpl } : {}),
@@ -103,6 +109,15 @@ export default function QuickLiveRoute({
     useState<LiveGrid | null>(null);
   const [promptFinishing, setPromptFinishing] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
+  // "Finish with two exercises?" — asked once, on the way out of a thin
+  // session the member assembled themselves (web's `showThinFinish`).
+  const [pendingThinFinish, setPendingThinFinish] = useState<LiveGrid | null>(null);
+  const [thinFinishAcked, setThinFinishAcked] = useState(false);
+  // Build as you go: the manage list + the add sheet (web's exercise-list
+  // panel + `AddExerciseSheet` in `LiveWorkoutClient`).
+  const [showExerciseList, setShowExerciseList] = useState(false);
+  const [showAddExercise, setShowAddExercise] = useState(false);
+  const [addAnchorIndex, setAddAnchorIndex] = useState(0);
 
   const dayKey = initialOriginKey ?? localDateKey(getNow?.() ?? new Date());
   const fallbackName = useMemo(
@@ -111,6 +126,21 @@ export default function QuickLiveRoute({
   );
 
   const handleFinish = (grid: LiveGrid) => {
+    // A session the member assembled themselves, thinner than a session
+    // usually is: ask once on the way out (the web's `shouldAskBeforeFinish`
+    // in `LiveWorkoutClient` — `selfBuilt` is always true here, and never
+    // for a program workout).
+    if (
+      shouldWarnBeforeFinish({
+        selfBuilt: true,
+        exerciseCount: workout?.exercises.length ?? 0,
+        alreadyAsked: thinFinishAcked,
+      })
+    ) {
+      setPromptError(null);
+      setPendingThinFinish(grid);
+      return;
+    }
     if (shouldPromptForQuickSessionName(stored)) {
       setPromptError(null);
       setPendingCompletion(grid);
@@ -244,6 +274,29 @@ export default function QuickLiveRoute({
     );
   }
 
+  const handleAddExercise = (r: AddExerciseResult) => {
+    addExercise({
+      exercise: r.exercise,
+      placement: r.placement,
+      groupKind: r.groupKind,
+      anchorIndex: addAnchorIndex,
+    });
+  };
+
+  const handleThinFinishAnyway = () => {
+    // Asked and answered — this session will not ask again.
+    setThinFinishAcked(true);
+    const grid = pendingThinFinish;
+    setPendingThinFinish(null);
+    if (!grid) return;
+    if (shouldPromptForQuickSessionName(stored)) {
+      setPromptError(null);
+      setPendingCompletion(grid);
+      return;
+    }
+    onFinish(grid);
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <LiveWorkoutClient
@@ -260,6 +313,56 @@ export default function QuickLiveRoute({
         exerciseHistory={exerciseHistory}
         exerciseHints={quickHints}
         onDismissHint={(slug) => void dismissQuickHint(slug)}
+        manageExercises={
+          workout
+            ? {
+                onOpen: () => setShowExerciseList(true),
+                label: `Exercises (${workout.exercises.length})`,
+              }
+            : undefined
+        }
+      />
+      <WorkoutExerciseList
+        visible={showExerciseList}
+        onClose={() => setShowExerciseList(false)}
+        exercises={workout?.exercises ?? []}
+        grid={restoredGrid ?? {}}
+        onJump={() => setShowExerciseList(false)}
+        onChange={(change) => applyExerciseChange(change)}
+        onAddExercise={() => {
+          setAddAnchorIndex(
+            Math.max(0, (workout?.exercises.length ?? 1) - 1),
+          );
+          setShowExerciseList(false);
+          setShowAddExercise(true);
+        }}
+        testID="quick-live-manage"
+      />
+      <AddExerciseSheet
+        visible={showAddExercise}
+        onClose={() => setShowAddExercise(false)}
+        onAdd={handleAddExercise}
+        anchorName={workout && workout.exercises[addAnchorIndex]?.name}
+        anchorSlug={workout && workout.exercises[addAnchorIndex]?.slug}
+        anchorInGroup={!!(workout && workout.exercises[addAnchorIndex]?.groupId)}
+        workoutExerciseSlugs={(workout?.exercises ?? [])
+          .map((e) => e.slug)
+          .filter(Boolean)}
+        testID="quick-live-add"
+      />
+      <ThinSessionModal
+        visible={pendingThinFinish !== null}
+        exerciseCount={workout?.exercises.length ?? 0}
+        onAddExercise={() => {
+          setPendingThinFinish(null);
+          setAddAnchorIndex(
+            Math.max(0, (workout?.exercises.length ?? 1) - 1),
+          );
+          setShowAddExercise(true);
+        }}
+        onFinishAnyway={handleThinFinishAnyway}
+        onClose={() => setPendingThinFinish(null)}
+        testID="quick-live-thin-session"
       />
       {pendingCompletion ? (
         <QuickSessionNamePrompt

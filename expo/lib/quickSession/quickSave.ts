@@ -108,10 +108,15 @@ export function buildQuickSaveRequest(
       ...(ex.groupId ? { groupId: ex.groupId } : {}),
       ...(ex.groupType ? { groupType: ex.groupType } : {}),
       ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+      ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
       ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
       prescription: {
         sets: Math.max(1, ex.sets ?? 1),
         ...(ex.repsLabel ? { reps: ex.repsLabel } : {}),
+        // A timed prescription travels as `duration` (the web's
+        // `prescriptionOf` reads `ex.duration`); without it a resumed plank
+        // comes back with no timed box.
+        ...(ex.durationLabel ? { duration: ex.durationLabel } : {}),
         ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
         ...(ex.restSec != null ? { rest: `${ex.restSec}s` } : {}),
       },

@@ -19,6 +19,8 @@ import {
 import { ExerciseSwapModal } from "@/components/live/ExerciseSwapModal";
 import { StreakMilestoneModal } from "@/components/StreakMilestoneModal";
 import { DayChoiceModal } from "@/components/workout/DayChoiceModal";
+import { AddExerciseSheet, type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
+import { WorkoutExerciseList } from "@/components/workout/WorkoutExerciseList";
 import {
   IncompleteWorkoutModal,
   type ResolveIncompleteAction,
@@ -143,6 +145,7 @@ export default function LiveWorkoutRoute({
     loading,
     workout,
     day: resolvedDay,
+    grid,
     notes,
     setNotes,
     restoredGrid,
@@ -178,6 +181,8 @@ export default function LiveWorkoutRoute({
     streakMilestone,
     workoutStreakDays,
     clearStreakMilestone,
+    applyExerciseChange,
+    addExercise,
   } = useLiveWorkout(valid ? id : "", day, sd, {
     cacheStore,
     initialPhase:
@@ -189,6 +194,30 @@ export default function LiveWorkoutRoute({
   });
 
   const showSummary = finishedGrid !== null;
+
+  // ── Build as you go (NP-138) ─────────────────────────────────────────────
+  //
+  // The workout is not fixed at the door: the exercise list opens the manage
+  // sheet (jump / remove / group / long-press reorder), which reports
+  // structural changes the hook applies (grid + swap trail permuted, saved
+  // immediately with `addedAdHoc` and the group fields). The add sheet hands
+  // back a plain exercise plus a placement; the anchor is the exercise the
+  // member is standing in. A program workout is the coach's call, so it never
+  // asks the thin-session question — that prompt is quick-session-only (the
+  // route below wires it through `shouldWarnBeforeFinish` with
+  // `selfBuilt: true`).
+  const [showExerciseList, setShowExerciseList] = useState(false);
+  const [showAddExercise, setShowAddExercise] = useState(false);
+  const [addAnchorIndex, setAddAnchorIndex] = useState(0);
+
+  const handleAddExercise = (r: AddExerciseResult) => {
+    addExercise({
+      exercise: r.exercise,
+      placement: r.placement,
+      groupKind: r.groupKind,
+      anchorIndex: addAnchorIndex,
+    });
+  };
 
   // Share (NP-165): the web's Track header shares `{ kind: 'workout',
   // programId, day }` — no phase NAME travels (the route matches `ph.phase`
@@ -480,6 +509,42 @@ export default function LiveWorkoutRoute({
         exercisePRs={exercisePRs}
         exerciseHints={exerciseHints}
         onDismissHint={(slug) => void dismissHint(slug)}
+        manageExercises={
+          workout
+            ? {
+                onOpen: () => setShowExerciseList(true),
+                label: `Exercises (${workout.exercises.length})`,
+              }
+            : undefined
+        }
+      />
+      <WorkoutExerciseList
+        visible={showExerciseList}
+        onClose={() => setShowExerciseList(false)}
+        exercises={workout?.exercises ?? []}
+        grid={grid}
+        onJump={() => setShowExerciseList(false)}
+        onChange={(change) => applyExerciseChange(change)}
+        onAddExercise={() => {
+          setAddAnchorIndex(
+            Math.max(0, (workout?.exercises.length ?? 1) - 1),
+          );
+          setShowExerciseList(false);
+          setShowAddExercise(true);
+        }}
+        testID="live-workout-manage"
+      />
+      <AddExerciseSheet
+        visible={showAddExercise}
+        onClose={() => setShowAddExercise(false)}
+        onAdd={handleAddExercise}
+        anchorName={workout && workout.exercises[addAnchorIndex]?.name}
+        anchorSlug={workout && workout.exercises[addAnchorIndex]?.slug}
+        anchorInGroup={!!(workout && workout.exercises[addAnchorIndex]?.groupId)}
+        workoutExerciseSlugs={(workout?.exercises ?? [])
+          .map((e) => e.slug)
+          .filter(Boolean)}
+        testID="live-workout-add"
       />
       <ExerciseSwapModal
         visible={swapSlug !== null}

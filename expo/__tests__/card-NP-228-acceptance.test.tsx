@@ -283,6 +283,10 @@ describe("(id: e5cecfe8) The quick summary counts PRs against last performance",
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
     });
+    // NP-138: a self-built session this thin asks once on the way out.
+    await act(async () => {
+      fireEvent.press(getByTestId("quick-live-thin-session-finish"));
+    });
 
     await waitFor(() => {
       expect(getByTestId("workout-summary")).toBeTruthy();
