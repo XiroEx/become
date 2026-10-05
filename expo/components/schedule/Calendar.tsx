@@ -45,15 +45,21 @@ const MONTH_NAMES = [
   "December",
 ];
 
+// Matches the web's hardcoded calendar palette exactly
+// (webapp/app/dashboard/calendar/CalendarClient.tsx), not the brand
+// semantic tokens (`bg-primary`/`bg-accent`/`bg-destructive`) — those are
+// the brand red/amber/red and made Scheduled look like Incomplete and
+// Completed look orange (NP-240). The web never themes these per
+// light/dark either, so the same literal classes apply in both modes.
 const STATUS_COLOR: Record<string, string> = {
-  scheduled: "bg-primary",
-  completed: "bg-accent",
-  makeup: "bg-emerald-300",
-  missed: "bg-destructive",
+  scheduled: "bg-blue-500",
+  completed: "bg-green-700",
+  makeup: "bg-green-300",
+  missed: "bg-red-600",
   skipped: "bg-amber-400",
   rest: "bg-muted",
-  planned: "bg-primary",
-  incomplete: "bg-destructive",
+  planned: "bg-blue-500",
+  incomplete: "bg-red-600",
 };
 
 function pad(n: number): string {
@@ -429,7 +435,7 @@ export function Calendar({
               const status: SlotStatus | "makeup" = isMakeup
                 ? "makeup"
                 : w.status;
-              const colorClass = STATUS_COLOR[status] ?? "bg-primary";
+              const colorClass = STATUS_COLOR[status] ?? "bg-blue-500";
               markers.push({
                 key: `w-${w.programId}-${w.workoutIndex}-${i}`,
                 status,
@@ -440,7 +446,7 @@ export function Calendar({
             for (let i = 0; i < dayQuick.length; i++) {
               const q = dayQuick[i];
               if (!q) continue;
-              const colorClass = STATUS_COLOR[q.status] ?? "bg-primary";
+              const colorClass = STATUS_COLOR[q.status] ?? "bg-blue-500";
               markers.push({
                 key: `q-${q.sessionId ?? i}`,
                 status: q.status,
@@ -578,7 +584,7 @@ export function Calendar({
         >
           <View
             style={{ width: 8, height: 8, borderRadius: 4 }}
-            className="bg-accent"
+            className="bg-green-700"
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Completed
@@ -590,7 +596,7 @@ export function Calendar({
         >
           <View
             style={{ width: 8, height: 8, borderRadius: 4 }}
-            className="bg-emerald-300"
+            className="bg-green-300"
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Made Up
@@ -602,7 +608,7 @@ export function Calendar({
         >
           <View
             style={{ width: 8, height: 8, borderRadius: 4 }}
-            className="bg-primary"
+            className="bg-blue-500"
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Scheduled
@@ -614,7 +620,7 @@ export function Calendar({
         >
           <View
             style={{ width: 8, height: 8, borderRadius: 4 }}
-            className="bg-destructive"
+            className="bg-red-600"
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Incomplete
@@ -642,7 +648,7 @@ export function Calendar({
               height: 8,
               borderRadius: 4,
             }}
-            className="bg-primary border border-purple-400"
+            className="bg-purple-500 border border-purple-300"
           />
           <Text style={{ fontSize: 11 }} className="text-muted-foreground">
             Quick session

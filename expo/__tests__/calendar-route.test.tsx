@@ -114,14 +114,15 @@ describe("CalendarIndexRoute", () => {
     );
   });
 
-  it("does not navigate when a completed slot is tapped", async () => {
-    const { getByTestId } = render(<CalendarIndexRoute />);
-    const itemId = `scheduled-list-item-${midMonth}-0`;
+  it("does not list a completed slot under Upcoming (NP-240: that list is today/future scheduled only)", async () => {
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    // The future scheduled slot still shows...
     await waitFor(() => {
-      expect(getByTestId(itemId)).toBeTruthy();
+      expect(getByTestId(`scheduled-list-item-${futureDate}-1`)).toBeTruthy();
     });
-    fireEvent.press(getByTestId(itemId));
-    expect(mockPush).not.toHaveBeenCalled();
+    // ...but the completed one does not, even though its date (midMonth)
+    // can itself be today-or-later — it is done, not upcoming.
+    expect(queryByTestId(`scheduled-list-item-${midMonth}-0`)).toBeNull();
   });
 });
 
