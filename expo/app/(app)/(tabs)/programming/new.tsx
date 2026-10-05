@@ -6,7 +6,9 @@ import { ChevronLeft } from "lucide-react-native";
 import type { z } from "zod";
 import { apiFetch, CustomProgramResponseSchema } from "@become/api-client";
 import { Text } from "@/components/Text";
+import { Button } from "@/components/Button";
 import { ProgramBuilder } from "@/components/programs/ProgramBuilder";
+import { PasteImportSheet, type ImportOutcome } from "@/components/workout/PasteImportSheet";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
 import { syntheticGate, useEntitlements } from "@/lib/entitlements";
@@ -16,7 +18,12 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { notifyProgramUpdated } from "@/lib/programs/programEvents";
-import type { CustomProgramBuilderPayload } from "@/lib/programs/programBuilder";
+import { importProgramFromText } from "@/lib/workout/importWorkoutRun";
+import { importedToBuilderState } from "@/lib/programs/importedToBuilderState";
+import type {
+  CustomProgramBuilderPayload,
+  ProgramBuilderState,
+} from "@/lib/programs/programBuilder";
 import {
   PROGRAM_CREATE_DRAFT_KEY,
   createProgramDraftStore,
@@ -46,6 +53,19 @@ import {
  *     server-minted `program_id`, which is the address of everything else
  *     (rule 2 of the program routes), so the new program's own screen is
  *     where this ends.
+ *
+ * IMPORT FROM TEXT 4/4 (NP-244): an entry choice above the builder —
+ * "Start from scratch" (today's behaviour, unchanged) or "Import a program",
+ * which reuses `PasteImportSheet` (NP-243) with `kind: "program"` and
+ * `importProgramFromText` (NP-242). The custom-programs `canCreate` check
+ * still happens before the import is offered — `atCap` hides the import
+ * entry the same way it already gates Save, and the cap sheet itself is
+ * unchanged. On a successful import the stale scratch draft is cleared
+ * FIRST (`draft.clear()`) so it cannot win a race with the mapped state —
+ * `importedToBuilderState` turns the AI's `ImportedProgram` into
+ * `ProgramBuilderState` — and the builder remounts (its `key` flips) with
+ * that as `initialState`, seeded before its own draft-read effect ever runs,
+ * so a remounted builder never reads the (now-cleared) disk at all.
  */
 export default function NewProgramRoute() {
   const { colors } = useThemeTokens();
@@ -60,6 +80,10 @@ export default function NewProgramRoute() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importedState, setImportedState] = useState<ProgramBuilderState | null>(
+    null,
+  );
+  const [showImport, setShowImport] = useState(false);
 
   const fetchOpts = useMemo(
     () => ({
@@ -136,6 +160,31 @@ export default function NewProgramRoute() {
     [atCap, draft, fetchOpts, raiseCapSheet, refreshEntitlements, router],
   );
 
+  /**
+   * Submits the pasted text to NP-242's AI run. On `ok` the stale scratch
+   * draft is cleared FIRST — it must never win a race with what was just
+   * imported — and the mapped state becomes the builder's `initialState`,
+   * which also flips the builder's `key` below so it mounts fresh rather
+   * than adopting the import into whatever the scratch builder already had
+   * in React state. A `gate` refusal raises the EXISTING upgrade path, same
+   * as the Sessions hub's import does; every other outcome (`consent`,
+   * `rate_limited`, `empty`, `error`) is left for `PasteImportSheet` itself
+   * to render, and the member stays right here either way.
+   */
+  const handleImportSubmit = useCallback(
+    async (text: string): Promise<ImportOutcome> => {
+      const outcome = await importProgramFromText(text, fetchOpts);
+      if (outcome.status === "ok") {
+        await draft.clear();
+        setImportedState(importedToBuilderState(outcome.program));
+      } else if (outcome.status === "gate") {
+        showUpgradeSheet(outcome.gate);
+      }
+      return outcome;
+    },
+    [draft, fetchOpts],
+  );
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -196,8 +245,43 @@ export default function NewProgramRoute() {
             </View>
           ) : null}
 
+          {/* THE ENTRY CHOICE (NP-244): start from scratch — today's
+              behaviour, the builder below is already open on it — or import
+              pasted text. The import option is not offered at the cap; the
+              allowance lock/counter above already explain why, and Save
+              still raises the same sheet. */}
+          <View
+            testID="programming-new-entry-choice"
+            style={{ flexDirection: "row", gap: 8 }}
+          >
+            <Button
+              testID="programming-new-entry-scratch"
+              variant={importedState ? "secondary" : "primary"}
+              accessibilityLabel="Start from scratch"
+              onPress={() => setImportedState(null)}
+            >
+              Start from scratch
+            </Button>
+            {!atCap ? (
+              <Button
+                testID="programming-new-entry-import"
+                variant={importedState ? "primary" : "secondary"}
+                accessibilityLabel="Import a program"
+                onPress={() => setShowImport(true)}
+              >
+                Import a program
+              </Button>
+            ) : null}
+          </View>
+
           <ProgramBuilder
+            // Flips when an import lands, forcing a fresh mount: the new
+            // instance's `initialState` is non-null from its very first
+            // render, so it is seeded before its own draft-read effect ever
+            // fires and never reads the (now-cleared) scratch draft at all.
+            key={importedState ? "imported" : "scratch"}
             mode="create"
+            initialState={importedState}
             draft={draft}
             locked={atCap}
             saving={saving}
@@ -208,6 +292,14 @@ export default function NewProgramRoute() {
           />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PasteImportSheet
+        visible={showImport}
+        kind="program"
+        onSubmit={handleImportSubmit}
+        onClose={() => setShowImport(false)}
+        testID="programming-new-import-sheet"
+      />
     </SafeAreaView>
   );
 }
