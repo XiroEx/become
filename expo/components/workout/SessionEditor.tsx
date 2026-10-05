@@ -36,11 +36,16 @@ import type {
   ExerciseSearchResult,
 } from "@become/api-client";
 import {
+  addNextIntoGroup,
+  defaultSetsFor,
   groupIndexes,
   sanitizeGroups,
+  setGroupKindAt,
+  setSetsAt,
   setUnitLabel,
   ungroupAt,
   type DraftExercise,
+  type GroupKind,
 } from "@become/core";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
@@ -71,6 +76,10 @@ function stripGroup(ex: DraftExercise): DraftExercise {
   delete next.groupRounds;
   return next;
 }
+
+/** The two kinds a member picks between here. A triset/giant set is just a
+ *  superset with more in it, and the label follows the size on its own. */
+const OFFERED_KINDS: GroupKind[] = ["superset", "circuit"];
 
 export function SessionEditor({
   title,
@@ -171,7 +180,7 @@ export function SessionEditor({
     [],
   );
 
-  /** Superset this exercise with the one below it — or break the group up. */
+  /** Group this exercise with the one below it — or break the group up. */
   const toggleGroup = useCallback(
     (i: number) =>
       setRows((prev) => {
@@ -181,6 +190,25 @@ export function SessionEditor({
         if (i + 1 >= prev.length) return prev;
         return groupIndexes(prev, [i, i + 1], "superset").exercises;
       }),
+    [],
+  );
+
+  /** Pull the exercise below the group into it — a circuit of three, four, … */
+  const growGroup = useCallback(
+    (i: number) => setRows((prev) => addNextIntoGroup(prev, i).exercises),
+    [],
+  );
+
+  /** Superset or circuit. A circuit's rounds then agree across the block. */
+  const chooseKind = useCallback(
+    (i: number, kind: GroupKind) => setRows((prev) => setGroupKindAt(prev, i, kind).exercises),
+    [],
+  );
+
+  /** Inside a circuit the count belongs to the block, so all of it follows. */
+  const changeSets = useCallback(
+    (i: number, sets: number) =>
+      setRows((prev) => setSetsAt(prev, i, Math.max(1, Math.min(20, sets || 1)))),
     [],
   );
 
@@ -210,7 +238,8 @@ export function SessionEditor({
           exerciseSlug: ex.slug,
           name: ex.name,
           trackingType,
-          sets: 3,
+          // Agree with the session you are adding to, not a hardcoded 3.
+          sets: defaultSetsFor(prev),
           reps: isTime ? "" : "8-12",
           ...(isTime ? { duration: "30" } : {}),
           ...(ex.equipment ? { equipment: ex.equipment } : {}),
@@ -260,6 +289,13 @@ export function SessionEditor({
       <View testID={`${testID}-rows`} style={{ gap: 8 }}>
         {rows.map((ex, i) => {
           const isTime = ex.trackingType === "time";
+          // Only the first member of a group carries the kind control, so one
+          // circuit does not offer the same choice three times over; only the
+          // last can swallow the exercise below it.
+          const groupHead = !!ex.groupId && rows[i - 1]?.groupId !== ex.groupId;
+          const canGrowGroup =
+            !!ex.groupId && i + 1 < rows.length && rows[i + 1]?.groupId !== ex.groupId;
+          const inCircuit = !!ex.groupId && ex.groupType === "circuit";
           return (
             <View
               key={`${ex.exerciseSlug || ex.name}-${i}`}
@@ -304,6 +340,17 @@ export function SessionEditor({
                       )}
                     </Pressable>
                   ) : null}
+                  {canGrowGroup ? (
+                    <Pressable
+                      testID={`${testID}-group-grow-${i}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add the next exercise into the ${(ex.groupLabel || "group").toLowerCase()} containing ${ex.name}`}
+                      onPress={() => growGroup(i)}
+                      style={{ padding: 6, ...minTouchTarget }}
+                    >
+                      <Plus size={16} color={colors.primary} strokeWidth={2} />
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     testID={`${testID}-up-${i}`}
                     accessibilityRole="button"
@@ -336,6 +383,46 @@ export function SessionEditor({
                 </View>
               </View>
 
+              {/* Superset or circuit. A circuit is an intent, not a headcount,
+                  so it stays an explicit choice — and picking it is what makes
+                  the block's rounds agree. */}
+              {groupHead ? (
+                <View
+                  testID={`${testID}-group-kind-${i}`}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+                >
+                  {OFFERED_KINDS.map((k) => {
+                    const active = (ex.groupType ?? "superset") === k;
+                    return (
+                      <Pressable
+                        key={k}
+                        testID={`${testID}-group-kind-${k}-${i}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`${k === "superset" ? "Superset" : "Circuit"} for the group containing ${ex.name}`}
+                        onPress={() => chooseKind(i, k)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 4,
+                          borderRadius: 999,
+                          backgroundColor: active ? colors.primary : colors.muted,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: "600",
+                            color: active ? colors["primary-foreground"] : colors["muted-foreground"],
+                          }}
+                        >
+                          {k === "superset" ? "Superset" : "Circuit"}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   <Text className="text-muted-foreground text-xs">
@@ -344,9 +431,7 @@ export function SessionEditor({
                   <Input
                     testID={`${testID}-sets-${i}`}
                     value={String(ex.sets)}
-                    onChangeText={(text) =>
-                      patchRow(i, { sets: Math.max(1, Math.min(20, Number(text) || 1)) })
-                    }
+                    onChangeText={(text) => changeSets(i, Number(text))}
                     keyboardType="number-pad"
                     accessibilityLabel={`${setUnitLabel(ex.trackingType, ex.sets)} for ${ex.name}`}
                   />
@@ -365,6 +450,17 @@ export function SessionEditor({
                   />
                 </View>
               </View>
+
+              {inCircuit ? (
+                <Text
+                  testID={`${testID}-circuit-note-${i}`}
+                  className="text-muted-foreground"
+                  style={{ fontSize: 11 }}
+                >
+                  A circuit runs every exercise for the same number of rounds — changing this
+                  changes the whole circuit.
+                </Text>
+              ) : null}
             </View>
           );
         })}

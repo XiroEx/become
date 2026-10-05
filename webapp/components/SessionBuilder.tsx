@@ -17,12 +17,24 @@ import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/qu
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
-import { groupIndexes, ungroupAt } from "@/lib/workout/buildAsYouGo";
+import {
+  addNextIntoGroup,
+  defaultSetsFor,
+  groupIndexes,
+  setGroupKindAt,
+  setSetsAt,
+  ungroupAt,
+  type GroupKind,
+} from "@/lib/workout/buildAsYouGo";
 import { setUnitLabel } from "@/lib/workout/tracking";
 import { implementLabel } from "@/lib/workout/equipmentVariant";
 import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
 import UpgradeSheet from "@/components/UpgradeSheet";
 import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
+
+/** The two kinds a member picks between here. A triset/giant set is just a
+ *  superset with more in it, and the label follows the size on its own. */
+const OFFERED_KINDS: GroupKind[] = ["superset", "circuit"];
 
 interface SearchExercise {
   slug: string;
@@ -214,7 +226,8 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
         exerciseSlug: r.slug,
         name: r.name,
         trackingType: r.trackingType,
-        sets: 3,
+        // Agree with the session you are adding to, not a hardcoded 3.
+        sets: defaultSetsFor(prev),
         reps: r.trackingType.startsWith("time") ? "" : "8-12",
         ...(r.equipment && { equipment: r.equipment }),
         ...(r.laterality && { laterality: r.laterality }),
@@ -247,7 +260,7 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
     });
   }, []);
 
-  // Superset an exercise with the one under it, or break the group apart.
+  // Group an exercise with the one under it, or break the group apart.
   // The same gesture exists mid-session in the live and track views.
   const toggleGroup = useCallback((slug: string) => {
     setChosen((prev) => {
@@ -259,9 +272,29 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
     });
   }, []);
 
+  /** Pull the exercise below the group into it — a circuit of three, four, … */
+  const growGroup = useCallback((slug: string) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : addNextIntoGroup(prev, i).exercises;
+    });
+  }, []);
+
+  /** Superset or circuit. A circuit's rounds then agree across the block. */
+  const chooseKind = useCallback((slug: string, kind: GroupKind) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : setGroupKindAt(prev, i, kind).exercises;
+    });
+  }, []);
+
   const setSets = useCallback((slug: string, sets: number) => {
     const clamped = Math.max(1, Math.min(8, sets));
-    setChosen((prev) => prev.map((e) => (e.exerciseSlug === slug ? { ...e, sets: clamped } : e)));
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      // Inside a circuit the count belongs to the block, so all of it follows.
+      return i === -1 ? prev : setSetsAt(prev, i, clamped);
+    });
   }, []);
 
   const finish = useCallback(async () => {
@@ -524,11 +557,19 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
         </p>
       ) : (
         <div className="space-y-1.5">
-          {chosen.map((ex) => (
+          {chosen.map((ex, i) => {
+          // Only the first member of a group carries the kind control, so one
+          // circuit does not offer the same choice three times over; only the
+          // last can swallow the exercise below it.
+          const groupHead = !!ex.groupId && chosen[i - 1]?.groupId !== ex.groupId;
+          const canGrowGroup =
+            !!ex.groupId && i + 1 < chosen.length && chosen[i + 1]?.groupId !== ex.groupId;
+          return (
             <div
               key={ex.exerciseSlug}
-              className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
             >
+            <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -568,6 +609,16 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
               >
                 {ex.groupId ? <Unlink className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
               </button>
+              {canGrowGroup && (
+                <button
+                  onClick={() => growGroup(ex.exerciseSlug)}
+                  aria-label={`Add the next exercise into the ${(ex.groupLabel || "group").toLowerCase()} containing ${ex.name}`}
+                  data-testid={`builder-group-grow-${ex.exerciseSlug}`}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-purple-500 transition-colors hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
               <button
                 onClick={() => removeExercise(ex.exerciseSlug)}
                 aria-label="Remove exercise"
@@ -576,7 +627,37 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
-          ))}
+
+            {/* Superset or circuit. A circuit is an intent, not a headcount, so
+                it stays an explicit choice — and picking it is what makes the
+                block's rounds agree with its first exercise. */}
+            {groupHead && (
+              <div className="mt-1.5 flex items-center gap-1.5" data-testid={`builder-group-kind-${ex.exerciseSlug}`}>
+                {OFFERED_KINDS.map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => chooseKind(ex.exerciseSlug, k)}
+                    aria-pressed={(ex.groupType || "superset") === k}
+                    data-testid={`builder-group-kind-${k}-${ex.exerciseSlug}`}
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                      (ex.groupType || "superset") === k
+                        ? "bg-purple-600 text-white"
+                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                    }`}
+                  >
+                    {k === "superset" ? "Superset" : "Circuit"}
+                  </button>
+                ))}
+                {ex.groupType === "circuit" && (
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    same rounds for every exercise
+                  </span>
+                )}
+              </div>
+            )}
+            </div>
+          );
+          })}
         </div>
       )}
 

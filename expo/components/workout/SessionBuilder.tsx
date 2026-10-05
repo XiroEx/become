@@ -64,13 +64,19 @@ import type {
   ExerciseSearchResult,
 } from "@become/api-client";
 import {
+  DEFAULT_SETS,
+  addNextIntoGroup,
+  defaultSetsFor,
   fallbackQuickSessionName,
   groupIndexes,
   implementLabel,
   localDateStr,
+  setGroupKindAt,
+  setSetsAt,
   setUnitLabel,
   ungroupAt,
   type DraftExercise,
+  type GroupKind,
 } from "@become/core";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
@@ -119,21 +125,25 @@ export interface SessionBuilderProps {
   initialDraft?: InitialSessionDraft;
 }
 
-function toDraftExercise(r: {
-  slug: string;
-  name: string;
-  trackingType?: string;
-  equipment?: string[];
-  laterality?: string;
-  movementPatterns?: string[];
-}): DraftExercise {
+function toDraftExercise(
+  r: {
+    slug: string;
+    name: string;
+    trackingType?: string;
+    equipment?: string[];
+    laterality?: string;
+    movementPatterns?: string[];
+  },
+  // Agree with the session you are adding to, not a hardcoded 3.
+  sets = DEFAULT_SETS,
+): DraftExercise {
   const trackingType = r.trackingType ?? "reps_weight";
   const isTime = trackingType.startsWith("time");
   return {
     exerciseSlug: r.slug,
     name: r.name,
     trackingType,
-    sets: 3,
+    sets,
     reps: isTime ? "" : "8-12",
     ...(isTime ? { duration: "30" } : {}),
     ...(r.equipment ? { equipment: r.equipment } : {}),
@@ -151,6 +161,10 @@ function stripGroup(ex: DraftExercise): DraftExercise {
   delete next.groupRounds;
   return next;
 }
+
+/** The two kinds a member picks between here. A triset/giant set is just a
+ *  superset with more in it, and the label follows the size on its own. */
+const OFFERED_KINDS: GroupKind[] = ["superset", "circuit"];
 
 export function SessionBuilder({
   onLaunch,
@@ -314,7 +328,7 @@ export function SessionBuilder({
     (r: { slug: string; name: string; trackingType?: string; equipment?: string[]; laterality?: string; movementPatterns?: string[] }) => {
       setChosen((prev) => {
         if (prev.some((e) => e.exerciseSlug === r.slug)) return prev;
-        return [...prev, toDraftExercise(r)];
+        return [...prev, toDraftExercise(r, defaultSetsFor(prev))];
       });
       setQuery("");
       setResults([]);
@@ -334,7 +348,7 @@ export function SessionBuilder({
     });
   }, []);
 
-  // Superset an exercise with the one under it, or break the group apart —
+  // Group an exercise with the one under it, or break the group apart —
   // the same gesture the live and track views offer mid-session.
   const toggleGroup = useCallback((slug: string) => {
     setChosen((prev) => {
@@ -346,11 +360,29 @@ export function SessionBuilder({
     });
   }, []);
 
+  /** Pull the exercise below the group into it — a circuit of three, four, … */
+  const growGroup = useCallback((slug: string) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : addNextIntoGroup(prev, i).exercises;
+    });
+  }, []);
+
+  /** Superset or circuit. A circuit's rounds then agree across the block. */
+  const chooseKind = useCallback((slug: string, kind: GroupKind) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : setGroupKindAt(prev, i, kind).exercises;
+    });
+  }, []);
+
   const setSets = useCallback((slug: string, sets: number) => {
     const clamped = Math.max(1, Math.min(8, sets));
-    setChosen((prev) =>
-      prev.map((e) => (e.exerciseSlug === slug ? { ...e, sets: clamped } : e)),
-    );
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      // Inside a circuit the count belongs to the block, so all of it follows.
+      return i === -1 ? prev : setSetsAt(prev, i, clamped);
+    });
   }, []);
 
   const finish = useCallback(async () => {
@@ -618,14 +650,19 @@ export function SessionBuilder({
         </View>
       ) : (
         <View testID={`${testID}-chosen`} style={{ gap: 6 }}>
-          {chosen.map((ex) => (
+          {chosen.map((ex, i) => {
+          // Only the first member of a group carries the kind control, so one
+          // circuit does not offer the same choice three times over; only the
+          // last can swallow the exercise below it.
+          const groupHead = !!ex.groupId && chosen[i - 1]?.groupId !== ex.groupId;
+          const canGrowGroup =
+            !!ex.groupId && i + 1 < chosen.length && chosen[i + 1]?.groupId !== ex.groupId;
+          return (
             <View
               key={ex.exerciseSlug}
               testID={`${testID}-chosen-${ex.exerciseSlug}`}
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
+                gap: 6,
                 padding: 12,
                 borderRadius: 12,
                 borderWidth: 1,
@@ -633,6 +670,7 @@ export function SessionBuilder({
                 backgroundColor: colors.card,
               }}
             >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="text-foreground text-sm font-medium" numberOfLines={1}>
                   {ex.name}
@@ -688,6 +726,17 @@ export function SessionBuilder({
                   <Layers size={16} color={colors["muted-foreground"]} strokeWidth={2} />
                 )}
               </Pressable>
+              {canGrowGroup ? (
+                <Pressable
+                  testID={`${testID}-group-grow-${ex.exerciseSlug}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add the next exercise into the ${(ex.groupLabel || "group").toLowerCase()} containing ${ex.name}`}
+                  onPress={() => growGroup(ex.exerciseSlug)}
+                  style={{ padding: 6, ...minTouchTarget }}
+                >
+                  <Plus size={16} color={colors.primary} strokeWidth={2} />
+                </Pressable>
+              ) : null}
               <Pressable
                 testID={`${testID}-remove-${ex.exerciseSlug}`}
                 accessibilityRole="button"
@@ -698,7 +747,58 @@ export function SessionBuilder({
                 <Trash2 size={16} color={colors.destructive} strokeWidth={2} />
               </Pressable>
             </View>
-          ))}
+
+            {/* Superset or circuit. A circuit is an intent, not a headcount, so
+                it stays an explicit choice — and picking it is what makes the
+                block's rounds agree with its first exercise. */}
+            {groupHead ? (
+              <View
+                testID={`${testID}-group-kind-${ex.exerciseSlug}`}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}
+              >
+                {OFFERED_KINDS.map((k) => {
+                  const active = (ex.groupType ?? "superset") === k;
+                  return (
+                    <Pressable
+                      key={k}
+                      testID={`${testID}-group-kind-${k}-${ex.exerciseSlug}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`${k === "superset" ? "Superset" : "Circuit"} for the group containing ${ex.name}`}
+                      onPress={() => chooseKind(ex.exerciseSlug, k)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        backgroundColor: active ? colors.primary : colors.muted,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "600",
+                          color: active ? colors["primary-foreground"] : colors["muted-foreground"],
+                        }}
+                      >
+                        {k === "superset" ? "Superset" : "Circuit"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {ex.groupType === "circuit" ? (
+                  <Text
+                    testID={`${testID}-circuit-note-${ex.exerciseSlug}`}
+                    className="text-muted-foreground"
+                    style={{ fontSize: 11 }}
+                  >
+                    same rounds for every exercise
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            </View>
+          );
+          })}
         </View>
       )}
 

@@ -1020,6 +1020,14 @@ export default function WorkoutFormPage() {
     void autoSave(nextProgress, next);
   }, [exerciseProgress, isQuick, quickSessionId, workout, autoSave]);
 
+  // The exercise a new one would be grouped with — the open card in the Track
+  // view, falling back to the last exercise. The sheet reads its set count so
+  // a new exercise starts where the session already is.
+  const addAnchor = (() => {
+    const list = workout?.exercises ?? [];
+    return expandedExercise != null ? list[expandedExercise] : list.at(-1);
+  })();
+
   const handleAddExercise = useCallback((r: AddExerciseResult) => {
     const list = (workout?.exercises ?? []) as AdHocExercise[];
     const fresh = { ...r.exercise, addedAdHoc: true } as AdHocExercise;
@@ -2360,8 +2368,10 @@ export default function WorkoutFormPage() {
         open={showAddExercise}
         onClose={() => setShowAddExercise(false)}
         onAdd={handleAddExercise}
-        anchorName={expandedExercise != null ? workout?.exercises[expandedExercise]?.name : workout?.exercises.at(-1)?.name}
-        anchorInGroup={!!(expandedExercise != null ? workout?.exercises[expandedExercise]?.groupId : workout?.exercises.at(-1)?.groupId)}
+        anchorName={addAnchor?.name}
+        anchorInGroup={!!addAnchor?.groupId}
+        anchorSets={addAnchor?.sets}
+        anchorGroupType={addAnchor?.groupType}
       />
 
       {/* Exercise Swap Modal */}

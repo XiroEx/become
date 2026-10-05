@@ -34,6 +34,8 @@ import type {
   ExerciseSearchResult,
 } from "@become/api-client";
 import {
+  DEFAULT_SETS,
+  agreesOnSets,
   setUnitLabel,
   type GroupKind,
 } from "@become/core";
@@ -78,6 +80,17 @@ export interface AddExerciseSheetProps {
   anchorSlug?: string | null;
   /** True when the anchor already belongs to a group, so we say "add into it". */
   anchorInGroup?: boolean;
+  /**
+   * The anchor's set count. A new exercise defaults to it rather than to a
+   * flat 3 — adding one exercise to a five-set session should not quietly
+   * produce a workout that disagrees with itself.
+   */
+  anchorSets?: number | null;
+  /**
+   * The anchor's group kind, when it is already in one. A circuit runs every
+   * member for the same rounds, so joining one is not a free choice.
+   */
+  anchorGroupType?: string | null;
   /** Exercise slugs already in this workout, so suggestions don't repeat one. */
   workoutExerciseSlugs?: string[];
   title?: string;
@@ -131,6 +144,8 @@ export function AddExerciseSheet({
   anchorName,
   anchorSlug,
   anchorInGroup = false,
+  anchorSets,
+  anchorGroupType,
   workoutExerciseSlugs = [],
   title = "Add an exercise",
   testID = "add-exercise-sheet",
@@ -150,7 +165,9 @@ export function AddExerciseSheet({
     DEFAULT_CUSTOM_EXERCISE_FORM,
   );
   const [picked, setPicked] = useState<SearchRow | null>(null);
-  const [sets, setSets] = useState(3);
+  const defaultSets =
+    anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS;
+  const [sets, setSets] = useState(defaultSets);
   const [reps, setReps] = useState("8-12");
   const [seconds, setSeconds] = useState(45);
   const [placement, setPlacement] = useState<AddExercisePlacement>("end");
@@ -173,7 +190,7 @@ export function AddExerciseSheet({
     setResults([]);
     setSuggested([]);
     setPicked(null);
-    setSets(3);
+    setSets(defaultSets);
     setReps("8-12");
     setSeconds(45);
     setPlacement("end");
@@ -181,7 +198,7 @@ export function AddExerciseSheet({
     setShowCreateForm(false);
     setCreatingError(null);
     setCustomForm(DEFAULT_CUSTOM_EXERCISE_FORM);
-  }, [visible]);
+  }, [visible, defaultSets]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const workoutSlugsKey = workoutExerciseSlugs.join(",");
@@ -355,6 +372,18 @@ export function AddExerciseSheet({
     }
   }, [customForm, creating, choose, mayCreateCustom, entitlements, token, refreshEntitlements]);
 
+  // Joining a circuit is not a free choice of set count: a circuit is rounds
+  // of the whole block, so the anchor's count is the count. Reported from the
+  // field — a 3-set exercise added to a 5-set one as a circuit produced five
+  // rounds with the newcomer missing from two of them.
+  const joiningCircuit =
+    placement === "group" &&
+    !!anchorName &&
+    agreesOnSets(anchorInGroup ? anchorGroupType ?? undefined : groupKind);
+  const lockedSets =
+    joiningCircuit && anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : null;
+  const effectiveSets = lockedSets ?? sets;
+
   const submit = useCallback(async () => {
     if (!picked || adding) return;
     setAdding(true);
@@ -364,7 +393,7 @@ export function AddExerciseSheet({
       const exercise: LiveWorkoutExercise = {
         slug,
         name: picked.name,
-        sets,
+        sets: effectiveSets,
         ...(timed ? {} : { repsLabel: reps.trim() || "8-12" }),
         ...(timed ? { durationLabel: `${seconds} sec` } : {}),
         trackingType: picked.trackingType,
@@ -380,7 +409,7 @@ export function AddExerciseSheet({
     } finally {
       setAdding(false);
     }
-  }, [picked, adding, sets, reps, seconds, placement, groupKind, onAdd, onClose]);
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose]);
 
   if (!visible) return null;
 
@@ -398,7 +427,7 @@ export function AddExerciseSheet({
     ...customMatches.filter((c) => !results.some((r) => r.slug === c.slug)),
   ];
   const timed = isTimed(picked?.trackingType);
-  const setsLabel = setUnitLabel(picked?.trackingType ?? null, sets);
+  const setsLabel = setUnitLabel(picked?.trackingType ?? null, effectiveSets);
 
   return (
     <Modal
@@ -608,22 +637,24 @@ export function AddExerciseSheet({
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Pressable
                       testID={`${testID}-sets-less`}
+                      disabled={lockedSets !== null}
                       onPress={() => setSets((v) => Math.max(1, Math.min(10, v - 1)))}
                       accessibilityRole="button"
                       accessibilityLabel={`Fewer ${setsLabel}`}
-                      style={minTouchTarget}
+                      style={[minTouchTarget, { opacity: lockedSets !== null ? 0.4 : 1 }]}
                     >
                       <Text className="text-foreground text-lg font-bold">−</Text>
                     </Pressable>
                     <Text testID={`${testID}-sets`} className="text-foreground text-sm font-bold" style={{ minWidth: 24, textAlign: "center" }}>
-                      {sets}
+                      {effectiveSets}
                     </Text>
                     <Pressable
                       testID={`${testID}-sets-more`}
+                      disabled={lockedSets !== null}
                       onPress={() => setSets((v) => Math.max(1, Math.min(10, v + 1)))}
                       accessibilityRole="button"
                       accessibilityLabel={`More ${setsLabel}`}
-                      style={minTouchTarget}
+                      style={[minTouchTarget, { opacity: lockedSets !== null ? 0.4 : 1 }]}
                     >
                       <Text className="text-foreground text-lg font-bold">+</Text>
                     </Pressable>
@@ -725,6 +756,15 @@ export function AddExerciseSheet({
                         </Pressable>
                       ))}
                     </View>
+                  ) : null}
+                  {lockedSets !== null ? (
+                    <Text
+                      testID={`${testID}-circuit-note`}
+                      className="text-muted-foreground text-xs"
+                      style={{ marginTop: 8 }}
+                    >
+                      {`A circuit runs every exercise the same number of rounds, so this one follows ${anchorName} at ${lockedSets}.`}
+                    </Text>
                   ) : null}
                 </View>
               ) : null}

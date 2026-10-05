@@ -35,6 +35,90 @@ export interface MutationResult<T extends WorkoutExercise> {
 
 export const GROUP_KINDS: GroupKind[] = ['superset', 'circuit', 'triset', 'giant_set']
 
+/** What a brand-new exercise gets when nothing in the session suggests better. */
+export const DEFAULT_SETS = 3
+
+/**
+ * The set count a newly added exercise should start on.
+ *
+ * It used to be a flat 3 everywhere, so adding an exercise to a five-set
+ * session produced a workout that disagreed with itself before the member had
+ * touched anything. The FIRST exercise is the one the session was built
+ * around, so a new one starts on its count. Still only a default: changing it
+ * by hand changes it.
+ */
+export function defaultSetsFor(list: Pick<WorkoutExercise, 'sets'>[]): number {
+  const first = list[0]?.sets
+  return typeof first === 'number' && first > 0 ? Math.max(1, Math.floor(first)) : DEFAULT_SETS
+}
+
+/**
+ * Whether a group of this kind runs every member for the same number of
+ * rounds. A circuit does — it IS rounds of the whole block — so its members
+ * cannot disagree about how many there are. A superset (and everything else)
+ * is free to pair 5 sets of one thing with 3 of another, which is why only a
+ * circuit is held to agreement.
+ */
+export function agreesOnSets(kind?: string): boolean {
+  return kind === 'circuit'
+}
+
+/**
+ * Make every member of a circuit agree with its first member's set count.
+ *
+ * Reported from the field: a 3-set exercise added to a 5-set one and turned
+ * into a circuit rendered as five rounds with the second exercise missing from
+ * two of them — a shape nobody can run. The first member is the one the
+ * circuit was built on, so it wins, and `groupRounds` follows so the flow
+ * builder and the group header quote the same number.
+ *
+ * Only circuits are touched. Supersets are left exactly as they are.
+ */
+export function alignCircuitSets<T extends WorkoutExercise>(list: T[]): T[] {
+  const next = [...list]
+  let changed = false
+  let i = 0
+  while (i < next.length) {
+    const head = next[i]!
+    if (!head.groupId || !agreesOnSets(head.groupType)) {
+      i++
+      continue
+    }
+    let last = i
+    while (last + 1 < next.length && next[last + 1]!.groupId === head.groupId) last++
+    if (last > i) {
+      const rounds = Math.max(1, Math.floor(head.sets ?? DEFAULT_SETS))
+      for (let k = i; k <= last; k++) {
+        const ex = next[k]!
+        if (ex.sets === rounds && ex.groupRounds === rounds) continue
+        next[k] = { ...ex, sets: rounds, groupRounds: rounds }
+        changed = true
+      }
+    }
+    i = last + 1
+  }
+  return changed ? next : list
+}
+
+/**
+ * Change one exercise's set count, keeping a circuit in agreement.
+ *
+ * Inside a circuit the count is a property of the BLOCK, not of the exercise
+ * standing in it, so editing any member edits all of them — the member asked
+ * for a different number of rounds, not for a circuit that cannot be run.
+ * Outside a circuit only the one exercise moves, exactly as before.
+ */
+export function setSetsAt<T extends WorkoutExercise>(list: T[], index: number, sets: number): T[] {
+  const target = list[index]
+  if (!target) return list
+  const value = Math.max(1, Math.floor(sets) || 1)
+  const circuit = !!target.groupId && agreesOnSets(target.groupType)
+  return list.map((ex, i) => {
+    if (i !== index && !(circuit && ex.groupId === target.groupId)) return ex
+    return circuit ? { ...ex, sets: value, groupRounds: value } : { ...ex, sets: value }
+  })
+}
+
 /** Below this many exercises, a session reads as thin — the add-exercise button calls attention to itself. */
 export const RECOMMENDED_MIN_EXERCISES = 4
 
@@ -142,7 +226,9 @@ export function addIntoGroup<T extends WorkoutExercise>(
         ? { ...e, groupLabel: groupLabelFor((e.groupType as GroupKind) || 'superset', size) }
         : e,
     )
-    return { ...inserted, exercises: relabelled, groupId: anchor.groupId }
+    // Joining a circuit means running its rounds — whatever count the sheet
+    // offered, the block it is joining decides.
+    return { ...inserted, exercises: alignCircuitSets(relabelled), groupId: anchor.groupId }
   }
   // No group yet: put the new exercise right after the anchor and marry the two.
   const inserted = insertExerciseAfter(list, anchorIndex, ex)
@@ -179,6 +265,13 @@ export function groupIndexes<T extends WorkoutExercise>(
   order.push(...picked)
   for (let i = anchor + 1; i < list.length; i++) if (!picked.includes(i)) order.push(i)
 
+  // A circuit runs the whole block for the same number of rounds, so its
+  // members are brought into agreement the moment it is made: an explicit
+  // round count wins, otherwise the first exercise picked sets it.
+  const circuitSets = agreesOnSets(kind)
+    ? Math.max(1, Math.floor(opts?.rounds ?? list[anchor]?.sets ?? DEFAULT_SETS))
+    : 0
+
   const exercises = order.map(oldIdx => {
     const ex = list[oldIdx]!
     if (!picked.includes(oldIdx)) return ex
@@ -187,6 +280,7 @@ export function groupIndexes<T extends WorkoutExercise>(
       groupId,
       groupType: kind,
       groupLabel: label,
+      ...(circuitSets ? { sets: circuitSets, groupRounds: circuitSets } : {}),
       ...(opts?.rounds ? { groupRounds: opts.rounds } : {}),
       ...(opts?.rest ? { groupRest: opts.rest } : {}),
     }
@@ -194,6 +288,61 @@ export function groupIndexes<T extends WorkoutExercise>(
 
   const start = order.indexOf(picked[0]!)
   return { exercises, order, groupId, indexes: picked.map((_, i) => start + i) }
+}
+
+/** The bounds of the group the exercise at `index` belongs to, or null. */
+function groupBoundsAt(list: Pick<WorkoutExercise, 'groupId'>[], index: number): { first: number; last: number; groupId: string } | null {
+  const gid = list[index]?.groupId
+  if (!gid) return null
+  let first = index
+  let last = index
+  while (first - 1 >= 0 && list[first - 1]?.groupId === gid) first--
+  while (last + 1 < list.length && list[last + 1]?.groupId === gid) last++
+  return { first, last, groupId: gid }
+}
+
+/**
+ * Re-badge the group the exercise at `index` belongs to as another kind —
+ * "this is a circuit, not a superset".
+ *
+ * The builder used to be able to make supersets and nothing else, so a circuit
+ * could only be assembled mid-session from the live view. Switching TO a
+ * circuit brings the block's set counts into agreement; switching away leaves
+ * them where they are, because they are the member's numbers now.
+ */
+export function setGroupKindAt<T extends WorkoutExercise>(list: T[], index: number, kind: GroupKind): MutationResult<T> {
+  const bounds = groupBoundsAt(list, index)
+  if (!bounds) return { exercises: list, order: identityOrder(list.length) }
+  const size = bounds.last - bounds.first + 1
+  const label = groupLabelFor(kind, size)
+  const relabelled = list.map((ex, i) =>
+    i >= bounds.first && i <= bounds.last ? { ...ex, groupType: kind, groupLabel: label } : ex,
+  )
+  return { exercises: alignCircuitSets(relabelled), order: identityOrder(list.length) }
+}
+
+/**
+ * Pull the exercise that follows a group into it — the gesture that turns a
+ * pair into a real circuit of three, four, five.
+ *
+ * Order is unchanged: the newcomer already sits directly behind the group's
+ * last member, which is the one place grouping needs it to be.
+ */
+export function addNextIntoGroup<T extends WorkoutExercise>(list: T[], index: number): MutationResult<T> & { groupId: string } {
+  const bounds = groupBoundsAt(list, index)
+  if (!bounds) return { exercises: list, order: identityOrder(list.length), groupId: '' }
+  const next = bounds.last + 1
+  if (next >= list.length) return { exercises: list, order: identityOrder(list.length), groupId: bounds.groupId }
+  const head = list[bounds.first]!
+  const kind = (head.groupType as GroupKind) || 'superset'
+  const indexes: number[] = []
+  for (let i = bounds.first; i <= next; i++) indexes.push(i)
+  const grouped = groupIndexes(list, indexes, kind, {
+    groupId: bounds.groupId,
+    ...(head.groupRounds ? { rounds: head.groupRounds } : {}),
+    ...(head.groupRest ? { rest: head.groupRest } : {}),
+  })
+  return { exercises: grouped.exercises, order: grouped.order, groupId: bounds.groupId }
 }
 
 /** Break up the group the exercise at `index` belongs to. Order is unchanged. */
