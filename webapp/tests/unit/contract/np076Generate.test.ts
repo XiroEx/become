@@ -226,22 +226,38 @@ test('POST /api/generate/session answers a preview for a focus', async () => {
 })
 
 test('POST /api/generate/session without a seed answers a different session (Regenerate)', async () => {
-  const first = await call(generateSessionPOST, 'POST', '/api/generate/session', MEMBER, {
-    body: { focus: 'push' },
-  })
-  assert.equal(first.status, 200, JSON.stringify(first.body))
-  const second = await call(generateSessionPOST, 'POST', '/api/generate/session', MEMBER, {
-    body: { focus: 'push' },
-  })
-  assert.equal(second.status, 200, JSON.stringify(second.body))
-  const a = GenerateSessionResponseSchema.parse(first.body)
-  const b = GenerateSessionResponseSchema.parse(second.body)
-  // Two unseeded draws mint different seeds, so the sessions differ — that is
-  // what the sheet's Regenerate button relies on.
-  assert.notDeepEqual(
-    a.session.exercises.map((ex) => ex.exerciseSlug),
-    b.session.exercises.map((ex) => ex.exerciseSlug),
-  )
+  // Unseeded draws mint their seed from Math.random(). The fixture pool is
+  // small (six rows), so two RANDOM seeds can legitimately pick the same
+  // exercises — asserting "two draws differ" flaked about one run in several.
+  // Pin Math.random to a fixed, well-spread sequence instead: the seeds are then
+  // the same on every run, and the assertion is only what Regenerate relies on —
+  // each unseeded draw mints a NEW seed, and some fresh seed gives a different
+  // session than the first.
+  const realRandom = Math.random
+  let n = 0
+  Math.random = () => ((++n * 0.6180339887) % 1)
+  try {
+    const draw = async () => {
+      const res = await call(generateSessionPOST, 'POST', '/api/generate/session', MEMBER, {
+        body: { focus: 'push' },
+      })
+      assert.equal(res.status, 200, JSON.stringify(res.body))
+      const parsed = GenerateSessionResponseSchema.parse(res.body)
+      return { seed: parsed.seed, slugs: parsed.session.exercises.map((ex) => ex.exerciseSlug) }
+    }
+    const first = await draw()
+    const seeds = new Set([first.seed])
+    let differing: string[] | null = null
+    for (let i = 0; i < 25 && !differing; i++) {
+      const next = await draw()
+      assert.ok(!seeds.has(next.seed), 'every unseeded draw mints a new seed')
+      seeds.add(next.seed)
+      if (JSON.stringify(next.slugs) !== JSON.stringify(first.slugs)) differing = next.slugs
+    }
+    assert.ok(differing, 'Regenerate (a fresh seed) must be able to give a different session')
+  } finally {
+    Math.random = realRandom
+  }
 })
 
 test('POST /api/generate/session refuses a missing focus with 400', async () => {
