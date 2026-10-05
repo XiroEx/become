@@ -960,7 +960,14 @@ export function useLiveWorkout(
             groupType: ex.groupType,
             groupRounds: ex.groupRounds,
             groupRest: ex.groupRest,
-            restSec: ex.rest ? parseRestSeconds(ex.rest) || 90 : 90,
+            // Leave `restSec` undefined when the program sets no explicit
+            // `rest`: `restAfterStep`'s smart default (3 min reps_weight,
+            // 90s bodyweight/reps_only, 60s otherwise — the web's
+            // `getSmartRestDefault`) only fires when `restSec` is null, and a
+            // flat 90 here would silently override it for every exercise
+            // that relies on the default, breaking "same rest for the same
+            // exercise" parity with the web.
+            restSec: ex.rest ? parseRestSeconds(ex.rest) : undefined,
             videoUrl: ex.videoUrl ?? null,
             thumbnailUrl: ex.thumbnailUrl ?? null,
             videoWidth: ex.videoWidth ?? null,
@@ -1084,7 +1091,11 @@ export function useLiveWorkout(
               groupType: (m as any).groupType ?? existing?.groupType,
               groupRounds: (m as any).groupRounds ?? existing?.groupRounds,
               groupRest: (m as any).groupRest ?? existing?.groupRest,
-              restSec: existing?.restSec ?? 90,
+              // Same rule as the initial hydration above: an ad-hoc
+              // exercise's own `rest` wins, else the slug's already-computed
+              // `restSec` carries over, else leave it undefined so the
+              // smart tracking-type default applies instead of a flat 90.
+              restSec: m.rest ? parseRestSeconds(m.rest) : existing?.restSec,
               addedAdHoc: Boolean((m as any).addedAdHoc),
               videoUrl: existing?.videoUrl ?? null,
               thumbnailUrl: existing?.thumbnailUrl ?? null,
