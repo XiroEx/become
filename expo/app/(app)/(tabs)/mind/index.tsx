@@ -69,6 +69,7 @@ import {
 } from "@/lib/mind/sessionCache";
 import { precomposeMindSession } from "@/lib/mind/precompose";
 import { runAiTask } from "@/lib/ai/runClient";
+import { MindCoachTeaser } from "@/components/mind/MindCoachTeaser";
 
 export interface MindRouteProps {
   testID?: string;
@@ -823,6 +824,26 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
               nextInLabel={cooldownLabel}
               mainSessionCount={progress?.mainSessionCount ?? 0}
             />
+          </View>
+        )}
+
+        {/* AI coach — unlocks after 3 main sessions (parity with
+            `webapp/components/mind/MindJourney.tsx:591-604`). */}
+        {(progress?.mainSessionCount ?? 0) >= 3 ? (
+          <MindCoachTeaser testID="mind-coach-teaser" />
+        ) : (
+          <View
+            testID="mind-coach-teaser-locked"
+            className="flex-row items-center justify-between rounded-2xl border border-dashed border-border bg-muted/40 px-4 py-3.5 opacity-80"
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text className="text-muted-foreground text-sm font-semibold">Your coach</Text>
+              <Text className="text-muted-foreground text-xs mt-0.5">
+                Talk it through — unlocks after your 3rd main session (
+                {progress?.mainSessionCount ?? 0}/3 done)
+              </Text>
+            </View>
+            <Lock size={16} color={colors["muted-foreground"]} />
           </View>
         )}
 
