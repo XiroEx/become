@@ -44,8 +44,19 @@ export interface AdHocExercise extends WorkoutExercise {
   addedAdHoc?: boolean
 }
 
+/**
+ * The only fields the list mutations read or write. A mutation is generic over
+ * any exercise row that carries the group fields (the native live session's
+ * `LiveWorkoutExercise` does, but types `videoUrl` / `trackingType` as nullable,
+ * so it is not assignable to the full `WorkoutExercise`).
+ */
+export type GroupableExercise = Pick<
+  WorkoutExercise,
+  'name' | 'groupId' | 'groupType' | 'groupLabel' | 'groupRest' | 'groupRounds'
+>
+
 /** The result of any mutation: the new list plus how the old one maps onto it. */
-export interface MutationResult<T extends WorkoutExercise> {
+export interface MutationResult<T extends GroupableExercise> {
   exercises: T[]
   /** `order[newIndex] = oldIndex`, or -1 for an exercise that did not exist before. */
   order: number[]
@@ -110,7 +121,7 @@ function identityOrder(n: number): number[] {
 }
 
 /** Append an exercise to the end of the workout. */
-export function appendExercise<T extends WorkoutExercise>(list: T[], ex: T): MutationResult<T> & { index: number } {
+export function appendExercise<T extends GroupableExercise>(list: T[], ex: T): MutationResult<T> & { index: number } {
   return { exercises: [...list, ex], order: [...identityOrder(list.length), -1], index: list.length }
 }
 
@@ -119,7 +130,7 @@ export function appendExercise<T extends WorkoutExercise>(list: T[], ex: T): Mut
  * superset I am standing in" — the new exercise has to sit beside its group or
  * the flow builder will not interleave it.
  */
-export function insertExerciseAfter<T extends WorkoutExercise>(list: T[], afterIndex: number, ex: T): MutationResult<T> & { index: number } {
+export function insertExerciseAfter<T extends GroupableExercise>(list: T[], afterIndex: number, ex: T): MutationResult<T> & { index: number } {
   const at = Math.max(-1, Math.min(afterIndex, list.length - 1)) + 1
   const exercises = [...list.slice(0, at), ex, ...list.slice(at)]
   const order = [...identityOrder(list.length).slice(0, at), -1, ...identityOrder(list.length).slice(at)]
@@ -131,7 +142,7 @@ export function insertExerciseAfter<T extends WorkoutExercise>(list: T[], afterI
  * group of the two, when it has none). This is the one-tap "superset this with
  * what I am doing" path.
  */
-export function addIntoGroup<T extends WorkoutExercise>(
+export function addIntoGroup<T extends GroupableExercise>(
   list: T[],
   anchorIndex: number,
   ex: T,
@@ -179,7 +190,7 @@ export function addIntoGroup<T extends WorkoutExercise>(
  * Make the given exercises one group, moving them together at the position of
  * the first one. Returns the permutation so set data can follow its exercise.
  */
-export function groupIndexes<T extends WorkoutExercise>(
+export function groupIndexes<T extends GroupableExercise>(
   list: T[],
   indexes: number[],
   kind: GroupKind = 'superset',
@@ -215,7 +226,7 @@ export function groupIndexes<T extends WorkoutExercise>(
 }
 
 /** Break up the group the exercise at `index` belongs to. Order is unchanged. */
-export function ungroupAt<T extends WorkoutExercise>(list: T[], index: number): MutationResult<T> {
+export function ungroupAt<T extends GroupableExercise>(list: T[], index: number): MutationResult<T> {
   const gid = list[index]?.groupId
   if (!gid) return { exercises: list, order: identityOrder(list.length) }
   const exercises = list.map(ex => {
@@ -232,7 +243,7 @@ export function ungroupAt<T extends WorkoutExercise>(list: T[], index: number): 
 }
 
 /** Remove an exercise, dissolving a group that would be left with one member. */
-export function removeExercise<T extends WorkoutExercise>(list: T[], index: number): MutationResult<T> {
+export function removeExercise<T extends GroupableExercise>(list: T[], index: number): MutationResult<T> {
   if (index < 0 || index >= list.length) return { exercises: list, order: identityOrder(list.length) }
   const gid = list[index]?.groupId
   const order = identityOrder(list.length).filter(i => i !== index)
@@ -259,7 +270,7 @@ export function removeExercise<T extends WorkoutExercise>(list: T[], index: numb
  * an outsider into the middle of one — `sanitizeGroups` settles that afterwards,
  * because a group whose members are no longer neighbours is not a group.
  */
-export function moveExercise<T extends WorkoutExercise>(list: T[], from: number, to: number): MutationResult<T> {
+export function moveExercise<T extends GroupableExercise>(list: T[], from: number, to: number): MutationResult<T> {
   if (from === to || from < 0 || from >= list.length || to < 0 || to >= list.length) {
     return { exercises: list, order: identityOrder(list.length) }
   }
@@ -350,7 +361,7 @@ export function exerciseFromLog(saved: SavedLogExercise): AdHocExercise {
  * own list — or explicitly flagged as added — comes back, in order, keeping
  * whatever group it was put in.
  */
-export function mergeAdHocFromLog<T extends WorkoutExercise>(
+export function mergeAdHocFromLog<T extends GroupableExercise>(
   planned: T[],
   saved: SavedLogExercise[] | undefined,
 ): (T | AdHocExercise)[] {
@@ -370,7 +381,7 @@ export function mergeAdHocFromLog<T extends WorkoutExercise>(
  * than none — the flow builder would stop interleaving it while the card kept
  * saying "Superset".
  */
-export function sanitizeGroups<T extends WorkoutExercise>(list: T[]): T[] {
+export function sanitizeGroups<T extends GroupableExercise>(list: T[]): T[] {
   const runs = new Map<string, number[]>()
   list.forEach((ex, i) => {
     if (!ex.groupId) return
