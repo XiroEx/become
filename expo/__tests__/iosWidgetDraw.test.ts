@@ -275,6 +275,12 @@ describe("drawIosWidgets", () => {
     expect(entry).toMatch(/lib\/widgets\/ios\/widgets/);
   });
 
+  it("registers the iOS background refresh from the app entry, on iOS only", () => {
+    const entry = fs.readFileSync(path.join(EXPO_DIR, "index.js"), "utf8");
+    expect(entry).toMatch(/registerIosWidgetsRefresh/);
+    expect(entry).toMatch(/lib\/widgets\/iosBackgroundRefresh/);
+  });
+
   it("agrees with the pure builder about what each widget shows", async () => {
     const rec = recording();
     await drawIosWidgets({

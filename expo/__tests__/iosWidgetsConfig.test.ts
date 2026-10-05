@@ -104,3 +104,45 @@ describe("the five iOS widgets, declared once and declared everywhere", () => {
     }
   });
 });
+
+describe("the background refresh — app.json mounts the plugin", () => {
+  it("declares expo-background-task on the SDK 57 line as a dependency", () => {
+    expect(packageJson.dependencies?.["expo-background-task"]).toEqual(
+      expect.stringMatching(/^~57\.0\./),
+    );
+  });
+
+  it("mounts the expo-background-task config plugin", () => {
+    expect(appJson.expo.plugins ?? []).toContain("expo-background-task");
+  });
+
+  // The library's plugin writes these into the Info.plist at prebuild time —
+  // never by hand in app.json. Pinned here so the refresh cannot silently
+  // lose its background mode or its task identifier.
+  it("resolves UIBackgroundModes + BGTaskSchedulerPermittedIdentifiers", async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pluginModule = require("expo-background-task/plugin/build/withBackgroundTask") as {
+      default?: (
+        config: Record<string, unknown>,
+      ) => Record<string, { ios?: { infoPlist?: unknown } }>;
+      withBackgroundTask?: (
+        config: Record<string, unknown>,
+      ) => Record<string, { ios?: { infoPlist?: unknown } }>;
+    };
+    const withBackgroundTask =
+      pluginModule.default ?? pluginModule.withBackgroundTask;
+    expect(typeof withBackgroundTask).toBe("function");
+    const config = withBackgroundTask!({ name: "Become", slug: "become" });
+    const mod = config.mods?.ios?.infoPlist as
+      | ((args: {
+          modResults: Record<string, unknown>;
+        }) => Promise<{ modResults: Record<string, unknown> }>)
+      | undefined;
+    expect(typeof mod).toBe("function");
+    const { modResults } = await mod?.({ modResults: {} })!;
+    expect(modResults.UIBackgroundModes).toContain("processing");
+    expect(modResults.BGTaskSchedulerPermittedIdentifiers).toContain(
+      "com.expo.modules.backgroundtask.processing",
+    );
+  });
+});

@@ -238,6 +238,25 @@ extension reads them from the App Group. The widgets token stays in the app's
 SecureStore (`lib/widgets/token.ts`); there is no extension-side network call
 and no separate Swift module writing a token into the group.
 
+While the app is closed the refresh is `become-widgets-refresh`
+(`lib/widgets/iosBackgroundRefresh.ts`): one `expo-background-task` task
+(an Expo library on BGTaskScheduler — not a hosted service), defined with
+`expo-task-manager`'s `defineTask` and registered at app start on iOS only
+from `index.js`, minimum interval from the feed's `refreshAfterSeconds`
+(NP-216, via `nextRefreshDate`) clamped to >= 15 min. The task body
+(`refreshIosWidgets`) re-reads the feed with the stored widgets token and
+pushes the timelines — no token draws the prompt, revoked clears token +
+snapshot and draws the prompt, offline draws today's stored snapshot and
+keeps the token. `app.json` mounts the library's config plugin
+(`expo-background-task`), which adds `UIBackgroundModes: ["processing"]` and
+`BGTaskSchedulerPermittedIdentifiers:
+["com.expo.modules.backgroundtask.processing"]` — never by hand.
+
+iOS decides when the task actually runs: the interval is a minimum delay,
+not a schedule, and short intervals are often deferred to overnight windows.
+A member who opens the app need not wait for it — the open hand-off
+(`handoff.ts`) pushes fresh timelines immediately.
+
 ## Verified by
 
 - `__tests__/iosConfig.test.ts` — app.json invariants + StatusBar style +
