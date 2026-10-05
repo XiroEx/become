@@ -174,6 +174,7 @@ only if George asks. Until then, assume no OTA.
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
 | Privacy form filled | App Store Connect → App Privacy | See "Apple App Privacy form" below |
 | **Demo account filled in** | App Store Connect → App Review Information → Sign-in required | **Blocking.** See "Reviewer demo account" below — an app the reviewer cannot sign in to is rejected under Guideline 2.1 |
+| **Permission audit green** | `npx jest __tests__/releaseCandidatePermissions.test.ts` | **Blocking.** NP-206: every permission v1 requests has its reason on both platforms; the manifest declares only what v1 uses. See "Pre-submission permission audit" below |
 | Submit for App Review | App Store Connect → Distribution | When ready to go GA |
 
 ## Play Console (Android) checklist
@@ -185,6 +186,7 @@ only if George asks. Until then, assume no OTA.
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
 | Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
+| **Permission audit green** | `npx jest __tests__/releaseCandidatePermissions.test.ts` | **Blocking.** NP-206: the manifest declares only what v1 uses, each with its reason. See "Pre-submission permission audit" below |
 | **Demo account in the release notes** | Play Console → App content → App access | **Blocking.** All functionality is behind sign-in; give the same demo email + review code. See "Reviewer demo account" below |
 
 ## Reviewer demo account
@@ -240,6 +242,45 @@ touches another required-reason API, add its category there with the module.
 `app.json`, and `__tests__/permissionStrings.test.ts` fails the build when a
 permission-bearing module arrives without one (ITMS-90683 otherwise). See
 `IOS_QUIRKS.md` → "Permission usage strings".
+
+## Pre-submission permission audit (NP-206)
+
+Before the release candidate goes to either store, every permission it can
+request must have a specific, honest reason in the member's language — Apple
+rejects vague ones under guideline 5.1.1, and Play reviews the manifest
+against the Data Safety form and the health apps declaration.
+
+The v1 surface, verified against the installed config plugins and the
+modules' own platform sources:
+
+| Platform | Permission / key | What Become does with it |
+|---|---|---|
+| iOS | `NSCameraUsageDescription` | Meal photo for the estimate, food-barcode scan, food-label evidence, Mind mirror preview |
+| iOS | `NSPhotoLibraryUsageDescription` | Pick a photo — meal, food label, avatar, feedback screenshot; nothing else is read |
+| iOS | `NSMicrophoneUsageDescription` | Follow along as the member speaks their affirmation |
+| iOS | `NSSpeechRecognitionUsageDescription` | Turn that speech into lit-up words |
+| iOS | `NSFaceIDUsageDescription` | Unlock on reopen instead of a fresh sign-in link |
+| Android | `CAMERA` | Same camera uses as iOS |
+| Android | `RECORD_AUDIO` | Same affirmation uses as iOS |
+| Android | `health.READ_WEIGHT` | Import weigh-ins the scale or another app recorded |
+| Android | `health.WRITE_WEIGHT` | Write a Become weigh-in back out |
+| Android | `health.WRITE_EXERCISE` | Write a finished workout out as a session |
+| Android | `POST_NOTIFICATIONS` | Workout reminders, streak alerts — at the considered moment, never at first launch |
+
+Rules that travel: no permission is a condition of using the app (every
+refusal degrades — manual barcode entry, black-stage mirror, hold-to-affirm,
+Settings nudges); notifications fire only from the explicit Turn on or the
+end-of-onboarding hand-off, never at launch; HealthKit ships no strings until
+NP-185 installs its module; nothing is saved to the photo library so there
+is no `NSPhotoLibraryAddUsageDescription`.
+
+The gate is `npx jest __tests__/releaseCandidatePermissions.test.ts` — it
+pins the iOS key set, the full Android manifest (six runtime + the two
+biometric install-time permissions, nothing else), each Android reason
+anchored to its in-app copy, the considered-moment timing, the no-gating
+fallbacks, and the NP-014 rule that a new permission-bearing module without
+its string fails. A green run is the permission sign-off on both store
+checklists above.
 
 **Icons and the launch screen** are generated, not hand-exported:
 `node scripts/generate-app-assets.mjs` writes `assets/icon.png` (1024 px,
