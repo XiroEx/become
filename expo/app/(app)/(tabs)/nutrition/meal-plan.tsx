@@ -99,7 +99,13 @@ export default function MealPlanRoute() {
   const { token } = useAuth();
 
   const [weekStart, setWeekStart] = useState<Date>(() => startOfWeek(new Date()));
+  // The day + slot being planned into. It OUTLIVES the search sheet: the sheet
+  // calls `onClose()` before handing the pick over (`FoodSearchSheet.tsx:420`,
+  // `:464`), so closing it must not forget which Thursday lunch slot the
+  // member tapped — otherwise `PlanFoodSheet` / `MealLogSheet` never open and
+  // nothing can be planned from the week at all.
   const [picker, setPicker] = useState<PickerTarget | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [pickedFood, setPickedFood] = useState<QuantityPickerFood | null>(null);
   // A saved meal picked from the search sheet waits here for its portion in
   // `MealLogSheet mode="plan"` (NP-232): the meal-plan week plans through the
@@ -238,6 +244,7 @@ export default function MealPlanRoute() {
       setPickedFood(null);
       setPickedMeal(null);
       setPicker(null);
+      setSearchOpen(false);
       setCopySource(null);
       setApplyFrom(null);
       setNotice(toast);
@@ -250,6 +257,16 @@ export default function MealPlanRoute() {
     setPickedFood(null);
     setPickedMeal(null);
     setPicker(null);
+    setSearchOpen(false);
+  }, []);
+
+  /** `+` on a day's slot: remember the target, then open the search sheet. */
+  const openPicker = useCallback((dateKey: string, tag: string) => {
+    setPickedFood(null);
+    setPickedMeal(null);
+    setMealPlanError(null);
+    setPicker({ dateKey, tag });
+    setSearchOpen(true);
   }, []);
 
   const revealSlot = useCallback((dayKey: string, tag: string) => {
@@ -574,9 +591,7 @@ export default function MealPlanRoute() {
                             accessibilityRole="button"
                             accessibilityLabel={`Add to ${slot} on ${dayKey}`}
                             testID={`meal-plan-add-${dayKey}-${slot}`}
-                            onPress={() =>
-                              setPicker({ dateKey: dayKey, tag: slot })
-                            }
+                            onPress={() => openPicker(dayKey, slot)}
                             style={{
                               width: 28,
                               height: 28,
@@ -793,8 +808,8 @@ export default function MealPlanRoute() {
 
       {/* Plan a food into the chosen day + slot (plan mode = no time picker) */}
       <FoodSearchSheet
-        visible={picker !== null && pickedFood === null && pickedMeal === null}
-        onClose={() => setPicker(null)}
+        visible={searchOpen && pickedFood === null && pickedMeal === null}
+        onClose={() => setSearchOpen(false)}
         currentTag={picker?.tag}
         basketMode={false}
         onPickFood={handlePickFood}
