@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Dumbbell,
   GripVertical,
   Pencil,
   Plus,
@@ -92,6 +93,19 @@ import {
 
 type HistoryResponse = z.infer<typeof WorkoutHistoryResponseSchema>;
 type PlannedResponse = z.infer<typeof PlannedWorkoutsResponseSchema>;
+
+// The Workout Hub tab switcher (NP-239) — native counterpart of the web's
+// segmented `TABS` control in `HubClient.tsx`. The web keeps all three
+// panels mounted behind `?tab=`; native already routes Exercises, Sessions
+// and Programs as their own screens, so this switches by pushing between
+// them instead. Sessions is always the active tab here since this IS that
+// screen.
+type HubTabKey = "exercises" | "sessions" | "programs";
+const HUB_TABS: { key: HubTabKey; label: string; route: string; icon: typeof Dumbbell }[] = [
+  { key: "exercises", label: "Exercises", route: "/(tabs)/programming/exercises", icon: Dumbbell },
+  { key: "sessions", label: "Sessions", route: "/(tabs)/programming/sessions", icon: Zap },
+  { key: "programs", label: "Programs", route: "/(tabs)/programming/mine", icon: Sparkles },
+];
 
 function toHubSession(log: WorkoutHistoryEntry): HubSession {
   return {
@@ -430,8 +444,6 @@ export default function SessionsHubRoute() {
     void history.refetch();
     void plannedFetch.refetch();
   }, [history, plannedFetch]);
-  const empty = !loading && !fetchError && sessions.length === 0 && planned.length === 0;
-
   const renderSessionRow = (log: HubSession, opts?: { favoriteIndex?: number; favoriteCount?: number }) => {
     const id = log.sessionId ?? `${log.title}-${log.date}`;
     const busy = opening === (log.sessionId ?? log.date);
@@ -584,6 +596,52 @@ export default function SessionsHubRoute() {
           <Text className="text-foreground text-2xl font-bold">Sessions</Text>
         </View>
 
+        {/* Workout Hub tab switcher: Exercises / Sessions / Programs (NP-239) */}
+        <View
+          testID="sessions-hub-tabs"
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}
+        >
+          {HUB_TABS.map((t) => {
+            const active = t.key === "sessions";
+            const Icon = t.icon;
+            return (
+              <Pressable
+                key={t.key}
+                testID={`sessions-hub-tab-${t.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${t.label} tab`}
+                accessibilityState={{ selected: active }}
+                disabled={active}
+                onPress={() => {
+                  if (!active) router.push(t.route as never);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 14,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: active ? colors.primary : colors.muted,
+                  ...minTouchTarget,
+                }}
+              >
+                <Icon
+                  color={active ? colors["primary-foreground"] : colors["muted-foreground"]}
+                  size={14}
+                  strokeWidth={2}
+                />
+                <Text
+                  className="text-xs font-semibold"
+                  style={{ color: active ? colors["primary-foreground"] : colors["muted-foreground"] }}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {enforced ? (
           <View testID="sessions-allowance" style={{ marginBottom: 12 }}>
             <AllowanceCounter feature="custom-sessions" testID="sessions-allowance-counter" />
@@ -628,9 +686,6 @@ export default function SessionsHubRoute() {
           error={fetchError}
           onRetry={retry}
           hasData={sessions.length > 0 || planned.length > 0}
-          empty={empty}
-          emptyTitle="No sessions yet"
-          emptyMessage="Tap Build to create your first session."
           testID="sessions-hub-state"
         >
           {/* Planned (upcoming) sessions — future-dated ones set with "Log or
@@ -767,23 +822,69 @@ export default function SessionsHubRoute() {
             <Text className="text-foreground text-sm font-semibold">Generate a session instead</Text>
           </Pressable>
 
-          {favoriteSessions.length > 0 ? (
-            <View style={{ marginBottom: 4 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <Bookmark color={colors.primary} fill={colors.primary} size={12} strokeWidth={1.5} />
-                <Text className="text-muted-foreground text-xs font-semibold uppercase">Favorites</Text>
+          {sessions.length === 0 ? (
+            // Dashed empty-state card — matches the web's `EmptyState`
+            // (rounded-xl, dashed border, icon circle) so the hub never
+            // paints bare "No sessions yet" text with nowhere to go: the
+            // Import/Build header above and the hub tabs stay reachable.
+            <View
+              testID="sessions-hub-empty"
+              style={{
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 16,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: colors.border,
+                backgroundColor: colors.muted,
+                paddingVertical: 48,
+                paddingHorizontal: 16,
+              }}
+            >
+              <View
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.card,
+                  marginBottom: 12,
+                }}
+              >
+                <Zap color={colors["muted-foreground"]} size={28} strokeWidth={1.5} />
               </View>
-              {favoriteSessions.map((log, i) =>
-                renderSessionRow(log, { favoriteIndex: i, favoriteCount: favoriteSessions.length }),
-              )}
+              <Text className="text-foreground text-base font-semibold text-center">
+                No sessions yet
+              </Text>
+              <Text
+                className="text-muted-foreground text-sm text-center"
+                style={{ marginTop: 4, maxWidth: 280 }}
+              >
+                Tap Build to create your first session.
+              </Text>
             </View>
-          ) : null}
+          ) : (
+            <>
+              {favoriteSessions.length > 0 ? (
+                <View style={{ marginBottom: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                    <Bookmark color={colors.primary} fill={colors.primary} size={12} strokeWidth={1.5} />
+                    <Text className="text-muted-foreground text-xs font-semibold uppercase">Favorites</Text>
+                  </View>
+                  {favoriteSessions.map((log, i) =>
+                    renderSessionRow(log, { favoriteIndex: i, favoriteCount: favoriteSessions.length }),
+                  )}
+                </View>
+              ) : null}
 
-          {otherSessions.length > 0 ? (
-            <View>
-              {otherSessions.map((log) => renderSessionRow(log))}
-            </View>
-          ) : null}
+              {otherSessions.length > 0 ? (
+                <View>
+                  {otherSessions.map((log) => renderSessionRow(log))}
+                </View>
+              ) : null}
+            </>
+          )}
 
           {enforced ? (
             <View style={{ marginTop: 8 }}>

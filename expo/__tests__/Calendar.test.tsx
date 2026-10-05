@@ -170,6 +170,44 @@ describe("Calendar", () => {
     expect(getByTestId("legend-quick")).toBeTruthy();
   });
 
+  // NP-240: native used the brand tokens (red `bg-primary` for Scheduled,
+  // orange `bg-accent` for Completed), which made Scheduled read as
+  // Incomplete. Legend dots must match the web's literal palette
+  // (webapp/app/dashboard/calendar/CalendarClient.tsx) instead.
+  it("legend dot colors match the web's palette, not the brand tokens", () => {
+    const { getByTestId } = render(<Calendar month="2026-05" />);
+    const classOf = (testId: string) =>
+      getByTestId(testId).props.children[0].props.className as string;
+    expect(classOf("legend-completed")).toContain("bg-green-700");
+    expect(classOf("legend-makeup")).toContain("bg-green-300");
+    expect(classOf("legend-scheduled")).toContain("bg-blue-500");
+    expect(classOf("legend-incomplete")).toContain("bg-red-600");
+    expect(classOf("legend-skipped")).toContain("bg-amber-400");
+    expect(classOf("legend-quick")).toContain("bg-purple-500");
+    // None of the brand semantic tokens leak into the legend any more.
+    expect(classOf("legend-scheduled")).not.toContain("bg-primary");
+    expect(classOf("legend-completed")).not.toContain("bg-accent");
+    expect(classOf("legend-incomplete")).not.toContain("bg-destructive");
+  });
+
+  it("day-grid status dots use the web's colors for completed, scheduled, and missed", () => {
+    const slots: ScheduledSlot[] = [
+      { date: "2026-05-05", programId: "p", phaseIndex: 0, workoutIndex: 0, status: "scheduled" },
+      { date: "2026-05-07", programId: "p", phaseIndex: 0, workoutIndex: 0, status: "completed" },
+      { date: "2026-05-09", programId: "p", phaseIndex: 0, workoutIndex: 0, status: "missed" },
+    ];
+    const { getByTestId } = render(<Calendar month="2026-05" slots={slots} />);
+    expect(getByTestId("calendar-dot-2026-05-05").props.className).toContain(
+      "bg-blue-500",
+    );
+    expect(getByTestId("calendar-dot-2026-05-07").props.className).toContain(
+      "bg-green-700",
+    );
+    expect(getByTestId("calendar-dot-2026-05-09").props.className).toContain(
+      "bg-red-600",
+    );
+  });
+
   it("invokes view mode and navigation callbacks", () => {
     const onChangeViewMode = jest.fn();
     const onPrev = jest.fn();

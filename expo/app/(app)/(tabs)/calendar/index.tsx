@@ -38,6 +38,7 @@ import {
   quickSessionsForDate,
   isMakeupWorkout,
   toQuickCalItems,
+  upcomingSlots,
   type QuickCalItem,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
@@ -219,6 +220,17 @@ export default function CalendarIndexRoute() {
   );
 
   const slots = useMemo(() => toScheduledSlots(data), [data]);
+  // Web's calendar has no "Upcoming" equivalent at all; the day detail panel
+  // covers past sessions. Native keeps this list but, per NP-240, it must
+  // only show what is actually still ahead — today-or-later AND still
+  // `scheduled` — not past completed/missed/skipped slots. `upcomingSlots`
+  // already filters by date and sorts ascending; the status filter here
+  // drops the "done" ones that date filtering alone would still let through.
+  const upcomingScheduledSlots = useMemo(
+    () =>
+      upcomingSlots(slots, todayDate).filter((s) => s.status === "scheduled"),
+    [slots, todayDate],
+  );
   const rawLogs =
     logsData && typeof logsData === "object" && "logs" in logsData
       ? (logsData as { logs?: any[] }).logs
@@ -988,7 +1000,7 @@ export default function CalendarIndexRoute() {
         <View>
           <Text className="text-foreground font-semibold mb-2">Upcoming</Text>
           <ScheduledList
-            slots={slots}
+            slots={upcomingScheduledSlots}
             onSelectSlot={openSlot}
             onReschedule={setRescheduleSlot}
           />
