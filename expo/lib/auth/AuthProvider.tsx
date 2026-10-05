@@ -60,6 +60,7 @@ import { clearAppBadge } from "@/lib/widgets/badge";
 import { clearAllLiveWorkoutDrafts } from "@/lib/live/liveWorkoutCache";
 import { clearAllProgramDrafts } from "@/lib/programs/programDraft";
 import { clearAuthedImageCache } from "@/lib/media/authedBlob";
+import { clearAllCoachChats } from "@/lib/ai/coachChatStore";
 import { getOfflineWrites } from "@/lib/offline/writes";
 
 /**
@@ -350,6 +351,16 @@ export function AuthProvider({
       // have read them anyway — this is so they do not outlive the session at
       // all.
       clearAuthedImageCache();
+
+      // Coach chat threads (NP-155) are keyed by member id
+      // (`become.chat.<memberId>.<persistKey>`) — but the device itself is
+      // shared, so the next person to sign in here must not be able to open
+      // this member's conversation with their coach.
+      try {
+        await clearAllCoachChats();
+      } catch {
+        /* ignore */
+      }
 
       // Only a DELIBERATE sign-out. "unauthorized" and "expired" mean the server
       // has already stopped accepting this token, so the call could not be

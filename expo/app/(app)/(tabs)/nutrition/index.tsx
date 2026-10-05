@@ -96,6 +96,7 @@ import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 import { useEntitlements } from "@/lib/entitlements";
 import { useApiErrorHandler } from "@/lib/errors";
 import { CalorieRing } from "@/components/nutrition/CalorieRing";
+import { NutritionConsultantTeaser } from "@/components/nutrition/NutritionConsultantTeaser";
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
@@ -1993,6 +1994,16 @@ export default function NutritionIndexRoute() {
             goalLine={goalLineText}
             plannedExtra={todayPlannedExtra?.calories}
             onEditGoals={handleEditGoals}
+          />
+
+          {/* Nutrition consultant (NP-155) — the first suggestion quotes
+              today's remaining calories/protein, letter for letter the
+              web's formula (`goal - consumed`). */}
+          <NutritionConsultantTeaser
+            remaining={{
+              calories: goalCalories - consumedCalories,
+              protein: goalProtein - totalProtein,
+            }}
           />
 
           {/* Quick Adds (visible entries with delete) */}
