@@ -100,6 +100,30 @@ All three assets are written by `scripts/generate-app-assets.mjs` from
 phone icon and the browser icon are the same mark. Re-run it (and only it) when
 the real store icon lands.
 
+## Runtime permissions (NP-206)
+
+The v1 build may ask for six runtime permissions, and only those six
+(`app.json` → `android.permissions`):
+
+| Permission | What Become does with it | Asked |
+|---|---|---|
+| `CAMERA` | Meal photo for the estimate, food-barcode scan, food-label evidence, Mind mirror preview | From the feature surface only |
+| `RECORD_AUDIO` | Follow along as the member speaks their affirmation | Only on Start in a Speak / Mirror beat |
+| `health.READ_WEIGHT` | Import weigh-ins the scale or another app recorded | Only after the read switch is on |
+| `health.WRITE_WEIGHT` | Write a Become weigh-in back out | Only after the write switch is on |
+| `health.WRITE_EXERCISE` | Write a finished workout out as a session | Only after the write switch is on |
+| `POST_NOTIFICATIONS` | Workout reminders, streak alerts | At the considered moment, never at first launch |
+
+Each has its reason in the member's language on the screen before the OS
+prompt (`lib/config/permissions.ts` → `V1_ANDROID_RUNTIME_PERMISSIONS`, with
+`rationaleAnchors` naming the copy). The biometric plugin adds two
+install-time normal permissions (`USE_BIOMETRIC`, `USE_FINGERPRINT`) that
+never prompt. Everything else the AARs merge (`INTERNET`, `VIBRATE`,
+`RECEIVE_BOOT_COMPLETED`, SDK-32-capped storage) never prompts either and
+Play does not review it. `__tests__/releaseCandidatePermissions.test.ts`
+holds the manifest, the table and the screens equal — a permission without
+its reason, or a reason without its screen, fails the build.
+
 ## Health Connect (NP-199)
 
 Weight both ways and finished workouts out, through

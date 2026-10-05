@@ -17,8 +17,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "Become uses Face ID to unlock the app when you reopen it, instead of emailing you a new sign-in link.",
-        "NSCameraUsageDescription": "Become uses the camera to photograph a meal so it can log what is in it, a food label when you report a food, and a progress photo when you choose to add one.",
-        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo to attach — a meal, a food label, a progress shot, an avatar or a feedback screenshot — and reads nothing else from it.",
+        "NSCameraUsageDescription": "Become uses the camera to photograph a meal for its estimate, scan a food barcode, photograph a food label you report, and mirror you in a Mind session.",
+        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo — a meal, a food label, an avatar or a feedback screenshot — and reads nothing else from it.",
         "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
         "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud."
       },
