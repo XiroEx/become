@@ -63,6 +63,8 @@ import {
   PersonalRecordsSection,
   prHistoryForSlug,
 } from "@/components/progress/PersonalRecords";
+import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
+import { correctableFromProgressWorkout } from "@/lib/workout/correction";
 
 const WORKOUTS_PAGE = 5;
 
@@ -86,11 +88,13 @@ function WorkoutRow({
   workout,
   expanded,
   onToggle,
+  onCorrect,
   index,
 }: {
   workout: ProgressDetailedWorkout;
   expanded: boolean;
   onToggle: () => void;
+  onCorrect: () => void;
   index: number;
 }) {
   const { colors } = useThemeTokens();
@@ -272,6 +276,27 @@ function WorkoutRow({
               No tracked sets recorded
             </Text>
           )}
+          <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: colors.border }}>
+            <Pressable
+              testID={`progress-workout-correct-${index}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Correct ${workout.title || workout.day}`}
+              accessibilityHint="Fix a mistyped set in this finished workout"
+              onPress={onCorrect}
+              style={({ pressed }) => ({
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                paddingVertical: 10,
+                alignItems: "center",
+                opacity: pressed ? 0.7 : 1,
+                ...minTouchTarget,
+              })}
+            >
+              <Text className="text-foreground text-sm font-semibold">Correct this workout</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
     </View>
@@ -305,6 +330,7 @@ export function ProgressScreen({
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [correctingIdx, setCorrectingIdx] = useState<number | null>(null);
 
   const handleBack = useCallback(() => {
     if (onBack) {
@@ -348,6 +374,11 @@ export function ProgressScreen({
     () =>
       selectedPR ? prHistoryForSlug(detailedWorkouts, selectedPR.slug) : [],
     [selectedPR, detailedWorkouts],
+  );
+  const correctingWorkout = useMemo(
+    () =>
+      correctingIdx !== null ? (detailedWorkouts[correctingIdx] ?? null) : null,
+    [correctingIdx, detailedWorkouts],
   );
 
   return (
@@ -486,6 +517,7 @@ export function ProgressScreen({
                       onToggle={() =>
                         setExpandedIdx(expandedIdx === i ? null : i)
                       }
+                      onCorrect={() => setCorrectingIdx(i)}
                     />
                   ),
                 )}
@@ -563,6 +595,18 @@ export function ProgressScreen({
             onClose={() => setSelectedSlug(null)}
             onChanged={async () => {
               setSelectedSlug(null);
+              onRefresh?.();
+            }}
+            authToken={authToken}
+          />
+        ) : null}
+        {correctingWorkout ? (
+          <TrainingLogCorrectionSheet
+            key={`${correctingWorkout.rawDate}-${correctingIdx}`}
+            workout={correctableFromProgressWorkout(correctingWorkout)}
+            onClose={() => setCorrectingIdx(null)}
+            onSaved={async () => {
+              setCorrectingIdx(null);
               onRefresh?.();
             }}
             authToken={authToken}
