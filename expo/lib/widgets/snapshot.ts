@@ -28,6 +28,7 @@ import type {
   BecomeWidget,
   WidgetFeed,
   WidgetKey,
+  WidgetRing,
   WidgetState,
 } from "@become/api-client";
 import {
@@ -47,9 +48,33 @@ export interface WidgetSnapshotRow {
   state: WidgetState;
   /** 0..1 for the bar, or null when this widget has nothing to fill. */
   progress: number | null;
+  /**
+   * The macro rings, verbatim from the feed. Only the nutrition row fills
+   * this; everything else ships []. The medium iOS tile draws one mini-bar
+   * per ring, so a snapshot without them is a medium tile without macros.
+   */
+  rings: WidgetSnapshotRing[];
   /** Relative web path a tap opens, straight from the feed. */
   deepLink: string;
 }
+
+/**
+ * One macro ring, compacted: `[label, value, pct, unit]`. `pct` is null when
+ * the member has no target for it — the tile draws the value without a bar,
+ * never a hollow zero.
+ *
+ * A TUPLE, not an object, on purpose: four rings ride in every snapshot and
+ * object key names cost bytes against SecureStore's 2048 ceiling
+ * (`SNAPSHOT_BYTE_BUDGET` below trips if this ever stops fitting). `target`
+ * is deliberately not stored — no tile draws it (the macro line in `caption`
+ * already says "P 120/160g"); `pct` is the only fraction a bar needs.
+ */
+export type WidgetSnapshotRing = [
+  label: string,
+  value: number,
+  pct: number | null,
+  unit: string,
+];
 
 export interface WidgetSnapshot {
   /** Epoch ms the server built the feed. */
@@ -64,12 +89,16 @@ export const MAX_TITLE_CHARS = 24;
 export const MAX_HEADLINE_CHARS = 32;
 export const MAX_UNIT_CHARS = 16;
 export const MAX_CAPTION_CHARS = 72;
+/** Ring labels and units are server words too — capped like everything else. */
+export const MAX_RING_LABEL_CHARS = 12;
+export const MAX_RING_UNIT_CHARS = 8;
 
 /**
  * The size an encoded snapshot must stay under. Well inside SecureStore's 2048
- * bytes, with room for a fifth widget landing here later.
+ * bytes: worst case is five capped rows with four macro rings on the
+ * nutrition row, which encodes to ~1.9k.
  */
-export const SNAPSHOT_BYTE_BUDGET = 1600;
+export const SNAPSHOT_BYTE_BUDGET = 1950;
 
 function cap(value: string, max: number): string {
   const clean = value.replace(/\s+/g, " ").trim();
@@ -79,6 +108,20 @@ function cap(value: string, max: number): string {
 function clampFraction(value: number | null | undefined): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return Math.max(0, Math.min(1, value));
+}
+
+/** One macro ring, compacted — the feed's words and fractions, capped. */
+export function snapshotRing(ring: WidgetRing): WidgetSnapshotRing {
+  const value =
+    typeof ring.value === "number" && Number.isFinite(ring.value)
+      ? ring.value
+      : 0;
+  return [
+    cap(String(ring.label ?? ""), MAX_RING_LABEL_CHARS),
+    value,
+    clampFraction(ring.pct),
+    cap(String(ring.unit ?? ""), MAX_RING_UNIT_CHARS),
+  ];
 }
 
 /** One feed row, compacted. */
@@ -93,6 +136,7 @@ export function snapshotRow(row: BecomeWidget): WidgetSnapshotRow {
     caption: cap(row.caption, MAX_CAPTION_CHARS),
     state: row.state,
     progress: clampFraction(row.progress),
+    rings: Array.isArray(row.rings) ? row.rings.map(snapshotRing) : [],
     deepLink: row.deepLink,
   };
 }
@@ -170,23 +214,45 @@ export function decodeSnapshot(raw: string | null): WidgetSnapshot | null {
       generatedAt:
         typeof candidate.generatedAt === "number" ? candidate.generatedAt : 0,
       todayKey: typeof candidate.todayKey === "string" ? candidate.todayKey : "",
-      rows: candidate.rows.filter(isSnapshotRow),
+      // Rows stored by an older build carry no rings; they draw without
+      // macros rather than failing the guard above.
+      rows: candidate.rows.filter(isSnapshotRow).map((row) => ({
+        ...row,
+        rings: Array.isArray(row.rings)
+          ? row.rings.filter(isSnapshotRing)
+          : [],
+      })),
     };
   } catch {
     return null;
   }
 }
 
+function isSnapshotRing(value: unknown): value is WidgetSnapshotRing {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "number" &&
+    (typeof value[2] === "number" || value[2] === null) &&
+    typeof value[3] === "string"
+  );
+}
+
 function isSnapshotRow(value: unknown): value is WidgetSnapshotRow {
   if (typeof value !== "object" || value === null) return false;
-  const row = value as Partial<WidgetSnapshotRow>;
+  const row = value as Partial<WidgetSnapshotRow> & { rings?: unknown };
   return (
     typeof row.key === "string" &&
     typeof row.title === "string" &&
     typeof row.headline === "string" &&
     typeof row.caption === "string" &&
     typeof row.state === "string" &&
-    typeof row.deepLink === "string"
+    typeof row.deepLink === "string" &&
+    // A snapshot written by an older build carries no rings, and a single
+    // malformed ring must not cost the whole row — `decodeSnapshot` below
+    // normalises both. So presence is not checked here.
+    (row.rings === undefined || Array.isArray(row.rings))
   );
 }
 

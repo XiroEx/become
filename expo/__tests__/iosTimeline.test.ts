@@ -47,6 +47,7 @@ function row(over: Partial<WidgetSnapshotRow> & { key: WidgetKey }): WidgetSnaps
     caption: `${over.key} caption`,
     state: "done",
     progress: 0.5,
+    rings: [],
     deepLink: "/dashboard/streaks",
     ...over,
   } as WidgetSnapshotRow;
@@ -152,8 +153,43 @@ describe("signed in with today's snapshot", () => {
       caption: "Nothing scheduled — recover",
       state: "at-risk",
       progress: 0.857,
+      rings: [],
       url: "become://dashboard/nutrition",
     });
+  });
+
+  it("carries the nutrition rings through for the medium tile's macros", () => {
+    const rings: [string, number, number | null, string][] = [
+      ["Cal", 1180, 0.59, "cal"],
+      ["Protein", 120, 0.75, "g"],
+    ];
+    const timeline = buildIosTimeline({
+      snapshot: {
+        generatedAt: NOW.getTime(),
+        todayKey: TODAY_KEY,
+        rows: [
+          row({
+            key: "nutrition",
+            title: "Nutrition",
+            headline: "820",
+            headlineUnit: "cal left",
+            caption: "P 120/160g · C 180/240g · F 40/60g",
+            state: "todo",
+            progress: 0.59,
+            rings,
+            deepLink: "/dashboard/nutrition",
+          }),
+        ],
+      },
+      signedIn: true,
+      now: NOW,
+      todayKey: TODAY_KEY,
+      nextLocalMidnight: MIDNIGHT,
+    });
+    const first = entriesOf(timeline, "nutrition")[0]?.props;
+    expect(first).toMatchObject({ signedIn: true });
+    if (first?.signedIn !== true) throw new Error("expected a signed-in row");
+    expect(first.rings).toEqual(rings);
   });
 });
 

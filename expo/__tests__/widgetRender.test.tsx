@@ -50,6 +50,7 @@ function snapshotRow(over: Partial<WidgetSnapshotRow> = {}): WidgetSnapshotRow {
     caption: "2 days to 14",
     state: "done",
     progress: 0.857,
+    rings: [],
     deepLink: "/dashboard/streaks",
     ...over,
   };
