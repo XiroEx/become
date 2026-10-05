@@ -4,6 +4,12 @@ import {
   type RecipeDetailViewModel,
 } from "@/components/recipes/RecipeDetail";
 
+// The thumbnail is an `AuthedImage` (the bearer-token image fetch), which reads
+// the signed-in token through `useAuth`.
+jest.mock("@/lib/auth/useAuth", () => ({
+  useAuth: () => ({ token: "test-jwt", isAuthed: true }),
+}));
+
 const sample: RecipeDetailViewModel = {
   id: "rec-1",
   name: "Banana oat smoothie",
@@ -41,7 +47,9 @@ describe("RecipeDetail", () => {
     expect(getByTestId("recipe-detail-description").props.children).toBe(
       "Quick high-protein breakfast",
     );
-    expect(getByTestId("recipe-detail-thumb")).toBeTruthy();
+    // The photo is a bearer-token fetch: before it resolves the slot shows its
+    // loading placeholder under the `-thumb` testID prefix.
+    expect(getByTestId("recipe-detail-thumb-loading")).toBeTruthy();
   });
 
   it("renders per-serving nutrition kcal + macros", () => {
