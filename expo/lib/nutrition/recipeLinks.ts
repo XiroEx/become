@@ -9,7 +9,7 @@ import { WEBAPP_BASE_URL } from "@/lib/programs/browserLauncher";
  * these URLs anymore. The helpers stay for parity surfaces that genuinely
  * need a web address (notifications, shared links) and point at the pages
  * that exist — `/dashboard/recipes/...`, never the
- * `/dashboard/nutrition/recipes/...` paths that never did.
+ * nested `nutrition` paths that never did.
  */
 
 export function recipeViewUrl(recipeId: string): string {

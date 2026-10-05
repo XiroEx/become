@@ -343,7 +343,8 @@ export function RecipeEditorSheet({
       ...(cookNum != null && Number.isFinite(cookNum) ? { cookTime: cookNum } : {}),
       instructions: steps.map((s) => s.trim()).filter(Boolean),
       tags,
-      ingredients: ingredients.map(({ key: _key, ...ing }) => ing),
+      // `key` rides along as the row identity; `recipeCreateBody` never sends it.
+      ingredients,
     };
     void onSubmit({ input, pendingPhoto, photoRemoved });
   }, [
@@ -826,7 +827,7 @@ export function RecipeEditorSheet({
                 testID={`${testID}-save`}
                 variant="primary"
                 loading={submitting}
-                disabled={submitting || !name.trim() || ingredients.length === 0}
+                disabled={submitting}
                 onPress={handleSave}
               >
                 {isEdit ? "Save changes" : "Create recipe"}

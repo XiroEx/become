@@ -562,7 +562,7 @@ describe("(id: e015c9ed) A recipe created natively opens and edits on the web", 
     const back = recipeCreateBody({ ...form, ingredients: form.ingredients });
     const row = (back.ingredients as Record<string, unknown>[])[0];
     expect(row).toMatchObject({ name: "Turkey", amount: 500, unit: "g" });
-    expect((row.nutrition as Record<string, number>).calories).toBe(600);
+    expect((row?.nutrition as Record<string, number> | undefined)?.calories).toBe(600);
   });
 
   it("the live preview divides row totals by servings, like the route", () => {
