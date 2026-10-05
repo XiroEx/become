@@ -77,8 +77,15 @@ of that (it names Become, it is long enough to be a sentence, it is not a
 placeholder) and the unused half of the rule too: a usage string with no module
 behind it is a question from App Review, so it fails as well.
 
-Today the app installs none of those modules and there are no usage strings;
-each later feature brings its own with its code.
+The v1 set is five keys (NP-206 audit): camera (meal photo, barcode scan,
+food-label evidence, Mind mirror preview), photo library (meal, food label,
+avatar, feedback screenshot — picked, never scanned), microphone + speech
+recognition (speaking the affirmation out loud), and Face ID (unlock instead
+of a fresh sign-in link). Push needs no key on iOS; HealthKit ships no key
+until NP-185 installs its module; nothing is saved to the library so there is
+no `NSPhotoLibraryAddUsageDescription`. `__tests__/releaseCandidatePermissions.test.ts`
+pins the whole set — add a key with the module that needs it, or the suite
+fails.
 
 ## Safe area
 
