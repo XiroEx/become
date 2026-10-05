@@ -43,7 +43,7 @@ describe("buildOnboardingRecommendPath", () => {
 });
 
 describe("afterOnboarding hooks", () => {
-  it("askNotificationPermissionAfterOnboarding is a safe no-op until NP-065 fills it", async () => {
+  it("askNotificationPermissionAfterOnboarding never blocks landing Home", async () => {
     await expect(askNotificationPermissionAfterOnboarding()).resolves.toBeUndefined();
   });
 

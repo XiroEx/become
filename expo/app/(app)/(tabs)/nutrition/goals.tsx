@@ -1015,7 +1015,7 @@ export default function NutritionGoalsRoute() {
                           style={minTouchTarget}
                           className={`rounded-xl border p-3 ${on ? "border-foreground bg-foreground/5" : "border-border bg-card"}`}
                         >
-                          <Text className={`text-sm font-medium ${on ? "font-semibold" : ""}`}>
+                          <Text className={`text-sm font-medium text-foreground ${on ? "font-semibold" : ""}`}>
                             {presetLabel(key, presetSplits[key])}
                           </Text>
                         </Pressable>

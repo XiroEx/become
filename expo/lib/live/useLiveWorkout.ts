@@ -58,6 +58,7 @@ import {
   type LiveWorkoutSnapshot,
 } from "@/lib/live/liveWorkoutCache";
 import { localDateKey } from "@/lib/time/localDay";
+import { coachingFieldsFrom } from "@/lib/live/coachingFields";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import type {
   LiveGrid,
@@ -950,6 +951,7 @@ export function useLiveWorkout(
             repsLabel: ex.reps,
             notes: ex.details,
             trackingType: ex.trackingType ?? undefined,
+            ...coachingFieldsFrom(ex),
             equipment: ex.equipment,
             laterality: ex.laterality,
             movementPatterns: ex.movementPatterns,
@@ -1069,6 +1071,11 @@ export function useLiveWorkout(
               repsLabel: m.reps ?? existing?.repsLabel,
               notes: m.details ?? existing?.notes,
               trackingType: m.trackingType ?? existing?.trackingType,
+              tip: existing?.tip,
+              tempo: existing?.tempo,
+              rpe: existing?.rpe,
+              durationLabel: existing?.durationLabel,
+              primaryMuscles: existing?.primaryMuscles,
               equipment: existing?.equipment,
               laterality: existing?.laterality,
               movementPatterns: existing?.movementPatterns,
