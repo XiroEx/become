@@ -37,7 +37,7 @@ export function ThinSessionModal({
   onClose,
   testID = "thin-session-modal",
 }: ThinSessionModalProps) {
-  const { colors } = useThemeTokens();
+  const { colors, scrim } = useThemeTokens();
 
   if (!visible) return null;
 
@@ -49,7 +49,7 @@ export function ThinSessionModal({
       onRequestClose={onClose}
       testID={testID}
     >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: scrim }}>
         <View
           testID={`${testID}-sheet`}
           style={{
@@ -93,7 +93,7 @@ export function ThinSessionModal({
             accessibilityLabel="Add an exercise"
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-              <Plus size={16} color="#fff" />
+              <Plus size={16} color={colors["primary-foreground"]} />
               <Text className="text-primary-foreground text-sm font-bold">
                 Add an exercise
               </Text>

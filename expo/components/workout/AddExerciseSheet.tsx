@@ -135,7 +135,7 @@ export function AddExerciseSheet({
   title = "Add an exercise",
   testID = "add-exercise-sheet",
 }: AddExerciseSheetProps) {
-  const { colors } = useThemeTokens();
+  const { colors, scrim } = useThemeTokens();
   const { token } = useAuth();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchRow[]>([]);
@@ -195,6 +195,8 @@ export function AddExerciseSheet({
       return;
     }
     let cancelled = false;
+    // Raising the loading flag as the fetch starts is the effect's job.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loading flag for a fetch started here
     setLoadingSuggested(true);
     void (async () => {
       try {
@@ -406,7 +408,7 @@ export function AddExerciseSheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" }}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: scrim }}>
         <View
           testID={`${testID}-sheet`}
           style={{
