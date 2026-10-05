@@ -254,6 +254,7 @@
           ]
         }
       ],
+      "expo-background-task",
       "expo-notifications"
     ],
     "experiments": {

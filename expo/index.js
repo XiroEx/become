@@ -36,4 +36,15 @@ if (Platform.OS === "ios") {
   // The WidgetKit layouts: one `createWidget(name, BecomeWidget)` per row of
   // `IOS_WIDGETS`. Side-effect import — registration, not a value.
   require("./lib/widgets/ios/widgets");
+
+  // The background refresh (NP-218): re-read the feed and push the timelines
+  // while the app is closed. `defineTask` must run in the bundle's global
+  // scope — the OS wakes the bundle with no UI, exactly like Android's
+  // headless task above — so this lives here and not in a screen. iOS decides
+  // when the task actually runs (see `IOS_QUIRKS.md`); failures are silent by
+  // design (`lib/widgets/iosBackgroundRefresh.ts` never throws).
+  const {
+    registerIosWidgetsRefresh,
+  } = require("./lib/widgets/iosBackgroundRefresh");
+  registerIosWidgetsRefresh().catch(() => null);
 }
