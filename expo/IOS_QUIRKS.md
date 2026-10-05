@@ -219,8 +219,10 @@ See P6 for the parse/verify flow.
 `enableAndroid: false` (Android widgets are `react-native-android-widget`,
 NP-198 — expo-widgets must not touch Android), and one widget per feed key in
 `WidgetKeySchema` order (`StreakWidget`, `NutritionWidget`, `MindWidget`,
-`BecomingWidget`, `TrainingWidget`), `supportedFamilies: ["systemSmall"]`
-only — NP-182 adds the other sizes and Lock Screen families. The names live
+`BecomingWidget`, `TrainingWidget`), each with `supportedFamilies`
+`systemSmall`, `systemMedium`, `accessoryCircular`, `accessoryRectangular`
+and `accessoryInline` (NP-182: small and medium Home Screen tiles plus the
+Lock Screen sizes). The names live
 in one place, `lib/widgets/iosWidgets.ts` (`IOS_WIDGETS`), mirroring
 `androidWidgets.ts`; `__tests__/iosWidgetsConfig.test.ts` holds the plugin
 block equal to it.

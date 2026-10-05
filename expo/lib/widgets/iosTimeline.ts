@@ -36,6 +36,7 @@ import {
   snapshotIsForDay,
   snapshotRowFor,
   type WidgetSnapshot,
+  type WidgetSnapshotRing,
   type WidgetSnapshotRow,
 } from "@/lib/widgets/snapshot";
 import { widgetSignInUri, widgetTapUri } from "@/lib/widgets/taps";
@@ -47,6 +48,8 @@ export const IOS_WIDGET_SIGN_IN_PROMPT = "Open Become to sign in" as const;
  * Everything one iOS widget renders. Either today's numbers — copied from the
  * snapshot row as is, no re-wording, no re-derived state — or the sign-in
  * prompt. `url` is the tap target as a `become://` url the OS can fire.
+ * `rings` is the nutrition row's macro rings (empty everywhere else); the
+ * medium tile draws one mini-bar per ring.
  */
 export type IosWidgetProps =
   | {
@@ -58,6 +61,7 @@ export type IosWidgetProps =
       state: WidgetState;
       /** 0..1 for the bar, or null when this widget has nothing to fill. */
       progress: number | null;
+      rings: WidgetSnapshotRing[];
       url: string;
     }
   | {
@@ -107,6 +111,7 @@ function rowProps(row: WidgetSnapshotRow): IosWidgetProps {
     caption: row.caption,
     state: row.state,
     progress: row.progress,
+    rings: row.rings ?? [],
     url: widgetTapUri(row.deepLink),
   };
 }
