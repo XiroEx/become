@@ -20,6 +20,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import {
+  IOS_WIDGET_FAMILIES,
   IOS_WIDGETS,
   IOS_WIDGET_BUNDLE_IDENTIFIER,
   IOS_WIDGET_GROUP_IDENTIFIER,
@@ -87,12 +88,37 @@ describe("the five iOS widgets, declared once and declared everywhere", () => {
     );
   });
 
-  it("gives every widget a displayName, a one-line description and systemSmall", () => {
+  it("gives every widget a displayName, a one-line description and all five families", () => {
     expect(pluginWidgets.length).toBe(5);
     for (const w of pluginWidgets) {
       expect(w.displayName).toEqual(expect.stringMatching(/\S/));
       expect(w.description).toEqual(expect.stringMatching(/\S/));
-      expect(w.supportedFamilies).toEqual(["systemSmall"]);
+      expect(w.supportedFamilies).toEqual([...IOS_WIDGET_FAMILIES]);
+    }
+  });
+
+  it("declares small, medium and the three Lock Screen sizes, in that order", () => {
+    expect([...IOS_WIDGET_FAMILIES]).toEqual([
+      "systemSmall",
+      "systemMedium",
+      "accessoryCircular",
+      "accessoryRectangular",
+      "accessoryInline",
+    ]);
+  });
+
+  it("gives every widget the same five families", () => {
+    for (const def of IOS_WIDGETS) {
+      expect([...def.supportedFamilies]).toEqual([...IOS_WIDGET_FAMILIES]);
+    }
+  });
+
+  it("keeps the plugin families in sync with IOS_WIDGETS", () => {
+    for (const def of IOS_WIDGETS) {
+      const pluginWidget = pluginWidgets.find((w) => w.name === def.name);
+      expect(pluginWidget?.supportedFamilies).toEqual([
+        ...def.supportedFamilies,
+      ]);
     }
   });
 

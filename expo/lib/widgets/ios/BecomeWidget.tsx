@@ -1,5 +1,5 @@
 /**
- * THE iOS WIDGET LAYOUT — one component, five home-screen tiles.
+ * THE iOS WIDGET LAYOUT — one component, five home-screen tiles, five sizes.
  *
  * WidgetKit does NOT run our code at paint time: it renders a TIMELINE the app
  * pushed earlier (`updateTimeline([{ date, props }])` from `expo-widgets`), one
@@ -14,6 +14,26 @@
  * one `widgets[].name` from the `expo-widgets` plugin block in `app.json` —
  * one registration per row of `IOS_WIDGETS`, so a name in one and not the
  * other is a widget that never paints.
+ *
+ * ONE REGISTRATION, FIVE SIZES. The extension evaluates the same layout once
+ * per family the widget declares (`supportedFamilies` in `app.json`, mirrored
+ * as `IOS_WIDGET_FAMILIES`), handing the family in as the layout's second
+ * argument (`environment.widgetFamily`: `systemSmall`, `systemMedium`,
+ * `accessoryCircular`, `accessoryRectangular`, `accessoryInline`). The layout
+ * branches on it below — small is the tile NP-181 drew, medium adds the macro
+ * rings, and the three accessory families are the Lock Screen: a number for
+ * the circle, headline plus caption for the rectangle, one line for inline.
+ * An unknown or missing family draws small, never nothing.
+ *
+ * SELF-CONTAINED OR RED. The stringified layout is evaluated in a bare
+ * JavaScriptCore context whose only globals are the `@expo/ui` views, the
+ * modifiers and the React/jsx runtimes — module-scope helpers do NOT survive.
+ * So every word below is a literal and every branch is inline: a free
+ * reference is a ReferenceError the extension renders as a red box, with no
+ * error anywhere else. That includes the sign-in prompt: it is inlined as a
+ * literal (kept equal to `IOS_WIDGET_SIGN_IN_PROMPT` by
+ * `__tests__/iosBecomeWidget.test.tsx`), because importing the constant would
+ * be exactly such a free reference.
  *
  * THE TAP. `expo-widgets` 57 exposes NO tap-URL API of its own (no `url` on
  * `updateTimeline`, no tap prop on `createWidget` — see
@@ -40,10 +60,7 @@ import {
 } from "@expo/ui/swift-ui";
 import { font, widgetURL } from "@expo/ui/swift-ui/modifiers";
 import type { WidgetState } from "@become/api-client";
-import {
-  IOS_WIDGET_SIGN_IN_PROMPT,
-  type IosWidgetProps,
-} from "@/lib/widgets/iosTimeline";
+import type { IosWidgetProps } from "@/lib/widgets/iosTimeline";
 
 /**
  * A state tint, as a named colour the extension resolves in any scheme.
@@ -53,10 +70,10 @@ import {
  * NOTE — read before inlining this into the layout: the `'widget'` directive
  * stringifies `BecomeWidget` into the layout the native side evaluates, and a
  * free function reference does NOT survive that (the extension evaluates the
- * layout source with only the `@expo/ui` views, the modifiers and the prompt
- * constant in scope). So the layout draws the state as its own words below,
- * and this helper exists for non-widget callers (tests, previews) that want
- * the same mapping without evaluating the layout.
+ * layout source with only the `@expo/ui` views, the modifiers and the
+ * React/jsx runtimes in scope). So the layout draws the state as its own
+ * words below, and this helper exists for non-widget callers (tests,
+ * previews) that want the same mapping without evaluating the layout.
  */
 export function iosWidgetStateTint(state: WidgetState): string {
   if (state === "at-risk") return "orange";
@@ -66,13 +83,67 @@ export function iosWidgetStateTint(state: WidgetState): string {
 }
 
 /**
- * One tile. Signed in: title, headline + unit, caption, a bar when `progress`
- * is not null. Signed out: the gallery title and the sign-in prompt — never a
- * number, because a number on a signed-out tile is another member's day.
+ * One tile in every size. Signed in: the feed's numbers in the shape the
+ * family asks for. Signed out: the gallery title and the sign-in prompt —
+ * never a number, because a number on a signed-out tile is another member's
+ * day.
+ *
+ * `environment` is WidgetKit's, handed in by the extension: `widgetFamily`
+ * names the size being painted. It is untyped on purpose — the stringified
+ * layout receives whatever the OS sent, and an unknown family draws small.
  */
-export function BecomeWidget(props: IosWidgetProps): React.JSX.Element {
+export function BecomeWidget(
+  props: IosWidgetProps,
+  environment?: { widgetFamily?: string },
+): React.JSX.Element {
   "widget";
+  const family = environment?.widgetFamily;
   if (!props.signedIn) {
+    if (family === "accessoryCircular") {
+      return (
+        <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url)]}>
+          <Text modifiers={[font({ size: 13, weight: "semibold" })]}>
+            {"Sign in"}
+          </Text>
+          <Link destination={props.url} label="Open Become" />
+        </VStack>
+      );
+    }
+    if (family === "accessoryInline") {
+      return (
+        <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url)]}>
+          <Text>{"Become: open the app to sign in"}</Text>
+          <Link destination={props.url} label="Open Become" />
+        </VStack>
+      );
+    }
+    if (family === "accessoryRectangular") {
+      return (
+        <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url)]}>
+          <Text modifiers={[font({ size: 13, weight: "medium" })]}>
+            {props.title}
+          </Text>
+          <Text modifiers={[font({ size: 13, weight: "semibold" })]}>
+            {"Open Become to sign in"}
+          </Text>
+          <Link destination={props.url} label="Open Become" />
+        </VStack>
+      );
+    }
+    if (family === "systemMedium") {
+      return (
+        <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+          <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+            {props.title}
+          </Text>
+          <Spacer />
+          <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
+            {"Open Become to sign in"}
+          </Text>
+          <Link destination={props.url} label="Open Become" />
+        </VStack>
+      );
+    }
     return (
       <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
         <Text modifiers={[font({ size: 12, weight: "medium" })]}>
@@ -80,9 +151,93 @@ export function BecomeWidget(props: IosWidgetProps): React.JSX.Element {
         </Text>
         <Spacer />
         <Text modifiers={[font({ size: 14, weight: "semibold" })]}>
-          {IOS_WIDGET_SIGN_IN_PROMPT}
+          {"Open Become to sign in"}
         </Text>
         <Link destination={props.url} label="Open Become" />
+      </VStack>
+    );
+  }
+  if (family === "accessoryCircular") {
+    return (
+      <VStack alignment="center" spacing={0} modifiers={[widgetURL(props.url)]}>
+        <Text modifiers={[font({ size: 20, weight: "bold" })]}>
+          {props.headline}
+        </Text>
+        {props.headlineUnit ? <Text>{props.headlineUnit}</Text> : null}
+        <Link destination={props.url}>
+          <Text>Open</Text>
+        </Link>
+      </VStack>
+    );
+  }
+  if (family === "accessoryRectangular") {
+    return (
+      <VStack alignment="leading" spacing={2} modifiers={[widgetURL(props.url)]}>
+        <HStack spacing={4}>
+          <Text modifiers={[font({ size: 18, weight: "bold" })]}>
+            {props.headline}
+          </Text>
+          {props.headlineUnit ? <Text>{props.headlineUnit}</Text> : null}
+        </HStack>
+        <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
+        <Link destination={props.url}>
+          <Text>Open</Text>
+        </Link>
+      </VStack>
+    );
+  }
+  if (family === "accessoryInline") {
+    return (
+      <VStack alignment="leading" spacing={0} modifiers={[widgetURL(props.url)]}>
+        <Link destination={props.url}>
+          <Text>
+            {props.headlineUnit
+              ? `${props.title}: ${props.headline} ${props.headlineUnit} · ${props.caption}`
+              : `${props.title}: ${props.headline} · ${props.caption}`}
+          </Text>
+        </Link>
+      </VStack>
+    );
+  }
+  if (family === "systemMedium") {
+    return (
+      <VStack alignment="leading" spacing={4} modifiers={[widgetURL(props.url)]}>
+        <Text modifiers={[font({ size: 12, weight: "medium" })]}>
+          {props.title}
+        </Text>
+        <HStack spacing={4}>
+          <Text modifiers={[font({ size: 26, weight: "bold" })]}>
+            {props.headline}
+          </Text>
+          {props.headlineUnit ? <Text>{props.headlineUnit}</Text> : null}
+        </HStack>
+        <Text modifiers={[font({ size: 12 })]}>{props.caption}</Text>
+        {props.rings.map((ring) => (
+          <HStack key={ring[0]} spacing={4}>
+            <Text modifiers={[font({ size: 11 })]}>
+              {`${ring[0]} ${ring[1]}${ring[3]}`}
+            </Text>
+            <Spacer />
+            {ring[2] !== null ? (
+              <ProgressView value={ring[2]} />
+            ) : null}
+          </HStack>
+        ))}
+        {props.progress !== null ? (
+          <ProgressView value={props.progress} />
+        ) : null}
+        <Text modifiers={[font({ size: 10 })]}>
+          {props.state === "at-risk"
+            ? "Needs attention today"
+            : props.state === "done"
+              ? "Done"
+              : props.state === "todo"
+                ? "To do"
+                : "Not set up yet"}
+        </Text>
+        <Link destination={props.url}>
+          <Text>Open</Text>
+        </Link>
       </VStack>
     );
   }

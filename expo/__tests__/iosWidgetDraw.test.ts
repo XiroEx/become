@@ -75,7 +75,10 @@ const FEED = {
       caption: "P 120/160g · C 180/240g · F 40/60g",
       state: "todo",
       progress: 0.6,
-      rings: [],
+      rings: [
+        { key: "calories", label: "Cal", value: 1180, target: 2000, pct: 0.59, unit: "cal" },
+        { key: "protein", label: "Protein", value: 120, target: 160, pct: 0.75, unit: "g" },
+      ],
       deepLink: "/dashboard/nutrition",
     },
     {
@@ -185,6 +188,14 @@ describe("drawIosWidgets", () => {
     const mind = signedInProps(rec.pushed, "mind");
     expect(mind.headlineUnit).toBeNull();
     expect(mind.progress).toBeNull();
+
+    // The medium tile's macros travel with the timeline, not around it.
+    const nutrition = signedInProps(rec.pushed, "nutrition");
+    expect(nutrition.url).toBe("become://dashboard/nutrition");
+    expect(nutrition.rings).toEqual([
+      ["Cal", 1180, 0.59, "cal"],
+      ["Protein", 120, 0.75, "g"],
+    ]);
 
     // Today's row now, the prompt at local midnight — never yesterday's
     // numbers after the rollover.

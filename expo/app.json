@@ -225,31 +225,31 @@
               "name": "StreakWidget",
               "displayName": "Become · Streak",
               "description": "Your streak, and whether today still needs something logged.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
             },
             {
               "name": "NutritionWidget",
               "displayName": "Become · Nutrition",
               "description": "Calories left today, with protein, carbs and fat.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
             },
             {
               "name": "MindWidget",
               "displayName": "Become · Mind",
               "description": "Today's Mind session, and where you are in the chapter.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
             },
             {
               "name": "BecomingWidget",
               "displayName": "Become · Becoming",
               "description": "The week you are on, and who you are becoming.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
             },
             {
               "name": "TrainingWidget",
               "displayName": "Become · Training",
               "description": "Today's session, and whether it is done.",
-              "supportedFamilies": ["systemSmall"]
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
             }
           ]
         }
