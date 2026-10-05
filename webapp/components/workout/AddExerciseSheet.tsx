@@ -19,7 +19,7 @@ import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
 import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
 import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/ExerciseVariationPicker'
 import type { WorkoutExercise } from '@/lib/workoutUtils'
-import type { GroupKind } from '@/lib/workout/buildAsYouGo'
+import { DEFAULT_SETS, agreesOnSets, type GroupKind } from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
 import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
 import { matchesExerciseQuery } from '@/lib/exerciseSearchRanking'
@@ -57,6 +57,13 @@ export interface AddExerciseSheetProps {
   anchorSlug?: string
   /** True when the anchor already belongs to a group, so we say "add into it". */
   anchorInGroup?: boolean
+  /** The anchor's set count. A new exercise defaults to it rather than to a
+   *  flat 3 — adding one exercise to a five-set session should not quietly
+   *  produce a workout that disagrees with itself. */
+  anchorSets?: number
+  /** The anchor's group kind, when it is already in one. A circuit runs every
+   *  member for the same rounds, so joining one is not a free choice. */
+  anchorGroupType?: string
   /** Exercise slugs already in this workout, so suggestions don't repeat one. */
   workoutExerciseSlugs?: string[]
   tone?: 'dark' | 'app'
@@ -77,6 +84,8 @@ export default function AddExerciseSheet({
   anchorName,
   anchorSlug,
   anchorInGroup = false,
+  anchorSets,
+  anchorGroupType,
   workoutExerciseSlugs = [],
   tone = 'app',
   title = 'Add an exercise',
@@ -95,7 +104,8 @@ export default function AddExerciseSheet({
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
   const [picked, setPicked] = useState<SearchExercise | null>(null)
-  const [sets, setSets] = useState(3)
+  const defaultSets = anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS
+  const [sets, setSets] = useState(defaultSets)
   const [reps, setReps] = useState('8-12')
   const [seconds, setSeconds] = useState(45)
   const [placement, setPlacement] = useState<Placement>('end')
@@ -111,12 +121,12 @@ export default function AddExerciseSheet({
   useEffect(() => {
     if (!open) return
     setQuery(''); setResults([]); setPicked(null)
-    setSets(3); setReps('8-12'); setSeconds(45)
+    setSets(defaultSets); setReps('8-12'); setSeconds(45)
     setPlacement('end'); setGroupKind('superset')
     setShowCreateForm(false); setCreatingError(null); setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
     const t = setTimeout(() => inputRef.current?.focus(), 120)
     return () => clearTimeout(t)
-  }, [open])
+  }, [open, defaultSets])
 
   // What to add next, guessed from the exercise you're standing in — shown
   // before you type anything, so the sheet isn't just a naked search box.
@@ -236,6 +246,17 @@ export default function AddExerciseSheet({
     }
   }, [customForm, creating, choose])
 
+  // Joining a circuit is not a free choice of set count: a circuit is rounds
+  // of the whole block, so the anchor's count is the count. Reported from the
+  // field — a 3-set exercise added to a 5-set one as a circuit produced five
+  // rounds with the newcomer missing from two of them.
+  const joiningCircuit =
+    placement === 'group' &&
+    !!anchorName &&
+    agreesOnSets(anchorInGroup ? anchorGroupType : groupKind)
+  const lockedSets = joiningCircuit && anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : null
+  const effectiveSets = lockedSets ?? sets
+
   const submit = useCallback(async () => {
     if (!picked || adding) return
     setAdding(true)
@@ -244,7 +265,7 @@ export default function AddExerciseSheet({
       name: picked.name,
       exerciseSlug: picked.slug,
       trackingType: picked.trackingType,
-      sets,
+      sets: effectiveSets,
       reps: timed ? '' : reps.trim() || '8-12',
       ...(timed ? { duration: `${seconds} sec` } : {}),
       ...(picked.equipment && { equipment: picked.equipment }),
@@ -257,7 +278,7 @@ export default function AddExerciseSheet({
     } finally {
       setAdding(false)
     }
-  }, [picked, adding, sets, reps, seconds, placement, groupKind, onAdd, onClose])
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose])
 
   if (!open) return null
 
@@ -420,7 +441,14 @@ export default function AddExerciseSheet({
             />
 
             <div className="grid grid-cols-2 gap-3">
-              <Stepper label={setUnitLabel(picked?.trackingType, sets)} value={sets} onChange={v => setSets(Math.max(1, Math.min(10, v)))} dark={dark} testid="add-exercise-sets" />
+              <Stepper
+                label={setUnitLabel(picked?.trackingType, effectiveSets)}
+                value={effectiveSets}
+                onChange={v => setSets(Math.max(1, Math.min(10, v)))}
+                dark={dark}
+                testid="add-exercise-sets"
+                disabled={lockedSets !== null}
+              />
               {timed ? (
                 <Stepper label="Seconds" value={seconds} step={15} onChange={v => setSeconds(Math.max(5, Math.min(600, v)))} dark={dark} testid="add-exercise-seconds" />
               ) : (
@@ -477,6 +505,11 @@ export default function AddExerciseSheet({
                     ))}
                   </div>
                 )}
+                {lockedSets !== null && (
+                  <p className={`mt-2 text-xs ${muted}`} data-testid="add-exercise-circuit-note">
+                    A circuit runs every exercise the same number of rounds, so this one follows {anchorName} at {lockedSets}.
+                  </p>
+                )}
               </div>
             )}
 
@@ -496,18 +529,18 @@ export default function AddExerciseSheet({
   )
 }
 
-function Stepper({ label, value, onChange, dark, step = 1, testid }: { label: string; value: number; onChange: (v: number) => void; dark: boolean; step?: number; testid?: string }) {
+function Stepper({ label, value, onChange, dark, step = 1, testid, disabled = false }: { label: string; value: number; onChange: (v: number) => void; dark: boolean; step?: number; testid?: string; disabled?: boolean }) {
   const btn = dark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200'
   const muted = dark ? 'text-white/50' : 'text-zinc-500 dark:text-zinc-400'
   return (
     <div>
       <span className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${muted}`}>{label}</span>
       <div className="flex items-center gap-2">
-        <button onClick={() => onChange(value - step)} aria-label={`Fewer ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl ${btn}`}>
+        <button onClick={() => onChange(value - step)} disabled={disabled} aria-label={`Fewer ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl disabled:opacity-40 ${btn}`}>
           <Minus className="h-4 w-4" />
         </button>
         <span data-testid={testid} className="min-w-[2ch] flex-1 text-center text-sm font-bold">{value}</span>
-        <button onClick={() => onChange(value + step)} aria-label={`More ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl ${btn}`}>
+        <button onClick={() => onChange(value + step)} disabled={disabled} aria-label={`More ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl disabled:opacity-40 ${btn}`}>
           <Plus className="h-4 w-4" />
         </button>
       </div>

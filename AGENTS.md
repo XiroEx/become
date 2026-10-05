@@ -187,6 +187,7 @@ silently empty. For local work run `next dev`, where local env is authoritative.
 ### Key Patterns
 - Programs reference exercises by `slug`, hydrated server-side via `hydrateExercises.ts`
 - Exercise grouping supports supersets, circuits, trisets, giant sets, EMOM, AMRAP
+- A **circuit** is rounds of the whole block, so its members may not disagree about how many: `alignCircuitSets` / `setSetsAt` in `lib/workout/buildAsYouGo.ts` hold every member to the FIRST one's `sets` (and mirror it into `groupRounds`). Supersets are explicitly left free to pair 5 sets of one thing with 3 of another. A newly added exercise defaults to `defaultSetsFor(list)` — the first exercise's count — never a hardcoded 3
 - Lean queries (`.lean()`) for read-only endpoints
 - TTL index on MagicLink for auto-cleanup
 

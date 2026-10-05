@@ -21,6 +21,13 @@ import {
   moveExercise,
   canRemoveExercise,
   RECOMMENDED_MIN_EXERCISES,
+  DEFAULT_SETS,
+  defaultSetsFor,
+  agreesOnSets,
+  alignCircuitSets,
+  setSetsAt,
+  setGroupKindAt,
+  addNextIntoGroup,
   type AdHocExercise,
 } from '@/lib/workout/buildAsYouGo'
 import { buildWorkoutFlow, groupExercises } from '@/lib/workoutUtils'
@@ -244,4 +251,162 @@ test('the last exercise cannot be removed', () => {
   assert.equal(canRemoveExercise([ex('Bench')]), false)
   assert.equal(canRemoveExercise([ex('Bench'), ex('Row')]), true)
   assert.equal(canRemoveExercise([]), false)
+})
+
+// ── Circuits: one set count for the whole block ──────────────────────────────
+//
+// Card: "if you make a circuit every exercise after the first one should agree
+// on sets as the first. The way we have it now is that u have to manually
+// choose the sets when u add a new exercise." Reported with a 3-set goblet
+// squat dropped into a 5-set jump rope and turned into a circuit.
+
+test('a new exercise defaults to the first exercise\'s set count, not a flat 3', () => {
+  assert.equal(DEFAULT_SETS, 3)
+  // Nothing to agree with yet.
+  assert.equal(defaultSetsFor([]), 3)
+  // The first exercise is the one the session was built around.
+  assert.equal(defaultSetsFor([ex('Jump Rope', 5), ex('Row', 2)]), 5)
+  // Junk and missing counts fall back rather than producing a zero-set row.
+  assert.equal(defaultSetsFor([{}]), 3)
+  assert.equal(defaultSetsFor([{ sets: 0 }]), 3)
+  assert.equal(defaultSetsFor([{ sets: 4.7 }]), 4)
+})
+
+test('only a circuit holds its members to one set count', () => {
+  assert.equal(agreesOnSets('circuit'), true)
+  assert.equal(agreesOnSets('superset'), false)
+  assert.equal(agreesOnSets('triset'), false)
+  assert.equal(agreesOnSets(undefined), false)
+})
+
+test('making a circuit brings every member onto the first one\'s rounds', () => {
+  // The reported case: 5-set jump rope, then a 3-set goblet squat.
+  const list = [ex('Jump Rope', 5), ex('Goblet Squat', 3)]
+  const r = groupIndexes(list, [0, 1], 'circuit')
+  assert.deepEqual(r.exercises.map(e => e.sets), [5, 5])
+  assert.deepEqual(r.exercises.map(e => e.groupRounds), [5, 5])
+  assert.equal(r.exercises[0]!.groupLabel, 'Circuit')
+  // Every round now has both exercises in it — five rounds of two.
+  const flow = buildWorkoutFlow(r.exercises)
+  assert.equal(flow.length, 10)
+  assert.deepEqual(flow.map(s => s.exerciseIndex), [0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+
+  // A superset is left exactly as it was: 5 of one and 3 of the other is a
+  // legitimate thing to ask for outside a circuit.
+  const sup = groupIndexes(list, [0, 1], 'superset')
+  assert.deepEqual(sup.exercises.map(e => e.sets), [5, 3])
+  assert.equal(sup.exercises[0]!.groupRounds, undefined)
+
+  // An explicit round count still wins over the first exercise's.
+  const explicit = groupIndexes(list, [0, 1], 'circuit', { rounds: 4 })
+  assert.deepEqual(explicit.exercises.map(e => e.sets), [4, 4])
+  assert.deepEqual(explicit.exercises.map(e => e.groupRounds), [4, 4])
+})
+
+test('joining a circuit mid-session takes the circuit\'s rounds', () => {
+  const gid = 'g1'
+  const circuit = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Goblet Squat', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+  ]
+  const r = addIntoGroup(circuit, 0, ex('Push Up', 2))
+  assert.deepEqual(r.exercises.map(e => e.name), ['Jump Rope', 'Goblet Squat', 'Push Up'])
+  assert.deepEqual(r.exercises.map(e => e.sets), [5, 5, 5])
+
+  // Joining a superset does not: the pair was never held to one count.
+  const superset = circuit.map(e => ({ ...e, groupType: 'superset', groupLabel: 'Superset' }))
+  const s = addIntoGroup(superset, 0, ex('Push Up', 2))
+  assert.deepEqual(s.exercises.map(e => e.sets), [5, 5, 2])
+})
+
+test('a circuit that already disagrees is repaired, and nothing else is touched', () => {
+  const gid = 'g1'
+  const broken = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Goblet Squat', 3, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Curl', 2),
+  ]
+  const fixed = alignCircuitSets(broken)
+  assert.deepEqual(fixed.map(e => e.sets), [5, 5, 2])
+  assert.deepEqual(fixed.map(e => e.groupRounds), [5, 5, undefined])
+
+  // Already in agreement: the same array back, so React does not re-render.
+  assert.equal(alignCircuitSets(fixed), fixed)
+
+  // A superset is never rewritten, and a lone exercise is not a circuit.
+  const sup = [
+    ex('Bench', 5, { groupId: gid, groupType: 'superset' }),
+    ex('Row', 3, { groupId: gid, groupType: 'superset' }),
+  ]
+  assert.equal(alignCircuitSets(sup), sup)
+  const lonely = [ex('Bench', 5, { groupId: gid, groupType: 'circuit' }), ex('Row', 3)]
+  assert.equal(alignCircuitSets(lonely), lonely)
+})
+
+test('editing any member of a circuit edits the circuit; outside one, only the row', () => {
+  const gid = 'g1'
+  const list = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Goblet Squat', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Curl', 2),
+  ]
+  // The member asked for three rounds of the circuit, not for a broken one.
+  const r = setSetsAt(list, 1, 3)
+  assert.deepEqual(r.map(e => e.sets), [3, 3, 2])
+  assert.deepEqual(r.map(e => e.groupRounds), [3, 3, undefined])
+
+  // An exercise on its own moves alone.
+  assert.deepEqual(setSetsAt(list, 2, 4).map(e => e.sets), [5, 5, 4])
+  // Nonsense is clamped to a workout that can be run, and a bad index is a no-op.
+  assert.equal(setSetsAt(list, 2, 0)[2]!.sets, 1)
+  assert.equal(setSetsAt(list, 99, 4), list)
+})
+
+test('a superset can be re-badged as a circuit from the builder', () => {
+  const gid = 'g1'
+  const pair = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'superset', groupLabel: 'Superset' }),
+    ex('Goblet Squat', 3, { groupId: gid, groupType: 'superset', groupLabel: 'Superset' }),
+    ex('Curl', 2),
+  ]
+  const circuit = setGroupKindAt(pair, 1, 'circuit')
+  assert.deepEqual(circuit.exercises.map(e => e.groupType), ['circuit', 'circuit', undefined])
+  assert.deepEqual(circuit.exercises.map(e => e.groupLabel), ['Circuit', 'Circuit', undefined])
+  // Switching TO a circuit is what makes the rounds agree.
+  assert.deepEqual(circuit.exercises.map(e => e.sets), [5, 5, 2])
+  // Nothing moves, so no caller has to permute its set data.
+  assert.deepEqual(circuit.order, [0, 1, 2])
+
+  // Back to a superset: the numbers are the member's now, not the block's.
+  const back = setGroupKindAt(circuit.exercises, 0, 'superset')
+  assert.deepEqual(back.exercises.map(e => e.groupType), ['superset', 'superset', undefined])
+  assert.deepEqual(back.exercises.map(e => e.sets), [5, 5, 2])
+
+  // An ungrouped exercise has no kind to set.
+  assert.equal(setGroupKindAt(pair, 2, 'circuit').exercises, pair)
+})
+
+test('a pair grows into a real circuit of three', () => {
+  const gid = 'g1'
+  const list = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit', groupRounds: 5 }),
+    ex('Goblet Squat', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit', groupRounds: 5 }),
+    ex('Push Up', 2),
+    ex('Curl', 3),
+  ]
+  // Reached from the last member of the group — the exercise below it joins.
+  const r = addNextIntoGroup(list, 1)
+  assert.equal(r.groupId, gid)
+  assert.deepEqual(r.exercises.map(e => e.groupId), [gid, gid, gid, undefined])
+  assert.deepEqual(r.exercises.map(e => e.sets), [5, 5, 5, 3])
+  assert.deepEqual(r.order, [0, 1, 2, 3])
+  assert.equal(groupExercises(r.exercises)[0]!.exercises.length, 3)
+
+  // Reaching it from the group's head finds the same neighbour.
+  assert.deepEqual(addNextIntoGroup(list, 0).exercises.map(e => e.groupId), [gid, gid, gid, undefined])
+
+  // Nothing below the group, or no group at all: nothing happens.
+  const atEnd = [list[0]!, list[1]!]
+  assert.equal(addNextIntoGroup(atEnd, 0).exercises, atEnd)
+  assert.equal(addNextIntoGroup(list, 2).exercises, list)
 })

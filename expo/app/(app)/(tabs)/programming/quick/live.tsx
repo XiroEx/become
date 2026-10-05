@@ -345,6 +345,8 @@ export default function QuickLiveRoute({
         anchorName={workout && workout.exercises[addAnchorIndex]?.name}
         anchorSlug={workout && workout.exercises[addAnchorIndex]?.slug}
         anchorInGroup={!!(workout && workout.exercises[addAnchorIndex]?.groupId)}
+        anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
+        anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
         workoutExerciseSlugs={(workout?.exercises ?? [])
           .map((e) => e.slug)
           .filter(Boolean)}

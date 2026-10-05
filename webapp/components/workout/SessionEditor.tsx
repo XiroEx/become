@@ -11,8 +11,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, Check, Layers, Plus, Search, Trash2, Unlink, X } from 'lucide-react'
 import type { DraftExercise } from '@/lib/quickSession/types'
-import { groupIndexes, sanitizeGroups, ungroupAt } from '@/lib/workout/buildAsYouGo'
+import {
+  addNextIntoGroup,
+  defaultSetsFor,
+  groupIndexes,
+  sanitizeGroups,
+  setGroupKindAt,
+  setSetsAt,
+  ungroupAt,
+  type GroupKind,
+} from '@/lib/workout/buildAsYouGo'
 import { setUnitLabel } from '@/lib/workout/tracking'
+
+/** The two kinds a member picks between here. A triset/giant set is just a
+ *  superset with more in it, and the label follows the size on its own. */
+const OFFERED_KINDS: GroupKind[] = ['superset', 'circuit']
 
 interface SearchExercise {
   slug: string
@@ -109,7 +122,7 @@ export default function SessionEditor({
       return next
     })
 
-  /** Superset this exercise with the one below it — or break the group up. */
+  /** Group this exercise with the one below it — or break the group up. */
   const toggleGroup = (i: number) =>
     setRows((prev) => {
       const row = prev[i]
@@ -118,6 +131,17 @@ export default function SessionEditor({
       if (i + 1 >= prev.length) return prev
       return groupIndexes(prev, [i, i + 1], 'superset').exercises
     })
+
+  /** Pull the exercise below the group into it — a circuit of three, four, … */
+  const growGroup = (i: number) => setRows((prev) => addNextIntoGroup(prev, i).exercises)
+
+  /** Superset or circuit. A circuit's rounds then agree across the block. */
+  const chooseKind = (i: number, kind: GroupKind) =>
+    setRows((prev) => setGroupKindAt(prev, i, kind).exercises)
+
+  /** Inside a circuit the count belongs to the block, so all of it follows. */
+  const changeSets = (i: number, sets: number) =>
+    setRows((prev) => setSetsAt(prev, i, Math.max(1, Math.min(20, sets || 1))))
 
   const moveRow = (i: number, delta: number) =>
     setRows((prev) => {
@@ -138,7 +162,8 @@ export default function SessionEditor({
         exerciseSlug: ex.slug,
         name: ex.name,
         trackingType: ex.trackingType,
-        sets: 3,
+        // Agree with the session you are adding to, not a hardcoded 3.
+        sets: defaultSetsFor(prev),
         reps: isTime ? '' : '8-12',
         ...(isTime ? { duration: '30' } : {}),
         ...(ex.equipment && { equipment: ex.equipment }),
@@ -175,6 +200,12 @@ export default function SessionEditor({
       <div className="space-y-2">
         {rows.map((ex, i) => {
           const isTime = ex.trackingType === 'time'
+          // Only the first member of a group carries the kind control, so one
+          // circuit does not offer the same choice three times over.
+          const groupHead = !!ex.groupId && rows[i - 1]?.groupId !== ex.groupId
+          const canGrowGroup =
+            !!ex.groupId && i + 1 < rows.length && rows[i + 1]?.groupId !== ex.groupId
+          const inCircuit = !!ex.groupId && ex.groupType === 'circuit'
           return (
             <div
               key={`${ex.exerciseSlug || ex.name}-${i}`}
@@ -199,6 +230,17 @@ export default function SessionEditor({
                       className={`rounded-lg p-1.5 ${ex.groupId ? 'text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/40' : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'}`}
                     >
                       {ex.groupId ? <Unlink className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+                    </button>
+                  )}
+                  {canGrowGroup && (
+                    <button
+                      type="button"
+                      onClick={() => growGroup(i)}
+                      aria-label={`Add the next exercise into the ${(ex.groupLabel || 'group').toLowerCase()} containing ${ex.name}`}
+                      data-testid={`editor-group-grow-${i}`}
+                      className="rounded-lg p-1.5 text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/40"
+                    >
+                      <Plus className="h-4 w-4" />
                     </button>
                   )}
                   <button
@@ -230,6 +272,30 @@ export default function SessionEditor({
                 </div>
               </div>
 
+              {/* Superset or circuit. A circuit is an intent, not a headcount,
+                  so it stays an explicit choice — and picking it is what makes
+                  the block's rounds agree. */}
+              {groupHead && (
+                <div className="mt-2 flex items-center gap-1.5" data-testid={`editor-group-kind-${i}`}>
+                  {OFFERED_KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => chooseKind(i, k)}
+                      aria-pressed={(ex.groupType || 'superset') === k}
+                      data-testid={`editor-group-kind-${k}-${i}`}
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                        (ex.groupType || 'superset') === k
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                      }`}
+                    >
+                      {k === 'superset' ? 'Superset' : 'Circuit'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-2 flex items-center gap-2">
                 <label className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   {setUnitLabel(ex.trackingType, ex.sets)}
@@ -239,9 +305,7 @@ export default function SessionEditor({
                     max={20}
                     inputMode="numeric"
                     value={ex.sets}
-                    onChange={(e) =>
-                      patchRow(i, { sets: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })
-                    }
+                    onChange={(e) => changeSets(i, Number(e.target.value))}
                     aria-label={`${setUnitLabel(ex.trackingType, ex.sets)} for ${ex.name}`}
                     className="w-14 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                   />
@@ -259,6 +323,12 @@ export default function SessionEditor({
                   />
                 </label>
               </div>
+
+              {inCircuit && (
+                <p className="mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400" data-testid={`editor-circuit-note-${i}`}>
+                  A circuit runs every exercise for the same number of rounds — changing this changes the whole circuit.
+                </p>
+              )}
             </div>
           )
         })}

@@ -498,6 +498,13 @@ const LIST_BROKEN: WorkoutExercise[] = [
   ex('D', { groupId: 'lonely' }),
 ]
 const NEW_EX = ex('Lateral Raise', { sets: 3 })
+// A circuit whose members disagree about how many rounds there are — the exact
+// shape the field reported (3-set exercise dropped into a 5-set circuit).
+const LIST_CIRCUIT: WorkoutExercise[] = [
+  ex('Jump Rope', { sets: 5, groupId: 'adhoc-1', groupType: 'circuit', groupLabel: 'Circuit' }),
+  ex('Goblet Squat', { sets: 3, groupId: 'adhoc-1', groupType: 'circuit', groupLabel: 'Circuit' }),
+  ex('Curl', { sets: 2 }),
+]
 
 test('workout/buildAsYouGo: add, group, ungroup, move, remap', () => {
   const b = webBuildAsYouGo
@@ -514,6 +521,25 @@ test('workout/buildAsYouGo: add, group, ungroup, move, remap', () => {
   same('workout/buildAsYouGo.groupLabelFor', b.groupLabelFor, c.groupLabelFor,
     (['superset', 'circuit', 'triset', 'giant_set'] as const).flatMap(k => [2, 3, 5].map(n => [k, n] as [typeof k, number])))
   same('workout/buildAsYouGo.naturalKindFor', b.naturalKindFor, c.naturalKindFor, [[1], [2], [3], [4], [7]])
+  same('workout/buildAsYouGo.agreesOnSets', b.agreesOnSets, c.agreesOnSets,
+    [['circuit'], ['superset'], ['triset'], ['giant_set'], [undefined], ['']])
+  same('workout/buildAsYouGo.defaultSetsFor', b.defaultSetsFor, c.defaultSetsFor, [
+    [[]], [LIST_A], [LIST_CIRCUIT], [[{ sets: 0 }]], [[{ sets: undefined }]], [[{ sets: 4.7 }]],
+  ])
+  same('workout/buildAsYouGo.alignCircuitSets', b.alignCircuitSets, c.alignCircuitSets,
+    [[LIST_A], [LIST_GROUPED], [LIST_CIRCUIT], [LIST_BROKEN], [[]]])
+  same('workout/buildAsYouGo.setSetsAt', b.setSetsAt, c.setSetsAt, [
+    [LIST_A, 0, 5], [LIST_A, 99, 5], [LIST_GROUPED, 0, 4],
+    [LIST_CIRCUIT, 1, 4], [LIST_CIRCUIT, 2, 4], [LIST_CIRCUIT, 0, 0],
+  ])
+  same('workout/buildAsYouGo.setGroupKindAt', b.setGroupKindAt, c.setGroupKindAt, [
+    [LIST_GROUPED, 0, 'circuit'], [LIST_GROUPED, 1, 'circuit'], [LIST_GROUPED, 2, 'circuit'],
+    [LIST_CIRCUIT, 0, 'superset'], [LIST_A, 0, 'circuit'],
+  ])
+  same('workout/buildAsYouGo.addNextIntoGroup', b.addNextIntoGroup, c.addNextIntoGroup, [
+    [LIST_GROUPED, 0], [LIST_GROUPED, 1], [LIST_GROUPED, 2],
+    [LIST_CIRCUIT, 0], [LIST_CIRCUIT, 1], [LIST_A, 0],
+  ])
   same('workout/buildAsYouGo.newGroupId', b.newGroupId, c.newGroupId, [
     [[], undefined], [LIST_A, undefined], [LIST_GROUPED, 1], [LIST_GROUPED, 2], [LIST_GROUPED, 0],
   ])
