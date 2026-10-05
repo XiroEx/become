@@ -220,6 +220,7 @@ export function CoachChat({
     >
       <Pressable
         testID={`${testID}-backdrop`}
+        accessibilityRole="none"
         onPress={onClose}
         accessible={false}
         importantForAccessibility="no"
