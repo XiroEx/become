@@ -115,11 +115,19 @@ export function buildWorkoutSaveRequest(
       ...(ex.groupId ? { groupId: ex.groupId } : {}),
       ...(ex.groupType ? { groupType: ex.groupType } : {}),
       ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+      // The round-end rest travels with the exercise (the web's save body
+      // passes `groupRest` through); without it a regrouped block resumes
+      // with the default rest instead of the one the member set.
+      ...(ex.groupRest ? { groupRest: ex.groupRest } : {}),
       ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
       prescription: prescriptionOf({
         name: ex.name,
         sets: ex.sets,
         reps: ex.repsLabel,
+        // A timed prescription travels as `duration` (the web's
+        // `prescriptionOf` reads `ex.duration`); without it a resumed plank
+        // comes back with no timed box.
+        duration: ex.durationLabel,
         trackingType: ex.trackingType ?? undefined,
         rest: ex.restSec != null ? `${ex.restSec}s` : undefined,
       }),

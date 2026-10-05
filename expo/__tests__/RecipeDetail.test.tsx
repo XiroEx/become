@@ -3,7 +3,12 @@ import {
   RecipeDetail,
   type RecipeDetailViewModel,
 } from "@/components/recipes/RecipeDetail";
-import { recipeEditUrl } from "@/lib/nutrition/recipeLinks";
+
+// The thumbnail is an `AuthedImage` (the bearer-token image fetch), which reads
+// the signed-in token through `useAuth`.
+jest.mock("@/lib/auth/useAuth", () => ({
+  useAuth: () => ({ token: "test-jwt", isAuthed: true }),
+}));
 
 const sample: RecipeDetailViewModel = {
   id: "rec-1",
@@ -23,10 +28,18 @@ const sample: RecipeDetailViewModel = {
   ],
 };
 
+const noop = () => {};
+
 describe("RecipeDetail", () => {
   it("renders the recipe name, description, and thumbnail", () => {
     const { getByTestId } = render(
-      <RecipeDetail recipe={sample} onSaveAsMeal={() => {}} />,
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
     );
     expect(getByTestId("recipe-detail-name").props.children).toBe(
       "Banana oat smoothie",
@@ -34,12 +47,20 @@ describe("RecipeDetail", () => {
     expect(getByTestId("recipe-detail-description").props.children).toBe(
       "Quick high-protein breakfast",
     );
-    expect(getByTestId("recipe-detail-thumb")).toBeTruthy();
+    // The photo is a bearer-token fetch: before it resolves the slot shows its
+    // loading placeholder under the `-thumb` testID prefix.
+    expect(getByTestId("recipe-detail-thumb-loading")).toBeTruthy();
   });
 
   it("renders per-serving nutrition kcal + macros", () => {
     const { getByTestId } = render(
-      <RecipeDetail recipe={sample} onSaveAsMeal={() => {}} />,
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
     );
     expect(
       getByTestId("recipe-detail-nutrition-kcal").props.children,
@@ -57,7 +78,13 @@ describe("RecipeDetail", () => {
 
   it("renders one row per ingredient", () => {
     const { getByTestId } = render(
-      <RecipeDetail recipe={sample} onSaveAsMeal={() => {}} />,
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
     );
     expect(getByTestId("recipe-detail-ingredient-banana")).toBeTruthy();
     expect(getByTestId("recipe-detail-ingredient-oats")).toBeTruthy();
@@ -66,33 +93,90 @@ describe("RecipeDetail", () => {
 
   it("renders numbered instruction steps", () => {
     const { getByTestId } = render(
-      <RecipeDetail recipe={sample} onSaveAsMeal={() => {}} />,
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
     );
     expect(getByTestId("recipe-detail-step-0")).toBeTruthy();
     expect(getByTestId("recipe-detail-step-1")).toBeTruthy();
   });
 
-  it("Edit-in-browser button fires the launcher with the correct URL", async () => {
-    const launcher = jest.fn(async () => undefined);
+  it("Save-as-food CTA reads Save as food until saved, then Log this food", () => {
+    const unsaved = render(
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(unsaved.getByTestId("recipe-detail-save-or-log")).toBeTruthy();
+    const saved = render(
+      <RecipeDetail
+        recipe={sample}
+        savedFoodId="f1"
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(saved.getByTestId("recipe-detail-save-or-log")).toBeTruthy();
+  });
+
+  it("owner actions show only for the owner, and fire edit/delete/convert", async () => {
+    const onEdit = jest.fn();
+    const onDelete = jest.fn();
+    const onConvertToMeal = jest.fn();
+    const { getByTestId, queryByTestId, rerender } = render(
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={onConvertToMeal}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />,
+    );
+    expect(queryByTestId("recipe-detail-owner-actions")).toBeNull();
+    rerender(
+      <RecipeDetail
+        recipe={{ ...sample, isOwner: true }}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={onConvertToMeal}
+        onEdit={onEdit}
+        onDelete={onDelete}
+      />,
+    );
+    expect(getByTestId("recipe-detail-owner-actions")).toBeTruthy();
+    fireEvent.press(getByTestId("recipe-detail-edit"));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    fireEvent.press(getByTestId("recipe-detail-delete"));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    fireEvent.press(getByTestId("recipe-detail-to-meal"));
+    await waitFor(() => {
+      expect(onConvertToMeal).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("Save-or-Log fires the handler", async () => {
+    const onSaveOrLogFood = jest.fn();
     const { getByTestId } = render(
       <RecipeDetail
         recipe={sample}
-        onSaveAsMeal={() => {}}
-        browserLauncher={launcher}
+        onSaveOrLogFood={onSaveOrLogFood}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
       />,
     );
-    fireEvent.press(getByTestId("recipe-detail-edit-in-browser"));
+    fireEvent.press(getByTestId("recipe-detail-save-or-log"));
     await waitFor(() => {
-      expect(launcher).toHaveBeenCalledWith(recipeEditUrl("rec-1"));
+      expect(onSaveOrLogFood).toHaveBeenCalledTimes(1);
     });
-    expect(recipeEditUrl("rec-1")).toBe(
-      "https://become.redbtn.io/dashboard/nutrition/recipes/rec-1/edit",
-    );
-  });
-
-  it("recipeEditUrl URL-encodes the id", () => {
-    expect(recipeEditUrl("a b/c")).toBe(
-      "https://become.redbtn.io/dashboard/nutrition/recipes/a%20b%2Fc/edit",
-    );
   });
 });

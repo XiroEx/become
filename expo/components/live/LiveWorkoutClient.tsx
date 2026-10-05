@@ -212,6 +212,19 @@ export interface LiveWorkoutClientProps {
    * yet, so omitting it renders no elapsed line at all.
    */
   activeSeconds?: number;
+  /**
+   * Mid-session exercise management (NP-138, build as you go). The web live
+   * client's `EXERCISES` popover opens the add/remove/reorder/group panel;
+   * natively the route owns that panel (`WorkoutExerciseList` + the add
+   * sheet) and hands this in so both views offer the same door. Omitted,
+   * the views render exactly as before.
+   */
+  manageExercises?: {
+    /** Open the route-owned manage panel. */
+    onOpen: () => void;
+    /** Button label — e.g. `Exercises (5)`. */
+    label?: string;
+  };
   testID?: string;
 }
 
@@ -452,6 +465,7 @@ export function LiveWorkoutClient({
   enableSkipFlow = false,
   headerAction,
   activeSeconds,
+  manageExercises,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -1129,24 +1143,36 @@ export function LiveWorkoutClient({
         ) : null}
 
         {view === "track" ? (
-          <TrackWorkoutView
-            testID={testID}
-            exercises={workout.exercises}
-            grid={grid}
-            workoutFlow={workoutFlow}
-            flowIndexByKey={flowIndexByKey}
-            groupType={workout.groupType}
-            round={round}
-            totalRounds={totalRounds}
-            onRoundChange={setRound}
-            onSetChange={handleSetChange}
-            onRequestSwap={onRequestSwap}
-            notes={notes}
-            onNotesChange={handleNotesChange}
-            showNotes={completedSets > 0}
-            exerciseHints={exerciseHints}
-            onDismissHint={onDismissHint}
-          />
+          <>
+            {manageExercises ? (
+              <Button
+                testID={`${testID}-manage-exercises`}
+                variant="secondary"
+                onPress={manageExercises.onOpen}
+                accessibilityLabel={manageExercises.label ?? "Manage exercises"}
+              >
+                {manageExercises.label ?? "Exercises"}
+              </Button>
+            ) : null}
+            <TrackWorkoutView
+              testID={testID}
+              exercises={workout.exercises}
+              grid={grid}
+              workoutFlow={workoutFlow}
+              flowIndexByKey={flowIndexByKey}
+              groupType={workout.groupType}
+              round={round}
+              totalRounds={totalRounds}
+              onRoundChange={setRound}
+              onSetChange={handleSetChange}
+              onRequestSwap={onRequestSwap}
+              notes={notes}
+              onNotesChange={handleNotesChange}
+              showNotes={completedSets > 0}
+              exerciseHints={exerciseHints}
+              onDismissHint={onDismissHint}
+            />
+          </>
         ) : (
           <>
           <View style={{ flexDirection: "row", gap: 8 }}>
@@ -1160,6 +1186,18 @@ export function LiveWorkoutClient({
                 Exercises
               </Button>
             </View>
+            {manageExercises ? (
+              <View style={{ flex: 1 }}>
+                <Button
+                  testID={`${testID}-live-manage`}
+                  variant="secondary"
+                  onPress={manageExercises.onOpen}
+                  accessibilityLabel={manageExercises.label ?? "Manage exercises"}
+                >
+                  {manageExercises.label ?? "Manage"}
+                </Button>
+              </View>
+            ) : null}
           </View>
           <LiveStepView
             testID={testID}
