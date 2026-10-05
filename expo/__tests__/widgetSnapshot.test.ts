@@ -170,7 +170,7 @@ describe("the encoded snapshot fits SecureStore", () => {
     // Only the nutrition row fills `rings` — the feed ships [] everywhere
     // else (`BecomeWidgetSchema`: "Only the nutrition widget fills this").
     const ringiest = {
-      key: "calories",
+      key: "calories" as const,
       label: longest,
       value: 123456.789,
       target: 234567.891,
