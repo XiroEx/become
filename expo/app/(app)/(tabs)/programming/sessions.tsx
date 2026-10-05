@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock,
   GripVertical,
+  Pencil,
   Plus,
   Sparkles,
   Upload,
@@ -21,10 +22,12 @@ import {
   FavoriteOrderResponseSchema,
   PlannedWorkoutsResponseSchema,
   QuickSessionPatchResponseSchema,
+  QuickSessionResponseSchema,
   WorkoutHistoryResponseSchema,
   apiFetch,
   type FavoriteOrderResponse,
   type PlannedQuickSession,
+  type QuickSession,
   type QuickSessionPatchRequest,
   type WorkoutHistoryEntry,
 } from "@become/api-client";
@@ -34,6 +37,8 @@ import { ScreenState } from "@/components/ScreenState";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
+import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
+import { correctableFromQuickSession, type CorrectableWorkout } from "@/lib/workout/correction";
 import { useEntitlements } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { routeApiError } from "@/lib/errors";
@@ -146,6 +151,11 @@ export default function SessionsHubRoute() {
   const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
+  // The log being corrected: the row plus its logged sets, fetched from the
+  // session read (the hub list carries prescriptions, not logged sets).
+  const [correcting, setCorrecting] = useState<CorrectableWorkout | null>(null);
+  const [correctingError, setCorrectingError] = useState<string | null>(null);
+  const [loadingCorrection, setLoadingCorrection] = useState<string | null>(null);
 
   const {
     data: entitlements,
@@ -369,6 +379,41 @@ export default function SessionsHubRoute() {
     [opening, fetchOpts, handleFailure, router],
   );
 
+  // Correct a finished quick session. The hub list carries prescriptions
+  // (what to do next time), not logged sets — so the logged sets are read
+  // back from `GET /api/workouts/session?id=` first, and the sheet edits
+  // that. The PATCH then rewrites the log and the server recomputes PRs.
+  const correctingRef = useRef(false);
+  const openCorrection = useCallback(
+    async (log: HubSession) => {
+      const id = log.sessionId;
+      if (!id || correctingRef.current) return;
+      correctingRef.current = true;
+      setLoadingCorrection(id);
+      setCorrectingError(null);
+      try {
+        const res = await apiFetch<z.infer<typeof QuickSessionResponseSchema>>(
+          `/api/workouts/session?id=${encodeURIComponent(id)}`,
+          QuickSessionResponseSchema,
+          { ...fetchOpts },
+        );
+        const data: QuickSession | null = res.session;
+        if (!data) {
+          setCorrectingError("That session isn't available anymore.");
+          return;
+        }
+        setCorrecting(correctableFromQuickSession(data));
+      } catch (err) {
+        const message = handleFailure(err);
+        if (message) setCorrectingError(message);
+      } finally {
+        correctingRef.current = false;
+        setLoadingCorrection(null);
+      }
+    },
+    [fetchOpts, handleFailure],
+  );
+
   // The session builder (NP-137) is native now — the Build button opens the
   // in-app builder route. Import (NP-170) still lives on the web until that
   // card lands, opened signed in (NP-121).
@@ -479,6 +524,23 @@ export default function SessionsHubRoute() {
         </Pressable>
         {log.sessionId ? (
           <Pressable
+            testID={`sessions-correct-${log.sessionId}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Correct ${log.title}`}
+            accessibilityHint="Fix a mistyped set in this finished session"
+            disabled={loadingCorrection === log.sessionId}
+            onPress={() => void openCorrection(log)}
+            style={{ padding: 8, ...minTouchTarget }}
+          >
+            {loadingCorrection === log.sessionId ? (
+              <ActivityIndicator size="small" color={colors["muted-foreground"]} />
+            ) : (
+              <Pencil color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+            )}
+          </Pressable>
+        ) : null}
+        {log.sessionId ? (
+          <Pressable
             testID={`sessions-favorite-${log.sessionId}`}
             accessibilityRole="button"
             accessibilityLabel={log.favorite ? "Remove from favorites" : "Add to favorites"}
@@ -539,6 +601,25 @@ export default function SessionsHubRoute() {
             }}
           >
             <Text className="text-foreground text-sm">{actionError}</Text>
+          </View>
+        ) : null}
+        {correctingError ? (
+          <View
+            testID="sessions-correction-error"
+            style={{
+              padding: 12,
+              borderRadius: 12,
+              backgroundColor: colors.muted,
+              marginBottom: 12,
+            }}
+          >
+            <Text
+              testID="sessions-correction-error-text"
+              accessibilityRole="alert"
+              className="text-foreground text-sm"
+            >
+              {correctingError}
+            </Text>
           </View>
         ) : null}
 
@@ -721,6 +802,18 @@ export default function SessionsHubRoute() {
       </ScrollView>
 
       <GenerateSheet visible={showGenerate} onClose={() => setShowGenerate(false)} testID="sessions-generate-sheet" />
+      {correcting ? (
+        <TrainingLogCorrectionSheet
+          key={correcting.sessionId ?? correcting.rawDate}
+          workout={correcting}
+          onClose={() => setCorrecting(null)}
+          onSaved={async () => {
+            setCorrecting(null);
+            await history.refetch();
+          }}
+          authToken={token}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

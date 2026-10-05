@@ -1,12 +1,17 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, RefreshControl, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from "react-native";
 import type { z } from "zod";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Clock, Dumbbell, History, Sparkles } from "lucide-react-native";
+import { ChevronLeft, Clock, Dumbbell, History, Pencil, Sparkles } from "lucide-react-native";
 import {
+  PastWorkoutLogResponseSchema,
+  QuickSessionResponseSchema,
   WorkoutHistoryResponseSchema,
+  apiFetch,
+  type QuickSession,
+  type StoredWorkoutLog,
   type WorkoutHistoryEntry,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -26,6 +31,12 @@ import {
   type HistoryFilter,
 } from "@/lib/history/history";
 import { openHistoryQuickSession } from "@/lib/history/openHistoryQuick";
+import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
+import {
+  correctableFromQuickSession,
+  correctableFromStoredLog,
+  type CorrectableWorkout,
+} from "@/lib/workout/correction";
 
 /**
  * TRAINING HISTORY (NP-112).
@@ -50,12 +61,16 @@ function HistoryRow({
   index,
   onOpenProgram,
   onOpenQuick,
+  onCorrect,
+  correcting,
   opening,
 }: {
   log: WorkoutHistoryEntry;
   index: number;
   onOpenProgram: (programId: string) => void;
   onOpenQuick: (log: WorkoutHistoryEntry) => void;
+  onCorrect: (log: WorkoutHistoryEntry) => void;
+  correcting: boolean;
   opening: string | null;
 }) {
   const { colors, tint } = useThemeTokens();
@@ -64,21 +79,22 @@ function HistoryRow({
   const label = formatHistoryDateLabel(log.date);
 
   return (
-    <Pressable
-      testID={`history-row-${isQuick ? "quick" : "program"}-${log.sessionId ?? log.date}-${index}`}
-      accessibilityRole="button"
-      accessibilityLabel={`${log.title}, ${label}, ${log.exerciseCount} ${log.exerciseCount === 1 ? "exercise" : "exercises"}${log.duration ? `, ${log.duration} minutes` : ""}`}
-      accessibilityHint={isQuick ? "Reopens this session" : "Opens this program"}
-      onPress={() =>
-        isQuick
-          ? onOpenQuick(log)
-          : log.programId
-            ? onOpenProgram(log.programId)
-            : onOpenQuick(log)
-      }
-      disabled={busy}
-      style={[minTouchTarget, { opacity: busy ? 0.6 : 1 }]}
-    >
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+      <Pressable
+        testID={`history-row-${isQuick ? "quick" : "program"}-${log.sessionId ?? log.date}-${index}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${log.title}, ${label}, ${log.exerciseCount} ${log.exerciseCount === 1 ? "exercise" : "exercises"}${log.duration ? `, ${log.duration} minutes` : ""}`}
+        accessibilityHint={isQuick ? "Reopens this session" : "Opens this program"}
+        onPress={() =>
+          isQuick
+            ? onOpenQuick(log)
+            : log.programId
+              ? onOpenProgram(log.programId)
+              : onOpenQuick(log)
+        }
+        disabled={busy}
+        style={[minTouchTarget, { flex: 1, opacity: busy ? 0.6 : 1 }]}
+      >
       <View
         style={{
           flexDirection: "row",
@@ -166,7 +182,41 @@ function HistoryRow({
           </View>
         </View>
       </View>
-    </Pressable>
+      </Pressable>
+        {/* A finished log can be corrected in place — the row itself keeps its
+            open/reopen tap, so the pencil is its own target beside it. */}
+        {log.completed ? (
+          <Pressable
+            testID={`history-correct-${log.sessionId ?? log.date}-${index}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Correct ${log.title}`}
+            accessibilityHint="Fix a mistyped set in this finished workout"
+            disabled={correcting}
+            onPress={() => onCorrect(log)}
+            style={[
+              minTouchTarget,
+              {
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+                flexShrink: 0,
+                opacity: correcting ? 0.6 : 1,
+              },
+            ]}
+          >
+            {correcting ? (
+              <ActivityIndicator size="small" color={colors["muted-foreground"]} />
+            ) : (
+              <Pencil size={16} color={colors["muted-foreground"]} />
+            )}
+          </Pressable>
+        ) : null}
+    </View>
   );
 }
 
@@ -189,6 +239,11 @@ export default function HistoryRoute({
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [opening, setOpening] = useState<string | null>(null);
   const [openError, setOpenError] = useState<string | null>(null);
+  // The log being corrected: the row plus its logged sets, fetched from the
+  // single-log read (the history list carries counts, not sets).
+  const [correcting, setCorrecting] = useState<CorrectableWorkout | null>(null);
+  const [correctingKey, setCorrectingKey] = useState<string | null>(null);
+  const [correctError, setCorrectError] = useState<string | null>(null);
 
   const history = useFetch<z.infer<typeof WorkoutHistoryResponseSchema>>(
     "/api/workouts/logs",
@@ -267,6 +322,64 @@ export default function HistoryRoute({
       }
     },
     [logs, opening, router, token],
+  );
+
+  // Correct a finished log. The history list carries counts, not sets — so
+  // the logged sets are read back first: a quick log from the session read,
+  // a program log from the past-log read (matched on its UTC calendar day,
+  // the same day the route files it under). The PATCH then rewrites the log
+  // and the server recomputes PRs from the corrected history.
+  const correctingRef = useRef<string | null>(null);
+  const onCorrect = useCallback(
+    async (log: WorkoutHistoryEntry) => {
+      const key = log.sessionId ?? log.date;
+      if (correctingRef.current) return;
+      correctingRef.current = key;
+      setCorrectingKey(key);
+      setCorrectError(null);
+      try {
+        const opts = {
+          baseUrl: WEBAPP_BASE_URL,
+          getToken: () => token ?? undefined,
+        };
+        if (log.kind === "quick" && log.sessionId) {
+          const res = await apiFetch<z.infer<typeof QuickSessionResponseSchema>>(
+            `/api/workouts/session?id=${encodeURIComponent(log.sessionId)}`,
+            QuickSessionResponseSchema,
+            opts,
+          );
+          const data: QuickSession | null = res.session;
+          if (!data) {
+            setCorrectError("That session isn't available anymore.");
+            return;
+          }
+          setCorrecting(correctableFromQuickSession(data));
+          return;
+        }
+        if (log.kind !== "quick" && log.programId) {
+          const day = log.date.slice(0, 10);
+          const res = await apiFetch<z.infer<typeof PastWorkoutLogResponseSchema>>(
+            `/api/workouts/log?programId=${encodeURIComponent(log.programId)}&date=${encodeURIComponent(day)}`,
+            PastWorkoutLogResponseSchema,
+            opts,
+          );
+          const data: StoredWorkoutLog | null = res.log;
+          if (!data) {
+            setCorrectError("That workout isn't available anymore.");
+            return;
+          }
+          setCorrecting(correctableFromStoredLog(data));
+          return;
+        }
+        setCorrectError("That workout can't be corrected here.");
+      } catch {
+        setCorrectError("Could not load that workout. Check your connection and try again.");
+      } finally {
+        correctingRef.current = null;
+        setCorrectingKey(null);
+      }
+    },
+    [token],
   );
 
   const loading = history.loading && logs.length === 0 && initialLogs === undefined;
@@ -418,6 +531,15 @@ export default function HistoryRoute({
               {openError}
             </Text>
           ) : null}
+          {correctError ? (
+            <Text
+              testID="history-correction-error"
+              accessibilityRole="alert"
+              className="text-destructive text-sm mb-2"
+            >
+              {correctError}
+            </Text>
+          ) : null}
 
           {filtered.length === 0 && logs.length > 0 ? (
             <View
@@ -443,6 +565,8 @@ export default function HistoryRoute({
                   index={index}
                   onOpenProgram={onOpenProgram}
                   onOpenQuick={(log) => void onOpenQuick(log, index)}
+                  onCorrect={(log) => void onCorrect(log)}
+                  correcting={correctingKey === (item.sessionId ?? item.date)}
                   opening={opening}
                 />
               )}
@@ -464,6 +588,18 @@ export default function HistoryRoute({
           )}
         </View>
       </ScreenState>
+      {correcting ? (
+        <TrainingLogCorrectionSheet
+          key={correcting.sessionId ?? correcting.rawDate}
+          workout={correcting}
+          onClose={() => setCorrecting(null)}
+          onSaved={async () => {
+            setCorrecting(null);
+            await history.refetch();
+          }}
+          authToken={token}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
