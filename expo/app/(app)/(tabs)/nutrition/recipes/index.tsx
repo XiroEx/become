@@ -484,8 +484,12 @@ export default function MyStuffRoute() {
       raiseCapSheet("custom-foods");
       return;
     }
-    void openWebSignedIn("/dashboard/recipes/new");
-  }, [isAtCap, raiseCapSheet]);
+    // Native recipe editor (NP-144): the create screen posts
+    // `POST /api/nutrition/recipes` itself. The server is still the gate —
+    // a 403 that arrives anyway raises the same sheet from the server's own
+    // words.
+    router.push("/(tabs)/nutrition/recipes/new" as never);
+  }, [isAtCap, raiseCapSheet, router]);
 
   const handleCreateFood = useCallback(() => {
     if (isAtCap("custom-foods")) {
@@ -678,29 +682,56 @@ export default function MyStuffRoute() {
                 const busy = busyRecipeId === id;
                 const kcal = recipe.totalsPerServing?.calories;
                 return (
-                  <Card key={id} title={recipe.name} subtitle={recipe.description ?? ""}>
-                    <View testID={`my-stuff-recipe-${id}`}>
-                      {typeof kcal === "number" ? (
-                        <Text testID={`my-stuff-recipe-${id}-kcal`} className="text-muted-foreground text-xs">
-                          {Math.round(kcal)} cal/serving
+                  <Pressable
+                    key={id}
+                    testID={`my-stuff-recipe-open-${id}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open recipe ${recipe.name}`}
+                    onPress={() =>
+                      router.push(
+                        `/(tabs)/nutrition/recipes/${encodeURIComponent(id)}` as never,
+                      )
+                    }
+                  >
+                    <Card title={recipe.name} subtitle={recipe.description ?? ""}>
+                      <View testID={`my-stuff-recipe-${id}`}>
+                        {typeof kcal === "number" ? (
+                          <Text testID={`my-stuff-recipe-${id}-kcal`} className="text-muted-foreground text-xs">
+                            {Math.round(kcal)} cal/serving
+                          </Text>
+                        ) : null}
+                        <Text className="text-muted-foreground text-xs">
+                          {(recipe.ingredients?.length ?? 0)} ingredients
                         </Text>
-                      ) : null}
-                      <Text className="text-muted-foreground text-xs">
-                        {(recipe.ingredients?.length ?? 0)} ingredients
-                      </Text>
-                      <View style={{ marginTop: 8 }}>
-                        <Button
-                          testID={`my-stuff-recipe-save-or-log-${id}`}
-                          variant="primary"
-                          loading={busy}
-                          disabled={busy}
-                          onPress={() => void handleRecipeSaveOrLog(recipe)}
-                        >
-                          {saved ? "Log" : "Save as food"}
-                        </Button>
+                        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                          <View style={{ flex: 1 }}>
+                            <Button
+                              testID={`my-stuff-recipe-open-button-${id}`}
+                              variant="secondary"
+                              onPress={() =>
+                                router.push(
+                                  `/(tabs)/nutrition/recipes/${encodeURIComponent(id)}` as never,
+                                )
+                              }
+                            >
+                              Open
+                            </Button>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Button
+                              testID={`my-stuff-recipe-save-or-log-${id}`}
+                              variant="primary"
+                              loading={busy}
+                              disabled={busy}
+                              onPress={() => void handleRecipeSaveOrLog(recipe)}
+                            >
+                              {saved ? "Log" : "Save as food"}
+                            </Button>
+                          </View>
+                        </View>
                       </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </Pressable>
                 );
               })}
             </View>
