@@ -248,6 +248,10 @@ describe("(id: e5cecfda) Finishing asks for a name; Skip saves the web's fallbac
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
     });
+    // NP-138: a self-built session this thin asks once on the way out.
+    await act(async () => {
+      fireEvent.press(getByTestId("quick-live-thin-session-finish"));
+    });
 
     // The unnamed session asks for a name instead of saving.
     await waitFor(() => {
@@ -339,6 +343,10 @@ describe("(id: e5cecfdc) A repeat never overwrites its source log", () => {
     // A repeat already has an identity, so it finishes directly — no prompt.
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
+    });
+    // NP-138: a self-built session this thin asks once on the way out.
+    await act(async () => {
+      fireEvent.press(getByTestId("quick-live-thin-session-finish"));
     });
 
     await waitFor(() => {
