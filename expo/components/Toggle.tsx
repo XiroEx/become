@@ -6,9 +6,10 @@ const TRACK_WIDTH = 48;
 const TRACK_HEIGHT = 28;
 
 /**
- * Which "on" colour the track draws. Defaults to `primary` (the brand red,
- * most switches in the app). NP-303: the web's Settings notification/email
- * switches are `bg-blue-600`, never the brand red — `info` is that same
+ * Which "on" colour the track draws. Defaults to `primary` (zinc-900 / white
+ * since NP-313, which is the web's own `bg-zinc-900 dark:bg-white` switch —
+ * it used to be the brand red). NP-303: the web's Settings
+ * notification/email switches are `bg-blue-600` instead — `info` is that same
  * blue-600/400 token.
  */
 export type ToggleColor = "primary" | "info";
