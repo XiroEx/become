@@ -269,10 +269,10 @@ const V1_SCREENS: Screen[] = [
         screen.getByLabelText("What should we call you?"),
         "Jon",
       );
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
+      // Step 3: Body & nutrition (Age and Biological sex moved here, NP-246)
       fireEvent.changeText(screen.getByLabelText("Age"), "25");
       fireEvent.press(screen.getByLabelText("Male"));
-      fireEvent.press(screen.getByRole("button", { name: "Next" }));
-      // Step 3: Body & nutrition
       fireEvent.changeText(screen.getByLabelText("Feet"), "5");
       fireEvent.changeText(screen.getByLabelText("Inches"), "10");
       fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
@@ -611,10 +611,10 @@ describe("sign-in through to Home, by role and name only", () => {
       screen.getByLabelText("What should we call you?"),
       "Jon",
     );
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 3: Body & nutrition (Age and Biological sex moved here, NP-246)
     fireEvent.changeText(screen.getByLabelText("Age"), "25");
     fireEvent.press(screen.getByLabelText("Male"));
-    fireEvent.press(screen.getByRole("button", { name: "Next" }));
-    // Step 3: Body & nutrition
     fireEvent.changeText(screen.getByLabelText("Feet"), "5");
     fireEvent.changeText(screen.getByLabelText("Inches"), "10");
     fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
