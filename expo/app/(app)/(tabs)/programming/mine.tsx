@@ -270,7 +270,11 @@ export default function MyProgramsRoute() {
                 paddingHorizontal: 14,
                 paddingVertical: 8,
                 borderRadius: 999,
-                backgroundColor: colors.primary,
+                // The web's header CTA is green on both "My Programs"
+                // (`bg-green-600`, labelled "Add") and the Workout hub's
+                // Programs tab (same button, labelled "Create") — never the
+                // brand red (NP-282).
+                backgroundColor: colors.success,
               },
             ]}
           >
@@ -316,14 +320,19 @@ export default function MyProgramsRoute() {
           </View>
         ) : null}
 
+        {/*
+          No `empty` prop here on purpose (NP-282): `ScreenState`'s own empty
+          branch is a bare title + message with no icon, no CTA and no tip,
+          which is exactly the native/web gap this card closes. `MyPrograms`
+          renders its OWN full empty state (icon, "Create Your First
+          Program", the "Design your own program" tip) once `programs` is
+          empty, so this only needs to carry loading/error through.
+        */}
         <ScreenState
           loading={custom.loading}
           error={custom.error}
-          empty={!custom.loading && !custom.error && programs.length === 0}
           hasData={programs.length > 0}
           onRetry={retryList}
-          emptyTitle="No custom programs yet"
-          emptyMessage="Build your own training program tailored to your goals."
           testID="my-programs-screen-state"
         >
           <MyPrograms

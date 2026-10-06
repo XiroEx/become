@@ -26,6 +26,13 @@ export interface ButtonProps {
   loading?: boolean;
   children?: ReactNode;
   /**
+   * An icon rendered beside the label — the web's icon+label CTAs (`<Dumbbell
+   * /> I'll Be Back`, `<TrendingUp /> View Training Log`). Never placed
+   * inside the label `<Text>`: RN's Text only hosts text/inline content, not
+   * an SVG icon, so icon and label sit side by side in a row instead.
+   */
+  icon?: ReactNode;
+  /**
    * Overrides the accessible name. Omitted, the name is the label TEXT — see
    * `accessibleName` below, which is why it is computed rather than left to
    * React Native: while `loading` the label is replaced by a spinner, and a
@@ -103,6 +110,7 @@ export function Button({
   disabled = false,
   loading = false,
   children,
+  icon,
   accessibilityLabel,
   accessibilityHint,
   testID,
@@ -146,6 +154,23 @@ export function Button({
                   : colors.foreground
             }
           />
+        </View>
+      ) : icon ? (
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+          }}
+        >
+          {icon}
+          <Text
+            style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+            className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
+          >
+            {children}
+          </Text>
         </View>
       ) : (
         // WRAPPABLE_TEXT, or the label runs off the end of the button at the

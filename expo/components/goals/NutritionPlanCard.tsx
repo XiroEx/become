@@ -204,18 +204,21 @@ export function NutritionPlanCard({
         ) : null}
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 }}>
+        {/* The web's `bg-purple-100 dark:bg-purple-900/30` icon chip
+            (`PlanCard.tsx`) — the `mindset` token (purple-600/400), not the
+            brand accent (amber/orange) native drew before (NP-266). */}
         <View
+          testID={`${testID}-icon`}
+          className="bg-purple-100 dark:bg-purple-900/30"
           style={{
             width: 40,
             height: 40,
             borderRadius: 12,
-            backgroundColor: colors.accent,
-            opacity: 0.9,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Target size={20} color={colors.background} />
+          <Target size={20} color={colors.mindset} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text className="text-foreground text-sm font-semibold" testID={`${testID}-headline`}>

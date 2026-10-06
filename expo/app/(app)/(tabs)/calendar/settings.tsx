@@ -4,7 +4,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  View,
 } from "react-native";
+import { Calendar } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScheduleApiResponseSchema } from "@become/api-client";
@@ -47,9 +49,32 @@ export default function CalendarSettingsRoute() {
         testID="calendar-settings-route-kav"
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-          <Text className="text-foreground text-2xl font-bold">
-            Schedule settings
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              testID="calendar-settings-icon"
+              className="bg-blue-100 dark:bg-blue-900/30"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Calendar size={20} color={colors.info} />
+            </View>
+            <View>
+              <Text className="text-foreground text-2xl font-bold">
+                Schedule Settings
+              </Text>
+              <Text
+                testID="calendar-settings-subtitle"
+                className="text-muted-foreground text-sm"
+              >
+                Manage your training schedules
+              </Text>
+            </View>
+          </View>
 
           {loading && schedules.length === 0 ? (
             <Text className="text-muted-foreground" testID="calendar-settings-loading">
@@ -77,10 +102,21 @@ export default function CalendarSettingsRoute() {
               schedule.scheduledWorkouts?.filter((w) => w.status === "completed")
                 .length ?? 0;
             const totalCount = schedule.scheduledWorkouts?.length ?? 0;
+            // Mirrors the web's per-schedule subtitle (NP-293):
+            // `{completed}/{total} workouts completed · Started {date}`.
+            const subtitleParts: string[] = [];
+            if (totalCount > 0) {
+              subtitleParts.push(`${completedCount}/${totalCount} workouts completed`);
+            }
+            if (settings?.startDate) {
+              const started = new Date(settings.startDate).toLocaleDateString(
+                "en-US",
+                { month: "short", day: "numeric", year: "numeric" },
+              );
+              subtitleParts.push(`Started ${started}`);
+            }
             const subtitle =
-              totalCount > 0
-                ? `${completedCount}/${totalCount} workouts completed`
-                : undefined;
+              subtitleParts.length > 0 ? subtitleParts.join(" · ") : undefined;
             const formTestId =
               schedules.length === 1
                 ? "schedule-settings"

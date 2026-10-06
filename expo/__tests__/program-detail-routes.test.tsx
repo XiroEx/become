@@ -397,6 +397,29 @@ describe("ProgramDetailRoute mutations", () => {
   });
 
   it("start-date opens dialog, PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
+    // The start-date link only renders inside the enrolled block (NP-284
+    // gates it on `activeProgram`, matching the web), so this needs an
+    // actual enrollment mocked — not the describe block's default `[]`.
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() =>
       expect(getByTestId("program-detail-set-start-date")).toBeTruthy(),
@@ -572,6 +595,28 @@ describe("ProgramDetailRoute mutations", () => {
   });
 
   it("(id: e015c931) Shifting by 3 days opens dialog, calls PATCH /api/schedule with action: 'shift' and days: 3, and refetches active", async () => {
+    // The Delay Schedule link only renders inside the enrolled block
+    // (NP-284 gates it on `activeProgram`, matching the web).
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() => expect(getByTestId("program-detail-shift")).toBeTruthy());
 

@@ -12,8 +12,10 @@ import {
 import { DAY_LABELS } from "@/lib/schedule/scheduleSettings";
 import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import type { ScheduleDoc } from "@become/api-client";
-import { Calendar, Check, Dumbbell } from "lucide-react-native";
+import { slotDateKey, type ScheduleDoc } from "@become/api-client";
+import { Calendar, Check, ChevronLeft, Dumbbell } from "lucide-react-native";
+import { MIN_TOUCH_TARGET, hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 
 export interface ScheduleSetupProps {
   programId: string;
@@ -28,6 +30,10 @@ export interface ScheduleSetupProps {
   }) => Promise<void> | void;
   onSkip: () => void;
   onRecreate?: () => void;
+  /** View mode's "View Full Calendar" CTA — the Calendar tab. */
+  onViewCalendar?: () => void;
+  /** View mode's "Edit Training Days" CTA — calendar settings. */
+  onEditTrainingDays?: () => void;
   loading?: boolean;
   submitting?: boolean;
   error?: string | null;
@@ -35,6 +41,34 @@ export interface ScheduleSetupProps {
 }
 
 const DAYS_OF_WEEK = [0, 1, 2, 3, 4, 5, 6];
+
+/**
+ * Rule 1 (shared/api-client/src/schemas/schedule.ts): a slot `date` is a DAY
+ * MARKER at 00:00Z, never an instant, so it is formatted through UTC fields —
+ * the same way the web renders it (ScheduleSetupClient.tsx's Upcoming
+ * Workouts list). Reading it through the device's local offset would show
+ * the previous day west of UTC.
+ */
+function formatMarkerDayNumber(dateMarker: string): string {
+  return String(new Date(dateMarker).getUTCDate());
+}
+
+function formatMarkerWeekday(dateMarker: string): string {
+  return new Date(dateMarker).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function formatMarkerShortDate(dateMarker: string): string {
+  return new Date(dateMarker).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
 
 /**
  * Schedule Setup component for configuring program training days and calendar.
@@ -56,6 +90,8 @@ export function ScheduleSetup({
   onConfirm,
   onSkip,
   onRecreate,
+  onViewCalendar,
+  onEditTrainingDays,
   loading = false,
   submitting = false,
   error = null,
@@ -106,96 +142,233 @@ export function ScheduleSetup({
     );
   }
 
-  // VIEW MODE: Active schedule already exists
+  // VIEW MODE: Active schedule already exists. Mirrors the web's view mode
+  // (webapp/app/dashboard/workout/[programId]/schedule/ScheduleSetupClient.tsx):
+  // header, three stat tiles, an Upcoming Workouts list, "View Full
+  // Calendar", "Edit Training Days" and a red-outline "Recreate Schedule".
   if (existingSchedule && !isRecreating) {
     const scheduledWorkouts = existingSchedule.scheduledWorkouts ?? [];
     const todayKey = localDateKey(new Date());
-    const upcomingCount = scheduledWorkouts.filter(
-      (w) =>
-        (typeof w.date === "string" ? w.date.slice(0, 10) : "") >= todayKey &&
-        w.status === "scheduled",
-    ).length;
+    const upcomingWorkouts = scheduledWorkouts
+      .filter(
+        (w) => slotDateKey(w.date) >= todayKey && w.status === "scheduled",
+      )
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 5);
     const completedCount = scheduledWorkouts.filter(
       (w) => w.status === "completed",
     ).length;
+    const totalCount = scheduledWorkouts.length;
     const daysList = (existingSchedule.settings?.trainingDays ?? [])
       .map((d) => DAY_LABELS[d] ?? `Day ${d}`)
       .join(", ");
+    const startDateMarker = existingSchedule.settings?.startDate;
+    const startDateLabel = startDateMarker
+      ? formatMarkerShortDate(startDateMarker)
+      : "—";
 
     return (
       <ScrollView
         testID={`${testID}-view-mode`}
         contentContainerStyle={{ padding: 16, gap: 16 }}
       >
-        <View style={{ gap: 4 }}>
-          <Text className="text-muted text-xs uppercase font-bold tracking-wider">
-            Active Schedule
-          </Text>
-          <Text className="text-foreground text-2xl font-bold">
-            {programName}
-          </Text>
+        <View style={{ gap: 12 }}>
+          <Pressable
+            testID="schedule-back-btn"
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={onSkip}
+            hitSlop={hitSlopToMinTarget(MIN_TOUCH_TARGET, 24)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+          >
+            <ChevronLeft size={16} color={colors["muted-foreground"]} />
+            <Text className="text-muted-foreground text-sm">Back</Text>
+          </Pressable>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                backgroundColor: colors.info + "20",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Calendar size={20} color={colors.info} />
+            </View>
+            <View>
+              <Text className="text-foreground text-xl font-bold">
+                Your Schedule
+              </Text>
+              <Text className="text-muted-foreground text-sm">
+                {programName}
+              </Text>
+            </View>
+          </View>
         </View>
 
-        <Card>
-          <View style={{ gap: 12 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Calendar size={20} color={colors.primary} />
-            <Text className="text-foreground text-base font-semibold">
-              Schedule Overview
+        <View
+          testID="schedule-stats"
+          style={{ flexDirection: "row", gap: 10 }}
+        >
+          <View
+            testID="schedule-tile-completed"
+            style={{
+              flex: 1,
+              backgroundColor: colors.muted,
+              borderRadius: 12,
+              padding: 12,
+              gap: 2,
+            }}
+          >
+            <Text className="text-muted-foreground text-xs">Completed</Text>
+            <Text className="text-foreground text-base font-bold">
+              {completedCount}/{totalCount}
             </Text>
           </View>
-
-          <View style={{ gap: 8 }}>
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text className="text-muted text-sm">Training Days</Text>
-              <Text className="text-foreground text-sm font-medium">
-                {daysList || "None"}
-              </Text>
-            </View>
-
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text className="text-muted text-sm">Upcoming Sessions</Text>
-              <Text className="text-foreground text-sm font-medium">
-                {upcomingCount}
-              </Text>
-            </View>
-
-            <View
-              style={{ flexDirection: "row", justifyContent: "space-between" }}
-            >
-              <Text className="text-muted text-sm">Completed</Text>
-              <Text className="text-foreground text-sm font-medium">
-                {completedCount}
-              </Text>
-            </View>
+          <View
+            testID="schedule-tile-training-days"
+            style={{
+              flex: 1,
+              backgroundColor: colors.muted,
+              borderRadius: 12,
+              padding: 12,
+              gap: 2,
+            }}
+          >
+            <Text className="text-muted-foreground text-xs">
+              Training Days
+            </Text>
+            <Text className="text-foreground text-sm font-bold">
+              {daysList || "None"}
+            </Text>
+          </View>
+          <View
+            testID="schedule-tile-start-date"
+            style={{
+              flex: 1,
+              backgroundColor: colors.muted,
+              borderRadius: 12,
+              padding: 12,
+              gap: 2,
+            }}
+          >
+            <Text className="text-muted-foreground text-xs">Start Date</Text>
+            <Text className="text-foreground text-sm font-bold">
+              {startDateLabel}
+            </Text>
           </View>
         </View>
-        </Card>
+
+        {upcomingWorkouts.length > 0 ? (
+          <View style={{ gap: 10 }}>
+            <Text className="text-foreground text-sm font-semibold">
+              Upcoming Workouts
+            </Text>
+            <View style={{ gap: 8 }}>
+              {upcomingWorkouts.map((w, idx) => (
+                <View
+                  key={`${w.date}-${idx}`}
+                  testID={`upcoming-workout-${idx}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 10,
+                      backgroundColor: colors.info + "20",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: colors.info,
+                        fontWeight: "bold",
+                        fontSize: 14,
+                      }}
+                    >
+                      {formatMarkerDayNumber(w.date)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text className="text-foreground text-sm font-medium">
+                      {w.dayLabel ?? "Workout"}
+                    </Text>
+                    <Text className="text-muted-foreground text-xs">
+                      {formatMarkerWeekday(w.date)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ gap: 10, marginTop: 8 }}>
           <Button
+            testID="view-full-calendar-btn"
+            variant="inverted"
+            onPress={onViewCalendar}
+          >
+            View Full Calendar
+          </Button>
+
+          <Button
+            testID="edit-training-days-btn"
+            variant="ghost"
+            onPress={onEditTrainingDays}
+          >
+            Edit Training Days
+          </Button>
+
+          <Pressable
             testID="recreate-schedule-btn"
-            variant="secondary"
+            accessibilityRole="button"
+            accessibilityLabel="Recreate Schedule"
             onPress={() => {
               setIsRecreating(true);
               setStep(1);
               onRecreate?.();
             }}
+            style={[
+              minTouchTarget,
+              {
+                borderWidth: 1.5,
+                borderColor: colors.destructive,
+                borderRadius: 12,
+                paddingVertical: 12,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            ]}
           >
-            Recreate Schedule
-          </Button>
-
-          <Button
-            testID="back-to-program-btn"
-            variant="ghost"
-            onPress={onSkip}
-          >
-            Back to Program
-          </Button>
+            <Text
+              style={[
+                WRAPPABLE_TEXT,
+                {
+                  color: colors.destructive,
+                  fontWeight: "600",
+                  fontSize: 15,
+                  textAlign: "center",
+                },
+              ]}
+            >
+              Recreate Schedule
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     );
@@ -209,7 +382,7 @@ export function ScheduleSetup({
     >
       {/* Header & Step progress */}
       <View style={{ gap: 6 }}>
-        <Text className="text-muted text-xs uppercase font-bold tracking-wider">
+        <Text className="text-muted-foreground text-xs uppercase font-bold tracking-wider">
           Step {step} of 3
         </Text>
         <Text className="text-foreground text-2xl font-bold">
@@ -217,7 +390,7 @@ export function ScheduleSetup({
           {step === 2 && "When do you want to start?"}
           {step === 3 && "Preview your schedule"}
         </Text>
-        <Text className="text-muted text-sm">
+        <Text className="text-muted-foreground text-sm">
           {step === 1 &&
             `Choose ${trainingDaysPerWeek} training days per week for ${programName}.`}
           {step === 2 &&
@@ -291,7 +464,7 @@ export function ScheduleSetup({
               Please select at least one training day.
             </Text>
           ) : (
-            <Text className="text-muted text-xs">
+            <Text className="text-muted-foreground text-xs">
               {selectedDays.length} day{selectedDays.length === 1 ? "" : "s"} selected
             </Text>
           )}
@@ -370,7 +543,7 @@ export function ScheduleSetup({
             </View>
 
             {previewWorkouts.length === 0 ? (
-              <Text className="text-muted text-xs">
+              <Text className="text-muted-foreground text-xs">
                 No workouts scheduled. Check your training days.
               </Text>
             ) : (
@@ -405,7 +578,7 @@ export function ScheduleSetup({
                         {pw.dayLabel}
                       </Text>
                     </View>
-                    <Text className="text-muted text-xs">{pw.date}</Text>
+                    <Text className="text-muted-foreground text-xs">{pw.date}</Text>
                   </View>
                 ))}
               </View>

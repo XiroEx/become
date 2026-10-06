@@ -1,5 +1,6 @@
 /* eslint-disable import/first */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { View } from "react-native";
 
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();
@@ -384,5 +385,118 @@ describe("NutritionGoalsRoute (NP-148)", () => {
         "text-foreground",
       );
     }
+  });
+
+  it("The Weight tab uses the web's plain chart and a black Log Weight button, not the dashboard's red one (NP-266)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-tab-weight")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("nutrition-goals-tab-weight"));
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-weight-chart")).toBeTruthy();
+    });
+
+    // The web's `bg-zinc-900 dark:bg-white` Log Weight button — the
+    // `inverted` variant (`bg-foreground`) — not the brand-red `primary`
+    // variant native drew before.
+    const logWeight = getByTestId("nutrition-goals-log-weight");
+    expect(String((logWeight.props as { className?: string }).className ?? "")).toContain(
+      "bg-foreground",
+    );
+    expect(String((logWeight.props as { className?: string }).className ?? "")).not.toContain(
+      "bg-primary",
+    );
+  });
+
+  it("Your Stats shows a Sex label and an update-details link, like the web (NP-266)", async () => {
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/profile")) {
+        return {
+          profile: {
+            age: 30,
+            heightCm: 178,
+            currentWeightKg: 83.9,
+            weightUnit: "lbs",
+            fitnessGoals: ["lose_weight"],
+            // No biologicalSex — the manual Sex control shows.
+          },
+        };
+      }
+      return defaultApiHandler(url);
+    });
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-manual-sex-male")).toBeTruthy();
+    });
+    expect(getByTestId("nutrition-goals-manual-sex-female")).toBeTruthy();
+
+    // The web's "Sex" label above the control, and the
+    // "...or update your details" link to Settings (`PlanCard` has no
+    // equivalent — this is the Your Stats card's own missing-info banner).
+    const link = getByTestId("nutrition-goals-update-details-link");
+    expect(link).toBeTruthy();
+    fireEvent.press(link);
+    expect(mockPush).toHaveBeenCalledWith("/settings");
+  });
+
+  it("The macro bar and % labels use the web's blue/green/yellow, not red/amber/grey (NP-266)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-macro-bar")).toBeTruthy();
+    });
+
+    const segments = getByTestId("nutrition-goals-macro-bar").findAllByType(View);
+    const classNames = segments.map((s) => String((s.props as { className?: string }).className ?? ""));
+    expect(classNames).toEqual(["bg-blue-600", "bg-green-600", "bg-yellow-400"]);
+
+    expect(
+      String(
+        (getByTestId("nutrition-goals-macro-bar-label-protein").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-blue-600");
+    expect(
+      String(
+        (getByTestId("nutrition-goals-macro-bar-label-carbs").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-green-600");
+    expect(
+      String(
+        (getByTestId("nutrition-goals-macro-bar-label-fats").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-yellow-600");
+  });
+
+  it("Save Goals is black like the web, not the brand red (NP-266)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-save")).toBeTruthy();
+    });
+    const save = getByTestId("nutrition-goals-save");
+    expect(String((save.props as { className?: string }).className ?? "")).toContain(
+      "bg-foreground",
+    );
+    expect(String((save.props as { className?: string }).className ?? "")).not.toContain(
+      "bg-primary",
+    );
+  });
+
+  it("The plan icon chip is purple like the web, not the brand accent (NP-266)", async () => {
+    const { getByTestId } = render(<NutritionPlanCard testID="plan-card" />);
+
+    await waitFor(() => {
+      expect(getByTestId("plan-card-icon")).toBeTruthy();
+    });
+    expect(String((getByTestId("plan-card-icon").props as { className?: string }).className ?? "")).toContain(
+      "bg-purple-100",
+    );
   });
 });

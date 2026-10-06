@@ -5,9 +5,14 @@
  * The web's Training tab edits what onboarding collected: ordered fitness
  * goals (up to three, index 0 is the primary and is also written as
  * `fitnessGoal`), experience level, weekly availability (1–7 days/week),
- * equipment access and injury notes — plus the Nutrition Planning choice
- * between manual and automatic promotion (`planPromoteMode`). All of it is
- * saved by the page's one `PATCH /api/profile`.
+ * equipment access and injury notes. All of it is saved by the page's one
+ * `PATCH /api/profile`.
+ *
+ * The Nutrition Planning choice (`planPromoteMode`, manual vs automatic
+ * promotion) lives on the web's SETTINGS tab, not Training — NP-302 moved
+ * it to native Settings > Settings to match. `PlanPromoteModeValue` and
+ * `PLAN_PROMOTE_MODE_OPTIONS` stay exported here since that's still the one
+ * place the option list and value type are defined.
  *
  * This module holds the option lists and the two pure rules so both the
  * screen and the tests read the same values:
@@ -139,7 +144,10 @@ export interface TrainingProfilePatch {
   weeklyAvailability: number;
   equipmentAccess: EquipmentValue[];
   injuryNotes: string;
-  planPromoteMode: PlanPromoteModeValue;
+  /** Not sent by the Training tab (NP-302 moved this control to Settings >
+   * Settings) — optional so a Settings-tab caller can still include it in
+   * the SAME shape if it ever shares this builder. */
+  planPromoteMode?: PlanPromoteModeValue;
 }
 
 /**
@@ -154,15 +162,17 @@ export function buildTrainingProfilePatch(input: {
   weeklyAvailability: number;
   equipmentAccess: readonly EquipmentValue[];
   injuryNotes: string;
-  planPromoteMode: PlanPromoteModeValue;
+  planPromoteMode?: PlanPromoteModeValue;
 }): TrainingProfilePatch {
   const goals = [...input.fitnessGoals];
   const patch: TrainingProfilePatch = {
     weeklyAvailability: clampWeeklyAvailability(input.weeklyAvailability),
     equipmentAccess: [...input.equipmentAccess],
     injuryNotes: input.injuryNotes,
-    planPromoteMode: input.planPromoteMode,
   };
+  if (input.planPromoteMode) {
+    patch.planPromoteMode = input.planPromoteMode;
+  }
   if (goals.length > 0) {
     patch.fitnessGoal = goals[0];
     patch.fitnessGoals = goals;

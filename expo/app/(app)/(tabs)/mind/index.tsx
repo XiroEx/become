@@ -7,9 +7,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowRight,
+  Brain,
   Check,
+  ChevronRight,
   Flame,
   Lock,
 } from "lucide-react-native";
@@ -110,7 +113,7 @@ export const MOVE_CHIP: Record<string, string> = {
   social: "Social",
   mirror: "Mirror",
   choice: "Choice",
-  type: "Type",
+  type: "Type it",
   speak: "Speak",
   assemble: "Assemble",
   compose: "Compose",
@@ -598,10 +601,10 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
       <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
         {/* Header: Title, Mind streak, and Profile avatar button */}
         <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-foreground text-2xl font-bold">Mind</Text>
-            <Text className="text-muted-foreground text-sm">
-              Daily mindset &amp; focus
+          <View className="flex-row items-center gap-2">
+            <Brain size={24} color={colors["mind-violet"]} />
+            <Text className="text-foreground text-2xl font-bold">
+              Mindset
             </Text>
           </View>
           <View className="flex-row items-center gap-3">
@@ -637,31 +640,67 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
           </View>
         </View>
 
-        {/* Level progress bar */}
+        {/* Level bar: violet badge + violet→green gradient fill, always. In the
+            cooldown state it collapses onto ONE line with the chapter label
+            instead of the XP count and a separate chapter path (NP-296, web
+            parity: `webapp/components/mind/MindJourney.tsx`). */}
         {levelProgress ? (
-          <View testID="mind-level-bar">
-            <View className="flex-row items-center gap-3">
-              <View className="rounded-md bg-purple-100 dark:bg-purple-950/50 px-2 py-0.5">
-                <Text className="text-xs font-extrabold text-purple-600 dark:text-purple-400">
+          available ? (
+            <View testID="mind-level-bar">
+              <View className="flex-row items-center gap-3">
+                <View className="rounded-md bg-violet-100 dark:bg-violet-500/15 px-2 py-0.5">
+                  <Text className="text-xs font-extrabold text-violet-600 dark:text-violet-300">
+                    Lv {level}
+                  </Text>
+                </View>
+                <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                  <LinearGradient
+                    colors={[colors["mind-violet"], colors["mind-green"]]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={{
+                      height: "100%",
+                      borderRadius: 999,
+                      width: `${Math.min(100, Math.max(0, levelProgress.pct))}%`,
+                    }}
+                  />
+                </View>
+                <Text className="text-xs font-medium text-muted-foreground">
+                  {levelProgress.xpToNext} XP
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View testID="mind-level-bar" className="flex-row items-center gap-2.5">
+              <View className="rounded-md bg-violet-100 dark:bg-violet-500/15 px-2 py-0.5">
+                <Text className="text-xs font-extrabold text-violet-600 dark:text-violet-300">
                   Lv {level}
                 </Text>
               </View>
               <View className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                <View
-                  className="h-full rounded-full bg-primary"
+                <LinearGradient
+                  colors={[colors["mind-violet"], colors["mind-green"]]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
                   style={{
+                    height: "100%",
+                    borderRadius: 999,
                     width: `${Math.min(100, Math.max(0, levelProgress.pct))}%`,
                   }}
                 />
               </View>
-              <Text className="text-xs font-medium text-muted-foreground">
-                {levelProgress.xpToNext} XP
+              <Text
+                testID="mind-chapter-path"
+                className="shrink-0 text-xs font-semibold text-muted-foreground"
+              >
+                Ch.{chapter} · {chapterName}
               </Text>
             </View>
-          </View>
+          )
         ) : null}
 
-        {/* Chapter progression (visual path) */}
+        {/* Chapter progression (visual path) — only while a main session is
+            available; the cooldown label above replaces it. */}
         {available ? (
           <View testID="mind-chapter-path">
             <View className="flex-row items-center">
@@ -680,16 +719,16 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                     {i > 0 && (
                       <View
                         className={`h-0.5 flex-1 ${
-                          c.id <= chapter ? "bg-primary" : "bg-muted"
+                          c.id <= chapter ? "bg-violet-500" : "bg-muted"
                         }`}
                       />
                     )}
                     <View
                       className={`h-7 w-7 rounded-full items-center justify-center ${
                         done
-                          ? "bg-primary"
+                          ? "bg-violet-500"
                           : current
-                          ? "border-2 border-primary bg-background"
+                          ? "border-2 border-violet-500 bg-background"
                           : "bg-muted"
                       }`}
                     >
@@ -698,7 +737,9 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                       ) : (
                         <Text
                           className={`text-xs font-bold ${
-                            current ? "text-primary" : "text-muted-foreground"
+                            current
+                              ? "text-violet-600 dark:text-violet-300"
+                              : "text-muted-foreground"
                           }`}
                         >
                           {c.id}
@@ -716,13 +757,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                 : " — final chapter"}
             </Text>
           </View>
-        ) : (
-          <View className="flex-row items-center gap-2">
-            <Text className="text-xs font-semibold text-muted-foreground">
-              Ch.{chapter} · {chapterName}
-            </Text>
-          </View>
-        )}
+        ) : null}
 
         {sessionLock ? (
           /* Lock Card: Free member with sessions >= sessionsLimit */
@@ -765,24 +800,28 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             </View>
           </Pressable>
         ) : available && effectivePlan ? (
-          /* Main Session Card */
+          /* Main Session Card — dark (zinc-900) card, white title, white/
+             translucent move chips and a white Begin button, matching the
+             web's `bg-zinc-900 ... text-white` card (NP-296). Deliberately
+             NOT `bg-card`/`text-foreground`: the web keeps this card dark in
+             both light and dark mode. */
           <View
             testID="mind-session-card"
             accessibilityRole="summary"
-            className="rounded-3xl bg-card border border-border p-6 shadow-sm"
+            className="rounded-3xl bg-zinc-900 dark:bg-zinc-800 p-6 shadow-sm"
           >
-            <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <Text className="text-xs font-semibold uppercase tracking-widest text-white/50">
               {sessionLabel}
             </Text>
             <Text
               testID="mind-session-title"
-              className="text-foreground text-2xl font-extrabold mt-2"
+              className="text-white text-2xl font-extrabold mt-2"
             >
               {effectivePlan.intro.title}
             </Text>
             <Text
               testID="mind-session-subtitle"
-              className="text-muted-foreground text-sm mt-1"
+              className="text-white/70 text-sm mt-1"
             >
               {effectivePlan.intro.subtitle}
             </Text>
@@ -791,9 +830,9 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
                 <View
                   key={m.id}
                   testID={`mind-move-chip-${m.kind}`}
-                  className="rounded-full bg-primary/10 border border-primary/20 px-3 py-1"
+                  className="rounded-full bg-white/10 px-3 py-1"
                 >
-                  <Text className="text-xs font-semibold text-primary">
+                  <Text className="text-xs font-semibold text-white/90">
                     {MOVE_CHIP[m.kind as MoveKind] ?? m.kind}
                   </Text>
                 </View>
@@ -804,12 +843,12 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
               accessibilityRole="button"
               accessibilityLabel="Begin session"
               onPress={begin}
-              className="mt-6 flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-3.5 px-6"
+              className="mt-6 flex-row items-center justify-center gap-2 rounded-2xl bg-white py-3.5 px-6"
             >
-              <Text className="text-base font-bold text-primary-foreground">
+              <Text className="text-base font-bold text-zinc-900">
                 Begin
               </Text>
-              <ArrowRight size={18} color={colors["primary-foreground"]} />
+              <ArrowRight size={18} color={colors["mind-ink"]} />
             </Pressable>
           </View>
         ) : (
@@ -826,6 +865,30 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             />
           </View>
         )}
+
+        {/* The Becoming — where you started, where you are, what's next, for
+            all three pillars. Present in both the available and cooldown
+            states (web parity: `webapp/components/mind/MindJourney.tsx:574-589`).
+            Native has no Becoming stage yet (NP-203/NP-204 decide that); this
+            opens the same screen `BecomingDoor` on the dashboard already
+            routes to. */}
+        <Pressable
+          testID="mind-becoming-link"
+          accessibilityRole="button"
+          accessibilityLabel="The Becoming. Where you started, where you are, what's next"
+          onPress={() => router.push("/becoming" as never)}
+          className="flex-row items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5"
+        >
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text className="text-foreground text-sm font-semibold">
+              The Becoming
+            </Text>
+            <Text className="text-muted-foreground text-xs mt-0.5">
+              Where you started, where you are, what&apos;s next
+            </Text>
+          </View>
+          <ChevronRight size={20} color={colors["muted-foreground"]} />
+        </Pressable>
 
         {/* AI coach — unlocks after 3 main sessions (parity with
             `webapp/components/mind/MindJourney.tsx:591-604`). */}

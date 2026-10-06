@@ -22,19 +22,19 @@ describe("CalorieRing", () => {
       60,
       "g / ",
       150,
-      "g P",
+      "g",
     ]);
     expect(getByTestId("day-totals-carbs").props.children).toEqual([
       60,
       "g / ",
       200,
-      "g C",
+      "g",
     ]);
     expect(getByTestId("day-totals-fat").props.children).toEqual([
       20,
       "g / ",
       65,
-      "g F",
+      "g",
     ]);
     expect(getByTestId("day-totals-fiber").props.children).toEqual([
       15,

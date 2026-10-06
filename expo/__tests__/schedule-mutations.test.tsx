@@ -106,12 +106,19 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
   });
 
   it("PATCHes reschedule and the grid reflects the moved slot after refetch", async () => {
+    // No "Upcoming" list any more (web has none, NP-292) — reschedule goes
+    // through the day panel's Manage sheet, the same path exercised in
+    // calendar-day-actions.test.tsx.
     const { getByTestId } = render(<CalendarIndexRoute />);
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-reschedule-${dateA}-0`)).toBeTruthy();
+      expect(getByTestId(`calendar-day-${dateA}`)).toBeTruthy();
     });
-
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    fireEvent.press(getByTestId(`calendar-day-${dateA}`));
+    await waitFor(() => {
+      expect(getByTestId("day-detail-manage-prog-1-0")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("day-detail-manage-prog-1-0"));
+    fireEvent.press(getByTestId("slot-menu-to-date"));
     fireEvent.changeText(getByTestId("reschedule-modal-date"), dateB);
     await act(async () => {
       fireEvent.press(getByTestId("reschedule-modal-confirm"));
@@ -139,7 +146,7 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
       expect(getsTo("/api/schedule").length).toBeGreaterThan(1);
     });
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-item-${dateB}-0`)).toBeTruthy();
+      expect(getByTestId(`calendar-dot-${dateB}`)).toBeTruthy();
     });
   });
 });
@@ -181,7 +188,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-settings-day-2")).toBeTruthy();
     });
 
-    // Toggle Tuesday (2) on, then submit.
+    // Enter edit mode (web's Edit Days), toggle Tuesday (2) on, then submit.
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-day-2"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-submit"));
@@ -254,7 +262,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-card-prog-2")).toBeTruthy();
     });
 
-    // Edit program 2: toggle Saturday (6) and save
+    // Edit program 2: Edit Days, toggle Saturday (6) and save
+    fireEvent.press(getByTestId("schedule-settings-prog-2-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-prog-2-day-6"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-prog-2-submit"));
@@ -322,7 +331,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-settings-day-2")).toBeTruthy();
     });
 
-    // Toggle Tuesday (2) on and submit
+    // Edit Days, toggle Tuesday (2) on and submit
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-day-2"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-submit"));

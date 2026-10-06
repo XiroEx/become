@@ -54,7 +54,7 @@ export function DateNav({
   onSelectDate,
   testID = "nutrition-date-nav",
 }: DateNavProps) {
-  const { colors, scrim } = useThemeTokens();
+  const { colors, scrim, tint } = useThemeTokens();
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const parts = dateKey.split("-").map(Number);
@@ -128,7 +128,7 @@ export function DateNav({
             backgroundColor: isSelected
               ? colors.primary
               : isCurrentDay
-              ? colors.primary + "20"
+              ? tint("primary", 0.12)
               : "transparent",
           }}
         >
@@ -256,6 +256,29 @@ export function DateNav({
             }}
             onPress={(e) => e.stopPropagation()}
           >
+            {/* Today chip — at the top, matching the web's `DateOnlyPicker
+                showTodayChip`. Jumps straight to today without paging
+                months. */}
+            <Pressable
+              testID="date-picker-today-chip"
+              accessibilityRole="button"
+              accessibilityLabel="Jump to today"
+              onPress={() => {
+                onSelectDate?.(todayKey);
+                onToday?.();
+                setPickerOpen(false);
+              }}
+              style={{
+                alignSelf: "flex-start",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 999,
+                backgroundColor: tint("primary", 0.12),
+              }}
+            >
+              <Text className="text-primary text-xs font-semibold">Today</Text>
+            </Pressable>
+
             {/* Header: Month Year + Prev/Next buttons */}
             <View
               style={{
@@ -306,11 +329,11 @@ export function DateNav({
               {daysElements}
             </View>
 
-            {/* Footer: Today button & Close */}
+            {/* Footer: Close */}
             <View
               style={{
                 flexDirection: "row",
-                justifyContent: "space-between",
+                justifyContent: "center",
                 alignItems: "center",
                 marginTop: 8,
                 borderTopWidth: 1,
@@ -318,26 +341,6 @@ export function DateNav({
                 paddingTop: 8,
               }}
             >
-              <Pressable
-                testID="date-picker-today-btn"
-                accessibilityRole="button"
-                accessibilityLabel="Jump to today"
-                onPress={() => {
-                  onSelectDate?.(todayKey);
-                  onToday?.();
-                  setPickerOpen(false);
-                }}
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 8,
-                  backgroundColor: colors.primary + "15",
-                }}
-              >
-                <Text className="text-primary text-xs font-semibold">
-                  Today
-                </Text>
-              </Pressable>
               <Pressable
                 testID="date-picker-close-btn"
                 accessibilityRole="button"

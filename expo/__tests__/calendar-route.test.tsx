@@ -99,30 +99,25 @@ describe("CalendarIndexRoute", () => {
   });
 
   it("navigates to the workout when a future scheduled slot is tapped", async () => {
+    // No "Upcoming" list any more (web has none, NP-292) — the slot is
+    // started from the day panel, which workoutIndex 1 ("Day 2") still
+    // identifies the same way.
     const { getByTestId } = render(<CalendarIndexRoute />);
-    // workoutIndex from "Day 2" → 1; phaseIndex from phase 1 → 0.
-    const itemId = `scheduled-list-item-${futureDate}-1`;
     await waitFor(() => {
-      expect(getByTestId(itemId)).toBeTruthy();
+      expect(getByTestId(`calendar-day-${futureDate}`)).toBeTruthy();
     });
-    fireEvent.press(getByTestId(itemId));
+    fireEvent.press(getByTestId(`calendar-day-${futureDate}`));
+    const startId = "day-detail-start-prog-1-1";
+    await waitFor(() => {
+      expect(getByTestId(startId)).toBeTruthy();
+    });
+    fireEvent.press(getByTestId(startId));
     // A tapped slot opens the TRACK view (NP-087) — every set on one screen,
     // with Live on the toggle, the way the web's calendar links to
     // `/dashboard/workout/{id}/workout?day=…&sd=…`.
     expect(mockPush).toHaveBeenCalledWith(
       `/(tabs)/programming/prog-1/workout/1/live?phase=0&sd=${encodeURIComponent(futureDate)}&day=Day%202`,
     );
-  });
-
-  it("does not list a completed slot under Upcoming (NP-240: that list is today/future scheduled only)", async () => {
-    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
-    // The future scheduled slot still shows...
-    await waitFor(() => {
-      expect(getByTestId(`scheduled-list-item-${futureDate}-1`)).toBeTruthy();
-    });
-    // ...but the completed one does not, even though its date (midMonth)
-    // can itself be today-or-later — it is done, not upcoming.
-    expect(queryByTestId(`scheduled-list-item-${midMonth}-0`)).toBeNull();
   });
 });
 
@@ -165,19 +160,32 @@ describe("CalendarIndexRoute — reschedule modal is keyed on the slot", () => {
     });
   });
 
+  // No "Upcoming" list any more (web has none, NP-292) — reschedule is
+  // reached through each slot's day panel: select the day, open Manage,
+  // then "Move to Date".
+  function openRescheduleFor(
+    getByTestId: ReturnType<typeof render>["getByTestId"],
+    date: string,
+    workoutIndex: number,
+  ) {
+    fireEvent.press(getByTestId(`calendar-day-${date}`));
+    fireEvent.press(getByTestId(`day-detail-manage-prog-1-${workoutIndex}`));
+    fireEvent.press(getByTestId("slot-menu-to-date"));
+  }
+
   it("opens each slot's own date, not the first one it was opened with", async () => {
     const { getByTestId } = render(<CalendarIndexRoute />);
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-reschedule-${dateA}-0`)).toBeTruthy();
+      expect(getByTestId(`calendar-day-${dateA}`)).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    openRescheduleFor(getByTestId, dateA, 0);
     expect(getByTestId("reschedule-modal-date").props.value).toBe(dateA);
 
     // Type something, back out, then reschedule the OTHER workout.
     fireEvent.changeText(getByTestId("reschedule-modal-date"), "2026-01-01");
     fireEvent.press(getByTestId("reschedule-modal-close"));
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateB}-1`));
+    openRescheduleFor(getByTestId, dateB, 1);
 
     expect(getByTestId("reschedule-modal-date").props.value).toBe(dateB);
   });
@@ -185,12 +193,12 @@ describe("CalendarIndexRoute — reschedule modal is keyed on the slot", () => {
   it("confirms with the slot that was opened second", async () => {
     const { getByTestId } = render(<CalendarIndexRoute />);
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-reschedule-${dateB}-1`)).toBeTruthy();
+      expect(getByTestId(`calendar-day-${dateB}`)).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    openRescheduleFor(getByTestId, dateA, 0);
     fireEvent.press(getByTestId("reschedule-modal-close"));
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateB}-1`));
+    openRescheduleFor(getByTestId, dateB, 1);
     fireEvent.press(getByTestId("reschedule-modal-confirm"));
 
     const patches = mockApiFetch.mock.calls.filter(
@@ -491,6 +499,103 @@ describe("CalendarIndexRoute — Acceptance criteria & parity", () => {
     fireEvent.press(getByTestId("calendar-view-month"));
     await waitFor(() => {
       expect(getByTestId("calendar-day-2026-05-01")).toBeTruthy();
+    });
+  });
+});
+
+// NP-292: the three fixes that are specific to the whole route rather than
+// one component — dropping the "Upcoming" list (web has none and it read
+// "No upcoming workouts." outside the visible month) and clearing the day
+// panel instead of leaving it stale when the visible range changes.
+describe("CalendarIndexRoute — NP-292", () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockApiFetch.mockReset();
+    mockParams = {};
+    mockApiFetch.mockResolvedValue({ schedules: [] });
+  });
+
+  it("renders no 'Upcoming' list at all — web has none, and the list used to say 'No upcoming workouts.' outside the visible month", async () => {
+    const { queryByText, getByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("calendar")).toBeTruthy();
+    });
+    expect(queryByText("Upcoming")).toBeNull();
+    expect(queryByText(/No upcoming workouts/i)).toBeNull();
+  });
+
+  it("clears the day panel instead of leaving a stale day selected after Next", async () => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const monthStr = String(today.getMonth() + 1).padStart(2, "0");
+    const dayStr = String(today.getDate()).padStart(2, "0");
+    const todayKey = `${y}-${monthStr}-${dayStr}`;
+    mockParams = { date: todayKey };
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/schedule")) {
+        return Promise.resolve({
+          schedules: [
+            {
+              programId: "prog-1",
+              scheduledWorkouts: [
+                {
+                  date: `${todayKey}T00:00:00.000Z`,
+                  dayLabel: "Day 1",
+                  workoutTitle: "Today's lift",
+                  status: "scheduled",
+                  phase: 1,
+                },
+              ],
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ logs: [] });
+    });
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("calendar-day-detail")).toBeTruthy();
+    });
+    expect(getByTestId("day-detail-start-prog-1-0")).toBeTruthy();
+
+    // Jumping to next month used to leave this same panel showing — now the
+    // range has changed and the selection is cleared rather than going
+    // stale (the Oct 3 bug: a completed day reading "Rest day" after the
+    // slot it described fell out of the fetched range).
+    fireEvent.press(getByTestId("calendar-next-button"));
+    await waitFor(() => {
+      expect(queryByTestId("calendar-day-detail")).toBeNull();
+    });
+  });
+
+  it("clears the day panel when toggling month/week view", async () => {
+    mockParams = { date: "2026-05-18" };
+    mockApiFetch.mockResolvedValue({
+      schedules: [
+        {
+          programId: "prog-1",
+          scheduledWorkouts: [
+            {
+              date: "2026-05-18T00:00:00.000Z",
+              dayLabel: "Day 1",
+              status: "scheduled",
+              phase: 1,
+            },
+          ],
+        },
+      ],
+    });
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("calendar-day-detail")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("calendar-view-week"));
+    await waitFor(() => {
+      expect(queryByTestId("calendar-day-detail")).toBeNull();
     });
   });
 });

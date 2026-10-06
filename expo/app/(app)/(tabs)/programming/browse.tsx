@@ -86,7 +86,7 @@ export default function ProgramsBrowseRoute() {
           </View>
         </View>
 
-        <ProgramsCatalog catalogTitle="All Programs" />
+        <ProgramsCatalog catalogTitle="Browse Programs" />
       </ScrollView>
     </SafeAreaView>
   );

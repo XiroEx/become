@@ -21,10 +21,25 @@
  *   primary     red-500 (brand, both)    destructive red-700  / red-400
  *   accent      amber-600 / amber-400    success     green-600 / green-400
  *   info        blue-600 / blue-400      (the web's "Calendar"/History links
- *                                          and the scheduled-workout icons —
+ *                                          the scheduled-workout icons and the
+ *                                          meal macro tile for protein —
  *                                          Tailwind's blue, never the brand red)
  *   mindset     purple-600 / purple-400  (the web's Mindset streak icon —
  *                                          Tailwind's purple, distinct from accent)
+ *   teal        teal-500 (both modes)    (the nutrition consultant's identity
+ *                                          colour, NP-262)
+ *   mind-violet violet-500 (both modes)  the Mind home's own accent (NP-296):
+ *   mind-green  green-500  (both modes)  the Brain icon, the level bar and the
+ *                                          chapter path, as a violet→green
+ *                                          gradient — `webapp/components/mind/
+ *                                          MindJourney.tsx`'s `from-violet-500
+ *                                          to-green-500`. Distinct from
+ *                                          `mindset` (the Streaks screen's
+ *                                          badge, a flat purple with no green).
+ *   mind-ink    zinc-900   (both modes)  the session card's white Begin
+ *                                          button text/icon — static like
+ *                                          `primary`, because that button is
+ *                                          white in both light and dark mode.
  *
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
@@ -47,13 +62,20 @@ export type TokenName =
   | "accent"
   | "accent-foreground"
   | "success"
+  | "teal"
   | "info"
   | "mindset"
   | "mood-bad"
   | "mood-low"
   | "mood-okay"
   | "mood-good"
-  | "mood-great";
+  | "mood-great"
+  | "mind-violet"
+  | "mind-green"
+  | "mind-ink"
+  | "orange"
+  | "indigo"
+  | "rose";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -73,6 +95,10 @@ export const lightTokens: Record<TokenName, string> = {
   // light value is not the dark one.
   "accent-foreground": "24 24 27",
   success: "22 163 74", // green-600 — the web's `text-green-600`
+  teal: "20 184 166", // teal-500 — the nutrition consultant's identity
+  // colour (NP-262), identical in both modes like `primary`: the web's
+  // `accentFrom="from-emerald-500" accentTo="to-teal-500"` gradient does not
+  // change with the scheme either.
   info: "37 99 235", // blue-600 — the web's `text-blue-600` (Calendar/History
   // links); `text-blue-500` icons are one shade lighter on the web but share
   // this token rather than adding a second blue
@@ -87,6 +113,13 @@ export const lightTokens: Record<TokenName, string> = {
   "mood-okay": "251 191 36", // amber-400 — Okay
   "mood-good": "163 230 53", // lime-400 — Pretty Good
   "mood-great": "52 211 153", // emerald-400 — Great
+  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-green": "34 197 94", // green-500 — same in both modes
+  "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  orange: "249 115 22", // orange-500 — the web's Circuit group badge
+  // (`bg-orange-500`), same in both modes like `primary`
+  indigo: "99 102 241", // indigo-500 — the web's Triset group badge
+  rose: "244 63 94", // rose-500 — the web's Giant Set group badge
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -103,6 +136,7 @@ export const darkTokens: Record<TokenName, string> = {
   accent: "251 191 36", // amber-400 — the web's `dark:text-amber-400`
   "accent-foreground": "24 24 27",
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
+  teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
   info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
   mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
   // Same flat mood palette as light mode — see the comment on `lightTokens`.
@@ -111,6 +145,12 @@ export const darkTokens: Record<TokenName, string> = {
   "mood-okay": "251 191 36",
   "mood-good": "163 230 53",
   "mood-great": "52 211 153",
+  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-green": "34 197 94", // green-500 — same in both modes
+  "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  orange: "249 115 22", // orange-500 — same in both modes
+  indigo: "99 102 241", // indigo-500 — same in both modes
+  rose: "244 63 94", // rose-500 — same in both modes
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

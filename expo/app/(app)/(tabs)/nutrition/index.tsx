@@ -9,18 +9,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  BookOpen,
+  CalendarClock,
   CalendarDays,
   Camera,
   ChefHat,
   ChevronDown,
   Clock,
+  Copy,
   History,
-  MoreVertical,
   Plus,
   Search,
   Trash2,
   Upload,
-  X,
+  UtensilsCrossed,
   Zap,
 } from "lucide-react-native";
 import { z } from "zod";
@@ -100,8 +102,7 @@ import { NutritionConsultantTeaser } from "@/components/nutrition/NutritionConsu
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
-import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
-import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+import { ScheduleMealsDrawer } from "@/components/nutrition/ScheduleMealsDrawer";
 import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
@@ -120,11 +121,10 @@ import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
 import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
 import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
-import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
 import { applyLogCorrection } from "@/lib/nutrition/foodFlags";
 import { isObjectIdString } from "@/lib/nutrition/foodImport";
 
-export type NutritionViewMode = "day" | "week" | "month" | "training";
+export type NutritionViewMode = "day" | "week" | "month";
 
 const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
@@ -143,8 +143,7 @@ export default function NutritionIndexRoute() {
     if (
       params.view === "week" ||
       params.view === "month" ||
-      params.view === "day" ||
-      params.view === "training"
+      params.view === "day"
     ) {
       return params.view;
     }
@@ -155,8 +154,7 @@ export default function NutritionIndexRoute() {
     if (
       params.view === "week" ||
       params.view === "month" ||
-      params.view === "day" ||
-      params.view === "training"
+      params.view === "day"
     ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
       setViewMode(params.view);
@@ -1092,7 +1090,6 @@ export default function NutritionIndexRoute() {
     }
   };
 
-  const [menuOpen, setMenuOpen] = useState(false);
   const [timelineMenuOpen, setTimelineMenuOpen] = useState(false);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
@@ -1122,13 +1119,12 @@ export default function NutritionIndexRoute() {
   // onto the scanner instead of the name search.
   const [searchBarcodeOpen, setSearchBarcodeOpen] = useState(false);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
-  // Schedule-meals tools (NP-177): the two bulk sheets ported from the web's
-  // ScheduleMealsDrawer / PlanToolsSheets. `copyDayOpen` copies a day forward
-  // (from the meal plan and from a future day); `applyMealOpen` repeats one
-  // saved meal across days. `planToolsNotice` carries the success toast until
-  // the refetch lands, mirroring the web's `showSuccessToast` + refetch.
-  const [copyDayOpen, setCopyDayOpen] = useState(false);
-  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  // Schedule-meals drawer (NP-265): the one blue CTA, ONE sheet with three
+  // tabs (By day / From meals / Copy day) and a Range toggle — replaces the
+  // former native-only separate "Copy day…" / "Repeat a meal…" buttons.
+  // `planToolsNotice` carries the success toast until the refetch lands,
+  // mirroring the web's `showSuccessToast` + refetch.
+  const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
   const [planToolsNotice, setPlanToolsNotice] = useState<string | null>(null);
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
@@ -1588,8 +1584,6 @@ export default function NutritionIndexRoute() {
   const handleBulkApplied = useCallback(
     (toast: string) => {
       setPlanToolsNotice(toast);
-      setCopyDayOpen(false);
-      setApplyMealOpen(false);
       if (showPlans) {
         void refetchMealPlans();
       }
@@ -1638,6 +1632,33 @@ export default function NutritionIndexRoute() {
     addDefaultVariantToBasket(food);
   };
 
+  // "Schedule meals" — the same control rendered in two places, so the two
+  // can never drift apart (the web's `page.tsx:1023-1032`): above the tag
+  // list on a future day (the only thing you can do on a day you have not
+  // lived yet), below the water tracker at the end of today (NP-262). Opens
+  // the ScheduleMealsDrawer (NP-265) — By day / From meals / Copy day, same
+  // as the web — instead of navigating to the Meal Schedule settings screen.
+  const scheduleMealsButton = (
+    <Pressable
+      testID="nutrition-schedule-meals-button"
+      accessibilityRole="button"
+      accessibilityLabel="Schedule meals"
+      onPress={() => setScheduleDrawerOpen(true)}
+      className="bg-blue-600"
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        borderRadius: 12,
+        paddingVertical: 12,
+      }}
+    >
+      <CalendarDays size={16} color={colors["primary-foreground"]} />
+      <Text className="text-white text-sm font-semibold">Schedule meals</Text>
+    </Pressable>
+  );
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -1656,18 +1677,14 @@ export default function NutritionIndexRoute() {
         }}
       >
         <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-          <Text className="text-foreground text-2xl font-bold">Nutrition</Text>
+          <Text className="text-foreground text-2xl font-bold" numberOfLines={1}>
+            Nutrition
+          </Text>
           <Text className="text-muted-foreground text-xs mt-0.5" numberOfLines={1}>
             Track your food, macros, and hydration
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          {/* Unread food-report outcomes (NP-174). Opens My reports, which marks them read. */}
-          <FoodReportsBadge
-            token={token}
-            onOpen={() => setReportsOpen(true)}
-            refreshKey={reportsRefreshKey}
-          />
           {/* My Stuff header action */}
           <Pressable
             testID="nutrition-my-stuff-button"
@@ -1715,24 +1732,6 @@ export default function NutritionIndexRoute() {
             <Text className="text-xs font-semibold text-foreground">Timeline</Text>
             <ChevronDown size={14} color={colors["muted-foreground"]} />
           </Pressable>
-
-          {/* Kebab Menu */}
-          <Pressable
-            testID="nutrition-menu-button"
-            accessibilityLabel="Nutrition menu"
-            accessibilityRole="button"
-            onPress={() => setMenuOpen((o) => !o)}
-            hitSlop={8}
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <MoreVertical size={20} color={colors.foreground} />
-          </Pressable>
         </View>
       </View>
 
@@ -1764,7 +1763,9 @@ export default function NutritionIndexRoute() {
         </View>
       ) : null}
 
-      {/* 4-segment View Selector (Day / Week / Month / Training) */}
+      {/* 3-segment View Selector (Day / Week / Month). Training preferences
+          moved to Settings > Training (NP-302); Nutrition Planning moved to
+          Settings > Settings, matching the web's tab layout. */}
       <View
         testID="nutrition-view-selector"
         style={{
@@ -1868,33 +1869,6 @@ export default function NutritionIndexRoute() {
             Month
           </Text>
         </Pressable>
-
-        <Pressable
-          testID="nutrition-view-training"
-          accessibilityRole="button"
-          accessibilityLabel="Training preferences"
-          onPress={() => handleViewChange("training")}
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            paddingVertical: 6,
-            borderRadius: 7,
-            backgroundColor: viewMode === "training" ? colors.card : "transparent",
-            borderWidth: viewMode === "training" ? 1 : 0,
-            borderColor: colors.border,
-          }}
-        >
-          <Text
-            className={`text-xs font-semibold ${
-              viewMode === "training" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Training
-          </Text>
-        </Pressable>
       </View>
 
       {/* Date Navigation & Swipe Container */}
@@ -1903,9 +1877,6 @@ export default function NutritionIndexRoute() {
         onTouchStart={viewMode === "day" ? onTouchStart : undefined}
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
-        {viewMode === "training" ? (
-          <TrainingPreferencesScreen />
-        ) : (
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
@@ -2052,15 +2023,199 @@ export default function NutritionIndexRoute() {
             onEditGoals={handleEditGoals}
           />
 
-          {/* Nutrition consultant (NP-155) — the first suggestion quotes
-              today's remaining calories/protein, letter for letter the
-              web's formula (`goal - consumed`). */}
-          <NutritionConsultantTeaser
-            remaining={{
-              calories: goalCalories - consumedCalories,
-              protein: goalProtein - totalProtein,
-            }}
-          />
+          {/* Future-day schedule CTA — leads above the tag list, same spot
+              the web puts it: scheduling is the only thing you can do on a
+              day you have not lived yet (NP-262). The ScheduleMealsDrawer's
+              own "Copy day" / "From meals" tabs replace the separate
+              "Copy day…" / "Repeat a meal…" buttons this used to render
+              (NP-265) — one blue CTA, matching the web exactly. */}
+          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
+
+          {/* Empty State when nothing logged and nothing planned — fork/knife
+              icon, a black (web: `bg-zinc-900 dark:bg-white`) Add food pill,
+              and icons on the secondary actions (NP-262). */}
+          {sections.length === 0 && quickAdds.length === 0 && (
+            <Card testID="nutrition-empty-state">
+              <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
+                <UtensilsCrossed size={24} color={colors["muted-foreground"]} />
+                <Text className="text-foreground text-lg font-bold text-center">
+                  {isFuture ? "Nothing planned yet" : "Nothing logged yet"}
+                </Text>
+                <Text className="text-muted-foreground text-sm text-center px-4">
+                  {isFuture
+                    ? "Plan ahead — schedule meals for this day so they're ready when it arrives."
+                    : "Add your first food of the day to start tracking."}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    justifyContent: "center",
+                    gap: 8,
+                    marginTop: 4,
+                  }}
+                >
+                  {!isFuture && (
+                    <>
+                      <Button
+                        testID="nutrition-empty-add-food"
+                        variant="inverted"
+                        size="sm"
+                        onPress={() => openSearch()}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Plus size={14} color={colors.background} />
+                          <Text className="text-background text-sm font-semibold">
+                            Add food
+                          </Text>
+                        </View>
+                      </Button>
+                      <Button
+                        testID="nutrition-copy-yesterday"
+                        variant="secondary"
+                        size="sm"
+                        disabled={copyingYesterday}
+                        onPress={copyYesterday}
+                      >
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Copy size={14} color={colors.foreground} />
+                          <Text className="text-foreground text-sm font-semibold">
+                            {copyingYesterday ? "Copying…" : "Copy yesterday"}
+                          </Text>
+                        </View>
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    testID="nutrition-empty-browse-my-stuff"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => router.push("/(tabs)/nutrition/recipes")}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <ChefHat size={14} color={colors.foreground} />
+                      <Text className="text-foreground text-sm font-semibold">
+                        Browse My Stuff
+                      </Text>
+                    </View>
+                  </Button>
+                </View>
+              </View>
+            </Card>
+          )}
+
+          {/* Occurrence / Tag Sections (including Planned meals) */}
+          {sections.map((section) => (
+            <TagSection
+              key={section.key}
+              occurrence={section}
+              empty={section.empty}
+              removable={section.empty && sessionTags.includes(section.tag)}
+              onRemoveItem={handleRemoveItem}
+              onEditItem={handleEditItem}
+              onEditMeal={handleEditMeal}
+              onFlagItem={handleFlagItem}
+              onRemoveTag={handleRemoveTag}
+              onAddFood={openSearch}
+              onAddToMeal={handleAddToMeal}
+              onLogPlan={isToday ? handleLogPlan : undefined}
+              onRemovePlan={handleRemovePlan}
+              onSkipPlan={handleSkipPlan}
+              onEditPlanItem={handleEditPlanItem}
+              onStartSelect={handleStartSelect}
+              selecting={selectSectionKey === section.key}
+              selectedKeys={combineSelection}
+              onToggleSelect={handleToggleSelect}
+              onCancelSelect={exitSelectMode}
+              onCombine={() => {
+                setCombineError(null);
+                setCombineSheetOpen(true);
+              }}
+            />
+          ))}
+
+          {/* + Add tag — an inline row (text, Add, Cancel), matching the
+              web's `showAddTagInput` flow, not a centred modal (NP-262). */}
+          {addTagOpen ? (
+            <View
+              testID="nutrition-add-tag-row"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                padding: 12,
+                backgroundColor: colors.card,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="nutrition-add-tag-input"
+                  placeholder="e.g. brunch"
+                  value={newTagInput}
+                  onChangeText={setNewTagInput}
+                />
+              </View>
+              <Pressable
+                testID="nutrition-add-tag-submit"
+                accessibilityRole="button"
+                accessibilityLabel="Add tag"
+                disabled={!newTagInput.trim()}
+                onPress={() => {
+                  const norm = newTagInput.trim().toLowerCase();
+                  if (norm && !sessionTags.includes(norm)) {
+                    setSessionTags((prev) => [...prev, norm]);
+                  }
+                  setNewTagInput("");
+                  setAddTagOpen(false);
+                }}
+                className="bg-foreground"
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  opacity: newTagInput.trim() ? 1 : 0.4,
+                }}
+              >
+                <Text className="text-background text-xs font-semibold">Add</Text>
+              </Pressable>
+              <Pressable
+                testID="nutrition-add-tag-cancel"
+                accessibilityRole="button"
+                accessibilityLabel="Cancel adding a tag"
+                onPress={() => {
+                  setAddTagOpen(false);
+                  setNewTagInput("");
+                }}
+                style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+              >
+                <Text className="text-muted-foreground text-xs font-medium">Cancel</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              testID="nutrition-add-tag-button"
+              accessibilityRole="button"
+              accessibilityLabel="Add tag"
+              onPress={() => setAddTagOpen(true)}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                borderWidth: 1,
+                borderStyle: "dashed",
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingVertical: 12,
+              }}
+            >
+              <Plus size={16} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-sm font-medium">Add tag</Text>
+            </Pressable>
+          )}
 
           {/* Quick Adds (visible entries with delete) */}
           {quickAdds.length > 0 ? (
@@ -2165,157 +2320,101 @@ export default function NutritionIndexRoute() {
             onAddWater={handleAddWater}
           />
 
-          {/* Occurrence / Tag Sections (including Planned meals) */}
-          {sections.map((section) => (
-            <TagSection
-              key={section.key}
-              occurrence={section}
-              empty={section.empty}
-              removable={section.empty && sessionTags.includes(section.tag)}
-              onRemoveItem={handleRemoveItem}
-              onEditItem={handleEditItem}
-              onEditMeal={handleEditMeal}
-              onFlagItem={handleFlagItem}
-              onRemoveTag={handleRemoveTag}
-              onAddFood={openSearch}
-              onAddToMeal={handleAddToMeal}
-              onLogPlan={isToday ? handleLogPlan : undefined}
-              onRemovePlan={handleRemovePlan}
-              onSkipPlan={handleSkipPlan}
-              onEditPlanItem={handleEditPlanItem}
-              onStartSelect={handleStartSelect}
-              selecting={selectSectionKey === section.key}
-              selectedKeys={combineSelection}
-              onToggleSelect={handleToggleSelect}
-              onCancelSelect={exitSelectMode}
-              onCombine={() => {
-                setCombineError(null);
-                setCombineSheetOpen(true);
-              }}
-            />
-          ))}
+          {/* End of today: what is still ahead of you. See scheduleMealsButton above. */}
+          {isToday ? scheduleMealsButton : null}
 
-          {/* Empty State when nothing logged and nothing planned */}
-          {sections.length === 0 && quickAdds.length === 0 && (
-            <Card testID="nutrition-empty-state">
-              <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
-                <Text className="text-foreground text-lg font-bold text-center">
-                  {isFuture ? "Nothing planned yet" : "Nothing logged yet"}
-                </Text>
-                <Text className="text-muted-foreground text-sm text-center px-4">
-                  {isFuture
-                    ? "Plan ahead — schedule meals for this day so they're ready when it arrives."
-                    : "Add your first food of the day to start tracking."}
-                </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    justifyContent: "center",
-                    gap: 8,
-                    marginTop: 4,
-                  }}
-                >
-                  {!isFuture && (
-                    <>
-                      <Button
-                        testID="nutrition-empty-add-food"
-                        size="sm"
-                        onPress={() => openSearch()}
-                      >
-                        Add food
-                      </Button>
-                      <Button
-                        testID="nutrition-empty-quick-add"
-                        variant="secondary"
-                        size="sm"
-                        onPress={() => setQuickAddOpen(true)}
-                      >
-                        Quick Add
-                      </Button>
-                      <Button
-                        testID="nutrition-copy-yesterday"
-                        variant="secondary"
-                        size="sm"
-                        disabled={copyingYesterday}
-                        onPress={copyYesterday}
-                      >
-                        {copyingYesterday ? "Copying…" : "Copy yesterday"}
-                      </Button>
-                    </>
-                  )}
-                  <Button
-                    testID="nutrition-empty-browse-my-stuff"
-                    variant="secondary"
-                    size="sm"
-                    onPress={() => router.push("/(tabs)/nutrition/recipes")}
-                  >
-                    Browse My Stuff
-                  </Button>
-                </View>
-              </View>
-            </Card>
-          )}
+          {/* Nutrition consultant (NP-155) — the first suggestion quotes
+              today's remaining calories/protein, letter for letter the
+              web's formula (`goal - consumed`). Sits after the tag list,
+              Add tag, Quick Adds, Water and Schedule meals — the web's order
+              (NP-262). */}
+          <NutritionConsultantTeaser
+            remaining={{
+              calories: goalCalories - consumedCalories,
+              protein: goalProtein - totalProtein,
+            }}
+          />
 
-          {/* Action buttons */}
-          <View style={{ gap: 10, marginTop: 8 }}>
-            <Button
-              testID="nutrition-find-food"
-              onPress={() => openSearch()}
-            >
-              {isFuture ? "Schedule food" : "Find a food"}
-            </Button>
-            {isFuture ? (
-              <>
-                <Button
-                  testID="nutrition-copy-day-button"
-                  variant="secondary"
-                  onPress={() => {
-                    setPlanToolsNotice(null);
-                    setCopyDayOpen(true);
-                  }}
-                >
-                  Copy day…
-                </Button>
-                <Button
-                  testID="nutrition-repeat-meal-button"
-                  variant="secondary"
-                  onPress={() => {
-                    setPlanToolsNotice(null);
-                    setApplyMealOpen(true);
-                  }}
-                >
-                  Repeat a meal…
-                </Button>
-              </>
-            ) : null}
-            <Button
+          {/* Quick Actions tiles — Quick Add / My Stuff / Meal Plan, matching
+              the web's bottom-of-page tile row (NP-262). The persistent
+              "Quick Add" and "Find a food" buttons above duplicated the
+              search bar and these tiles, so they are gone. */}
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Pressable
               testID="nutrition-quick-add-button"
-              variant="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Quick Add"
               disabled={isFuture}
               onPress={() => {
                 if (!isFuture) setQuickAddOpen(true);
               }}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                gap: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingVertical: 14,
+                opacity: isFuture ? 0.5 : 1,
+              }}
             >
-              Quick Add
-            </Button>
-            {!isFuture && (
-              <Button
-                testID="nutrition-action-copy-yesterday"
-                variant="secondary"
-                disabled={copyingYesterday}
-                onPress={copyYesterday}
+              <View
+                className="bg-green-100 dark:bg-green-900/30"
+                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
               >
-                {copyingYesterday ? "Copying…" : "Copy yesterday"}
-              </Button>
-            )}
-            <Button
-              testID="nutrition-add-tag-button"
-              variant="ghost"
-              onPress={() => setAddTagOpen(true)}
+                <Plus size={18} color={colors.foreground} />
+              </View>
+              <Text className="text-foreground text-xs font-medium">Quick Add</Text>
+            </Pressable>
+
+            <Pressable
+              testID="nutrition-tile-my-stuff"
+              accessibilityRole="button"
+              accessibilityLabel="My Stuff"
+              onPress={() => router.push("/(tabs)/nutrition/recipes")}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                gap: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingVertical: 14,
+              }}
             >
-              + Add a tag
-            </Button>
+              <View
+                className="bg-orange-100 dark:bg-orange-900/30"
+                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <BookOpen size={18} color={colors.foreground} />
+              </View>
+              <Text className="text-foreground text-xs font-medium">My Stuff</Text>
+            </Pressable>
+
+            <Pressable
+              testID="nutrition-tile-meal-plan"
+              accessibilityRole="button"
+              accessibilityLabel="Meal Plan"
+              onPress={() => router.push("/(tabs)/nutrition/meal-plan")}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                gap: 8,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingVertical: 14,
+              }}
+            >
+              <View
+                className="bg-blue-100 dark:bg-blue-900/30"
+                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+              >
+                <CalendarClock size={18} color={colors.foreground} />
+              </View>
+              <Text className="text-foreground text-xs font-medium">Meal Plan</Text>
+            </Pressable>
           </View>
           </>
           ) : viewMode === "week" ? (
@@ -2328,7 +2427,7 @@ export default function NutritionIndexRoute() {
               onRemovePlan={handleRemovePlan}
               onEditPlanItem={handleEditPlanItem}
             />
-          ) : viewMode === "month" ? (
+          ) : (
             <TimelineMonthView
               selectedDate={activeDate}
               calorieGoal={goalCalories}
@@ -2337,112 +2436,9 @@ export default function NutritionIndexRoute() {
               onSkipPlan={handleSkipPlan}
               onRemovePlan={handleRemovePlan}
             />
-          ) : (
-            // viewMode === "training" inside the day ScrollView cannot happen:
-            // the training branch above renders instead. Kept so the union
-            // stays exhaustive if the branches above ever change.
-            <TrainingPreferencesScreen />
           )}
         </ScrollView>
-        )}
       </View>
-
-      {/* Screen Menu (NP-012: only offers screens that exist natively) */}
-      <Modal
-        visible={menuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMenuOpen(false)}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close menu backdrop"
-          style={{
-            flex: 1,
-            backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
-          }}
-          onPress={() => setMenuOpen(false)}
-        >
-          <View
-            testID="nutrition-menu-modal"
-            style={{
-              backgroundColor: colors.background,
-              borderRadius: 16,
-              padding: 20,
-              width: "100%",
-              maxWidth: 320,
-              gap: 14,
-            }}
-          >
-            <View
-              testID="nutrition-menu-sheet"
-              style={{
-                gap: 14,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <Text className="text-foreground text-lg font-bold">Nutrition</Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close menu"
-                  onPress={() => setMenuOpen(false)}
-                >
-                  <X size={20} color={colors.foreground} />
-                </Pressable>
-              </View>
-              <Button
-                testID="nutrition-menu-search"
-                variant="ghost"
-                onPress={() => {
-                  setMenuOpen(false);
-                  openSearch();
-                }}
-              >
-                Find a food
-              </Button>
-              <Button
-                testID="nutrition-menu-recipes"
-                variant="ghost"
-                onPress={() => {
-                  setMenuOpen(false);
-                  router.push("/(tabs)/nutrition/recipes");
-                }}
-              >
-                Recipes
-              </Button>
-              <Button
-                testID="nutrition-menu-meal-schedule"
-                variant="ghost"
-                onPress={() => {
-                  setMenuOpen(false);
-                  router.push("/(tabs)/nutrition/meal-schedule");
-                }}
-              >
-                Meal Schedule
-              </Button>
-              <Button
-                testID="nutrition-menu-meal-plan"
-                variant="ghost"
-                onPress={() => {
-                  setMenuOpen(false);
-                  router.push("/(tabs)/nutrition/meal-plan");
-                }}
-              >
-                Meal plan
-              </Button>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
 
       {/* Timeline Dropdown Menu */}
       <Modal
@@ -2538,6 +2534,19 @@ export default function NutritionIndexRoute() {
               <History size={16} color={colors.foreground} />
               <Text className="text-sm font-medium text-foreground">Estimate history</Text>
             </Pressable>
+            {/* Unread food-report outcomes (NP-174). Folded into the Timeline
+                dropdown (NP-262) — the standalone header pill forced the
+                title to wrap. */}
+            <FoodReportsBadge
+              variant="row"
+              testID="nutrition-timeline-food-reports"
+              token={token}
+              refreshKey={reportsRefreshKey}
+              onOpen={() => {
+                setTimelineMenuOpen(false);
+                setReportsOpen(true);
+              }}
+            />
           </Pressable>
         </Pressable>
       </Modal>
@@ -2664,77 +2673,6 @@ export default function NutritionIndexRoute() {
         </Pressable>
       </Modal>
 
-      {/* Add Tag Modal */}
-      <Modal
-        visible={addTagOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAddTagOpen(false)}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close add tag modal backdrop"
-          style={{
-            flex: 1,
-            backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
-          }}
-          onPress={() => setAddTagOpen(false)}
-        >
-          <View
-            testID="nutrition-add-tag-modal"
-            style={{
-              backgroundColor: colors.background,
-              borderRadius: 16,
-              padding: 20,
-              width: "100%",
-              maxWidth: 320,
-              gap: 14,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Text className="text-foreground text-lg font-bold">
-                Add Tag Section
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close add tag modal"
-                onPress={() => setAddTagOpen(false)}
-              >
-                <X size={20} color={colors.foreground} />
-              </Pressable>
-            </View>
-            <Input
-              testID="nutrition-add-tag-input"
-              placeholder="e.g. Pre-workout, Shake"
-              value={newTagInput}
-              onChangeText={setNewTagInput}
-            />
-            <Button
-              testID="nutrition-add-tag-submit"
-              onPress={() => {
-                const norm = newTagInput.trim().toLowerCase();
-                if (norm && !sessionTags.includes(norm)) {
-                  setSessionTags((prev) => [...prev, norm]);
-                }
-                setNewTagInput("");
-                setAddTagOpen(false);
-              }}
-            >
-              Add Tag
-            </Button>
-          </View>
-        </Pressable>
-      </Modal>
-
       {/* Food Search Sheet (NP-092). On a future day the basket is hidden
           (the web hides it in plan mode, `FoodSearchModal.tsx:2495`): picks
           open `PlanFoodSheet` / `MealLogSheet mode="plan"` instead. */}
@@ -2818,21 +2756,14 @@ export default function NutritionIndexRoute() {
         }}
       />
 
-      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
-          across days, from the meal plan and from a future day. */}
-      <CopyDaySheet
-        visible={copyDayOpen}
-        defaultSourceDate={activeDate}
-        onClose={() => setCopyDayOpen(false)}
-        onApplied={handleBulkApplied}
-      />
-      <ApplyMealSheet
-        visible={applyMealOpen}
-        defaultFromDate={activeDate}
-        defaultToDate={activeDate}
-        defaultTag={searchTag ?? currentDefaultTag}
+      {/* Schedule meals (NP-265): By day / From meals / Copy day, behind the
+          one blue "Schedule meals" CTA, matching the web's
+          `ScheduleMealsDrawer` exactly. */}
+      <ScheduleMealsDrawer
+        visible={scheduleDrawerOpen}
+        defaultDate={activeDate}
         availableTags={availableTags}
-        onClose={() => setApplyMealOpen(false)}
+        onClose={() => setScheduleDrawerOpen(false)}
         onApplied={handleBulkApplied}
       />
 

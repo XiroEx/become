@@ -204,23 +204,41 @@ export function Calendar({
           return `${MONTH_NAMES[month1 - 1]?.slice(0, 3) ?? ""} ${day1} – ${MONTH_NAMES[month2 - 1]?.slice(0, 3) ?? ""} ${day2}, ${year2}`;
         })();
 
-  // Rows and cells
-  let rows: (string | null)[][] = [];
+  // Rows and cells. Each cell carries whether it falls outside the active
+  // month (web's `!isThisMonth` — Sep 27-30 padding before Nov 1, etc.): the
+  // grid always shows a full 7-day week, and those leading/trailing days get
+  // their real adjacent-month date (and markers) rather than a blank square
+  // (NP-292). The schedule fetch already pads 7 days either side of the
+  // month for exactly this reason, so the data for them is on hand.
+  let rows: ({ date: string; outside: boolean } | null)[][] = [];
   if (activeViewMode === "month") {
     const [yearStr, monthStr] = effectiveMonth.split("-");
     const year = Number(yearStr);
     const m0 = Number(monthStr) - 1;
     const totalDays = daysInMonth(year, m0);
     const leadingBlanks = new Date(year, m0, 1).getDay();
-    const cells: (string | null)[] = [];
-    for (let i = 0; i < leadingBlanks; i++) cells.push(null);
-    for (let d = 1; d <= totalDays; d++) {
-      cells.push(`${year}-${pad(m0 + 1)}-${pad(d)}`);
+    const cells: { date: string; outside: boolean }[] = [];
+    for (let i = leadingBlanks; i > 0; i--) {
+      const d = new Date(year, m0, 1 - i);
+      cells.push({
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        outside: true,
+      });
     }
-    while (cells.length % 7 !== 0) cells.push(null);
+    for (let d = 1; d <= totalDays; d++) {
+      cells.push({ date: `${year}-${pad(m0 + 1)}-${pad(d)}`, outside: false });
+    }
+    let trailDay = 1;
+    while (cells.length % 7 !== 0) {
+      const d = new Date(year, m0 + 1, trailDay++);
+      cells.push({
+        date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+        outside: true,
+      });
+    }
     for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
   } else {
-    rows = [getWeekDays(effectiveCurrentDate)];
+    rows = [getWeekDays(effectiveCurrentDate).map((date) => ({ date, outside: false }))];
   }
 
   // Swipe handling
@@ -407,8 +425,8 @@ export function Calendar({
           testID={`${testID}-row-${ri}`}
           style={{ flexDirection: "row" }}
         >
-          {row.map((date, ci) => {
-            if (!date) {
+          {row.map((cell, ci) => {
+            if (!cell) {
               return (
                 <View
                   key={ci}
@@ -417,6 +435,7 @@ export function Calendar({
                 />
               );
             }
+            const { date, outside } = cell;
 
             const daySlots = slots.filter((s) => s.date === date);
             const dayQuick = quickSessions.filter((q) => {
@@ -473,6 +492,7 @@ export function Calendar({
                   alignItems: "center",
                   justifyContent: "flex-start",
                   paddingVertical: 3,
+                  opacity: outside ? 0.4 : 1,
                 }}
               >
                 <View
