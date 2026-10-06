@@ -468,3 +468,203 @@ describe("(id: e015ca73) An exercise created natively can be used in a swap and 
     );
   });
 });
+
+describe("(NP-276) native parity — the create sheet fits the safe area; list search/sort/filters; video entry point; pending banner; form hints", () => {
+  const BENCH = {
+    slug: "custom-u1-bench-press-1",
+    name: "Bench Press",
+    trackingType: "reps_weight",
+    primaryMuscles: ["chest"],
+    bodyRegion: "upper_body",
+    category: "strength",
+    role: "compound",
+    defaultSets: 4,
+    defaultReps: "6-8",
+    equipment: [],
+    reviewStatus: "none",
+    isUniversal: false,
+    tags: ["custom", "strength", "push", "upper_body"],
+    createdAt: "2026-09-01T00:00:00.000Z",
+  };
+  const PLANK = {
+    slug: "custom-u1-plank-hold-2",
+    name: "Plank Hold",
+    trackingType: "time",
+    primaryMuscles: ["abs", "obliques"],
+    bodyRegion: "core",
+    category: "bodyweight",
+    role: "accessory",
+    defaultSets: 3,
+    defaultReps: "45s",
+    equipment: [],
+    reviewStatus: "pending",
+    isUniversal: false,
+    tags: ["custom", "bodyweight", "core", "isometric"],
+    createdAt: "2026-09-15T00:00:00.000Z",
+  };
+
+  it("BLOCKER: the create sheet is a scrollable bottom sheet bounded to the safe area, not an unbounded centred modal", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId("my-exercises-screen-state")).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId("my-exercises-create"));
+    await waitFor(() =>
+      expect(screen.getByTestId("my-exercises-create-modal")).toBeTruthy(),
+    );
+
+    // Bounded, not an unbounded centred `Modal`: the sheet's own card caps
+    // its height to the safe area and the form scrolls inside it — this is
+    // what keeps the title, Cancel and Create reachable on a phone screen
+    // shorter than the form (the card's BLOCKER).
+    expect(
+      screen.getByTestId("my-exercises-create-modal-sheet").props.style,
+    ).toMatchObject({ maxHeight: "90%" });
+    expect(screen.getByTestId("my-exercises-create-form-scroll")).toBeTruthy();
+    expect(screen.getByTestId("my-exercises-create-form-name")).toBeTruthy();
+    expect(screen.getByTestId("my-exercises-create-form-cancel")).toBeTruthy();
+    expect(screen.getByTestId("my-exercises-create-form-submit")).toBeTruthy();
+  });
+
+  it("the empty library shows an icon and a Create Exercise button (ScreenState no longer swallows them)", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    await waitFor(() => expect(screen.getByTestId("my-exercises-empty")).toBeTruthy());
+    expect(screen.getByTestId("my-exercises-create-empty")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("my-exercises-create-empty"));
+    await waitFor(() =>
+      expect(screen.getByTestId("my-exercises-create-modal")).toBeTruthy(),
+    );
+  });
+
+  it("search, sort and the body-part / role filter chips narrow the list the way the web's do", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [BENCH, PLANK] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`my-exercises-item-${BENCH.slug}`)).toBeTruthy(),
+    );
+    expect(screen.getByTestId(`my-exercises-item-${PLANK.slug}`)).toBeTruthy();
+
+    // "Recent" (the default) sorts the newer row (Plank) first.
+    let rows = screen.getAllByTestId(/^my-exercises-item-/);
+    expect(rows[0]?.props.testID).toBe(`my-exercises-item-${PLANK.slug}`);
+
+    // "A–Z" sorts Bench before Plank.
+    fireEvent.press(screen.getByTestId("my-exercises-sort-alphabetical"));
+    rows = screen.getAllByTestId(/^my-exercises-item-/);
+    expect(rows[0]?.props.testID).toBe(`my-exercises-item-${BENCH.slug}`);
+
+    // Search narrows to the matching row only.
+    fireEvent.changeText(screen.getByTestId("my-exercises-search"), "plank");
+    expect(screen.queryByTestId(`my-exercises-item-${BENCH.slug}`)).toBeNull();
+    expect(screen.getByTestId(`my-exercises-item-${PLANK.slug}`)).toBeTruthy();
+    fireEvent.changeText(screen.getByTestId("my-exercises-search"), "");
+
+    // Body-part chip: "Chest" keeps Bench, drops Plank; toggling it off brings
+    // Plank back.
+    fireEvent.press(screen.getByTestId("my-exercises-body-part-chest"));
+    expect(screen.getByTestId(`my-exercises-item-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.queryByTestId(`my-exercises-item-${PLANK.slug}`)).toBeNull();
+    fireEvent.press(screen.getByTestId("my-exercises-body-part-chest"));
+
+    // Role chip: "Accessory" keeps Plank, drops Bench.
+    fireEvent.press(screen.getByTestId("my-exercises-role-accessory"));
+    expect(screen.queryByTestId(`my-exercises-item-${BENCH.slug}`)).toBeNull();
+    expect(screen.getByTestId(`my-exercises-item-${PLANK.slug}`)).toBeTruthy();
+
+    // No match for an unfindable query — and "Clear search & filters" resets.
+    fireEvent.press(screen.getByTestId("my-exercises-role-accessory"));
+    fireEvent.changeText(screen.getByTestId("my-exercises-search"), "nonexistent-xyz");
+    expect(screen.getByTestId("my-exercises-no-matches")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("my-exercises-clear-filters"));
+    expect(screen.getByTestId(`my-exercises-item-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-item-${PLANK.slug}`)).toBeTruthy();
+  });
+
+  it("every row shows the Yours badge and its chip row (sets, reps, derived tags)", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [BENCH] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`my-exercises-item-${BENCH.slug}`)).toBeTruthy(),
+    );
+    expect(screen.getByTestId(`my-exercises-yours-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-chip-sets-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-chip-reps-${BENCH.slug}`)).toBeTruthy();
+    expect(
+      screen.getByTestId(`my-exercises-chip-tag-${BENCH.slug}-strength`),
+    ).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-chip-tag-${BENCH.slug}-push`)).toBeTruthy();
+  });
+
+  it("the expanded card offers Add a video and an outline delete, and a pending row shows the amber banner", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [BENCH, PLANK] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId(`my-exercises-item-${BENCH.slug}`)).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId(`my-exercises-toggle-${BENCH.slug}`));
+    // Neither row has a demo yet — "Add a video" opens the web library, with
+    // the hint copy the card asks for, rather than no video section at all.
+    expect(screen.getByTestId(`my-exercises-video-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-video-hint-${BENCH.slug}`)).toBeTruthy();
+    expect(screen.getByTestId(`my-exercises-delete-${BENCH.slug}`)).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId(`my-exercises-toggle-${PLANK.slug}`));
+    expect(screen.getByTestId(`my-exercises-pending-${PLANK.slug}`)).toBeTruthy();
+  });
+
+  it("the create form shows the web's tracking-type and role hints", async () => {
+    setEntitlementsToken(mockMemberJwt());
+    scriptEntitlements(ROOM, ROOM);
+    routeListFetch((path: string) => {
+      if (path === "/api/exercises/custom") return { exercises: [] };
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyExercisesRoute />);
+    fireEvent.press(screen.getByTestId("my-exercises-create"));
+    await waitFor(() =>
+      expect(screen.getByTestId("my-exercises-create-modal")).toBeTruthy(),
+    );
+
+    expect(
+      screen.getByTestId("my-exercises-create-form-tracking-reps_weight"),
+    ).toBeTruthy();
+    expect(screen.getByTestId("my-exercises-create-form-role-compound")).toBeTruthy();
+    expect(screen.getByTestId("my-exercises-create-form-advanced-hint")).toBeTruthy();
+  });
+});
