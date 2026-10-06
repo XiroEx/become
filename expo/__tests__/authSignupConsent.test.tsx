@@ -71,9 +71,15 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
         <LoginScreen initialMode="register" />,
       );
 
-      expect(getByText("Create an account")).toBeTruthy();
+      expect(getByText("Create account")).toBeTruthy();
       expect(getByTestId("consent-checkbox")).toBeTruthy();
-      expect(getByText(CONSENT_STATEMENT)).toBeTruthy();
+      // The sentence is split into nested <Text> so the Terms/Privacy words
+      // can be their own underlined links (NP-251); CONSENT_STATEMENT still
+      // carries the checkbox's accessible name word for word (asserted below).
+      expect(getByText(/I am at least 13 years old/)).toBeTruthy();
+      expect(getByTestId("consent-checkbox").props.accessibilityLabel).toBe(
+        CONSENT_STATEMENT,
+      );
       expect(getByTestId("consent-checkbox").props.accessibilityRole).toBe(
         "checkbox",
       );
@@ -87,7 +93,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
         <LoginScreen initialMode="login" />,
       );
 
-      expect(getByText("Sign in with a magic link")).toBeTruthy();
+      expect(
+        getByText("Welcome back. Sign in to pick up where you left off."),
+      ).toBeTruthy();
       expect(queryByTestId("consent-checkbox")).toBeNull();
 
       // Enter email in login mode
@@ -95,7 +103,7 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
 
       // Switch to register mode
       fireEvent.press(getByTestId("login-mode-toggle"));
-      expect(getByText("Create an account")).toBeTruthy();
+      expect(getByText("Create account")).toBeTruthy();
       expect(getByTestId("consent-checkbox")).toBeTruthy();
       expect(getByTestId("login-email").props.value).toBe(
         "newmember@example.com",
@@ -103,7 +111,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
 
       // Switch back to login mode
       fireEvent.press(getByTestId("login-mode-toggle"));
-      expect(getByText("Sign in with a magic link")).toBeTruthy();
+      expect(
+        getByText("Welcome back. Sign in to pick up where you left off."),
+      ).toBeTruthy();
       expect(queryByTestId("consent-checkbox")).toBeNull();
       expect(getByTestId("login-email").props.value).toBe(
         "newmember@example.com",
@@ -428,7 +438,9 @@ describe("Native email-link sign-in and sign-up with consent and resumable wait"
 
       // Clicking "Sign in instead" switches to login mode, keeps email, clears error
       fireEvent.press(offerBtn);
-      expect(getByText("Sign in with a magic link")).toBeTruthy();
+      expect(
+        getByText("Welcome back. Sign in to pick up where you left off."),
+      ).toBeTruthy();
       expect(getByTestId("login-email").props.value).toBe(
         "existinguser@example.com",
       );
