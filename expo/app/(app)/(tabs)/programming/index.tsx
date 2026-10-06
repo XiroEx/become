@@ -11,13 +11,13 @@ import {
   Search,
   Sparkles,
   Wand2,
-  Zap,
 } from "lucide-react-native";
 import { ResumeWorkoutPill } from "@/components/workout/ResumeWorkoutPill";
 import { UpcomingWeekStrip } from "@/components/workout/UpcomingWeekStrip";
 import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSection";
 import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
+import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
 
@@ -28,8 +28,11 @@ import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
  * - Resume pill for in-progress workout or planned session
  * - Upcoming week strip with status icons and calendar link
  * - Continue Training cards showing active programs with progress % and paused state
- * - Quick links to History (NP-112), Browse (NP-072), Workout Now (NP-076), and Calendar
- * - Generate (NP-133): the standard-generator sheet (session or program, no AI switch)
+ * - Quick links to History, Workouts (hub Exercises), Programs (hub Programs) and Generate (NP-133),
+ *   matching the web's Workout page header chips (NP-277)
+ * - Saved for Later, Recommended for You and Browse Programs below Continue Training —
+ *   the same sections/components the Browse screen uses, so the web's single
+ *   Workout page and the native Workout tab show the same content (NP-277)
  */
 export default function ProgrammingIndexRoute() {
   const { colors } = useThemeTokens();
@@ -60,10 +63,6 @@ export default function ProgrammingIndexRoute() {
 
   const handleOpenHistory = () => {
     router.push("/(tabs)/programming/history" as never);
-  };
-
-  const handleOpenBrowse = () => {
-    router.push("/(tabs)/programming/browse");
   };
 
   const handleOpenMine = () => {
@@ -138,7 +137,12 @@ export default function ProgrammingIndexRoute() {
           Choose your training path and start building.
         </Text>
 
-        {/* Quick Links Hub */}
+        {/* Quick Links Hub — History, Workouts (hub Exercises) and Programs
+            (hub Programs) chips, matching the web's icons/colours exactly
+            (History blue, Workouts green dumbbell, Programs amber sparkles);
+            Browse and Workout Now dropped from this row — Browse's content
+            now lives inline below Continue Training, and Workout Now already
+            has its own button on the Continue Training header (NP-277). */}
         <View className="flex-row flex-wrap items-center gap-2 mb-5">
           <Pressable
             testID="workout-open-history"
@@ -147,61 +151,35 @@ export default function ProgrammingIndexRoute() {
             onPress={handleOpenHistory}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
           >
-            <History size={14} color={colors.primary} />
+            <History size={14} color={colors.info} />
             <Text className="text-foreground text-xs font-semibold">
               History
             </Text>
           </Pressable>
 
           <Pressable
-            testID="workout-open-browse"
+            testID="workout-open-exercises"
             accessibilityRole="button"
-            accessibilityLabel="Browse Programs"
-            onPress={handleOpenBrowse}
+            accessibilityLabel="Workouts"
+            onPress={handleOpenExercises}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
           >
-            <Sparkles size={14} color={colors.accent} />
+            <Dumbbell size={14} color={colors.success} />
             <Text className="text-foreground text-xs font-semibold">
-              Browse
+              Workouts
             </Text>
           </Pressable>
 
           <Pressable
             testID="workout-open-mine"
             accessibilityRole="button"
-            accessibilityLabel="My Programs"
+            accessibilityLabel="Programs"
             onPress={handleOpenMine}
             className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
           >
-            <Dumbbell size={14} color={colors.primary} />
+            <Sparkles size={14} color={colors.accent} />
             <Text className="text-foreground text-xs font-semibold">
-              My Programs
-            </Text>
-          </Pressable>
-
-          <Pressable
-            testID="workout-open-exercises"
-            accessibilityRole="button"
-            accessibilityLabel="My Exercises"
-            onPress={handleOpenExercises}
-            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
-          >
-            <Dumbbell size={14} color={colors.primary} />
-            <Text className="text-foreground text-xs font-semibold">
-              My Exercises
-            </Text>
-          </Pressable>
-
-          <Pressable
-            testID="workout-open-workout-now"
-            accessibilityRole="button"
-            accessibilityLabel="Workout Now"
-            onPress={handleWorkoutNow}
-            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-600"
-          >
-            <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
-            <Text className="text-white text-xs font-semibold">
-              Workout Now
+              Programs
             </Text>
           </Pressable>
 
@@ -233,6 +211,13 @@ export default function ProgrammingIndexRoute() {
         <View className="mb-5">
           <ContinueTrainingSection onWorkoutNow={handleWorkoutNow} />
         </View>
+
+        {/* 4. Saved for Later, Recommended for You and Browse Programs —
+            the web's Workout page continues below Continue Training with
+            these sections; native used to stop after Continue Training.
+            `ProgramsCatalog` is the exact component the dedicated Browse
+            screen renders (NP-072), so both show identical content (NP-277). */}
+        <ProgramsCatalog catalogTitle="Browse Programs" />
       </ScrollView>
 
       {/* Workout Now sheet (NP-076): focus → deterministic preview → NP-227 overview */}

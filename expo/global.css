@@ -29,6 +29,7 @@
     --accent: 217 119 6;
     --accent-foreground: 24 24 27;
     --success: 22 163 74;
+    --info: 37 99 235;
   }
 
   .dark:root,
@@ -46,5 +47,6 @@
     --accent: 251 191 36;
     --accent-foreground: 24 24 27;
     --success: 74 222 128;
+    --info: 96 165 250;
   }
 }

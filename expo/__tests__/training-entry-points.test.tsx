@@ -124,6 +124,10 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
         expect(rendered.getPathname()).toBe(pathname);
       });
     },
+    // The Workout tab (NP-277) now also mounts Saved/Recommended/Browse
+    // Programs below Continue Training, so the first render does more work
+    // than the default 5s budget reliably covers under full-suite load.
+    15000,
   );
 
   it("pushes them, so Back returns to the programs list", async () => {
