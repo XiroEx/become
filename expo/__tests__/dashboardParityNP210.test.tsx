@@ -167,6 +167,36 @@ describe("NP-210: Home Dashboard Parity & Stat Tiles", () => {
       expect(getByTestId("tile-goal-footer").props.children).toContain("181 lbs");
       expect(getByTestId("tile-goal-footer").props.children).toContain("~12 wks");
     });
+
+    it("opens Nutrition Goals, not the day screen (NP-256, web's /dashboard/nutrition/goals)", () => {
+      const tile: DashboardTile = { id: "goal", kind: "stat", size: "1x1" };
+      const onOpenNutritionGoals = jest.fn();
+      const onOpenNutrition = jest.fn();
+
+      const { getByTestId } = render(
+        <StatTile
+          tile={tile}
+          onOpenNutritionGoals={onOpenNutritionGoals}
+          onOpenNutrition={onOpenNutrition}
+        />,
+      );
+
+      fireEvent.press(getByTestId("tile-goal"));
+      expect(onOpenNutritionGoals).toHaveBeenCalledTimes(1);
+      expect(onOpenNutrition).not.toHaveBeenCalled();
+    });
+
+    it("falls back to onOpenNutrition when onOpenNutritionGoals is not given", () => {
+      const tile: DashboardTile = { id: "goal", kind: "stat", size: "1x1" };
+      const onOpenNutrition = jest.fn();
+
+      const { getByTestId } = render(
+        <StatTile tile={tile} onOpenNutrition={onOpenNutrition} />,
+      );
+
+      fireEvent.press(getByTestId("tile-goal"));
+      expect(onOpenNutrition).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("StatTile - Calories", () => {

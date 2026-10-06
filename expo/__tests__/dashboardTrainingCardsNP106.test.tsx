@@ -232,14 +232,14 @@ describe("NP-106 missed card + quick links", () => {
 
   it("shows the first-time empty state with Browse, and quick links without Connect", () => {
     const onBrowsePrograms = jest.fn();
-    const onOpenHistory = jest.fn();
+    const onOpenProgress = jest.fn();
     const { getByTestId, queryByTestId } = render(
       <DashboardQuickLinks
         showEmptyState
         onBrowsePrograms={onBrowsePrograms}
         onOpenPrograms={jest.fn()}
         onOpenNutrition={jest.fn()}
-        onOpenHistory={onOpenHistory}
+        onOpenProgress={onOpenProgress}
       />,
     );
 
@@ -254,7 +254,22 @@ describe("NP-106 missed card + quick links", () => {
     expect(queryByTestId("dashboard-quick-link-connect")).toBeNull();
     expect(queryByTestId("dashboard-quick-link-chat")).toBeNull();
 
-    // Progress points at History until native progress exists.
+    // Progress opens the Training Log (NP-130/NP-256), matching the web's
+    // `/dashboard/progress`.
+    fireEvent.press(getByTestId("dashboard-quick-link-progress"));
+    expect(onOpenProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("Progress falls back to onOpenHistory when onOpenProgress is not given", () => {
+    const onOpenHistory = jest.fn();
+    const { getByTestId } = render(
+      <DashboardQuickLinks
+        onOpenPrograms={jest.fn()}
+        onOpenNutrition={jest.fn()}
+        onOpenHistory={onOpenHistory}
+      />,
+    );
+
     fireEvent.press(getByTestId("dashboard-quick-link-progress"));
     expect(onOpenHistory).toHaveBeenCalledTimes(1);
   });

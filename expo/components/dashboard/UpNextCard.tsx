@@ -44,8 +44,11 @@ export function UpNextCard({
     } else if (workout.programId) {
       const pIdx = workout.workoutIndex ?? 0;
       const phase = workout.phase ? Math.max(0, workout.phase - 1) : 0;
+      // `/live` lands on Track, matching every other training entry point
+      // (NP-256) — this fallback only runs when the route forgets to pass
+      // `onPressWorkout`.
       router.push(
-        `/(tabs)/programming/${workout.programId}/workout/${pIdx}?phase=${phase}` as never,
+        `/(tabs)/programming/${workout.programId}/workout/${pIdx}/live?phase=${phase}` as never,
       );
     } else {
       handleOpenCalendar();

@@ -173,6 +173,11 @@ export interface DashboardScreenProps {
   onOpenPrograms?: () => void;
   /** Opens the training history (NP-112). */
   onOpenHistory?: () => void;
+  /**
+   * Opens the Training Log (NP-130) — the Progress quick link and the
+   * Current Program card's `Progress` label (NP-256).
+   */
+  onOpenProgress?: () => void;
   /** Nutrition quick-link description (calories today when known). */
   quickLinksNutritionDescription?: string | null;
   /** Action tile callback: opens Mind tab / session. */
@@ -181,6 +186,8 @@ export interface DashboardScreenProps {
   onOpenBecoming?: () => void;
   /** Action tile callback: opens Nutrition tab. */
   onOpenNutrition?: () => void;
+  /** The Goal tile's own destination: Nutrition Goals, not the day screen (NP-256). */
+  onOpenNutritionGoals?: () => void;
   /** Action tile callback: opens Workout Now sheet. */
   onOpenWorkoutNow?: () => void;
   /** Controls Workout Now sheet externally for testability. */
@@ -295,10 +302,12 @@ export function DashboardScreen({
   onBrowsePrograms,
   onOpenPrograms,
   onOpenHistory,
+  onOpenProgress,
   quickLinksNutritionDescription,
   onOpenMind,
   onOpenBecoming,
   onOpenNutrition,
+  onOpenNutritionGoals,
   onOpenWorkoutNow,
   workoutNowOpen,
   onWorkoutNowOpenChange,
@@ -585,6 +594,7 @@ export function DashboardScreen({
           onDismissSuggestion={onDismissSuggestion}
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
+          onOpenNutritionGoals={onOpenNutritionGoals}
           onOpenWorkoutNow={handleWorkoutNow}
           onOpenCalendar={onOpenCalendar}
           onOpenCheckIn={() => setOpen(true)}
@@ -705,6 +715,7 @@ export function DashboardScreen({
             program={currentProgram}
             onView={() => onViewProgram?.(currentProgram.programId)}
             onContinue={onStartNextWorkout ?? onStartWorkout}
+            onPressProgress={onOpenProgress}
           />
         ) : null}
 
@@ -736,14 +747,14 @@ export function DashboardScreen({
 
         {/* First-time empty state + quick links (NP-106, web
             DashboardClient parity): All Programs, Nutrition, Progress
-            (→ training history, NP-112). No Connect link — chat is on hold
-            for the store release. */}
+            (→ the Training Log, NP-130/NP-256). No Connect link — chat is
+            on hold for the store release. */}
         <DashboardQuickLinks
           showEmptyState={showEmptyState}
           onBrowsePrograms={onBrowsePrograms}
           onOpenPrograms={onOpenPrograms ?? onBrowsePrograms}
           onOpenNutrition={onOpenNutrition}
-          onOpenHistory={onOpenHistory}
+          onOpenProgress={onOpenProgress ?? onOpenHistory}
           nutritionDescription={quickLinksNutritionDescription}
         />
 
