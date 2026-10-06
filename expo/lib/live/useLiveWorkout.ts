@@ -1083,6 +1083,7 @@ export function useLiveWorkout(
               rpe: existing?.rpe,
               durationLabel: existing?.durationLabel,
               primaryMuscles: existing?.primaryMuscles,
+              difficulty: existing?.difficulty,
               equipment: existing?.equipment,
               laterality: existing?.laterality,
               movementPatterns: existing?.movementPatterns,
