@@ -1,13 +1,6 @@
 /* eslint-disable import/first */
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
-let mockParams: Record<string, string | undefined> = {};
-const mockPush = jest.fn();
-jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
-  useLocalSearchParams: () => mockParams,
-}));
-
 const mockToken = "test-jwt";
 const mockRefresh = jest.fn(async () => {});
 jest.mock("@/lib/auth/useAuth", () => ({
@@ -29,7 +22,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { clearAll } from "@/lib/cache/lastKnown";
-import NutritionIndexRoute from "../app/(app)/(tabs)/nutrition/index";
+import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
 import {
   MAX_FITNESS_GOALS,
   buildTrainingProfilePatch,
@@ -48,40 +41,7 @@ function callsByMethod(prefix: string, method: string): unknown[][] {
   );
 }
 
-const mealLogsFixture = {
-  date: "2026-06-01",
-  logs: [],
-  dailyTotals: { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 },
-};
-
-const sideTablesFixture = {
-  water: { current: 0, goal: 96 },
-  quickAdds: [],
-};
-
-const goalsFixture = { calories: 2200, protein: 150, carbs: 200, fats: 65 };
-
-const goalProgressFixture = {
-  todayKey: "2026-06-01",
-  nutrition: { target: { weight: 175 }, unit: "lbs", direction: "lose" },
-  training: {},
-};
-
-const scheduleFixture = { windows: [] };
-const tagsFixture = { defaults: ["breakfast"], userTags: [] };
-
 let mockProfileData: Record<string, unknown>;
-
-function defaultApiHandler(url: string) {
-  if (url.startsWith("/api/meal-logs")) return mealLogsFixture;
-  if (url.startsWith("/api/nutrition/log")) return sideTablesFixture;
-  if (url.startsWith("/api/nutrition/goals")) return goalsFixture;
-  if (url.startsWith("/api/goals")) return goalProgressFixture;
-  if (url.startsWith("/api/nutrition/meal-schedule")) return scheduleFixture;
-  if (url.startsWith("/api/tags")) return tagsFixture;
-  if (url.startsWith("/api/meal-plans")) return { plans: [], days: [] };
-  return {};
-}
 
 describe("Training preferences pure rules (NP-127)", () => {
   it("MAX_FITNESS_GOALS is 3, matching the web", () => {
@@ -115,7 +75,6 @@ describe("Training preferences pure rules (NP-127)", () => {
       weeklyAvailability: 4,
       equipmentAccess: ["dumbbells"],
       injuryNotes: "Bad left knee",
-      planPromoteMode: "auto",
     });
     expect(patch.fitnessGoal).toBe("gain_muscle");
     expect(patch.fitnessGoals).toEqual(["gain_muscle", "lose_weight"]);
@@ -123,6 +82,19 @@ describe("Training preferences pure rules (NP-127)", () => {
     expect(patch.weeklyAvailability).toBe(4);
     expect(patch.equipmentAccess).toEqual(["dumbbells"]);
     expect(patch.injuryNotes).toBe("Bad left knee");
+    // NP-302: the Training tab no longer sends planPromoteMode — that
+    // choice moved to Settings > Settings (NutritionPlanningSection).
+    expect(patch.planPromoteMode).toBeUndefined();
+  });
+
+  it("buildTrainingProfilePatch still carries planPromoteMode when a caller supplies it", () => {
+    const patch = buildTrainingProfilePatch({
+      fitnessGoals: [],
+      weeklyAvailability: 3,
+      equipmentAccess: [],
+      injuryNotes: "",
+      planPromoteMode: "auto",
+    });
     expect(patch.planPromoteMode).toBe("auto");
   });
 });
@@ -132,8 +104,6 @@ describe("Training preferences screen (NP-127)", () => {
     await clearAll();
     mockApiFetch.mockReset();
     mockRefresh.mockClear();
-    mockPush.mockReset();
-    mockParams = { view: "training" };
     mockProfileData = {
       name: "Jon Runner",
       email: "jon@example.com",
@@ -145,6 +115,9 @@ describe("Training preferences screen (NP-127)", () => {
         weeklyAvailability: 3,
         equipmentAccess: ["dumbbells"],
         injuryNotes: "Bad left knee",
+        // NP-302: still present on the profile (the Settings tab owns it
+        // now), kept here to prove the Training tab no longer reads or
+        // writes it.
         planPromoteMode: "manual",
       },
     };
@@ -164,20 +137,21 @@ describe("Training preferences screen (NP-127)", () => {
         }
         return Promise.resolve(mockProfileData);
       }
-      return Promise.resolve(defaultApiHandler(String(url)));
+      return Promise.resolve({});
     });
   });
 
-  it("(id: e015c98d) every Training-tab field seeds from GET /api/profile and PATCHes back through the same route", async () => {
-    const { getByTestId } = render(<NutritionIndexRoute />);
+  it("(id: e015c98d) every Training-tab field seeds from GET /api/profile and PATCHes back through the same route, and never touches planPromoteMode", async () => {
+    const { getByTestId } = render(<TrainingPreferencesScreen />);
 
-    // The Training view is reachable from the nutrition screen.
+    // The Training tab is its own self-contained screen (Settings >
+    // Training, NP-302).
     await waitFor(() => {
       expect(getByTestId("training-preferences-route")).toBeTruthy();
     });
 
-    // Seeded from the profile: goals, experience, schedule, equipment,
-    // injury notes and the promotion choice.
+    // Seeded from the profile: goals, experience, schedule, equipment and
+    // injury notes. No promotion-choice control lives here any more.
     await waitFor(() => {
       expect(
         getByTestId("training-preferences-goal-lose_weight").props
@@ -195,14 +169,12 @@ describe("Training preferences screen (NP-127)", () => {
       expect(getByTestId("training-preferences-injury-notes").props.value).toBe(
         "Bad left knee",
       );
-      expect(
-        getByTestId("training-preferences-promote-manual").props
-          .accessibilityState?.selected,
-      ).toBe(true);
     });
+    expect(() => getByTestId("training-preferences-promote-manual")).toThrow();
+    expect(() => getByTestId("training-preferences-promote-auto")).toThrow();
 
-    // Change every field: swap primary goal, experience, schedule,
-    // equipment, injury notes and the promotion choice.
+    // Change every remaining field: swap primary goal, experience,
+    // schedule, equipment and injury notes.
     fireEvent.press(getByTestId("training-preferences-goal-maintain"));
     fireEvent.press(getByTestId("training-preferences-experience-advanced"));
     fireEvent.press(getByTestId("training-preferences-weekly-increase"));
@@ -211,7 +183,6 @@ describe("Training preferences screen (NP-127)", () => {
       getByTestId("training-preferences-injury-notes"),
       "Shoulder impingement",
     );
-    fireEvent.press(getByTestId("training-preferences-promote-auto"));
 
     await act(async () => {
       fireEvent.press(getByTestId("training-preferences-save"));
@@ -240,7 +211,13 @@ describe("Training preferences screen (NP-127)", () => {
       "barbell",
     ]);
     expect(patchBody.profile.injuryNotes).toBe("Shoulder impingement");
-    expect(patchBody.profile.planPromoteMode).toBe("auto");
+    // NP-302: the Training tab's save never sends planPromoteMode, and the
+    // profile's existing value survives untouched (merged by the mock,
+    // exactly like the real PATCH route merges partial profile updates).
+    expect(patchBody.profile.planPromoteMode).toBeUndefined();
+    expect(
+      (mockProfileData.profile as Record<string, unknown>).planPromoteMode,
+    ).toBe("manual");
 
     // Reads back identically on the web: the mock store now holds the PATCH.
     const stored = mockProfileData.profile as Record<string, unknown>;
@@ -254,11 +231,10 @@ describe("Training preferences screen (NP-127)", () => {
     expect(stored.weeklyAvailability).toBe(4);
     expect(stored.equipmentAccess).toEqual(["dumbbells", "barbell"]);
     expect(stored.injuryNotes).toBe("Shoulder impingement");
-    expect(stored.planPromoteMode).toBe("auto");
   });
 
   it("(id: e015c98e) a fourth fitness goal cannot be added — it swaps the last pick, as on the web", async () => {
-    const { getByTestId } = render(<NutritionIndexRoute />);
+    const { getByTestId } = render(<TrainingPreferencesScreen />);
 
     await waitFor(() => {
       expect(getByTestId("training-preferences-route")).toBeTruthy();
@@ -314,5 +290,16 @@ describe("Training preferences screen (NP-127)", () => {
       "gain_muscle",
       "general_health",
     ]);
+  });
+
+  it("embedded (Settings > Training): no SafeAreaView chrome, no 'Training' title, no planPromoteMode UI", async () => {
+    const { getByTestId, queryByText } = render(
+      <TrainingPreferencesScreen embedded />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("training-preferences-route")).toBeTruthy();
+    });
+    expect(queryByText("Training")).toBeNull();
+    expect(queryByText("Nutrition Planning")).toBeNull();
   });
 });

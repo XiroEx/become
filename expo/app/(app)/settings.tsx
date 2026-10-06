@@ -21,6 +21,9 @@ import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
+import { ProfileSettingsScreen } from "@/components/profile/ProfileSettingsScreen";
+import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
+import { NutritionPlanningSection } from "@/components/settings/NutritionPlanningSection";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ScreenState } from "@/components/ScreenState";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -54,9 +57,23 @@ import { ChevronRight, ExternalLink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
- * Native Settings screen: Account, Security (NP-187), Notifications (NP-068),
- * AI features (NP-046), Legal & support, and Delete account at the bottom
- * (two taps away).
+ * Native Settings screen. NP-302 added the web's Profile / Training /
+ * Settings segmented tabs (`webapp/app/dashboard/settings/page.tsx`):
+ *
+ *   - Profile: `ProfileSettingsScreen` embedded — Account (name/email), Body
+ *     Stats, pace and Save Changes, then Health sync as the native extra.
+ *   - Training: `TrainingPreferencesScreen` embedded — Fitness Goals,
+ *     Experience & Schedule, Equipment & Injuries.
+ *   - Settings: Account (sign out, admin tools, Plan), Security (NP-187),
+ *     Notifications (NP-068), AI features (NP-046), Nutrition Planning
+ *     (moved here from the Training tab to match the web), Legal & support,
+ *     and Delete account at the bottom (two taps away).
+ *
+ * The tab bar defaults to "Settings" — the screen's original content — so
+ * every existing deep link and test that opens Settings still lands on
+ * exactly what it always has; Profile and Training are additions reachable
+ * by tapping their tab, the fix for "native Settings has no Profile/Training
+ * tab and the editor in profile/health.tsx is unreachable."
  */
 export interface SettingsNotifDeps {
   /** OS permission probe. Defaults to NP-065's `defaultPushDeps` reader. */
@@ -85,6 +102,12 @@ export default function SettingsScreen({
   const router = useRouter();
   const { token, user, logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  // NP-302: Profile / Training / Settings, defaulting to "settings" (the
+  // screen's original, still-reachable content) so every existing deep link
+  // and test lands exactly where it always has.
+  const [activeTab, setActiveTab] = useState<"profile" | "training" | "settings">(
+    "settings",
+  );
   // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
   // `expo-notifications` (no native module under Jest — even a dynamic
   // `import()` throws without --experimental-vm-modules), so they inject
@@ -522,28 +545,85 @@ export default function SettingsScreen({
       })
     : null;
 
+  const TABS = [
+    { id: "profile" as const, label: "Profile" },
+    { id: "training" as const, label: "Training" },
+    { id: "settings" as const, label: "Settings" },
+  ];
+
   return (
-    <ScreenState
-      loading={initialLoading}
-      error={fetchError}
-      hasData={hasData}
-      onRetry={onRetry}
-      offlineNote="You're offline. Showing last-saved settings."
-      testID="settings-screen-state"
+    <SafeAreaView
+      edges={["top", "bottom"]}
+      style={{ flex: 1, backgroundColor: colors.background }}
+      testID="native-settings-screen"
     >
-      <SafeAreaView
-        edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: colors.background }}
-        testID="native-settings-screen"
+      <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
+        <Text
+          accessibilityRole="header"
+          className="text-foreground text-2xl font-bold"
+        >
+          Settings
+        </Text>
+
+        {/* NP-302: the web's Profile / Training / Settings segmented tabs. */}
+        <View
+          testID="settings-tabs"
+          style={{
+            flexDirection: "row",
+            padding: 3,
+            borderRadius: 10,
+            backgroundColor: colors.muted,
+          }}
+        >
+          {TABS.map((tab) => (
+            <Pressable
+              key={tab.id}
+              testID={`settings-tab-${tab.id}`}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.label}
+              accessibilityState={{ selected: activeTab === tab.id }}
+              onPress={() => setActiveTab(tab.id)}
+              style={[
+                minTouchTarget,
+                {
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 8,
+                  borderRadius: 7,
+                  backgroundColor:
+                    activeTab === tab.id ? colors.card : "transparent",
+                },
+              ]}
+            >
+              <Text
+                className={`text-sm font-medium ${
+                  activeTab === tab.id
+                    ? "text-foreground"
+                    : "text-muted-foreground"
+                }`}
+              >
+                {tab.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {activeTab === "profile" ? (
+        <ProfileSettingsScreen embedded />
+      ) : activeTab === "training" ? (
+        <TrainingPreferencesScreen embedded />
+      ) : (
+      <ScreenState
+        loading={initialLoading}
+        error={fetchError}
+        hasData={hasData}
+        onRetry={onRetry}
+        offlineNote="You're offline. Showing last-saved settings."
+        testID="settings-screen-state"
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
-          <Text
-            accessibilityRole="header"
-            className="text-foreground text-2xl font-bold"
-          >
-            Settings
-          </Text>
-
           {/* 1. Account Section */}
         <View
           testID="settings-account-section"
@@ -918,6 +998,10 @@ export default function SettingsScreen({
           </Pressable>
         </View>
 
+        {/* 4b. Nutrition Planning — moved here from the Training tab's
+            screen (NP-302), matching the web's Settings tab. */}
+        <NutritionPlanningSection />
+
         {/* 5. Legal & support Section */}
         <View
           testID="settings-legal-section"
@@ -980,8 +1064,9 @@ export default function SettingsScreen({
             }}
           />
         </View>
-      </ScrollView>
+        </ScrollView>
+      </ScreenState>
+      )}
     </SafeAreaView>
-  </ScreenState>
   );
 }
