@@ -59,13 +59,38 @@ export function volumeChartField(
 }
 
 /**
+ * Round `max` UP to the nearest value whose quarter-steps are themselves
+ * round thousands — the web's Recharts axis, which "nices" its domain rather
+ * than drawing raw quarters of the data max (NP-314).
+ *
+ * Native used to divide the raw max by 4 and round EACH tick independently,
+ * which keeps the steps unequal whenever the max is not itself a round
+ * number: a ~23.2k max produced 0 / 6k / 12k / 17k / 23k (steps of 6, 6, 5,
+ * 6) where the web draws 0 / 6k / 12k / 18k / 24k (an even 6k step). This
+ * picks ONE step first — the smallest whole multiple of the max's leading
+ * digit's place value whose four increments cover `max` — then builds every
+ * tick from that same step, so the spacing is always even and every tick
+ * lands on a round number.
+ */
+export function volumeChartAxisMax(max: number): number {
+  if (max <= 0) return 0;
+  const roughStep = max / 4;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep) + 1e-9));
+  const step = Math.ceil(roughStep / magnitude - 1e-9) * magnitude;
+  return step * 4;
+}
+
+/**
  * The y-axis tick values, exported so tests pin the step count. The web's
  * `YAxis` (Recharts, default tick count) draws 5 evenly spaced ticks — e.g.
  * 0 / 6k / 12k / 18k / 24k for a ~24k max — not the 3-tick 0/half/full native
- * drew before (which showed as 0 / 12k / 23k for the same data).
+ * drew before (which showed as 0 / 12k / 23k for the same data), nor the
+ * unevenly-stepped 0 / 6k / 12k / 17k / 23k a raw quarter-of-the-max produced
+ * once the 3-tick bug (NP-259) was fixed.
  */
 export function volumeChartYTicks(max: number): number[] {
-  return [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(max * ratio));
+  const axisMax = volumeChartAxisMax(max);
+  return [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(axisMax * ratio));
 }
 
 export interface VolumeBarChartProps {
@@ -96,7 +121,7 @@ export function VolumeBarChart({
   const [chartWidth, setChartWidth] = useState<number>(320);
 
   const field = volumeChartField(weeks);
-  const max = volumeChartMax(weeks);
+  const max = volumeChartAxisMax(volumeChartMax(weeks));
   const plotWidth = Math.max(10, chartWidth - PAD_LEFT - PAD_RIGHT);
   const plotHeight = Math.max(10, CHART_HEIGHT - PAD_TOP - PAD_BOTTOM);
   const barColor = colors.foreground;

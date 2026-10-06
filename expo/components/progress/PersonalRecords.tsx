@@ -41,6 +41,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { usePressed } from "@/lib/a11y/usePressed";
 
 // ─── History ────────────────────────────────────────────────────────────────
 
@@ -184,6 +185,68 @@ export function prApiErrorMessage(error: unknown, fallback: string): string {
 
 const PRS_PAGE = 6;
 
+function PersonalRecordRow({
+  pr,
+  index,
+  onSelect,
+}: {
+  pr: ProgressExercisePR;
+  index: number;
+  onSelect: (pr: ProgressExercisePR) => void;
+}) {
+  const { colors } = useThemeTokens();
+  const press = usePressed();
+  return (
+    <Pressable
+      testID={`progress-record-${index}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${pr.name}, personal record ${pr.weight} pounds for ${pr.reps} reps`}
+      accessibilityHint="Shows history and corrections"
+      onPress={() => onSelect(pr)}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      style={[
+        {
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          opacity: press.pressed ? 0.7 : 1,
+        },
+        minTouchTarget,
+      ]}
+    >
+      <View style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
+        <Text
+          className="text-foreground text-sm font-semibold"
+          style={WRAPPABLE_TEXT}
+          numberOfLines={1}
+        >
+          {pr.name}
+        </Text>
+        <Text className="text-muted-foreground text-xs">
+          {pr.date} · history &amp; corrections
+        </Text>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Text className="text-foreground text-sm font-bold">
+          {pr.weight} lbs
+        </Text>
+        {pr.reps > 0 ? (
+          <Text className="text-muted-foreground text-xs">
+            × {pr.reps} reps
+          </Text>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 export interface PersonalRecordsSectionProps {
   pbs: ProgressExercisePR[];
   onSelect: (pr: ProgressExercisePR) => void;
@@ -224,50 +287,7 @@ export function PersonalRecordsSection({
       </View>
       <View style={{ gap: 8 }}>
         {pbs.slice(0, shown).map((pr, i) => (
-          <Pressable
-            key={pr.slug}
-            testID={`progress-record-${i}`}
-            accessibilityRole="button"
-            accessibilityLabel={`${pr.name}, personal record ${pr.weight} pounds for ${pr.reps} reps`}
-            accessibilityHint="Shows history and corrections"
-            onPress={() => onSelect(pr)}
-            style={({ pressed }) => ({
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              opacity: pressed ? 0.7 : 1,
-              ...minTouchTarget,
-            })}
-          >
-            <View style={{ flex: 1, minWidth: 0, marginRight: 12 }}>
-              <Text
-                className="text-foreground text-sm font-semibold"
-                style={WRAPPABLE_TEXT}
-                numberOfLines={1}
-              >
-                {pr.name}
-              </Text>
-              <Text className="text-muted-foreground text-xs">
-                {pr.date} · history &amp; corrections
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text className="text-foreground text-sm font-bold">
-                {pr.weight} lbs
-              </Text>
-              {pr.reps > 0 ? (
-                <Text className="text-muted-foreground text-xs">
-                  × {pr.reps} reps
-                </Text>
-              ) : null}
-            </View>
-          </Pressable>
+          <PersonalRecordRow key={pr.slug} pr={pr} index={i} onSelect={onSelect} />
         ))}
         {pbs.length > PRS_PAGE ? (
           <Pressable
