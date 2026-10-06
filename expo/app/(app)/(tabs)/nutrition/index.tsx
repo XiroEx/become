@@ -102,8 +102,7 @@ import { NutritionConsultantTeaser } from "@/components/nutrition/NutritionConsu
 import { CombineSheet } from "@/components/nutrition/CombineSheet";
 import { BasketSheet, type BasketItem } from "@/components/nutrition/BasketSheet";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
-import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
-import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+import { ScheduleMealsDrawer } from "@/components/nutrition/ScheduleMealsDrawer";
 import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet";
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
@@ -1123,13 +1122,12 @@ export default function NutritionIndexRoute() {
   // onto the scanner instead of the name search.
   const [searchBarcodeOpen, setSearchBarcodeOpen] = useState(false);
   const [copyingYesterday, setCopyingYesterday] = useState(false);
-  // Schedule-meals tools (NP-177): the two bulk sheets ported from the web's
-  // ScheduleMealsDrawer / PlanToolsSheets. `copyDayOpen` copies a day forward
-  // (from the meal plan and from a future day); `applyMealOpen` repeats one
-  // saved meal across days. `planToolsNotice` carries the success toast until
-  // the refetch lands, mirroring the web's `showSuccessToast` + refetch.
-  const [copyDayOpen, setCopyDayOpen] = useState(false);
-  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  // Schedule-meals drawer (NP-265): the one blue CTA, ONE sheet with three
+  // tabs (By day / From meals / Copy day) and a Range toggle — replaces the
+  // former native-only separate "Copy day…" / "Repeat a meal…" buttons.
+  // `planToolsNotice` carries the success toast until the refetch lands,
+  // mirroring the web's `showSuccessToast` + refetch.
+  const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
   const [planToolsNotice, setPlanToolsNotice] = useState<string | null>(null);
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
@@ -1589,8 +1587,6 @@ export default function NutritionIndexRoute() {
   const handleBulkApplied = useCallback(
     (toast: string) => {
       setPlanToolsNotice(toast);
-      setCopyDayOpen(false);
-      setApplyMealOpen(false);
       if (showPlans) {
         void refetchMealPlans();
       }
@@ -1642,13 +1638,15 @@ export default function NutritionIndexRoute() {
   // "Schedule meals" — the same control rendered in two places, so the two
   // can never drift apart (the web's `page.tsx:1023-1032`): above the tag
   // list on a future day (the only thing you can do on a day you have not
-  // lived yet), below the water tracker at the end of today (NP-262).
+  // lived yet), below the water tracker at the end of today (NP-262). Opens
+  // the ScheduleMealsDrawer (NP-265) — By day / From meals / Copy day, same
+  // as the web — instead of navigating to the Meal Schedule settings screen.
   const scheduleMealsButton = (
     <Pressable
       testID="nutrition-schedule-meals-button"
       accessibilityRole="button"
       accessibilityLabel="Schedule meals"
-      onPress={() => router.push("/(tabs)/nutrition/meal-schedule")}
+      onPress={() => setScheduleDrawerOpen(true)}
       className="bg-blue-600"
       style={{
         flexDirection: "row",
@@ -2058,32 +2056,11 @@ export default function NutritionIndexRoute() {
 
           {/* Future-day schedule CTA — leads above the tag list, same spot
               the web puts it: scheduling is the only thing you can do on a
-              day you have not lived yet (NP-262). */}
-          {isFuture ? (
-            <View style={{ gap: 10 }}>
-              {scheduleMealsButton}
-              <Button
-                testID="nutrition-copy-day-button"
-                variant="secondary"
-                onPress={() => {
-                  setPlanToolsNotice(null);
-                  setCopyDayOpen(true);
-                }}
-              >
-                Copy day…
-              </Button>
-              <Button
-                testID="nutrition-repeat-meal-button"
-                variant="secondary"
-                onPress={() => {
-                  setPlanToolsNotice(null);
-                  setApplyMealOpen(true);
-                }}
-              >
-                Repeat a meal…
-              </Button>
-            </View>
-          ) : null}
+              day you have not lived yet (NP-262). The ScheduleMealsDrawer's
+              own "Copy day" / "From meals" tabs replace the separate
+              "Copy day…" / "Repeat a meal…" buttons this used to render
+              (NP-265) — one blue CTA, matching the web exactly. */}
+          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
 
           {/* Empty State when nothing logged and nothing planned — fork/knife
               icon, a black (web: `bg-zinc-900 dark:bg-white`) Add food pill,
@@ -2816,21 +2793,14 @@ export default function NutritionIndexRoute() {
         }}
       />
 
-      {/* Schedule-meals tools (NP-177): copy a day forward + repeat a meal
-          across days, from the meal plan and from a future day. */}
-      <CopyDaySheet
-        visible={copyDayOpen}
-        defaultSourceDate={activeDate}
-        onClose={() => setCopyDayOpen(false)}
-        onApplied={handleBulkApplied}
-      />
-      <ApplyMealSheet
-        visible={applyMealOpen}
-        defaultFromDate={activeDate}
-        defaultToDate={activeDate}
-        defaultTag={searchTag ?? currentDefaultTag}
+      {/* Schedule meals (NP-265): By day / From meals / Copy day, behind the
+          one blue "Schedule meals" CTA, matching the web's
+          `ScheduleMealsDrawer` exactly. */}
+      <ScheduleMealsDrawer
+        visible={scheduleDrawerOpen}
+        defaultDate={activeDate}
         availableTags={availableTags}
-        onClose={() => setApplyMealOpen(false)}
+        onClose={() => setScheduleDrawerOpen(false)}
         onApplied={handleBulkApplied}
       />
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Pencil, Play, Plus, Trash2 } from "lucide-react-native";
+import { Lightbulb, Pencil, Play, Plus, Trash2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
@@ -54,7 +54,7 @@ export function MyPrograms({
   deletingId = null,
   testID = "my-programs",
 }: MyProgramsProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const confirmTarget = confirmId
@@ -70,25 +70,82 @@ export function MyPrograms({
   };
 
   if (programs.length === 0) {
+    // Native counterpart of the web's `EmptyState` on
+    // `MyProgramsClient.tsx`: an icon circle, title + description, and the
+    // "Create Your First Program" CTA — plus a static nudge toward the
+    // creator in the words of the web's onboarding tour
+    // (`webapp/lib/tutorials/sections/programs.ts`'s `programs-new-intro`
+    // step). The tour ITSELF (the interactive spotlight overlay) stays a
+    // later decision for native (NP-164, PARITY_GAP_ANALYSIS.md §"Guided
+    // tour") — this is only the copy and the CTA, which both already lead
+    // to the same creator `onCreate` opens.
     return (
-      <View testID={`${testID}-empty`} style={{ padding: 16, gap: 12 }}>
-        <Text className="text-muted-foreground text-center text-sm">
-          You haven&apos;t created any custom programs yet. Build your own
-          training program tailored to your goals.
-        </Text>
-        {onCreate ? (
-          <Button
-            testID={`${testID}-create-empty`}
-            onPress={() => void onCreate()}
-            accessibilityLabel="Create your first program"
+      <View testID={`${testID}-empty`} style={{ padding: 16, gap: 16 }}>
+        <View style={{ alignItems: "center", gap: 10 }}>
+          <View
+            style={{
+              width: 64,
+              height: 64,
+              borderRadius: 32,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.muted,
+            }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Plus size={16} color={colors["primary-foreground"]} />
-              <Text className="text-primary-foreground text-sm font-semibold">
-                Create your first program
-              </Text>
+            <Plus size={28} color={colors["muted-foreground"]} />
+          </View>
+          <Text className="text-foreground text-base font-semibold text-center">
+            You haven&apos;t created any custom programs yet
+          </Text>
+          <Text className="text-muted-foreground text-sm text-center">
+            Build your own training program tailored to your goals.
+          </Text>
+          {onCreate ? (
+            <View style={{ marginTop: 4 }}>
+              <Button
+                testID={`${testID}-create-empty`}
+                variant="success"
+                onPress={() => void onCreate()}
+                accessibilityLabel="Create your first program"
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Plus size={16} color={colors["primary-foreground"]} />
+                  <Text className="text-primary-foreground text-sm font-semibold">
+                    Create Your First Program
+                  </Text>
+                </View>
+              </Button>
             </View>
-          </Button>
+          ) : null}
+        </View>
+
+        {onCreate ? (
+          <Card testID={`${testID}-empty-tip`}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+              <Lightbulb size={18} color={colors.accent} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text className="text-foreground text-sm font-semibold">
+                  Design your own program
+                </Text>
+                <Text className="text-muted-foreground text-xs leading-relaxed">
+                  Pick the exercises, prescribe the sets and reps, and
+                  structure it in phases — then follow it with the same live
+                  workout view as coach-built programs.
+                </Text>
+                <View style={{ marginTop: 6, alignSelf: "flex-start" }}>
+                  <Button
+                    testID={`${testID}-empty-tip-cta`}
+                    variant="inverted"
+                    size="sm"
+                    onPress={() => void onCreate()}
+                    accessibilityLabel="Walk me through it"
+                  >
+                    Walk me through it
+                  </Button>
+                </View>
+              </View>
+            </View>
+          </Card>
         ) : null}
       </View>
     );
@@ -177,7 +234,9 @@ export function MyPrograms({
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 8,
-                    backgroundColor: colors.primary,
+                    // Enroll is a positive, non-destructive action — the
+                    // web's `bg-green-600`, native's `success` token (NP-282).
+                    backgroundColor: colors.success,
                     opacity: enrolling ? 0.5 : 1,
                   },
                 ]}
@@ -230,13 +289,18 @@ export function MyPrograms({
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 8,
-                      backgroundColor: colors.destructive,
+                      // The web's Delete is a LIGHT red text button
+                      // (`bg-red-50 text-red-600`, `dark:bg-red-900/20
+                      // dark:text-red-400`) — a tint of `destructive`, not a
+                      // solid fill (NP-282). Enroll stays the only solid
+                      // action pill on the row.
+                      backgroundColor: tint("destructive", 0.12),
                       opacity: deleting ? 0.5 : 1,
                     },
                   ]}
                 >
-                  <Trash2 size={14} color={colors["destructive-foreground"]} />
-                  <Text className="text-destructive-foreground text-xs font-semibold">
+                  <Trash2 size={14} color={colors.destructive} />
+                  <Text className="text-destructive text-xs font-semibold">
                     {deleting ? "Deleting…" : "Delete"}
                   </Text>
                 </Pressable>
