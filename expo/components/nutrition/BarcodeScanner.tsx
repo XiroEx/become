@@ -5,6 +5,7 @@ import {
   Pressable,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Keyboard, ScanBarcode, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
@@ -15,6 +16,27 @@ import {
   BARCODE_SCANNER_TYPES,
   shouldAcceptScan,
 } from "@/lib/nutrition/barcodeLookup";
+
+/**
+ * `app.json`'s `androidStatusBar.translucent: true` (edge-to-edge, see
+ * `ANDROID_QUIRKS.md`) means this `Modal`'s own window draws under the
+ * status bar on Android, same as every other screen — the rest of them
+ * just happen to sit inside a navigator that already adds the insets. This
+ * `Modal` is bare, so it has to add them itself.
+ *
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but this
+ * component's tests (and `FoodSearchSheet`'s, which always mounts it) don't
+ * wrap one. Falling back to zero insets there keeps this a no-op in tests
+ * while fixing the real device.
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 /**
  * Native barcode scanner (NP-088).
@@ -45,6 +67,8 @@ export interface BarcodeScannerProps {
   permissionImpl?: typeof useCameraPermissions;
   /** Injection point; the app leaves it unset (`CameraView`). */
   cameraImpl?: typeof CameraView;
+  /** Injection point; the app leaves it unset (`useSafeAreaInsetsOrZero`). */
+  insetsImpl?: () => { top: number; bottom: number; left: number; right: number };
   testID?: string;
 }
 
@@ -56,9 +80,11 @@ export function BarcodeScanner({
   onDetected,
   permissionImpl = useCameraPermissions,
   cameraImpl: CameraImpl = CameraView,
+  insetsImpl = useSafeAreaInsetsOrZero,
   testID = "barcode-scanner",
 }: BarcodeScannerProps) {
   const { colors } = useThemeTokens();
+  const insets = insetsImpl();
   const [permission, requestPermission] = permissionImpl();
   const [showManual, setShowManual] = useState(false);
   const [manualCode, setManualCode] = useState("");
@@ -108,14 +134,19 @@ export function BarcodeScanner({
       testID={testID}
     >
       <View className="flex-1 bg-black" testID={`${testID}-root`}>
-        {/* Header */}
+        {/* Header — padded below the status bar (`androidStatusBar.translucent`
+            draws this Modal's own window under it on Android) so the title,
+            the manual-entry toggle and the close X all land in live-touch
+            territory instead of the status-bar's dead zone. */}
         <View
+          testID={`${testID}-header`}
           style={{
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
             paddingHorizontal: 16,
-            paddingVertical: 12,
+            paddingTop: insets.top + 12,
+            paddingBottom: 12,
           }}
         >
           <Text className="text-sm font-semibold text-white">
@@ -263,8 +294,8 @@ export function BarcodeScanner({
         {(showManual || phase === "denied") && (
           <View
             testID={`${testID}-manual-form`}
-            className="bg-card flex-row items-center px-4 py-3"
-            style={{ gap: 8 }}
+            className="bg-card flex-row items-center px-4"
+            style={{ gap: 8, paddingTop: 12, paddingBottom: insets.bottom + 12 }}
           >
             <View style={{ flex: 1 }}>
               <Input

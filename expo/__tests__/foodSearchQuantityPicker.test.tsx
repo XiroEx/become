@@ -198,4 +198,29 @@ describe("Card NP-261 — FoodSearchSheet's inline quantity picker (basket mode)
     expect(onLogItem).not.toHaveBeenCalled();
     expect(onAddToBasket).not.toHaveBeenCalled();
   });
+
+  // NP-321: the standalone flag icon on every collapsed row is gone (it
+  // over-badged the row, see FoodSearchSheet.tsx's row render); the report
+  // entry point now lives on the picker this test already opens.
+  it("(id: np321-report) 'Something look wrong?' on the expanded picker opens FlagFoodSheet for that food", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={() => {}}
+        currentTag="snack"
+        basketMode
+        onLogItem={jest.fn()}
+        debounceMs={0}
+      />,
+    );
+
+    await openRow(getByTestId);
+    expect(queryByTestId("flag-food")).toBeNull();
+
+    fireEvent.press(getByTestId("quantity-picker-report-food"));
+
+    await waitFor(() => {
+      expect(getByTestId("flag-food")).toBeTruthy();
+    });
+  });
 });

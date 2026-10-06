@@ -205,4 +205,22 @@ describe("QuantityPicker", () => {
     expect(getByTestId("quantity-input").props.value).toBe("1");
     expect(getByTestId("macro-preview-calories").props.children).toEqual([4, " kcal"]);
   });
+
+  describe("Card NP-321 — 'Something look wrong?' (moved off the search row)", () => {
+    it("is absent without an onReportFood handler (every existing consumer is unaffected)", () => {
+      const { queryByTestId } = render(<QuantityPicker food={bridgedFood} />);
+      expect(queryByTestId("quantity-picker-report-food")).toBeNull();
+    });
+
+    it("renders and fires onReportFood when wired (FoodSearchSheet's expanded picker, NP-321)", () => {
+      const onReportFood = jest.fn();
+      const { getByTestId } = render(
+        <QuantityPicker food={bridgedFood} onReportFood={onReportFood} />,
+      );
+      const link = getByTestId("quantity-picker-report-food");
+      expect(link).toHaveTextContent("Something look wrong?");
+      fireEvent.press(link);
+      expect(onReportFood).toHaveBeenCalledTimes(1);
+    });
+  });
 });
