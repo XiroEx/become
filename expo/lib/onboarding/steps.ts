@@ -123,7 +123,10 @@ export const STEP_QUESTIONS: readonly string[] = [
   // STEP_TITLES[2] ("Body & nutrition") stays as the "Step 3 of 5 ·" chip
   // label, which the web keeps unchanged too.
   "Body stats",
-  "What equipment do you have?",
+  // Web parity (NP-248): web's step 4 heading reads "Equipment & injuries"
+  // with the copy below about not recommending a barbell program to someone
+  // training in a living room.
+  "Equipment & injuries",
   "Here's what we heard",
 ];
 
@@ -166,6 +169,12 @@ export interface OnboardingProfile {
   macroPreset?: MacroPreset;
   weeklyAvailability?: number;
   equipmentAccess?: EquipmentType[];
+  /**
+   * Free-text injuries or areas to avoid (web parity, NP-248 — web's step 4
+   * `Injury notes` textarea, saved as `injuryNotes` and shown on the review
+   * step). Optional; sent with the profile exactly as the web sends it.
+   */
+  injuryNotes?: string;
   nutritionDirection?: NutritionDirection;
   weightUnit?: "lbs" | "kg";
   [key: string]: unknown;
