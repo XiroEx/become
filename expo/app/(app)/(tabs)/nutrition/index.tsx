@@ -121,11 +121,10 @@ import { TimelineMonthView } from "@/components/nutrition/TimelineMonthView";
 import { FoodReportsBadge } from "@/components/nutrition/FoodReportsBadge";
 import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
-import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
 import { applyLogCorrection } from "@/lib/nutrition/foodFlags";
 import { isObjectIdString } from "@/lib/nutrition/foodImport";
 
-export type NutritionViewMode = "day" | "week" | "month" | "training";
+export type NutritionViewMode = "day" | "week" | "month";
 
 const EMPTY_PLANS: MealPlan[] = [];
 const EMPTY_LOGS: MealLog[] = [];
@@ -144,8 +143,7 @@ export default function NutritionIndexRoute() {
     if (
       params.view === "week" ||
       params.view === "month" ||
-      params.view === "day" ||
-      params.view === "training"
+      params.view === "day"
     ) {
       return params.view;
     }
@@ -156,8 +154,7 @@ export default function NutritionIndexRoute() {
     if (
       params.view === "week" ||
       params.view === "month" ||
-      params.view === "day" ||
-      params.view === "training"
+      params.view === "day"
     ) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
       setViewMode(params.view);
@@ -1766,7 +1763,9 @@ export default function NutritionIndexRoute() {
         </View>
       ) : null}
 
-      {/* 4-segment View Selector (Day / Week / Month / Training) */}
+      {/* 3-segment View Selector (Day / Week / Month). Training preferences
+          moved to Settings > Training (NP-302); Nutrition Planning moved to
+          Settings > Settings, matching the web's tab layout. */}
       <View
         testID="nutrition-view-selector"
         style={{
@@ -1870,33 +1869,6 @@ export default function NutritionIndexRoute() {
             Month
           </Text>
         </Pressable>
-
-        <Pressable
-          testID="nutrition-view-training"
-          accessibilityRole="button"
-          accessibilityLabel="Training preferences"
-          onPress={() => handleViewChange("training")}
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            paddingVertical: 6,
-            borderRadius: 7,
-            backgroundColor: viewMode === "training" ? colors.card : "transparent",
-            borderWidth: viewMode === "training" ? 1 : 0,
-            borderColor: colors.border,
-          }}
-        >
-          <Text
-            className={`text-xs font-semibold ${
-              viewMode === "training" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Training
-          </Text>
-        </Pressable>
       </View>
 
       {/* Date Navigation & Swipe Container */}
@@ -1905,9 +1877,6 @@ export default function NutritionIndexRoute() {
         onTouchStart={viewMode === "day" ? onTouchStart : undefined}
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
-        {viewMode === "training" ? (
-          <TrainingPreferencesScreen />
-        ) : (
         <ScrollView
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
         >
@@ -2458,7 +2427,7 @@ export default function NutritionIndexRoute() {
               onRemovePlan={handleRemovePlan}
               onEditPlanItem={handleEditPlanItem}
             />
-          ) : viewMode === "month" ? (
+          ) : (
             <TimelineMonthView
               selectedDate={activeDate}
               calorieGoal={goalCalories}
@@ -2467,14 +2436,8 @@ export default function NutritionIndexRoute() {
               onSkipPlan={handleSkipPlan}
               onRemovePlan={handleRemovePlan}
             />
-          ) : (
-            // viewMode === "training" inside the day ScrollView cannot happen:
-            // the training branch above renders instead. Kept so the union
-            // stays exhaustive if the branches above ever change.
-            <TrainingPreferencesScreen />
           )}
         </ScrollView>
-        )}
       </View>
 
       {/* Timeline Dropdown Menu */}

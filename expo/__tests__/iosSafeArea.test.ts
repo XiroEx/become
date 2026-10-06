@@ -23,7 +23,6 @@ const DIRECT_SCREENS = [
   "app/(app)/(tabs)/chat/[id].tsx",
   "app/(app)/(tabs)/calendar/index.tsx",
   "app/(app)/(tabs)/calendar/settings.tsx",
-  "app/(app)/(tabs)/profile/health.tsx",
   "app/(app)/settings.tsx",
 ];
 
@@ -46,6 +45,12 @@ const DELEGATING_SCREENS: { route: string; delegate: string }[] = [
   {
     route: "app/(app)/(tabs)/profile/index.tsx",
     delegate: "components/profile/ProfileScreen.tsx",
+  },
+  {
+    // NP-302: health.tsx now just renders ProfileSettingsScreen, which also
+    // backs Settings > Profile (embedded, no SafeAreaView of its own there).
+    route: "app/(app)/(tabs)/profile/health.tsx",
+    delegate: "components/profile/ProfileSettingsScreen.tsx",
   },
 ];
 
