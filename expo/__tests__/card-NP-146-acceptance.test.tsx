@@ -475,7 +475,7 @@ describe("Card NP-146 acceptance (umbrella)", () => {
       10,
       "g / ",
       150,
-      "g P",
+      "g",
     ]);
     today.unmount();
 
@@ -487,13 +487,15 @@ describe("Card NP-146 acceptance (umbrella)", () => {
     mockParams = { date: FUTURE_DAY };
     const future = render(<NutritionIndexRoute />);
     await waitFor(() => {
-      expect(future.getByTestId("nutrition-find-food")).toBeTruthy();
+      expect(future.getByTestId("nutrition-fab-add")).toBeTruthy();
     });
     // Plan mode, not log mode: the web relabels the same control
     // (`page.tsx:860-868`).
-    expect(future.getByText("Schedule food")).toBeTruthy();
+    expect(future.getByTestId("nutrition-fab-add").props.accessibilityLabel).toBe(
+      "Schedule food",
+    );
     await act(async () => {
-      fireEvent.press(future.getByTestId("nutrition-find-food"));
+      fireEvent.press(future.getByTestId("nutrition-fab-add"));
     });
     await waitFor(() => {
       expect(future.getByTestId(`food-search-result-${OATS._id}`)).toBeTruthy();

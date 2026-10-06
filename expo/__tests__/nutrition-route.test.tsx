@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();
@@ -191,21 +191,21 @@ describe("NutritionIndexRoute", () => {
       55,
       "g / ",
       150,
-      "g P",
+      "g",
     ]);
     // Carbs: 50 + 20 = 70
     expect(getByTestId("day-totals-carbs").props.children).toEqual([
       70,
       "g / ",
       200,
-      "g C",
+      "g",
     ]);
     // Fats: 13 + 3 = 16
     expect(getByTestId("day-totals-fat").props.children).toEqual([
       16,
       "g / ",
       65,
-      "g F",
+      "g",
     ]);
     // Fiber from meal-logs: 5
     expect(getByTestId("day-totals-fiber").props.children).toEqual([
@@ -381,38 +381,30 @@ describe("NutritionIndexRoute", () => {
     });
   });
 
-  it("offers only natively existing screens in the menu (NP-012)", async () => {
-    const { getByTestId } = render(<NutritionIndexRoute />);
+  it("header offers only My Stuff and Timeline — the kebab menu's screens moved into tiles/dropdown (NP-262)", async () => {
+    const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
 
     await waitFor(() => {
-      expect(getByTestId("nutrition-menu-button")).toBeTruthy();
+      expect(getByTestId("nutrition-my-stuff-button")).toBeTruthy();
+      expect(getByTestId("nutrition-timeline-button")).toBeTruthy();
     });
 
-    // Open menu
-    fireEvent.press(getByTestId("nutrition-menu-button"));
+    // The old native-only kebab is gone — its screens are reachable from
+    // the Timeline dropdown (Meal Schedule, Food reports) and the bottom
+    // tiles (My Stuff, Meal Plan) instead.
+    expect(queryByTestId("nutrition-menu-button")).toBeNull();
 
-    await waitFor(() => {
-      expect(getByTestId("nutrition-menu-search")).toBeTruthy();
-      expect(getByTestId("nutrition-menu-recipes")).toBeTruthy();
-      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
-    });
-
-    // Does NOT offer unported web surfaces in the menu (NP-012)
-    const menuSheet = getByTestId("nutrition-menu-sheet");
-    const { queryByText: queryInMenu } = within(menuSheet);
-    expect(queryInMenu("Timeline")).toBeNull();
-    expect(queryInMenu("Estimate history")).toBeNull();
-
-    // Tapping recipes navigates to recipes
-    fireEvent.press(getByTestId("nutrition-menu-recipes"));
+    // Tapping My Stuff navigates directly (no kebab in the way).
+    fireEvent.press(getByTestId("nutrition-my-stuff-button"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/recipes");
 
-    // Reopen menu to tap meal schedule
-    fireEvent.press(getByTestId("nutrition-menu-button"));
+    // Timeline dropdown still offers Meal Schedule + Food reports.
+    fireEvent.press(getByTestId("nutrition-timeline-button"));
     await waitFor(() => {
-      expect(getByTestId("nutrition-menu-meal-schedule")).toBeTruthy();
+      expect(getByTestId("nutrition-timeline-meal-schedule")).toBeTruthy();
+      expect(getByTestId("nutrition-timeline-food-reports")).toBeTruthy();
     });
-    fireEvent.press(getByTestId("nutrition-menu-meal-schedule"));
+    fireEvent.press(getByTestId("nutrition-timeline-meal-schedule"));
     expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/meal-schedule");
   });
 
@@ -423,11 +415,11 @@ describe("NutritionIndexRoute", () => {
       expect(getByTestId("nutrition-add-tag-button")).toBeTruthy();
     });
 
-    // Open add tag modal
+    // Open the inline add-tag row (NP-262: no longer a centred modal)
     fireEvent.press(getByTestId("nutrition-add-tag-button"));
 
     // Enter new tag name
-    fireEvent.changeText(getByPlaceholderText("e.g. Pre-workout, Shake"), "Bedtime");
+    fireEvent.changeText(getByPlaceholderText("e.g. brunch"), "Bedtime");
     fireEvent.press(getByTestId("nutrition-add-tag-submit"));
 
     // Empty section appears

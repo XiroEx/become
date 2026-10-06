@@ -46,21 +46,20 @@ export function NutritionConsultantTeaser({
         accessibilityRole="button"
         accessibilityLabel="Your nutrition consultant"
         onPress={() => setOpen(true)}
+        className="border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10"
         style={{
           borderRadius: 18,
           borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.muted,
           padding: 14,
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "center" }}>
           <View
+            className="bg-teal-500"
             style={{
               width: 40,
               height: 40,
               borderRadius: 14,
-              backgroundColor: colors.success,
               alignItems: "center",
               justifyContent: "center",
               marginRight: 12,
@@ -86,6 +85,10 @@ export function NutritionConsultantTeaser({
         testID="nutrition-consultant-chat"
         visible={open}
         onClose={() => setOpen(false)}
+        // Teal, not the brand red every other coach uses — matches the
+        // web's `accentFrom="from-emerald-500" accentTo="to-teal-500"` on
+        // this one sheet (NP-262).
+        accentColor={colors.teal}
         endpoint="/api/ai/nutrition/consultant"
         domain="nutrition"
         persistKey="nutrition-consultant"

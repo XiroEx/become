@@ -26,6 +26,56 @@ export interface CalorieRingProps {
   testID?: string;
 }
 
+/**
+ * Macro bar/value status — ported from `webapp/lib/nutrition/macroStatus.ts`
+ * (NP-262). A floor target (protein) can only be "hit" or "under" — exceeding
+ * it is always the win. A ceiling target (carbs, fats) earns a 5% grace band
+ * before it counts as "over", so a rounding error does not read as a mistake.
+ */
+type MacroBarKind = "floor" | "ceiling";
+type MacroBarStatus = "empty" | "under" | "hit" | "warn" | "over";
+
+function macroBarStatus(current: number, goal: number, kind: MacroBarKind): MacroBarStatus {
+  if (!Number.isFinite(goal) || goal <= 0) return "empty";
+  if (!Number.isFinite(current) || current <= 0) return "empty";
+  const ratio = current / goal;
+  if (kind === "floor") return ratio >= 0.95 ? "hit" : "under";
+  if (ratio > 1.05) return "over";
+  if (ratio > 1) return "warn";
+  if (ratio >= 0.95) return "hit";
+  return "under";
+}
+
+/** Fill colour: STATUS wins once a target is met or blown; otherwise the
+ *  macro's own identity colour (web's `MACRO_COLORS`: protein blue, carbs
+ *  green, fats yellow). */
+function macroBarFillClass(status: MacroBarStatus, identity: string): string {
+  switch (status) {
+    case "hit":
+      return "bg-emerald-500";
+    case "warn":
+      return "bg-orange-500";
+    case "over":
+      return "bg-red-500";
+    default:
+      return identity;
+  }
+}
+
+/** Text colour for the "123g / 200g" readout — web's `macroTextClass`. */
+function macroValueClass(status: MacroBarStatus): string {
+  switch (status) {
+    case "hit":
+      return "text-emerald-600 dark:text-emerald-400 font-semibold";
+    case "warn":
+      return "text-orange-600 dark:text-orange-400 font-semibold";
+    case "over":
+      return "text-red-500 font-semibold";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
 function renderMacroPill(
   current: number,
   goal: number,
@@ -319,105 +369,143 @@ export function CalorieRing({
         ) : null}
       </View>
 
-      {/* Macro bars */}
+      {/* Macro bars — status-colored (NP-262): emerald once a target is hit,
+          orange/red once a ceiling is blown, else the macro's own identity
+          colour (blue protein, green carbs, yellow fats — the web's
+          `MACRO_COLORS`). No trailing macro-letter suffix on the readout;
+          the row label above already names the macro. */}
       <View style={{ marginTop: 20, gap: 12 }}>
-        {/* Protein */}
+        {/* Protein — a FLOOR: exceeding it is a good outcome, never a warning. */}
         <View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 4,
-            }}
-          >
-            <Text className="text-foreground text-xs font-semibold">Protein</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text testID="day-totals-protein" className="text-muted-foreground text-xs">
-                {Math.round(protein.current)}g / {Math.round(protein.goal)}g P
-              </Text>
-              {renderMacroPill(protein.current, protein.goal, "floor", "day-totals-protein-pill")}
-            </View>
-          </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
-            {proteinPlannedPct > proteinPct && (
-              <View
-                testID="macro-bar-protein-planned"
-                className="h-full rounded-full bg-blue-500/40 absolute left-0"
-                style={{ width: `${proteinPlannedPct}%` }}
-              />
-            )}
-            <View
-              className="h-full rounded-full bg-blue-500"
-              style={{ width: `${proteinPct}%` }}
-            />
-          </View>
+          {(() => {
+            const proteinStatus = macroBarStatus(protein.current, protein.goal, "floor");
+            return (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text className="text-foreground text-xs font-semibold">Protein</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text
+                      testID="day-totals-protein"
+                      className={`text-xs ${macroValueClass(proteinStatus)}`}
+                    >
+                      {Math.round(protein.current)}g / {Math.round(protein.goal)}g
+                    </Text>
+                    {renderMacroPill(protein.current, protein.goal, "floor", "day-totals-protein-pill")}
+                  </View>
+                </View>
+                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                  {proteinPlannedPct > proteinPct && (
+                    <View
+                      testID="macro-bar-protein-planned"
+                      className="h-full rounded-full bg-blue-500/40 absolute left-0"
+                      style={{ width: `${proteinPlannedPct}%` }}
+                    />
+                  )}
+                  <View
+                    testID="macro-bar-protein"
+                    className={`h-full rounded-full ${macroBarFillClass(proteinStatus, "bg-blue-600")}`}
+                    style={{ width: `${proteinPct}%` }}
+                  />
+                </View>
+              </>
+            );
+          })()}
         </View>
 
-        {/* Carbs */}
+        {/* Carbs — a ceiling. */}
         <View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 4,
-            }}
-          >
-            <Text className="text-foreground text-xs font-semibold">Carbs</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text testID="day-totals-carbs" className="text-muted-foreground text-xs">
-                {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g C
-              </Text>
-              {renderMacroPill(carbs.current, carbs.goal, "ceiling", "day-totals-carbs-pill")}
-            </View>
-          </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
-            {carbsPlannedPct > carbsPct && (
-              <View
-                testID="macro-bar-carbs-planned"
-                className="h-full rounded-full bg-emerald-500/40 absolute left-0"
-                style={{ width: `${carbsPlannedPct}%` }}
-              />
-            )}
-            <View
-              className="h-full rounded-full bg-emerald-500"
-              style={{ width: `${carbsPct}%` }}
-            />
-          </View>
+          {(() => {
+            const carbsStatus = macroBarStatus(carbs.current, carbs.goal, "ceiling");
+            return (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text className="text-foreground text-xs font-semibold">Carbs</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text
+                      testID="day-totals-carbs"
+                      className={`text-xs ${macroValueClass(carbsStatus)}`}
+                    >
+                      {Math.round(carbs.current)}g / {Math.round(carbs.goal)}g
+                    </Text>
+                    {renderMacroPill(carbs.current, carbs.goal, "ceiling", "day-totals-carbs-pill")}
+                  </View>
+                </View>
+                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                  {carbsPlannedPct > carbsPct && (
+                    <View
+                      testID="macro-bar-carbs-planned"
+                      className="h-full rounded-full bg-green-500/40 absolute left-0"
+                      style={{ width: `${carbsPlannedPct}%` }}
+                    />
+                  )}
+                  <View
+                    testID="macro-bar-carbs"
+                    className={`h-full rounded-full ${macroBarFillClass(carbsStatus, "bg-green-600")}`}
+                    style={{ width: `${carbsPct}%` }}
+                  />
+                </View>
+              </>
+            );
+          })()}
         </View>
 
-        {/* Fats */}
+        {/* Fats — a ceiling. Identity is yellow, distinct from the orange
+            "slightly over" warning so the two never read as the same thing. */}
         <View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: 4,
-            }}
-          >
-            <Text className="text-foreground text-xs font-semibold">Fats</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text testID="day-totals-fat" className="text-muted-foreground text-xs">
-                {Math.round(fats.current)}g / {Math.round(fats.goal)}g F
-              </Text>
-              {renderMacroPill(fats.current, fats.goal, "ceiling", "day-totals-fat-pill")}
-            </View>
-          </View>
-          <View className="h-2 rounded-full bg-muted overflow-hidden relative">
-            {fatsPlannedPct > fatsPct && (
-              <View
-                testID="macro-bar-fats-planned"
-                className="h-full rounded-full bg-purple-500/40 absolute left-0"
-                style={{ width: `${fatsPlannedPct}%` }}
-              />
-            )}
-            <View
-              className="h-full rounded-full bg-purple-500"
-              style={{ width: `${fatsPct}%` }}
-            />
-          </View>
+          {(() => {
+            const fatsStatus = macroBarStatus(fats.current, fats.goal, "ceiling");
+            return (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 4,
+                  }}
+                >
+                  <Text className="text-foreground text-xs font-semibold">Fats</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text
+                      testID="day-totals-fat"
+                      className={`text-xs ${macroValueClass(fatsStatus)}`}
+                    >
+                      {Math.round(fats.current)}g / {Math.round(fats.goal)}g
+                    </Text>
+                    {renderMacroPill(fats.current, fats.goal, "ceiling", "day-totals-fat-pill")}
+                  </View>
+                </View>
+                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                  {fatsPlannedPct > fatsPct && (
+                    <View
+                      testID="macro-bar-fats-planned"
+                      className="h-full rounded-full bg-yellow-400/40 absolute left-0"
+                      style={{ width: `${fatsPlannedPct}%` }}
+                    />
+                  )}
+                  <View
+                    testID="macro-bar-fats"
+                    className={`h-full rounded-full ${macroBarFillClass(fatsStatus, "bg-yellow-400")}`}
+                    style={{ width: `${fatsPct}%` }}
+                  />
+                </View>
+              </>
+            );
+          })()}
         </View>
 
         {/* Fiber */}

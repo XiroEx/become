@@ -25,7 +25,7 @@ export function WaterTracker({
   disabled = false,
   testID = "nutrition-water-section",
 }: WaterTrackerProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors } = useThemeTokens();
   const safeGoal = Math.max(goal, 1);
   const safeCurrent = Math.max(current, 0);
   const percentage = Math.min((safeCurrent / safeGoal) * 100, 100);
@@ -44,18 +44,18 @@ export function WaterTracker({
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <View
+            className={isComplete ? "bg-blue-100 dark:bg-blue-900/30" : "bg-muted"}
             style={{
               width: 32,
               height: 32,
               borderRadius: 8,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: isComplete ? tint("primary", 0.15) : colors.muted,
             }}
           >
             <Droplets
               size={18}
-              color={isComplete ? colors.primary : colors["muted-foreground"]}
+              color={isComplete ? colors.foreground : colors["muted-foreground"]}
             />
           </View>
           <Text className="text-foreground text-sm font-semibold">Water</Text>
@@ -67,7 +67,7 @@ export function WaterTracker({
           <Text
             className={
               isComplete
-                ? "text-primary font-semibold"
+                ? "text-blue-600 dark:text-blue-400 font-semibold"
                 : "text-foreground font-semibold"
             }
           >
@@ -95,11 +95,11 @@ export function WaterTracker({
         }}
       >
         <View
+          className="bg-blue-400"
           style={{
             height: "100%",
             width: `${percentage}%`,
             borderRadius: 5,
-            backgroundColor: colors.primary,
           }}
         />
       </View>
@@ -134,7 +134,7 @@ export function WaterTracker({
                 pointerEvents="none"
               />
             )}
-            <Text className="text-xs font-semibold text-primary">
+            <Text className="text-xs font-semibold text-blue-600 dark:text-blue-400">
               {item.label}
             </Text>
             <Text className="text-[10px] text-muted-foreground mt-0.5">

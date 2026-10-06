@@ -219,11 +219,13 @@ function installHandler() {
 }
 
 async function openSearch(getByTestId: (id: string) => any) {
+  // The persistent "Find a food" button duplicated the search bar above it
+  // and is gone (NP-262) — the search bar is the one way in now.
   await waitFor(() => {
-    expect(getByTestId("nutrition-find-food")).toBeTruthy();
+    expect(getByTestId("nutrition-search-bar")).toBeTruthy();
   });
   await act(async () => {
-    fireEvent.press(getByTestId("nutrition-find-food"));
+    fireEvent.press(getByTestId("nutrition-search-bar"));
   });
   await waitFor(() => {
     expect(getByTestId("food-search-sheet")).toBeTruthy();
@@ -401,8 +403,10 @@ describe("Card NP-232 acceptance", () => {
     await waitFor(() => {
       expect(getByTestId("meal-log-sheet")).toBeTruthy();
     });
-    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toBe(
-      "Log meal",
+    // The submit label reads the web's `Apply to <Tag>` (NP-268), not a
+    // fixed "Log meal" — the tag is whatever ADDING TO is currently showing.
+    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toMatch(
+      /^Apply to /,
     );
     await act(async () => {
       fireEvent.press(getByTestId("meal-log-sheet-submit"));

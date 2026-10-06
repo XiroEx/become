@@ -62,6 +62,14 @@ export interface CoachChatProps {
   persistKey: string;
   /** Label shown in the global activity pill while a reply generates. */
   runLabel?: string;
+  /**
+   * Header icon, user-message bubble, and send-button colour. Defaults to
+   * `colors.primary` (the brand red every other coach uses) — pass this only
+   * when a specific consultant has its own identity colour, e.g. the
+   * nutrition consultant's teal (NP-262), matching the web's
+   * `accentFrom`/`accentTo` gradient on that one sheet.
+   */
+  accentColor?: string;
   testID?: string;
 }
 
@@ -83,9 +91,11 @@ export function CoachChat({
   suggestions = [],
   persistKey,
   runLabel = "Coach is replying",
+  accentColor,
   testID = "coach-chat",
 }: CoachChatProps) {
   const { colors, scrim } = useThemeTokens();
+  const accent = accentColor ?? colors.primary;
   const { user } = useAuth();
   const memberId = typeof user?.id === "string" ? user.id : null;
 
@@ -292,7 +302,7 @@ export function CoachChat({
                       width: 36,
                       height: 36,
                       borderRadius: 18,
-                      backgroundColor: colors.primary,
+                      backgroundColor: accent,
                       alignItems: "center",
                       justifyContent: "center",
                       marginRight: 10,
@@ -356,7 +366,7 @@ export function CoachChat({
                       borderRadius: 18,
                       paddingHorizontal: 14,
                       paddingVertical: 10,
-                      backgroundColor: m.role === "user" ? colors.primary : colors.muted,
+                      backgroundColor: m.role === "user" ? accent : colors.muted,
                     }}
                   >
                     <Text
@@ -465,7 +475,7 @@ export function CoachChat({
                     borderRadius: 20,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: colors.primary,
+                    backgroundColor: accent,
                     opacity: !input.trim() || sending ? 0.4 : 1,
                   },
                 ]}

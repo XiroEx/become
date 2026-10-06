@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -23,6 +23,8 @@ import { CheckoutAction } from "@/components/entitlements/UpgradeSheet";
 import { useEntitlements } from "@/lib/entitlements";
 import {
   FREE_LIMITS,
+  MAX_CHAPTER,
+  SESSIONS_PER_CHAPTER,
   hasManageableBilling,
   tierLabel,
   type EntitlementsSnapshot,
@@ -86,6 +88,19 @@ export function usageLine(
   };
 }
 
+/**
+ * A line under the feature name that the allowance itself cannot say — the
+ * web's `rowDetail` (`PlanPageClient.tsx`). The milestone row ("First 10" /
+ * "All 50") spells out how long the whole Mind path is.
+ */
+export function rowDetail(row: PlanRowCopy): string | null {
+  const kind = FREE_LIMITS[row.feature as Feature]?.kind;
+  if (kind === "milestone") {
+    return `The Mind path runs ${SESSIONS_PER_CHAPTER * MAX_CHAPTER} sessions.`;
+  }
+  return null;
+}
+
 // ─── Just paid ───────────────────────────────────────────────────────────────
 
 export type CheckoutReturnState = "none" | "confirming" | "confirmed";
@@ -113,7 +128,7 @@ export function CheckoutConfirmation({
         padding: 14,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: colors.primary,
+        borderColor: colors.mindset,
         backgroundColor: colors.card,
       }}
     >
@@ -128,9 +143,9 @@ export function CheckoutConfirmation({
         }}
       >
         {confirming ? (
-          <ActivityIndicator size="small" color={colors.primary} />
+          <ActivityIndicator size="small" color={colors.mindset} />
         ) : (
-          <Sparkles size={20} color={colors.primary} />
+          <Sparkles size={20} color={colors.mindset} />
         )}
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
@@ -207,7 +222,7 @@ export function CurrentPlan({
         >
           <Sparkles
             size={20}
-            color={isPlus ? colors.primary : colors["muted-foreground"]}
+            color={isPlus ? colors.mindset : colors["muted-foreground"]}
           />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -295,10 +310,10 @@ export function UnenforcedPlan({
             { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 },
           ]}
         >
-          <Text className="text-primary text-sm font-medium" style={WRAPPABLE_TEXT}>
+          <Text className="text-mindset text-sm font-medium" style={WRAPPABLE_TEXT}>
             Back to your dashboard
           </Text>
-          <ArrowRight size={16} color={colors.primary} />
+          <ArrowRight size={16} color={colors.mindset} />
         </Pressable>
       )}
       {manageable && (
@@ -460,7 +475,7 @@ export function PlanPricing({
         {/* Annual card */}
         <View
           testID="annual-pricing-card"
-          className="rounded-xl border border-primary/40 bg-primary/5 p-4"
+          className="rounded-xl border border-mindset/40 bg-mindset/5 p-4"
         >
           <View
             style={{
@@ -486,7 +501,7 @@ export function PlanPricing({
               <View
                 testID="annual-saves-badge"
                 style={{
-                  backgroundColor: colors.primary,
+                  backgroundColor: colors.mindset,
                   paddingHorizontal: 8,
                   paddingVertical: 2,
                   borderRadius: 12,
@@ -494,7 +509,7 @@ export function PlanPricing({
                 }}
               >
                 <Text
-                  className="text-primary-foreground text-[10px] font-bold uppercase"
+                  className="text-white text-[10px] font-bold uppercase"
                   style={WRAPPABLE_TEXT}
                 >
                   {`Save ${plans.annual.savesPercentDisplay}`}
@@ -512,7 +527,7 @@ export function PlanPricing({
           {plans.annual.savingLine ? (
             <Text
               testID="annual-saving-line"
-              className="text-primary text-xs font-medium mt-1"
+              className="text-mindset text-xs font-medium mt-1"
               style={WRAPPABLE_TEXT}
             >
               {plans.annual.savingLine}
@@ -546,6 +561,13 @@ export function PlanPricing({
 }
 
 // ─── Plan comparison ────────────────────────────────────────────────────────
+
+/**
+ * Width of the Free and Plus columns — the web's `4.5rem` grid tracks
+ * (`grid-cols-[minmax(0,1fr)_4.5rem_4.5rem]`). Narrower than this and the
+ * Free column's "Not included" wraps onto two lines (NP-250).
+ */
+export const PLAN_COLUMN_WIDTH = 72;
 
 export interface PlanComparisonProps {
   rows: PlanRowCopy[];
@@ -582,16 +604,17 @@ export function PlanComparison({
         >
           What you get
         </Text>
-        <View style={{ flexDirection: "row", gap: 16, flexShrink: 1 }}>
+        <View style={{ flexDirection: "row", gap: 8, flexShrink: 1 }}>
           <Text
             className={`text-[11px] font-semibold uppercase tracking-wide ${isPlus ? "text-muted-foreground" : "text-foreground"}`}
-            style={[{ width: 56, textAlign: "center" }, WRAPPABLE_TEXT]}
+            style={[{ width: PLAN_COLUMN_WIDTH, textAlign: "center" }, WRAPPABLE_TEXT]}
           >
             Free
           </Text>
           <Text
-            className="text-[11px] font-semibold uppercase tracking-wide text-primary"
-            style={[{ width: 56, textAlign: "center" }, WRAPPABLE_TEXT]}
+            testID="plan-comparison-plus-header"
+            className="text-[11px] font-semibold uppercase tracking-wide text-mindset"
+            style={[{ width: PLAN_COLUMN_WIDTH, textAlign: "center" }, WRAPPABLE_TEXT]}
           >
             Plus
           </Text>
@@ -604,6 +627,7 @@ export function PlanComparison({
             snapshot?.features?.[row.feature as Feature],
             row,
           );
+          const detail = rowDetail(row);
           return (
             <View
               key={row.feature}
@@ -626,6 +650,15 @@ export function PlanComparison({
                 >
                   {row.label}
                 </Text>
+                {detail ? (
+                  <Text
+                    testID={`plan-row-detail-${row.feature}`}
+                    className="text-muted-foreground text-[11px] leading-tight mt-0.5"
+                    style={WRAPPABLE_TEXT}
+                  >
+                    {detail}
+                  </Text>
+                ) : null}
                 {usage ? (
                   <Text
                     testID={`plan-row-usage-${row.feature}`}
@@ -638,15 +671,15 @@ export function PlanComparison({
               </View>
               <Text
                 testID={`plan-row-free-${row.feature}`}
-                className="text-muted-foreground text-xs text-center"
-                style={[{ width: 56 }, WRAPPABLE_TEXT]}
+                className="text-muted-foreground text-[11px] leading-tight text-center"
+                style={[{ width: PLAN_COLUMN_WIDTH }, WRAPPABLE_TEXT]}
               >
                 {row.free}
               </Text>
               <Text
                 testID={`plan-row-plus-${row.feature}`}
-                className="text-primary text-xs font-semibold text-center"
-                style={[{ width: 56 }, WRAPPABLE_TEXT]}
+                className="text-mindset text-[11px] leading-tight font-semibold text-center"
+                style={[{ width: PLAN_COLUMN_WIDTH }, WRAPPABLE_TEXT]}
               >
                 {row.plus}
               </Text>
@@ -746,8 +779,11 @@ export interface PlanScreenProps {
   initialSnapshot?: EntitlementsSnapshot;
 }
 
+/** One stable default, so `deps` keeps its identity across renders (NP-250). */
+const NO_DEPS: BillingDeps = {};
+
 export default function PlanScreen({
-  deps = {},
+  deps = NO_DEPS,
   initialPlans,
   initialStatus,
   initialSnapshot,
@@ -877,21 +913,44 @@ export default function PlanScreen({
   // cancellation (`subscription.cancelAtPeriodEnd`) shows on arrival. The
   // return params arrive from outside React (the deep link that opened this
   // screen), so syncing from them in an effect is the honest shape.
+  //
+  // NP-250: this effect must NOT depend on `deps`. A caller that passes no
+  // deps got a fresh `{}` every render, and the activation itself reloads the
+  // entitlements store (a re-render), so the effect was cancelled and re-run
+  // on every pass and `setCheckoutReturn("confirmed")` never landed — the
+  // banner sat on "Confirming your payment" forever. `deps` is read through a
+  // ref, the effect is keyed on the return itself, and a return is activated
+  // once per mount.
+  const depsRef = useRef(deps);
+  useEffect(() => {
+    depsRef.current = deps;
+  }, [deps]);
+  const activatedReturnRef = useRef<string | null>(null);
+  // Mounted flag in its own effect, so the guarded activation below is not
+  // orphaned by a cleanup/re-run (StrictMode) that the guard then skips.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (!paidReturn && !portalReturn) return;
-    let cancelled = false;
+    const returnKey = `${paidReturn ? "paid" : "portal"}:${paidSessionId ?? ""}`;
+    if (activatedReturnRef.current === returnKey) return;
+    activatedReturnRef.current = returnKey;
 
     void (async () => {
-      await activateFromCheckoutReturn(paidReturn ? paidSessionId : undefined, deps);
-      if (!cancelled) {
+      await activateFromCheckoutReturn(
+        paidReturn ? paidSessionId : undefined,
+        depsRef.current,
+      );
+      if (mountedRef.current && activatedReturnRef.current === returnKey) {
         setCheckoutReturn(paidReturn ? "confirmed" : "none");
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [paidReturn, portalReturn, paidSessionId, deps]);
+  }, [paidReturn, portalReturn, paidSessionId]);
 
   // Re-read when the app comes back to the foreground after a checkout or
   // portal handover (NP-054). The member may return through the app switcher

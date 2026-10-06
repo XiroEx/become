@@ -1,5 +1,22 @@
+import { useState } from "react";
 import { Pressable, View } from "react-native";
-import { Check, Flag, Pencil, Plus, Trash2 } from "lucide-react-native";
+import {
+  Check,
+  ChevronDown,
+  Cookie,
+  Dumbbell,
+  Flag,
+  Flame,
+  Moon,
+  Pencil,
+  Plus,
+  Sandwich,
+  Sun,
+  Sunrise,
+  Tag as TagIcon,
+  Trash2,
+  Utensils,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -78,6 +95,35 @@ export interface TagSectionProps {
   testID?: string;
 }
 
+/**
+ * Icon + colour per tag — ported from the web's `tagVisuals` map
+ * (`webapp/components/nutrition/TagSection.tsx`), so a breakfast section
+ * reads the same icon tile natively as it does on the web (NP-262).
+ */
+const TAG_VISUALS: Record<string, { Icon: typeof Sun; bgClass: string }> = {
+  // Icon colour tile per tag — the web's `tagVisuals` map. The icon GLYPH
+  // itself paints `colors.foreground` (no hex/rgb literal is allowed outside
+  // `lib/theme/tokens.ts`, NP-123); the tile behind it carries the hue.
+  breakfast: { Icon: Sunrise, bgClass: "bg-amber-100 dark:bg-amber-900/30" },
+  lunch: { Icon: Sandwich, bgClass: "bg-orange-100 dark:bg-orange-900/30" },
+  dinner: { Icon: Utensils, bgClass: "bg-indigo-100 dark:bg-indigo-900/30" },
+  snack: { Icon: Cookie, bgClass: "bg-emerald-100 dark:bg-emerald-900/30" },
+  "pre-workout": { Icon: Dumbbell, bgClass: "bg-purple-100 dark:bg-purple-900/30" },
+  "post-workout": { Icon: Flame, bgClass: "bg-rose-100 dark:bg-rose-900/30" },
+  brunch: { Icon: Sun, bgClass: "bg-yellow-100 dark:bg-yellow-900/30" },
+  dessert: { Icon: Cookie, bgClass: "bg-pink-100 dark:bg-pink-900/30" },
+  "late-night": { Icon: Moon, bgClass: "bg-slate-100 dark:bg-slate-800/60" },
+};
+
+function getTagVisuals(tag: string) {
+  return (
+    TAG_VISUALS[tag.toLowerCase()] ?? {
+      Icon: TagIcon,
+      bgClass: "bg-zinc-100 dark:bg-zinc-800",
+    }
+  );
+}
+
 function capitalizeTag(tag: string): string {
   if (!tag) return "";
   return tag
@@ -116,9 +162,11 @@ export function TagSection({
   onCombine,
   testID,
 }: TagSectionProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors } = useThemeTokens();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const sectionTag = occurrence.tag;
   const sectionTestId = testID ?? `nutrition-section-${sectionTag}`;
+  const visuals = getTagVisuals(sectionTag);
   const isPlannedOccurrence = Boolean(occurrence.planned);
   const plans = (occurrence.plans ?? []) as MealPlan[];
   const hasPlans = plans.length > 0;
@@ -187,8 +235,13 @@ export function TagSection({
           : undefined
       }
     >
-      {/* Header */}
-      <View
+      {/* Header — tap the icon/title to collapse the section, matching the
+          web's icon tile + collapse chevron (NP-262). */}
+      <Pressable
+        testID={`nutrition-section-collapse-${sectionTag}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${capitalizeTag(sectionTag)}`}
+        onPress={() => setIsCollapsed((c) => !c)}
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
@@ -196,6 +249,20 @@ export function TagSection({
           marginBottom: 8,
         }}
       >
+        <View
+          testID={`nutrition-section-icon-${sectionTag}`}
+          className={visuals.bgClass}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            marginRight: 10,
+          }}
+        >
+          <visuals.Icon size={16} color={colors.foreground} />
+        </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text
@@ -284,17 +351,29 @@ export function TagSection({
                 hitSlop={8}
                 style={{ paddingHorizontal: 6, paddingVertical: 4 }}
               >
-                <Text className="text-primary text-xs font-semibold">Select</Text>
+                <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                  Select
+                </Text>
               </Pressable>
             ) : null}
+            <View style={{ padding: 6 }}>
+              <ChevronDown
+                size={16}
+                color={colors["muted-foreground"]}
+                style={{ transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }] }}
+              />
+            </View>
           </View>
         )}
-      </View>
+      </Pressable>
 
-      {/* The running count, so it stays visible while a long sitting scrolls. */}
+      {/* The running count, so it stays visible while a long sitting scrolls.
+          Green, like the web's `border-emerald-200 bg-emerald-50` — not the
+          brand red, which here would read as an error rather than a mode. */}
       {selecting ? (
         <View
           testID={`nutrition-combine-bar-${sectionTag}`}
+          className="border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-900/20"
           style={{
             flexDirection: "row",
             alignItems: "center",
@@ -304,20 +383,19 @@ export function TagSection({
             paddingHorizontal: 10,
             paddingVertical: 8,
             borderRadius: 10,
-            backgroundColor: tint("primary", 0.1),
           }}
         >
           <View style={{ flex: 1 }}>
             <Text
               testID={`nutrition-combine-count-${sectionTag}`}
-              className="text-foreground text-xs font-semibold"
+              className="text-emerald-900 dark:text-emerald-100 text-xs font-semibold"
             >
               {picked.length === 0
                 ? "Tap items to combine"
                 : `${picked.length} selected`}
             </Text>
             {picked.length > 0 ? (
-              <Text className="text-muted-foreground text-xs mt-0.5">
+              <Text className="text-emerald-700 dark:text-emerald-300 text-xs mt-0.5">
                 {Math.round(pickedTotals.calories)} kcal ·{" "}
                 {Math.round(pickedTotals.protein)}g P ·{" "}
                 {Math.round(pickedTotals.carbs)}g C ·{" "}
@@ -333,23 +411,23 @@ export function TagSection({
             disabled={!canCombine(picked)}
             onPress={onCombine}
             hitSlop={8}
+            className="bg-emerald-600"
             style={{
               paddingHorizontal: 10,
               paddingVertical: 6,
               borderRadius: 8,
-              backgroundColor: colors.primary,
               opacity: canCombine(picked) ? 1 : 0.5,
             }}
           >
-            <Text className="text-primary-foreground text-xs font-semibold">
+            <Text className="text-white text-xs font-semibold">
               Combine
             </Text>
           </Pressable>
         </View>
       ) : null}
 
-      {/* Content */}
-      {!hasContent ? (
+      {/* Content — hidden while collapsed. */}
+      {isCollapsed ? null : !hasContent ? (
         <View style={{ paddingVertical: 12 }}>
           <Text className="text-muted-foreground text-sm italic">
             No foods logged yet
@@ -518,7 +596,8 @@ export function TagSection({
         </View>
       )}
 
-      {/* Add food to this section button */}
+      {/* Add food to this section button — hidden while collapsed. */}
+      {isCollapsed ? null : (
       <View
         style={{
           marginTop: 8,
@@ -559,6 +638,7 @@ export function TagSection({
           </Pressable>
         ) : null}
       </View>
+      )}
     </Card>
   );
 }
