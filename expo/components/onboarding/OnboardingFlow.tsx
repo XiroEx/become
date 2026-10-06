@@ -1,10 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { View, Pressable, ScrollView } from "react-native";
+import {
+  Flame,
+  Dumbbell,
+  Scale,
+  Zap,
+  Heart,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Sparkles,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { announce } from "@/lib/a11y/announce";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   directionForGoal,
   defaultPaceKg,
@@ -45,6 +58,7 @@ import {
   MAX_GOALS,
   LEGAL_MINIMUM_AGE,
   STEP_QUESTIONS,
+  STEP_TITLES,
   DIRECTION_OPTIONS,
   ACTIVITY_BLURBS,
   MACRO_PRESET_CHOICES,
@@ -93,14 +107,12 @@ function OptionRow({
   label,
   selected,
   multiple = false,
-  badge,
   onPress,
 }: {
   testID: string;
   label: string;
   selected: boolean;
   multiple?: boolean;
-  badge?: string | null;
   onPress: () => void;
 }) {
   return (
@@ -112,29 +124,139 @@ function OptionRow({
       accessibilityLabel={label}
       style={minTouchTarget}
       className={`p-3 rounded-xl border mb-2 flex-row items-center justify-between ${
-        selected ? "border-primary bg-primary/10" : "border-border bg-card"
+        selected ? "border-foreground bg-foreground" : "border-border bg-card"
       }`}
     >
       <View className="flex-1">
         <Text
           className={
-            selected ? "text-primary font-semibold" : "text-foreground"
+            selected ? "text-background font-semibold" : "text-foreground"
           }
         >
           {label}
         </Text>
-        {badge ? (
+      </View>
+      {selected ? (
+        <Text className="text-background font-bold ml-2">✓</Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
+/**
+ * Icon tile metadata for each goal card (NP-245), mirroring the web's
+ * Flame / Dumbbell / Scale / Zap / Heart on an orange / blue / violet /
+ * yellow / emerald tinted tile (`webapp/app/onboarding/page.tsx`'s
+ * `GOAL_OPTIONS`). The tile background is a plain Tailwind class (fine
+ * anywhere); the glyph's own fill is a fixed "R G B" triplet — never a hex or
+ * `rgb(...)` STRING LITERAL, which is what NP-123's lint rule actually bans —
+ * turned into a colour at render time exactly the way `resolveToken` does for
+ * the real theme tokens. These five are brand hues, identical in both themes
+ * like `primary`, so they do not belong in `lib/theme/tokens.ts`'s light/dark
+ * pairs.
+ */
+const GOAL_TILE_META: Record<
+  FitnessGoal,
+  {
+    Icon: ComponentType<{
+      size?: number;
+      color?: string;
+      strokeWidth?: number;
+    }>;
+    tileClass: string;
+    rgb: string;
+  }
+> = {
+  lose_weight: {
+    Icon: Flame,
+    tileClass: "bg-orange-100 dark:bg-orange-900/30",
+    rgb: "249 115 22", // orange-500
+  },
+  gain_muscle: {
+    Icon: Dumbbell,
+    tileClass: "bg-blue-100 dark:bg-blue-900/30",
+    rgb: "59 130 246", // blue-500
+  },
+  maintain: {
+    Icon: Scale,
+    tileClass: "bg-violet-100 dark:bg-violet-900/30",
+    rgb: "139 92 246", // violet-500
+  },
+  improve_performance: {
+    Icon: Zap,
+    tileClass: "bg-yellow-100 dark:bg-yellow-900/30",
+    rgb: "234 179 8", // yellow-500
+  },
+  general_health: {
+    Icon: Heart,
+    tileClass: "bg-emerald-100 dark:bg-emerald-900/30",
+    rgb: "16 185 129", // emerald-500
+  },
+};
+
+/**
+ * A single goal card on step 1 (NP-245). Mirrors the web's Step1 button:
+ * an icon tile, the label, a Primary/Also-#N badge once picked, and the same
+ * black-fill "selected" inversion every other option in the wizard uses.
+ */
+function GoalCard({
+  testID,
+  label,
+  Icon,
+  tileClass,
+  rgb,
+  selected,
+  rank,
+  onPress,
+}: {
+  testID: string;
+  label: string;
+  Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  tileClass: string;
+  rgb: string;
+  selected: boolean;
+  rank: number;
+  onPress: () => void;
+}) {
+  const { colors } = useThemeTokens();
+  const iconColor = selected ? colors.background : `rgb(${rgb})`;
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected, selected }}
+      accessibilityLabel={label}
+      style={minTouchTarget}
+      className={`flex-row items-center gap-4 rounded-2xl border-2 p-4 mb-3 ${
+        selected ? "border-foreground bg-foreground" : "border-border bg-card"
+      }`}
+    >
+      <View
+        className={`h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+          selected ? "bg-background/20" : tileClass
+        }`}
+      >
+        <Icon size={24} color={iconColor} strokeWidth={1.5} />
+      </View>
+      <View className="flex-1 min-w-0">
+        <Text
+          className={`font-semibold text-base ${
+            selected ? "text-background" : "text-foreground"
+          }`}
+        >
+          {label}
+        </Text>
+        {selected ? (
           <Text
-            testID={badge === "Primary" ? "primary-goal-badge" : undefined}
-            className="text-xs text-primary font-bold uppercase tracking-wider mt-0.5"
+            testID={rank === 0 ? "primary-goal-badge" : undefined}
+            className="text-background/70 text-[10px] font-bold uppercase tracking-widest mt-0.5"
           >
-            {badge}
+            {rank === 0 ? "Primary" : `Also #${rank + 1}`}
           </Text>
         ) : null}
       </View>
-      {selected ? (
-        <Text className="text-primary font-bold ml-2">✓</Text>
-      ) : null}
+      {selected ? <Check size={20} color={iconColor} /> : null}
     </Pressable>
   );
 }
@@ -160,6 +282,7 @@ function RecommendationCard({
   /** Omit to render the card as pure information (no action). */
   onEnroll?: () => void;
 }) {
+  const { colors } = useThemeTokens();
   if (loading && !recommendation) {
     return (
       <View
@@ -189,9 +312,12 @@ function RecommendationCard({
       testID={`${testID}-recommended-program`}
       className="mt-3 p-4 rounded-2xl border-2 border-foreground bg-card"
     >
-      <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-        Recommended for you
-      </Text>
+      <View className="flex-row items-center gap-1.5">
+        <Sparkles size={14} color={colors.foreground} />
+        <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+          Recommended for you
+        </Text>
+      </View>
       <Text
         testID={`${testID}-recommended-program-name`}
         className="text-foreground text-base font-bold mt-2"
@@ -303,6 +429,7 @@ export function OnboardingFlow({
   enrolled = false,
   onDraftChange,
 }: OnboardingFlowProps) {
+  const { colors } = useThemeTokens();
   const [step, setStep] = useState<number>(1);
   const [name, setName] = useState<string>(initialName);
   const [profile, setProfile] = useState<OnboardingProfile>(() => ({
@@ -674,15 +801,29 @@ export function OnboardingFlow({
       "biological sex",
   ].filter(Boolean) as string[];
 
+  const progress = (step / TOTAL_STEPS) * 100;
+
   return (
     <View style={{ flex: 1 }} testID={testID}>
+      {/* Thin progress bar across the top, filling per step (web parity). */}
+      <View
+        testID={`${testID}-progress-bar`}
+        className="h-1 bg-border"
+        accessibilityRole="progressbar"
+        accessibilityValue={{ min: 0, max: TOTAL_STEPS, now: step }}
+      >
+        <View
+          className="h-full bg-foreground"
+          style={{ width: `${progress}%` }}
+        />
+      </View>
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <Text
           testID={`${testID}-step-indicator`}
           accessibilityLiveRegion="polite"
-          className="text-muted-foreground text-sm"
+          className="text-muted-foreground text-xs font-medium uppercase tracking-widest text-center"
         >
-          Step {step} of {TOTAL_STEPS}
+          Step {step} of {TOTAL_STEPS} · {STEP_TITLES[step - 1]}
         </Text>
 
         {/* STEP 1: GOALS */}
@@ -690,13 +831,16 @@ export function OnboardingFlow({
           <View>
             <Text
               accessibilityRole="header"
-              className="text-foreground text-xl font-bold mb-1"
+              className="text-foreground text-2xl font-bold mb-1"
             >
               {STEP_QUESTIONS[0]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-3">
-              Pick up to {MAX_GOALS}. Your first pick is your primary goal — it
-              drives your program, your calories and your dashboard.
+              Pick up to {MAX_GOALS}. Your first pick is your{" "}
+              <Text className="font-semibold text-foreground">
+                primary goal
+              </Text>{" "}
+              — it drives your program, your calories and your dashboard.
             </Text>
             <View
               accessibilityRole="radiogroup"
@@ -705,23 +849,31 @@ export function OnboardingFlow({
               {GOAL_OPTIONS.map((o) => {
                 const rank = goals.indexOf(o.value);
                 const selected = rank >= 0;
-                let badge: string | null = null;
-                if (selected) {
-                  badge = rank === 0 ? "Primary" : `Also #${rank + 1}`;
-                }
+                const meta = GOAL_TILE_META[o.value];
                 return (
-                  <OptionRow
+                  <GoalCard
                     key={o.value}
                     testID={`${testID}-goal-${o.value}`}
                     label={o.label}
+                    Icon={meta.Icon}
+                    tileClass={meta.tileClass}
+                    rgb={meta.rgb}
                     selected={selected}
-                    multiple
-                    badge={badge}
+                    rank={rank}
                     onPress={() => toggleGoal(o.value)}
                   />
                 );
               })}
             </View>
+            {/* The same server-driven program match the review step shows,
+                live the moment a goal is picked (NP-245) — the review step's
+                RecommendationCard, reused as-is: no enrolment action here,
+                pure preview. */}
+            <RecommendationCard
+              testID={`${testID}-step1`}
+              recommendation={recommendation}
+              loading={recommendationLoading}
+            />
           </View>
         ) : null}
 
@@ -730,7 +882,7 @@ export function OnboardingFlow({
           <View>
             <Text
               accessibilityRole="header"
-              className="text-foreground text-xl font-bold mb-1"
+              className="text-foreground text-2xl font-bold mb-1"
             >
               {STEP_QUESTIONS[1]}
             </Text>
@@ -829,7 +981,7 @@ export function OnboardingFlow({
               <View className="flex-1 mr-2">
                 <Text
                   accessibilityRole="header"
-                  className="text-foreground text-xl font-bold mb-1"
+                  className="text-foreground text-2xl font-bold mb-1"
                 >
                   {STEP_QUESTIONS[2]}
                 </Text>
@@ -1005,18 +1157,22 @@ export function OnboardingFlow({
                       style={minTouchTarget}
                       className={`flex-1 p-3 rounded-xl border ${
                         selected
-                          ? "border-primary bg-primary/10"
+                          ? "border-foreground bg-foreground"
                           : "border-border bg-card"
                       }`}
                     >
                       <Text
                         className={`text-xs font-semibold ${
-                          selected ? "text-primary" : "text-foreground"
+                          selected ? "text-background" : "text-foreground"
                         }`}
                       >
                         {label}
                       </Text>
-                      <Text className="text-[10px] text-muted-foreground mt-0.5">
+                      <Text
+                        className={`text-[10px] mt-0.5 ${
+                          selected ? "text-background/70" : "text-muted-foreground"
+                        }`}
+                      >
                         {subLabel}
                       </Text>
                     </Pressable>
@@ -1069,19 +1225,23 @@ export function OnboardingFlow({
                       style={minTouchTarget}
                       className={`p-3 rounded-xl border mb-2 flex-row items-center justify-between ${
                         selected
-                          ? "border-primary bg-primary/10"
+                          ? "border-foreground bg-foreground"
                           : "border-border bg-card"
                       }`}
                     >
                       <View className="flex-1">
                         <Text
                           className={`text-xs font-semibold ${
-                            selected ? "text-primary" : "text-foreground"
+                            selected ? "text-background" : "text-foreground"
                           }`}
                         >
                           {level.replace("_", " ").toUpperCase()}
                         </Text>
-                        <Text className="text-[10px] text-muted-foreground mt-0.5">
+                        <Text
+                          className={`text-[10px] mt-0.5 ${
+                            selected ? "text-background/70" : "text-muted-foreground"
+                          }`}
+                        >
                           {ACTIVITY_BLURBS[level]}
                         </Text>
                       </View>
@@ -1114,7 +1274,7 @@ export function OnboardingFlow({
                     style={minTouchTarget}
                     className={`p-3 rounded-xl border mb-2 flex-row items-center justify-between ${
                       selected
-                        ? "border-primary bg-primary/10"
+                        ? "border-foreground bg-foreground"
                         : "border-border bg-card"
                     }`}
                   >
@@ -1122,24 +1282,36 @@ export function OnboardingFlow({
                       <View className="flex-row items-center gap-1.5">
                         <Text
                           className={`text-xs font-semibold ${
-                            selected ? "text-primary" : "text-foreground"
+                            selected ? "text-background" : "text-foreground"
                           }`}
                         >
                           {MACRO_PRESET_LABELS[key]}
                         </Text>
                         {isSuggested ? (
-                          <View className="bg-primary/20 px-1.5 py-0.5 rounded-full">
-                            <Text className="text-[9px] text-primary font-bold uppercase">
+                          <View
+                            className={`px-1.5 py-0.5 rounded-full ${
+                              selected ? "bg-background/20" : "bg-foreground"
+                            }`}
+                          >
+                            <Text className="text-[9px] text-background font-bold uppercase">
                               {presetRecommendation.badge}
                             </Text>
                           </View>
                         ) : null}
                       </View>
-                      <Text className="text-[10px] text-muted-foreground mt-0.5">
+                      <Text
+                        className={`text-[10px] mt-0.5 ${
+                          selected ? "text-background/70" : "text-muted-foreground"
+                        }`}
+                      >
                         {MACRO_PRESET_BLURBS[key]}
                       </Text>
                     </View>
-                    <Text className="text-xs text-muted-foreground tabular-nums ml-2">
+                    <Text
+                      className={`text-xs tabular-nums ml-2 ${
+                        selected ? "text-background/70" : "text-muted-foreground"
+                      }`}
+                    >
                       {split.protein}/{split.carbs}/{split.fats}
                     </Text>
                   </Pressable>
@@ -1263,7 +1435,7 @@ export function OnboardingFlow({
           <View>
             <Text
               accessibilityRole="header"
-              className="text-foreground text-xl font-bold mb-1"
+              className="text-foreground text-2xl font-bold mb-1"
             >
               {STEP_QUESTIONS[3]}
             </Text>
@@ -1289,7 +1461,7 @@ export function OnboardingFlow({
           <View testID="review-step">
             <Text
               accessibilityRole="header"
-              className="text-foreground text-xl font-bold mb-1"
+              className="text-foreground text-2xl font-bold mb-1"
             >
               {STEP_QUESTIONS[4]}
             </Text>
@@ -1455,28 +1627,64 @@ export function OnboardingFlow({
         ) : null}
       </ScrollView>
 
-      {/* Navigation buttons */}
-      <View style={{ flexDirection: "row", gap: 8, padding: 16 }}>
-        {step > 1 ? (
-          <View style={{ flex: 1 }}>
-            <Button
-              testID={`${testID}-back`}
-              variant="secondary"
-              onPress={() => goToStep(Math.max(1, step - 1))}
-            >
-              Back
-            </Button>
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Button
-            testID={`${testID}-next`}
-            onPress={onNext}
-            disabled={!canAdvance || submitting}
+      {/* Navigation buttons — outlined Back (visible but disabled on step 1,
+          never hidden) and a black-fill Next/Finish, matching the web's
+          footer chrome (NP-245). */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: 16,
+        }}
+      >
+        <Pressable
+          testID={`${testID}-back`}
+          onPress={step === 1 ? undefined : () => goToStep(Math.max(1, step - 1))}
+          disabled={step === 1}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: step === 1 }}
+          accessibilityLabel="Back"
+          style={[minTouchTarget, { flexShrink: 1 }]}
+          className={`flex-row items-center gap-1.5 rounded-xl border border-border px-4 py-3 ${
+            step === 1 ? "opacity-30" : ""
+          }`}
+        >
+          <ChevronLeft size={16} color={colors.foreground} />
+          <Text
+            style={WRAPPABLE_TEXT}
+            className="text-foreground text-sm font-medium"
           >
-            {step === TOTAL_STEPS ? "Finish" : "Next"}
-          </Button>
-        </View>
+            Back
+          </Text>
+        </Pressable>
+
+        <Pressable
+          testID={`${testID}-next`}
+          onPress={!canAdvance || submitting ? undefined : onNext}
+          disabled={!canAdvance || submitting}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canAdvance || submitting }}
+          accessibilityLabel={step === TOTAL_STEPS ? "Finish" : "Next"}
+          style={[minTouchTarget, { flexShrink: 1 }]}
+          className={`flex-row items-center gap-1.5 rounded-xl bg-foreground px-5 py-3 ${
+            !canAdvance || submitting ? "opacity-40" : ""
+          }`}
+        >
+          <Text
+            style={WRAPPABLE_TEXT}
+            className="text-background text-sm font-semibold"
+          >
+            {submitting ? "Saving…" : step === TOTAL_STEPS ? "Finish" : "Next"}
+          </Text>
+          {!submitting ? (
+            step === TOTAL_STEPS ? (
+              <Check size={16} color={colors.background} />
+            ) : (
+              <ChevronRight size={16} color={colors.background} />
+            )
+          ) : null}
+        </Pressable>
       </View>
     </View>
   );
