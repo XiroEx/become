@@ -4,9 +4,11 @@ import {
 import {
   editLoggedItem,
   editLoggedMeal,
+  formatTime12Hour,
   mealLogTagPatch,
   mealLogTimeInputValue,
   mealLogTimePatch,
+  parseTime12Hour,
 } from "../lib/nutrition/editLoggedEntry";
 import * as mindCache from "../lib/mind/sessionCache";
 
@@ -41,6 +43,42 @@ describe("editLoggedEntry (NP-095)", () => {
       expect(mealLogTimePatch("2026-10-01T12:00:00.000Z", "")).toEqual({
         untimed: true,
       });
+    });
+  });
+
+  describe("formatTime12Hour / parseTime12Hour (NP-264)", () => {
+    it("renders the web's 12-hour display from the 24-hour wire format", () => {
+      expect(formatTime12Hour("04:00")).toBe("4:00 AM");
+      expect(formatTime12Hour("16:00")).toBe("4:00 PM");
+      expect(formatTime12Hour("00:00")).toBe("12:00 AM");
+      expect(formatTime12Hour("12:30")).toBe("12:30 PM");
+      expect(formatTime12Hour("")).toBe("");
+    });
+
+    it("parses a typed 12-hour time back to the 24-hour wire format", () => {
+      expect(parseTime12Hour("4:00 AM")).toBe("04:00");
+      expect(parseTime12Hour("4:00pm")).toBe("16:00");
+      expect(parseTime12Hour("12:00 AM")).toBe("00:00");
+      expect(parseTime12Hour("12:30 PM")).toBe("12:30");
+    });
+
+    it("accepts a bare 24-hour fallback and treats blank as cleared", () => {
+      expect(parseTime12Hour("16:00")).toBe("16:00");
+      expect(parseTime12Hour("")).toBe("");
+      expect(parseTime12Hour("   ")).toBe("");
+    });
+
+    it("rejects nonsense rather than silently guessing", () => {
+      expect(parseTime12Hour("not a time")).toBeNull();
+      expect(parseTime12Hour("13:00 PM")).toBeNull();
+      expect(parseTime12Hour("4:75 AM")).toBeNull();
+    });
+
+    it("round-trips every hour of the day", () => {
+      for (let h = 0; h < 24; h++) {
+        const hhmm = `${String(h).padStart(2, "0")}:15`;
+        expect(parseTime12Hour(formatTime12Hour(hhmm))).toBe(hhmm);
+      }
     });
   });
 

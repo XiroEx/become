@@ -7,22 +7,23 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Pencil } from "lucide-react-native";
+import { AlertTriangle, Clock, Pencil, Tag as TagIcon, X } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Text } from "@/components/Text";
-import {
-  QuantityPicker,
-  type QuantityPickerSelection,
-} from "@/components/nutrition/QuantityPicker";
+import type { QuantityPickerSelection } from "@/components/nutrition/QuantityPicker";
+import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { scalingFactor, nutritionForQuantity } from "@/lib/nutrition/foodMath";
 import type { Unit } from "@/lib/nutrition/units";
+import type { LogCorrection } from "@/lib/nutrition/foodFlags";
 import {
   editLoggedItem,
+  formatTime12Hour,
   mealLogTagPatch,
   mealLogTimeInputValue,
   mealLogTimePatch,
+  parseTime12Hour,
   type EditLogItemNutrition,
 } from "@/lib/nutrition/editLoggedEntry";
 import {
@@ -30,6 +31,14 @@ import {
   type MealPlanItemInput,
 } from "@/lib/nutrition/mealPlanApi";
 import type { MealLog } from "@become/api-client";
+
+/** Render a quantity for an amount chip: whole numbers bare, else 2 decimals max. */
+function formatAmountNumber(n: number): string {
+  if (!Number.isFinite(n)) return "0";
+  if (Number.isInteger(n)) return String(n);
+  const rounded = Math.round(n * 100) / 100;
+  return String(rounded);
+}
 
 export type EditLogItem = MealLog["items"][number];
 
@@ -225,12 +234,12 @@ export function buildUpdatedPlanItems(
 /**
  * ─── Edit a logged item, natively (NP-095) ──────────────────────────────────
  *
- * The web's `EditFoodModal.tsx` as a sheet on the native quantity picker
- * (NP-093): change the amount (quantity + unit), move the row to another tag,
- * or change its clock time — keeping the untimed choice. The Flag-this-food
- * entry inside the item editor arrives with NP-174, so this sheet does not
- * offer macro correction: `nutrition` is never sent and the stored block is
- * left untouched.
+ * The web's `EditFoodModal.tsx` as a sheet: amount presets (as logged, half,
+ * double) plus a Custom fallback, move the row to another tag, change its
+ * clock time — keeping the untimed choice — and "Fix these macros" (NP-174's
+ * `FlagFoodSheet`, wired here the same way `EditFoodModal.tsx` wires it) to
+ * correct this entry's own nutrition. `nutrition` is only ever sent when the
+ * member actually corrected it; otherwise the stored block is left untouched.
  *
  * Plan mode (NP-233): with `planId` + `planItems` the sheet edits a PLANNED
  * item instead — same picker, but save rebuilds the whole `items[]` via
@@ -262,6 +271,23 @@ export function EditLogItemSheet({
   const [logTime, setLogTime] = useState(() =>
     mealLogTimeInputValue(loggedAt, untimed),
   );
+  // 12-hour display text bound to the input — NP-264 matches the web's
+  // `<input type="time">` 12-hour rendering ("4:00 AM") while `logTime`
+  // keeps the 24-hour wire format `mealLogTimePatch` expects.
+  const [timeText, setTimeText] = useState(() =>
+    formatTime12Hour(mealLogTimeInputValue(loggedAt, untimed)),
+  );
+  // Amount presets + Custom (NP-264) — the web's quick chips (1×, ½×, 2×)
+  // plus a free-typed fallback, replacing the unit-chip picker here.
+  const [amountMode, setAmountMode] = useState<"quick" | "custom">("quick");
+  const [activePresetId, setActivePresetId] = useState<string>("primary");
+  const [customQtyText, setCustomQtyText] = useState("");
+  // A macro correction the member typed for THIS entry, on the item's
+  // storage basis — held until save so it travels with the amount edit
+  // rather than being a second, invisible write. Mirrors the web's
+  // `nutritionOverride` in `EditFoodModal.tsx`.
+  const [nutritionOverride, setNutritionOverride] = useState<LogCorrection | null>(null);
+  const [flagOpen, setFlagOpen] = useState(false);
 
   const derived = useMemo(
     () => (item ? deriveEditVariantAndInitial(item) : null),
@@ -305,6 +331,91 @@ export function EditLogItemSheet({
 
   const effectiveSelection = selection ?? derivedSelection;
 
+  // Resolve a (quantity, unit) pair against the derived variant — shared by
+  // the amount preset chips and the Custom input.
+  const resolveSelection = (
+    quantity: number,
+    unit: string,
+  ): QuantityPickerSelection | null => {
+    if (!derived) return null;
+    try {
+      const multiplier = scalingFactor(derived.variant as never, quantity, unit as Unit);
+      if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+      return {
+        quantity,
+        unit,
+        multiplier,
+        nutrition: nutritionForQuantity(derived.variant as never, quantity, unit as Unit),
+        variant: derived.variant,
+        tag: normalizedCurrentTag,
+        date: "",
+        timeMode: "now" as const,
+        pickedTime: null,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  // Amount presets (NP-264): the web's quick chips — the amount as already
+  // logged, half of it, and double it — plus a "Custom" fallback. Unlike the
+  // web's `buildQuickOptions`, this does not consider the food's
+  // `alternateServings` (not carried by the stored log/plan item shapes
+  // here), so the middle chip is always half rather than a named alternate.
+  const amountPresets = useMemo(() => {
+    if (!derived) return [];
+    const { unit } = derived.initial;
+    const primaryQty = derived.initial.quantity;
+    const halfQty = primaryQty / 2;
+    const doubleQty = primaryQty * 2;
+    return [
+      { id: "primary", quantity: primaryQty, unit, label: `${formatAmountNumber(primaryQty)} ${unit}` },
+      { id: "half", quantity: halfQty, unit, label: `${formatAmountNumber(halfQty)} ${unit}` },
+      { id: "double", quantity: doubleQty, unit, label: `${formatAmountNumber(doubleQty)} ${unit}` },
+    ];
+  }, [derived]);
+
+  const handlePresetSelect = (id: string) => {
+    const preset = amountPresets.find((p) => p.id === id);
+    if (!preset) return;
+    setActivePresetId(id);
+    setAmountMode("quick");
+    const next = resolveSelection(preset.quantity, preset.unit);
+    if (next) setSelection(next);
+  };
+
+  const enterCustomMode = () => {
+    setAmountMode("custom");
+    const base = effectiveSelection?.quantity ?? derived?.initial.quantity ?? 0;
+    setCustomQtyText(formatAmountNumber(base));
+  };
+
+  const handleCustomQtyChange = (text: string) => {
+    setCustomQtyText(text);
+    if (!derived) return;
+    const parsed = parseFloat(text);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const next = resolveSelection(parsed, derived.initial.unit);
+      if (next) setSelection(next);
+    }
+  };
+
+  // Live preview: the selection itself carries the scaled nutrition. A
+  // pending correction is per storage basis, so it scales by the same
+  // multiplier. Mirrors the web's `preview` in `EditFoodModal.tsx`.
+  const preview = useMemo(() => {
+    if (!effectiveSelection) return undefined;
+    if (!nutritionOverride) return effectiveSelection.nutrition;
+    const f = effectiveSelection.multiplier > 0 ? effectiveSelection.multiplier : 1;
+    return {
+      ...effectiveSelection.nutrition,
+      calories: nutritionOverride.calories * f,
+      protein: nutritionOverride.protein * f,
+      carbs: nutritionOverride.carbs * f,
+      fats: nutritionOverride.fats * f,
+    };
+  }, [effectiveSelection, nutritionOverride]);
+
   const isPlanMode = planId != null && planItems != null;
 
   const tagOptions = useMemo(() => {
@@ -324,11 +435,19 @@ export function EditLogItemSheet({
 
   useEffect(() => {
     if (visible) {
+      const t = mealLogTimeInputValue(loggedAt, untimed);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from sheet open + new target
       setSelection(null);
       setError(null);
       setSelectedTag(normalizedCurrentTag);
-      setLogTime(mealLogTimeInputValue(loggedAt, untimed));
+      setLogTime(t);
+      setTimeText(formatTime12Hour(t));
+      setAmountMode("quick");
+      setActivePresetId("primary");
+      setCustomQtyText("");
+      // A pending correction belongs to the entry it was typed for. Leaving
+      // it set would silently apply one row's macros to the next row opened.
+      setNutritionOverride(null);
     }
   }, [visible, item, normalizedCurrentTag, loggedAt, untimed]);
 
@@ -419,8 +538,24 @@ export function EditLogItemSheet({
                 item.loggedMlPerServing,
             }
           : {}),
-        // No `nutrition`: the member cannot correct macros here (NP-174 owns
-        // that entry), so the stored block is left untouched.
+        // Only present when the member corrected the macros via "Fix these
+        // macros" — the route replaces nutrition wholesale, so sending it
+        // unconditionally would rewrite good data with a round-tripped copy
+        // of itself.
+        ...(nutritionOverride
+          ? {
+              nutrition: {
+                calories: nutritionOverride.calories,
+                protein: nutritionOverride.protein,
+                carbs: nutritionOverride.carbs,
+                fats: nutritionOverride.fats,
+                fiber: nutritionOverride.fiber,
+              },
+            }
+          : {}),
+        ...(nutritionOverride?.servingLabel !== undefined
+          ? { servingLabel: nutritionOverride.servingLabel }
+          : {}),
         ...tagPatch,
         ...timePatch,
         token,
@@ -434,188 +569,423 @@ export function EditLogItemSheet({
     }
   };
 
+  const itemFoodId = (item as { foodId?: unknown } | null)?.foodId;
+  const hasFoodId = Boolean(itemFoodId);
+
   return (
-    <BottomSheet
-      visible={visible}
-      onClose={handleClose}
-      title={item?.name ? `Edit ${item.name}` : "Edit item"}
-      testID={testID}
-      accessibilityLabel={item?.name ? `Edit ${item.name}` : "Edit logged item"}
-    >
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+    <>
+      <BottomSheet
+        visible={visible}
+        onClose={handleClose}
+        // The header row below is the web's single title (icon + name + X) —
+        // BottomSheet's own big title would just repeat it.
+        testID={testID}
+        accessibilityLabel={item?.name ? `Edit ${item.name}` : "Edit logged item"}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+          >
             <View
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
+                flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
+                justifyContent: "space-between",
+                gap: 10,
               }}
             >
-              <Pencil size={18} color={colors.foreground} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text className="text-foreground text-sm font-semibold" numberOfLines={1}>
-                {item?.name ?? "Item"}
-              </Text>
-              {item?.brand ? (
-                <Text className="text-muted-foreground text-xs" numberOfLines={1}>
-                  {item.brand}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          {derived ? (
-            <View>
-              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                Amount
-              </Text>
-              <QuantityPicker
-                key={String((item as { _id?: unknown } | null)?._id ?? "item")}
-                variant={derived.variant}
-                initialQuantity={derived.initial.quantity}
-                initialUnit={derived.initial.unit}
-                initialTag={normalizedCurrentTag}
-                showLogControls={false}
-                onChange={setSelection}
-                testID={`${testID}-quantity`}
-              />
-            </View>
-          ) : null}
-
-          {isPlanMode ? null : (
-            <>
-              <View style={{ gap: 6 }}>
-                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                  Meal
-                </Text>
-                <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                  {tagOptions.map((tag) => {
-                    const isSelected = selectedTag === tag;
-                    return (
-                      <Pressable
-                        key={tag}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Move to ${tagLabel(tag)}`}
-                        testID={`${testID}-tag-${tag}`}
-                        onPress={() => setSelectedTag(tag)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 16,
-                          backgroundColor: isSelected ? colors.primary : colors.card,
-                          borderWidth: 1,
-                          borderColor: isSelected ? colors.primary : colors.border,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: isSelected ? "600" : "400",
-                            color: isSelected
-                              ? colors["primary-foreground"]
-                              : colors.foreground,
-                          }}
-                        >
-                          {tagLabel(tag)}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-
-              <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                 <View
                   style={{
-                    flexDirection: "row",
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
                     alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                    Time
-                  </Text>
-                  {logTime ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Clear time"
-                      testID={`${testID}-clear-time`}
-                      onPress={() => setLogTime("")}
-                      hitSlop={8}
-                    >
-                      <Text className="text-muted-foreground text-xs font-medium underline">
-                        Clear time
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-                <TextInput
-                  testID={`${testID}-time`}
-                  accessibilityLabel="Logged time in HH:mm"
-                  value={logTime}
-                  onChangeText={setLogTime}
-                  placeholder="HH:mm"
-                  style={{
-                    height: 40,
-                    borderRadius: 8,
+                    justifyContent: "center",
+                    backgroundColor: colors.card,
                     borderWidth: 1,
                     borderColor: colors.border,
-                    backgroundColor: colors.card,
-                    paddingHorizontal: 12,
-                    color: colors.foreground,
                   }}
-                />
-                <Text className="text-muted-foreground text-xs">
-                  {logTime
-                    ? "Change when this was logged."
-                    : "No time set — it stays anchored to this meal tag."}
-                </Text>
+                >
+                  <Pencil size={18} color={colors.foreground} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text className="text-foreground text-sm font-semibold" numberOfLines={1}>
+                    {item?.name ?? "Item"}
+                  </Text>
+                  {item?.brand ? (
+                    <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                      {item.brand}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
-            </>
-          )}
-
-          {error ? (
-            <Text testID={`${testID}-error`} className="text-destructive text-sm font-medium">
-              {error}
-            </Text>
-          ) : null}
-
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Button
-                testID={`${testID}-cancel`}
-                variant="secondary"
-                disabled={saving}
+              <Pressable
+                testID={`${testID}-close`}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
                 onPress={handleClose}
+                hitSlop={8}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                Cancel
-              </Button>
+                <X size={20} color={colors["muted-foreground"]} />
+              </Pressable>
             </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                testID={`${testID}-save`}
-                disabled={
-                  saving || !effectiveSelection || effectiveSelection.quantity <= 0
-                }
-                loading={saving}
-                onPress={() => void handleSave()}
+
+            {derived ? (
+              <View style={{ gap: 8 }}>
+                <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                  Amount
+                </Text>
+                {amountMode === "quick" ? (
+                  <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                    {amountPresets.map((preset) => {
+                      const isSelected = activePresetId === preset.id;
+                      return (
+                        <Pressable
+                          key={preset.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Amount ${preset.label}`}
+                          testID={`${testID}-amount-preset-${preset.id}`}
+                          onPress={() => handlePresetSelect(preset.id)}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            backgroundColor: isSelected ? colors.foreground : colors.card,
+                            borderWidth: 1,
+                            borderColor: isSelected ? colors.foreground : colors.border,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: "600",
+                              color: isSelected ? colors.background : colors.foreground,
+                            }}
+                          >
+                            {preset.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Enter a custom amount"
+                      testID={`${testID}-amount-custom`}
+                      onPress={enterCustomMode}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: colors.card,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <Pencil size={11} color={colors.foreground} />
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>
+                        Custom
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <TextInput
+                        testID={`${testID}-amount-custom-input`}
+                        accessibilityLabel="Custom amount"
+                        value={customQtyText}
+                        onChangeText={handleCustomQtyChange}
+                        keyboardType="decimal-pad"
+                        placeholder="Amount"
+                        style={{
+                          flex: 1,
+                          height: 40,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: colors.border,
+                          backgroundColor: colors.card,
+                          paddingHorizontal: 12,
+                          color: colors.foreground,
+                        }}
+                      />
+                      <Text className="text-foreground text-sm font-semibold">
+                        {derived.initial.unit}
+                      </Text>
+                    </View>
+                    <Pressable
+                      testID={`${testID}-amount-back-to-presets`}
+                      accessibilityRole="button"
+                      onPress={() => setAmountMode("quick")}
+                      hitSlop={6}
+                    >
+                      <Text className="text-muted-foreground text-xs font-medium">
+                        ← Back to presets
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            ) : null}
+
+            {isPlanMode ? null : (
+              <>
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <TagIcon size={12} color={colors["muted-foreground"]} />
+                    <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                      Meal tag
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                    {tagOptions.map((tag) => {
+                      const isSelected = selectedTag === tag;
+                      return (
+                        <Pressable
+                          key={tag}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Move to ${tagLabel(tag)}`}
+                          testID={`${testID}-tag-${tag}`}
+                          onPress={() => setSelectedTag(tag)}
+                          style={{
+                            paddingHorizontal: 12,
+                            paddingVertical: 6,
+                            borderRadius: 16,
+                            backgroundColor: isSelected ? colors.primary : colors.card,
+                            borderWidth: 1,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 13,
+                              fontWeight: isSelected ? "600" : "400",
+                              color: isSelected
+                                ? colors["primary-foreground"]
+                                : colors.foreground,
+                            }}
+                          >
+                            {tagLabel(tag)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View style={{ gap: 6 }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Clock size={12} color={colors["muted-foreground"]} />
+                      <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                        Time
+                      </Text>
+                    </View>
+                    {logTime ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear time"
+                        testID={`${testID}-clear-time`}
+                        onPress={() => {
+                          setLogTime("");
+                          setTimeText("");
+                        }}
+                        hitSlop={8}
+                      >
+                        <Text className="text-muted-foreground text-xs font-medium underline">
+                          Clear time
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <View style={{ position: "relative", justifyContent: "center" }}>
+                    <Clock
+                      size={16}
+                      color={colors["muted-foreground"]}
+                      style={{ position: "absolute", left: 12, zIndex: 1 }}
+                    />
+                    <TextInput
+                      testID={`${testID}-time`}
+                      accessibilityLabel="Logged time, 12-hour clock"
+                      value={timeText}
+                      onChangeText={(text) => {
+                        setTimeText(text);
+                        const parsed = parseTime12Hour(text);
+                        if (parsed !== null) setLogTime(parsed);
+                      }}
+                      placeholder="4:00 AM"
+                      style={{
+                        height: 40,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                        paddingLeft: 36,
+                        paddingRight: 12,
+                        color: colors.foreground,
+                      }}
+                    />
+                  </View>
+                  <Text className="text-muted-foreground text-xs">
+                    {logTime
+                      ? "Change when this was logged."
+                      : "No time set — it stays anchored to this meal tag."}
+                  </Text>
+                </View>
+              </>
+            )}
+
+            {preview ? (
+              <View
+                testID={`${testID}-macros`}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  gap: 6,
+                }}
               >
-                Save
-              </Button>
+                <Text className="text-muted-foreground text-xs font-medium">
+                  Updated macros
+                </Text>
+                <View style={{ flexDirection: "row" }}>
+                  {[
+                    { label: "Cal", value: String(Math.round(preview.calories)), color: colors.foreground },
+                    { label: "Protein", value: `${Math.round(preview.protein * 10) / 10}g`, color: colors.info },
+                    { label: "Carbs", value: `${Math.round(preview.carbs * 10) / 10}g`, color: colors.success },
+                    { label: "Fats", value: `${Math.round(preview.fats * 10) / 10}g`, color: colors.accent },
+                  ].map((m) => (
+                    <View key={m.label} style={{ flex: 1, alignItems: "center" }}>
+                      <Text
+                        testID={`${testID}-macro-${m.label.toLowerCase()}`}
+                        style={{ color: m.color }}
+                        className="text-base font-bold"
+                      >
+                        {m.value}
+                      </Text>
+                      <Text className="text-muted-foreground text-[10px] uppercase">
+                        {m.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+
+            {isPlanMode ? null : (
+              <Pressable
+                testID={`${testID}-fix-macros`}
+                accessibilityRole="button"
+                onPress={() => setFlagOpen(true)}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingTop: 2,
+                }}
+              >
+                <AlertTriangle size={13} color={colors.accent} />
+                <Text
+                  className="text-xs font-medium underline"
+                  style={{ color: nutritionOverride ? colors.accent : colors["muted-foreground"] }}
+                >
+                  {nutritionOverride
+                    ? "Macros edited — save to apply"
+                    : hasFoodId
+                      ? "Something look wrong?"
+                      : "Fix these macros"}
+                </Text>
+              </Pressable>
+            )}
+
+            {error ? (
+              <Text testID={`${testID}-error`} className="text-destructive text-sm font-medium">
+                {error}
+              </Text>
+            ) : null}
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  testID={`${testID}-cancel`}
+                  variant="secondary"
+                  disabled={saving}
+                  onPress={handleClose}
+                >
+                  Cancel
+                </Button>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  testID={`${testID}-save`}
+                  variant="inverted"
+                  disabled={
+                    saving || !effectiveSelection || effectiveSelection.quantity <= 0
+                  }
+                  loading={saving}
+                  onPress={() => void handleSave()}
+                >
+                  Save
+                </Button>
+              </View>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </BottomSheet>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </BottomSheet>
+
+      {item && !isPlanMode ? (
+        <FlagFoodSheet
+          visible={flagOpen}
+          canReport={hasFoodId}
+          foodId={hasFoodId ? String(itemFoodId) : ""}
+          foodName={item.name ?? "this food"}
+          currentNutrition={{
+            calories: nutritionOverride?.calories ?? item.nutrition?.calories ?? 0,
+            protein: nutritionOverride?.protein ?? item.nutrition?.protein ?? 0,
+            carbs: nutritionOverride?.carbs ?? item.nutrition?.carbs ?? 0,
+            fats: nutritionOverride?.fats ?? item.nutrition?.fats ?? 0,
+            fiber: nutritionOverride?.fiber ?? item.nutrition?.fiber ?? 0,
+          }}
+          // storage basis -> the portion on screen. Prefer the live
+          // selection, but fall back to the item's own `servings` (the same
+          // factor), available immediately before the picker has emitted.
+          portion={{
+            label:
+              (item as { servingLabel?: string }).servingLabel ||
+              (item.loggedQuantity != null && item.loggedUnit
+                ? `${item.loggedQuantity} ${item.loggedUnit}`
+                : effectiveSelection
+                  ? `${effectiveSelection.quantity} ${effectiveSelection.unit}`
+                  : "this entry"),
+            factor: effectiveSelection?.multiplier ?? item.servings ?? 1,
+          }}
+          onApplyToLog={setNutritionOverride}
+          onClose={() => setFlagOpen(false)}
+          editableServingLabel
+          token={token}
+          testID={`${testID}-flag`}
+        />
+      ) : null}
+    </>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
-import { Zap } from "lucide-react-native";
+import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { X, Zap } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -85,7 +85,8 @@ export function QuickAddSheet({
     <BottomSheet
       visible={visible}
       onClose={handleClose}
-      title="Quick Add"
+      // The header row below is the web's single title (lightning icon +
+      // "Quick Add" + X) — BottomSheet's own big title would just repeat it.
       testID="quick-add-sheet"
       accessibilityLabel="Quick Add Sheet"
     >
@@ -96,25 +97,47 @@ export function QuickAddSheet({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
         >
-          {/* Header icon badge */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
+          {/* Header icon badge + title + close — matches the web's centred
+              modal header exactly; no extra subtitle underneath. */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: tint("accent", 0.15),
+                }}
+              >
+                <Zap size={20} color={colors.accent} />
+              </View>
+              <Text className="text-foreground text-lg font-bold">Quick Add</Text>
+            </View>
+            <Pressable
+              testID="quick-add-close-button"
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={handleClose}
+              hitSlop={8}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: tint("accent", 0.15),
               }}
             >
-              <Zap size={20} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text className="text-foreground text-sm font-medium">
-                Log calories and optional macros
-              </Text>
-            </View>
+              <X size={20} color={colors["muted-foreground"]} />
+            </Pressable>
           </View>
 
           {/* Calories (required) */}
@@ -139,10 +162,15 @@ export function QuickAddSheet({
             </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
+                <Text
+                  style={{ color: colors.info, textAlign: "center" }}
+                  className="text-[11px] font-medium mb-1"
+                >
+                  Protein
+                </Text>
                 <Input
                   testID="quick-add-protein-input"
-                  label="Protein (g)"
-                  placeholder="0"
+                  placeholder="g"
                   keyboardType="numeric"
                   value={protein}
                   onChangeText={(val) => {
@@ -152,10 +180,15 @@ export function QuickAddSheet({
                 />
               </View>
               <View style={{ flex: 1 }}>
+                <Text
+                  style={{ color: colors.success, textAlign: "center" }}
+                  className="text-[11px] font-medium mb-1"
+                >
+                  Carbs
+                </Text>
                 <Input
                   testID="quick-add-carbs-input"
-                  label="Carbs (g)"
-                  placeholder="0"
+                  placeholder="g"
                   keyboardType="numeric"
                   value={carbs}
                   onChangeText={(val) => {
@@ -165,10 +198,15 @@ export function QuickAddSheet({
                 />
               </View>
               <View style={{ flex: 1 }}>
+                <Text
+                  style={{ color: colors.accent, textAlign: "center" }}
+                  className="text-[11px] font-medium mb-1"
+                >
+                  Fats
+                </Text>
                 <Input
                   testID="quick-add-fats-input"
-                  label="Fats (g)"
-                  placeholder="0"
+                  placeholder="g"
                   keyboardType="numeric"
                   value={fats}
                   onChangeText={(val) => {
@@ -229,7 +267,7 @@ export function QuickAddSheet({
             <View style={{ flex: 1 }}>
               <Button
                 testID="quick-add-submit-button"
-                variant="primary"
+                variant="inverted"
                 loading={loading}
                 onPress={handleSubmit}
               >

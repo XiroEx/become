@@ -7,16 +7,18 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { ChefHat } from "lucide-react-native";
+import { ChefHat, Clock, Tag as TagIcon, X } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   editLoggedMeal,
+  formatTime12Hour,
   mealLogTagPatch,
   mealLogTimeInputValue,
   mealLogTimePatch,
+  parseTime12Hour,
 } from "@/lib/nutrition/editLoggedEntry";
 
 export interface EditLoggedMealSheetProps {
@@ -77,6 +79,12 @@ export function EditLoggedMealSheet({
   const [initialLogTime, setInitialLogTime] = useState(() =>
     mealLogTimeInputValue(loggedAt, untimed),
   );
+  // 12-hour display text bound to the input — NP-264 matches the web's
+  // `<input type="time">` 12-hour rendering ("4:00 AM") while `logTime`
+  // keeps the 24-hour wire format `mealLogTimePatch` expects.
+  const [timeText, setTimeText] = useState(() =>
+    formatTime12Hour(mealLogTimeInputValue(loggedAt, untimed)),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +110,7 @@ export function EditLoggedMealSheet({
       setSelectedTag(normalizedCurrentTag);
       setLogTime(t);
       setInitialLogTime(t);
+      setTimeText(formatTime12Hour(t));
       setError(null);
     }
   }, [visible, logId, normalizedCurrentTag, loggedAt, untimed]);
@@ -141,7 +150,8 @@ export function EditLoggedMealSheet({
     <BottomSheet
       visible={visible}
       onClose={handleClose}
-      title={mealName ? `Edit ${mealName}` : "Edit meal"}
+      // The header row below is the web's single title ("EDIT MEAL" + name +
+      // X) — BottomSheet's own big title would just repeat it.
       testID={testID}
       accessibilityLabel={mealName ? `Edit ${mealName}` : "Edit logged meal"}
     >
@@ -150,29 +160,54 @@ export function EditLoggedMealSheet({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <ChefHat size={18} color={colors.foreground} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                  Edit meal
+                </Text>
+                <Text className="text-foreground text-base font-bold" numberOfLines={1}>
+                  {mealName || "Meal"}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              testID={`${testID}-close`}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={handleClose}
+              hitSlop={8}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
               }}
             >
-              <ChefHat size={18} color={colors.foreground} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text className="text-muted-foreground text-[11px] font-medium uppercase">
-                Edit meal
-              </Text>
-              <Text className="text-foreground text-base font-bold" numberOfLines={1}>
-                {mealName || "Meal"}
-              </Text>
-            </View>
+              <X size={20} color={colors["muted-foreground"]} />
+            </Pressable>
           </View>
 
           <Text className="text-muted-foreground text-xs">
@@ -180,9 +215,12 @@ export function EditLoggedMealSheet({
           </Text>
 
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-              Meal
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <TagIcon size={12} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                Meal tag
+              </Text>
+            </View>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               {tagOptions.map((tag) => {
                 const isSelected = selectedTag === tag;
@@ -227,15 +265,21 @@ export function EditLoggedMealSheet({
                 justifyContent: "space-between",
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                Time
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Clock size={12} color={colors["muted-foreground"]} />
+                <Text className="text-muted-foreground text-[11px] font-medium uppercase">
+                  Time
+                </Text>
+              </View>
               {logTime ? (
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Clear time"
                   testID={`${testID}-clear-time`}
-                  onPress={() => setLogTime("")}
+                  onPress={() => {
+                    setLogTime("");
+                    setTimeText("");
+                  }}
                   hitSlop={8}
                 >
                   <Text className="text-muted-foreground text-xs font-medium underline">
@@ -244,22 +288,34 @@ export function EditLoggedMealSheet({
                 </Pressable>
               ) : null}
             </View>
-            <TextInput
-              testID={`${testID}-time`}
-              accessibilityLabel="Logged time in HH:mm"
-              value={logTime}
-              onChangeText={setLogTime}
-              placeholder="HH:mm"
-              style={{
-                height: 40,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                paddingHorizontal: 12,
-                color: colors.foreground,
-              }}
-            />
+            <View style={{ position: "relative", justifyContent: "center" }}>
+              <Clock
+                size={16}
+                color={colors["muted-foreground"]}
+                style={{ position: "absolute", left: 12, zIndex: 1 }}
+              />
+              <TextInput
+                testID={`${testID}-time`}
+                accessibilityLabel="Logged time, 12-hour clock"
+                value={timeText}
+                onChangeText={(text) => {
+                  setTimeText(text);
+                  const parsed = parseTime12Hour(text);
+                  if (parsed !== null) setLogTime(parsed);
+                }}
+                placeholder="4:00 AM"
+                style={{
+                  height: 40,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                  paddingLeft: 36,
+                  paddingRight: 12,
+                  color: colors.foreground,
+                }}
+              />
+            </View>
             <Text className="text-muted-foreground text-xs">
               {logTime
                 ? "Change when this was logged."
@@ -287,6 +343,7 @@ export function EditLoggedMealSheet({
             <View style={{ flex: 1 }}>
               <Button
                 testID={`${testID}-save`}
+                variant="inverted"
                 disabled={saving || !hasChanges}
                 loading={saving}
                 onPress={() => void handleSave()}
