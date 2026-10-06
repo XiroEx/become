@@ -67,6 +67,46 @@ describe("toProgramSummary", () => {
     expect(s.targetUser).toBeUndefined();
     expect(s.description).toBe("");
   });
+
+  // NP-278: narrowTargetUser only recognised 3 of the 5 web levels, so the
+  // level line vanished for every "Beginner to Intermediate" /
+  // "Intermediate to Advanced" program (e.g. the three BECOME programs
+  // targeted "Beginner to Intermediate").
+  it("(NP-278) keeps a 'Beginner to Intermediate' / 'Intermediate to Advanced' target_user instead of dropping it", () => {
+    expect(
+      toProgramSummary({
+        program_id: "p3",
+        name: "12 Week Fat-Loss Foundation Program",
+        target_user: "Beginner to Intermediate",
+      }).targetUser,
+    ).toBe("Beginner to Intermediate");
+
+    expect(
+      toProgramSummary({
+        program_id: "p4",
+        name: "Hybrid Strength",
+        target_user: "Intermediate to Advanced",
+      }).targetUser,
+    ).toBe("Intermediate to Advanced");
+  });
+
+  // NP-278: the browse catalog must be able to tell a member's own custom
+  // program apart from the shared catalog so it can exclude it.
+  it("(NP-278) carries isCustom through so Browse can exclude the member's own programs", () => {
+    expect(
+      toProgramSummary({
+        program_id: "custom-abc-my-split",
+        name: "My Split",
+        isCustom: true,
+        createdBy: "user-1",
+      }).isCustom,
+    ).toBe(true);
+
+    expect(
+      toProgramSummary({ program_id: "p5", name: "Catalog Program" })
+        .isCustom,
+    ).toBeUndefined();
+  });
 });
 
 describe("ProgramsBrowseRoute", () => {

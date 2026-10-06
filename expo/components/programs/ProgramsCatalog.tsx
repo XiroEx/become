@@ -3,8 +3,9 @@ import { useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
-import { Filter, Heart } from "lucide-react-native";
+import { Bookmark, ChevronRight, Filter } from "lucide-react-native";
 import {
+  ActiveProgramsApiResponseSchema,
   ProgramCatalogItemSchema,
   ProgramSearchResponseSchema,
   SavedProgramsResponseSchema,
@@ -30,6 +31,7 @@ import { useMutation } from "@/lib/hooks/useMutation";
 import { toProgramSummary } from "@/lib/programs/programSummary";
 import { matchRecommendedPrograms } from "@/lib/programs/recommendations";
 import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
+import { BROWSE_LEVELS } from "@/lib/programs/levels";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 const CatalogOrSearchSchema = z.union([
@@ -41,13 +43,8 @@ const CatalogOrSearchSchema = z.union([
   })),
 ]);
 
-export const BROWSE_LEVELS = [
-  "Beginner",
-  "Intermediate",
-  "Advanced",
-  "Beginner to Intermediate",
-  "Intermediate to Advanced",
-] as const;
+// Re-exported for existing call sites (the Browse route re-exports it too).
+export { BROWSE_LEVELS };
 
 export function buildSearchPath(
   q: string,
@@ -171,6 +168,40 @@ export function ProgramsCatalog({
     [savedList],
   );
 
+  // Active (enrolled) programs — fetched so Browse can exclude them (NP-278:
+  // the web's catalog never lists a program the member is already enrolled
+  // in; native used to list it anyway).
+  const activePrograms = useFetch(
+    "/api/programs/active",
+    ActiveProgramsApiResponseSchema,
+    {
+      ...fetchOpts,
+      skip: !token,
+    },
+  );
+
+  const activeProgramIds = useMemo(
+    () =>
+      new Set(
+        (activePrograms.data?.activePrograms ?? []).map((p) => p.programId),
+      ),
+    [activePrograms.data],
+  );
+
+  // A program belongs in Browse only if it is neither a program the member
+  // is already enrolled in NOR one of their own custom programs (those live
+  // in My Programs). Mirrors the web's `filteredPrograms` exclusion in
+  // WorkoutClient.tsx, extended to customs per NP-278.
+  const isBrowsable = useCallback(
+    (p: ProgramSummary) => !p.isCustom && !activeProgramIds.has(p.id),
+    [activeProgramIds],
+  );
+
+  const browsePrograms = useMemo(
+    () => programs.filter(isBrowsable),
+    [programs, isBrowsable],
+  );
+
   // Fetch catalog programs on debounced search / filter change
   useEffect(() => {
     let active = true;
@@ -260,12 +291,22 @@ export function ProgramsCatalog({
 
   const recommendedPrograms = useMemo(() => {
     if (hasFilters) return [];
+    // Same base as Browse (no enrolled/custom programs), MINUS anything
+    // already saved — the web drops a saved program from "Recommended for
+    // You" because it is already surfaced in "Saved for Later" above it.
+    const eligible = browsePrograms.filter((p) => !savedProgramIds.has(p.id));
     return matchRecommendedPrograms(
-      programs,
+      eligible,
       userFitnessGoal,
       userExperienceLevel,
     );
-  }, [hasFilters, programs, userFitnessGoal, userExperienceLevel]);
+  }, [
+    hasFilters,
+    browsePrograms,
+    savedProgramIds,
+    userFitnessGoal,
+    userExperienceLevel,
+  ]);
 
   // Toggle Save handler for every card (catalog, recommended, saved)
   const handleToggleSave = useCallback(
@@ -338,8 +379,66 @@ export function ProgramsCatalog({
 
   const initialLoading = loading && programs.length === 0;
 
+  // The server's `total` counts every program the catalog visibility clause
+  // matches — it does not know about enrollment or which ones are this
+  // member's own customs. Subtract what Browse actually excludes so the
+  // header count matches what is on screen (NP-278: native showed "(8)"
+  // against the web's "(7)" with one enrolled + one custom program on the
+  // account).
+  const excludedFromBrowseCount = useMemo(
+    () => programs.filter((p) => !isBrowsable(p)).length,
+    [programs, isBrowsable],
+  );
+  const displayTotal = Math.max(total - excludedFromBrowseCount, 0);
+
   return (
     <>
+      {/* Browse Heading + Filters Toggle — the web puts Filters to the
+          right of the heading, not under the search bar. */}
+      <View
+        style={{
+          marginBottom: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Text className="text-foreground text-lg font-bold">
+          {hasFilters ? "Search Results" : catalogTitle}
+          {displayTotal > 0 ? (
+            <Text className="text-muted-foreground text-sm font-normal">
+              {" "}
+              ({displayTotal})
+            </Text>
+          ) : null}
+        </Text>
+
+        <Pressable
+          testID="programming-browse-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="Toggle filters"
+          onPress={() => setShowFilters((prev) => !prev)}
+          className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg ${
+            showFilters || hasFilters ? "bg-success/15" : "bg-muted"
+          }`}
+        >
+          <Filter
+            size={14}
+            color={showFilters || hasFilters ? colors.success : colors["muted-foreground"]}
+          />
+          <Text
+            className={`text-xs font-semibold ${
+              showFilters || hasFilters ? "text-success" : "text-muted-foreground"
+            }`}
+          >
+            Filters
+            {hasFilters
+              ? ` (${(searchQuery ? 1 : 0) + selectedTags.length + (selectedLevel ? 1 : 0)})`
+              : ""}
+          </Text>
+        </Pressable>
+      </View>
+
       {/* Search Input */}
       <View style={{ marginBottom: 12 }}>
         <Input
@@ -351,63 +450,57 @@ export function ProgramsCatalog({
         />
       </View>
 
-      {/* Filters Toggle & Chips */}
+      {/* Expanded Filter Panel — TAGS first, then EXPERIENCE LEVEL, matching
+          the web's order (WorkoutClient.tsx renders Tags before the level
+          buttons). */}
       <View style={{ marginBottom: 16 }}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 8,
-          }}
-        >
-          <Pressable
-            testID="programming-browse-filter-toggle"
-            accessibilityRole="button"
-            accessibilityLabel="Toggle filters"
-            onPress={() => setShowFilters((prev) => !prev)}
-            className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
-              showFilters || hasFilters
-                ? "border-primary bg-primary/10"
-                : "border-border bg-card"
-            }`}
-          >
-            <Filter
-              size={14}
-              color={
-                showFilters || hasFilters
-                  ? colors.primary
-                  : colors["muted-foreground"]
-              }
-            />
-            <Text className="text-foreground text-xs font-semibold">
-              Filters
-              {hasFilters
-                ? ` (${(searchQuery ? 1 : 0) + selectedTags.length + (selectedLevel ? 1 : 0)})`
-                : ""}
-            </Text>
-          </Pressable>
-
-          {hasFilters ? (
-            <Pressable
-              testID="programming-browse-clear-filters"
-              accessibilityRole="button"
-              accessibilityLabel="Clear all filters"
-              onPress={handleClearFilters}
-            >
-              <Text className="text-destructive text-xs font-medium">
-                Clear filters
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        {/* Expanded Filter Panel */}
         {showFilters ? (
           <View
             className="p-3 rounded-xl border border-border bg-card mb-2"
             style={{ gap: 12 }}
           >
+            {/* Tag Filters */}
+            {availableTags.length > 0 ? (
+              <View>
+                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
+                  Tags
+                </Text>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 6,
+                  }}
+                >
+                  {availableTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <Pressable
+                        key={tag}
+                        testID={`programming-browse-tag-${tag}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Filter by tag ${tag}`}
+                        onPress={() => handleToggleTag(tag)}
+                        className={`px-3 py-1 rounded-full ${
+                          isSelected ? "bg-success" : "bg-background border border-border"
+                        }`}
+                      >
+                        <Text
+                          className={`text-xs ${
+                            isSelected
+                              ? "text-primary-foreground font-semibold"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {tag}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+
             {/* Level Filter */}
             <View>
               <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
@@ -431,10 +524,8 @@ export function ProgramsCatalog({
                       onPress={() =>
                         setSelectedLevel(isSelected ? "" : level)
                       }
-                      className={`px-3 py-1 rounded-full border ${
-                        isSelected
-                          ? "bg-primary border-primary"
-                          : "bg-background border-border"
+                      className={`px-3 py-1 rounded-full ${
+                        isSelected ? "bg-success" : "bg-background border border-border"
                       }`}
                     >
                       <Text
@@ -452,48 +543,17 @@ export function ProgramsCatalog({
               </View>
             </View>
 
-            {/* Tag Filters */}
-            {availableTags.length > 0 ? (
-              <View>
-                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
-                  Tags
+            {hasFilters ? (
+              <Pressable
+                testID="programming-browse-clear-filters"
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+                onPress={handleClearFilters}
+              >
+                <Text className="text-destructive text-xs font-medium">
+                  Clear all filters
                 </Text>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: 6,
-                  }}
-                >
-                  {availableTags.map((tag) => {
-                    const isSelected = selectedTags.includes(tag);
-                    return (
-                      <Pressable
-                        key={tag}
-                        testID={`programming-browse-tag-${tag}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Filter by tag ${tag}`}
-                        onPress={() => handleToggleTag(tag)}
-                        className={`px-3 py-1 rounded-full border ${
-                          isSelected
-                            ? "bg-primary border-primary"
-                            : "bg-background border-border"
-                        }`}
-                      >
-                        <Text
-                          className={`text-xs ${
-                            isSelected
-                              ? "text-primary-foreground font-semibold"
-                              : "text-foreground"
-                          }`}
-                        >
-                          {tag}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
+              </Pressable>
             ) : null}
           </View>
         ) : null}
@@ -516,10 +576,10 @@ export function ProgramsCatalog({
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              <Heart
+              <Bookmark
                 size={16}
-                color={colors.primary}
-                fill={colors.primary}
+                color={colors.accent}
+                fill={colors.accent}
               />
               <Text className="text-foreground text-lg font-bold">
                 Saved for Later
@@ -577,88 +637,132 @@ export function ProgramsCatalog({
             >
               {recommendedPrograms.slice(0, 5).map((program) => {
                 const isItemSaved = savedProgramIds.has(program.id);
+                const visibleTags = program.tags?.slice(0, 4) ?? [];
+                const extraTags =
+                  (program.tags?.length ?? 0) - visibleTags.length;
                 return (
                   <View
                     key={program.id}
                     testID={`browse-recommended-item-${program.id}`}
-                    style={{ width: 240 }}
-                    className="rounded-xl border border-border bg-card p-3 justify-between"
+                    style={{
+                      width: 260,
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: 8,
+                      borderWidth: 1,
+                      borderLeftWidth: 4,
+                      borderColor: colors.border,
+                      borderLeftColor: colors.success,
+                      borderRadius: 16,
+                      backgroundColor: colors.card,
+                      padding: 12,
+                    }}
                   >
+                    <Pressable
+                      testID={`browse-recommended-save-${program.id}`}
+                      onPress={() => handleToggleSave(program.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        isItemSaved
+                          ? `Unsave program ${program.name}`
+                          : `Save program ${program.name}`
+                      }
+                      className="p-1 shrink-0"
+                    >
+                      <Bookmark
+                        color={
+                          isItemSaved
+                            ? colors.success
+                            : colors["muted-foreground"]
+                        }
+                        fill={isItemSaved ? colors.success : "transparent"}
+                        size={18}
+                        strokeWidth={1.5}
+                      />
+                    </Pressable>
                     <Pressable
                       onPress={() =>
                         router.push(`/(tabs)/programming/${program.id}`)
                       }
                       accessibilityRole="button"
                       accessibilityLabel={`Open program ${program.name}`}
+                      style={{ flex: 1 }}
                     >
-                      <Text
-                        className="text-foreground font-bold text-base mb-1"
-                        numberOfLines={1}
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 6,
+                          flexWrap: "wrap",
+                        }}
                       >
-                        {program.name}
-                      </Text>
-                      <Text
-                        className="text-muted-foreground text-xs mb-2"
-                        numberOfLines={2}
-                      >
-                        {program.description}
-                      </Text>
+                        <Text
+                          className="text-foreground font-semibold text-base flex-1"
+                          numberOfLines={1}
+                        >
+                          {program.name}
+                        </Text>
+                      </View>
                       <View
                         style={{
                           flexDirection: "row",
                           flexWrap: "wrap",
-                          gap: 6,
+                          gap: 4,
+                          marginTop: 4,
                         }}
                       >
                         {program.durationWeeks ? (
-                          <Text className="text-muted-foreground text-xs">
-                            {program.durationWeeks}w
-                          </Text>
+                          <View className="rounded-full bg-muted px-1.5 py-0.5">
+                            <Text className="text-muted-foreground text-xs font-medium">
+                              {program.durationWeeks}w
+                            </Text>
+                          </View>
                         ) : null}
                         {program.trainingDaysPerWeek ? (
-                          <Text className="text-muted-foreground text-xs">
-                            · {program.trainingDaysPerWeek}d/wk
-                          </Text>
-                        ) : null}
-                        {program.targetUser ? (
-                          <Text className="text-muted-foreground text-xs">
-                            · {program.targetUser}
-                          </Text>
+                          <View className="rounded-full bg-muted px-1.5 py-0.5">
+                            <Text className="text-muted-foreground text-xs font-medium">
+                              {program.trainingDaysPerWeek}x/wk
+                            </Text>
+                          </View>
                         ) : null}
                       </View>
+                      {program.targetUser ? (
+                        <Text className="text-muted-foreground text-xs mt-1">
+                          {program.targetUser}
+                        </Text>
+                      ) : null}
+                      {visibleTags.length > 0 ? (
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            gap: 4,
+                            marginTop: 4,
+                          }}
+                        >
+                          {visibleTags.map((tag) => (
+                            <View
+                              key={tag}
+                              className="rounded-full bg-success/10 px-1.5 py-0.5"
+                            >
+                              <Text className="text-success text-xs">
+                                {tag}
+                              </Text>
+                            </View>
+                          ))}
+                          {extraTags > 0 ? (
+                            <Text className="text-muted-foreground text-xs">
+                              +{extraTags} more
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </Pressable>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "flex-end",
-                        marginTop: 8,
-                      }}
-                    >
-                      <Pressable
-                        testID={`browse-recommended-save-${program.id}`}
-                        onPress={() => handleToggleSave(program.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          isItemSaved
-                            ? `Unsave program ${program.name}`
-                            : `Save program ${program.name}`
-                        }
-                        className="p-1.5"
-                      >
-                        <Heart
-                          color={
-                            isItemSaved
-                              ? colors.primary
-                              : colors["muted-foreground"]
-                          }
-                          fill={
-                            isItemSaved ? colors.primary : "transparent"
-                          }
-                          size={18}
-                          strokeWidth={1.5}
-                        />
-                      </Pressable>
-                    </View>
+                    <ChevronRight
+                      color={colors["muted-foreground"]}
+                      size={16}
+                      strokeWidth={1.5}
+                    />
                   </View>
                 );
               })}
@@ -666,26 +770,6 @@ export function ProgramsCatalog({
           </ScrollView>
         </View>
       ) : null}
-
-      {/* Catalog / All Programs Header */}
-      <View
-        style={{
-          marginBottom: 8,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text className="text-foreground text-lg font-bold">
-          {hasFilters ? "Search Results" : catalogTitle}
-          {total > 0 ? (
-            <Text className="text-muted-foreground text-sm font-normal">
-              {" "}
-              ({total})
-            </Text>
-          ) : null}
-        </Text>
-      </View>
 
       {/* Error State */}
       {error && programs.length === 0 ? (
@@ -712,7 +796,7 @@ export function ProgramsCatalog({
       ) : (
         /* Programs List with Server Paging and Save/Unsave on each card */
         <ProgramsList
-          programs={programs}
+          programs={browsePrograms}
           serverPaging={true}
           hasMore={hasMore}
           onLoadMore={handleLoadMore}
