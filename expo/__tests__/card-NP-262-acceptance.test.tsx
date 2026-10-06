@@ -140,14 +140,17 @@ describe("NP-262: nutrition day header, order and tiles", () => {
   });
 
   it("offers 'Schedule meals' on today and on a future day, but not on a past day", async () => {
-    // Today
+    // Today — opens the ScheduleMealsDrawer (NP-265), not a navigation.
     mockParams = { date: TODAY_MOCK };
     const today = render(<NutritionIndexRoute />);
     await waitFor(() => {
       expect(today.getByTestId("nutrition-schedule-meals-button")).toBeTruthy();
     });
     fireEvent.press(today.getByTestId("nutrition-schedule-meals-button"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/meal-schedule");
+    await waitFor(() => {
+      expect(today.getByTestId("schedule-meals-drawer")).toBeTruthy();
+    });
+    expect(mockPush).not.toHaveBeenCalledWith("/(tabs)/nutrition/meal-schedule");
     today.unmount();
 
     // Future — `isFuture` compares against the REAL clock
