@@ -7,7 +7,8 @@ import {
   Share,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft,
   ArrowRight,
@@ -62,7 +63,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { announce } from "@/lib/a11y/announce";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import {
@@ -85,7 +86,51 @@ import {
  *  5. Report the EFFECTIVE kinds shown (the locked-in alternative replaces breath).
  *  6. Never compute XP or chapters natively; show the server's numbers.
  *  7. Drop the cached AI plan and warm a fresh one on completion (NP-102).
+ *
+ * THE CHROME IS THE WEB'S FIXED DARK STAGE, NOT A THEMED SCREEN (NP-297). The
+ * web's `SessionPlayer` is `fixed inset-0 bg-black text-white` — one immersive
+ * surface that never follows `prefers-color-scheme`, on every stage (intro,
+ * every move, payoff, level-up). Native used to draw this chrome from
+ * `useThemeTokens()`, which is exactly what made a light-mode phone show a
+ * light background with the `primary` token (brand red here) for the
+ * progress bar and every button — the opposite of the web's black-and-white
+ * immersive look, on top of a `SafeAreaView` whose insets don't resolve
+ * correctly inside this file's bare `Modal` (see `useSafeAreaInsetsOrZero`
+ * below), which is why the exit / back / progress row used to land under the
+ * iOS status bar on every stage.
+ *
+ * The fix is the same shape as `MirrorScene` / `BarcodeScanner`'s always-dark
+ * surfaces: literal Tailwind classes (`bg-black`, `text-white` — not hex, see
+ * NP-123 / `noHexColorLiterals.test.ts`) carry the surface and the text, and
+ * the few `PLAYER_*` constants below carry the handful of spots a React
+ * Native API needs an actual colour VALUE rather than a class (a lucide
+ * `color` prop, an `ActivityIndicator`, a gradient's stops) — resolved
+ * against the DARK palette explicitly rather than the live system scheme,
+ * because this screen does not have a light mode on either client.
+ * `mind-violet` / `mind-green` are already flat (identical in both palettes —
+ * the Mind home's own violet→green accent, NP-296), so the progress bar and
+ * the seal/intro-tile gradients need no mode pin; `success` / `accent` DO
+ * vary with the system, so they are pinned to `"dark"` to land on the web's
+ * green-400 / amber-400 rather than whatever the phone happens to be set to.
+ *
+ * Scoped to what THIS file draws. The individual scenes (`StateCheckScene`,
+ * `BreathScene`, …) are untouched — they are separately-shipped NP-098/123
+ * surfaces that deliberately follow the system scheme, which is still correct
+ * everywhere else they're used. The `move` stage here keeps its own explicit
+ * `bg-background` behind whichever scene is playing so none of that legibility
+ * work is undone; only the chrome this file owns (the top bar, the intro, the
+ * payoff, the level-up) takes the web's fixed black.
  */
+const PLAYER_WHITE = onDarkForeground;
+const PLAYER_BLACK = resolveToken("mind-ink", "dark");
+const PLAYER_GREEN = resolveToken("success", "dark");
+const PLAYER_AMBER = resolveToken("accent", "dark");
+const PLAYER_ORANGE = resolveToken("orange", "dark");
+const PLAYER_MUTED = tintToken("foreground", "dark", 0.5);
+const PLAYER_GRADIENT: [string, string] = [
+  resolveToken("mind-violet", "dark"),
+  resolveToken("mind-green", "dark"),
+];
 
 export type SessionStage = "intro" | "move" | "payoff" | "levelup";
 
@@ -131,6 +176,29 @@ export interface SessionPlayerProps {
   tz?: number;
   /** Explicit token override (falls back to useAuth when inside AuthProvider). */
   token?: string | null;
+  /** Injection point for tests; the app leaves it unset (`useSafeAreaInsetsOrZero`). */
+  insetsImpl?: () => { top: number; bottom: number; left: number; right: number };
+}
+
+/**
+ * This `Modal` is bare (no navigator wraps it), so — exactly like
+ * `BarcodeScanner`'s own `useSafeAreaInsetsOrZero` (NP-321) — it has to add
+ * its own device insets rather than lean on a `SafeAreaView`, whose insets are
+ * measured for the screen BEHIND this Modal's own native window. That gap is
+ * what let the exit / back / progress row draw under the iOS status bar on
+ * every stage.
+ *
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but this component's
+ * tests don't wrap one. Falling back to zero insets there keeps this a no-op
+ * in tests while fixing the real device.
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
 }
 
 export const CHECK_IN_QUESTION = "How I checked in today";
@@ -266,8 +334,9 @@ export function SessionPlayer({
   testID = "mind-session-player",
   tz,
   token: propToken,
+  insetsImpl = useSafeAreaInsetsOrZero,
 }: SessionPlayerProps) {
-  const { colors } = useThemeTokens();
+  const insets = insetsImpl();
   const reduceMotion = useReducedMotion();
   const auth = useOptionalAuth();
   const token = propToken !== undefined ? propToken : auth.token;
@@ -541,11 +610,14 @@ export function SessionPlayer({
       animationType={modalAnimation("fade", reduceMotion)}
       onRequestClose={onHardwareBack}
     >
-      <SafeAreaView
-        edges={["top", "bottom"]}
-        style={{ flex: 1, backgroundColor: colors.background }}
+      <View
+        testID={`${testID}-root`}
+        className="flex-1 bg-black"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        {/* Top bar: exit + back + progress segments */}
+        {/* Top bar: exit + back + progress segments — the web's fixed dark
+            chrome, padded by the REAL device inset above rather than a
+            `SafeAreaView` (see `useSafeAreaInsetsOrZero`). */}
         <View className="flex-row items-center gap-3 px-4 pt-3">
           <Pressable
             testID={`${testID}-exit`}
@@ -557,9 +629,9 @@ export function SessionPlayer({
                 : setConfirmingExit(true)
             }
             style={minTouchTarget}
-            className="items-center justify-center rounded-full bg-muted"
+            className="items-center justify-center rounded-full bg-white/10"
           >
-            <X size={18} color={colors.foreground} />
+            <X size={18} color={PLAYER_WHITE} />
           </Pressable>
           {canGoBack ? (
             <Pressable
@@ -568,9 +640,9 @@ export function SessionPlayer({
               accessibilityLabel="Previous move"
               onPress={back}
               style={minTouchTarget}
-              className="items-center justify-center rounded-full bg-muted"
+              className="items-center justify-center rounded-full bg-white/10"
             >
-              <ArrowLeft size={18} color={colors.foreground} />
+              <ArrowLeft size={18} color={PLAYER_WHITE} />
             </Pressable>
           ) : null}
           <View className="flex-1 flex-row gap-1.5">
@@ -580,11 +652,16 @@ export function SessionPlayer({
                 testID={`${testID}-progress-${i}`}
                 accessible={false}
                 importantForAccessibility="no"
-                className="h-1 flex-1 overflow-hidden rounded-full bg-muted"
+                className="h-1 flex-1 overflow-hidden rounded-full bg-white/15"
               >
-                <View
-                  className="h-full rounded-full bg-primary"
+                <LinearGradient
+                  testID={`${testID}-progress-${i}-fill`}
+                  colors={PLAYER_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
                   style={{
+                    height: "100%",
+                    borderRadius: 999,
                     width:
                       i < filledSegments
                         ? "100%"
@@ -598,39 +675,59 @@ export function SessionPlayer({
           </View>
         </View>
 
-        {/* Realignment notice */}
+        {/* Realignment notice — sits on the root's black, same as the top bar. */}
         {realigned && stage === "move" && index === 1 ? (
           <View
             testID={`${testID}-realigned`}
             accessibilityLiveRegion="polite"
-            className="mx-4 mt-2.5 rounded-full bg-muted px-3 py-1.5"
+            className="mx-4 mt-2.5 rounded-full bg-white/10 px-3 py-1.5"
           >
-            <Text className="text-center text-xs font-semibold text-muted-foreground">
+            <Text className="text-center text-xs font-semibold text-white/70">
               Rebuilt around how you just checked in · {realigned}
             </Text>
           </View>
         ) : null}
 
-        {/* Stage */}
-        <View className="flex-1">
+        {/* Stage. `move` gets its own themed `bg-background` so the scene it
+            hosts (StateCheckScene, BreathScene, …) stays exactly as legible as
+            it always was — those are separate, system-following surfaces
+            (NP-098/123) that this card does not touch. Every other stage has
+            no background of its own, so the root's forced black shows through,
+            matching the web's fixed `bg-black` stage. */}
+        <View
+          testID={`${testID}-stage`}
+          className={stage === "move" ? "flex-1 bg-background" : "flex-1"}
+        >
           {stage === "intro" ? (
             <View
               testID={`${testID}-intro`}
               className="flex-1 items-center justify-center px-6"
             >
-              <View className="mb-4 h-14 w-14 items-center justify-center rounded-2xl bg-primary">
-                <Sparkles size={28} color={colors["primary-foreground"]} />
-              </View>
+              <LinearGradient
+                colors={PLAYER_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  height: 56,
+                  width: 56,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                }}
+              >
+                <Sparkles size={28} color={PLAYER_WHITE} />
+              </LinearGradient>
               <Text
                 testID={`${testID}-intro-title`}
-                className="text-center text-3xl font-extrabold text-foreground"
+                className="text-center text-3xl font-extrabold text-white"
               >
                 {plan.intro.title}
               </Text>
-              <Text className="mt-3 max-w-xs text-center text-muted-foreground">
+              <Text className="mt-3 max-w-xs text-center text-white/60">
                 {plan.intro.subtitle}
               </Text>
-              <Text className="mt-6 text-xs uppercase tracking-widest text-muted-foreground">
+              <Text className="mt-6 text-xs uppercase tracking-widest text-white/40">
                 {total} moves · ~3 min
               </Text>
               <Pressable
@@ -639,12 +736,10 @@ export function SessionPlayer({
                 accessibilityLabel="Begin"
                 onPress={() => setStage("move")}
                 style={minTouchTarget}
-                className="mt-10 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+                className="mt-10 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4"
               >
-                <Text className="text-base font-bold text-primary-foreground">
-                  Begin
-                </Text>
-                <ArrowRight size={20} color={colors["primary-foreground"]} />
+                <Text className="text-base font-bold text-black">Begin</Text>
+                <ArrowRight size={20} color={PLAYER_BLACK} />
               </Pressable>
             </View>
           ) : null}
@@ -722,14 +817,26 @@ export function SessionPlayer({
                 className="w-full max-w-sm items-center justify-center"
               >
                 {/* Seal checkmark */}
-                <View className="mb-5 h-20 w-20 items-center justify-center rounded-full bg-primary">
-                  <Check size={40} color={colors["primary-foreground"]} />
-                </View>
+                <LinearGradient
+                  colors={PLAYER_GRADIENT}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    height: 80,
+                    width: 80,
+                    borderRadius: 40,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 20,
+                  }}
+                >
+                  <Check size={40} color={PLAYER_WHITE} />
+                </LinearGradient>
 
                 {/* Title */}
                 <Text
                   testID={`${testID}-payoff-title`}
-                  className="text-center text-2xl font-extrabold text-foreground"
+                  className="text-center text-2xl font-extrabold text-white"
                 >
                   {result?.leveledUp
                     ? "Level up."
@@ -741,7 +848,7 @@ export function SessionPlayer({
                 {/* Subtitle */}
                 <Text
                   testID={`${testID}-payoff-subtitle`}
-                  className="mt-2 text-center text-muted-foreground"
+                  className="mt-2 text-center text-white/60"
                 >
                   {result?.leveledUp
                     ? `You climbed to Level ${result.level}.`
@@ -758,10 +865,10 @@ export function SessionPlayer({
                       <View
                         key={`${label}-${i}`}
                         testID={`${testID}-payoff-recap-${i}`}
-                        className="flex-row items-center gap-2.5 rounded-xl bg-card border border-border px-3 py-2"
+                        className="flex-row items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2"
                       >
-                        <Check size={14} color={colors.success} strokeWidth={3} />
-                        <Text className="text-xs font-medium text-foreground">
+                        <Check size={14} color={PLAYER_GREEN} strokeWidth={3} />
+                        <Text className="text-xs font-medium text-white/75">
                           {label}
                         </Text>
                       </View>
@@ -777,23 +884,23 @@ export function SessionPlayer({
                         ? `${testID}-payoff-reflecting`
                         : `${testID}-payoff-reflection`
                     }
-                    className="mt-5 w-full max-w-sm rounded-2xl border border-border bg-card p-4"
+                    className="mt-5 w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-4"
                   >
                     {reflecting ? (
                       <View className="flex-row items-center justify-center gap-2.5 py-2">
-                        <ActivityIndicator size="small" color={colors.primary} />
-                        <Text className="text-sm text-muted-foreground">
+                        <ActivityIndicator size="small" color={PLAYER_MUTED} />
+                        <Text className="text-sm text-white/50">
                           Reading what you said…
                         </Text>
                       </View>
                     ) : (
                       <>
-                        <Text className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <Text className="text-[10px] font-bold uppercase tracking-widest text-white/40">
                           Here&apos;s what I see
                         </Text>
                         <Text
                           testID={`${testID}-payoff-reflection-text`}
-                          className="mt-1.5 text-sm leading-relaxed text-foreground"
+                          className="mt-1.5 text-sm leading-relaxed text-white/80"
                         >
                           {reflection}
                         </Text>
@@ -806,9 +913,9 @@ export function SessionPlayer({
                 {payoffPhase >= 2 && result && (result.xpAwarded ?? 0) > 0 ? (
                   <View
                     testID={`${testID}-payoff-xp`}
-                    className="mt-4 rounded-full bg-muted px-4 py-1.5"
+                    className="mt-4 rounded-full bg-white/10 px-4 py-1.5"
                   >
-                    <Text className="text-sm font-bold text-success">
+                    <Text className="text-sm font-bold text-green-300">
                       +{result.xpAwarded} XP
                     </Text>
                   </View>
@@ -824,7 +931,7 @@ export function SessionPlayer({
                       <Text
                         testID={`${testID}-payoff-level-label`}
                         className={`text-xs font-semibold ${
-                          result.leveledUp ? "text-primary" : "text-foreground"
+                          result.leveledUp ? "text-violet-300" : "text-white/70"
                         }`}
                       >
                         Level {result.level}
@@ -832,17 +939,21 @@ export function SessionPlayer({
                       {result.levelProgress ? (
                         <Text
                           testID={`${testID}-payoff-level-xp-next`}
-                          className="text-xs text-muted-foreground"
+                          className="text-xs text-white/40"
                         >
                           {result.levelProgress.xpToNext} XP to next
                         </Text>
                       ) : null}
                     </View>
-                    <View className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted">
-                      <View
+                    <View className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-white/15">
+                      <LinearGradient
                         testID={`${testID}-payoff-level-bar`}
-                        className="h-full rounded-full bg-primary"
+                        colors={PLAYER_GRADIENT}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
                         style={{
+                          height: "100%",
+                          borderRadius: 999,
                           width: `${Math.min(
                             100,
                             Math.max(0, result.levelProgress?.pct ?? 0),
@@ -857,7 +968,7 @@ export function SessionPlayer({
                 {payoffPhase >= 2 && result?.trainingMode ? (
                   <Text
                     testID={`${testID}-payoff-cooldown-note`}
-                    className="mt-3 max-w-xs text-center text-xs text-muted-foreground"
+                    className="mt-3 max-w-xs text-center text-xs text-white/40"
                   >
                     You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
                   </Text>
@@ -869,10 +980,10 @@ export function SessionPlayer({
                     <View
                       key={f}
                       testID={`${testID}-payoff-feature-unlock-${f}`}
-                      className="mt-3 flex-row items-center gap-1.5 rounded-full bg-muted px-3.5 py-1.5"
+                      className="mt-3 flex-row items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-1.5"
                     >
-                      <Sparkles size={14} color={colors.accent} />
-                      <Text className="text-xs font-semibold text-accent">
+                      <Sparkles size={14} color={PLAYER_AMBER} />
+                      <Text className="text-xs font-semibold text-amber-300">
                         {FEATURE_UNLOCK_LABEL[f] ?? f}
                       </Text>
                     </View>
@@ -887,8 +998,8 @@ export function SessionPlayer({
                       testID={`${testID}-payoff-streak`}
                       className="mt-3 flex-row items-center gap-1.5"
                     >
-                      <Flame size={16} color={colors.accent} />
-                      <Text className="text-sm font-semibold text-foreground">
+                      <Flame size={16} color={PLAYER_ORANGE} />
+                      <Text className="text-sm font-semibold text-orange-300">
                         {result.streak}-day streak
                       </Text>
                     </View>
@@ -914,10 +1025,10 @@ export function SessionPlayer({
                         }
                       }}
                       style={minTouchTarget}
-                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-primary py-4"
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-amber-400 py-4"
                     >
-                      <ChevronUp size={20} color={colors["primary-foreground"]} />
-                      <Text className="text-base font-bold text-primary-foreground">
+                      <ChevronUp size={20} color={PLAYER_BLACK} />
+                      <Text className="text-base font-bold text-black">
                         New chapter unlocked
                       </Text>
                     </Pressable>
@@ -929,7 +1040,7 @@ export function SessionPlayer({
                       style={minTouchTarget}
                       className="mt-3 items-center justify-center py-2"
                     >
-                      <Text className="text-sm font-medium text-muted-foreground">
+                      <Text className="text-sm font-medium text-white/50">
                         Later
                       </Text>
                     </Pressable>
@@ -942,9 +1053,9 @@ export function SessionPlayer({
                       accessibilityLabel="Done for now"
                       onPress={onExit}
                       style={minTouchTarget}
-                      className="mt-8 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
+                      className="mt-8 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-white py-4"
                     >
-                      <Text className="text-base font-bold text-primary-foreground">
+                      <Text className="text-base font-bold text-black">
                         Done for now
                       </Text>
                     </Pressable>
@@ -960,11 +1071,8 @@ export function SessionPlayer({
                         style={minTouchTarget}
                         className="mt-3 flex-row items-center justify-center gap-1.5 py-2"
                       >
-                        <Share2
-                          size={14}
-                          color={colors["muted-foreground"]}
-                        />
-                        <Text className="text-xs font-medium text-muted-foreground">
+                        <Share2 size={14} color={PLAYER_MUTED} />
+                        <Text className="text-xs font-medium text-white/40">
                           {sharing
                             ? "Creating link…"
                             : shared
@@ -991,19 +1099,19 @@ export function SessionPlayer({
               }}
               className="flex-1 w-full"
             >
-              <Text className="text-xs font-semibold uppercase tracking-widest text-accent">
+              <Text className="text-xs font-semibold uppercase tracking-widest text-amber-300">
                 Chapter {levelUp.chapter} unlocked
               </Text>
               <Text
                 testID={`${testID}-levelup-title`}
-                className="mt-3 text-center text-3xl font-extrabold text-foreground"
+                className="mt-3 text-center text-3xl font-extrabold text-white"
               >
                 {levelUp.currentChapter?.name ??
                   CHAPTERS[levelUp.chapter - 1]?.name}
               </Text>
               <Text
                 testID={`${testID}-levelup-theme`}
-                className="mt-2 text-center text-sm text-muted-foreground max-w-xs"
+                className="mt-2 text-center text-sm text-white/60 max-w-xs"
               >
                 {levelUp.currentChapter?.theme ??
                   CHAPTERS[levelUp.chapter - 1]?.theme}
@@ -1014,7 +1122,7 @@ export function SessionPlayer({
                   testID={`${testID}-levelup-tools`}
                   className="mt-8 w-full max-w-xs"
                 >
-                  <Text className="mb-3 text-xs uppercase tracking-widest text-muted-foreground text-center">
+                  <Text className="mb-3 text-xs uppercase tracking-widest text-white/40 text-center">
                     New tools
                   </Text>
                   <View className="gap-2">
@@ -1022,10 +1130,10 @@ export function SessionPlayer({
                       <View
                         key={id}
                         testID={`${testID}-levelup-tool-${id}`}
-                        className="flex-row items-center gap-2 rounded-xl bg-card border border-border px-4 py-3"
+                        className="flex-row items-center gap-2 rounded-xl bg-white/10 px-4 py-3"
                       >
-                        <Sparkles size={16} color={colors.accent} />
-                        <Text className="text-sm font-semibold text-foreground">
+                        <Sparkles size={16} color={PLAYER_AMBER} />
+                        <Text className="text-sm font-semibold text-white">
                           {SYSTEM_INFO[id]?.label ?? id}
                         </Text>
                       </View>
@@ -1040,17 +1148,17 @@ export function SessionPlayer({
                 accessibilityLabel="Enter"
                 onPress={onExit}
                 style={minTouchTarget}
-                className="mt-10 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-primary py-4"
+                className="mt-10 w-full max-w-xs flex-row items-center justify-center rounded-2xl bg-white py-4"
               >
-                <Text className="text-base font-bold text-primary-foreground">
-                  Enter
-                </Text>
+                <Text className="text-base font-bold text-black">Enter</Text>
               </Pressable>
             </ScrollView>
           ) : null}
         </View>
 
-        {/* Leaving mid-session confirmation dialog */}
+        {/* Leaving mid-session confirmation dialog — themed (not forced dark):
+            a native-only safeguard the web doesn't have, so it keeps following
+            the system scheme like every other dialog in the app. */}
         {confirmingExit ? (
           <View
             testID={`${testID}-exit-dialog`}
@@ -1097,7 +1205,7 @@ export function SessionPlayer({
             </View>
           </View>
         ) : null}
-      </SafeAreaView>
+      </View>
     </RNModal>
   );
 }
