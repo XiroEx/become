@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -69,6 +69,7 @@ import { PacePicker } from "@/components/goals/PacePicker";
 import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { GoalsWeightChart } from "@/components/nutrition/GoalsWeightChart";
+import { useScrollFocusedFieldIntoView } from "@/lib/keyboard/useScrollFocusedFieldIntoView";
 
 /**
  * Nutrition goals (NP-148) — the native port of
@@ -161,6 +162,15 @@ export default function NutritionGoalsRoute() {
   const { token } = useAuth();
   const { colors } = useThemeTokens();
   const { tzOffset } = useLocalDay();
+
+  // NP-319: Android has no built-in "scroll the focused field into view" the
+  // way iOS's ScrollView does, and this is a plain screen (not a sheet), so
+  // real keyboard avoidance alone (the KeyboardAvoidingView below) still
+  // leaves the Water Goal field unreachable once the keyboard opens.
+  const goalsScrollRef = useRef<ScrollView>(null);
+  const waterFieldRef = useRef<View>(null);
+  const { onScroll: onGoalsScroll, setActiveField: setGoalsActiveField } =
+    useScrollFocusedFieldIntoView(goalsScrollRef);
 
   const [form, setForm] = useState<NutritionGoalsForm>({
     calories: 2000,
@@ -655,8 +665,11 @@ export default function NutritionGoalsRoute() {
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="nutrition-goals-route"
     >
+      {/* NP-319: real Android keyboard avoidance — "undefined" did nothing,
+          and edge-to-edge's targetSdk 35 resize no longer covers this either.
+          "height" is computed from the keyboard-show event instead. */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScreenState
@@ -667,6 +680,9 @@ export default function NutritionGoalsRoute() {
           testID="nutrition-goals-screen-state"
         >
           <ScrollView
+            ref={goalsScrollRef}
+            onScroll={onGoalsScroll}
+            scrollEventThrottle={16}
             contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 40 }}
             keyboardShouldPersistTaps="handled"
             testID="nutrition-goals-scroll"
@@ -1208,13 +1224,14 @@ export default function NutritionGoalsRoute() {
                     Water Goal
                   </Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                    <View style={{ flex: 1 }}>
+                    <View testID="nutrition-goals-water-field" style={{ flex: 1 }} ref={waterFieldRef}>
                       <Input
                         testID="nutrition-goals-water"
                         value={String(form.waterGoal)}
                         onChangeText={(v) => setForm((prev) => ({ ...prev, waterGoal: Number(v) || 0 }))}
                         keyboardType="decimal-pad"
                         accessibilityLabel="Water goal in ounces"
+                        onFocus={() => setGoalsActiveField(waterFieldRef.current)}
                       />
                     </View>
                     <Text className="text-muted-foreground text-sm">oz</Text>

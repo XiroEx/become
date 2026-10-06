@@ -582,7 +582,8 @@ export function EditLogItemSheet({
         testID={testID}
         accessibilityLabel={item?.name ? `Edit ${item.name}` : "Edit logged item"}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* NP-319: real Android keyboard avoidance — see EstimateSheet.tsx. */}
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ gap: 14, paddingBottom: 8 }}

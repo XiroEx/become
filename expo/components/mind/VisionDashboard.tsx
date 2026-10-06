@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
+import type { SetActiveField } from "@/lib/keyboard/useScrollFocusedFieldIntoView";
 import {
   AlertCircle,
   ArrowRight,
@@ -223,7 +224,21 @@ const EMPTY_FORM: VisionForm = {
 const IDENTITY_PLACEHOLDER =
   "e.g. A disciplined, present leader people can count on";
 
-export default function VisionDashboard() {
+export interface VisionDashboardProps {
+  /**
+   * NP-319: this dashboard is rendered INSIDE a parent route's own
+   * `ScrollView` (`app/(app)/(tabs)/mind/[section].tsx`), not one it owns
+   * itself, so the Android "scroll the focused field into view" fix has to
+   * be handed down rather than set up here — see
+   * `useScrollFocusedFieldIntoView`. Optional so this component still works
+   * standalone (tests, Storybook-style usage) without it.
+   */
+  setActiveField?: SetActiveField;
+}
+
+export default function VisionDashboard({
+  setActiveField,
+}: VisionDashboardProps = {}) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
   const [vision, setVision] = useState<VisionData | null>(null);
@@ -250,6 +265,12 @@ export default function VisionDashboard() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<VisionForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // NP-319: refs the focused-field-into-view fix measures against — one for
+  // the identity statement, one per domain (keyed so a field that mounts via
+  // `DOMAINS.map()` is still read fresh at keyboard-show time).
+  const identityFieldRef = useRef<View>(null);
+  const domainFieldRefs = useRef<Partial<Record<DomainKey, View | null>>>({});
 
   // Tracks the core GET /api/mind/vision call specifically (not the
   // secondary journal fetch below) so a slow or failed request shows a
@@ -521,7 +542,7 @@ export default function VisionDashboard() {
           <Text className="text-xs font-semibold uppercase tracking-widest text-emerald-500">
             {hasVision ? "Edit your vision" : "Paint your vision"}
           </Text>
-          <View>
+          <View ref={identityFieldRef}>
             <Text className="mb-1 text-[11px] font-semibold text-muted-foreground">
               Who you’re becoming (one line)
             </Text>
@@ -534,10 +555,11 @@ export default function VisionDashboard() {
               placeholder={IDENTITY_PLACEHOLDER}
               multiline
               className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+              onFocus={() => setActiveField?.(identityFieldRef.current)}
             />
           </View>
           {DOMAINS.map((d) => (
-            <View key={d.key}>
+            <View key={d.key} ref={(el) => { domainFieldRefs.current[d.key] = el; }}>
               <View className="mb-1 flex-row items-center gap-1.5">
                 <d.Icon size={12} color={colors["muted-foreground"]} />
                 <Text className="text-[11px] font-semibold text-muted-foreground">
@@ -553,6 +575,7 @@ export default function VisionDashboard() {
                 placeholder={d.placeholder}
                 multiline
                 className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+                onFocus={() => setActiveField?.(domainFieldRefs.current[d.key] ?? null)}
               />
             </View>
           ))}

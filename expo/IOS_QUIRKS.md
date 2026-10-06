@@ -104,15 +104,23 @@ them means content lines up edge-to-edge with the design grid.
 
 Every screen that contains a `TextInput` wraps its content in
 `KeyboardAvoidingView` with `behavior={Platform.OS === "ios" ? "padding" : undefined}`.
-On Android we leave the default (windowSoftInputMode handles it). Affected
-screens:
+"Leave the default" used to mean `windowSoftInputMode`'s resize handled
+Android on its own — **that stopped being true once targetSdk 35's
+edge-to-edge enforcement landed (NP-319): the resize no longer shrinks the
+window, and inside a `Modal` sheet it never worked at all.** The screens still
+on `undefined` below are the surfaces NP-319 didn't touch; see
+`ANDROID_QUIRKS.md` → "Keyboard avoiding" for the ones it fixed and the
+shared pieces (`lib/keyboard/useScrollFocusedFieldIntoView.ts`,
+`lib/keyboard/handleSheetRequestClose.ts`) a future pass over these should
+reuse rather than re-deriving `app/(auth)/login.tsx`'s (NP-309) original,
+one-off version of the same fix.
 
 - `app/(app)/(tabs)/chat/[id].tsx`
 - `app/(app)/(tabs)/nutrition/search.tsx`
 - `app/(app)/(tabs)/nutrition/food/[id].tsx`
 - `app/(app)/(tabs)/calendar/settings.tsx`
 
-**`app/(auth)/login.tsx` is the one exception (NP-309).** On a One UI 7 /
+**`app/(auth)/login.tsx` was the first exception (NP-309).** On a One UI 7 /
 Android 15 device, edge-to-edge enforcement stops `windowSoftInputMode`'s
 resize from happening, so "leave the default" left "Sign in with review code"
 under the keyboard with no hint it was still there. That screen sets
@@ -122,6 +130,8 @@ field and its submit button above the keyboard by hand
 (`Keyboard.addListener("keyboardDidShow", …)` + `measureInWindow` +
 `ScrollView.scrollTo`), because Android's `ScrollView` — unlike iOS's — has no
 built-in "scroll the focused `TextInput` into view" behaviour to fall back on.
+NP-319 lifted that hand-rolled pair into the shared hook/helper above rather
+than inlining a third and fourth copy.
 
 The `Input` component itself is a thin wrapper around the platform `TextInput`
 — it does NOT manage keyboard avoidance because the surrounding screen knows
