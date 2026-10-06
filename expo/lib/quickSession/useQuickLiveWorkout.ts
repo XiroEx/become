@@ -143,6 +143,15 @@ export interface UseQuickLiveWorkoutResult {
   exerciseHistory: Record<string, ExerciseHistoryEntry>;
   finishing: boolean;
   finishedGrid: LiveGrid | null;
+  /**
+   * The title the finished save actually went out under — captured at the
+   * moment of `finishWithTitle`, because `stored` (and its `.title`) is
+   * cleared right after a successful finish. `WorkoutSummary` reading
+   * `stored?.title` once it is gone is exactly what showed the session's OLD
+   * title twice (`Core Session — Core Session`) after renaming it to
+   * `FP test core` on the way out.
+   */
+  finishedTitle: string | null;
   finishedElapsedSeconds: number;
   activeSeconds: number;
   originKey: string;
@@ -284,6 +293,7 @@ export function useQuickLiveWorkout(
   >({});
   const [finishing, setFinishing] = useState(false);
   const [finishedGrid, setFinishedGrid] = useState<LiveGrid | null>(null);
+  const [finishedTitle, setFinishedTitle] = useState<string | null>(null);
   const [finishedElapsedSeconds, setFinishedElapsedSeconds] = useState(0);
   const [activeSeconds, setActiveSeconds] = useState(0);
   const [originKey] = useState(
@@ -385,6 +395,7 @@ export function useQuickLiveWorkout(
     sessionStartRef.current = Date.now();
     activeBaselineRef.current = 0;
     setFinishedGrid(null);
+    setFinishedTitle(null);
     setSaveError(null);
     setError(null);
     setLoading(true);
@@ -576,6 +587,7 @@ export function useQuickLiveWorkout(
         setStored(null);
         setNeedsName(false);
         setFinishedGrid(grid);
+        setFinishedTitle(title);
         setFinishedElapsedSeconds(active);
         setActiveSeconds(active);
         setFinishing(false);
@@ -744,6 +756,7 @@ export function useQuickLiveWorkout(
     exerciseHistory,
     finishing,
     finishedGrid,
+    finishedTitle,
     finishedElapsedSeconds,
     activeSeconds,
     originKey,
