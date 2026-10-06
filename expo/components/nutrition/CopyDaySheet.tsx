@@ -49,7 +49,7 @@ export interface CopyDaySheetProps {
   apiFetch?: Parameters<typeof copyDayForward>[0]["apiFetch"];
 }
 
-const SOURCE_OPTIONS: { value: BulkSourceType; label: string }[] = [
+export const SOURCE_OPTIONS: { value: BulkSourceType; label: string }[] = [
   { value: "log", label: "What I ate" },
   { value: "plan", label: "What I planned" },
 ];
