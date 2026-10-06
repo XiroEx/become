@@ -130,7 +130,9 @@ export function PlanCard({
         className="w-full flex-row items-center gap-3 rounded-2xl border border-border bg-card p-4"
       >
         <View className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-          <Sparkles size={20} color={colors.accent} />
+          {/* Purple sparkle, matching its own purple badge and the web's
+              Plus accent — `colors.accent` (amber) painted this orange. */}
+          <Sparkles size={20} color={colors.mindset} />
         </View>
         <View className="min-w-0 flex-1">
           <Text className="text-foreground text-sm font-semibold">

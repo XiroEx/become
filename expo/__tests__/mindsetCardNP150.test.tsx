@@ -1,8 +1,10 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { act, render, fireEvent } from "@testing-library/react-native";
+import { colorScheme } from "nativewind";
 import { MindsetCard } from "@/components/dashboard/MindsetCard";
 import { DashboardScreen } from "@/components/DashboardScreen";
 import type { MindSummaryResponse } from "@become/api-client";
+import { darkTokens, lightTokens } from "@/lib/theme/tokens";
 import {
   computeMindsetCta,
   computeMindsetStatus,
@@ -11,6 +13,12 @@ import {
   formatLastStateFeeling,
   getEffectiveMood,
 } from "@/lib/mind/mindsetCard";
+
+function setSystemScheme(mode: "light" | "dark"): void {
+  act(() => {
+    colorScheme.set(mode);
+  });
+}
 
 const MOCK_SUMMARY: MindSummaryResponse = {
   todayKey: "2026-10-02",
@@ -240,5 +248,63 @@ describe("NP-150: Mindset Card and helpers", () => {
       expect(getByText("Take five in Mindset")).toBeTruthy();
       expect(getByText(/Chapter 2: The Foundation/)).toBeTruthy();
     });
+
+    // (card NP-257) In dark mode the "Mindset" title and "Level N · Chapter M"
+    // line rendered with no explicit colour, which React Native defaults to
+    // BLACK — invisible on the near-black dark surfaces. They must resolve
+    // `colors.foreground`, which flips light/dark, same as the web's
+    // `text-zinc-900 dark:text-white`.
+    it.each(["light", "dark"] as const)(
+      "(NP-257) title and level/chapter line resolve colors.foreground in %s mode",
+      (mode) => {
+        setSystemScheme(mode);
+        const tokens = mode === "dark" ? darkTokens : lightTokens;
+        const { getByTestId } = render(<MindsetCard summary={MOCK_SUMMARY} />);
+
+        const title = getByTestId("mindset-card-title");
+        const titleColor = [title.props.style]
+          .flat(Infinity)
+          .find((s) => s?.color)?.color;
+        expect(titleColor).toBe(`rgb(${tokens.foreground})`);
+
+        const levelChapter = getByTestId("mindset-level-chapter");
+        const levelColor = [levelChapter.props.style]
+          .flat(Infinity)
+          .find((s) => s?.color)?.color;
+        expect(levelColor).toBe(`rgb(${tokens.foreground})`);
+      },
+    );
+
+    // (NP-257) The CTA is a solid button: filled with `colors.foreground`
+    // (dark ink in light mode, white in dark mode) and labelled with
+    // `colors.background` — the inverse pairing is what makes it read as a
+    // solid black button in light mode and a solid white one in dark mode,
+    // matching the web's `bg-zinc-900 text-white dark:bg-white dark:text-black`.
+    it.each(["light", "dark"] as const)(
+      "(NP-257) the CTA button is filled, not transparent, in %s mode",
+      (mode) => {
+        setSystemScheme(mode);
+        const tokens = mode === "dark" ? darkTokens : lightTokens;
+        const { getByTestId, getByText } = render(
+          <MindsetCard summary={MOCK_SUMMARY} />,
+        );
+
+        const cta = getByTestId("mindset-cta");
+        const ctaStyle = (
+          typeof cta.props.style === "function"
+            ? cta.props.style({ pressed: false })
+            : cta.props.style
+        );
+        const fill = [ctaStyle].flat(Infinity).find((s) => s?.backgroundColor)
+          ?.backgroundColor;
+        expect(fill).toBe(`rgb(${tokens.foreground})`);
+
+        const ctaLabel = getByText("Start today's session");
+        const labelColor = [ctaLabel.props.style]
+          .flat(Infinity)
+          .find((s) => s?.color)?.color;
+        expect(labelColor).toBe(`rgb(${tokens.background})`);
+      },
+    );
   });
 });

@@ -48,7 +48,12 @@ export type TokenName =
   | "accent-foreground"
   | "success"
   | "info"
-  | "mindset";
+  | "mindset"
+  | "mood-bad"
+  | "mood-low"
+  | "mood-okay"
+  | "mood-good"
+  | "mood-great";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -73,6 +78,15 @@ export const lightTokens: Record<TokenName, string> = {
   // this token rather than adding a second blue
   mindset: "147 51 234", // purple-600 — the web's Mindset streak icon
   // (`text-purple-600 bg-purple-100`)
+  // The mood chart's 5 bar/face colours (`webapp/components/ProgressChart.tsx`
+  // `moodColors`). The web uses ONE flat palette in both modes — these data
+  // colours identify a mood level, not a surface, so they do not flip with
+  // the scheme — which is why the light and dark values below are identical.
+  "mood-bad": "248 113 113", // red-400 — Bad
+  "mood-low": "251 146 60", // orange-400 — Not Great
+  "mood-okay": "251 191 36", // amber-400 — Okay
+  "mood-good": "163 230 53", // lime-400 — Pretty Good
+  "mood-great": "52 211 153", // emerald-400 — Great
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -91,6 +105,12 @@ export const darkTokens: Record<TokenName, string> = {
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
   info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
   mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
+  // Same flat mood palette as light mode — see the comment on `lightTokens`.
+  "mood-bad": "248 113 113",
+  "mood-low": "251 146 60",
+  "mood-okay": "251 191 36",
+  "mood-good": "163 230 53",
+  "mood-great": "52 211 153",
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {
