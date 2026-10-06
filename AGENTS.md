@@ -1273,6 +1273,40 @@ lockout, the switch off) and `expo/__tests__/reviewSignIn.test.tsx`.
 native app cannot import from `webapp/`; the webapp suite compares the two
 strings, so a rename cannot 404 every store-build review sign-in in silence.
 
+### The store name and subtitle (store readiness)
+
+**A shipped app carries three names and they are allowed to differ.** The
+listing name (App Store Connect → App Information → Name, Play Console → App
+name, 30 characters, has to be free across the App Store), the home-screen
+label (`expo/app.json` → `expo.name`, which is `Become` and stays `Become` —
+it becomes `CFBundleDisplayName` and Android's `app_name` at `expo prebuild`),
+and the PWA install name (`webapp/lib/appChannel.ts`). Jon asked which one this
+card was about; only the first one changes, so the icon under a member's thumb
+says `Become` either way, which is what he asked for.
+
+The strings, their character counts and the reasoning live in
+**`expo/STORE_LISTING.md`**: `Become: Fitness & Mindset` (25/30) as the name on
+BOTH stores, `Workouts, meals, mind sessions` (30/30) as the iOS subtitle, and
+`Coach-built training, food logged from a photo, and short mind sessions.`
+(72/80) as the Play short description. The name and the subtitle are indexed
+together by Apple, so no word is spent twice across them.
+
+Two things that document has to carry because no amount of code can replace
+them: **a ladder, not a single name** — App Store Connect is the only thing
+that knows whether a name is free, there is no API to ask, so it lists six
+candidates to try in order (starting with plain `Become`), every one ≤30 and
+every one starting with `Become`; and **the reservation is a human step**,
+gated on the App Store Connect record (card `6ab0281d`) and the Play Console
+record (`6ab02822`), with the sign-off table at the bottom of the document
+recording who reserved what, when. No agent here has store credentials.
+
+Test: `expo/__tests__/storeNameAndSubtitle.test.ts` re-derives every count from
+the strings, re-checks each against its store's limit, and fails if the two
+store names drift apart, a ladder rung stops reading as Become, the
+home-screen row stops matching `app.json`, or `RELEASE.md` stops pointing at
+the document. Listing copy (description, keywords, screenshots) is card
+`6ab0282c` and is not in there.
+
 ### The native navigation shell (NP-003)
 
 `expo/app/` is three things and a redirect:
