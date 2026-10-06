@@ -134,13 +134,14 @@ describe("Card NP-036 Acceptance Criteria", () => {
       // 3. Render Home in airplane mode
       const { getByTestId, getByText, queryByTestId } = render(<DashboardRoute />);
 
-      // Verify cached data is rendered
+      // Verify cached data is rendered. The header is the web's static copy
+      // (NP-255), not a personalized greeting, so the cached member name
+      // shows up through Up Next — the one next-workout card — instead of a
+      // dropped "Today's workout" card.
       await waitFor(() => {
-        expect(getByText(/Alex Runner/i)).toBeTruthy();
+        expect(getByTestId("up-next-card")).toBeTruthy();
       });
-      expect(getByText("Push Power A")).toBeTruthy();
-      expect(getByText("Hypertrophy Wave · Phase 1")).toBeTruthy();
-      expect(getByText(/4 exercises/i)).toBeTruthy();
+      expect(getByText("Push Power A · Hypertrophy Wave")).toBeTruthy();
 
       // Verify offline note is displayed on the screen
       expect(getByTestId("dashboard-error")).toBeTruthy();

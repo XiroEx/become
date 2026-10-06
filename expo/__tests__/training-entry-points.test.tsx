@@ -164,8 +164,9 @@ describe("Start workout leads to the live screen", () => {
     const rendered = await renderShell("/(tabs)/dashboard");
     expect(await screen.findByTestId("dashboard-screen")).toBeTruthy();
 
-    // The card only renders once current-workout has answered.
-    const start = await screen.findByTestId("dashboard-start-workout");
+    // Up Next is the one next-workout card (NP-255) and only renders once
+    // current-workout has answered.
+    const start = await screen.findByTestId("up-next-card");
     fireEvent.press(start);
 
     expect(
@@ -232,13 +233,29 @@ describe("the Start callbacks are required props", () => {
     expect(src).not.toMatch(new RegExp(`${prop}\\?:`));
   });
 
+  // The line the card is about: `onPress={onStartWorkout ?? (() => {})}`
+  // rendered a live button that did nothing, in a file that compiled. Neither
+  // file may swallow the omission with a no-op default any more — the prop
+  // has to reach a real handler. `onStartWorkout`'s one call site moved off a
+  // Button's `onPress` (NP-255 dropped the "Today's workout" card it
+  // belonged to): Up Next and Current Program's Continue own the Start
+  // action now, each falling back to it when there's no better next-workout
+  // handler, which is a DIFFERENT fallback than the banned no-op one.
+  const noOpDefaultPattern: Record<string, RegExp> = {
+    onStartWorkout: /onPressWorkout=\{onStartNextWorkout \?\? onStartWorkout\}/,
+    onStartLive: /onPress=\{onStartLive\}/,
+  };
+
   it.each(sources)("%s has no no-op default in %s", (prop, file) => {
-    // The line the card is about: `onPress={onStartWorkout ?? (() => {})}`
-    // rendered a live button that did nothing, in a file that compiled. The
-    // button now presses straight through to the prop. (The comments in those
-    // files quote the old line, which is why this looks at the JSX.)
     const src = fs.readFileSync(path.resolve(__dirname, "..", file), "utf8");
-    expect(src).toMatch(new RegExp(`onPress=\\{${prop}\\}`));
-    expect(src).not.toMatch(new RegExp(`onPress=\\{${prop}\\s*\\?\\?`));
+    expect(src).toMatch(noOpDefaultPattern[prop]!);
+    // Scoped to an actual JSX expression (`={...}`), not just anywhere in the
+    // file — both files' doc comments quote this exact banned pattern on
+    // purpose, to say it no longer happens in the code below them.
+    expect(src).not.toMatch(
+      new RegExp(
+        `=\\{[^}]*\\b${prop}\\s*\\?\\?\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*\\}\\s*\\)[^}]*\\}`,
+      ),
+    );
   });
 });
