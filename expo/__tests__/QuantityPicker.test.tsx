@@ -158,6 +158,39 @@ describe("QuantityPicker", () => {
     });
   });
 
+  it("(NP-261) primaryActionLabel overrides the Log button text, and the secondary action fires its own handler with the same result", () => {
+    const onSubmit = jest.fn();
+    const onSecondaryAction = jest.fn();
+    const { getByTestId } = render(
+      <QuantityPicker
+        food={bridgedFood}
+        initialQuantity={2}
+        onSubmit={onSubmit}
+        primaryActionLabel="Add to Breakfast"
+        secondaryActionLabel="Build a meal"
+        onSecondaryAction={onSecondaryAction}
+      />,
+    );
+
+    expect(getByTestId("log-food-button")).toHaveTextContent("Add to Breakfast");
+
+    fireEvent.press(getByTestId("quantity-picker-secondary-action"));
+    expect(onSecondaryAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ loggedQuantity: 2 }),
+      }),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId("log-food-button"));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it("(NP-261) with no secondaryActionLabel/onSecondaryAction, there is no second button (every other consumer is unaffected)", () => {
+    const { queryByTestId } = render(<QuantityPicker food={bridgedFood} />);
+    expect(queryByTestId("quantity-picker-secondary-action")).toBeNull();
+  });
+
   it("renders serving choices when available", () => {
     const { getByTestId } = render(
       <QuantityPicker food={bridgedFood} />,
