@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet } from "react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { X, Smile } from "lucide-react-native";
+import { X } from "lucide-react-native";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
 import type { TokenName } from "@/lib/theme/tokens";
@@ -85,6 +85,14 @@ export function MoodLogSheet({
       testID={testID}
       visible={visible}
       onClose={onClose}
+      // NP-316: ports the web's layout — a single-line title + X (no icon
+      // badge, no subtitle) and one row of five faces
+      // (`webapp/components/MoodCard.tsx`'s `grid-cols-5`), not a vertical
+      // list. Below, the title `Text` carries `flex: 1` (and `numberOfLines`)
+      // while the X gets a fixed, non-shrinking size — without that, the
+      // header row had no basis to shrink the title against, so on Android
+      // it could grow past the sheet's own padding and push the close
+      // button off the right edge of the screen instead of wrapping.
     >
       <View style={{ gap: 16 }}>
         {/* Header */}
@@ -93,43 +101,33 @@ export function MoodLogSheet({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
+            gap: 8,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                backgroundColor: tint("accent", 0.15),
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Smile size={20} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                className="text-foreground text-lg font-bold"
-                style={{ flexShrink: 1 }}
-              >
-                Today&apos;s Mood
-              </Text>
-              <Text
-                className="text-muted-foreground text-xs"
-                style={{ flexShrink: 1 }}
-              >
-                Pick or change today&apos;s mood
-              </Text>
-            </View>
-          </View>
+          <Text
+            testID={`${testID}-title`}
+            accessibilityRole="header"
+            numberOfLines={1}
+            className="text-foreground text-base font-semibold"
+            style={{ flex: 1 }}
+          >
+            How are you feeling?
+          </Text>
           <Pressable
             testID={`${testID}-close`}
             onPress={onClose}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Close"
-            className="p-2 rounded-full"
+            hitSlop={8}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
           >
             <X size={18} color={colors["muted-foreground"]} />
           </Pressable>
@@ -139,8 +137,8 @@ export function MoodLogSheet({
           <Text className="text-destructive text-xs">{error}</Text>
         ) : null}
 
-        {/* Mood options list */}
-        <View style={{ gap: 8 }}>
+        {/* Mood options — one row of five faces, like the web's grid-cols-5 */}
+        <View style={styles.optionsRow}>
           {MOOD_OPTIONS.map((m) => {
             const isSelected = currentMood === m.level;
             // The web's selected state is a neutral zinc ring + fill
@@ -159,39 +157,31 @@ export function MoodLogSheet({
                 style={[
                   styles.optionButton,
                   {
-                    borderColor: isSelected ? colors["muted-foreground"] : colors.border,
-                    backgroundColor: isSelected ? colors.muted : colors.card,
+                    borderColor: isSelected ? colors["muted-foreground"] : "transparent",
+                    backgroundColor: isSelected ? colors.muted : "transparent",
                   },
                 ]}
               >
                 <View
                   testID={`mood-option-${m.level}`}
-                  style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}
+                  style={[
+                    styles.faceBadge,
+                    { backgroundColor: tint(moodToken, 0.25) },
+                  ]}
                 >
-                  <View
-                    style={[
-                      styles.faceBadge,
-                      { backgroundColor: tint(moodToken, 0.25) },
-                    ]}
-                  >
-                    <Text style={{ fontSize: 20 }}>{m.emoji}</Text>
-                  </View>
-                  <Text
-                    testID={`tile-mood-option-${m.level}`}
-                    className="text-base font-semibold"
-                    style={{ color: isSelected ? colors[moodToken] : colors.foreground }}
-                  >
-                    {m.label}
-                  </Text>
+                  <Text style={{ fontSize: 22 }}>{m.emoji}</Text>
                 </View>
-                {isSelected ? (
-                  <View
-                    style={[
-                      styles.indicator,
-                      { backgroundColor: colors[moodToken] },
-                    ]}
-                  />
-                ) : null}
+                <Text
+                  testID={`tile-mood-option-${m.level}`}
+                  numberOfLines={1}
+                  className="text-[11px] font-medium"
+                  style={{
+                    color: isSelected ? colors[moodToken] : colors.foreground,
+                    textAlign: "center",
+                  }}
+                >
+                  {m.label}
+                </Text>
               </Pressable>
             );
           })}
@@ -202,25 +192,26 @@ export function MoodLogSheet({
 }
 
 const styles = StyleSheet.create({
-  optionButton: {
+  optionsRow: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    gap: 4,
+  },
+  optionButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     borderRadius: 12,
     borderWidth: 1,
     minHeight: 48,
   },
-  indicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
   faceBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
