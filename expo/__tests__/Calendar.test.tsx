@@ -208,6 +208,48 @@ describe("Calendar", () => {
     );
   });
 
+  // NP-292: web shows the trailing days of the PREVIOUS/NEXT month (e.g. Sep
+  // 27-30 padding before Nov) instead of a blank square, with their own
+  // status dots. Native used to render `null` for every leading/trailing
+  // cell, which also meant a completed dot the day before the 1st (visible
+  // on the web) simply never appeared.
+  it("renders real adjacent-month dates (not blanks) for leading/trailing padding, with markers", () => {
+    // May 2026: May 1 is a Friday → 5 leading blanks (Apr 26-30).
+    const slots: ScheduledSlot[] = [
+      {
+        date: "2026-04-28",
+        programId: "p",
+        phaseIndex: 0,
+        workoutIndex: 0,
+        status: "completed",
+      },
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <Calendar month="2026-05" slots={slots} />,
+    );
+    // The padded April dates render with their real date number, not a blank.
+    expect(getByTestId("calendar-day-2026-04-26")).toBeTruthy();
+    expect(getByTestId("calendar-day-2026-04-30")).toBeTruthy();
+    expect(queryByTestId("calendar-blank-0-0")).toBeNull();
+    // And they still carry their status dot.
+    expect(getByTestId("calendar-dot-2026-04-28")).toBeTruthy();
+    expect(
+      getByTestId("calendar-dot-2026-04-28").props.accessibilityLabel,
+    ).toBe("status-completed");
+  });
+
+  it("renders real adjacent-month dates for trailing padding after the month ends", () => {
+    // May 2026 has 31 days, May 31 is a Sunday → the grid's last row is
+    // exactly May 25-31 (no trailing padding needed is also fine), so use a
+    // month that DOES need trailing padding: Feb 2026 has 28 days starting
+    // Sunday Feb 1, ending Saturday Feb 28 — exactly 4 full weeks, no
+    // trailing pad either. April 2026 starts Wednesday Apr 1 and has 30
+    // days, ending Thursday Apr 30 → trailing pad into May 1-2.
+    const { getByTestId } = render(<Calendar month="2026-04" />);
+    expect(getByTestId("calendar-day-2026-05-01")).toBeTruthy();
+    expect(getByTestId("calendar-day-2026-05-02")).toBeTruthy();
+  });
+
   it("invokes view mode and navigation callbacks", () => {
     const onChangeViewMode = jest.fn();
     const onPrev = jest.fn();

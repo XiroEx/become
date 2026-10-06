@@ -106,12 +106,19 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
   });
 
   it("PATCHes reschedule and the grid reflects the moved slot after refetch", async () => {
+    // No "Upcoming" list any more (web has none, NP-292) — reschedule goes
+    // through the day panel's Manage sheet, the same path exercised in
+    // calendar-day-actions.test.tsx.
     const { getByTestId } = render(<CalendarIndexRoute />);
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-reschedule-${dateA}-0`)).toBeTruthy();
+      expect(getByTestId(`calendar-day-${dateA}`)).toBeTruthy();
     });
-
-    fireEvent.press(getByTestId(`scheduled-list-reschedule-${dateA}-0`));
+    fireEvent.press(getByTestId(`calendar-day-${dateA}`));
+    await waitFor(() => {
+      expect(getByTestId("day-detail-manage-prog-1-0")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("day-detail-manage-prog-1-0"));
+    fireEvent.press(getByTestId("slot-menu-to-date"));
     fireEvent.changeText(getByTestId("reschedule-modal-date"), dateB);
     await act(async () => {
       fireEvent.press(getByTestId("reschedule-modal-confirm"));
@@ -139,7 +146,7 @@ describe("Calendar reschedule (PATCH /api/schedule)", () => {
       expect(getsTo("/api/schedule").length).toBeGreaterThan(1);
     });
     await waitFor(() => {
-      expect(getByTestId(`scheduled-list-item-${dateB}-0`)).toBeTruthy();
+      expect(getByTestId(`calendar-dot-${dateB}`)).toBeTruthy();
     });
   });
 });
