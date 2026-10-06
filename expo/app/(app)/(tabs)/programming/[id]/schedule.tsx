@@ -98,6 +98,17 @@ export default function ScheduleSetupRoute() {
     router.replace(`/(tabs)/programming/${encodeURIComponent(id)}`);
   }, [router, id]);
 
+  // NP-285: view mode's "View Full Calendar" and "Edit Training Days" CTAs —
+  // the Calendar tab and its settings screen, same destinations as the web's
+  // `/dashboard/calendar` and `/dashboard/calendar/settings` links.
+  const onViewCalendar = useCallback(() => {
+    router.push("/(tabs)/calendar");
+  }, [router]);
+
+  const onEditTrainingDays = useCallback(() => {
+    router.push("/(tabs)/calendar/settings");
+  }, [router]);
+
   if (!id) {
     return (
       <SafeAreaView
@@ -127,6 +138,8 @@ export default function ScheduleSetupRoute() {
         existingSchedule={existingSchedule}
         onConfirm={onConfirm}
         onSkip={onSkip}
+        onViewCalendar={onViewCalendar}
+        onEditTrainingDays={onEditTrainingDays}
         submitting={submitting}
         error={error}
         loading={programFetch.loading || activeFetch.loading || scheduleFetch.loading}
