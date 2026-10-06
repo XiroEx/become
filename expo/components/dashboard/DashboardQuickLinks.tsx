@@ -22,14 +22,17 @@ import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
  * ready / Browse"), opening the Workout tab.
  *
  * Quick links mirror the web's 2×2 grid minus Connect: chat is on hold for
- * the store release, so there is no chat link. Progress opens the training
- * history (NP-112) — every completed program + quick session.
+ * the store release, so there is no chat link. Progress opens the Training
+ * Log (NP-130) — matching the web's `/dashboard/progress` (NP-256).
  */
 export interface DashboardQuickLinksProps {
   showEmptyState?: boolean;
   onBrowsePrograms?: () => void;
   onOpenPrograms?: () => void;
   onOpenNutrition?: () => void;
+  /** Opens the Training Log (NP-130/NP-256). Falls back to `onOpenHistory`. */
+  onOpenProgress?: () => void;
+  /** @deprecated use `onOpenProgress` — kept as a fallback. */
   onOpenHistory?: () => void;
   nutritionDescription?: string | null;
   testID?: string;
@@ -40,6 +43,7 @@ export function DashboardQuickLinks({
   onBrowsePrograms,
   onOpenPrograms,
   onOpenNutrition,
+  onOpenProgress,
   onOpenHistory,
   nutritionDescription,
   testID = "dashboard-quick-links",
@@ -146,7 +150,7 @@ export function DashboardQuickLinks({
           testID="dashboard-quick-link-progress"
           accessibilityRole="button"
           accessibilityLabel="Progress. Weight & PRs"
-          onPress={onOpenHistory}
+          onPress={onOpenProgress ?? onOpenHistory}
           style={[
             minTouchTarget,
             styles.link,

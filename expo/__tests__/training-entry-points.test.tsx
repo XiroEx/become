@@ -160,7 +160,10 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
 });
 
 describe("Start workout leads to the live screen", () => {
-  it("dashboard → workout overview for the current program, day and phase", async () => {
+  it("dashboard → the live (Track/Live) screen for the current program, day and phase", async () => {
+    // NP-256: Up Next used to open the read-only overview — a second tap
+    // ("Start Live" on that screen) was what reached Track. It now opens the
+    // tracker directly, the same one-tap depth as the web's Continue link.
     const rendered = await renderShell("/(tabs)/dashboard");
     expect(await screen.findByTestId("dashboard-screen")).toBeTruthy();
 
@@ -171,19 +174,19 @@ describe("Start workout leads to the live screen", () => {
 
     expect(
       await screen.findByTestId(
-        screenId("(app)/(tabs)/programming/[id]/workout/[idx]/index"),
+        screenId("(app)/(tabs)/programming/[id]/workout/[idx]/live"),
       ),
     ).toBeTruthy();
     // "Day 3" → index 2, 1-based phase 2 → `?phase=1`.
     await waitFor(() => {
-      expect(rendered.getPathname()).toBe("/programming/p1/workout/2");
+      expect(rendered.getPathname()).toBe("/programming/p1/workout/2/live");
     });
     expect(rendered.getSearchParams()).toEqual(
       expect.objectContaining({ phase: "1" }),
     );
   });
 
-  it("workout overview → the live screen for the same program, phase and index", async () => {
+  it("the workout overview (reached from elsewhere, e.g. a phase's workout list) still starts live from its own button", async () => {
     // The overview is loaded for real here; the live screen is the stub, so
     // the assertion is about which route opened, not what it renders.
     await SecureStore.setItemAsync("become.session", savedJwt());

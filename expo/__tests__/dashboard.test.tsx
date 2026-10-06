@@ -416,7 +416,7 @@ describe("DashboardRoute navigation", () => {
     wireApiFetch();
   });
 
-  it("Start workout (via Up Next, NP-255) opens the current workout's overview, by day label and phase", async () => {
+  it("Start workout (via Up Next, NP-255) opens the current workout's tracker, by day label and phase", async () => {
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
       expect(getByTestId("up-next-card")).toBeTruthy();
@@ -424,11 +424,13 @@ describe("DashboardRoute navigation", () => {
 
     fireEvent.press(getByTestId("up-next-card"));
 
-    // The web opens `…/workout?day=Day 3`; the native route addresses the
-    // workout by index, so "Day 3" → 2 (workoutIndexFromDayLabel) and the
-    // 1-based phase 2 → `?phase=1`.
+    // The web opens `…/workout?day=Day 3` (Track); the native route
+    // addresses the workout by index, so "Day 3" → 2
+    // (workoutIndexFromDayLabel) and the 1-based phase 2 → `?phase=1`. The
+    // `/live` segment is what lands on Track/Live rather than the read-only
+    // overview (NP-256).
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/2?phase=1",
+      "/(tabs)/programming/p1/workout/2/live?phase=1",
     );
   });
 
@@ -445,7 +447,7 @@ describe("DashboardRoute navigation", () => {
     fireEvent.press(getByTestId("up-next-card"));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/0?phase=0",
+      "/(tabs)/programming/p1/workout/0/live?phase=0",
     );
   });
 
@@ -1170,7 +1172,7 @@ describe("DashboardRoute navigation", () => {
       d.setDate(d.getDate() + 1);
       const sd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       expect(mockPush).toHaveBeenCalledWith(
-        `/(tabs)/programming/p1/workout/2?phase=0&day=${encodeURIComponent("Day 3")}&sd=${encodeURIComponent(sd)}`,
+        `/(tabs)/programming/p1/workout/2/live?phase=0&day=${encodeURIComponent("Day 3")}&sd=${encodeURIComponent(sd)}`,
       );
     });
 
@@ -1211,7 +1213,7 @@ describe("DashboardRoute navigation", () => {
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
     });
 
-    it("Progress quick link opens the training history (NP-112)", async () => {
+    it("Progress quick link opens the Training Log (NP-130/NP-256)", async () => {
       wireSchedule();
       const { getByTestId } = render(<DashboardRoute />);
 
@@ -1219,7 +1221,7 @@ describe("DashboardRoute navigation", () => {
         expect(getByTestId("dashboard-quick-link-progress")).toBeTruthy();
       });
       fireEvent.press(getByTestId("dashboard-quick-link-progress"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/history");
+      expect(mockPush).toHaveBeenCalledWith("/progress");
     });
   });
 });
