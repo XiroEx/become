@@ -18,7 +18,14 @@ export const MealPlanItemSchema = z
     id: z.string().optional(),
     name: z.string(),
     servings: z.number().optional(),
-    servingSize: z.string().optional(),
+    // `webapp/models/Meal.ts` (`IMealItem.servingSize`) is a required Mongoose
+    // `Number` — the server has only ever sent a number here (`3`, `100`,
+    // `1.5`). This used to declare `z.string()`, which made every real
+    // `GET /api/meal-plans` response fail `PlansResponseSchema.safeParse`: the
+    // week screen swallowed the thrown `SchemaValidationError` into an empty
+    // week with no planned rows, no day totals and a disabled Grocery list
+    // (NP-267).
+    servingSize: z.number().optional(),
     servingUnit: z.string().optional(),
     brand: z.string().optional(),
     nutrition: MealPlanNutritionSchema.optional(),

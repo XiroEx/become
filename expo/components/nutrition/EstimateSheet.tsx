@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   View,
 } from "react-native";
-import { Camera, ImagePlus, PencilLine, Plus, RotateCcw, Send, Trash2 } from "lucide-react-native";
+import { Camera, ImagePlus, PencilLine, Plus, RotateCcw, Send, Trash2, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -105,6 +107,13 @@ export interface EstimateSheetProps {
   initialImageUrl?: string | null;
   /** The re-opened estimate's id — edits/logs update it in place. */
   initialScanId?: string | null;
+  /**
+   * When set, the sheet opens straight into this capture source instead of
+   * showing the chooser first (NP-263) — the web's "Upload photo" opens the
+   * photo library directly, so the native Upload menu's equivalent button
+   * must too, rather than re-presenting Take photo / Upload photo / Describe.
+   */
+  initialAutoCaptureSource?: CaptureSource | null;
   captureImpl?: typeof captureImage;
   testID?: string;
 }
@@ -139,10 +148,11 @@ export function EstimateSheet({
   initialReview = null,
   initialImageUrl = null,
   initialScanId = null,
+  initialAutoCaptureSource = null,
   captureImpl = captureImage,
   testID = "estimate-sheet",
 }: EstimateSheetProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token } = useAuth();
   const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
     useEntitlements();
@@ -163,6 +173,12 @@ export function EstimateSheet({
   const [correcting, setCorrecting] = useState(false);
   const [correctNotice, setCorrectNotice] = useState<string | null>(null);
   const [imageThumb, setImageThumb] = useState<string>("");
+  // Set on open when the caller asked for a direct library/camera launch
+  // (NP-263's "Upload photo" from the nutrition screen's Upload menu) —
+  // consumed by the effect below once `captureFrom` exists, then cleared so
+  // re-opening the sheet some other way never re-fires it.
+  const [pendingAutoCapture, setPendingAutoCapture] =
+    useState<CaptureSource | null>(null);
   const savedScanIdRef = useRef<string | null>(null);
   const noteRef = useRef("");
   // The signed follow-up ticket that came back with the estimate on screen
@@ -194,6 +210,10 @@ export function EstimateSheet({
     allowanceTicketRef.current = undefined;
     setCorrectNotice(null);
     setImageThumb("");
+    // Armed only while a direct-launch request is live; cleared once the
+    // capture effect below consumes it (or immediately, for every other
+    // open) so it never re-fires on an unrelated re-open.
+    setPendingAutoCapture(initialAutoCaptureSource ?? null);
     if (initialPhase === "review" && initialReview && initialReview.length) {
       // Re-opening a saved estimate to edit: rebuild review items from the
       // scan, exactly the way the web's SnapPlateModal does for
@@ -239,7 +259,7 @@ export function EstimateSheet({
       setCaptured(null);
       setImageThumb("");
     }
-  }, [visible, tag, initialPhase, initialImage, initialOrigin, initialDescribe, initialReview, initialImageUrl, initialScanId]);
+  }, [visible, tag, initialPhase, initialImage, initialOrigin, initialDescribe, initialReview, initialImageUrl, initialScanId, initialAutoCaptureSource]);
 
   const getToken = useCallback(
     () => (token ?? undefined),
@@ -429,7 +449,7 @@ export function EstimateSheet({
   }, [correctText, correcting, items, imageThumb, getToken, persistCurrent, refreshEntitlements]);
 
   const captureFrom = useCallback(
-    async (source: CaptureSource) => {
+    async (source: CaptureSource, note = "") => {
       setCapturing(true);
       setDenial(null);
       try {
@@ -447,7 +467,10 @@ export function EstimateSheet({
         }
         setCaptured(result.image);
         setOrigin(source === "camera" ? "camera" : "library");
-        setComposeNote("");
+        // Carries typed describe text forward as the compose note — the
+        // web's "Add photo"/"Upload photo" from the describe step do the
+        // same (`setComposeNote(describeText)` before opening the picker).
+        setComposeNote(note);
         setPhase("compose");
       } finally {
         setCapturing(false);
@@ -455,6 +478,19 @@ export function EstimateSheet({
     },
     [captureImpl],
   );
+
+  // Consumes a direct-launch request armed by the open effect (NP-263): the
+  // nutrition screen's Upload menu "Upload photo" must open the photo
+  // library immediately, the way web's `pickGallery` does, instead of
+  // re-presenting this sheet's own Take photo / Upload photo / Describe
+  // chooser. Cleared right away so it never re-fires.
+  useEffect(() => {
+    if (!visible || !pendingAutoCapture) return;
+    const source = pendingAutoCapture;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from open intent, same as the reset effect above
+    setPendingAutoCapture(null);
+    void captureFrom(source);
+  }, [visible, pendingAutoCapture, captureFrom]);
 
   const setMultiplier = useCallback((idx: number, delta: number) => {
     setItems((prev) =>
@@ -607,14 +643,65 @@ export function EstimateSheet({
       <BottomSheet
         visible={visible && !addMoreOpen}
         onClose={onClose}
-        title="Snap your plate"
+        // The describe phase renders its own header (icon, title, subtitle,
+        // close) to match the web's pencil-icon header — the generic title
+        // would duplicate it.
+        title={phase === "describe" ? undefined : "Snap your plate"}
         testID={testID}
       >
-        <ScrollView
-          testID={`${testID}-body`}
-          style={{ maxHeight: 520 }}
-          contentContainerStyle={{ paddingBottom: 8 }}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <ScrollView
+            testID={`${testID}-body`}
+            keyboardShouldPersistTaps="handled"
+            style={{ maxHeight: 520 }}
+            contentContainerStyle={{ paddingBottom: 8 }}
+          >
+          {phase === "describe" && (
+            <View
+              testID={`${testID}-describe-header`}
+              style={{
+                flexDirection: "row",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 8,
+                marginBottom: 4,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: tint("success", 0.15),
+                  }}
+                >
+                  <PencilLine size={16} color={colors.success} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text className="text-foreground text-base font-bold">
+                    Describe your meal
+                  </Text>
+                  <Text className="text-muted-foreground text-xs">
+                    Add a photo too, or just use your words
+                  </Text>
+                </View>
+              </View>
+              <Pressable
+                testID={`${testID}-describe-close`}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                onPress={onClose}
+                hitSlop={8}
+                style={{ padding: 4 }}
+              >
+                <X size={20} color={colors["muted-foreground"]} />
+              </Pressable>
+            </View>
+          )}
+
           {phase === "chooser" && (
             <View testID={`${testID}-chooser`} style={{ gap: 10, paddingTop: 4 }}>
               <Text className="text-foreground text-base font-bold text-center">
@@ -672,12 +759,27 @@ export function EstimateSheet({
 
           {phase === "describe" && (
             <View testID={`${testID}-describe`} style={{ gap: 12, paddingTop: 4 }}>
-              <Text className="text-foreground text-base font-bold text-center">
-                Describe your meal
-              </Text>
-              <Text className="text-muted-foreground text-sm text-center">
-                In your words — the food and portions, plus sauces, sides and drinks.
-              </Text>
+              <View style={{ alignItems: "center", gap: 4 }}>
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 16,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: tint("success", 0.15),
+                    marginBottom: 4,
+                  }}
+                >
+                  <PencilLine size={28} color={colors.success} />
+                </View>
+                <Text className="text-foreground text-base font-bold text-center">
+                  Describe your meal
+                </Text>
+                <Text className="text-muted-foreground text-sm text-center">
+                  In your words — add a photo too, or just estimate from the text.
+                </Text>
+              </View>
               <Input
                 testID={`${testID}-describe-input`}
                 placeholder="e.g. chicken burrito bowl with rice, black beans, guac and salsa"
@@ -686,6 +788,37 @@ export function EstimateSheet({
                 multiline
                 numberOfLines={4}
               />
+              {/* Optional photo — carries the typed text forward as the
+                  compose note, the way the web's "Add photo"/"Upload photo"
+                  do from this same step. */}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    testID={`${testID}-describe-add-photo`}
+                    variant="secondary"
+                    onPress={() => void captureFrom("camera", describeText)}
+                    disabled={capturing}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Camera size={14} color={colors.foreground} />
+                      <Text className="text-foreground text-sm font-medium">Add photo</Text>
+                    </View>
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    testID={`${testID}-describe-upload-photo`}
+                    variant="secondary"
+                    onPress={() => void captureFrom("library", describeText)}
+                    disabled={capturing}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <ImagePlus size={14} color={colors.foreground} />
+                      <Text className="text-foreground text-sm font-medium">Upload photo</Text>
+                    </View>
+                  </Button>
+                </View>
+              </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <Button
@@ -699,6 +832,7 @@ export function EstimateSheet({
                 <View style={{ flex: 2 }}>
                   <Button
                     testID={`${testID}-describe-estimate`}
+                    variant="success"
                     onPress={() => void runDescribeEstimate(describeText)}
                     disabled={!describeText.trim()}
                   >
@@ -1059,7 +1193,8 @@ export function EstimateSheet({
               />
             </View>
           )}
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </BottomSheet>
 
       <FoodSearchSheet

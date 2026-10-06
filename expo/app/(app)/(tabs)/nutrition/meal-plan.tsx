@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +18,7 @@ import {
 } from "@become/api-client";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
+import { ScreenState } from "@/components/ScreenState";
 import { BottomSheet } from "@/components/BottomSheet";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
@@ -147,6 +143,7 @@ export default function MealPlanRoute() {
   const {
     data: plansData,
     loading: plansLoading,
+    error: plansError,
     refetch: refetchPlans,
   } = useFetch(plansPath, PlansResponseSchema, fetchOpts);
   const { data: goalsData } = useFetch(
@@ -414,15 +411,24 @@ export default function MealPlanRoute() {
           </Text>
         ) : null}
 
-        {plansLoading && plans.length === 0 ? (
-          <View
-            testID="meal-plan-loading"
-            style={{ alignItems: "center", paddingVertical: 64 }}
-          >
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : (
-          <View testID="meal-plan-days" style={{ gap: 12 }}>
+        {/* `PlansResponseSchema` used to reject the server's numeric
+            `servingSize` and the thrown `SchemaValidationError` landed here
+            as `plansError` without ever being read — the week just rendered
+            empty, with no planned rows, no day totals and a disabled
+            Grocery list (NP-267). `ScreenState` surfaces it instead: a
+            retryable error, not a silent empty week. `hasData` is keyed on
+            the response having PARSED at all (`plansData !== null`), not on
+            the week having any plans — a genuinely empty week is valid
+            data, not an error. */}
+        <ScreenState
+          testID="meal-plan-screen-state"
+          loading={plansLoading}
+          error={plansError}
+          hasData={plansData !== null}
+          onRetry={() => void refetchPlans()}
+          serverErrorMessage="Could not load your meal plan. Pull to retry."
+        >
+        <View testID="meal-plan-days" style={{ gap: 12 }}>
             {days.map((day) => {
               const dayKey = ymd(day);
               const dayPlans = byDay.get(dayKey) ?? [];
@@ -694,7 +700,7 @@ export default function MealPlanRoute() {
               );
             })}
           </View>
-        )}
+        </ScreenState>
 
         <Button
           testID="meal-plan-timeline-link"
@@ -821,6 +827,7 @@ export default function MealPlanRoute() {
         food={pickedFood}
         plannedDate={picker?.dateKey ?? ""}
         tag={picker?.tag ?? "snack"}
+        availableTags={{ defaults: tagDefaults, userTags: tagUserTags }}
         onClose={closePlanFlow}
         onPlanned={handlePlanned}
       />

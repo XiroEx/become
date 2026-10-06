@@ -233,7 +233,7 @@ describe("the table", () => {
     ["/dashboard/recipes/r1/edit", "/(tabs)/nutrition/recipes", "nearest"],
     ["/dashboard/foods/f1", "/(tabs)/nutrition/food/f1", "exact"],
     ["/dashboard/meals/m1", "/(tabs)/nutrition", "nearest"],
-    ["/dashboard/meal-plan", "/(tabs)/nutrition", "nearest"],
+    ["/dashboard/meal-plan", "/(tabs)/nutrition/meal-plan", "exact"],
     ["/dashboard/timeline", "/(tabs)/nutrition", "nearest"],
     // Mind
     ["/dashboard/mind", "/(tabs)/mind", "exact"],

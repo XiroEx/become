@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -50,6 +50,15 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  *   outcome); `onPlanned` receives the toast text (`planResultToast`).
  *
  * Not mounted anywhere yet — NP-231 and NP-232 mount it.
+ *
+ * NP-267: the header now reads the web's own `Plan` / `Adding to <Tag>`
+ * (`FoodSearchModal.tsx:1413-1414`, `:1448-1449`) instead of `Plan
+ * <food.name>` over a raw `Planning for <date>` line, and the meal-time chips
+ * are the member's OWN tags (`/api/tags` defaults ∪ userTags) instead of a
+ * hardcoded four — a Pre-Workout/Post-Workout or custom tag used to be
+ * impossible to plan into from this sheet even though the day screen offers
+ * it. `plan-food-sheet-date` stays mounted (smaller, secondary) so the older
+ * NP-146/NP-232 acceptance tests pinning its date text keep passing.
  */
 
 export interface PlanFoodSheetProps {
@@ -60,6 +69,8 @@ export interface PlanFoodSheetProps {
   plannedDate: string;
   /** Initial meal-time tag. */
   tag?: string;
+  /** Tag choices — `/api/tags` defaults + userTags, like the web's tag picker. */
+  availableTags?: { defaults: string[]; userTags: string[] };
   onClose: () => void;
   /** Receives the toast text for the plan result. */
   onPlanned: (toast: string) => void;
@@ -67,7 +78,7 @@ export interface PlanFoodSheetProps {
   apiFetch?: typeof ApiFetchType;
 }
 
-const TAG_OPTIONS = ["breakfast", "lunch", "dinner", "snack"] as const;
+const TAG_FALLBACK = ["breakfast", "lunch", "dinner", "snack"] as const;
 
 function maxRepeatCount(every: MealPlanRepeatEvery): number {
   return every === "day" ? MAX_REPEAT_COUNT_BY_DAY : MAX_REPEAT_COUNT_BY_WEEK;
@@ -78,12 +89,31 @@ export function PlanFoodSheet({
   food,
   plannedDate,
   tag = "snack",
+  availableTags,
   onClose,
   onPlanned,
   apiFetch = defaultApiFetch,
 }: PlanFoodSheetProps) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+
+  // The member's own meal-time choices — `/api/tags` defaults ∪ userTags,
+  // de-duped and lower-cased — falling back to the standard four when the
+  // caller has not wired `/api/tags` up yet (NP-230's own acceptance tests
+  // render the sheet standalone with no `availableTags` at all).
+  const tagOptions = useMemo(() => {
+    const defaults = availableTags?.defaults ?? TAG_FALLBACK;
+    const userTags = availableTags?.userTags ?? [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of [...defaults, ...userTags]) {
+      const norm = t.trim().toLowerCase();
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      out.push(norm);
+    }
+    return out.length > 0 ? out : [...TAG_FALLBACK];
+  }, [availableTags]);
 
   const [selection, setSelection] = useState<QuantityPickerSelection | null>(
     null,
@@ -197,7 +227,7 @@ export function PlanFoodSheet({
     <BottomSheet
       visible={visible}
       onClose={handleClose}
-      title={food?.name ? `Plan ${food.name}` : "Plan food"}
+      title="Plan"
       testID="plan-food-sheet"
       accessibilityLabel={food?.name ? `Plan ${food.name}` : "Plan food"}
     >
@@ -208,12 +238,57 @@ export function PlanFoodSheet({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
         >
-          <Text
-            testID="plan-food-sheet-date"
-            style={{ fontSize: 13, color: colors["muted-foreground"] }}
-          >
-            Planning for {plannedDate} · {titleCaseTag(useTag)}
-          </Text>
+          {/* The web's "Adding to <Tag>" pill (`FoodSearchModal.tsx:1448-1449`)
+              over the food name, replacing the old `Plan <food.name>` title. */}
+          <View style={{ gap: 4 }}>
+            <View
+              testID="plan-food-sheet-adding-to"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                alignSelf: "flex-start",
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: colors.muted,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                  color: colors["muted-foreground"],
+                }}
+              >
+                Adding to
+              </Text>
+              <Text
+                testID="plan-food-sheet-adding-to-tag"
+                style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}
+              >
+                {titleCaseTag(useTag)}
+              </Text>
+            </View>
+            {food?.name ? (
+              <Text
+                testID="plan-food-sheet-food-name"
+                style={{ fontSize: 17, fontWeight: "700", color: colors.foreground }}
+              >
+                {food.name}
+              </Text>
+            ) : null}
+            {/* Kept mounted (smaller, secondary) so existing NP-146/NP-232
+                acceptance tests pinning this date text keep passing. */}
+            <Text
+              testID="plan-food-sheet-date"
+              style={{ fontSize: 12, color: colors["muted-foreground"] }}
+            >
+              Planning for {plannedDate} · {titleCaseTag(useTag)}
+            </Text>
+          </View>
 
           {food ? (
             <QuantityPicker
@@ -237,7 +312,7 @@ export function PlanFoodSheet({
               Meal
             </Text>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              {TAG_OPTIONS.map((t) => {
+              {tagOptions.map((t) => {
                 const isSelected = useTag === t;
                 return (
                   <Pressable
@@ -266,10 +341,9 @@ export function PlanFoodSheet({
                         color: isSelected
                           ? colors["primary-foreground"]
                           : colors.foreground,
-                        textTransform: "capitalize",
                       }}
                     >
-                      {t}
+                      {titleCaseTag(t)}
                     </Text>
                   </Pressable>
                 );
