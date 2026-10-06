@@ -83,14 +83,19 @@ const sample: ProgramDetailViewModel = {
 };
 
 describe("ProgramDetail", () => {
-  it("renders program name, description, and metadata", () => {
-    const { getByTestId } = render(<ProgramDetail program={sample} />);
+  // NP-284: the web hero never shows the long description paragraph — only
+  // the name, the duration/frequency badges and the target user/goal lines.
+  it("renders program name and hero badges, and does not render the description paragraph", () => {
+    const { getByTestId, getByText, queryByText } = render(
+      <ProgramDetail program={sample} />,
+    );
     expect(getByTestId("program-detail-name").props.children).toBe(
       "Strength Foundation",
     );
-    expect(getByTestId("program-detail-description").props.children).toBe(
-      "Build a base of strength and movement quality.",
-    );
+    expect(getByText("12 Weeks")).toBeTruthy();
+    expect(getByText("4x/week")).toBeTruthy();
+    expect(getByText("Beginner")).toBeTruthy();
+    expect(queryByText("Build a base of strength and movement quality.")).toBeNull();
   });
 
   it("renders a card/tab per phase + workout titles", () => {
@@ -231,12 +236,58 @@ describe("ProgramDetail", () => {
 
     expect(getByTestId("program-detail-workout-title").props.children).toBe("Push A");
     expect(getByTestId("program-detail-exercise-bench-press")).toBeTruthy();
-    expect(getByTestId("program-detail-exercise-thumb-bench-press")).toBeTruthy();
+    expect(getByTestId("program-detail-exercise-number-bench-press")).toBeTruthy();
     expect(getByTestId("program-detail-exercise-demo-bench-press")).toBeTruthy();
 
     expect(getByTestId("program-detail-exercise-group-superset-1")).toBeTruthy();
     expect(getByText("Superset A")).toBeTruthy();
+    // NP-284: full wording, matching the web exactly — not the shortened
+    // native "minimal rest" / "60s rest".
+    expect(getByText("1 exercises · 60s rest between rounds")).toBeTruthy();
     expect(getByTestId("program-detail-exercise-overhead-press")).toBeTruthy();
+  });
+
+  // NP-284: web colours group blocks by type (purple Superset, orange Circuit,
+  // …) instead of one red badge for every type, and says "minimal rest
+  // between exercises" when the group carries no groupRest.
+  it("colours group badges by groupType and uses the web's subtitle wording", () => {
+    const withCircuit: ProgramDetailViewModel = {
+      ...sample,
+      phases: [
+        {
+          ...sample.phases[0]!,
+          workouts: [
+            {
+              workoutIndex: 0,
+              day: "Day 1",
+              title: "Circuit Day",
+              exerciseCount: 2,
+              exercises: [
+                {
+                  slug: "burpees",
+                  name: "Burpees",
+                  sets: 3,
+                  groupId: "circuit-1",
+                  groupType: "circuit",
+                },
+                {
+                  slug: "mountain-climbers",
+                  name: "Mountain Climbers",
+                  sets: 3,
+                  groupId: "circuit-1",
+                  groupType: "circuit",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const { getByText } = render(
+      <ProgramDetail program={withCircuit} selectedDayKey="Day 1" />,
+    );
+    expect(getByText("Circuit")).toBeTruthy();
+    expect(getByText("2 exercises · minimal rest between exercises")).toBeTruthy();
   });
 
   it("renders Save/Unsave toggle button and calls onToggleSave", () => {
@@ -374,5 +425,88 @@ describe("ProgramDetail", () => {
     expect(abandonBtn).toBeTruthy();
     fireEvent.press(abandonBtn);
     expect(onAbandon).toHaveBeenCalledTimes(1);
+  });
+
+  // NP-284: "Started Sep 15, 2026" — the blue start-date link in the hero.
+  it("renders the formatted start date as the start-date link label", () => {
+    const { getByText } = render(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={{
+          programId: "prog-1",
+          programName: "Strength Foundation",
+          currentPhase: 1,
+          currentDay: "Day 1",
+          completedWorkouts: 9,
+          totalWorkouts: 13,
+          startDate: "2026-09-15",
+        }}
+        onSetStartDate={() => {}}
+      />,
+    );
+    expect(getByText("Started Sep 15, 2026")).toBeTruthy();
+  });
+
+  // NP-284: Schedule + Training Log links — unreachable from native once
+  // enrolled before this card.
+  it("renders Schedule and Training Log links and calls their handlers", () => {
+    const onOpenSchedule = jest.fn();
+    const onOpenTrainingLog = jest.fn();
+    const { getByTestId, getByText } = render(
+      <ProgramDetail
+        program={sample}
+        isEnrolled={true}
+        activeProgram={{
+          programId: "prog-1",
+          programName: "Strength Foundation",
+          currentPhase: 1,
+          currentDay: "Day 1",
+          completedWorkouts: 9,
+          totalWorkouts: 13,
+        }}
+        onOpenSchedule={onOpenSchedule}
+        onOpenTrainingLog={onOpenTrainingLog}
+      />,
+    );
+
+    expect(getByText("Schedule")).toBeTruthy();
+    expect(getByText("Training Log")).toBeTruthy();
+
+    fireEvent.press(getByTestId("program-detail-schedule-link"));
+    expect(onOpenSchedule).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByTestId("program-detail-training-log-link"));
+    expect(onOpenTrainingLog).toHaveBeenCalledTimes(1);
+  });
+
+  // NP-284 point 3: hold the enroll/continue area until the active-program
+  // read resolves — never flash "Enroll in program" at an enrolled member.
+  it("shows a neutral loading state instead of Enroll in program while activeProgramLoading", () => {
+    const { getByTestId, queryByTestId, queryByText } = render(
+      <ProgramDetail program={sample} activeProgramLoading={true} />,
+    );
+
+    expect(getByTestId("program-detail-start-loading")).toBeTruthy();
+    expect(queryByTestId("program-detail-start")).toBeNull();
+    expect(queryByText("Enroll in program")).toBeNull();
+  });
+
+  // NP-284: "All Programs" and "Calendar" nav pills on the hero.
+  it("renders All Programs and Calendar pills and calls their handlers", () => {
+    const onBack = jest.fn();
+    const onOpenCalendar = jest.fn();
+    const { getByTestId, getByText } = render(
+      <ProgramDetail program={sample} onBack={onBack} onOpenCalendar={onOpenCalendar} />,
+    );
+
+    expect(getByText("All Programs")).toBeTruthy();
+    expect(getByText("Calendar")).toBeTruthy();
+
+    fireEvent.press(getByTestId("program-detail-back"));
+    expect(onBack).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByTestId("program-detail-open-calendar"));
+    expect(onOpenCalendar).toHaveBeenCalledTimes(1);
   });
 });

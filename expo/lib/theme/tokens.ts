@@ -67,7 +67,10 @@ export type TokenName =
   | "mindset"
   | "mind-violet"
   | "mind-green"
-  | "mind-ink";
+  | "mind-ink"
+  | "orange"
+  | "indigo"
+  | "rose";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -99,6 +102,10 @@ export const lightTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  orange: "249 115 22", // orange-500 — the web's Circuit group badge
+  // (`bg-orange-500`), same in both modes like `primary`
+  indigo: "99 102 241", // indigo-500 — the web's Triset group badge
+  rose: "244 63 94", // rose-500 — the web's Giant Set group badge
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -121,6 +128,9 @@ export const darkTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  orange: "249 115 22", // orange-500 — same in both modes
+  indigo: "99 102 241", // indigo-500 — same in both modes
+  rose: "244 63 94", // rose-500 — same in both modes
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

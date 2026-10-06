@@ -1,10 +1,22 @@
 import { useState, useMemo, useCallback } from "react";
 import { View, ScrollView, Pressable } from "react-native";
 import { Text } from "@/components/Text";
-import { Check, Clock, Heart, Play } from "lucide-react-native";
+import {
+  Calendar,
+  Check,
+  ChevronLeft,
+  Clock,
+  Heart,
+  History,
+  Pause as PauseIcon,
+  Play,
+  TimerReset,
+  X,
+} from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { getTokens, tintToken, type TokenName } from "@/lib/theme/tokens";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
@@ -73,6 +85,12 @@ export interface ProgramDetailProps {
   /** Enrolled state: true if member is actively enrolled in this program. */
   isEnrolled?: boolean;
   activeProgram?: ActiveProgramSummary | null;
+  /**
+   * True while `GET /api/programs/active` is still in flight. Holds the
+   * primary CTA in a neutral loading state instead of flashing "Enroll in
+   * program" (and zero progress) at an already-enrolled member.
+   */
+  activeProgramLoading?: boolean;
   /** Completed days set (built from GET /api/workouts/logs with completed: true). */
   completedDays?: Set<string>;
   /** In-progress state: true if a workout is in-progress (isResume: true). */
@@ -83,7 +101,7 @@ export interface ProgramDetailProps {
   onStartLive?: (phaseIndex?: number, workoutIndex?: number, day?: string) => void;
   /** Resume live workout directly. */
   onResumeLive?: () => void;
-  /** Adjust the enrolled start date. Button renders only when provided. */
+  /** Adjust the enrolled start date. Renders the start-date link only when provided. */
   onSetStartDate?: () => void;
   /** Abandon the program. Button renders only when provided. */
   onAbandon?: () => void;
@@ -91,6 +109,14 @@ export interface ProgramDetailProps {
   onPauseResume?: () => void;
   /** Shift the schedule. Button renders only when provided. */
   onShift?: (days?: number) => void;
+  /** Open this program's Schedule screen. Link renders only when provided. */
+  onOpenSchedule?: () => void;
+  /** Open the Training Log (progress/workouts). Link renders only when provided. */
+  onOpenTrainingLog?: () => void;
+  /** Back to the programs list. Renders the "All Programs" pill only when provided. */
+  onBack?: () => void;
+  /** Open the calendar. Renders the "Calendar" pill only when provided. */
+  onOpenCalendar?: () => void;
   /** Open the editor for this custom program (native builder, NP-171). */
   onEdit?: () => void;
   /** Disables the action buttons while a mutation is in flight. */
@@ -120,6 +146,35 @@ const GROUP_LABELS: Record<string, string> = {
   amrap: "AMRAP",
 };
 
+// Mirrors the web's GROUP_COLORS (ProgramDetailClient.tsx) — a distinct hue
+// per group type instead of one red badge for everything. Every value is a
+// theme token name, never a literal, per NP-123.
+const GROUP_COLOR_TOKENS: Record<string, TokenName> = {
+  superset: "mindset", // purple-600/400 — web's `bg-purple-500`
+  circuit: "orange",
+  triset: "indigo",
+  giant_set: "rose",
+  emom: "teal",
+  amrap: "accent", // amber — web's `bg-amber-500`
+};
+
+/**
+ * `Started Sep 15, 2026` / `Starts Thu, Oct 9, 2026` / `Set start date` — the
+ * web's three labels for the enrolled start-date link (ProgramDetailClient.tsx).
+ */
+function formatStartDateLabel(startDate: string | null | undefined): string {
+  if (!startDate) return "Set start date";
+  const sd = startDate.split("T")[0]!;
+  const d = new Date(`${sd}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "Set start date";
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  if (sd > todayStr) {
+    return `Starts ${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}`;
+  }
+  return `Started ${d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
 export function ProgramDetail({
   program,
   onPhasePress,
@@ -131,6 +186,7 @@ export function ProgramDetail({
   onEnroll,
   isEnrolled = false,
   activeProgram = null,
+  activeProgramLoading = false,
   completedDays,
   hasInProgressWorkout = false,
   onContinue,
@@ -140,6 +196,10 @@ export function ProgramDetail({
   onAbandon,
   onPauseResume,
   onShift,
+  onOpenSchedule,
+  onOpenTrainingLog,
+  onBack,
+  onOpenCalendar,
   onEdit,
   actionPending = false,
   isSaved = false,
@@ -149,6 +209,21 @@ export function ProgramDetail({
   testID = "program-detail",
 }: ProgramDetailProps) {
   const { colors, tint } = useThemeTokens();
+
+  // The hero is ALWAYS dark (a dark-gradient-over-photo card on the web, same
+  // in light and dark app mode) — so its own text/icon/badge colours are
+  // pinned to the dark token set rather than following `colors`, which tracks
+  // the system scheme. `heroRgb`/`heroTint` are the dark-pinned equivalents of
+  // `colors`/`tint`.
+  const heroTokens = useMemo(() => getTokens("dark"), []);
+  const heroRgb = useCallback(
+    (name: TokenName) => `rgb(${heroTokens[name]})`,
+    [heroTokens],
+  );
+  const heroTint = useCallback(
+    (name: TokenName, alpha: number) => tintToken(name, "dark", alpha),
+    [],
+  );
 
   // Determine smart defaults matching web parity
   const defaultPhaseIndex = useMemo(() => {
@@ -296,6 +371,7 @@ export function ProgramDetail({
         }
         const groupType = ex.groupType ?? "superset";
         const groupLabel = ex.groupLabel || GROUP_LABELS[groupType] || "Group";
+        const groupToken = GROUP_COLOR_TOKENS[groupType] ?? GROUP_COLOR_TOKENS.superset!;
         elements.push(
           <View
             key={`group-${groupId}`}
@@ -303,8 +379,8 @@ export function ProgramDetail({
             style={{
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
+              borderColor: tint(groupToken, 0.4),
+              backgroundColor: tint(groupToken, 0.1),
               padding: 12,
               gap: 8,
             }}
@@ -312,7 +388,7 @@ export function ProgramDetail({
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <View
                 style={{
-                  backgroundColor: colors.primary,
+                  backgroundColor: colors[groupToken],
                   paddingHorizontal: 8,
                   paddingVertical: 2,
                   borderRadius: 9999,
@@ -323,7 +399,10 @@ export function ProgramDetail({
                 </Text>
               </View>
               <Text className="text-muted-foreground text-xs">
-                {groupExercises.length} exercises{ex.groupRest ? ` · ${ex.groupRest} rest` : " · minimal rest"}
+                {groupExercises.length} exercises
+                {ex.groupRest
+                  ? ` · ${ex.groupRest} rest between rounds`
+                  : " · minimal rest between exercises"}
               </Text>
             </View>
             {groupExercises.map(({ exercise: gEx, index: gIdx }) => (
@@ -381,6 +460,7 @@ export function ProgramDetail({
   }, [
     currentWorkout?.exercises,
     colors,
+    tint,
     testID,
     expandedSlug,
     activePlayingSlug,
@@ -396,187 +476,413 @@ export function ProgramDetail({
       onScroll={handleScroll}
       scrollEventThrottle={16}
     >
-      {/* Program Header */}
+      {/* Hero — a dark card matching the web's dark hero-over-photo (NP-284):
+          nav pills, duration/frequency badges, title, target user and goal.
+          Always dark (heroRgb/heroTint), independent of app light/dark mode,
+          same as the web's hero is always dark regardless of page theme. */}
       <View
         style={{
-          flexDirection: "row",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 12,
+          borderRadius: 20,
+          backgroundColor: heroRgb("card"),
+          padding: 16,
+          gap: 14,
         }}
       >
-        <View style={{ flex: 1 }}>
-          <Text
-            testID={`${testID}-name`}
-            className="text-foreground text-2xl font-bold mb-1"
-          >
-            {program.name}
-          </Text>
-          <Text
-            testID={`${testID}-description`}
-            className="text-muted-foreground text-sm"
-          >
-            {program.description}
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 8,
-              marginTop: 8,
-            }}
-          >
+        {onBack || onOpenCalendar ? (
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            {onBack ? (
+              <Pressable
+                testID={`${testID}-back`}
+                accessibilityRole="button"
+                accessibilityLabel="All Programs"
+                onPress={onBack}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 9999,
+                  backgroundColor: heroTint("primary-foreground", 0.1),
+                }}
+              >
+                <ChevronLeft size={16} color={heroRgb("primary-foreground")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                  All Programs
+                </Text>
+              </Pressable>
+            ) : (
+              <View />
+            )}
+            {onOpenCalendar ? (
+              <Pressable
+                testID={`${testID}-open-calendar`}
+                accessibilityRole="button"
+                accessibilityLabel="Calendar"
+                onPress={onOpenCalendar}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 9999,
+                  backgroundColor: heroTint("primary-foreground", 0.1),
+                }}
+              >
+                <Calendar size={16} color={heroRgb("primary-foreground")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                  Calendar
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {program.durationWeeks ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 9999,
+                backgroundColor: heroTint("success", 0.2),
+              }}
+            >
+              <Clock size={13} color={heroRgb("success")} strokeWidth={2} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: heroRgb("success") }}>
+                {program.durationWeeks} Weeks
+              </Text>
+            </View>
+          ) : null}
+          {program.trainingDaysPerWeek ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 9999,
+                backgroundColor: heroTint("info", 0.2),
+              }}
+            >
+              <Calendar size={13} color={heroRgb("info")} strokeWidth={2} />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: heroRgb("info") }}>
+                {program.trainingDaysPerWeek}x/week
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text
+              testID={`${testID}-name`}
+              style={{ fontSize: 24, fontWeight: "800", color: heroRgb("primary-foreground") }}
+            >
+              {program.name}
+            </Text>
             {program.targetUser ? (
-              <Text className="text-muted-foreground text-xs">
+              <Text style={{ fontSize: 15, color: heroRgb("primary-foreground"), opacity: 0.85, marginTop: 6 }}>
                 {program.targetUser}
               </Text>
             ) : null}
-            {program.durationWeeks ? (
-              <Text className="text-muted-foreground text-xs">
-                {program.durationWeeks} weeks
-              </Text>
-            ) : null}
-            {program.trainingDaysPerWeek ? (
-              <Text className="text-muted-foreground text-xs">
-                {program.trainingDaysPerWeek}d / week
-              </Text>
-            ) : null}
             {program.goal ? (
-              <Text className="text-muted-foreground text-xs">
+              <Text style={{ fontSize: 13, color: heroRgb("primary-foreground"), opacity: 0.6, marginTop: 4 }}>
                 {program.goal}
               </Text>
             ) : null}
           </View>
-        </View>
 
-        {onToggleSave ? (
-          <Pressable
-            testID={`${testID}-toggle-save`}
-            accessibilityRole="button"
-            accessibilityLabel={
-              isSaved
-                ? `Unsave program ${program.name}`
-                : `Save program ${program.name}`
-            }
-            onPress={onToggleSave}
-            disabled={actionPending}
-            className="rounded-xl border border-border p-3"
-          >
-            <Heart
-              color={isSaved ? colors.primary : colors["muted-foreground"]}
-              fill={isSaved ? colors.primary : "transparent"}
-              size={22}
-              strokeWidth={1.5}
-            />
-          </Pressable>
-        ) : null}
-        {shareBody ? (
-          <NativeShareButton
-            body={shareBody}
-            getToken={shareGetToken}
-            testID={`${testID}-share`}
-          />
-        ) : null}
-      </View>
-
-      {/* Action Buttons: Continue / Start Program + Workout / Resume */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-        <View style={{ flex: 1, minWidth: 130 }}>
-          {isEnrolled ? (
-            <Button
-              testID={`${testID}-continue`}
-              onPress={onContinue}
+          {onToggleSave ? (
+            <Pressable
+              testID={`${testID}-toggle-save`}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isSaved
+                  ? `Unsave program ${program.name}`
+                  : `Save program ${program.name}`
+              }
+              onPress={onToggleSave}
               disabled={actionPending}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: heroTint("primary-foreground", 0.3),
+                padding: 10,
+              }}
             >
-              Continue
-            </Button>
-          ) : (
-            <Button
-              testID={`${testID}-start`}
-              onPress={onEnroll ?? onStart ?? (() => {})}
-              disabled={actionPending}
-            >
-              {onEnroll ? "Enroll in program" : "Start program"}
-            </Button>
-          )}
-        </View>
-
-        <Pressable
-          testID={hasInProgressWorkout ? `${testID}-resume` : `${testID}-workout-live`}
-          accessibilityRole="button"
-          accessibilityLabel={hasInProgressWorkout ? "Resume in-progress workout" : "Workout live"}
-          onPress={handleLivePress}
-          disabled={actionPending}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-            borderRadius: 12,
-            backgroundColor: hasInProgressWorkout
-              ? tint("accent", 0.2)
-              : colors.card,
-            borderWidth: 1,
-            borderColor: hasInProgressWorkout ? colors.accent : colors.border,
-          }}
-        >
-          {hasInProgressWorkout ? (
-            <>
-              <Clock size={16} color={colors.accent} strokeWidth={2} />
-              <Text style={{ fontSize: 15, fontWeight: "600", color: colors.accent }}>Resume</Text>
-            </>
-          ) : (
-            <>
-              <Play size={16} color={colors.foreground} fill={colors.foreground} />
-              <Text style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}>Workout</Text>
-            </>
-          )}
-        </Pressable>
-      </View>
-
-      {/* Enrolled Progress & Controls */}
-      {isEnrolled && activeProgram ? (
-        <View style={{ gap: 6, marginVertical: 2 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text className="text-muted-foreground text-xs">
-              Progress: {activeProgram.completedWorkouts ?? 0}/{activeProgram.totalWorkouts ?? 0} sessions
-            </Text>
-            {activeProgram.totalWorkouts ? (
-              <Text className="text-muted-foreground text-xs font-semibold">
-                {Math.round(((activeProgram.completedWorkouts ?? 0) / activeProgram.totalWorkouts) * 100)}%
-              </Text>
-            ) : null}
-          </View>
-          {activeProgram.totalWorkouts ? (
-            <View style={{ height: 6, width: "100%", backgroundColor: colors.muted, borderRadius: 3, overflow: "hidden" }}>
-              <View
-                style={{
-                  height: "100%",
-                  width: `${Math.min(100, Math.round(((activeProgram.completedWorkouts ?? 0) / activeProgram.totalWorkouts) * 100))}%`,
-                  backgroundColor: colors.success,
-                  borderRadius: 3,
-                }}
+              <Heart
+                color={isSaved ? colors.primary : heroRgb("primary-foreground")}
+                fill={isSaved ? colors.primary : "transparent"}
+                size={22}
+                strokeWidth={1.5}
               />
-            </View>
+            </Pressable>
+          ) : null}
+          {shareBody ? (
+            <NativeShareButton
+              body={shareBody}
+              getToken={shareGetToken}
+              testID={`${testID}-share`}
+            />
           ) : null}
         </View>
-      ) : null}
 
-      {/* Paused indicator matching web */}
-      {activeProgram?.status === "paused" ? (
-        <View
-          testID={`${testID}-paused-banner`}
-          className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 mt-1"
-        >
-          <Text className="text-amber-600 dark:text-amber-400 text-xs font-semibold">
-            Program is paused. Workouts are frozen until you resume.
-          </Text>
+        {/* Action Buttons: Continue / Start Program + Workout / Resume */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 130 }}>
+            {activeProgramLoading ? (
+              <Button
+                testID={`${testID}-start-loading`}
+                variant="secondary"
+                disabled
+                loading
+                accessibilityLabel="Loading program status"
+              >
+                Loading…
+              </Button>
+            ) : isEnrolled ? (
+              <Button
+                testID={`${testID}-continue`}
+                onPress={onContinue}
+                disabled={actionPending}
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                testID={`${testID}-start`}
+                onPress={onEnroll ?? onStart ?? (() => {})}
+                disabled={actionPending}
+              >
+                {onEnroll ? "Enroll in program" : "Start program"}
+              </Button>
+            )}
+          </View>
+
+          <Pressable
+            testID={hasInProgressWorkout ? `${testID}-resume` : `${testID}-workout-live`}
+            accessibilityRole="button"
+            accessibilityLabel={hasInProgressWorkout ? "Resume in-progress workout" : "Workout live"}
+            onPress={handleLivePress}
+            disabled={actionPending}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              paddingHorizontal: 18,
+              paddingVertical: 12,
+              borderRadius: 9999,
+              backgroundColor: hasInProgressWorkout
+                ? heroTint("accent", 0.2)
+                : heroTint("primary-foreground", 0.1),
+            }}
+          >
+            {hasInProgressWorkout ? (
+              <>
+                <Clock size={16} color={heroRgb("accent")} strokeWidth={2} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("accent") }}>Resume</Text>
+              </>
+            ) : (
+              <>
+                <Play size={16} color={heroRgb("primary-foreground")} fill={heroRgb("primary-foreground")} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                  Workout
+                </Text>
+              </>
+            )}
+          </Pressable>
         </View>
-      ) : null}
 
-      {/* Program Management Actions */}
+        {/* Enrolled block — start date link, progress, Schedule + Training
+            Log links, inline Pause/Delay, red-outline Abandon. Gated on
+            `activeProgram` the same way the web's whole block is, and held
+            back entirely while the active-program read is in flight so an
+            enrolled member is never shown "Enroll in program" / 0 progress
+            while /api/programs/active is still loading (point 3). */}
+        {!activeProgramLoading && isEnrolled && activeProgram ? (
+          <View style={{ gap: 10 }}>
+            {onSetStartDate ? (
+              <Pressable
+                testID={`${testID}-set-start-date`}
+                accessibilityRole="button"
+                accessibilityLabel="Change program start date"
+                onPress={onSetStartDate}
+                disabled={actionPending}
+                style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" }}
+              >
+                <Calendar size={14} color={heroRgb("info")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("info") }}>
+                  {formatStartDateLabel(activeProgram.startDate)}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <View style={{ gap: 6 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ fontSize: 13, color: heroRgb("muted-foreground") }}>
+                  Progress: {activeProgram.completedWorkouts ?? 0}/{activeProgram.totalWorkouts ?? 0} sessions
+                </Text>
+                {activeProgram.totalWorkouts ? (
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: heroRgb("success") }}>
+                    {Math.round(((activeProgram.completedWorkouts ?? 0) / activeProgram.totalWorkouts) * 100)}%
+                  </Text>
+                ) : null}
+              </View>
+              {activeProgram.totalWorkouts ? (
+                <View
+                  style={{
+                    height: 6,
+                    width: "100%",
+                    backgroundColor: heroTint("primary-foreground", 0.2),
+                    borderRadius: 3,
+                    overflow: "hidden",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      width: `${Math.min(100, Math.round(((activeProgram.completedWorkouts ?? 0) / activeProgram.totalWorkouts) * 100))}%`,
+                      backgroundColor: heroRgb("success"),
+                      borderRadius: 3,
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
+
+            {onOpenSchedule || onOpenTrainingLog ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+                {onOpenSchedule ? (
+                  <Pressable
+                    testID={`${testID}-schedule-link`}
+                    accessibilityRole="button"
+                    accessibilityLabel="View schedule"
+                    onPress={onOpenSchedule}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <Calendar size={14} color={heroRgb("info")} strokeWidth={2} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("info") }}>Schedule</Text>
+                  </Pressable>
+                ) : null}
+                {onOpenTrainingLog ? (
+                  <Pressable
+                    testID={`${testID}-training-log-link`}
+                    accessibilityRole="button"
+                    accessibilityLabel="View training log"
+                    onPress={onOpenTrainingLog}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <History size={14} color={heroRgb("success")} strokeWidth={2} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("success") }}>
+                      Training Log
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {onPauseResume || onShift ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
+                {onPauseResume ? (
+                  <Pressable
+                    testID={`${testID}-pause-resume`}
+                    accessibilityRole="button"
+                    onPress={onPauseResume}
+                    disabled={actionPending}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <PauseIcon
+                      size={14}
+                      color={activeProgram.status === "paused" ? heroRgb("success") : heroRgb("accent")}
+                      strokeWidth={2}
+                    />
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: "600",
+                        color: activeProgram.status === "paused" ? heroRgb("success") : heroRgb("accent"),
+                      }}
+                    >
+                      {activeProgram.status === "paused" ? "Resume Program" : "Pause Program"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {onPauseResume && onShift ? (
+                  <Text style={{ fontSize: 13, color: heroRgb("muted-foreground") }}>|</Text>
+                ) : null}
+
+                {onShift ? (
+                  <Pressable
+                    testID={`${testID}-shift`}
+                    accessibilityRole="button"
+                    onPress={() => onShift(3)}
+                    disabled={actionPending}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+                  >
+                    <TimerReset size={14} color={heroRgb("info")} strokeWidth={2} />
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("info") }}>Delay Schedule</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+
+            {activeProgram.status === "paused" ? (
+              <View
+                testID={`${testID}-paused-banner`}
+                style={{
+                  backgroundColor: heroTint("accent", 0.15),
+                  borderWidth: 1,
+                  borderColor: heroTint("accent", 0.4),
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "600", color: heroRgb("accent") }}>
+                  Program is paused. Workouts are frozen until you resume.
+                </Text>
+              </View>
+            ) : null}
+
+            {onAbandon ? (
+              <Pressable
+                testID={`${testID}-abandon`}
+                accessibilityRole="button"
+                accessibilityLabel="Abandon program"
+                onPress={onAbandon}
+                disabled={actionPending}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  gap: 6,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 9999,
+                  borderWidth: 1,
+                  borderColor: heroTint("destructive", 0.4),
+                }}
+              >
+                <X size={14} color={heroRgb("destructive")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("destructive") }}>
+                  Abandon program
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      {/* Program editor entry point (native builder, NP-171) — not part of
+          the web hero, stays its own secondary action. */}
       {onEdit ? (
         <Button
           testID={`${testID}-edit`}
@@ -586,50 +892,6 @@ export function ProgramDetail({
           disabled={actionPending}
         >
           Edit
-        </Button>
-      ) : null}
-
-      {onPauseResume ? (
-        <Button
-          testID={`${testID}-pause-resume`}
-          variant="secondary"
-          onPress={onPauseResume}
-          disabled={actionPending}
-        >
-          {activeProgram?.status === "paused" ? "Resume Program" : "Pause Program"}
-        </Button>
-      ) : null}
-
-      {onShift ? (
-        <Button
-          testID={`${testID}-shift`}
-          variant="secondary"
-          onPress={() => onShift(3)}
-          disabled={actionPending}
-        >
-          Delay Schedule
-        </Button>
-      ) : null}
-
-      {onSetStartDate ? (
-        <Button
-          testID={`${testID}-set-start-date`}
-          variant="secondary"
-          onPress={onSetStartDate}
-          disabled={actionPending}
-        >
-          Change start date
-        </Button>
-      ) : null}
-
-      {onAbandon ? (
-        <Button
-          testID={`${testID}-abandon`}
-          variant="secondary"
-          onPress={onAbandon}
-          disabled={actionPending}
-        >
-          Abandon program
         </Button>
       ) : null}
 
