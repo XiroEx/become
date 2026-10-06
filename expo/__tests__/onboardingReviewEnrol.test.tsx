@@ -107,11 +107,11 @@ async function walkToReview(getByTestId: (id: string) => any) {
 async function walkToReviewSteps(getByTestId: (id: string) => any) {
 
   fireEvent.changeText(getByTestId("onboarding-name"), "Alex Smith");
-  fireEvent.changeText(getByTestId("onboarding-age"), "25");
-  fireEvent.press(getByTestId("onboarding-sex-male"));
   fireEvent.press(getByTestId("onboarding-experience-intermediate"));
   fireEvent.press(getByTestId("onboarding-next"));
 
+  fireEvent.changeText(getByTestId("onboarding-age"), "25");
+  fireEvent.press(getByTestId("onboarding-sex-male"));
   fireEvent.changeText(getByTestId("stat-height-ft"), "5");
   fireEvent.changeText(getByTestId("stat-height-in"), "10");
   fireEvent.changeText(getByTestId("stat-current-weight"), "180");

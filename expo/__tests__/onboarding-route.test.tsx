@@ -63,14 +63,20 @@ describe("OnboardingRoute", () => {
     expect(getByTestId("primary-goal-badge")).toBeTruthy();
     fireEvent.press(getByTestId("onboarding-next"));
 
-    // Step 2: About you (Name, Age with 13+ minimum, Sex, Experience)
+    // Step 2: About you (Name, Experience with description, Days/week stepper)
     fireEvent.changeText(getByTestId("onboarding-name"), "Alex Smith");
-    fireEvent.changeText(getByTestId("onboarding-age"), "25");
-    fireEvent.press(getByTestId("onboarding-sex-male"));
     fireEvent.press(getByTestId("onboarding-experience-intermediate"));
+    // Stepper defaults to 3; bump it to 4 to confirm weeklyAvailability travels
+    // with the profile the way the web's does (NP-246).
+    fireEvent.press(getByTestId("onboarding-weekly-availability-increase"));
+    expect(getByTestId("onboarding-weekly-availability").props.children).toBe(
+      4,
+    );
     fireEvent.press(getByTestId("onboarding-next"));
 
-    // Step 3: Body & nutrition
+    // Step 3: Body & nutrition (Age and Biological sex moved here, NP-246)
+    fireEvent.changeText(getByTestId("onboarding-age"), "25");
+    fireEvent.press(getByTestId("onboarding-sex-male"));
     fireEvent.changeText(getByTestId("stat-height-ft"), "5");
     fireEvent.changeText(getByTestId("stat-height-in"), "10");
     fireEvent.changeText(getByTestId("stat-current-weight"), "180");
@@ -123,6 +129,7 @@ describe("OnboardingRoute", () => {
         fitnessGoals: ["gain_muscle", "lose_weight"],
         fitnessGoal: "gain_muscle",
         experienceLevel: "intermediate",
+        weeklyAvailability: 4,
         age: 25,
         biologicalSex: "male",
         equipmentAccess: ["dumbbells", "barbell"],
@@ -179,11 +186,11 @@ describe("OnboardingRoute", () => {
       fireEvent.press(getByTestId("onboarding-next"));
 
       fireEvent.changeText(getByTestId("onboarding-name"), "Morgan");
-      fireEvent.changeText(getByTestId("onboarding-age"), "24");
-      fireEvent.press(getByTestId("onboarding-sex-female"));
       fireEvent.press(getByTestId("onboarding-next"));
 
       // Step 3
+      fireEvent.changeText(getByTestId("onboarding-age"), "24");
+      fireEvent.press(getByTestId("onboarding-sex-female"));
       fireEvent.changeText(getByTestId("stat-height-ft"), "5");
       fireEvent.changeText(getByTestId("stat-height-in"), "6");
       fireEvent.changeText(getByTestId("stat-current-weight"), "140");
@@ -212,13 +219,13 @@ describe("OnboardingRoute", () => {
       fireEvent.press(getByTestId("onboarding-goal-improve_performance"));
       fireEvent.press(getByTestId("onboarding-next"));
 
-      // Step 2: About you (name and age)
+      // Step 2: About you (name only — age and sex live on step 3, NP-246)
       fireEvent.changeText(getByTestId("onboarding-name"), "Jordan Taylor");
-      fireEvent.changeText(getByTestId("onboarding-age"), "30");
-      fireEvent.press(getByTestId("onboarding-sex-prefer_not_to_say"));
       fireEvent.press(getByTestId("onboarding-next"));
 
       // Step 3: Body & nutrition
+      fireEvent.changeText(getByTestId("onboarding-age"), "30");
+      fireEvent.press(getByTestId("onboarding-sex-prefer_not_to_say"));
       fireEvent.changeText(getByTestId("stat-height-ft"), "5");
       fireEvent.changeText(getByTestId("stat-height-in"), "8");
       fireEvent.changeText(getByTestId("stat-current-weight"), "160");
@@ -266,9 +273,15 @@ describe("OnboardingRoute", () => {
       fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
       fireEvent.press(getByTestId("onboarding-next"));
 
-      // Step 2: About you
+      // Step 2: About you — only name is required to advance (NP-246)
       fireEvent.changeText(getByTestId("onboarding-name"), "Young Person");
+      fireEvent.press(getByTestId("onboarding-next"));
+
+      // Step 3: About you fields (Age, Biological sex) now live here
       fireEvent.press(getByTestId("onboarding-sex-female"));
+      fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+      fireEvent.changeText(getByTestId("stat-height-in"), "0");
+      fireEvent.changeText(getByTestId("stat-current-weight"), "100");
 
       // Enter age under 13 (e.g. 12)
       fireEvent.changeText(getByTestId("onboarding-age"), "12");
@@ -282,9 +295,10 @@ describe("OnboardingRoute", () => {
         getByTestId("onboarding-next").props.accessibilityState?.disabled,
       ).toBe(true);
 
-      // Attempting to advance anyway does not advance to step 3
+      // Attempting to advance anyway does not advance to step 4
       fireEvent.press(getByTestId("onboarding-next"));
-      expect(queryByTestId("onboarding-step-3")).toBeNull();
+      expect(queryByTestId("onboarding-equipment-dumbbells")).toBeNull();
+      expect(getByTestId("onboarding-step-3")).toBeTruthy();
 
       // Now enter valid age 13
       fireEvent.changeText(getByTestId("onboarding-age"), "13");
@@ -295,9 +309,9 @@ describe("OnboardingRoute", () => {
         getByTestId("onboarding-next").props.accessibilityState?.disabled,
       ).toBe(false);
 
-      // Successfully advance to step 3
+      // Successfully advance to step 4
       fireEvent.press(getByTestId("onboarding-next"));
-      expect(getByTestId("onboarding-step-3")).toBeTruthy();
+      expect(getByTestId("onboarding-equipment-dumbbells")).toBeTruthy();
     });
   });
 
@@ -311,11 +325,9 @@ describe("OnboardingRoute", () => {
 
       // Step 2: About you
       fireEvent.changeText(getByTestId("onboarding-name"), "Sam");
-      fireEvent.changeText(getByTestId("onboarding-age"), "29");
-      fireEvent.press(getByTestId("onboarding-sex-male"));
       fireEvent.press(getByTestId("onboarding-next"));
 
-      // Step 3: Body & nutrition — initially no height or weight
+      // Step 3: Body & nutrition — initially no age, sex, height or weight
       expect(getByTestId("onboarding-step-3")).toBeTruthy();
       expect(getByTestId("tdee-incomplete")).toBeTruthy();
       expect(queryByTestId("tdee-preview")).toBeNull();
@@ -330,7 +342,9 @@ describe("OnboardingRoute", () => {
       expect(getByTestId("onboarding-step-3")).toBeTruthy();
       expect(queryByTestId("onboarding-equipment-dumbbells")).toBeNull();
 
-      // Fill in height only
+      // Fill in age and sex, and height only
+      fireEvent.changeText(getByTestId("onboarding-age"), "29");
+      fireEvent.press(getByTestId("onboarding-sex-male"));
       fireEvent.changeText(getByTestId("stat-height-ft"), "5");
       fireEvent.changeText(getByTestId("stat-height-in"), "11");
       expect(
@@ -363,11 +377,11 @@ describe("OnboardingRoute", () => {
 
       // Step 2: About you
       fireEvent.changeText(getByTestId("onboarding-name"), "Chris Evans");
-      fireEvent.changeText(getByTestId("onboarding-age"), "32");
-      fireEvent.press(getByTestId("onboarding-sex-male"));
       fireEvent.press(getByTestId("onboarding-next"));
 
       // Step 3: Body & nutrition
+      fireEvent.changeText(getByTestId("onboarding-age"), "32");
+      fireEvent.press(getByTestId("onboarding-sex-male"));
       fireEvent.changeText(getByTestId("stat-height-ft"), "6");
       fireEvent.changeText(getByTestId("stat-height-in"), "0");
       // Type 195 lbs
@@ -441,17 +455,34 @@ describe("OnboardingRoute", () => {
     ).toBe(false);
   });
 
-  it("does not advance past step 2 without name, valid age, and sex", () => {
+  it("does not advance past step 2 without a name (web parity: age and sex moved to step 3, NP-246)", () => {
     const { getByTestId } = render(<OnboardingRoute />);
     fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
     fireEvent.press(getByTestId("onboarding-next"));
 
-    // Step 2 starts invalid (empty name, age, sex)
+    // Step 2 starts invalid (empty name)
     expect(
       getByTestId("onboarding-next").props.accessibilityState?.disabled,
     ).toBe(true);
 
     fireEvent.changeText(getByTestId("onboarding-name"), "User");
+    expect(
+      getByTestId("onboarding-next").props.accessibilityState?.disabled,
+    ).toBe(false);
+
+    // Age and Biological sex are no longer asked on step 2 at all.
+    expect(() => getByTestId("onboarding-age")).toThrow();
+    expect(() => getByTestId("onboarding-sex-male")).toThrow();
+  });
+
+  it("does not advance past step 3 without a valid age, sex, height and weight", () => {
+    const { getByTestId } = render(<OnboardingRoute />);
+    fireEvent.press(getByTestId("onboarding-goal-lose_weight"));
+    fireEvent.press(getByTestId("onboarding-next"));
+
+    fireEvent.changeText(getByTestId("onboarding-name"), "User");
+    fireEvent.press(getByTestId("onboarding-next"));
+
     expect(
       getByTestId("onboarding-next").props.accessibilityState?.disabled,
     ).toBe(true);
@@ -462,6 +493,17 @@ describe("OnboardingRoute", () => {
     ).toBe(true);
 
     fireEvent.press(getByTestId("onboarding-sex-male"));
+    expect(
+      getByTestId("onboarding-next").props.accessibilityState?.disabled,
+    ).toBe(true);
+
+    fireEvent.changeText(getByTestId("stat-height-ft"), "5");
+    fireEvent.changeText(getByTestId("stat-height-in"), "10");
+    expect(
+      getByTestId("onboarding-next").props.accessibilityState?.disabled,
+    ).toBe(true);
+
+    fireEvent.changeText(getByTestId("stat-current-weight"), "180");
     expect(
       getByTestId("onboarding-next").props.accessibilityState?.disabled,
     ).toBe(false);
@@ -476,11 +518,11 @@ describe("OnboardingRoute", () => {
 
     // Step 2
     fireEvent.changeText(getByTestId("onboarding-name"), "Robin");
-    fireEvent.changeText(getByTestId("onboarding-age"), "22");
-    fireEvent.press(getByTestId("onboarding-sex-female"));
     fireEvent.press(getByTestId("onboarding-next"));
 
     // Step 3
+    fireEvent.changeText(getByTestId("onboarding-age"), "22");
+    fireEvent.press(getByTestId("onboarding-sex-female"));
     fireEvent.changeText(getByTestId("stat-height-ft"), "5");
     fireEvent.changeText(getByTestId("stat-height-in"), "5");
     fireEvent.changeText(getByTestId("stat-current-weight"), "130");

@@ -105,12 +105,14 @@ export interface OnboardingFlowProps {
 function OptionRow({
   testID,
   label,
+  description,
   selected,
   multiple = false,
   onPress,
 }: {
   testID: string;
   label: string;
+  description?: string;
   selected: boolean;
   multiple?: boolean;
   onPress: () => void;
@@ -135,6 +137,15 @@ function OptionRow({
         >
           {label}
         </Text>
+        {description ? (
+          <Text
+            className={`text-xs mt-0.5 ${
+              selected ? "text-background/70" : "text-muted-foreground"
+            }`}
+          >
+            {description}
+          </Text>
+        ) : null}
       </View>
       {selected ? (
         <Text className="text-background font-bold ml-2">✓</Text>
@@ -477,6 +488,10 @@ export function OnboardingFlow({
 
   const goals = useMemo(() => profile.fitnessGoals ?? [], [profile.fitnessGoals]);
   const primaryGoal = goals[0];
+  // Mirrors the web's `days = weeklyAvailability ?? 3` (webapp/app/onboarding/page.tsx):
+  // shown as 3 by default, but only ever written to the profile once the
+  // member actually taps the stepper.
+  const weeklyAvailabilityDays = profile.weeklyAvailability ?? 3;
 
   // Keep the route's server-driven recommendation in step with the draft
   // answers. The callback is stable-or-not by caller choice; guard with a
@@ -750,11 +765,8 @@ export function OnboardingFlow({
 
   const canAdvance =
     (step === 1 && goals.length > 0) ||
-    (step === 2 &&
-      name.trim().length > 0 &&
-      isAgeValid &&
-      !!profile.biologicalSex) ||
-    (step === 3 && canComputeTargets) ||
+    (step === 2 && name.trim().length > 0) ||
+    (step === 3 && canComputeTargets && isAgeValid) ||
     (step === 4 && (profile.equipmentAccess?.length ?? 0) > 0) ||
     (step === 5 &&
       !submitting &&
@@ -770,7 +782,7 @@ export function OnboardingFlow({
   };
 
   const onNext = () => {
-    if (step === 3 && !canComputeTargets) return;
+    if (step === 3 && (!canComputeTargets || !isAgeValid)) return;
     if (step < TOTAL_STEPS) {
       goToStep(step + 1);
     } else {
@@ -887,7 +899,9 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[1]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              We personalize your targets to your body, not an average.
+              Your name is how the app greets you. The rest sets the
+              difficulty of the program we match you with, and how active we
+              assume you are when we work out your calories.
             </Text>
 
             {/* Name */}
@@ -901,57 +915,7 @@ export function OnboardingFlow({
               maxLength={80}
             />
 
-            {/* Age with 13+ minimum */}
-            <View className="mt-3">
-              <Input
-                testID={`${testID}-age`}
-                label="Age"
-                keyboardType="number-pad"
-                placeholder="25"
-                value={profile.age !== undefined ? String(profile.age) : ""}
-                onChangeText={(t) => {
-                  const trimmed = t.trim();
-                  if (!trimmed) {
-                    set({ age: undefined });
-                    return;
-                  }
-                  const n = parseInt(trimmed, 10);
-                  set({ age: Number.isFinite(n) ? n : undefined });
-                }}
-              />
-              {isAgeBelowMinimum ? (
-                <Text
-                  testID={`${testID}-age-error`}
-                  accessibilityRole="alert"
-                  className="text-destructive text-xs mt-1"
-                >
-                  Must be at least 13 years old
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Biological Sex */}
-            <View className="mt-4">
-              <Text className="text-foreground text-sm font-medium mb-2">
-                Biological sex
-              </Text>
-              <View
-                accessibilityRole="radiogroup"
-                accessibilityLabel="Biological sex"
-              >
-                {SEX_OPTIONS.map((o) => (
-                  <OptionRow
-                    key={o.value}
-                    testID={`${testID}-sex-${o.value}`}
-                    label={o.label}
-                    selected={profile.biologicalSex === o.value}
-                    onPress={() => set({ biologicalSex: o.value })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            {/* Experience level (optional) */}
+            {/* Experience level, with descriptions (web parity) */}
             <View className="mt-4">
               <Text className="text-foreground text-sm font-medium mb-2">
                 Experience level
@@ -965,11 +929,79 @@ export function OnboardingFlow({
                     key={o.value}
                     testID={`${testID}-experience-${o.value}`}
                     label={o.label}
+                    description={o.desc}
                     selected={profile.experienceLevel === o.value}
                     onPress={() => set({ experienceLevel: o.value })}
                   />
                 ))}
               </View>
+            </View>
+
+            {/* Days available per week — -/3/+ stepper (web parity, NP-246) */}
+            <View className="mt-4">
+              <Text className="text-foreground text-sm font-medium mb-2">
+                Days available per week
+              </Text>
+              <View className="flex-row items-center gap-4">
+                <Pressable
+                  testID={`${testID}-weekly-availability-decrease`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease days"
+                  disabled={weeklyAvailabilityDays <= 1}
+                  onPress={() =>
+                    set({
+                      weeklyAvailability: Math.max(
+                        1,
+                        weeklyAvailabilityDays - 1,
+                      ),
+                    })
+                  }
+                  style={minTouchTarget}
+                  className={`h-11 w-11 items-center justify-center rounded-xl border border-border bg-card ${
+                    weeklyAvailabilityDays <= 1 ? "opacity-30" : ""
+                  }`}
+                >
+                  <Text className="text-foreground text-lg font-bold">
+                    −
+                  </Text>
+                </Pressable>
+                <Text
+                  testID={`${testID}-weekly-availability`}
+                  className="text-foreground text-2xl font-bold w-8 text-center"
+                >
+                  {weeklyAvailabilityDays}
+                </Text>
+                <Pressable
+                  testID={`${testID}-weekly-availability-increase`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase days"
+                  disabled={weeklyAvailabilityDays >= 7}
+                  onPress={() =>
+                    set({
+                      weeklyAvailability: Math.min(
+                        7,
+                        weeklyAvailabilityDays + 1,
+                      ),
+                    })
+                  }
+                  style={minTouchTarget}
+                  className={`h-11 w-11 items-center justify-center rounded-xl border border-border bg-card ${
+                    weeklyAvailabilityDays >= 7 ? "opacity-30" : ""
+                  }`}
+                >
+                  <Text className="text-foreground text-lg font-bold">
+                    +
+                  </Text>
+                </Pressable>
+                <Text className="text-muted-foreground text-sm">
+                  days / week
+                </Text>
+              </View>
+              <Text className="text-muted-foreground text-xs mt-2">
+                We&apos;ll only recommend programs that fit inside{" "}
+                {weeklyAvailabilityDays} day
+                {weeklyAvailabilityDays === 1 ? "" : "s"} a week.
+              </Text>
             </View>
           </View>
         ) : null}
@@ -1037,6 +1069,56 @@ export function OnboardingFlow({
                     Metric
                   </Text>
                 </Pressable>
+              </View>
+            </View>
+
+            {/* Age with 13+ minimum (web parity: moved from step 2, NP-246) */}
+            <View className="mb-4">
+              <Input
+                testID={`${testID}-age`}
+                label="Age"
+                keyboardType="number-pad"
+                placeholder="25"
+                value={profile.age !== undefined ? String(profile.age) : ""}
+                onChangeText={(t) => {
+                  const trimmed = t.trim();
+                  if (!trimmed) {
+                    set({ age: undefined });
+                    return;
+                  }
+                  const n = parseInt(trimmed, 10);
+                  set({ age: Number.isFinite(n) ? n : undefined });
+                }}
+              />
+              {isAgeBelowMinimum ? (
+                <Text
+                  testID={`${testID}-age-error`}
+                  accessibilityRole="alert"
+                  className="text-destructive text-xs mt-1"
+                >
+                  Must be at least 13 years old
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Biological Sex (web parity: moved from step 2, NP-246) */}
+            <View className="mb-4">
+              <Text className="text-foreground text-sm font-medium mb-2">
+                Biological sex
+              </Text>
+              <View
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Biological sex"
+              >
+                {SEX_OPTIONS.map((o) => (
+                  <OptionRow
+                    key={o.value}
+                    testID={`${testID}-sex-${o.value}`}
+                    label={o.label}
+                    selected={profile.biologicalSex === o.value}
+                    onPress={() => set({ biologicalSex: o.value })}
+                  />
+                ))}
               </View>
             </View>
 
@@ -1492,6 +1574,28 @@ export function OnboardingFlow({
               onEdit={goToStep}
             >
               <ReviewRow label="Name" value={name.trim() || "Not set"} />
+              {profile.experienceLevel ? (
+                <ReviewRow
+                  label="Experience"
+                  value={
+                    EXPERIENCE_OPTIONS.find(
+                      (e) => e.value === profile.experienceLevel,
+                    )?.label ?? profile.experienceLevel
+                  }
+                />
+              ) : null}
+              <ReviewRow
+                label="Days / week"
+                value={String(weeklyAvailabilityDays)}
+              />
+            </ReviewSection>
+
+            {/* Body & nutrition review */}
+            <ReviewSection
+              title="Body & nutrition"
+              stepNumber={3}
+              onEdit={goToStep}
+            >
               <ReviewRow
                 label="Age"
                 value={profile.age ? String(profile.age) : "—"}
@@ -1503,24 +1607,6 @@ export function OnboardingFlow({
                     ?.label ?? "Not set"
                 }
               />
-              {profile.experienceLevel ? (
-                <ReviewRow
-                  label="Experience"
-                  value={
-                    EXPERIENCE_OPTIONS.find(
-                      (e) => e.value === profile.experienceLevel,
-                    )?.label ?? profile.experienceLevel
-                  }
-                />
-              ) : null}
-            </ReviewSection>
-
-            {/* Body & nutrition review */}
-            <ReviewSection
-              title="Body & nutrition"
-              stepNumber={3}
-              onEdit={goToStep}
-            >
               <ReviewRow
                 label="Direction"
                 value={
