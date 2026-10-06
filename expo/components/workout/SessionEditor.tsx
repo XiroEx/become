@@ -37,6 +37,7 @@ import type {
 } from "@become/api-client";
 import {
   addNextIntoGroup,
+  alignCircuitSets,
   defaultSetsFor,
   groupIndexes,
   sanitizeGroups,
@@ -94,7 +95,13 @@ export function SessionEditor({
   const { colors } = useThemeTokens();
   const { token } = useAuth();
   const [draftTitle, setDraftTitle] = useState(title);
-  const [rows, setRows] = useState<DraftExercise[]>(exercises);
+  // A circuit agrees on sets the moment it is SHOWN. Every mutation below is
+  // already circuit-aware, but a session that was SAVED with a mismatched
+  // circuit — made before that rule existed, generated, imported, or written
+  // by a coach — opened here and printed "A circuit runs every exercise for
+  // the same number of rounds" underneath a 5 and a 3. It now opens agreed,
+  // and Save therefore writes a circuit that can actually be run.
+  const [rows, setRows] = useState<DraftExercise[]>(() => alignCircuitSets(exercises));
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ExerciseSearchResult[]>([]);
   const [customs, setCustoms] = useState<CustomExercise[]>([]);

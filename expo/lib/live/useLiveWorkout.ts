@@ -29,6 +29,7 @@ import {
   normalizeTracking,
   tracksTime,
   addIntoGroup,
+  alignCircuitSets,
   appendExercise,
   applyOrder,
   applyOrderToRecord,
@@ -940,8 +941,17 @@ export function useLiveWorkout(
       setResolvedDay(activeDay);
       setPhase(loadedPhase);
 
-      // Hydrate into LiveWorkoutExercise shape
-      let currentExercises: LiveWorkoutExercise[] = loadedWorkout.exercises.map(
+      // Hydrate into LiveWorkoutExercise shape.
+      //
+      // `alignCircuitSets` holds a CIRCUIT to its FIRST member's set count: a
+      // circuit runs every exercise for the same number of rounds, so one
+      // whose members disagree (written in the program editor, imported, or
+      // saved before that rule existed) would otherwise run as max(sets)
+      // rounds with the short members missing from the tail. Applied HERE,
+      // before the blank grid and the prefill are sized off `ex.sets`, so the
+      // flow, the grid and the save all come off one agreed list. Supersets
+      // are untouched — 5 of one and 3 of another is legitimate there.
+      let currentExercises: LiveWorkoutExercise[] = alignCircuitSets(loadedWorkout.exercises.map(
         (ex: any, i: number) => {
           const slug = ex.exerciseSlug ?? `exercise-${i}`;
           return {
@@ -976,7 +986,7 @@ export function useLiveWorkout(
             videoTrim: ex.videoTrim ?? null,
           };
         },
-      );
+      ));
 
       // 2. Fetch all-time PRs for exercises
       const slugs = Array.from(
@@ -1067,7 +1077,9 @@ export function useLiveWorkout(
             savedWorkout.exercises,
           );
 
-          currentExercises = merged.map((m) => {
+          // Aligned again: an ad-hoc exercise restored from the log brings
+          // its own set count, and it may be joining a circuit.
+          currentExercises = alignCircuitSets(merged.map((m) => {
             const exSlug =
               m.exerciseSlug || (m as any).slug || `exercise-${m.name}`;
             const existing = currentExercises.find((e) => e.slug === exSlug);
@@ -1105,7 +1117,7 @@ export function useLiveWorkout(
               videoFraming: existing?.videoFraming ?? null,
               videoTrim: existing?.videoTrim ?? null,
             };
-          });
+          }));
 
           // Restore swaps
           const restoredSwaps: Record<
