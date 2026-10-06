@@ -13,10 +13,11 @@
  *      `1 cup`); native always showed the section open with plain
  *      "Grams per serving" / "Millilitres per serving" number inputs.
  *   3. The `Save to My Foods` toggle and the disabled `Save food` button
- *      must stay on the native brand RED (`colors.primary`), never the
- *      web's green/grey — which they already do, because `primary` IS red
- *      in `global.css` for both platforms; this pins that so it cannot
- *      silently regress to a literal green/grey.
+ *      must stay on the `primary` token, never a literal green/grey. NP-272
+ *      pinned that while `primary` was the brand red; NP-313 repainted the
+ *      token itself to the web's neutral (zinc-900 / white), so these
+ *      assertions still read the TOKEN and the screen now matches the web's
+ *      own black/white primary rather than red.
  */
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
@@ -214,16 +215,16 @@ describe("weight/volume per serving collapses behind the web's disclosure", () =
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// 3. The toggle and disabled Save button stay brand RED on native.
+// 3. The toggle and disabled Save button stay on the `primary` token.
 // ───────────────────────────────────────────────────────────────────────────
 
-describe("the Save-to-My-Foods toggle and disabled Save button stay native red", () => {
-  it("colours the bookmark toggle with the red primary token, on and off", () => {
+describe("the Save-to-My-Foods toggle and disabled Save button stay on the primary token", () => {
+  it("colours the bookmark toggle with the primary token, on and off", () => {
     const screen = render(<NewFoodRoute />);
     const light = getTokens("light");
     const state = screen.getByTestId("food-new-bookmark-state");
-    // On by default (the web's own default), and RED — never the web's
-    // emerald.
+    // On by default (the web's own default), and the `primary` token —
+    // never a literal emerald/grey.
     expect(state.props.style).toEqual(
       expect.objectContaining({ backgroundColor: rgb(light.primary) }),
     );
@@ -234,7 +235,7 @@ describe("the Save-to-My-Foods toggle and disabled Save button stay native red",
     );
   });
 
-  it("renders the disabled Save food button as a faded RED (bg-primary + opacity-50), never grey", () => {
+  it("renders the disabled Save food button as a faded bg-primary + opacity-50, never grey", () => {
     const screen = render(<NewFoodRoute />);
     // No name yet, so Save is disabled.
     const save = screen.getByTestId("food-new-save");

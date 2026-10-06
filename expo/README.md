@@ -251,6 +251,33 @@ The same triplets are exported from `lib/theme/tokens.ts` as a typed map, for RN
 
 `darkMode: "class"` is set in `tailwind.config.js` — non-negotiable for NativeWind's runtime `colorScheme.set()`.
 
+### `primary` is NEUTRAL, and red is the exception (NP-313)
+
+The app shipped with `--primary: 239 68 68` (red-500) in **both** modes, so every
+primary button, selected chip, active tab, toggle and FAB was red. The web is
+not: a primary action there is `bg-zinc-900 text-white dark:bg-white
+dark:text-black` (~790 `bg-zinc-900` uses), and red is kept for ~75 specific
+ones. `primary` is now that neutral pair — **zinc-900 / white**, with
+`primary-foreground` **white / zinc-900** — and red lives on two tokens:
+
+| token | light | dark | what it is |
+|---|---|---|---|
+| `destructive` | red-700 | red-400 | error/alert TEXT and its tint — the web's `text-red-600 dark:text-red-400` on `bg-red-50 dark:bg-red-950/30` |
+| `brand` | red-600 | red-500 | the red the web paints on purpose elsewhere: the unread notification badge (`bg-red-500 text-white` in `webapp/components/TopNav.tsx`), unread dots, brand accents. `brand-foreground` is white in BOTH modes, like the web's `text-white` |
+
+Two consequences worth knowing before you add a call site:
+
+- **`primary-foreground` is no longer white in both modes.** It is the ink on a
+  neutral fill. A surface that is dark in BOTH schemes — a camera viewfinder, a
+  photo behind a scrim, the dark-pinned program hero, an avatar gradient — uses
+  `onDarkForeground` (or, inside the hero, `heroRgb("foreground")`), not
+  `primary-foreground`.
+- **Never pair a fill with a literal `text-white`.** `bg-primary` is white in
+  dark mode, so `text-white` on it is invisible. Use the fill's own
+  `*-foreground`.
+
+`__tests__/card-NP-313-acceptance.test.tsx` pins all of the above.
+
 ### Light and dark both ship, and the system picks (NP-123)
 
 `lib/theme/colorScheme.ts` exports `followSystemColorScheme()`, which

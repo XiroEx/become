@@ -16,6 +16,13 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * open).
  *
  * A badge is not worth an error state: a refused load renders nothing.
+ *
+ * COLOUR (NP-313): the count pill is the `brand` red with white ink, which is
+ * the web's own `bg-red-500 px-1.5 text-[10px] font-bold text-white`
+ * (`TopNav.tsx`). It is a notification accent, not an error, so it takes
+ * `brand` rather than `destructive` — and its ink is `brand-foreground`
+ * (white in BOTH modes, like the web's `text-white`) rather than
+ * `primary-foreground`, which is now zinc-900 in dark mode.
  */
 
 export interface FoodReportsBadgeProps {
@@ -114,12 +121,12 @@ export function FoodReportsBadge({
               paddingHorizontal: 5,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: colors.destructive,
+              backgroundColor: colors.brand,
             }}
           >
             <Text
               className="text-[11px] font-bold"
-              style={{ color: colors["primary-foreground"] }}
+              style={{ color: colors["brand-foreground"] }}
             >
               {unread > 99 ? "99+" : String(unread)}
             </Text>
@@ -161,12 +168,12 @@ export function FoodReportsBadge({
             paddingHorizontal: 5,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: colors.destructive,
+            backgroundColor: colors.brand,
           }}
         >
           <Text
             className="text-[11px] font-bold"
-            style={{ color: colors["primary-foreground"] }}
+            style={{ color: colors["brand-foreground"] }}
           >
             {unread > 99 ? "99+" : String(unread)}
           </Text>

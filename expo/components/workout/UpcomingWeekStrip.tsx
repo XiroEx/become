@@ -263,7 +263,9 @@ export function UpcomingWeekStrip({
             onPress={() => router.push("/(tabs)/programming/browse")}
             className="bg-primary px-4 py-2 rounded-xl"
           >
-            <Text className="text-white text-sm font-semibold">
+            {/* `text-primary-foreground`, not a literal white: `primary` is
+                white in dark mode since NP-313. */}
+            <Text className="text-primary-foreground text-sm font-semibold">
               Browse Programs
             </Text>
           </Pressable>

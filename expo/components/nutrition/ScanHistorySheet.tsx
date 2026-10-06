@@ -20,6 +20,7 @@ import { Text } from "@/components/Text";
 import { AuthedImage } from "@/components/media/AuthedImage";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import { localDateKey } from "@/lib/time/localDay";
 import {
   anchorMinutesForTag,
@@ -1043,7 +1044,7 @@ export function ScanHistorySheet({
               justifyContent: "center",
             }}
           >
-            <X size={20} color={colors["primary-foreground"]} />
+            <X size={20} color={onDarkForeground} />
           </Pressable>
         </Pressable>
       </Modal>

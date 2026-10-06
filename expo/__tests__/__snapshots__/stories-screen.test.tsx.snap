@@ -407,7 +407,7 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
               testID="btn-loading-spinner"
             >
               <ActivityIndicator
-                color="rgb(255 255 255)"
+                color="rgb(24 24 27)"
                 size="small"
               />
             </View>
