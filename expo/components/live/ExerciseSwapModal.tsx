@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import type { ReactNode } from "react";
 import { Modal, View, Pressable, ScrollView, TextInput } from "react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -102,6 +103,30 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   expert: "Expert",
 };
 
+const BODY_REGION_LABELS: Record<string, string> = {
+  upper_body: "Upper Body",
+  lower_body: "Lower Body",
+  core: "Core",
+  full_body: "Full Body",
+};
+
+// Filters mirror the web swap sheet (webapp/components/ExerciseSwapModal.tsx):
+// equipment / body region / difficulty / category, each single-select and
+// toggleable (tap again to clear).
+interface SwapFilters {
+  equipment: string | null;
+  bodyRegion: string | null;
+  difficulty: string | null;
+  category: string | null;
+}
+
+const DEFAULT_SWAP_FILTERS: SwapFilters = {
+  equipment: null,
+  bodyRegion: null,
+  difficulty: null,
+  category: null,
+};
+
 function formatEquipment(eq?: string): string {
   if (!eq) return "Bodyweight";
   return EQUIPMENT_LABELS[eq] || eq.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -117,6 +142,110 @@ function getScoreBadgeStyle(score?: number): { bg: string; text: string } {
   if (s >= 50) return { bg: "bg-yellow-500/20", text: "text-yellow-600 dark:text-yellow-400" };
   if (s >= 30) return { bg: "bg-orange-500/20", text: "text-orange-600 dark:text-orange-400" };
   return { bg: "bg-muted", text: "text-muted-foreground" };
+}
+
+/** One filter row: a label plus a wrapped row of toggleable chips. */
+function FilterChipRow({
+  label,
+  options,
+  selected,
+  onSelect,
+  formatLabel,
+  testID,
+}: {
+  label: string;
+  options: string[];
+  selected: string | null;
+  onSelect: (value: string) => void;
+  formatLabel: (value: string) => string;
+  testID: string;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <View className="flex-row items-start" style={{ gap: 8 }}>
+      <Text
+        className="text-muted-foreground text-[11px] font-medium uppercase"
+        style={{ width: 64, marginTop: 4 }}
+      >
+        {label}
+      </Text>
+      <View className="flex-1 flex-row flex-wrap" style={{ gap: 6 }}>
+        {options.map((opt) => {
+          const active = selected === opt;
+          return (
+            <Pressable
+              key={opt}
+              testID={`${testID}-${opt}`}
+              onPress={() => onSelect(opt)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={formatLabel(opt)}
+              className={`rounded-full px-2.5 py-1 ${active ? "bg-primary" : "bg-muted"}`}
+            >
+              <Text
+                className={`text-xs font-medium ${
+                  active ? "text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {formatLabel(opt)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * A short preview of `items` with a "Show N more (M left)" control —
+ * native port of the web's `CollapsibleSection` (webapp/components/CollapsibleSection.tsx).
+ * Give it a `key` that changes (modal re-open, new search, filter change) to
+ * snap it back to the preview; that's a remount, not a `resetKey` + effect.
+ */
+function SwapResultsSection({
+  title,
+  items,
+  renderItem,
+  testID,
+  previewCount = 4,
+  step = 8,
+}: {
+  title: string;
+  items: AlternativeCandidate[];
+  renderItem: (alt: AlternativeCandidate) => ReactNode;
+  testID: string;
+  previewCount?: number;
+  step?: number;
+}) {
+  const [visibleCount, setVisibleCount] = useState(previewCount);
+  if (items.length === 0) return null;
+  const shown = items.slice(0, visibleCount);
+  const remaining = items.length - visibleCount;
+
+  return (
+    <View className="mb-2">
+      <Text className="text-foreground font-semibold text-xs uppercase tracking-wide mb-2">
+        {title}
+        <Text className="text-muted-foreground font-normal normal-case"> ({items.length})</Text>
+      </Text>
+      {shown.map((alt) => renderItem(alt))}
+      {remaining > 0 ? (
+        <Pressable
+          testID={`${testID}-show-more`}
+          onPress={() => setVisibleCount((v) => v + step)}
+          accessibilityRole="button"
+          accessibilityLabel={`Show ${Math.min(step, remaining)} more (${remaining} left)`}
+          className="rounded-lg border border-border py-2 mt-1 items-center"
+        >
+          <Text className="text-muted-foreground text-xs font-semibold">
+            Show {Math.min(step, remaining)} more
+            <Text className="font-normal"> ({remaining} left)</Text>
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 }
 
 /**
@@ -149,6 +278,8 @@ export function ExerciseSwapModal({
   const [internalLoading, setInternalLoading] = useState(false);
   const [customExercises, setCustomExercises] = useState<AlternativeCandidate[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState<SwapFilters>(DEFAULT_SWAP_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
   const [catalogMatches, setCatalogMatches] = useState<AlternativeCandidate[] | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
@@ -199,6 +330,8 @@ export function ExerciseSwapModal({
       setShowCreateForm(false);
       setCreateValues(DEFAULT_CUSTOM_EXERCISE_FORM);
       setCreateError(null);
+      setFilters(DEFAULT_SWAP_FILTERS);
+      setShowFilters(false);
     } else if (!visible && prevVisibleRef.current) {
       releaseVideo();
     }
@@ -393,25 +526,109 @@ export function ExerciseSwapModal({
 
   const filteredAlternatives = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return searchCandidates;
     return searchCandidates.filter((alt) => {
-      const isCatalogMatch =
-        effectiveCatalogMatches?.some((m) => m.slug === alt.slug) ?? false;
-      if (
-        !isCatalogMatch &&
-        !alt.name.toLowerCase().includes(q) &&
-        !alt.equipment?.some((e: string) =>
-          formatEquipment(e).toLowerCase().includes(q),
-        ) &&
-        !alt.primaryMuscles?.some((m: string) =>
-          formatMuscle(m).toLowerCase().includes(q),
-        )
-      ) {
+      if (q) {
+        const isCatalogMatch =
+          effectiveCatalogMatches?.some((m) => m.slug === alt.slug) ?? false;
+        if (
+          !isCatalogMatch &&
+          !alt.name.toLowerCase().includes(q) &&
+          !alt.equipment?.some((e: string) =>
+            formatEquipment(e).toLowerCase().includes(q),
+          ) &&
+          !alt.primaryMuscles?.some((m: string) =>
+            formatMuscle(m).toLowerCase().includes(q),
+          )
+        ) {
+          return false;
+        }
+      }
+      if (filters.equipment && !alt.equipment?.includes(filters.equipment)) {
+        return false;
+      }
+      if (filters.bodyRegion && alt.bodyRegion !== filters.bodyRegion) {
+        return false;
+      }
+      if (filters.difficulty && alt.difficulty !== filters.difficulty) {
+        return false;
+      }
+      if (filters.category && alt.category !== filters.category) {
         return false;
       }
       return true;
     });
-  }, [searchCandidates, searchQuery, effectiveCatalogMatches]);
+  }, [searchCandidates, searchQuery, effectiveCatalogMatches, filters]);
+
+  // Filter chip options, collected from whatever is currently in play
+  // (scored alternatives + any catalogue search match) — mirrors the web's
+  // equipmentOptions/bodyRegionOptions/difficultyOptions/categoryOptions.
+  const equipmentOptions = useMemo(
+    () => [...new Set(searchCandidates.flatMap((alt) => alt.equipment ?? []))].sort(),
+    [searchCandidates],
+  );
+  const bodyRegionOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          searchCandidates
+            .map((alt) => alt.bodyRegion)
+            .filter((v): v is NonNullable<typeof v> => v != null),
+        ),
+      ].sort(),
+    [searchCandidates],
+  );
+  const difficultyOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          searchCandidates
+            .map((alt) => alt.difficulty)
+            .filter((v): v is NonNullable<typeof v> => v != null),
+        ),
+      ].sort(),
+    [searchCandidates],
+  );
+  const categoryOptions = useMemo(
+    () =>
+      [
+        ...new Set(
+          searchCandidates
+            .map((alt) => alt.category)
+            .filter((v): v is NonNullable<typeof v> => v != null),
+        ),
+      ].sort(),
+    [searchCandidates],
+  );
+
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(Boolean).length,
+    [filters],
+  );
+
+  const toggleFilter = useCallback((key: keyof SwapFilters, value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: prev[key] === value ? null : value,
+    }));
+  }, []);
+
+  const clearFilters = useCallback(() => setFilters(DEFAULT_SWAP_FILTERS), []);
+
+  // Snap the results section back to its preview (4 shown) whenever the
+  // modal re-opens, the query changes, or a filter changes — a section must
+  // never open already showing every one of 30 results from a previous visit.
+  const sectionResetKey = useMemo(
+    () =>
+      [
+        visible,
+        searchQuery,
+        filters.equipment,
+        filters.bodyRegion,
+        filters.difficulty,
+        filters.category,
+      ].join("|"),
+    [visible, searchQuery, filters],
+  );
 
   // The swap handler must read the LATEST `selectedVariants` at press time
   // (the variation-selection test pins this: picking a variation then tapping
@@ -584,11 +801,9 @@ export function ExerciseSwapModal({
           {/* Header */}
           <View className="flex-row items-center justify-between mb-3">
             <View className="flex-1 mr-2">
-              <Text className="text-foreground text-xl font-bold">
-                {sourceName ? `Swap ${sourceName}` : "Swap exercise"}
-              </Text>
+              <Text className="text-foreground text-xl font-bold">Swap Exercise</Text>
               <Text className="text-muted-foreground text-xs">
-                Replace exercise and choose session or program scope
+                Replace {sourceName || "exercise"}
               </Text>
             </View>
             <Pressable
@@ -627,6 +842,87 @@ export function ExerciseSwapModal({
               </Pressable>
             ) : null}
           </View>
+
+          {/* Filters toggle + result count */}
+          <View className="flex-row items-center mb-2" style={{ gap: 8 }}>
+            <Pressable
+              testID={`${testID}-filters-toggle`}
+              onPress={() => setShowFilters((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+              accessibilityState={{ expanded: showFilters }}
+              className={`flex-row items-center rounded-full px-3 py-1.5 ${
+                showFilters || activeFilterCount > 0 ? "bg-primary/15" : "bg-muted"
+              }`}
+              style={{ gap: 6 }}
+            >
+              <Text
+                className={`text-xs font-medium ${
+                  showFilters || activeFilterCount > 0 ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                Filters
+              </Text>
+              {activeFilterCount > 0 ? (
+                <View className="h-4 w-4 items-center justify-center rounded-full bg-primary">
+                  <Text className="text-primary-foreground text-[10px] font-semibold">
+                    {activeFilterCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+            {activeFilterCount > 0 ? (
+              <Pressable
+                testID={`${testID}-filters-clear`}
+                onPress={clearFilters}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+              >
+                <Text className="text-muted-foreground text-xs">Clear all</Text>
+              </Pressable>
+            ) : null}
+            <View style={{ flex: 1 }} />
+            <Text testID={`${testID}-result-count`} className="text-muted-foreground text-xs">
+              {filteredAlternatives.length} result{filteredAlternatives.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+
+          {showFilters ? (
+            <View className="mb-3" style={{ gap: 8 }}>
+              <FilterChipRow
+                label="Equipment"
+                options={equipmentOptions}
+                selected={filters.equipment}
+                onSelect={(v) => toggleFilter("equipment", v)}
+                formatLabel={formatEquipment}
+                testID={`${testID}-filter-equipment`}
+              />
+              <FilterChipRow
+                label="Region"
+                options={bodyRegionOptions}
+                selected={filters.bodyRegion}
+                onSelect={(v) => toggleFilter("bodyRegion", v)}
+                formatLabel={(v) => BODY_REGION_LABELS[v] || v}
+                testID={`${testID}-filter-region`}
+              />
+              <FilterChipRow
+                label="Difficulty"
+                options={difficultyOptions}
+                selected={filters.difficulty}
+                onSelect={(v) => toggleFilter("difficulty", v)}
+                formatLabel={(v) => DIFFICULTY_LABELS[v] || v}
+                testID={`${testID}-filter-difficulty`}
+              />
+              <FilterChipRow
+                label="Type"
+                options={categoryOptions}
+                selected={filters.category}
+                onSelect={(v) => toggleFilter("category", v)}
+                formatLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
+                testID={`${testID}-filter-category`}
+              />
+            </View>
+          ) : null}
 
           {/* Content */}
           {isLoading ? (
@@ -693,11 +989,12 @@ export function ExerciseSwapModal({
               ) : null}
 
               {/* Suggestions / Search Results */}
-              <View className="mb-2">
-                <Text className="text-foreground font-semibold text-sm mb-2">
-                  {searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
-                </Text>
-                {filteredAlternatives.map((alt) => {
+              <SwapResultsSection
+                key={sectionResetKey}
+                testID={testID}
+                title={searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
+                items={filteredAlternatives}
+                renderItem={(alt) => {
                   const isExpanded = selectedSlug === alt.slug;
                   const scoreBadge = getScoreBadgeStyle(alt.score);
                   const variations = variationsCache[alt.slug] ?? null;
@@ -931,8 +1228,8 @@ export function ExerciseSwapModal({
                       ) : null}
                     </View>
                   );
-                })}
-              </View>
+                }}
+              />
             </ScrollView>
           )}
 
