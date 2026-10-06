@@ -16,6 +16,7 @@ import {
   type BecomingJourneyResponse,
 } from "@become/api-client";
 import { useAuth } from "@/lib/auth/useAuth";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 import { resolveWebPath } from "@/lib/navigation/webPathToRoute";
 import {
   readBecomingCache,
@@ -35,7 +36,7 @@ export default function BecomingScreen() {
   const insets = useSafeAreaInsets();
   const search = useLocalSearchParams<{ week?: string }>();
   const initialWeekKey = search.week ?? null;
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const memberId =
     typeof user?.id === "string"
       ? user.id
@@ -67,6 +68,10 @@ export default function BecomingScreen() {
         const fresh = await apiFetch<BecomingJourneyResponse>(
           "/api/becoming/journey",
           BecomingJourneyResponseSchema,
+          {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          },
         );
         if (!cancelled) {
           const journey = fresh as unknown as JourneyPayload;
@@ -92,7 +97,7 @@ export default function BecomingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [memberId]);
+  }, [memberId, token]);
 
   const weeks: WeekSnapshot[] = useMemo(() => data?.weeks ?? [], [data?.weeks]);
 
