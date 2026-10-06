@@ -125,13 +125,18 @@ describe("Onboarding wizard chrome (NP-245)", () => {
     const { getByTestId } = render(<OnboardingFlow onComplete={noop} />);
     walkToStep2(getByTestId);
 
-    fireEvent.press(getByTestId("onboarding-sex-male"));
-    expect(getByTestId("onboarding-sex-male").props.className).toContain(
-      "bg-foreground",
-    );
     fireEvent.press(getByTestId("onboarding-experience-beginner"));
     expect(
       getByTestId("onboarding-experience-beginner").props.className,
     ).toContain("bg-foreground");
+
+    // Biological sex now lives on step 3 (NP-246); advance to reach it.
+    fireEvent.changeText(getByTestId("onboarding-name"), "Test User");
+    fireEvent.press(getByTestId("onboarding-next"));
+
+    fireEvent.press(getByTestId("onboarding-sex-male"));
+    expect(getByTestId("onboarding-sex-male").props.className).toContain(
+      "bg-foreground",
+    );
   });
 });

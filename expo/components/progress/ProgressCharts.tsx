@@ -58,6 +58,16 @@ export function volumeChartField(
   return weeks.some((w) => w.volume > 0) ? "volume" : "workouts";
 }
 
+/**
+ * The y-axis tick values, exported so tests pin the step count. The web's
+ * `YAxis` (Recharts, default tick count) draws 5 evenly spaced ticks — e.g.
+ * 0 / 6k / 12k / 18k / 24k for a ~24k max — not the 3-tick 0/half/full native
+ * drew before (which showed as 0 / 12k / 23k for the same data).
+ */
+export function volumeChartYTicks(max: number): number[] {
+  return [0, 0.25, 0.5, 0.75, 1].map((ratio) => Math.round(max * ratio));
+}
+
 export interface VolumeBarChartProps {
   weeks: ProgressWeeklyVolume[];
   testID?: string;
@@ -102,7 +112,7 @@ export function VolumeBarChart({
     return Math.max(2, (value / max) * plotHeight);
   };
 
-  const yTickValues = [0, 0.5, 1].map((ratio) => Math.round(max * ratio));
+  const yTickValues = volumeChartYTicks(max);
 
   return (
     <View

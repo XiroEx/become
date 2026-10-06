@@ -10,6 +10,10 @@ import {
   ChevronRight,
   Check,
   Sparkles,
+  TrendingDown,
+  Minus,
+  TrendingUp,
+  HelpCircle,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -61,6 +65,8 @@ import {
   STEP_TITLES,
   DIRECTION_OPTIONS,
   ACTIVITY_BLURBS,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
   MACRO_PRESET_CHOICES,
   type OnboardingProfile,
   type FitnessGoal,
@@ -105,12 +111,14 @@ export interface OnboardingFlowProps {
 function OptionRow({
   testID,
   label,
+  description,
   selected,
   multiple = false,
   onPress,
 }: {
   testID: string;
   label: string;
+  description?: string;
   selected: boolean;
   multiple?: boolean;
   onPress: () => void;
@@ -135,11 +143,90 @@ function OptionRow({
         >
           {label}
         </Text>
+        {description ? (
+          <Text
+            className={`text-xs mt-0.5 ${
+              selected ? "text-background/70" : "text-muted-foreground"
+            }`}
+          >
+            {description}
+          </Text>
+        ) : null}
       </View>
       {selected ? (
         <Text className="text-background font-bold ml-2">✓</Text>
       ) : null}
     </Pressable>
+  );
+}
+
+/**
+ * Equipment access as a wrapping pill chip (web parity, NP-248 — the web's
+ * step 4 renders `EQUIPMENT_OPTIONS` as `rounded-full` chips in a
+ * `flex-wrap` row rather than full-width rows, `webapp/app/onboarding/page.tsx`'s
+ * `Step4`). Multi-select, so `accessibilityRole="checkbox"` like the
+ * `OptionRow` chips it replaces for this one step.
+ */
+function EquipmentChip({
+  testID,
+  label,
+  selected,
+  onPress,
+}: {
+  testID: string;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected, selected }}
+      accessibilityLabel={label}
+      style={minTouchTarget}
+      className={`rounded-full border-2 px-4 py-2 items-center justify-center ${
+        selected ? "border-foreground bg-foreground" : "border-border bg-card"
+      }`}
+    >
+      <Text
+        className={`text-sm font-medium ${
+          selected ? "text-background" : "text-foreground"
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * The decorative unit label inside a height/weight input (web parity,
+ * NP-247 — the web overlays "ft" / "in" / "lbs" / "kg" at the right edge of
+ * the field, `webapp/app/onboarding/page.tsx`'s absolutely-positioned
+ * `<span>`). Purely visual: `pointerEvents="none"` so it never steals the
+ * touch, and it carries no accessible name of its own — the field's own
+ * `accessibilityLabel` (set explicitly where this replaces a visible
+ * "Feet" / "Inches" label) is still the thing a screen reader announces.
+ * Anchored to the bottom 44 points of its relative parent, which is exactly
+ * `minTouchTarget`'s height and therefore the `Input`'s own field box, so it
+ * centers on the TextInput and not on the label above it.
+ */
+function UnitSuffix({ text }: { text: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        right: 12,
+        bottom: 0,
+        height: minTouchTarget.minHeight,
+        justifyContent: "center",
+      }}
+    >
+      <Text className="text-muted-foreground text-xs">{text}</Text>
+    </View>
   );
 }
 
@@ -192,6 +279,22 @@ const GOAL_TILE_META: Record<
     tileClass: "bg-emerald-100 dark:bg-emerald-900/30",
     rgb: "16 185 129", // emerald-500
   },
+};
+
+/**
+ * Trend icon for each eating direction on step 3 (NP-247), mirroring the
+ * web's TrendingDown / Minus / TrendingUp on the Lose/Maintain/Gain cards
+ * (`webapp/app/onboarding/page.tsx`'s `DIRECTION_OPTIONS`). Kept local to the
+ * component — like `GOAL_TILE_META` — because `lib/onboarding/steps.ts` is a
+ * plain data module shared outside UI code and should not import React icons.
+ */
+const DIRECTION_ICONS: Record<
+  NutritionDirection,
+  ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
+> = {
+  lose: TrendingDown,
+  maintain: Minus,
+  gain: TrendingUp,
 };
 
 /**
@@ -477,6 +580,10 @@ export function OnboardingFlow({
 
   const goals = useMemo(() => profile.fitnessGoals ?? [], [profile.fitnessGoals]);
   const primaryGoal = goals[0];
+  // Mirrors the web's `days = weeklyAvailability ?? 3` (webapp/app/onboarding/page.tsx):
+  // shown as 3 by default, but only ever written to the profile once the
+  // member actually taps the stepper.
+  const weeklyAvailabilityDays = profile.weeklyAvailability ?? 3;
 
   // Keep the route's server-driven recommendation in step with the draft
   // answers. The callback is stable-or-not by caller choice; guard with a
@@ -750,12 +857,11 @@ export function OnboardingFlow({
 
   const canAdvance =
     (step === 1 && goals.length > 0) ||
-    (step === 2 &&
-      name.trim().length > 0 &&
-      isAgeValid &&
-      !!profile.biologicalSex) ||
-    (step === 3 && canComputeTargets) ||
-    (step === 4 && (profile.equipmentAccess?.length ?? 0) > 0) ||
+    (step === 2 && name.trim().length > 0) ||
+    (step === 3 && canComputeTargets && isAgeValid) ||
+    // Web parity (NP-248): web's step 4 Next is enabled with nothing picked
+    // (no check at all on `equipmentAccess` before advancing).
+    step === 4 ||
     (step === 5 &&
       !submitting &&
       goals.length > 0 &&
@@ -770,7 +876,7 @@ export function OnboardingFlow({
   };
 
   const onNext = () => {
-    if (step === 3 && !canComputeTargets) return;
+    if (step === 3 && (!canComputeTargets || !isAgeValid)) return;
     if (step < TOTAL_STEPS) {
       goToStep(step + 1);
     } else {
@@ -887,7 +993,9 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[1]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              We personalize your targets to your body, not an average.
+              Your name is how the app greets you. The rest sets the
+              difficulty of the program we match you with, and how active we
+              assume you are when we work out your calories.
             </Text>
 
             {/* Name */}
@@ -901,57 +1009,7 @@ export function OnboardingFlow({
               maxLength={80}
             />
 
-            {/* Age with 13+ minimum */}
-            <View className="mt-3">
-              <Input
-                testID={`${testID}-age`}
-                label="Age"
-                keyboardType="number-pad"
-                placeholder="25"
-                value={profile.age !== undefined ? String(profile.age) : ""}
-                onChangeText={(t) => {
-                  const trimmed = t.trim();
-                  if (!trimmed) {
-                    set({ age: undefined });
-                    return;
-                  }
-                  const n = parseInt(trimmed, 10);
-                  set({ age: Number.isFinite(n) ? n : undefined });
-                }}
-              />
-              {isAgeBelowMinimum ? (
-                <Text
-                  testID={`${testID}-age-error`}
-                  accessibilityRole="alert"
-                  className="text-destructive text-xs mt-1"
-                >
-                  Must be at least 13 years old
-                </Text>
-              ) : null}
-            </View>
-
-            {/* Biological Sex */}
-            <View className="mt-4">
-              <Text className="text-foreground text-sm font-medium mb-2">
-                Biological sex
-              </Text>
-              <View
-                accessibilityRole="radiogroup"
-                accessibilityLabel="Biological sex"
-              >
-                {SEX_OPTIONS.map((o) => (
-                  <OptionRow
-                    key={o.value}
-                    testID={`${testID}-sex-${o.value}`}
-                    label={o.label}
-                    selected={profile.biologicalSex === o.value}
-                    onPress={() => set({ biologicalSex: o.value })}
-                  />
-                ))}
-              </View>
-            </View>
-
-            {/* Experience level (optional) */}
+            {/* Experience level, with descriptions (web parity) */}
             <View className="mt-4">
               <Text className="text-foreground text-sm font-medium mb-2">
                 Experience level
@@ -965,11 +1023,79 @@ export function OnboardingFlow({
                     key={o.value}
                     testID={`${testID}-experience-${o.value}`}
                     label={o.label}
+                    description={o.desc}
                     selected={profile.experienceLevel === o.value}
                     onPress={() => set({ experienceLevel: o.value })}
                   />
                 ))}
               </View>
+            </View>
+
+            {/* Days available per week — -/3/+ stepper (web parity, NP-246) */}
+            <View className="mt-4">
+              <Text className="text-foreground text-sm font-medium mb-2">
+                Days available per week
+              </Text>
+              <View className="flex-row items-center gap-4">
+                <Pressable
+                  testID={`${testID}-weekly-availability-decrease`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease days"
+                  disabled={weeklyAvailabilityDays <= 1}
+                  onPress={() =>
+                    set({
+                      weeklyAvailability: Math.max(
+                        1,
+                        weeklyAvailabilityDays - 1,
+                      ),
+                    })
+                  }
+                  style={minTouchTarget}
+                  className={`h-11 w-11 items-center justify-center rounded-xl border border-border bg-card ${
+                    weeklyAvailabilityDays <= 1 ? "opacity-30" : ""
+                  }`}
+                >
+                  <Text className="text-foreground text-lg font-bold">
+                    −
+                  </Text>
+                </Pressable>
+                <Text
+                  testID={`${testID}-weekly-availability`}
+                  className="text-foreground text-2xl font-bold w-8 text-center"
+                >
+                  {weeklyAvailabilityDays}
+                </Text>
+                <Pressable
+                  testID={`${testID}-weekly-availability-increase`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase days"
+                  disabled={weeklyAvailabilityDays >= 7}
+                  onPress={() =>
+                    set({
+                      weeklyAvailability: Math.min(
+                        7,
+                        weeklyAvailabilityDays + 1,
+                      ),
+                    })
+                  }
+                  style={minTouchTarget}
+                  className={`h-11 w-11 items-center justify-center rounded-xl border border-border bg-card ${
+                    weeklyAvailabilityDays >= 7 ? "opacity-30" : ""
+                  }`}
+                >
+                  <Text className="text-foreground text-lg font-bold">
+                    +
+                  </Text>
+                </Pressable>
+                <Text className="text-muted-foreground text-sm">
+                  days / week
+                </Text>
+              </View>
+              <Text className="text-muted-foreground text-xs mt-2">
+                We&apos;ll only recommend programs that fit inside{" "}
+                {weeklyAvailabilityDays} day
+                {weeklyAvailabilityDays === 1 ? "" : "s"} a week.
+              </Text>
             </View>
           </View>
         ) : null}
@@ -986,8 +1112,8 @@ export function OnboardingFlow({
                   {STEP_QUESTIONS[2]}
                 </Text>
                 <Text className="text-muted-foreground text-sm mb-4">
-                  These numbers are what your daily calories and macros are built
-                  from. Nothing here is shared.
+                  These four numbers are what your daily calories and macros
+                  are built from. Nothing here is shared.
                 </Text>
               </View>
 
@@ -1040,67 +1166,154 @@ export function OnboardingFlow({
               </View>
             </View>
 
-            {/* Height input */}
-            <View className="mb-4">
-              <Text className="text-foreground text-xs font-medium mb-1.5">
-                Height
-              </Text>
-              {useImperial ? (
-                <View className="flex-row gap-3">
-                  <View className="flex-1">
-                    <Input
-                      testID="stat-height-ft"
-                      label="Feet"
-                      keyboardType="number-pad"
-                      placeholder="5"
-                      value={heightFt}
-                      onChangeText={(val) => handleHeightChange(val, heightIn)}
-                    />
-                  </View>
-                  <View className="flex-1">
-                    <Input
-                      testID="stat-height-in"
-                      label="Inches"
-                      keyboardType="number-pad"
-                      placeholder="10"
-                      value={heightIn}
-                      onChangeText={(val) => handleHeightChange(heightFt, val)}
-                    />
-                  </View>
-                </View>
-              ) : (
-                <Input
-                  testID="stat-height-cm"
-                  label="Height (cm)"
-                  keyboardType="number-pad"
-                  placeholder="175"
-                  value={heightCmDisplay}
-                  onChangeText={handleHeightCmChange}
-                />
-              )}
-            </View>
-
-            {/* Weight inputs */}
+            {/* Age + Height, side by side (web parity, NP-247) */}
             <View className="flex-row gap-3 mb-4">
               <View className="flex-1">
+                <Input
+                  testID={`${testID}-age`}
+                  label="Age"
+                  keyboardType="number-pad"
+                  placeholder="e.g. 28"
+                  value={profile.age !== undefined ? String(profile.age) : ""}
+                  onChangeText={(t) => {
+                    const trimmed = t.trim();
+                    if (!trimmed) {
+                      set({ age: undefined });
+                      return;
+                    }
+                    const n = parseInt(trimmed, 10);
+                    set({ age: Number.isFinite(n) ? n : undefined });
+                  }}
+                />
+                {isAgeBelowMinimum ? (
+                  <Text
+                    testID={`${testID}-age-error`}
+                    accessibilityRole="alert"
+                    className="text-destructive text-xs mt-1"
+                  >
+                    Must be at least 13 years old
+                  </Text>
+                ) : null}
+              </View>
+
+              <View className="flex-1">
+                <Text className="text-foreground text-sm font-medium mb-1">
+                  Height
+                </Text>
+                {useImperial ? (
+                  <View className="flex-row gap-2">
+                    <View style={{ position: "relative" }} className="flex-1">
+                      <Input
+                        testID="stat-height-ft"
+                        accessibilityLabel="Feet"
+                        keyboardType="number-pad"
+                        placeholder="5"
+                        value={heightFt}
+                        onChangeText={(val) =>
+                          handleHeightChange(val, heightIn)
+                        }
+                      />
+                      <UnitSuffix text="ft" />
+                    </View>
+                    <View style={{ position: "relative" }} className="flex-1">
+                      <Input
+                        testID="stat-height-in"
+                        accessibilityLabel="Inches"
+                        keyboardType="number-pad"
+                        placeholder="10"
+                        value={heightIn}
+                        onChangeText={(val) =>
+                          handleHeightChange(heightFt, val)
+                        }
+                      />
+                      <UnitSuffix text="in" />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ position: "relative" }}>
+                    <Input
+                      testID="stat-height-cm"
+                      accessibilityLabel="Height (cm)"
+                      keyboardType="number-pad"
+                      placeholder="e.g. 175"
+                      value={heightCmDisplay}
+                      onChangeText={handleHeightCmChange}
+                    />
+                    <UnitSuffix text="cm" />
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Biological sex — three side-by-side pills, with the Mifflin
+                note (web parity: moved from step 2, NP-246 / NP-247) */}
+            <View className="mb-4">
+              <Text className="text-foreground text-sm font-medium mb-1.5">
+                Biological sex
+              </Text>
+              <View
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Biological sex"
+                className="flex-row gap-2"
+              >
+                {SEX_OPTIONS.map((o) => {
+                  const selected = profile.biologicalSex === o.value;
+                  return (
+                    <Pressable
+                      key={o.value}
+                      testID={`${testID}-sex-${o.value}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: selected, selected }}
+                      accessibilityLabel={o.label}
+                      onPress={() => set({ biologicalSex: o.value })}
+                      style={minTouchTarget}
+                      className={`flex-1 items-center justify-center rounded-xl border-2 py-2.5 ${
+                        selected
+                          ? "border-foreground bg-foreground"
+                          : "border-border bg-card"
+                      }`}
+                    >
+                      <Text
+                        className={`text-xs font-semibold ${
+                          selected ? "text-background" : "text-foreground"
+                        }`}
+                      >
+                        {o.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <Text className="text-muted-foreground text-[11px] mt-1.5 leading-relaxed">
+                The Mifflin-St Jeor equation needs this. Choosing &quot;prefer
+                not to say&quot; means we can&apos;t calculate your calories
+                automatically.
+              </Text>
+            </View>
+
+            {/* Weight inputs, with unit suffixes */}
+            <View className="flex-row gap-3 mb-4">
+              <View className="flex-1" style={{ position: "relative" }}>
                 <Input
                   testID="stat-current-weight"
                   label={`Current weight (${useImperial ? "lbs" : "kg"})`}
                   keyboardType="decimal-pad"
-                  placeholder={useImperial ? "185" : "84"}
+                  placeholder={useImperial ? "e.g. 185" : "e.g. 84"}
                   value={useImperial ? currentLbs : currentKgDisplay}
                   onChangeText={handleCurrentWeightChange}
                 />
+                <UnitSuffix text={useImperial ? "lbs" : "kg"} />
               </View>
-              <View className="flex-1">
+              <View className="flex-1" style={{ position: "relative" }}>
                 <Input
                   testID="stat-target-weight"
                   label={`Target weight (${useImperial ? "lbs" : "kg"})`}
                   keyboardType="decimal-pad"
-                  placeholder={useImperial ? "165" : "75"}
+                  placeholder={useImperial ? "e.g. 165" : "e.g. 75"}
                   value={useImperial ? targetLbs : targetKgDisplay}
                   onChangeText={handleTargetWeightChange}
                 />
+                <UnitSuffix text={useImperial ? "lbs" : "kg"} />
               </View>
             </View>
 
@@ -1147,6 +1360,7 @@ export function OnboardingFlow({
                     applied === null || applied === 0
                       ? sub
                       : `TDEE ${applied < 0 ? "−" : "+"} ${Math.abs(applied)}`;
+                  const DirectionIcon = DIRECTION_ICONS[value];
                   return (
                     <Pressable
                       key={value}
@@ -1161,8 +1375,12 @@ export function OnboardingFlow({
                           : "border-border bg-card"
                       }`}
                     >
+                      <DirectionIcon
+                        size={16}
+                        color={selected ? colors.background : colors.foreground}
+                      />
                       <Text
-                        className={`text-xs font-semibold ${
+                        className={`text-xs font-semibold mt-1.5 ${
                           selected ? "text-background" : "text-foreground"
                         }`}
                       >
@@ -1210,9 +1428,10 @@ export function OnboardingFlow({
                 How active is your day, outside training?
               </Text>
               <Text className="text-muted-foreground text-xs mb-2">
-                Your job and daily movement, not your workouts.
+                Your job and daily movement, not your workouts. This has the
+                biggest effect on your calories.
               </Text>
-              {(Object.keys(ACTIVITY_BLURBS) as ActivityLevel[]).map(
+              {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map(
                 (level) => {
                   const selected = activity === level;
                   return (
@@ -1235,7 +1454,7 @@ export function OnboardingFlow({
                             selected ? "text-background" : "text-foreground"
                           }`}
                         >
-                          {level.replace("_", " ").toUpperCase()}
+                          {ACTIVITY_LABELS[level]}
                         </Text>
                         <Text
                           className={`text-[10px] mt-0.5 ${
@@ -1245,6 +1464,13 @@ export function OnboardingFlow({
                           {ACTIVITY_BLURBS[level]}
                         </Text>
                       </View>
+                      <Text
+                        className={`text-[10px] tabular-nums ml-2 ${
+                          selected ? "text-background/70" : "text-muted-foreground"
+                        }`}
+                      >
+                        ×{ACTIVITY_MULTIPLIERS[level]}
+                      </Text>
                     </Pressable>
                   );
                 },
@@ -1255,6 +1481,9 @@ export function OnboardingFlow({
             <View className="mb-4">
               <Text className="text-foreground text-sm font-semibold mb-1">
                 How do you want your macros split?
+              </Text>
+              <Text className="text-muted-foreground text-xs mb-2">
+                You can change this any time in Nutrition.
               </Text>
               {MACRO_PRESET_CHOICES.map((key) => {
                 const selected = macroPreset === key;
@@ -1317,6 +1546,17 @@ export function OnboardingFlow({
                   </Pressable>
                 );
               })}
+              {/* Say WHY that one is badged (web parity, NP-247). */}
+              <Text
+                testID="macro-preset-recommendation"
+                className="text-muted-foreground text-[11px] mt-2 leading-relaxed"
+              >
+                <Text className="font-semibold text-foreground">
+                  {MACRO_PRESET_LABELS[presetRecommendation.preset]}
+                </Text>
+                {" — "}
+                {presetRecommendation.why}
+              </Text>
             </View>
 
             {/* Live TDEE preview */}
@@ -1339,9 +1579,12 @@ export function OnboardingFlow({
                 testID="tdee-preview"
                 className="p-4 rounded-2xl border-2 border-foreground bg-card mb-4"
               >
-                <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground mb-1">
-                  Your daily targets
-                </Text>
+                <View className="flex-row items-center gap-1.5 mb-1">
+                  <Sparkles size={14} color={colors.foreground} />
+                  <Text className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                    Your daily targets
+                  </Text>
+                </View>
 
                 <Pressable
                   testID="explain-calories"
@@ -1359,6 +1602,7 @@ export function OnboardingFlow({
                   <Text className="text-sm text-muted-foreground">
                     cal / day
                   </Text>
+                  <HelpCircle size={14} color={colors["muted-foreground"]} />
                 </Pressable>
 
                 <View className="flex-row gap-2 my-2">
@@ -1388,9 +1632,15 @@ export function OnboardingFlow({
                       >
                         {grams}g
                       </Text>
-                      <Text className="text-[10px] text-muted-foreground uppercase mt-0.5">
-                        {label}
-                      </Text>
+                      <View className="flex-row items-center gap-0.5 mt-0.5">
+                        <Text className="text-[10px] text-muted-foreground uppercase">
+                          {label}
+                        </Text>
+                        <HelpCircle
+                          size={10}
+                          color={colors["muted-foreground"]}
+                        />
+                      </View>
                     </Pressable>
                   ))}
                 </View>
@@ -1411,9 +1661,12 @@ export function OnboardingFlow({
                 ) : null}
 
                 <Text className="text-muted-foreground text-xs mt-3 leading-relaxed">
-                  Your TDEE is about {targets.tdee.toLocaleString()} cal. We
-                  applied {DIRECTION_EXPLANATION[targets.direction]}. Tap any
-                  number to see how we got it.
+                  Your TDEE is about{" "}
+                  <Text className="font-semibold text-foreground">
+                    {targets.tdee.toLocaleString()} cal
+                  </Text>
+                  . We applied {DIRECTION_EXPLANATION[targets.direction]}. Tap
+                  any number to see how we got it.
                 </Text>
               </View>
             )}
@@ -1440,19 +1693,42 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[3]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              Tell us what you have access to so we can recommend the right
-              exercises.
+              We won&apos;t recommend a barbell program to someone training
+              in a living room. Tell us what you actually have.
             </Text>
-            {EQUIPMENT_OPTIONS.map((o) => (
-              <OptionRow
-                key={o.value}
-                testID={`${testID}-equipment-${o.value}`}
-                label={o.label}
-                multiple
-                selected={(profile.equipmentAccess ?? []).includes(o.value)}
-                onPress={() => toggleEquipment(o.value)}
+
+            <Text className="text-foreground text-sm font-medium mb-3">
+              Equipment access
+            </Text>
+            <View
+              testID={`${testID}-equipment-chips`}
+              style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+            >
+              {EQUIPMENT_OPTIONS.map((o) => (
+                <EquipmentChip
+                  key={o.value}
+                  testID={`${testID}-equipment-${o.value}`}
+                  label={o.label}
+                  selected={(profile.equipmentAccess ?? []).includes(o.value)}
+                  onPress={() => toggleEquipment(o.value)}
+                />
+              ))}
+            </View>
+
+            {/* Injury notes (web parity, NP-248 — native had no equivalent
+                field; saved as `injuryNotes` and shown on the review step). */}
+            <View className="mt-7">
+              <Input
+                testID={`${testID}-injury-notes`}
+                label="Injury notes"
+                placeholder="Any injuries or areas to avoid? (optional)"
+                value={profile.injuryNotes ?? ""}
+                onChangeText={(v) => set({ injuryNotes: v })}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
               />
-            ))}
+            </View>
           </View>
         ) : null}
 
@@ -1492,6 +1768,28 @@ export function OnboardingFlow({
               onEdit={goToStep}
             >
               <ReviewRow label="Name" value={name.trim() || "Not set"} />
+              {profile.experienceLevel ? (
+                <ReviewRow
+                  label="Experience"
+                  value={
+                    EXPERIENCE_OPTIONS.find(
+                      (e) => e.value === profile.experienceLevel,
+                    )?.label ?? profile.experienceLevel
+                  }
+                />
+              ) : null}
+              <ReviewRow
+                label="Days / week"
+                value={String(weeklyAvailabilityDays)}
+              />
+            </ReviewSection>
+
+            {/* Body & nutrition review */}
+            <ReviewSection
+              title="Body & nutrition"
+              stepNumber={3}
+              onEdit={goToStep}
+            >
               <ReviewRow
                 label="Age"
                 value={profile.age ? String(profile.age) : "—"}
@@ -1503,24 +1801,6 @@ export function OnboardingFlow({
                     ?.label ?? "Not set"
                 }
               />
-              {profile.experienceLevel ? (
-                <ReviewRow
-                  label="Experience"
-                  value={
-                    EXPERIENCE_OPTIONS.find(
-                      (e) => e.value === profile.experienceLevel,
-                    )?.label ?? profile.experienceLevel
-                  }
-                />
-              ) : null}
-            </ReviewSection>
-
-            {/* Body & nutrition review */}
-            <ReviewSection
-              title="Body & nutrition"
-              stepNumber={3}
-              onEdit={goToStep}
-            >
               <ReviewRow
                 label="Direction"
                 value={
@@ -1596,6 +1876,14 @@ export function OnboardingFlow({
                         e,
                     )
                     .join(", ") || "None"
+                }
+              />
+              <ReviewRow
+                label="Injury notes"
+                value={
+                  profile.injuryNotes?.trim()
+                    ? profile.injuryNotes.trim()
+                    : "None"
                 }
               />
             </ReviewSection>

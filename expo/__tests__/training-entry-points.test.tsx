@@ -124,6 +124,10 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
         expect(rendered.getPathname()).toBe(pathname);
       });
     },
+    // The Workout tab (NP-277) now also mounts Saved/Recommended/Browse
+    // Programs below Continue Training, so the first render does more work
+    // than the default 5s budget reliably covers under full-suite load.
+    15000,
   );
 
   it("pushes them, so Back returns to the programs list", async () => {
@@ -160,29 +164,33 @@ describe("Search, Saved and the calendar are two taps from the tab bar", () => {
 });
 
 describe("Start workout leads to the live screen", () => {
-  it("dashboard → workout overview for the current program, day and phase", async () => {
+  it("dashboard → the live (Track/Live) screen for the current program, day and phase", async () => {
+    // NP-256: Up Next used to open the read-only overview — a second tap
+    // ("Start Live" on that screen) was what reached Track. It now opens the
+    // tracker directly, the same one-tap depth as the web's Continue link.
     const rendered = await renderShell("/(tabs)/dashboard");
     expect(await screen.findByTestId("dashboard-screen")).toBeTruthy();
 
-    // The card only renders once current-workout has answered.
-    const start = await screen.findByTestId("dashboard-start-workout");
+    // Up Next is the one next-workout card (NP-255) and only renders once
+    // current-workout has answered.
+    const start = await screen.findByTestId("up-next-card");
     fireEvent.press(start);
 
     expect(
       await screen.findByTestId(
-        screenId("(app)/(tabs)/programming/[id]/workout/[idx]/index"),
+        screenId("(app)/(tabs)/programming/[id]/workout/[idx]/live"),
       ),
     ).toBeTruthy();
     // "Day 3" → index 2, 1-based phase 2 → `?phase=1`.
     await waitFor(() => {
-      expect(rendered.getPathname()).toBe("/programming/p1/workout/2");
+      expect(rendered.getPathname()).toBe("/programming/p1/workout/2/live");
     });
     expect(rendered.getSearchParams()).toEqual(
       expect.objectContaining({ phase: "1" }),
     );
   });
 
-  it("workout overview → the live screen for the same program, phase and index", async () => {
+  it("the workout overview (reached from elsewhere, e.g. a phase's workout list) still starts live from its own button", async () => {
     // The overview is loaded for real here; the live screen is the stub, so
     // the assertion is about which route opened, not what it renders.
     await SecureStore.setItemAsync("become.session", savedJwt());
@@ -232,13 +240,29 @@ describe("the Start callbacks are required props", () => {
     expect(src).not.toMatch(new RegExp(`${prop}\\?:`));
   });
 
+  // The line the card is about: `onPress={onStartWorkout ?? (() => {})}`
+  // rendered a live button that did nothing, in a file that compiled. Neither
+  // file may swallow the omission with a no-op default any more — the prop
+  // has to reach a real handler. `onStartWorkout`'s one call site moved off a
+  // Button's `onPress` (NP-255 dropped the "Today's workout" card it
+  // belonged to): Up Next and Current Program's Continue own the Start
+  // action now, each falling back to it when there's no better next-workout
+  // handler, which is a DIFFERENT fallback than the banned no-op one.
+  const noOpDefaultPattern: Record<string, RegExp> = {
+    onStartWorkout: /onPressWorkout=\{onStartNextWorkout \?\? onStartWorkout\}/,
+    onStartLive: /onPress=\{onStartLive\}/,
+  };
+
   it.each(sources)("%s has no no-op default in %s", (prop, file) => {
-    // The line the card is about: `onPress={onStartWorkout ?? (() => {})}`
-    // rendered a live button that did nothing, in a file that compiled. The
-    // button now presses straight through to the prop. (The comments in those
-    // files quote the old line, which is why this looks at the JSX.)
     const src = fs.readFileSync(path.resolve(__dirname, "..", file), "utf8");
-    expect(src).toMatch(new RegExp(`onPress=\\{${prop}\\}`));
-    expect(src).not.toMatch(new RegExp(`onPress=\\{${prop}\\s*\\?\\?`));
+    expect(src).toMatch(noOpDefaultPattern[prop]!);
+    // Scoped to an actual JSX expression (`={...}`), not just anywhere in the
+    // file — both files' doc comments quote this exact banned pattern on
+    // purpose, to say it no longer happens in the code below them.
+    expect(src).not.toMatch(
+      new RegExp(
+        `=\\{[^}]*\\b${prop}\\s*\\?\\?\\s*\\(\\s*\\(\\s*\\)\\s*=>\\s*\\{\\s*\\}\\s*\\)[^}]*\\}`,
+      ),
+    );
   });
 });

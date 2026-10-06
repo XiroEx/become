@@ -69,6 +69,8 @@ export interface SmartRotatingTileProps {
   // Pass-through handlers so a rotated card behaves exactly like a pinned one.
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
+  /** The Goal tile's own destination: Nutrition Goals, not the day screen (NP-256). */
+  onOpenNutritionGoals?: () => void;
   onOpenWorkoutNow?: () => void;
   onOpenCalendar?: () => void;
   onOpenCheckIn?: () => void;
@@ -93,6 +95,7 @@ export function SmartRotatingTile({
   onTap,
   onOpenMind,
   onOpenNutrition,
+  onOpenNutritionGoals,
   onOpenWorkoutNow,
   onOpenCalendar,
   onOpenCheckIn,
@@ -203,6 +206,7 @@ export function SmartRotatingTile({
         statData={statData}
         onOpenCalendar={onOpenCalendar}
         onOpenNutrition={onOpenNutrition}
+        onOpenNutritionGoals={onOpenNutritionGoals}
         onOpenCheckIn={onOpenCheckIn}
         onOpenWeight={onOpenWeight}
         onOpenMood={onOpenMood}

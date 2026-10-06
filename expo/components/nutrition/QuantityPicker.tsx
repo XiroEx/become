@@ -53,6 +53,15 @@ export interface QuantityPickerSelection {
   pickedTime: string | null;
 }
 
+/** What the Log/"Add to <tag>"/"Build a meal" buttons hand back. */
+export interface QuantityPickerLogResult {
+  item: MealItemPayload;
+  tag: string;
+  date: string;
+  timeMode: "now" | "picked" | "none";
+  pickedTime: string | null;
+}
+
 export interface QuantityPickerProps {
   food?: QuantityPickerFood | null;
   variant?: any;
@@ -72,13 +81,19 @@ export interface QuantityPickerProps {
    */
   showLogControls?: boolean;
   onChange?: (selection: QuantityPickerSelection) => void;
-  onSubmit?: (result: {
-    item: MealItemPayload;
-    tag: string;
-    date: string;
-    timeMode: "now" | "picked" | "none";
-    pickedTime?: string | null;
-  }) => void | Promise<void>;
+  onSubmit?: (result: QuantityPickerLogResult) => void | Promise<void>;
+  /**
+   * Overrides the primary button's label (default "Log Food") — e.g.
+   * `FoodSearchSheet`'s "Add to Breakfast" (NP-261). Still fires `onSubmit`.
+   */
+  primaryActionLabel?: string;
+  /**
+   * A second button next to the primary one (NP-261's "Build a meal",
+   * additive to every other consumer — only rendered when both this and
+   * `onSecondaryAction` are set).
+   */
+  secondaryActionLabel?: string;
+  onSecondaryAction?: (result: QuantityPickerLogResult) => void | Promise<void>;
   testID?: string;
 }
 
@@ -103,6 +118,9 @@ export function QuantityPicker({
   showLogControls = true,
   onChange,
   onSubmit,
+  primaryActionLabel,
+  secondaryActionLabel,
+  onSecondaryAction,
   testID = "quantity-picker",
 }: QuantityPickerProps) {
   const { colors } = useThemeTokens();
@@ -323,8 +341,8 @@ export function QuantityPicker({
   ]);
 
   // 8. Submit / Log handler
-  const handleLog = useCallback(() => {
-    if (!activeVariant) return;
+  const buildLogResult = useCallback((): QuantityPickerLogResult | null => {
+    if (!activeVariant) return null;
     const foodObj = food ?? {
       name: activeVariant.name ?? "Food",
     };
@@ -336,27 +354,30 @@ export function QuantityPicker({
       servingChoice: selectedChoice ?? undefined,
     });
 
+    return {
+      item,
+      tag,
+      date,
+      timeMode,
+      pickedTime: timeMode === "picked" ? pickedTime : null,
+    };
+  }, [food, activeVariant, quantity, unit, selectedChoice, tag, date, timeMode, pickedTime]);
+
+  const handleLog = useCallback(() => {
+    const result = buildLogResult();
+    if (!result) return;
     if (onSubmit) {
-      onSubmit({
-        item,
-        tag,
-        date,
-        timeMode,
-        pickedTime: timeMode === "picked" ? pickedTime : null,
-      });
+      onSubmit(result);
     }
-  }, [
-    food,
-    activeVariant,
-    quantity,
-    unit,
-    selectedChoice,
-    tag,
-    date,
-    timeMode,
-    pickedTime,
-    onSubmit,
-  ]);
+  }, [buildLogResult, onSubmit]);
+
+  const handleSecondaryAction = useCallback(() => {
+    const result = buildLogResult();
+    if (!result) return;
+    if (onSecondaryAction) {
+      onSecondaryAction(result);
+    }
+  }, [buildLogResult, onSecondaryAction]);
 
   return (
     <View testID={testID} style={{ gap: 16 }}>
@@ -770,7 +791,33 @@ export function QuantityPicker({
           }}
         >
           <Text style={{ fontSize: 16, fontWeight: "bold", color: colors["primary-foreground"] }}>
-            Log Food
+            {primaryActionLabel ?? "Log Food"}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* NP-261: a second action next to the primary one — "Build a meal"
+          on `FoodSearchSheet`'s inline picker, additive for every other
+          consumer (only rendered when both props are set). */}
+      {showLogControls && secondaryActionLabel && onSecondaryAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={secondaryActionLabel}
+          testID="quantity-picker-secondary-action"
+          onPress={handleSecondaryAction}
+          style={{
+            marginTop: 8,
+            height: 48,
+            borderRadius: 8,
+            backgroundColor: colors.card,
+            borderWidth: 1,
+            borderColor: colors.border,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "bold", color: colors.foreground }}>
+            {secondaryActionLabel}
           </Text>
         </Pressable>
       ) : null}

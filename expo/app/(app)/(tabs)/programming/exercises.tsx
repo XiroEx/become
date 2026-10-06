@@ -15,7 +15,7 @@ import {
 } from "@become/api-client";
 import { MyExercises } from "@/components/workout/MyExercises";
 import { CustomExerciseForm } from "@/components/workout/CustomExerciseForm";
-import { Modal } from "@/components/Modal";
+import { BottomSheet } from "@/components/BottomSheet";
 import { ScreenState } from "@/components/ScreenState";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
@@ -394,14 +394,15 @@ export default function MyExercisesRoute() {
           </View>
         ) : null}
 
+        {/* NP-276: the empty state (icon, copy, Create Exercise button) is
+            `MyExercises`'s own branch, not `ScreenState`'s plain title/message
+            one — `hasData` only needs to be true once loading/error are
+            cleared so `ScreenState` always hands off to it. */}
         <ScreenState
           loading={custom.loading}
           error={custom.error}
-          empty={!custom.loading && !custom.error && exercises.length === 0}
-          hasData={exercises.length > 0}
+          hasData={!custom.loading && !custom.error}
           onRetry={retryList}
-          emptyTitle="No custom exercises yet"
-          emptyMessage="Build your own exercise tailored to your training."
           testID="my-exercises-screen-state"
         >
           <MyExercises
@@ -420,23 +421,41 @@ export default function MyExercisesRoute() {
         </ScreenState>
       </ScrollView>
 
-      <Modal
+      {/* BLOCKER FIX (NP-276): the create card used to be a centred `Modal`
+          with no height limit and no scroll — on a phone the title and Name
+          field sat under the status bar and Cancel/Create sat below the
+          bottom edge, so a custom exercise could not be created natively.
+          `BottomSheet` + `sheetStyle={{ maxHeight: "90%" }}` + an inner
+          `ScrollView` is the pattern already proven for long native forms
+          (`GenerateSheet`, `UpgradeSheet`, `TrainingLogCorrectionSheet`): the
+          sheet itself never exceeds the safe area, and scrolling is what
+          keeps the title, Cancel and Create reachable regardless of how
+          tall the form gets. */}
+      <BottomSheet
         testID="my-exercises-create-modal"
         visible={showCreate}
         onClose={closeCreate}
         title="New Custom Exercise"
+        sheetStyle={{ maxHeight: "90%" }}
       >
-        <CustomExerciseForm
-          values={createValues}
-          onChange={setCreateValues}
-          error={createError}
-          submitting={creating}
-          submitLabel={creating ? "Creating..." : "Create Exercise"}
-          onSubmit={() => void confirmCreate()}
-          onCancel={closeCreate}
-          testID="my-exercises-create-form"
-        />
-      </Modal>
+        <ScrollView
+          testID="my-exercises-create-form-scroll"
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingBottom: 8 }}
+        >
+          <CustomExerciseForm
+            values={createValues}
+            onChange={setCreateValues}
+            error={createError}
+            submitting={creating}
+            submitLabel={creating ? "Creating..." : "Create Exercise"}
+            onSubmit={() => void confirmCreate()}
+            onCancel={closeCreate}
+            testID="my-exercises-create-form"
+          />
+        </ScrollView>
+      </BottomSheet>
     </SafeAreaView>
   );
 }

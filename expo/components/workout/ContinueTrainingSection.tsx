@@ -157,9 +157,15 @@ export function ContinueTrainingSection({
 
   return (
     <View testID={testID} className={`mb-4 ${className}`}>
-      {/* Section Header */}
-      <View className="flex-row items-center justify-between mb-3">
-        <Text className="text-foreground text-lg font-bold">
+      {/* Section Header — title gets flex-1 + numberOfLines so a long heading
+          (or a narrow phone) never overlaps the pill the way an un-flexed
+          Text (React Native's default flexShrink: 0) used to: the pill
+          stays pinned right and the title truncates itself instead. */}
+      <View className="flex-row items-center justify-between gap-3 mb-3">
+        <Text
+          className="text-foreground text-lg font-bold flex-1"
+          numberOfLines={1}
+        >
           Continue Training
         </Text>
         <Pressable
@@ -167,7 +173,7 @@ export function ContinueTrainingSection({
           accessibilityRole="button"
           accessibilityLabel="Workout Now"
           onPress={handleWorkoutNow}
-          className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-600"
+          className="flex-row items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-600 shrink-0"
         >
           <Zap size={14} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
           <Text className="text-white text-xs font-bold">Workout Now</Text>
@@ -186,6 +192,15 @@ export function ContinueTrainingSection({
             Math.max(0, Math.round(program.progress ?? 0)),
           );
 
+          // Left accent stripe — mirrors the web's Card `accent` prop
+          // (success/info/warning), an 8px bar clipped to the card's
+          // rounded corners via the parent's `overflow-hidden`.
+          const accentClass = isPaused
+            ? "bg-amber-500"
+            : isFuture
+              ? "bg-blue-500"
+              : "bg-emerald-500";
+
           return (
             <Pressable
               key={program.programId}
@@ -195,11 +210,19 @@ export function ContinueTrainingSection({
                 isPaused ? "Paused" : `${progress}% complete`
               }`}
               onPress={() => handleOpenProgram(program)}
-              className="bg-card border border-border rounded-2xl p-4 active:opacity-95 shadow-sm"
+              className="relative overflow-hidden bg-card border border-border rounded-2xl p-4 pl-5 active:opacity-95 shadow-sm"
             >
+              <View
+                testID={`continue-program-accent-${program.programId}`}
+                pointerEvents="none"
+                className={`absolute inset-y-0 left-0 w-2 ${accentClass}`}
+              />
               <View className="flex-row items-center justify-between mb-2">
                 <View className="flex-1 mr-3 min-w-0">
-                  <Text className="text-foreground text-base font-semibold truncate">
+                  <Text
+                    className="text-foreground text-base font-semibold"
+                    numberOfLines={1}
+                  >
                     {program.programName}
                   </Text>
 

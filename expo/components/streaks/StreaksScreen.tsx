@@ -269,7 +269,9 @@ export function StreaksScreen({
                 </Text>
                 {overall && overall.freezes > 0 ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Snowflake size={14} color={colors.accent} />
+                    {/* Blue on the web (`text-blue-500`); `info` is the app's one
+                        blue token and already covers this exact shade (NP-258). */}
+                    <Snowflake size={14} color={colors.info} />
                     <Text className="text-xs text-blue-500 font-medium">
                       {overall.freezes} freeze{overall.freezes === 1 ? "" : "s"}
                     </Text>
@@ -459,12 +461,15 @@ export function StreaksScreen({
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: tint("accent", 0.15),
+                // Purple on the web (`bg-purple-100 text-purple-600` /
+                // `dark:bg-purple-900/30 dark:text-purple-400`) — orange
+                // (`accent`) on native was the bug (NP-258).
+                backgroundColor: tint("mindset", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Brain size={22} color={colors.accent} />
+              <Brain size={22} color={colors.mindset} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -474,7 +479,7 @@ export function StreaksScreen({
                 <>
                   <View className="mt-1">
                     <StreakValue current={p.mindset.current} unit="days" />
-                    <BuildBar current={p.mindset.current} barColor={colors.accent} />
+                    <BuildBar current={p.mindset.current} barColor={colors.mindset} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     Days in a row with a mood check-in, a Mind check-in, a session or a journal entry.
@@ -581,9 +586,11 @@ export function StreaksScreen({
                           gap: 8,
                         }}
                       >
+                        {/* Sky/blue on the web (`text-sky-500`); `info` is the
+                            app's one blue token (NP-258). */}
                         <Snowflake
                           size={16}
-                          color={p.super.freeze.available ? colors.accent : colors["muted-foreground"]}
+                          color={p.super.freeze.available ? colors.info : colors["muted-foreground"]}
                           style={{ marginTop: 2 }}
                         />
                         <View style={{ flex: 1 }}>

@@ -233,7 +233,7 @@ describe("the table", () => {
     ["/dashboard/recipes/r1/edit", "/(tabs)/nutrition/recipes", "nearest"],
     ["/dashboard/foods/f1", "/(tabs)/nutrition/food/f1", "exact"],
     ["/dashboard/meals/m1", "/(tabs)/nutrition", "nearest"],
-    ["/dashboard/meal-plan", "/(tabs)/nutrition", "nearest"],
+    ["/dashboard/meal-plan", "/(tabs)/nutrition/meal-plan", "exact"],
     ["/dashboard/timeline", "/(tabs)/nutrition", "nearest"],
     // Mind
     ["/dashboard/mind", "/(tabs)/mind", "exact"],
@@ -245,7 +245,10 @@ describe("the table", () => {
     // Training
     ["/dashboard/workout", "/(tabs)/programming", "exact"],
     ["/dashboard/workout/hub", "/(tabs)/programming", "nearest"],
-    ["/dashboard/workout/library", "/(tabs)/programming", "nearest"],
+    // The exercise library (NP-169's "My Exercises" screen is its native
+    // counterpart, same CustomExercise[] data) — a "Browse exercises" nudge
+    // lands there exactly (NP-256), not on the generic Workout hub.
+    ["/dashboard/workout/library", "/(tabs)/programming/exercises", "exact"],
     ["/dashboard/workout/p1", "/(tabs)/programming/p1", "exact"],
     ["/dashboard/workout/p1/journey", "/(tabs)/programming/p1/journey", "exact"],
     ["/dashboard/workout/p1/schedule", "/(tabs)/calendar/settings", "nearest"],

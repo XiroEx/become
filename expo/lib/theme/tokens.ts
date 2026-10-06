@@ -20,6 +20,14 @@
  *   muted       zinc-100 / zinc-800      muted-fg    zinc-500 / zinc-400
  *   primary     red-500 (brand, both)    destructive red-700  / red-400
  *   accent      amber-600 / amber-400    success     green-600 / green-400
+ *   info        blue-600 / blue-400      (the web's "Calendar"/History links
+ *                                          the scheduled-workout icons and the
+ *                                          meal macro tile for protein —
+ *                                          Tailwind's blue, never the brand red)
+ *   mindset     purple-600 / purple-400  (the web's Mindset streak icon —
+ *                                          Tailwind's purple, distinct from accent)
+ *   teal        teal-500 (both modes)    (the nutrition consultant's identity
+ *                                          colour, NP-262)
  *
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
@@ -42,7 +50,9 @@ export type TokenName =
   | "accent"
   | "accent-foreground"
   | "success"
-  | "teal";
+  | "teal"
+  | "info"
+  | "mindset";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -66,6 +76,11 @@ export const lightTokens: Record<TokenName, string> = {
   // colour (NP-262), identical in both modes like `primary`: the web's
   // `accentFrom="from-emerald-500" accentTo="to-teal-500"` gradient does not
   // change with the scheme either.
+  info: "37 99 235", // blue-600 — the web's `text-blue-600` (Calendar/History
+  // links); `text-blue-500` icons are one shade lighter on the web but share
+  // this token rather than adding a second blue
+  mindset: "147 51 234", // purple-600 — the web's Mindset streak icon
+  // (`text-purple-600 bg-purple-100`)
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -83,6 +98,8 @@ export const darkTokens: Record<TokenName, string> = {
   "accent-foreground": "24 24 27",
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
   teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
+  info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
+  mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

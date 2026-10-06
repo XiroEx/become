@@ -6,6 +6,9 @@ import StreaksRoute from "@/app/(app)/(tabs)/dashboard/streaks";
 import { resolveWebPath } from "@/lib/navigation/webPathToRoute";
 import type { StreaksPayload } from "@become/api-client";
 import { apiFetch, ApiError } from "@become/api-client";
+import { lightTokens } from "@/lib/theme/tokens";
+
+const rgb = (triplet: string) => `rgb(${triplet})`;
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -411,6 +414,46 @@ describe("NP-108: Streaks Tile and Streaks Screen Parity", () => {
       const backBtn = getByTestId("streaks-back-button");
       fireEvent.press(backBtn);
       expect(onBack).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("(id: NP-258) freeze and Mindset icon colours match the web", () => {
+    it("colours the day-streak freeze snowflake blue, not orange", () => {
+      const { getByTestId } = render(<StreaksScreen data={SAMPLE_PAYLOAD} />);
+
+      const snowflake = within(getByTestId("streak-overall")).UNSAFE_getByType(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("lucide-react-native").Snowflake,
+      );
+      // `info` (blue-600/blue-400) — the web's `text-blue-500` freeze badge.
+      // `accent` (amber) is the native bug this card fixes.
+      expect(snowflake.props.color).not.toBe(rgb(lightTokens.accent));
+      expect(snowflake.props.color).toBe(rgb(lightTokens.info));
+    });
+
+    it("colours the Mindset pillar icon and badge purple, not orange", () => {
+      const { getByTestId } = render(<StreaksScreen data={SAMPLE_PAYLOAD} />);
+
+      const brain = within(getByTestId("streak-mindset")).UNSAFE_getByType(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("lucide-react-native").Brain,
+      );
+      expect(brain.props.color).not.toBe(rgb(lightTokens.accent));
+      expect(brain.props.color).toBe(rgb(lightTokens.mindset));
+    });
+
+    it("colours the super-streak freeze snowflake blue when a freeze is in hand", () => {
+      const { getByTestId } = render(<StreaksScreen data={SAMPLE_PAYLOAD} />);
+
+      // Two snowflakes live in this box when the "Use it" button is showing
+      // (the status icon, then the button's own icon) — the status icon is
+      // the first one rendered.
+      const snowflakes = within(getByTestId("super-freeze")).UNSAFE_getAllByType(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("lucide-react-native").Snowflake,
+      );
+      expect(snowflakes[0]!.props.color).not.toBe(rgb(lightTokens.accent));
+      expect(snowflakes[0]!.props.color).toBe(rgb(lightTokens.info));
     });
   });
 });

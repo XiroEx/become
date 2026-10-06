@@ -13,7 +13,7 @@
  * call. See `lib/nutrition/savedMeals.ts`.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -42,10 +42,9 @@ import {
   titleCaseMealTag,
   type SavedMealInput,
 } from "@/lib/nutrition/savedMeals";
-import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
-import { defaultVariantOf } from "@/lib/nutrition/foodMath";
+import type { FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import type { Food, Meal } from "@become/api-client";
+import type { Meal } from "@become/api-client";
 import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
 
 export interface MealEditorItem extends MealItemPayload {
@@ -202,6 +201,36 @@ export function MealEditorSheet({
   const [searchOpen, setSearchOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
+  // The sheet is mounted once by its caller (`BottomSheet`'s `children` are
+  // always in the tree — only the RN `Modal`'s own `visible` toggles), so the
+  // `useState` initialisers above only ever ran against whatever `initial`
+  // was at THAT first mount — typically null, before the meal had loaded.
+  // Edit then opened to every field empty and Save stayed disabled. Re-seed
+  // every time the sheet transitions closed → open, the way the web's own
+  // edit page re-reads its fetched meal into the form on each visit.
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible || wasVisible) return;
+    setName(initial?.name ?? "");
+    setDescription(initial?.description ?? "");
+    setServerImageUrl(initial?.imageUrl);
+    setPendingPhoto(null);
+    setPhotoRemoved(false);
+    setPhotoBusy(false);
+    setPhotoError(null);
+    setDenial(null);
+    setTags(initial?.tags ?? []);
+    setDefaultTag(initial?.defaultTag ?? "");
+    setItems(toEditorItems(initial?.items ?? []));
+    setTagPickerOpen(false);
+    setCustomTagInput("");
+    setSearchOpen(false);
+    setLocalError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const tagOptions = useMemo(() => {
     const defaults = availableTags?.defaults ?? TAG_FALLBACK;
     const userTags = availableTags?.userTags ?? [];
@@ -278,15 +307,11 @@ export function MealEditorSheet({
     setCustomTagInput("");
   }, [customTagInput]);
 
-  const handleAddFood = useCallback((food: Food) => {
-    const variant = defaultVariantOf(food);
-    if (!variant) return;
-    const item = buildMealItemPayload({
-      food: food as unknown as Parameters<typeof buildMealItemPayload>[0]["food"],
-      variant,
-      quantity: 1,
-      unit: variant.servingUnit,
-    });
+  // NP-261: `FoodSearchSheet`'s inline quantity picker (amount, unit, the
+  // member's own choice, not always the default serving) hands back the
+  // built item directly — there's only one action here ("Build a meal",
+  // since no `onLogItem` is wired up), so this fires once per ingredient.
+  const handleAddFood = useCallback(({ item }: FoodPickResult) => {
     setItems((prev) => [...prev, { ...item, key: itemKey() }]);
     setSearchOpen(false);
   }, []);

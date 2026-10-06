@@ -277,14 +277,14 @@ describe("Card NP-231 acceptance", () => {
       loggedQuantity: 1,
       loggedUnit: "g",
     };
-    // The mock apiFetch echoes the POST body back as the created plan, and
-    // the response schema reads `servingSize` as a string — send the wire
-    // shape the server actually stores.
-    const wireItem = { ...item, servingSize: "50" };
+    // The mock apiFetch echoes the POST body back as the created plan.
+    // `IMealItem.servingSize` (`webapp/models/Meal.ts`) is a required
+    // Mongoose `Number` — the wire shape the server actually stores is the
+    // same number the picker sent, never a string (NP-267).
     await createMealPlan({
       plannedDate: THURSDAY,
       tag: "lunch",
-      items: [wireItem as unknown as never],
+      items: [item as unknown as never],
       apiFetch: mockApiFetch as never,
     });
     const posts = postCalls();

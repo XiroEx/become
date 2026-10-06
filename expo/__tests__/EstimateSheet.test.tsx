@@ -142,11 +142,13 @@ const ESTIMATE = {
 function renderSheet(extra?: {
   initialPhase?: "chooser" | "describe" | "compose";
   initialDescribe?: string | null;
+  initialAutoCaptureSource?: "camera" | "library" | null;
+  onClose?: () => void;
 }) {
   return render(
     <EstimateSheet
       visible
-      onClose={() => {}}
+      onClose={extra?.onClose ?? (() => {})}
       onLogged={() => {}}
       tag="lunch"
       dateKey="2026-10-03"
@@ -154,6 +156,9 @@ function renderSheet(extra?: {
       initialPhase={extra?.initialPhase ?? "chooser"}
       {...(extra?.initialDescribe !== undefined
         ? { initialDescribe: extra.initialDescribe }
+        : {})}
+      {...(extra?.initialAutoCaptureSource !== undefined
+        ? { initialAutoCaptureSource: extra.initialAutoCaptureSource }
         : {})}
     />,
   );
@@ -498,5 +503,78 @@ describe("EstimateSheet correction ticket (NP-090)", () => {
     expect(getByTestId("estimate-sheet-item-0-amount").props.children).toBe(
       before,
     );
+  });
+});
+
+describe("EstimateSheet describe sheet matches web (NP-263)", () => {
+  it("wraps its content in a KeyboardAvoidingView with iOS padding behavior, so the keyboard cannot hide the field or Estimate", () => {
+    // A behavioral assertion can't observe iOS keyboard geometry under RTL —
+    // this guards the regression at the source level, the same way
+    // __tests__/iosKeyboardAvoiding.test.ts guards top-level screens.
+    const fs = jest.requireActual("fs");
+    const path = jest.requireActual("path");
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "..", "components/nutrition/EstimateSheet.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("KeyboardAvoidingView");
+    expect(src).toMatch(/Platform\.OS\s*===\s*["']ios["']\s*\?\s*["']padding["']/);
+    expect(src).toMatch(/keyboardShouldPersistTaps="handled"/);
+  });
+
+  it("shows a pencil-icon header with the web's title/subtitle and a close button that closes the sheet", () => {
+    const onClose = jest.fn();
+    const { getByTestId, getByText } = renderSheet({
+      initialPhase: "describe",
+      onClose,
+    });
+    expect(getByTestId("estimate-sheet-describe-header")).toBeTruthy();
+    expect(getByText("Add a photo too, or just use your words")).toBeTruthy();
+    expect(
+      getByText("In your words — add a photo too, or just estimate from the text."),
+    ).toBeTruthy();
+    fireEvent.press(getByTestId("estimate-sheet-describe-close"));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("offers Add photo and Upload photo, carrying the typed text forward as the compose note", async () => {
+    mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+    const { getByTestId } = renderSheet({ initialPhase: "describe" });
+    fireEvent.changeText(
+      getByTestId("estimate-sheet-describe-input"),
+      "chicken burrito bowl",
+    );
+    fireEvent.press(getByTestId("estimate-sheet-describe-upload-photo"));
+    expect(mockCapture).toHaveBeenCalledWith("library");
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+    });
+    expect(getByTestId("estimate-sheet-compose-note").props.value).toBe(
+      "chicken burrito bowl",
+    );
+  });
+
+  it("the describe Estimate button uses the teal/success styling, not the brand red", () => {
+    const { getByTestId } = renderSheet({ initialPhase: "describe" });
+    const estimateButton = getByTestId("estimate-sheet-describe-estimate");
+    const className: string = estimateButton.props.className ?? "";
+    expect(className).toMatch(/bg-success/);
+    expect(className).not.toMatch(/bg-primary\b/);
+  });
+
+  it("an auto-capture source (Upload menu's 'Upload photo') opens the library directly, skipping the chooser", async () => {
+    mockCapture.mockResolvedValue({ status: "captured", image: IMAGE });
+    const { getByTestId, queryByTestId } = renderSheet({
+      initialAutoCaptureSource: "library",
+    });
+    await waitFor(() => {
+      expect(mockCapture).toHaveBeenCalledWith("library");
+    });
+    await waitFor(() => {
+      expect(getByTestId("estimate-sheet-compose")).toBeTruthy();
+    });
+    // The chooser (Take photo / Upload photo / Describe it instead) is never
+    // shown — unlike the pre-fix bug where Upload photo re-opened it.
+    expect(queryByTestId("estimate-sheet-chooser")).toBeNull();
   });
 });

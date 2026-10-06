@@ -257,6 +257,21 @@ describe("NP-212: Home Parity 2 (Trend Pill, Rounded Goal, Nutrition Card, Curre
       fireEvent.press(continueBtn);
       expect(onContinue).toHaveBeenCalledTimes(1);
     });
+
+    it("the Progress label is a link to the Training Log records (NP-256, web's /dashboard/progress#records)", () => {
+      const onPressProgress = jest.fn();
+      const { getByTestId } = render(
+        <CurrentProgramCard
+          program={currentProgram}
+          onPressProgress={onPressProgress}
+        />,
+      );
+
+      const progressLink = getByTestId("current-program-progress-link");
+      expect(progressLink.props.accessibilityRole).toBe("link");
+      fireEvent.press(progressLink);
+      expect(onPressProgress).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("5. DashboardScreen Integration", () => {

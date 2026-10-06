@@ -93,7 +93,7 @@ import {
   logSavedMeal,
 } from "@/lib/nutrition/basketLog";
 import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
-import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
+import { buildMealItemPayload, logFoodItem } from "@/lib/nutrition/mealLogActions";
 import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 import { useEntitlements } from "@/lib/entitlements";
 import { useApiErrorHandler } from "@/lib/errors";
@@ -108,7 +108,7 @@ import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet"
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
-import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
+import { FoodSearchSheet, type FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
 import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
@@ -1102,6 +1102,12 @@ export default function NutritionIndexRoute() {
   const [estimatePhase, setEstimatePhase] = useState<
     "chooser" | "describe" | "review"
   >("chooser");
+  // NP-263: the Upload menu's "Upload photo" opens the photo library
+  // directly (web's `pickGallery`) instead of re-presenting this sheet's
+  // own Take photo / Upload photo / Describe chooser.
+  const [estimateAutoCaptureSource, setEstimateAutoCaptureSource] = useState<
+    "camera" | "library" | null
+  >(null);
   // Estimate history (NP-141): the history list, and the re-opened scan the
   // review opens on (the web's `?scan=<id>` into the review phase).
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1289,6 +1295,16 @@ export default function NutritionIndexRoute() {
   const openEstimate = (phase: "chooser" | "describe" | "review") => {
     if (phase !== "review") setReopenedScan(null);
     setEstimatePhase(phase === "review" ? "review" : phase);
+    setEstimateAutoCaptureSource(null);
+    setEstimateOpen(true);
+  };
+
+  // NP-263: open straight into the device's photo library, bypassing the
+  // chooser entirely — the Upload menu's "Upload photo" button only.
+  const openEstimateWithLibraryUpload = () => {
+    setReopenedScan(null);
+    setEstimatePhase("chooser");
+    setEstimateAutoCaptureSource("library");
     setEstimateOpen(true);
   };
 
@@ -1374,7 +1390,11 @@ export default function NutritionIndexRoute() {
   // or `/api/meals/{id}/log` for a future date.
   const [foodToPlan, setFoodToPlan] = useState<Food | null>(null);
 
-  const handleAddToBasket = (food: Food) => {
+  // Kept for `handlePickBasketFood`'s own fallback below — unreachable in
+  // the current wiring (`onPickFood` only fires when `isFuture`, and that
+  // branch returns before reaching this one) but self-consistent if that
+  // ever changes. The live "Build a meal" path is `handleBuildMealFromPicked`.
+  const addDefaultVariantToBasket = (food: Food) => {
     const variant = defaultVariantOf(food);
     if (!variant) return;
     const item = buildMealItemPayload({
@@ -1387,6 +1407,42 @@ export default function NutritionIndexRoute() {
     const entry: BasketItem = { ...item, key };
     setBasket((prev) => [...prev, entry]);
   };
+
+  // NP-261: "Build a meal" on `FoodSearchSheet`'s inline quantity picker —
+  // the member's own chosen quantity/unit/variant, not the forced default
+  // serving `addDefaultVariantToBasket` used before the picker existed.
+  const handleBuildMealFromPicked = useCallback((picked: FoodPickResult) => {
+    const key = `${String(picked.food._id ?? picked.food.id ?? "food")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const entry: BasketItem = { ...picked.item, key };
+    setBasket((prev) => [...prev, entry]);
+  }, [setBasket]);
+
+  // NP-261: "Add to <tag>" on the inline picker — logs the chosen quantity
+  // straight away through the same smart-append path the food-detail
+  // screen's `QuantityPicker` log button uses (`logFoodItem`,
+  // POST /api/meal-logs). The basket stays untouched; this is a one-shot log.
+  const handleLogPickedItem = useCallback(
+    async (picked: FoodPickResult) => {
+      try {
+        await logFoodItem({
+          item: picked.item,
+          tag: picked.tag,
+          date: picked.date,
+          timeMode: picked.timeMode,
+          pickedTime: picked.pickedTime,
+          existingLogs: displayedLogs,
+          apiFetch,
+          token,
+          baseUrl: WEBAPP_BASE_URL,
+        });
+        await refetchMealLogs();
+      } catch (err) {
+        const { handled, message } = handleApiError(err);
+        if (!handled) setBasketError(message);
+      }
+    },
+    [displayedLogs, token, refetchMealLogs, handleApiError, setBasketError],
+  );
 
   const handleRemoveBasketItem = (key: string) => {
     setBasket((prev) => prev.filter((item) => item.key !== key));
@@ -1580,7 +1636,7 @@ export default function NutritionIndexRoute() {
       }
       return;
     }
-    handleAddToBasket(food);
+    addDefaultVariantToBasket(food);
   };
 
   // "Schedule meals" — the same control rendered in two places, so the two
@@ -2658,7 +2714,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setUploadMenuOpen(false);
-                openEstimate("chooser");
+                openEstimateWithLibraryUpload();
               }}
             >
               Upload photo
@@ -2691,9 +2747,20 @@ export default function NutritionIndexRoute() {
         initialBarcodeOpen={searchBarcodeOpen}
         basketMode={addToLogId === null && !isFuture}
         basketCount={basket.length}
-        onAddToBasket={handlePickBasketFood}
+        onAddToBasket={handleBuildMealFromPicked}
+        onLogItem={handleLogPickedItem}
         onPickFood={isFuture ? handlePickBasketFood : undefined}
-        onOpenBasket={() => setBasketOpen(true)}
+        // NP-261 BLOCKER: `BasketSheet` is its own RN `Modal`, same as
+        // `FoodSearchSheet`'s `BottomSheet` — iOS refuses to present a
+        // second `Modal` while one is already presented, so leaving the
+        // search sheet `visible` while Review opened the basket sheet left
+        // Review silently doing nothing. Closing the search sheet first
+        // means only one native Modal is ever visible at once.
+        onOpenBasket={() => {
+          setSearchOpen(false);
+          setSearchBarcodeOpen(false);
+          setBasketOpen(true);
+        }}
         onPickMeal={handlePickMeal}
       />
 
@@ -2773,6 +2840,7 @@ export default function NutritionIndexRoute() {
         onClose={() => {
           setEstimateOpen(false);
           setReopenedScan(null);
+          setEstimateAutoCaptureSource(null);
         }}
         onLogged={() => void handleEstimateLogged()}
         tag={reopenedScan?.tag ?? currentDefaultTag}
@@ -2813,6 +2881,7 @@ export default function NutritionIndexRoute() {
         }
         initialImageUrl={reopenedScan?.imageUrl ?? null}
         initialScanId={reopenedScan?.scanId ?? null}
+        initialAutoCaptureSource={reopenedScan ? null : estimateAutoCaptureSource}
       />
 
       {/* Estimate history (NP-141) */}

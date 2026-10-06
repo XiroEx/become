@@ -29,11 +29,21 @@ import {
   X,
   AlertCircle,
 } from "lucide-react-native";
+import {
+  preferredServingLabel,
+  rowCalories,
+} from "@/lib/nutrition/foodRowDisplay";
+import { titleCase } from "@/lib/nutrition/mealSchedule";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { BottomSheet } from "@/components/BottomSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
 import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
+import {
+  QuantityPicker,
+  type QuantityPickerFood,
+  type QuantityPickerLogResult,
+} from "@/components/nutrition/QuantityPicker";
 import {
   BARCODE_LOOKUP_FAILED_MESSAGE,
   lookupBarcode,
@@ -67,6 +77,16 @@ const SOURCE_LABEL: Record<string, string> = {
   off: "OFF",
 };
 
+/**
+ * NP-261: what a row's inline `QuantityPicker` hands back once a member
+ * presses `Add to <tag>` or `Build a meal` — the picker's own result
+ * (`item`/`tag`/`date`/`timeMode`/`pickedTime`) plus the resolved `Food` the
+ * row was expanded for (post-import for an external hit).
+ */
+export interface FoodPickResult extends QuantityPickerLogResult {
+  food: Food;
+}
+
 export interface FoodSearchSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -74,13 +94,25 @@ export interface FoodSearchSheetProps {
   onPickFood?: (food: Food) => void;
   onPickMeal?: (meal: Meal) => void;
   /**
-   * Basket mode (NP-094): picking a food adds it to the basket instead of
-   * opening the quantity picker. The screen owns the basket and the log call.
+   * Basket mode (NP-094): picking a food expands the web's inline
+   * `QuantityPicker` under the row (amount, unit, time, tag) instead of
+   * routing to the food detail screen. `Add to <tag>` fires `onLogItem`
+   * (an immediate single log); `Build a meal` fires `onAddToBasket` with
+   * the member's chosen quantity — the screen owns the basket and both log
+   * calls (NP-261).
    */
   basketMode?: boolean;
   /** Rows collected so far, for the basket bar count. */
   basketCount?: number;
-  onAddToBasket?: (food: Food) => void;
+  /** "Build a meal" on the inline picker — the chosen quantity, not the bare Food. */
+  onAddToBasket?: (result: FoodPickResult) => void;
+  /**
+   * "Add to <tag>" on the inline picker (NP-261): logs the chosen quantity
+   * straight away. When absent (the meal/recipe editors' ingredient
+   * picker), `onAddToBasket` is the sheet's only action and is labelled
+   * "Build a meal".
+   */
+  onLogItem?: (result: FoodPickResult) => void;
   /** Open the basket sheet over what is collected. */
   onOpenBasket?: () => void;
   debounceMs?: number;
@@ -102,6 +134,7 @@ export function FoodSearchSheet({
   basketMode = false,
   basketCount = 0,
   onAddToBasket,
+  onLogItem,
   onOpenBasket,
   debounceMs = 300,
   setTimeoutImpl,
@@ -136,6 +169,21 @@ export function FoodSearchSheet({
   // nutrition basis for its log-correction panel; the search row only shows
   // the flattened default variant, which is exactly that basis.
   const [flagFood, setFlagFood] = useState<Food | null>(null);
+
+  // NP-261: the row (by its PRE-import id, so an external hit's row still
+  // matches after `importExternalIfNeeded` swaps in the real Food) whose
+  // inline `QuantityPicker` is open, and the resolved Food it was opened
+  // for. Basket mode only — the non-basket pick path is unaffected.
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [expandedFood, setExpandedFood] = useState<Food | null>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from the sheet's own open/close prop, not a render-derivable value
+      setExpandedRowId(null);
+      setExpandedFood(null);
+    }
+  }, [visible]);
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
   // up on the server and open the quantity picker on a real food. A miss or
@@ -410,8 +458,13 @@ export function FoodSearchSheet({
         }
       }
 
-      if (basketMode && onAddToBasket) {
-        onAddToBasket(targetFood);
+      // NP-261: basket mode expands the web's inline quantity picker under
+      // the row instead of silently logging the default serving — tapping
+      // the same row again collapses it.
+      if (basketMode) {
+        const willCollapse = expandedRowId === id;
+        setExpandedRowId(willCollapse ? null : id);
+        setExpandedFood(willCollapse ? null : targetFood);
         return;
       }
 
@@ -426,7 +479,7 @@ export function FoodSearchSheet({
       onClose();
       router.push(foodDetailHref(targetFood._id, targetFood));
     },
-    [basketMode, onAddToBasket, onClose, onPickFood, router, token],
+    [basketMode, expandedRowId, onClose, onPickFood, router, token],
   );
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
@@ -489,16 +542,39 @@ export function FoodSearchSheet({
 
   const isOverview = activeTab === "all" && query.trim().length < 2;
 
+  // NP-261: the inline picker's two actions. `onLogItem` present means a
+  // tag to log under (`nutrition/index.tsx`'s today screen): primary is
+  // "Add to <tag>", secondary (if a basket is also wired up) is "Build a
+  // meal". With no `onLogItem` (the meal/recipe editors' ingredient
+  // picker) `onAddToBasket` is the sheet's only action and takes the
+  // primary slot, still labelled "Build a meal".
+  const effectiveLogTag = currentTag ?? "snack";
+  const quantityPickerPrimaryLabel = onLogItem
+    ? `Add to ${titleCase(effectiveLogTag)}`
+    : onAddToBasket
+      ? "Build a meal"
+      : undefined;
+  const quantityPickerSecondaryLabel =
+    onLogItem && onAddToBasket ? "Build a meal" : undefined;
+
   const renderFoodRow = (food: Food) => {
     const id = String(food._id ?? food.id ?? "");
     const isSaved = savedFoodIds.has(id) || food.isSaved === true;
     const source = narrowFoodSource(food.source);
-    const calories = food.nutrition?.calories;
+    // NP-261: per-SERVING calories (the web's `rowCalories`), not the raw
+    // per-storage-basis figure — see `lib/nutrition/foodRowDisplay.ts`.
+    const calories = food.nutrition ? rowCalories(food) : undefined;
+    const servingLabel = food.nutrition ? preferredServingLabel(food) : "";
     const isImporting = importingRowId === id;
+    // NP-261: the row stays matched to its inline picker by the PRE-import
+    // id; the picker itself gets the resolved Food (real variants/ObjectId
+    // for an imported external hit).
+    const isExpanded = basketMode && expandedRowId === id;
+    const pickerFood = expandedFood ?? food;
 
     return (
+      <View key={id}>
       <Pressable
-        key={id}
         testID={`food-search-result-${id}`}
         onPress={() => handlePickFood(food)}
         accessibilityRole="button"
@@ -516,6 +592,36 @@ export function FoodSearchSheet({
         }}
       >
         <View style={{ flex: 1, paddingRight: 8 }}>
+          {/* NP-261: the web's blue "BEST MATCH" pill on the crowned top
+              result of a confident search (`isBestMatch`, page 0 only). */}
+          {food.isBestMatch ? (
+            <View
+              testID={`food-search-result-${id}-best-match`}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                alignSelf: "flex-start",
+                borderRadius: 999,
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                marginBottom: 2,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Star size={9} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  letterSpacing: 0.4,
+                  color: colors["primary-foreground"],
+                }}
+              >
+                BEST MATCH
+              </Text>
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text className="text-foreground font-semibold">{food.name}</Text>
             {food.isVerified ? (
@@ -526,13 +632,28 @@ export function FoodSearchSheet({
             {food.brand ? (
               <Text className="text-muted-foreground text-xs">{food.brand}</Text>
             ) : null}
-            {calories != null ? (
-              <Text className="text-muted-foreground text-xs">
-                {Math.round(calories)} kcal
+            {/* NP-261: the serving the calorie figure is measured against
+                ("1 medium (118 g)", "serving (100 g)") — dropped natively. */}
+            {servingLabel ? (
+              <Text
+                testID={`food-search-result-${id}-serving`}
+                className="text-muted-foreground text-xs"
+              >
+                {servingLabel}
               </Text>
             ) : null}
           </View>
         </View>
+        {/* NP-261: per-SERVING calories, not the per-100 g/ml storage
+            figure — the row and `QuantityPicker`'s own preview now agree. */}
+        {calories != null ? (
+          <Text
+            testID={`food-search-result-${id}-calories`}
+            className="text-foreground text-sm font-semibold"
+          >
+            {calories} cal
+          </Text>
+        ) : null}
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View
@@ -600,6 +721,46 @@ export function FoodSearchSheet({
           </Pressable>
         </View>
       </Pressable>
+      {isExpanded ? (
+        <View
+          testID={`food-search-result-${id}-picker`}
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            paddingBottom: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.muted,
+          }}
+        >
+          <QuantityPicker
+            testID={`food-search-result-${id}-quantity-picker`}
+            food={pickerFood as QuantityPickerFood}
+            initialTag={effectiveLogTag}
+            primaryActionLabel={quantityPickerPrimaryLabel}
+            secondaryActionLabel={quantityPickerSecondaryLabel}
+            onSubmit={(result: QuantityPickerLogResult) => {
+              setExpandedRowId(null);
+              setExpandedFood(null);
+              if (onLogItem) {
+                onLogItem({ ...result, food: pickerFood });
+              } else if (onAddToBasket) {
+                onAddToBasket({ ...result, food: pickerFood });
+              }
+            }}
+            onSecondaryAction={
+              onLogItem && onAddToBasket
+                ? (result: QuantityPickerLogResult) => {
+                    setExpandedRowId(null);
+                    setExpandedFood(null);
+                    onAddToBasket({ ...result, food: pickerFood });
+                  }
+                : undefined
+            }
+          />
+        </View>
+      ) : null}
+      </View>
     );
   };
 
@@ -655,6 +816,57 @@ export function FoodSearchSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
+        {/* NP-261: the web header's "ADDING TO <tag>" picker + close X.
+            `BottomSheet` already offers a swipe-to-dismiss and a backdrop
+            tap; this is the explicit, visible affordance the web always
+            shows next to its tag picker. */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          {currentTag ? (
+            <View
+              testID="food-search-adding-to"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.muted,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 0.5,
+                  color: colors["muted-foreground"],
+                }}
+              >
+                ADDING TO {currentTag.toUpperCase()}
+              </Text>
+            </View>
+          ) : (
+            <View />
+          )}
+          <Pressable
+            testID="food-search-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            hitSlop={8}
+            style={{ padding: 4 }}
+          >
+            <X size={20} color={colors.foreground} />
+          </Pressable>
+        </View>
+
         {/* Search Input + barcode button */}
         <View
           style={{

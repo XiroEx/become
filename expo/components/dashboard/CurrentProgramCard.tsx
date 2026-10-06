@@ -22,6 +22,8 @@ export interface CurrentProgramCardProps {
   program: CurrentProgramData;
   onView?: () => void;
   onContinue?: () => void;
+  /** Opens the Training Log records (web's `/dashboard/progress#records`, NP-256). */
+  onPressProgress?: () => void;
   testID?: string;
 }
 
@@ -29,6 +31,7 @@ export function CurrentProgramCard({
   program,
   onView,
   onContinue,
+  onPressProgress,
   testID = "dashboard-current-program-card",
 }: CurrentProgramCardProps) {
   const { colors } = useThemeTokens();
@@ -88,7 +91,18 @@ export function CurrentProgramCard({
       {/* Progress Bar */}
       <View style={styles.progressSection}>
         <View style={styles.progressMetaRow}>
-          <Text className="text-xs text-muted-foreground">Progress</Text>
+          <Pressable
+            testID="current-program-progress-link"
+            accessibilityRole="link"
+            accessibilityLabel="Progress"
+            onPress={onPressProgress}
+            disabled={!onPressProgress}
+            hitSlop={8}
+          >
+            <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+              Progress
+            </Text>
+          </Pressable>
           <Text
             testID="current-program-progress-pct"
             className="text-xs text-muted-foreground font-medium"

@@ -374,9 +374,16 @@ describe("Card NP-232 acceptance", () => {
     const { getByTestId } = render(<NutritionIndexRoute />);
     await openSearch(getByTestId);
 
-    // Today the search sheet still collects a basket.
+    // Today the search sheet still collects a basket, via the inline
+    // quantity picker's "Build a meal" (NP-261).
     await act(async () => {
       fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
+    });
+    await waitFor(() => {
+      expect(getByTestId("quantity-picker-secondary-action")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("quantity-picker-secondary-action"));
     });
     await waitFor(() => {
       expect(getByTestId("food-search-basket-bar")).toBeTruthy();
@@ -396,8 +403,10 @@ describe("Card NP-232 acceptance", () => {
     await waitFor(() => {
       expect(getByTestId("meal-log-sheet")).toBeTruthy();
     });
-    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toBe(
-      "Log meal",
+    // The submit label reads the web's `Apply to <Tag>` (NP-268), not a
+    // fixed "Log meal" — the tag is whatever ADDING TO is currently showing.
+    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toMatch(
+      /^Apply to /,
     );
     await act(async () => {
       fireEvent.press(getByTestId("meal-log-sheet-submit"));

@@ -4,7 +4,6 @@ import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Settings, Sliders } from "lucide-react-native";
-import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
@@ -174,6 +173,11 @@ export interface DashboardScreenProps {
   onOpenPrograms?: () => void;
   /** Opens the training history (NP-112). */
   onOpenHistory?: () => void;
+  /**
+   * Opens the Training Log (NP-130) — the Progress quick link and the
+   * Current Program card's `Progress` label (NP-256).
+   */
+  onOpenProgress?: () => void;
   /** Nutrition quick-link description (calories today when known). */
   quickLinksNutritionDescription?: string | null;
   /** Action tile callback: opens Mind tab / session. */
@@ -182,6 +186,8 @@ export interface DashboardScreenProps {
   onOpenBecoming?: () => void;
   /** Action tile callback: opens Nutrition tab. */
   onOpenNutrition?: () => void;
+  /** The Goal tile's own destination: Nutrition Goals, not the day screen (NP-256). */
+  onOpenNutritionGoals?: () => void;
   /** Action tile callback: opens Workout Now sheet. */
   onOpenWorkoutNow?: () => void;
   /** Controls Workout Now sheet externally for testability. */
@@ -296,10 +302,12 @@ export function DashboardScreen({
   onBrowsePrograms,
   onOpenPrograms,
   onOpenHistory,
+  onOpenProgress,
   quickLinksNutritionDescription,
   onOpenMind,
   onOpenBecoming,
   onOpenNutrition,
+  onOpenNutritionGoals,
   onOpenWorkoutNow,
   workoutNowOpen,
   onWorkoutNowOpenChange,
@@ -529,10 +537,10 @@ export function DashboardScreen({
               accessibilityRole="header"
               className="text-foreground text-2xl font-bold"
             >
-              {userName ? `Hey, ${userName}` : "Welcome"}
+              Dashboard
             </Text>
             <Text className="text-muted-foreground text-sm">
-              Here&apos;s your day
+              Track your fitness journey
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
@@ -570,52 +578,13 @@ export function DashboardScreen({
           </View>
         </View>
 
-        {todayWorkout ? (
-          <Card testID="dashboard-today" title="Today's workout">
-            {/* ONE SWIPE, NOT THREE. Title, program · phase and the exercise
-                count are one fact about today, so they are one accessibility
-                element that reads as a sentence; the button after it is the
-                thing to act on. */}
-            <View
-              testID="dashboard-today-summary"
-              accessible
-              accessibilityLabel={todayWorkoutSummaryLabel(todayWorkout)}
-            >
-              <Text
-                testID="dashboard-today-workout"
-                className="text-foreground text-lg font-semibold mb-1"
-              >
-                {todayWorkout.workoutTitle}
-              </Text>
-              <Text
-                testID="dashboard-today-program"
-                className="text-muted-foreground text-sm mb-1"
-              >
-                {todayWorkout.programName} · {todayWorkout.phaseLabel}
-              </Text>
-              <Text
-                testID="dashboard-today-exercises"
-                className="text-muted-foreground text-sm mb-3"
-              >
-                {todayWorkout.exerciseCount} exercise
-                {todayWorkout.exerciseCount === 1 ? "" : "s"}
-              </Text>
-            </View>
-            <Button
-              testID="dashboard-start-workout"
-              accessibilityLabel={`Start workout: ${todayWorkout.workoutTitle}`}
-              onPress={onStartWorkout}
-            >
-              Start workout
-            </Button>
-          </Card>
-        ) : (
-          <Card testID="dashboard-rest" title="Today">
-            <Text className="text-muted-foreground">
-              Rest day. Take a walk, drink water, log your mood.
-            </Text>
-          </Card>
-        )}
+        {/* The doorway to The Becoming (NP-192) — first thing under the
+            header, matching the web order (NP-255). */}
+        <BecomingDoor
+          goals={goals}
+          mind={mind}
+          onPress={onOpenBecoming}
+        />
 
         {/* Unified Dashboard Tile Grid (NP-104) */}
         <TileGrid
@@ -625,6 +594,7 @@ export function DashboardScreen({
           onDismissSuggestion={onDismissSuggestion}
           onOpenMind={onOpenMind}
           onOpenNutrition={onOpenNutrition}
+          onOpenNutritionGoals={onOpenNutritionGoals}
           onOpenWorkoutNow={handleWorkoutNow}
           onOpenCalendar={onOpenCalendar}
           onOpenCheckIn={() => setOpen(true)}
@@ -674,31 +644,6 @@ export function DashboardScreen({
           />
         ) : null}
 
-        {/* Push opt-in card (NP-065): undecided members only, 30-day
-            dismissal, never at first launch. The card reads its own state;
-            the route only wires the explicit "Turn on" registration. */}
-        {pushCardDeps || showPushCard ? (
-          <PushOptInCard deps={pushCardDeps} />
-        ) : null}
-
-        {/* The doorway to The Becoming (NP-192) */}
-        <BecomingDoor
-          goals={goals}
-          mind={mind}
-          onPress={onOpenBecoming}
-        />
-
-        {/* Mindset Card (NP-150) */}
-        <MindsetCard
-          summary={mind ?? null}
-          todaysMood={
-            todaysMood !== undefined
-              ? todaysMood
-              : ((statData?.todaysMood as MoodLevel | null | undefined) ?? null)
-          }
-          onOpenMind={onOpenMind}
-        />
-
         {/* Resume an in-progress workout (NP-071, shared with the web's
             ResumeWorkoutButton): sits between the tiles and Up Next, exactly
             where the web renders it. Opt-in via `resumeEnabled` because the
@@ -716,7 +661,14 @@ export function DashboardScreen({
           />
         ) : null}
 
-        {/* Up Next training card (NP-106) */}
+        {/* Up Next training card (NP-106). Web shows exactly one
+            next-workout card here (NextWorkoutCard) — native used to ALSO
+            show a separate "Today's workout" card above the tile grid,
+            computed from a different endpoint, which could contradict this
+            one (e.g. a day already completed, or the wrong day entirely).
+            Up Next is now the single source of truth for "what's next",
+            and its Start action already falls back to onStartWorkout
+            (NP-255). */}
         <UpNextCard
           workout={upcomingWorkout}
           onOpenCalendar={onOpenCalendar}
@@ -763,24 +715,48 @@ export function DashboardScreen({
             program={currentProgram}
             onView={() => onViewProgram?.(currentProgram.programId)}
             onContinue={onStartNextWorkout ?? onStartWorkout}
+            onPressProgress={onOpenProgress}
           />
+        ) : null}
+
+        {/* Mindset Card (NP-150) — after Current Program, matching the
+            web's order (NP-255; web renders them side by side on wider
+            widths). */}
+        <MindsetCard
+          summary={mind ?? null}
+          todaysMood={
+            todaysMood !== undefined
+              ? todaysMood
+              : ((statData?.todaysMood as MoodLevel | null | undefined) ?? null)
+          }
+          onOpenMind={onOpenMind}
+        />
+
+        {/* Member plan & allowance meters (NP-158) */}
+        <PlanCard onOpenPlan={onOpenPlan} />
+
+        {/* Push opt-in card (NP-065): undecided members only, 30-day
+            dismissal, never at first launch. The card reads its own state;
+            the route only wires the explicit "Turn on" registration. Web
+            renders this as a fixed-position overlay toast, so it never sits
+            inside the page order; placed here, right after the Plan card,
+            it does not split any adjacent pair of the web order (NP-255). */}
+        {pushCardDeps || showPushCard ? (
+          <PushOptInCard deps={pushCardDeps} />
         ) : null}
 
         {/* First-time empty state + quick links (NP-106, web
             DashboardClient parity): All Programs, Nutrition, Progress
-            (→ training history, NP-112). No Connect link — chat is on hold
-            for the store release. */}
+            (→ the Training Log, NP-130/NP-256). No Connect link — chat is
+            on hold for the store release. */}
         <DashboardQuickLinks
           showEmptyState={showEmptyState}
           onBrowsePrograms={onBrowsePrograms}
           onOpenPrograms={onOpenPrograms ?? onBrowsePrograms}
           onOpenNutrition={onOpenNutrition}
-          onOpenHistory={onOpenHistory}
+          onOpenProgress={onOpenProgress ?? onOpenHistory}
           nutritionDescription={quickLinksNutritionDescription}
         />
-
-        {/* Member plan & allowance meters (NP-158) */}
-        <PlanCard onOpenPlan={onOpenPlan} />
 
         {/* The in-app footer. Apple wants the privacy policy reachable from
             inside the app, not only from a marketing page a member installing to

@@ -269,10 +269,10 @@ const V1_SCREENS: Screen[] = [
         screen.getByLabelText("What should we call you?"),
         "Jon",
       );
+      fireEvent.press(screen.getByRole("button", { name: "Next" }));
+      // Step 3: Body & nutrition (Age and Biological sex moved here, NP-246)
       fireEvent.changeText(screen.getByLabelText("Age"), "25");
       fireEvent.press(screen.getByLabelText("Male"));
-      fireEvent.press(screen.getByRole("button", { name: "Next" }));
-      // Step 3: Body & nutrition
       fireEvent.changeText(screen.getByLabelText("Feet"), "5");
       fireEvent.changeText(screen.getByLabelText("Inches"), "10");
       fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
@@ -611,10 +611,10 @@ describe("sign-in through to Home, by role and name only", () => {
       screen.getByLabelText("What should we call you?"),
       "Jon",
     );
+    fireEvent.press(screen.getByRole("button", { name: "Next" }));
+    // Step 3: Body & nutrition (Age and Biological sex moved here, NP-246)
     fireEvent.changeText(screen.getByLabelText("Age"), "25");
     fireEvent.press(screen.getByLabelText("Male"));
-    fireEvent.press(screen.getByRole("button", { name: "Next" }));
-    // Step 3: Body & nutrition
     fireEvent.changeText(screen.getByLabelText("Feet"), "5");
     fireEvent.changeText(screen.getByLabelText("Inches"), "10");
     fireEvent.changeText(screen.getByLabelText("Current weight (lbs)"), "175");
@@ -627,17 +627,20 @@ describe("sign-in through to Home, by role and name only", () => {
     screen.unmount();
 
     // Home. The three things a member does from it are a button with a name.
+    // One next-workout card (Up Next) owns the Start action (NP-255) — there
+    // is no separate "Today's workout" card any more.
     const onStartWorkout = jest.fn();
     const onOpenSettings = jest.fn();
     render(
       <DashboardScreen
         userName="Jon"
         streakDays={3}
-        todayWorkout={{
-          programName: "Hypertrophy Block",
+        todayWorkout={null}
+        upcomingWorkout={{
+          dateLabel: "Today",
+          dayLabel: "Day 2",
           workoutTitle: "Upper Body A",
-          phaseLabel: "Phase 1",
-          exerciseCount: 6,
+          programName: "Hypertrophy Block",
         }}
         onStartWorkout={onStartWorkout}
         onOpenCalendar={() => {}}
@@ -646,7 +649,9 @@ describe("sign-in through to Home, by role and name only", () => {
       />,
     );
     fireEvent.press(
-      screen.getByRole("button", { name: "Start workout: Upper Body A" }),
+      screen.getByRole("button", {
+        name: "Up next: Today: Day 2. Upper Body A · Hypertrophy Block",
+      }),
     );
     expect(onStartWorkout).toHaveBeenCalled();
     fireEvent.press(screen.getByRole("button", { name: "Settings" }));
@@ -671,26 +676,28 @@ describe("sign-in through to Home, by role and name only", () => {
     ).toBeTruthy();
   });
 
-  it("Home reads today's workout as one fact, not three fragments", () => {
+  it("Home reads the next workout as one fact, not three fragments", () => {
+    // Up Next carries a single accessibilityLabel covering the day, the
+    // workout and the program — one swipe, not three (NP-106 / NP-255).
     render(
       <DashboardScreen
         userName="Jon"
         streakDays={3}
-        todayWorkout={{
-          programName: "Hypertrophy Block",
+        todayWorkout={null}
+        upcomingWorkout={{
+          dateLabel: "Today",
+          dayLabel: "Day 2",
           workoutTitle: "Upper Body A",
-          phaseLabel: "Phase 1",
-          exerciseCount: 6,
+          programName: "Hypertrophy Block",
         }}
         onStartWorkout={() => {}}
         onOpenCalendar={() => {}}
         onSubmitCheckIn={() => {}}
       />,
     );
-    const summary = screen.getByTestId("dashboard-today-summary");
-    expect(summary.props.accessible).toBe(true);
-    expect(summary.props.accessibilityLabel).toBe(
-      "Upper Body A. Hypertrophy Block, Phase 1. 6 exercises.",
+    const card = screen.getByTestId("up-next-card");
+    expect(card.props.accessibilityLabel).toBe(
+      "Up next: Today: Day 2. Upper Body A · Hypertrophy Block",
     );
   });
 });

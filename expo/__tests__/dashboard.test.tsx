@@ -197,17 +197,21 @@ describe("DashboardRoute", () => {
     const { getByTestId } = render(<DashboardRoute />);
 
     await waitFor(() => {
-      expect(getByTestId("dashboard-greeting").props.children).toBe("Hey, Jon");
+      // Header copy matches the web's (NP-255), not a personalized greeting.
+      expect(getByTestId("dashboard-greeting").props.children).toBe(
+        "Dashboard",
+      );
       expect(getByTestId("tile-streak")).toBeTruthy();
     });
+    // One next-workout card (Up Next), falling back to today's current-workout
+    // when there is no explicit scheduled "next" slot — not a separate
+    // "Today's workout" card that could disagree with it (NP-255).
     await waitFor(() => {
-      expect(getByTestId("dashboard-today-workout").props.children).toBe(
+      expect(getByTestId("up-next-title").props.children).toEqual([
         "Upper A",
-      );
+        " · Hypertrophy",
+      ]);
     });
-    // exerciseCount 3 → "3 exercise" + "s"
-    const exText = getByTestId("dashboard-today-exercises").props.children;
-    expect(Array.isArray(exText) ? exText.join("") : exText).toContain("3");
   });
 
   it("pull-to-refresh re-fires the fetches", async () => {
@@ -412,19 +416,21 @@ describe("DashboardRoute navigation", () => {
     wireApiFetch();
   });
 
-  it("Start workout opens the current workout's overview, by day label and phase", async () => {
+  it("Start workout (via Up Next, NP-255) opens the current workout's tracker, by day label and phase", async () => {
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+      expect(getByTestId("up-next-card")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-start-workout"));
+    fireEvent.press(getByTestId("up-next-card"));
 
-    // The web opens `…/workout?day=Day 3`; the native route addresses the
-    // workout by index, so "Day 3" → 2 (workoutIndexFromDayLabel) and the
-    // 1-based phase 2 → `?phase=1`.
+    // The web opens `…/workout?day=Day 3` (Track); the native route
+    // addresses the workout by index, so "Day 3" → 2
+    // (workoutIndexFromDayLabel) and the 1-based phase 2 → `?phase=1`. The
+    // `/live` segment is what lands on Track/Live rather than the read-only
+    // overview (NP-256).
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/2?phase=1",
+      "/(tabs)/programming/p1/workout/2/live?phase=1",
     );
   });
 
@@ -435,13 +441,13 @@ describe("DashboardRoute navigation", () => {
     };
     const { getByTestId } = render(<DashboardRoute />);
     await waitFor(() => {
-      expect(getByTestId("dashboard-start-workout")).toBeTruthy();
+      expect(getByTestId("up-next-card")).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId("dashboard-start-workout"));
+    fireEvent.press(getByTestId("up-next-card"));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/0?phase=0",
+      "/(tabs)/programming/p1/workout/0/live?phase=0",
     );
   });
 
@@ -1166,7 +1172,7 @@ describe("DashboardRoute navigation", () => {
       d.setDate(d.getDate() + 1);
       const sd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       expect(mockPush).toHaveBeenCalledWith(
-        `/(tabs)/programming/p1/workout/2?phase=0&day=${encodeURIComponent("Day 3")}&sd=${encodeURIComponent(sd)}`,
+        `/(tabs)/programming/p1/workout/2/live?phase=0&day=${encodeURIComponent("Day 3")}&sd=${encodeURIComponent(sd)}`,
       );
     });
 
@@ -1207,7 +1213,7 @@ describe("DashboardRoute navigation", () => {
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
     });
 
-    it("Progress quick link opens the training history (NP-112)", async () => {
+    it("Progress quick link opens the Training Log (NP-130/NP-256)", async () => {
       wireSchedule();
       const { getByTestId } = render(<DashboardRoute />);
 
@@ -1215,7 +1221,7 @@ describe("DashboardRoute navigation", () => {
         expect(getByTestId("dashboard-quick-link-progress")).toBeTruthy();
       });
       fireEvent.press(getByTestId("dashboard-quick-link-progress"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/history");
+      expect(mockPush).toHaveBeenCalledWith("/progress");
     });
   });
 });

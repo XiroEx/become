@@ -82,6 +82,12 @@ export const NATIVE_ROUTES = {
   browsePrograms: "/(tabs)/programming/browse",
   savedPrograms: "/(tabs)/programming/saved",
   programSearch: "/(tabs)/programming/search",
+  /**
+   * The exercise library — `app/(app)/(tabs)/programming/exercises.tsx`, the
+   * native counterpart of `webapp/app/dashboard/workout/library/ExerciseLibraryClient.tsx`
+   * (NP-169, NP-256).
+   */
+  exerciseLibrary: "/(tabs)/programming/exercises",
   /** Training history — `app/(app)/(tabs)/programming/history.tsx` (NP-112). */
   history: "/(tabs)/programming/history",
   mind: "/(tabs)/mind",
@@ -90,6 +96,8 @@ export const NATIVE_ROUTES = {
   nutritionGoals: "/(tabs)/nutrition/goals",
   recipes: "/(tabs)/nutrition/recipes",
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
+  /** The Meal Plan week — `app/(app)/(tabs)/nutrition/meal-plan.tsx` (NP-267). */
+  mealPlan: "/(tabs)/nutrition/meal-plan",
   calendar: "/(tabs)/calendar",
   scheduleSettings: "/(tabs)/calendar/settings",
   streaks: "/(tabs)/dashboard/streaks",
@@ -512,7 +520,12 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
       ? native(NATIVE_ROUTES.nutrition, params, "nearest")
       : native(`${NATIVE_ROUTES.nutrition}/food/${encodeURIComponent(id)}`, params, "exact");
   }
-  if (section === "meals" || section === "meal-plan" || section === "timeline") {
+  // The Meal Plan week now has a native screen (NP-267) — `become://dashboard/
+  // meal-plan` used to land on the Nutrition day instead of the week.
+  if (section === "meal-plan") {
+    return native(NATIVE_ROUTES.mealPlan, params, "exact");
+  }
+  if (section === "meals" || section === "timeline") {
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
 
@@ -609,10 +622,17 @@ function matchWorkout(
   if (!programId) return native(NATIVE_ROUTES.workout, params, "exact");
 
   const sub = lower(programId);
-  // `/dashboard/workout/hub`, `/library`, `/create`, `/quick-session` are
-  // pages, not program ids. None is built natively; the Workout tab is home.
-  if (sub === "hub" || sub === "library" || sub === "create" || sub === "quick-session") {
+  // `/dashboard/workout/hub`, `/create`, `/quick-session` are pages, not
+  // program ids. None is built natively; the Workout tab is home.
+  if (sub === "hub" || sub === "create" || sub === "quick-session") {
     return native(NATIVE_ROUTES.workout, params, "nearest");
+  }
+  // `/library` is the exercise library (NP-169's "My Exercises" screen IS its
+  // native counterpart — same `CustomExercise[]` data, same create/edit/
+  // delete/submit actions) — so a "Browse exercises" nudge lands there
+  // exactly, not on the generic Workout hub (NP-256).
+  if (sub === "library") {
+    return native(NATIVE_ROUTES.exerciseLibrary, params, "exact");
   }
   if (sub === "browse") return native(NATIVE_ROUTES.browsePrograms, params, "exact");
 

@@ -203,7 +203,7 @@ const TODAY_PLAN = {
       _id: "pi-1",
       name: "Chicken Breast",
       servings: 1,
-      servingSize: "200",
+      servingSize: 200,
       servingUnit: "g",
       nutrition: { calories: 700, protein: 60, carbs: 50, fats: 20, fiber: 3 },
     },
@@ -269,17 +269,16 @@ function installHandler() {
           items?: Record<string, unknown>[];
           mealId?: string;
         };
-        // The server stores items with a string `servingSize` (the wire shape
-        // `MealPlanItemSchema` reads); echo that, not the picker's number.
+        // `webapp/models/Meal.ts`'s `IMealItem.servingSize` is a required
+        // Mongoose `Number` — the server has only ever echoed a number here
+        // (NP-267 fixed `MealPlanItemSchema` to match; it used to declare
+        // `z.string()`, which made every real response fail to parse).
         const created: PlanRow = {
           _id: `plan-created-${plansState.length + 1}`,
           plannedDate: `${body.plannedDate ?? THURSDAY}T00:00:00.000Z`,
           plannedDateKey: body.plannedDate ?? THURSDAY,
           tag: body.tag ?? "lunch",
-          items: (body.items ?? []).map((it) => ({
-            ...it,
-            servingSize: String(it.servingSize ?? ""),
-          })),
+          items: body.items ?? [],
           status: "active",
           expectedNutrition: { calories: 190 },
         };
