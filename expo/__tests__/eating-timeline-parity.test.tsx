@@ -428,3 +428,92 @@ describe("Eating Timeline Parity (NP-178)", () => {
     });
   });
 });
+
+describe("Timeline week view: plan tools, tag filter, schedule CTA (NP-260)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockParams = { view: "week" };
+    mockApiFetch.mockImplementation(async (url: string) => defaultApiHandler(url));
+  });
+
+  it("(id: e015ca9e) shows Copy a day / Meal → days above the stats and opens the reused NP-177 sheets", async () => {
+    const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("timeline-week-view")).toBeTruthy();
+    });
+
+    expect(queryByTestId("copy-day-sheet")).toBeNull();
+    fireEvent.press(getByTestId("timeline-week-copy-day"));
+    expect(getByTestId("copy-day-sheet")).toBeTruthy();
+
+    // CopyDaySheet is a modal; closing it before opening ApplyMealSheet
+    // mirrors how a member would actually use the screen.
+    fireEvent.press(getByTestId("copy-day-sheet-backdrop"));
+
+    expect(queryByTestId("apply-meal-sheet")).toBeNull();
+    fireEvent.press(getByTestId("timeline-week-apply-meal"));
+    expect(getByTestId("apply-meal-sheet")).toBeTruthy();
+  });
+
+  it("(id: e015ca9f) Filter by tag narrows each day's logs and recomputes that day's calories", async () => {
+    const { getByTestId } = render(<NutritionIndexRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("timeline-week-view")).toBeTruthy();
+    });
+
+    // Before filtering: Wednesday (breakfast, 1,500 cal) and Monday (lunch,
+    // 1,850 cal) both count.
+    expect(getByTestId("timeline-week-day-cals-2026-06-03").props.children).toBe("1,500");
+    expect(getByTestId("timeline-week-day-cals-2026-06-01").props.children).toBe("1,850");
+
+    fireEvent.press(getByTestId("timeline-week-filter-toggle"));
+    fireEvent.press(getByTestId("timeline-week-filter-tag-lunch"));
+
+    // Filtered to "lunch" only: Wednesday's breakfast log no longer counts,
+    // Monday's lunch log still does, and the week total drops accordingly.
+    expect(getByTestId("timeline-week-day-cals-2026-06-03").props.children).toBe("0");
+    expect(getByTestId("timeline-week-day-cals-2026-06-01").props.children).toBe("1,850");
+
+    fireEvent.press(getByTestId("timeline-week-filter-clear"));
+    expect(getByTestId("timeline-week-day-cals-2026-06-03").props.children).toBe("1,500");
+  });
+
+  it("(id: e015caa0) Schedule meals for this week routes to the native week planner when the visible week has a future day", async () => {
+    const { getByTestId } = render(<NutritionIndexRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("timeline-week-view")).toBeTruthy();
+    });
+
+    // TODAY_MOCK (2026-06-03) sits inside this week, so the visible week has
+    // a future day (Thu-Sat) and the CTA renders.
+    fireEvent.press(getByTestId("timeline-week-schedule-meals"));
+
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/meal-plan");
+  });
+
+  it("(id: e015caa1) the day-row trailing control is a solid add button on every day, including empty ones", async () => {
+    const { getByTestId } = render(<NutritionIndexRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("timeline-week-view")).toBeTruthy();
+    });
+
+    // 2026-05-31 has zero logs and zero plans — the web shows the black `+`
+    // there too (page.tsx:2013-2021 renders unconditionally per row).
+    const addButton = getByTestId("timeline-week-open-2026-05-31");
+    expect(addButton).toBeTruthy();
+    expect(addButton.props.accessibilityLabel).toMatch(/food for 2026-05-31/);
+
+    fireEvent.press(addButton);
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/(tabs)/nutrition",
+      params: {
+        date: "2026-05-31",
+        view: "day",
+      },
+    });
+  });
+});

@@ -1,6 +1,16 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Pressable } from "react-native";
-import { ChevronDown, ChevronLeft, ChevronRight, CalendarDays, ExternalLink } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CalendarDays,
+  CopyPlus,
+  ChefHat,
+  Tag as TagIcon,
+  Plus,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useLocalDay, withTz } from "@/lib/time/localDay";
@@ -9,8 +19,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useFetch } from "@/lib/hooks/useFetch";
 import {
   MealLogsRangeResponseSchema,
+  TagsResponseSchema,
   type MealLogsRangeResponse,
   type MealLog,
+  type TagsResponse,
 } from "@become/api-client";
 import {
   PlansResponseSchema,
@@ -24,7 +36,40 @@ import {
   isSameLocalDay,
 } from "@/lib/nutrition/calendarDays";
 import { weeklyChartBarHeightPct } from "@/lib/nutrition/weekChart";
+import { titleCaseTag } from "@/lib/nutrition/mealPlanApi";
 import { NutritionPlanCard, type MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+
+/**
+ * ─── Week-view plan tools, tag filter and schedule CTA (NP-260) ─────────────
+ *
+ * Ports the four actions the web's Week view
+ * (`webapp/app/dashboard/timeline/page.tsx:1071-1169`) surfaces above the
+ * stats that this screen was missing:
+ *
+ * - "Copy a day" / "Meal → days" — the same `CopyDaySheet` / `ApplyMealSheet`
+ *   NP-177 already ported, now reused here (self-contained: this screen owns
+ *   their open/close state and refetches logs + plans on `onApplied`, same
+ *   as the web's `fetchData()` after a bulk op).
+ * - "Filter by tag" — a collapsible chip row over `GET /api/tags` defaults +
+ *   userTags (the web's `allFilterTags`); toggling a chip filters each day's
+ *   logs AND recomputes that day's totals from the filtered set, exactly
+ *   like the web's `matchesFilter` / `filteredDays`.
+ * - "Schedule meals for this week" — the web opens `ScheduleMealsDrawer`;
+ *   native has no such drawer, so this routes to the native week planner at
+ *   `/(tabs)/nutrition/meal-plan` (the native port of `/dashboard/meal-plan`,
+ *   which is where `CopyDaySheet` / `ApplyMealSheet` already live for the
+ *   day-view's future-day tools). Shown only when the visible week contains
+ *   today or a future day (the web's `weekHasFuture`).
+ *
+ * The per-day row's trailing control is restyled from a text "Open" button
+ * to a solid square `+`, matching the web's `WeekDayGroup` add button
+ * (`page.tsx:2013-2021`). It still opens the full Day view (`onOpenDay`) —
+ * the day screen is where the add-food / quick-add / schedule-meals surfaces
+ * actually live — rather than reopening its own sheet, but it now LOOKS and
+ * reads like "add", not "open", on every row (including empty days).
+ */
 
 export interface TimelineWeekViewProps {
   selectedDate: string; // YYYY-MM-DD
@@ -41,6 +86,8 @@ export interface TimelineWeekViewProps {
   testID?: string;
 }
 
+const DEFAULT_FILTER_TAGS = ["breakfast", "lunch", "dinner", "snack"];
+
 export function TimelineWeekView({
   selectedDate,
   calorieGoal = 2000,
@@ -54,6 +101,7 @@ export function TimelineWeekView({
   const { colors } = useThemeTokens();
   const { token } = useAuth();
   const { day: today, tzOffset } = useLocalDay();
+  const router = useRouter();
 
   // Internal week reference date (defaults to selectedDate)
   const [weekRefDate, setWeekRefDate] = useState<string>(selectedDate);
@@ -72,7 +120,7 @@ export function TimelineWeekView({
 
   // Fetch range data
   const logsPath = withTz(`/api/meal-logs?from=${fromStr}&to=${toStr}`, tzOffset);
-  const { data: logsData } = useFetch<MealLogsRangeResponse>(
+  const { data: logsData, refetch: refetchLogs } = useFetch<MealLogsRangeResponse>(
     logsPath,
     MealLogsRangeResponseSchema,
     {
@@ -83,7 +131,7 @@ export function TimelineWeekView({
   );
 
   const plansPath = `/api/meal-plans?from=${fromStr}&to=${toStr}`;
-  const { data: plansData } = useFetch<PlansResponse>(
+  const { data: plansData, refetch: refetchPlans } = useFetch<PlansResponse>(
     plansPath,
     PlansResponseSchema,
     {
@@ -93,24 +141,108 @@ export function TimelineWeekView({
     },
   );
 
+  // Tag choices for the filter row — `/api/tags` defaults + userTags, the
+  // same source the web's `allFilterTags` reads (NP-260).
+  const { data: tagsData } = useFetch<TagsResponse>(
+    "/api/tags",
+    TagsResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
+    },
+  );
+
+  const allFilterTags = useMemo<string[]>(() => {
+    const out: string[] = [
+      ...(tagsData?.defaults?.length ? tagsData.defaults : DEFAULT_FILTER_TAGS),
+    ];
+    for (const t of tagsData?.userTags ?? []) {
+      const norm = String(t).toLowerCase();
+      if (!out.includes(norm)) out.push(norm);
+    }
+    return out;
+  }, [tagsData]);
+
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+
+  const toggleFilter = useCallback((tag: string) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      const norm = tag.toLowerCase();
+      if (next.has(norm)) next.delete(norm);
+      else next.add(norm);
+      return next;
+    });
+  }, []);
+
+  const clearFilters = useCallback(() => setActiveFilters(new Set()), []);
+
+  const matchesFilter = useCallback(
+    (log: MealLog): boolean => {
+      if (activeFilters.size === 0) return true;
+      const tags = (log.tags ?? []).map((t) => String(t).toLowerCase());
+      return tags.some((t) => activeFilters.has(t));
+    },
+    [activeFilters],
+  );
+
+  // Plan tools (NP-177 sheets, reused here) + Schedule-meals CTA state.
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
+  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleBulkApplied = useCallback(
+    (toastText: string) => {
+      setToast(toastText);
+      void refetchLogs();
+      void refetchPlans();
+    },
+    [refetchLogs, refetchPlans],
+  );
+
   const activePlans = useMemo(() => {
     return (plansData?.plans ?? []).filter((p) => p.status === "active");
   }, [plansData?.plans]);
 
-  // Build the 7 days buckets
+  // Build the 7 days buckets — logs filtered by the active tag set, totals
+  // recomputed from the filtered set, exactly like the web's `filteredDays`.
   const days = useMemo(() => {
     const todayObj = parseDateKey(today);
     return weekDateObjs.map((dt) => {
       const dateKey = toDateKey(dt);
       const isCurrentDay = isSameLocalDay(dt, todayObj);
       const dayBucket = logsData?.days?.find((d) => d.date === dateKey);
-      const dayLogs: MealLog[] = dayBucket?.logs ?? [];
-      const dailyTotals = dayBucket?.dailyTotals ?? {
+      const rawLogs: MealLog[] = dayBucket?.logs ?? [];
+      const dayLogs: MealLog[] =
+        activeFilters.size === 0 ? rawLogs : rawLogs.filter(matchesFilter);
+      let dailyTotals = dayBucket?.dailyTotals ?? {
         calories: 0,
         protein: 0,
         carbs: 0,
         fats: 0,
       };
+      if (activeFilters.size > 0) {
+        const totals = dayLogs.reduce(
+          (acc, log) => {
+            const n = log.totalNutrition;
+            return {
+              calories: acc.calories + (n?.calories ?? 0),
+              protein: acc.protein + (n?.protein ?? 0),
+              carbs: acc.carbs + (n?.carbs ?? 0),
+              fats: acc.fats + (n?.fats ?? 0),
+            };
+          },
+          { calories: 0, protein: 0, carbs: 0, fats: 0 },
+        );
+        dailyTotals = {
+          calories: Math.round(totals.calories),
+          protein: Math.round(totals.protein),
+          carbs: Math.round(totals.carbs),
+          fats: Math.round(totals.fats),
+        };
+      }
       const dayPlans: MealPlan[] = activePlans.filter((p) => {
         const pKey = p.plannedDateKey ?? p.plannedDate?.split("T")[0];
         return pKey === dateKey;
@@ -127,7 +259,7 @@ export function TimelineWeekView({
         calories,
       };
     });
-  }, [weekDateObjs, logsData?.days, activePlans, today]);
+  }, [weekDateObjs, logsData?.days, activePlans, today, activeFilters, matchesFilter]);
 
   // Week summary
   const summary = useMemo(() => {
@@ -156,6 +288,16 @@ export function TimelineWeekView({
     day: "numeric",
     year: "numeric",
   })}`;
+
+  // Does the visible week contain today or a future day? Decides whether the
+  // "Schedule meals for this week" CTA shows — the web's `weekHasFuture`
+  // (`page.tsx:710`). Date keys are `YYYY-MM-DD`, so string comparison is
+  // calendar-correct.
+  const weekHasFuture = toStr >= today;
+
+  const allFilterActiveEmpty =
+    activeFilters.size > 0 &&
+    days.every((d) => d.logs.length === 0 && d.plans.length === 0);
 
   return (
     <View testID={testID} className="gap-4 px-4 pb-12">
@@ -198,6 +340,153 @@ export function TimelineWeekView({
           <ChevronRight size={20} color={colors.foreground} />
         </Pressable>
       </View>
+
+      {/* Plan tools — copy a day forward / apply a meal to days (NP-260,
+          matching `page.tsx:1071-1088`). Self-contained: this screen owns
+          the sheets and refetches on apply. */}
+      <View className="flex-row gap-2" testID="timeline-week-plan-tools">
+        <Pressable
+          testID="timeline-week-copy-day"
+          accessibilityRole="button"
+          accessibilityLabel="Copy a day"
+          onPress={() => {
+            setToast(null);
+            setCopyDayOpen(true);
+          }}
+          className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2.5"
+        >
+          <CopyPlus size={14} color={colors["muted-foreground"]} />
+          <Text className="text-muted-foreground text-xs font-semibold">
+            Copy a day
+          </Text>
+        </Pressable>
+        <Pressable
+          testID="timeline-week-apply-meal"
+          accessibilityRole="button"
+          accessibilityLabel="Meal to days"
+          onPress={() => {
+            setToast(null);
+            setApplyMealOpen(true);
+          }}
+          className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl border border-border bg-card py-2.5"
+        >
+          <ChefHat size={14} color={colors["muted-foreground"]} />
+          <Text className="text-muted-foreground text-xs font-semibold">
+            Meal → days
+          </Text>
+        </Pressable>
+      </View>
+
+      {toast ? (
+        <Pressable
+          testID="timeline-week-toast"
+          accessibilityRole="button"
+          accessibilityLabel={`${toast}. Dismiss`}
+          onPress={() => setToast(null)}
+          className="rounded-xl bg-muted px-3 py-2"
+        >
+          <Text className="text-foreground text-xs font-medium text-center">
+            {toast}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* Tag filter — collapsible chip row over /api/tags, matching
+          `page.tsx:1091-1155`. */}
+      <View
+        testID="timeline-week-filter"
+        className="rounded-xl border border-border bg-card p-3"
+      >
+        <Pressable
+          testID="timeline-week-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="Filter by tag"
+          onPress={() => setFiltersOpen((o) => !o)}
+          className="flex-row items-center justify-between"
+        >
+          <View className="flex-row items-center gap-2 flex-1 min-w-0">
+            <TagIcon size={16} color={colors["muted-foreground"]} />
+            <Text className="text-foreground text-xs font-semibold">
+              Filter by tag
+            </Text>
+            {activeFilters.size > 0 ? (
+              <View className="rounded-full bg-foreground px-1.5 py-0.5">
+                <Text className="text-background text-[10px] font-bold">
+                  {activeFilters.size}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <View className="flex-row items-center gap-2 shrink-0">
+            {activeFilters.size > 0 ? (
+              <Pressable
+                testID="timeline-week-filter-clear"
+                accessibilityRole="button"
+                accessibilityLabel="Clear tag filters"
+                onPress={(e) => {
+                  e?.stopPropagation?.();
+                  clearFilters();
+                }}
+              >
+                <Text className="text-muted-foreground text-[11px] font-medium">
+                  Clear
+                </Text>
+              </Pressable>
+            ) : null}
+            <ChevronDown
+              size={16}
+              color={colors["muted-foreground"]}
+              style={{ transform: [{ rotate: filtersOpen ? "0deg" : "-90deg" }] }}
+            />
+          </View>
+        </Pressable>
+
+        {filtersOpen ? (
+          <View className="flex-row flex-wrap gap-1.5 mt-3" testID="timeline-week-filter-chips">
+            {allFilterTags.map((tag) => {
+              const active = activeFilters.has(tag.toLowerCase());
+              return (
+                <Pressable
+                  key={tag}
+                  testID={`timeline-week-filter-tag-${tag}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  accessibilityLabel={`Filter by tag ${tag}`}
+                  onPress={() => toggleFilter(tag)}
+                  className={`rounded-full px-2.5 py-1 ${
+                    active ? "bg-foreground" : "bg-muted"
+                  }`}
+                >
+                  <Text
+                    className={`text-xs font-medium ${
+                      active ? "text-background" : "text-foreground"
+                    }`}
+                  >
+                    {titleCaseTag(tag)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+
+      {/* Schedule meals for this week — the web opens `ScheduleMealsDrawer`;
+          native routes to the week planner, matching `page.tsx:1160-1169`. */}
+      {weekHasFuture ? (
+        <Pressable
+          testID="timeline-week-schedule-meals"
+          accessibilityRole="button"
+          accessibilityLabel="Schedule meals for this week"
+          onPress={() => router.push("/(tabs)/nutrition/meal-plan")}
+          className="bg-blue-600 flex-row items-center justify-center gap-1.5 rounded-xl py-3"
+        >
+          <CalendarDays size={16} color={colors["primary-foreground"]} />
+          <Text className="text-white text-sm font-semibold">
+            Schedule meals for this week
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Summary card */}
       <View
@@ -292,6 +581,15 @@ export function TimelineWeekView({
         </View>
       </View>
 
+      {allFilterActiveEmpty ? (
+        <Text
+          testID="timeline-week-filter-empty"
+          className="text-muted-foreground text-xs text-center py-2"
+        >
+          No entries match the active tag filter for this week.
+        </Text>
+      ) : null}
+
       {/* Week day list */}
       <View className="gap-3">
         {days.map((d) => {
@@ -300,6 +598,7 @@ export function TimelineWeekView({
           const logCount = d.logs.length;
           const weekdayStr = d.dt.toLocaleDateString("en-US", { weekday: "short" });
           const dayNum = d.dt.getDate();
+          const addLabel = d.date >= today ? "Plan food" : "Add food";
 
           return (
             <View
@@ -362,7 +661,7 @@ export function TimelineWeekView({
                   </View>
                 </View>
 
-                {/* Per-day Calories + Open Action */}
+                {/* Per-day Calories + chevron */}
                 <View className="flex-row items-center gap-3 shrink-0">
                   <View className="items-end">
                     <Text
@@ -374,17 +673,6 @@ export function TimelineWeekView({
                     <Text className="text-muted-foreground text-[10px]">cal</Text>
                   </View>
 
-                  <Pressable
-                    testID={`timeline-week-open-${d.date}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${d.date} in day view`}
-                    onPress={() => onOpenDay(d.date)}
-                    className="flex-row items-center gap-1 rounded-lg bg-muted px-2.5 py-1.5"
-                  >
-                    <Text className="text-foreground text-xs font-semibold">Open</Text>
-                    <ExternalLink size={12} color={colors.foreground} />
-                  </Pressable>
-
                   <ChevronDown
                     size={16}
                     color={colors["muted-foreground"]}
@@ -392,6 +680,24 @@ export function TimelineWeekView({
                   />
                 </View>
               </Pressable>
+
+              {/* Add button — a solid square `+`, matching the web's
+                  `WeekDayGroup` trailing control (`page.tsx:2013-2021`)
+                  instead of the text "Open" + external-link icon this used
+                  to render on every row, including empty days. Opens the
+                  full Day view, where the add-food / schedule-meals surfaces
+                  live. */}
+              <View className="flex-row justify-end px-3.5 pb-3.5 -mt-1">
+                <Pressable
+                  testID={`timeline-week-open-${d.date}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${addLabel} for ${d.date}`}
+                  onPress={() => onOpenDay(d.date)}
+                  className="h-9 w-9 items-center justify-center rounded-lg bg-foreground"
+                >
+                  <Plus size={16} color={colors.background} />
+                </Pressable>
+              </View>
 
               {/* Expanded details */}
               {isExpanded ? (
@@ -456,6 +762,25 @@ export function TimelineWeekView({
           );
         })}
       </View>
+
+      <CopyDaySheet
+        visible={copyDayOpen}
+        defaultSourceDate={selectedDate}
+        onClose={() => setCopyDayOpen(false)}
+        onApplied={handleBulkApplied}
+      />
+      <ApplyMealSheet
+        visible={applyMealOpen}
+        defaultFromDate={selectedDate}
+        defaultToDate={selectedDate}
+        availableTags={
+          tagsData
+            ? { defaults: tagsData.defaults ?? [], userTags: tagsData.userTags ?? [] }
+            : undefined
+        }
+        onClose={() => setApplyMealOpen(false)}
+        onApplied={handleBulkApplied}
+      />
     </View>
   );
 }
