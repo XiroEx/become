@@ -28,6 +28,18 @@
  *                                          Tailwind's purple, distinct from accent)
  *   teal        teal-500 (both modes)    (the nutrition consultant's identity
  *                                          colour, NP-262)
+ *   mind-violet violet-500 (both modes)  the Mind home's own accent (NP-296):
+ *   mind-green  green-500  (both modes)  the Brain icon, the level bar and the
+ *                                          chapter path, as a violet→green
+ *                                          gradient — `webapp/components/mind/
+ *                                          MindJourney.tsx`'s `from-violet-500
+ *                                          to-green-500`. Distinct from
+ *                                          `mindset` (the Streaks screen's
+ *                                          badge, a flat purple with no green).
+ *   mind-ink    zinc-900   (both modes)  the session card's white Begin
+ *                                          button text/icon — static like
+ *                                          `primary`, because that button is
+ *                                          white in both light and dark mode.
  *
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
@@ -52,7 +64,10 @@ export type TokenName =
   | "success"
   | "teal"
   | "info"
-  | "mindset";
+  | "mindset"
+  | "mind-violet"
+  | "mind-green"
+  | "mind-ink";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -81,6 +96,9 @@ export const lightTokens: Record<TokenName, string> = {
   // this token rather than adding a second blue
   mindset: "147 51 234", // purple-600 — the web's Mindset streak icon
   // (`text-purple-600 bg-purple-100`)
+  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-green": "34 197 94", // green-500 — same in both modes
+  "mind-ink": "24 24 27", // zinc-900 — same in both modes
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -100,6 +118,9 @@ export const darkTokens: Record<TokenName, string> = {
   teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
   info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
   mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
+  "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
+  "mind-green": "34 197 94", // green-500 — same in both modes
+  "mind-ink": "24 24 27", // zinc-900 — same in both modes
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

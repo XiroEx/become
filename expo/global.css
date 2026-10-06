@@ -32,6 +32,9 @@
     --teal: 20 184 166;
     --info: 37 99 235;
     --mindset: 147 51 234;
+    --mind-violet: 139 92 246;
+    --mind-green: 34 197 94;
+    --mind-ink: 24 24 27;
   }
 
   .dark:root,
@@ -52,5 +55,8 @@
     --teal: 20 184 166;
     --info: 96 165 250;
     --mindset: 192 132 252;
+    --mind-violet: 139 92 246;
+    --mind-green: 34 197 94;
+    --mind-ink: 24 24 27;
   }
 }
