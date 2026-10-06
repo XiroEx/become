@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { ChevronLeft, Calculator, Save } from "lucide-react-native";
+import { ChevronLeft, Calculator, Save, Scale } from "lucide-react-native";
 import { z } from "zod";
 import {
   apiFetch,
@@ -68,7 +68,7 @@ import { NutritionPlanCard } from "@/components/goals/NutritionPlanCard";
 import { PacePicker } from "@/components/goals/PacePicker";
 import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
-import { ProgressChart } from "@/components/dashboard/ProgressChart";
+import { GoalsWeightChart } from "@/components/nutrition/GoalsWeightChart";
 
 /**
  * Nutrition goals (NP-148) — the native port of
@@ -81,8 +81,10 @@ import { ProgressChart } from "@/components/dashboard/ProgressChart";
  * too. Saving writes the identical POST /api/nutrition/goals body the web
  * writes, so the same inputs save identical targets on both clients.
  *
- * Tabs mirror the web's Goals/Weight segmented control. The weight chart is
- * the NP-130/NP-132 ProgressChart kit (react-native-svg, theme tokens).
+ * Tabs mirror the web's Goals/Weight segmented control. The Weight tab's
+ * chart is `GoalsWeightChart` (NP-266) — a 1:1 port of the web's PLAIN
+ * weight line (react-native-svg, theme tokens), not the dashboard's
+ * multi-metric `ProgressChart`, which the web's goals screen never embeds.
  */
 
 type GoalType = NutritionDirection;
@@ -186,7 +188,6 @@ export default function NutritionGoalsRoute() {
   const [activeTab, setActiveTab] = useState<"goals" | "weight">("goals");
   const [weightSheetOpen, setWeightSheetOpen] = useState(false);
   const [weightSeries, setWeightSeries] = useState<{ date: string; value: number }[]>([]);
-  const [bmiSeries, setBmiSeries] = useState<{ date: string; value: number }[]>([]);
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(null);
   const [planRefreshKey, setPlanRefreshKey] = useState(0);
   const [planPaceKgPerWeek, setPlanPaceKgPerWeek] = useState<number | null>(null);
@@ -257,7 +258,6 @@ export default function NutritionGoalsRoute() {
         }
       }
       setWeightSeries(progressData.weightData ?? []);
-      setBmiSeries(progressData.bmiData ?? []);
       if (progressData.goal?.targetWeightKg) {
         setTargetWeightKg(progressData.goal.targetWeightKg);
       }
@@ -768,20 +768,18 @@ export default function NutritionGoalsRoute() {
                 </View>
                 {weightSeries.length > 0 ? (
                   <>
-                    <ProgressChart
-                      weightData={weightSeries}
-                      bmiData={bmiSeries}
+                    <GoalsWeightChart
+                      data={weightSeries}
                       targetWeight={targetWeightDisplay}
-                      weightUnit={weightUnit}
-                      defaultChart="weight"
                       testID="nutrition-goals-weight-chart"
                     />
                     <View style={{ marginTop: 8 }}>
                       <Button
                         testID="nutrition-goals-log-weight"
+                        variant="inverted"
                         onPress={() => setWeightSheetOpen(true)}
                       >
-                        Log Weight
+                        <Scale size={16} color={colors.background} /> Log Weight
                       </Button>
                     </View>
                   </>
@@ -790,9 +788,10 @@ export default function NutritionGoalsRoute() {
                     <Text className="text-muted-foreground text-sm">No weight logged yet</Text>
                     <Button
                       testID="nutrition-goals-log-weight"
+                      variant="inverted"
                       onPress={() => setWeightSheetOpen(true)}
                     >
-                      Log Weight
+                      <Scale size={16} color={colors.background} /> Log Weight
                     </Button>
                   </View>
                 )}
@@ -834,7 +833,17 @@ export default function NutritionGoalsRoute() {
                   {(!userHeightCm || !userAge || !userSex) && (
                     <View className="mt-4 rounded-lg bg-muted p-2.5">
                       <Text className="text-muted-foreground text-xs font-medium mb-3">
-                        Fill in missing info for TDEE calculation
+                        Fill in missing info for TDEE calculation{" "}
+                        <Text
+                          testID="nutrition-goals-update-details-link"
+                          accessibilityRole="link"
+                          accessibilityLabel="Update your details"
+                          onPress={() => router.push("/settings")}
+                          style={minTouchTarget}
+                          className="text-blue-600 dark:text-blue-400 underline"
+                        >
+                          or update your details
+                        </Text>
                       </Text>
                       <View style={{ gap: 12 }}>
                         {!userAge && (
@@ -848,28 +857,33 @@ export default function NutritionGoalsRoute() {
                           />
                         )}
                         {!userSex && (
-                          <View style={{ flexDirection: "row", gap: 8 }}>
-                            {(["male", "female"] as const).map((s) => (
-                              <Pressable
-                                key={s}
-                                testID={`nutrition-goals-manual-sex-${s}`}
-                                accessibilityRole="radio"
-                                accessibilityState={{ selected: manualSex === s }}
-                                onPress={() => setManualSex(s)}
-                                style={minTouchTarget}
-                                className={`flex-1 items-center rounded-xl border py-2 ${
-                                  manualSex === s ? "border-foreground bg-foreground" : "border-border bg-card"
-                                }`}
-                              >
-                                <Text
-                                  className={`text-sm font-medium capitalize ${
-                                    manualSex === s ? "text-background" : "text-foreground"
+                          <View>
+                            <Text className="text-muted-foreground text-xs font-medium mb-1">
+                              Sex
+                            </Text>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              {(["male", "female"] as const).map((s) => (
+                                <Pressable
+                                  key={s}
+                                  testID={`nutrition-goals-manual-sex-${s}`}
+                                  accessibilityRole="radio"
+                                  accessibilityState={{ selected: manualSex === s }}
+                                  onPress={() => setManualSex(s)}
+                                  style={minTouchTarget}
+                                  className={`flex-1 items-center rounded-xl border py-2 ${
+                                    manualSex === s ? "border-foreground bg-foreground" : "border-border bg-card"
                                   }`}
                                 >
-                                  {s}
-                                </Text>
-                              </Pressable>
-                            ))}
+                                  <Text
+                                    className={`text-sm font-medium capitalize ${
+                                      manualSex === s ? "text-background" : "text-foreground"
+                                    }`}
+                                  >
+                                    {s}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
                           </View>
                         )}
                         {!userHeightCm && (
@@ -1151,19 +1165,36 @@ export default function NutritionGoalsRoute() {
                     </Pressable>
                   ) : null}
 
-                  {/* Macro bar — protein/carbs/fats shares, theme tokens (NP-123). */}
+                  {/* Macro bar — the web's blue/green/yellow protein/carbs/fats
+                      shares (`bg-blue-600` / `bg-green-600` / `bg-yellow-400`),
+                      not the brand red/amber/grey native drew before (NP-266). */}
                   <View
                     testID="nutrition-goals-macro-bar"
                     style={{ flexDirection: "row", height: 12, borderRadius: 999, overflow: "hidden", marginTop: 12 }}
                   >
-                    <View style={{ width: `${percentages.protein}%`, backgroundColor: colors.primary }} />
-                    <View style={{ width: `${percentages.carbs}%`, backgroundColor: colors.accent }} />
-                    <View style={{ width: `${percentages.fats}%`, backgroundColor: colors["muted-foreground"] }} />
+                    <View className="bg-blue-600" style={{ width: `${percentages.protein}%` }} />
+                    <View className="bg-green-600" style={{ width: `${percentages.carbs}%` }} />
+                    <View className="bg-yellow-400" style={{ width: `${percentages.fats}%` }} />
                   </View>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-                    <Text className="text-muted-foreground text-xs">Protein {percentages.protein}%</Text>
-                    <Text className="text-muted-foreground text-xs">Carbs {percentages.carbs}%</Text>
-                    <Text className="text-muted-foreground text-xs">Fats {percentages.fats}%</Text>
+                    <Text
+                      testID="nutrition-goals-macro-bar-label-protein"
+                      className="text-blue-600 dark:text-blue-400 text-xs"
+                    >
+                      Protein {percentages.protein}%
+                    </Text>
+                    <Text
+                      testID="nutrition-goals-macro-bar-label-carbs"
+                      className="text-green-600 dark:text-green-400 text-xs"
+                    >
+                      Carbs {percentages.carbs}%
+                    </Text>
+                    <Text
+                      testID="nutrition-goals-macro-bar-label-fats"
+                      className="text-yellow-600 dark:text-yellow-400 text-xs"
+                    >
+                      Fats {percentages.fats}%
+                    </Text>
                   </View>
                   <Text className="text-muted-foreground text-xs mt-3 leading-relaxed">
                     {tdee ? `Your TDEE is about ${tdee.toLocaleString()} cal. ` : ""}We applied{" "}
@@ -1192,12 +1223,13 @@ export default function NutritionGoalsRoute() {
 
                 <Button
                   testID="nutrition-goals-save"
+                  variant="inverted"
                   onPress={handleSave}
                   disabled={saving}
                   loading={saving}
                   accessibilityLabel="Save Goals"
                 >
-                  <Save size={16} /> {saving ? "Saving..." : "Save Goals"}
+                  <Save size={16} color={colors.background} /> {saving ? "Saving..." : "Save Goals"}
                 </Button>
                 {saveMessage ? (
                   <Text
