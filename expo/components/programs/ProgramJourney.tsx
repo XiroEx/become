@@ -1,6 +1,16 @@
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Trophy, Flame, TrendingUp, TrendingDown, Minus } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  Trophy,
+  Flame,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ChevronLeft,
+  Dumbbell,
+  Calendar,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -14,7 +24,11 @@ import type {
 
 // ─── ProgramJourney ─────────────────────────────────────────────────────────
 // Native port of `webapp/app/dashboard/workout/[programId]/journey/page.tsx`
-// (NP-167).
+// (NP-167). NP-286 is the full-pass visual-parity pass the first port
+// skipped: a header (back arrow, "Your Journey", program name — the web's
+// `<h1>` + sub-line, which native had folded the name into the hero and had
+// no back arrow or "Your Journey" title at all), the hero's gold treatment,
+// coloured stat values, amber PR weights and an icon on each footer button.
 //
 // The web's recap is the source of truth for what finishing a program shows:
 // sessions completed, total volume, weight change and the top PRs across the
@@ -25,9 +39,14 @@ import type {
 // Two deliberate divergences from the web, both on the record:
 //   1. No animation library: the web's framer-motion entrances are plain
 //      layout here. Same sections, same order, same words.
-//   2. The web's hero swaps its icon by state (Trophy) and its stat cards use
-//      fixed dark classes; here every colour comes from a Tailwind class or
-//      `useThemeTokens()` (NP-123) so the recap reads in light and dark mode.
+//   2. The web's hero and stat cards use FIXED dark classes (`text-yellow-400`,
+//      `text-emerald-400`, `bg-zinc-900`, no `dark:` variant anywhere on this
+//      page) — so the web page itself only reads correctly in dark mode. Here
+//      every colour is a semantic token class (`text-accent`, `text-success`,
+//      `text-info`, `text-mind-violet`) or comes from `useThemeTokens()`
+//      (NP-123), which carries the SAME gold/green/blue/violet/amber
+//      treatment into light mode too, rather than copying the web's
+//      dark-only literals verbatim.
 // ────────────────────────────────────────────────────────────────────────────
 
 export const JOURNEY_TEST_ID = "program-journey";
@@ -54,8 +73,33 @@ export function journeyWeightSub(change: ProgramJourneyWeightChange): string {
   return `${change.startLbs} → ${change.endLbs} lbs`;
 }
 
+type WeightTone = "muted" | "success" | "accent";
+
+/**
+ * The web's weight-change colour rule: `text-zinc-400` with no change,
+ * `emerald-400` down, `amber-400` up — mapped onto tokens here (`success` /
+ * `accent`) so light mode gets a correct value too, instead of the web's
+ * dark-only literal pair.
+ */
+function weightTone(change: ProgramJourneyWeightChange | null): WeightTone {
+  if (!change || change.change === 0) return "muted";
+  return change.change < 0 ? "success" : "accent";
+}
+
+/** The weight-change VALUE's className for a given tone — text and glyph agree. */
+export function journeyWeightToneClass(change: ProgramJourneyWeightChange | null): string {
+  const tone = weightTone(change);
+  return tone === "muted"
+    ? "text-muted-foreground"
+    : tone === "success"
+      ? "text-success"
+      : "text-accent";
+}
+
 export interface ProgramJourneyProps {
   journey: ProgramJourneyResponse;
+  /** Header back arrow — the web's `<ArrowLeft>` button back to the Workout tab. */
+  onBack: () => void;
   /** "Find My Next Challenge" — back to the Workout tab. */
   onFindNext: () => void;
   /** "View Full Training Log" — the native Training Log. */
@@ -65,22 +109,25 @@ export interface ProgramJourneyProps {
 
 function WeightGlyph({ change }: { change: ProgramJourneyWeightChange | null }) {
   const { colors } = useThemeTokens();
-  const glyphColor = !change || change.change === 0
-    ? colors["muted-foreground"]
-    : change.change < 0
-      ? colors.success
-      : colors.accent;
-  const Glyph = !change || change.change === 0 ? Minus : change.change < 0 ? TrendingDown : TrendingUp;
+  const tone = weightTone(change);
+  const glyphColor =
+    tone === "muted"
+      ? colors["muted-foreground"]
+      : tone === "success"
+        ? colors.success
+        : colors.accent;
+  const Glyph = tone === "muted" ? Minus : tone === "success" ? TrendingDown : TrendingUp;
   return <Glyph size={20} color={glyphColor} />;
 }
 
 export function ProgramJourney({
   journey,
+  onBack,
   onFindNext,
   onViewLog,
   testID = JOURNEY_TEST_ID,
 }: ProgramJourneyProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const volumeLabel = formatJourneyVolume(journey.totalVolumeLbs);
   const dateLine =
     journey.startDate && journey.endDate
@@ -96,56 +143,112 @@ export function ProgramJourney({
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-        {/* Hero banner */}
-        <Card
-          testID={`${testID}-hero`}
-          style={{ alignItems: "center", paddingVertical: 20 }}
-        >
-          <View
+        {/* Header — the web's back arrow, "Your Journey" title and program
+            name sub-line. Previously missing entirely; the program name sat
+            in the hero instead (it still does, below, matching the web). */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable
+            testID={`${testID}-back`}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={onBack}
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
-              backgroundColor: colors.muted,
+              width: 36,
+              height: 36,
+              borderRadius: 10,
               alignItems: "center",
               justifyContent: "center",
-              marginBottom: 12,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
           >
-            <Trophy size={32} color={colors.accent} strokeWidth={1.5} />
-          </View>
-          <Text
-            testID={`${testID}-title`}
-            className="text-foreground text-2xl font-black text-center"
-          >
-            PROGRAM COMPLETE
-          </Text>
-          <Text
-            testID={`${testID}-program-name`}
-            className="text-muted-foreground text-sm mt-1 text-center"
-          >
-            {journey.programName}
-          </Text>
-          {dateLine ? (
+            <ChevronLeft size={18} color={colors.foreground} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
             <Text
-              testID={`${testID}-dates`}
+              testID={`${testID}-header-title`}
+              className="text-foreground text-xl font-black"
+            >
+              Your Journey
+            </Text>
+            <Text
+              testID={`${testID}-header-program`}
+              className="text-muted-foreground text-sm"
+            >
+              {journey.programName}
+            </Text>
+          </View>
+        </View>
+
+        {/* Hero banner — the web's amber/gold-tinted card with a gold ring
+            around the trophy and a gold "PROGRAM COMPLETE"
+            (`from-yellow-500/20 to-amber-600/10`, `ring-yellow-500/30`,
+            `text-yellow-400`), carried over via the `accent` token. */}
+        <View testID={`${testID}-hero`} style={{ borderRadius: 16, overflow: "hidden" }}>
+          <LinearGradient
+            colors={[tint("accent", 0.2), tint("accent", 0.08)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: tint("accent", 0.3),
+              paddingVertical: 20,
+              paddingHorizontal: 16,
+              alignItems: "center",
+            }}
+          >
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 32,
+                backgroundColor: tint("accent", 0.2),
+                borderWidth: 4,
+                borderColor: tint("accent", 0.3),
+                alignItems: "center",
+                justifyContent: "center",
+                marginBottom: 12,
+              }}
+            >
+              <Trophy size={32} color={colors.accent} strokeWidth={1.5} />
+            </View>
+            <Text
+              testID={`${testID}-title`}
+              className="text-accent text-2xl font-black text-center"
+            >
+              PROGRAM COMPLETE
+            </Text>
+            <Text
+              testID={`${testID}-program-name`}
               className="text-muted-foreground text-sm mt-1 text-center"
             >
-              {dateLine}
+              {journey.programName}
             </Text>
-          ) : null}
-          <Text className="text-muted-foreground text-xs mt-2 text-center">
-            You showed up and did the work. That&apos;s everything.
-          </Text>
-        </Card>
+            {dateLine ? (
+              <Text
+                testID={`${testID}-dates`}
+                className="text-muted-foreground text-sm mt-1 text-center"
+              >
+                {dateLine}
+              </Text>
+            ) : null}
+            <Text className="text-muted-foreground text-xs mt-2 text-center">
+              You showed up and did the work. That&apos;s everything.
+            </Text>
+          </LinearGradient>
+        </View>
 
-        {/* Key stats grid */}
+        {/* Key stats grid — coloured like the web's: green sessions, blue
+            volume, violet length, success/amber weight change (never
+            neutral `text-foreground`). */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           <View style={{ flex: 1 }}>
             <Card testID={`${testID}-stat-sessions`} style={{ alignItems: "center" }}>
               <Text
                 testID={`${testID}-sessions`}
-                className="text-foreground text-2xl font-black text-center"
+                className="text-success text-2xl font-black text-center"
               >
                 {String(journey.totalSessions)}
               </Text>
@@ -158,7 +261,7 @@ export function ProgramJourney({
             <Card testID={`${testID}-stat-volume`} style={{ alignItems: "center" }}>
               <Text
                 testID={`${testID}-volume`}
-                className="text-foreground text-2xl font-black text-center"
+                className="text-info text-2xl font-black text-center"
               >
                 {volumeLabel}
               </Text>
@@ -179,7 +282,7 @@ export function ProgramJourney({
               <Card testID={`${testID}-stat-length`} style={{ alignItems: "center" }}>
                 <Text
                   testID={`${testID}-length`}
-                  className="text-foreground text-2xl font-black text-center"
+                  className="text-mind-violet text-2xl font-black text-center"
                 >
                   {`${journey.durationWeeks}w`}
                 </Text>
@@ -199,7 +302,7 @@ export function ProgramJourney({
                   <Text
                     testID={`${testID}-weight-change`}
                     style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
-                    className="text-foreground text-2xl font-black"
+                    className={`${journeyWeightToneClass(journey.weightChange)} text-2xl font-black`}
                   >
                     {formatJourneyWeightChange(journey.weightChange)}
                   </Text>
@@ -233,7 +336,7 @@ export function ProgramJourney({
           </View>
         </View>
 
-        {/* Top PRs */}
+        {/* Top PRs — the web's amber PR weights, never neutral. */}
         {journey.topPRs.length > 0 ? (
           <View testID={`${testID}-prs`}>
             <View
@@ -291,7 +394,7 @@ export function ProgramJourney({
                   <View style={{ alignItems: "flex-end" }}>
                     <Text
                       testID={`${testID}-pr-${i}-weight`}
-                      className="text-foreground text-sm font-black"
+                      className="text-accent text-sm font-black"
                     >
                       {`${pr.weight} lbs`}
                     </Text>
@@ -308,13 +411,15 @@ export function ProgramJourney({
           </View>
         ) : null}
 
-        {/* Footer CTAs */}
+        {/* Footer CTAs — the web's Dumbbell on "Find My Next Challenge" and
+            Calendar on "View Full Training Log" (previously no icons). */}
         <View style={{ gap: 8, paddingTop: 4 }}>
           <Button
             testID={`${testID}-next`}
             size="lg"
             onPress={onFindNext}
             accessibilityHint="Returns to the Workout tab"
+            icon={<Dumbbell size={18} color={colors["primary-foreground"]} />}
           >
             Find My Next Challenge
           </Button>
@@ -323,6 +428,7 @@ export function ProgramJourney({
             variant="ghost"
             onPress={onViewLog}
             accessibilityHint="Opens the training log"
+            icon={<Calendar size={16} color={colors.foreground} />}
           >
             View Full Training Log
           </Button>
