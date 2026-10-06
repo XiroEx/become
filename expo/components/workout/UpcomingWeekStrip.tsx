@@ -64,7 +64,9 @@ function StatusIndicator({ status }: { status: WeekStripDayStatus }) {
     case "skipped":
       return <Clock size={14} color={colors.accent} strokeWidth={2} />;
     case "scheduled":
-      return <Dumbbell size={14} color={colors.primary} strokeWidth={2} />;
+      // The web draws the scheduled-workout dumbbell in blue
+      // (`text-blue-500`), not the brand red `--primary`.
+      return <Dumbbell size={14} color={colors.info} strokeWidth={2} />;
     case "quick":
       return <View className="h-2 w-2 rounded-full bg-purple-500" />;
     case "rest":
@@ -211,7 +213,7 @@ export function UpcomingWeekStrip({
       <Card testID={`${testID}-loading`}>
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center gap-2">
-            <Calendar size={18} color={colors.primary} />
+            <Calendar size={18} color={colors.info} />
             <Text className="text-foreground text-base font-semibold">
               Loading schedule…
             </Text>
@@ -234,7 +236,7 @@ export function UpcomingWeekStrip({
       <Card testID={`${testID}-empty`}>
         <View className="flex-row items-center justify-between mb-2">
           <View className="flex-row items-center gap-2">
-            <Calendar size={18} color={colors.primary} />
+            <Calendar size={18} color={colors.info} />
             <Text className="text-foreground text-base font-semibold">
               This Week
             </Text>
@@ -246,8 +248,8 @@ export function UpcomingWeekStrip({
             onPress={() => router.push("/(tabs)/calendar")}
             className="flex-row items-center gap-0.5"
           >
-            <Text className="text-primary text-xs font-semibold">Calendar</Text>
-            <ChevronRight size={14} color={colors.primary} />
+            <Text style={{ color: colors.info }} className="text-xs font-semibold">Calendar</Text>
+            <ChevronRight size={14} color={colors.info} />
           </Pressable>
         </View>
         <View className="py-3 items-center">
@@ -280,7 +282,7 @@ export function UpcomingWeekStrip({
       {/* Header with week label, controls, and calendar link */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">
-          <Calendar size={18} color={colors.primary} />
+          <Calendar size={18} color={colors.info} />
           <Text
             testID="week-strip-label"
             className="text-foreground text-base font-semibold"
@@ -306,9 +308,9 @@ export function UpcomingWeekStrip({
               accessibilityRole="button"
               accessibilityLabel="Today"
               onPress={() => setWeekOffset(0)}
-              className="px-2 py-0.5 rounded-full bg-primary/10"
+              className="px-2 py-0.5 rounded-full bg-blue-500/10"
             >
-              <Text className="text-primary text-xs font-semibold">Today</Text>
+              <Text style={{ color: colors.info }} className="text-xs font-semibold">Today</Text>
             </Pressable>
           )}
 
@@ -329,8 +331,8 @@ export function UpcomingWeekStrip({
             onPress={() => router.push("/(tabs)/calendar")}
             className="flex-row items-center ml-1"
           >
-            <Text className="text-primary text-xs font-semibold">Calendar</Text>
-            <ChevronRight size={14} color={colors.primary} />
+            <Text style={{ color: colors.info }} className="text-xs font-semibold">Calendar</Text>
+            <ChevronRight size={14} color={colors.info} />
           </Pressable>
         </View>
       </View>
@@ -400,7 +402,7 @@ export function UpcomingWeekStrip({
           className="mt-3 flex-row items-center gap-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/20"
         >
           <View className="h-9 w-9 rounded-lg bg-blue-500/20 items-center justify-center">
-            <Dumbbell size={18} color={colors.primary} />
+            <Dumbbell size={18} color={colors.info} />
           </View>
           <View className="flex-1 min-w-0">
             <Text className="text-foreground text-sm font-semibold">
@@ -410,7 +412,7 @@ export function UpcomingWeekStrip({
               {todayWorkout.workoutTitle}
             </Text>
           </View>
-          <ChevronRight size={16} color={colors.primary} />
+          <ChevronRight size={16} color={colors.info} />
         </Pressable>
       )}
     </Card>
