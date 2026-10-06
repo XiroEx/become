@@ -1363,8 +1363,9 @@ function SettingsPageInner() {
 
           {/* Billing. Above the legal block on purpose: the sentence down there
               tells a member to cancel a paid plan before deleting the account,
-              and this is the button that does it. Self-contained — it draws
-              nothing for a member with no subscription. */}
+              and this is the button that does it. Self-contained — it decides
+              for itself whether that button or the note explaining there is no
+              payment method on the account is the honest thing to draw. */}
           <BillingSection />
 
           {/* Legal & support. Settings is where a member looks for these, and
