@@ -107,11 +107,21 @@ Every screen that contains a `TextInput` wraps its content in
 On Android we leave the default (windowSoftInputMode handles it). Affected
 screens:
 
-- `app/(auth)/login.tsx`
 - `app/(app)/(tabs)/chat/[id].tsx`
 - `app/(app)/(tabs)/nutrition/search.tsx`
 - `app/(app)/(tabs)/nutrition/food/[id].tsx`
 - `app/(app)/(tabs)/calendar/settings.tsx`
+
+**`app/(auth)/login.tsx` is the one exception (NP-309).** On a One UI 7 /
+Android 15 device, edge-to-edge enforcement stops `windowSoftInputMode`'s
+resize from happening, so "leave the default" left "Sign in with review code"
+under the keyboard with no hint it was still there. That screen sets
+`behavior="height"` on Android too (computed from the native keyboard-show
+event, not the window resize) and additionally scrolls the focused review-code
+field and its submit button above the keyboard by hand
+(`Keyboard.addListener("keyboardDidShow", …)` + `measureInWindow` +
+`ScrollView.scrollTo`), because Android's `ScrollView` — unlike iOS's — has no
+built-in "scroll the focused `TextInput` into view" behaviour to fall back on.
 
 The `Input` component itself is a thin wrapper around the platform `TextInput`
 — it does NOT manage keyboard avoidance because the surrounding screen knows

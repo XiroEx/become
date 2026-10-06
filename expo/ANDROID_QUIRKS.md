@@ -38,6 +38,15 @@ only-after-confirmation state install the hook with `enabled={hasInProgressWork}
 - **Recipe create** (web-only via Tier-3 deep-link, so no native handler) —
   no native interception needed; deep-link out + browser owns back.
 
+`onBack` is not only for confirm dialogs — it is whatever "back" should mean on
+that screen:
+
+- **Sign-in / sign-up** (`app/(auth)/login.tsx`, NP-309) — "Create account" is
+  `mode` state, not a route, so system back used to fall through to the OS and
+  exit the app, where web's `/register` is its own page and back returns to
+  `/login`. Enabled only while `mode === "register"`, `onBack` flips `mode`
+  back to `"login"` instead.
+
 `makeConfirmOnBack` from the same module returns a stable handler that
 intercepts the first press, calls `onConfirm`, and lets a second press
 through (an Alert with "Discard" / "Keep editing").

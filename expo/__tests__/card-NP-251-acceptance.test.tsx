@@ -65,23 +65,24 @@ beforeEach(() => {
 });
 
 describe("(NP-251) the web header: round back button, brand and tagline", () => {
-  it("draws a round back button beside BECOME and its tagline", () => {
-    const { getByTestId, getByText } = render(<LoginScreen />);
-    const back = getByTestId("login-back-button");
-    expect(back.props.accessibilityRole).toBe("button");
-    expect(back.props.accessibilityLabel).toBe("Back");
+  // NP-309: a reviewer flagged the round back button as inert dead weight at
+  // the auth root (`router.canGoBack()` is always false there) — it is now
+  // HIDDEN with no history instead of drawn-but-broken, and only shown (and
+  // wired to `router.back()`) on the web-only hand-off path where there is one.
+  it("hides the back button when there is no history, brand and tagline still show", () => {
+    const { queryByTestId, getByText } = render(<LoginScreen />);
+    expect(queryByTestId("login-back-button")).toBeNull();
     expect(getByText("BECOME")).toBeTruthy();
     expect(getByText("Transform your body and mind.")).toBeTruthy();
   });
 
-  it("does nothing when there is no history, and goes back when there is", () => {
-    const { getByTestId, rerender } = render(<LoginScreen />);
-    fireEvent.press(getByTestId("login-back-button"));
-    expect(mockBack).not.toHaveBeenCalled();
-
+  it("shows a working back button when there is history to go back to", () => {
     mockCanGoBack.mockReturnValue(true);
-    rerender(<LoginScreen />);
-    fireEvent.press(getByTestId("login-back-button"));
+    const { getByTestId } = render(<LoginScreen />);
+    const back = getByTestId("login-back-button");
+    expect(back.props.accessibilityRole).toBe("button");
+    expect(back.props.accessibilityLabel).toBe("Back");
+    fireEvent.press(back);
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });
