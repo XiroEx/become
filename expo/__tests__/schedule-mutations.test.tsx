@@ -181,7 +181,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-settings-day-2")).toBeTruthy();
     });
 
-    // Toggle Tuesday (2) on, then submit.
+    // Enter edit mode (web's Edit Days), toggle Tuesday (2) on, then submit.
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-day-2"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-submit"));
@@ -254,7 +255,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-card-prog-2")).toBeTruthy();
     });
 
-    // Edit program 2: toggle Saturday (6) and save
+    // Edit program 2: Edit Days, toggle Saturday (6) and save
+    fireEvent.press(getByTestId("schedule-settings-prog-2-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-prog-2-day-6"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-prog-2-submit"));
@@ -322,7 +324,8 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
       expect(getByTestId("schedule-settings-day-2")).toBeTruthy();
     });
 
-    // Toggle Tuesday (2) on and submit
+    // Edit Days, toggle Tuesday (2) on and submit
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
     fireEvent.press(getByTestId("schedule-settings-day-2"));
     await act(async () => {
       fireEvent.press(getByTestId("schedule-settings-submit"));
