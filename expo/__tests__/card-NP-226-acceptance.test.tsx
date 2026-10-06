@@ -125,9 +125,12 @@ describe("(id: e5cecfd9) Opening a quick session live saves it as started kind '
     );
 
     // The session renders — and the opening save already reached the server
-    // with no set touched (no input was ever changed in this test).
+    // with no set touched (no input was ever changed in this test). It opens
+    // on Live now (NP-291), so the readiness signal is the Live exercise card.
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
     await waitFor(() => {
       expect(workoutPosts(calls).length).toBeGreaterThan(0);
@@ -189,9 +192,11 @@ describe("(id: e5cecfdb) A session reopened with no local draft is rebuilt from 
       <QuickLiveRoute store={store} fetchImpl={fetchImpl} />,
     );
 
-    // The empty stash rebuilt from the server log and rendered it.
+    // The empty stash rebuilt from the server log and rendered it (on Live).
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
     expect(
       calls.some(
@@ -229,24 +234,26 @@ describe("(id: e5cecfda) Finishing asks for a name; Skip saves the web's fallbac
     );
 
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
 
     // Log the one set: weight + reps ticks it done, which reveals Finish.
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-weight"),
+        getByTestId("live-workout-live-bench-press-set-0-weight"),
         "135",
       );
     });
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-reps"),
+        getByTestId("live-workout-live-bench-press-set-0-reps"),
         "8",
       );
     });
     await act(async () => {
-      fireEvent.press(getByTestId("live-workout-finish"));
+      fireEvent.press(getByTestId("live-workout-live-complete"));
     });
     // NP-138: a self-built session this thin asks once on the way out.
     await act(async () => {
@@ -325,24 +332,26 @@ describe("(id: e5cecfdc) A repeat never overwrites its source log", () => {
     );
 
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
 
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-weight"),
+        getByTestId("live-workout-live-bench-press-set-0-weight"),
         "135",
       );
     });
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-reps"),
+        getByTestId("live-workout-live-bench-press-set-0-reps"),
         "8",
       );
     });
     // A repeat already has an identity, so it finishes directly — no prompt.
     await act(async () => {
-      fireEvent.press(getByTestId("live-workout-finish"));
+      fireEvent.press(getByTestId("live-workout-live-complete"));
     });
     // NP-138: a self-built session this thin asks once on the way out.
     await act(async () => {

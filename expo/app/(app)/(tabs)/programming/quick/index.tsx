@@ -65,7 +65,9 @@ import {
  * no `performedAt`, and the scheduled date stays where it was). A repeat
  * reopened under a fresh id keeps its `sourceSessionId`, so a rename also
  * patches the original log's title without touching its recorded exercises,
- * date or completion state. Share stays with NP-165. After a Log it the
+ * date or completion state. Share sits in the header row beside Edit / Log
+ * or plan (NP-165), matching the web's Back / Edit / Log or plan / Share
+ * top bar rather than standing alone under the title. After a Log it the
  * stash and progress are cleared; after a Plan it the member lands back on
  * the Workout tab.
  */
@@ -471,7 +473,10 @@ export default function QuickSessionOverviewRoute() {
               Back
             </Text>
           </Pressable>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+          <View
+            testID="quick-session-overview-header-actions"
+            style={{ flexDirection: "row", gap: 8 }}
+          >
             <Pressable
               testID="quick-session-overview-edit-toggle"
               accessibilityRole="button"
@@ -544,6 +549,13 @@ export default function QuickSessionOverviewRoute() {
                 Log or plan
               </Text>
             </Pressable>
+            {sessionShareBody ? (
+              <NativeShareButton
+                body={sessionShareBody}
+                getToken={() => token ?? undefined}
+                testID="quick-session-overview-share"
+              />
+            ) : null}
           </View>
         </View>
 
@@ -687,15 +699,6 @@ export default function QuickSessionOverviewRoute() {
           >
             {session.title}
           </Text>
-          {sessionShareBody ? (
-            <View style={{ marginTop: 8, alignItems: "flex-start" }}>
-              <NativeShareButton
-                body={sessionShareBody}
-                getToken={() => token ?? undefined}
-                testID="quick-session-overview-share"
-              />
-            </View>
-          ) : null}
           <Text
             style={{
               marginTop: 4,

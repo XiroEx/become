@@ -258,17 +258,19 @@ describe("(id: np290-saved-name) The summary shows the name just typed, not the 
     );
 
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
 
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-press-set-0-weight"), "135");
+      fireEvent.changeText(getByTestId("live-workout-live-bench-press-set-0-weight"), "135");
     });
     await act(async () => {
-      fireEvent.changeText(getByTestId("live-workout-bench-press-set-0-reps"), "8");
+      fireEvent.changeText(getByTestId("live-workout-live-bench-press-set-0-reps"), "8");
     });
     await act(async () => {
-      fireEvent.press(getByTestId("live-workout-finish"));
+      fireEvent.press(getByTestId("live-workout-live-complete"));
     });
     await act(async () => {
       fireEvent.press(getByTestId("quick-live-thin-session-finish"));
