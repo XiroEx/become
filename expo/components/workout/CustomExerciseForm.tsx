@@ -11,7 +11,9 @@ import {
   CUSTOM_EXERCISE_MUSCLE_GROUPS,
   CUSTOM_EXERCISE_MUSCLE_GROUP_LABELS,
   CUSTOM_EXERCISE_ROLES,
+  CUSTOM_EXERCISE_ROLE_HINTS,
   CUSTOM_EXERCISE_ROLE_LABELS,
+  CUSTOM_EXERCISE_TRACKING_HINTS,
   CUSTOM_EXERCISE_TRACKING_LABELS,
   CUSTOM_EXERCISE_TRACKING_TYPES,
   applyCategoryChange,
@@ -54,7 +56,7 @@ export function CustomExerciseForm({
   onCancel,
   testID = "custom-exercise-form",
 }: CustomExerciseFormProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const set = <K extends keyof CustomExerciseFormValues>(
     key: K,
@@ -104,13 +106,16 @@ export function CustomExerciseForm({
                     paddingVertical: 8,
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.card : "transparent",
+                    borderColor: active ? colors.success : colors.border,
+                    backgroundColor: active ? tint("success", 0.1) : "transparent",
                   },
                 ]}
               >
                 <Text className="text-foreground text-xs font-medium">
                   {CUSTOM_EXERCISE_TRACKING_LABELS[tracking]}
+                </Text>
+                <Text className="text-muted-foreground text-xs">
+                  {CUSTOM_EXERCISE_TRACKING_HINTS[tracking]}
                 </Text>
               </Pressable>
             );
@@ -140,8 +145,8 @@ export function CustomExerciseForm({
                     paddingVertical: 4,
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.card : "transparent",
+                    borderColor: active ? colors.success : colors.border,
+                    backgroundColor: active ? tint("success", 0.1) : "transparent",
                     justifyContent: "center",
                   },
                 ]}
@@ -175,8 +180,8 @@ export function CustomExerciseForm({
                     paddingVertical: 4,
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.card : "transparent",
+                    borderColor: active ? colors.success : colors.border,
+                    backgroundColor: active ? tint("success", 0.1) : "transparent",
                     justifyContent: "center",
                   },
                 ]}
@@ -210,22 +215,28 @@ export function CustomExerciseForm({
                 onPress={() => set("role", role)}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
-                accessibilityLabel={CUSTOM_EXERCISE_ROLE_LABELS[role]}
+                accessibilityLabel={`${CUSTOM_EXERCISE_ROLE_LABELS[role]} — ${CUSTOM_EXERCISE_ROLE_HINTS[role]}`}
                 style={[
                   minTouchTarget,
                   {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
                     paddingHorizontal: 10,
                     paddingVertical: 4,
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: active ? colors.primary : colors.border,
-                    backgroundColor: active ? colors.card : "transparent",
+                    borderColor: active ? colors.success : colors.border,
+                    backgroundColor: active ? tint("success", 0.1) : "transparent",
                     justifyContent: "center",
                   },
                 ]}
               >
                 <Text className="text-foreground text-xs font-medium">
                   {CUSTOM_EXERCISE_ROLE_LABELS[role]}
+                </Text>
+                <Text className="text-muted-foreground text-xs">
+                  {CUSTOM_EXERCISE_ROLE_HINTS[role]}
                 </Text>
               </Pressable>
             );
@@ -256,7 +267,9 @@ export function CustomExerciseForm({
       </View>
 
       {/* Advanced detail (exact muscles, equipment, movement) stays on the web
-          with demo upload and trim — this discloses that instead of faking it. */}
+          with demo upload and trim — this discloses that instead of faking it.
+          Web's own collapsed subtitle ("Exact muscles, equipment & movement",
+          `CustomExerciseFields.tsx`) rides along here too (NP-276). */}
       <Pressable
         testID={`${testID}-advanced-toggle`}
         onPress={() => setAdvancedOpen((open) => !open)}
@@ -265,10 +278,16 @@ export function CustomExerciseForm({
         accessibilityLabel="Advanced details"
         style={[minTouchTarget, { justifyContent: "center" }]}
       >
-        <Text className="text-muted-foreground text-xs">
+        <Text className="text-foreground text-xs font-medium">
+          Advanced <Text className="text-muted-foreground font-normal">· optional</Text>
+        </Text>
+        <Text
+          testID={`${testID}-advanced-hint`}
+          className="text-muted-foreground text-[11px]"
+        >
           {advancedOpen
-            ? "Advanced · optional — exact muscles, equipment and movement stay on the web"
-            : "Advanced · optional"}
+            ? "Exact muscles, equipment and movement stay on the web"
+            : "Exact muscles, equipment & movement"}
         </Text>
       </Pressable>
       {advancedOpen ? (
