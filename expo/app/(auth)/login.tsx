@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   AppState,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   View,
   type AppStateStatus,
 } from "react-native";
@@ -23,7 +25,7 @@ import {
   type AuthMode,
   type SendLinkRequest,
 } from "@become/api-client";
-import { CONSENT_STATEMENT } from "@become/core";
+import { CONSENT_STATEMENT, LEGAL_MINIMUM_AGE } from "@become/core";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import AppleSignInButton, {
@@ -50,8 +52,23 @@ import {
   type PendingSessionStore,
   AUTH_LINK_MAX_AGE_MS,
 } from "@/lib/auth/pendingAuthSession";
-import { Check } from "lucide-react-native";
+import { ArrowLeft, Check, Mail } from "lucide-react-native";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
+import {
+  defaultBrowserLauncher,
+  type BrowserLauncher,
+} from "@/lib/web/browserLauncher";
+import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
+
+/**
+ * The web header (`webapp/components/Header.tsx`) reads these from env vars
+ * with these exact literals as the fallback; native has no landing page to
+ * carry an env-driven brand name, so the fallback IS the value here (NP-251).
+ */
+const BRAND_NAME = "BECOME";
+const BRAND_TAGLINE = "Transform your body and mind.";
 
 /** Default poll cadence for the magic-link fallback (mirrors the webapp). */
 const POLL_INTERVAL_MS = 2000;
@@ -128,6 +145,8 @@ export interface LoginScreenProps {
   ) => () => void;
   now?: () => number;
   initialMode?: AuthMode;
+  /** DI hook for tests — opens the Terms/Privacy/footer legal links. */
+  launcher?: BrowserLauncher;
 }
 
 export default function LoginScreen({
@@ -146,8 +165,10 @@ export default function LoginScreen({
   subscribeToAppState,
   now,
   initialMode,
+  launcher = defaultBrowserLauncher,
 }: LoginScreenProps = {}) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
+  const reducedMotion = useReducedMotion();
   const router = useRouter();
   const auth = useAuth();
   const params = useLocalSearchParams<{ mode?: string }>();
@@ -230,6 +251,67 @@ export default function LoginScreen({
   // Why the member is looking at this screen. After a 401 it says the session
   // ended instead of leaving them to guess why they were thrown out.
   const sessionMessage = signOutMessage(auth.signedOutReason ?? null);
+
+  // Mirrors webapp/lib/authPageMode.ts's getAuthPageCopy — the heading and
+  // welcome copy the web card draws above the form (NP-251).
+  const authCopy =
+    mode === "register"
+      ? {
+          heading: "Create account",
+          welcome:
+            "Start your transformation. Create a free account to get going.",
+        }
+      : {
+          heading: "Sign in",
+          welcome: "Welcome back. Sign in to pick up where you left off.",
+        };
+
+  // The round back button in the web header (webapp/components/Header.tsx,
+  // backButton=true) always leads to the marketing home page. Native has no
+  // such page behind sign-in — a cold launch replaces straight into this
+  // screen — so there is nothing to go back to unless something actually
+  // pushed this screen onto the stack (e.g. a web-only hand-off). The button
+  // is drawn either way for visual parity; it is simply inert when there is
+  // no history.
+  const handleBack = (): void => {
+    if (router.canGoBack()) router.back();
+  };
+
+  // Opens a legal page (Terms, Privacy) in the in-app browser. Same shape as
+  // components/auth/ConsentSheet.tsx's onOpenLink.
+  const onOpenLink = useCallback(
+    (path: string) => {
+      void launcher(`${LEGAL_BASE_URL}${path}`);
+    },
+    [launcher],
+  );
+
+  // The waiting dot on the green "Check your email" card. A real loop
+  // (Animated, not moti/Reanimated, so lib/a11y/reducedMotion's build rule
+  // does not apply) that respects Reduce Motion by holding still instead.
+  const waitingDotOpacity = useMemo(() => new Animated.Value(1), []);
+  useEffect(() => {
+    if (!submitted || reducedMotion) {
+      waitingDotOpacity.setValue(1);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(waitingDotOpacity, {
+          toValue: 0.25,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+        Animated.timing(waitingDotOpacity, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [submitted, reducedMotion, waitingDotOpacity]);
 
   // Already signed in — a saved session restored while this screen was the
   // route (a deep link, a back stack) must not strand them on sign-in.
@@ -559,6 +641,22 @@ export default function LoginScreen({
     setError(null);
   };
 
+  /**
+   * The sign-in/sign-up toggle, moved (NP-251) so it reads below the green
+   * "Check your email" card too, matching webapp/components/AuthScreen.tsx —
+   * there it is an ordinary navigation to the other pathname, which cannot
+   * leave a stale poller running. Here `mode` is state, not a route, so a
+   * press while a link is still out has to tear the pending session down
+   * first or it would keep polling a session nobody can see any more.
+   */
+  const handleToggleMode = async (): Promise<void> => {
+    if (submitted) {
+      await handleChangeEmail();
+    }
+    setMode((m: AuthMode) => (m === "login" ? "register" : "login"));
+    setError(null);
+  };
+
   // Polling fallback: once the email is sent, poll check-session until verified,
   // expired, or 15 minutes old.
   useEffect(() => {
@@ -622,57 +720,170 @@ export default function LoginScreen({
         style={{ flex: 1 }}
         testID="login-screen-kav"
       >
-        <View className="flex-1 items-center justify-center px-6">
-          <Text
-            accessibilityRole="header"
-            className="text-foreground text-3xl font-bold mb-2"
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingHorizontal: 24,
+            paddingTop: 24,
+            paddingBottom: 40,
+          }}
+        >
+          {/* THE WEB HEADER (webapp/components/Header.tsx, backButton=true):
+              a round back button beside the brand name and tagline, replacing
+              the centred "Become" wordmark this screen drew on its own
+              (NP-251). */}
+          <View
+            testID="login-header"
+            className="flex-row items-center gap-3 mb-6"
           >
-            Become
-          </Text>
-          <Text className="text-muted-foreground text-base mb-6">
-            {mode === "register"
-              ? "Create an account"
-              : "Sign in with a magic link"}
-          </Text>
-          {sessionMessage ? (
-            <Text
-              testID="login-session-ended"
-              accessibilityRole="alert"
-              accessibilityLiveRegion="assertive"
-              className="text-destructive text-center mb-4"
+            <Pressable
+              testID="login-back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={handleBack}
+              style={{
+                height: 56,
+                width: 56,
+                borderRadius: 28,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {sessionMessage}
-            </Text>
-          ) : null}
-          {submitted ? (
-            <View
-              testID="login-submitted"
-              accessibilityLiveRegion="polite"
-              style={{ width: "100%" }}
-            >
+              <ArrowLeft size={22} color={colors.foreground} />
+            </Pressable>
+            <View className="flex-1">
               <Text
-                accessibilityRole="header"
-                className="text-foreground text-center mb-2"
+                className="text-foreground text-xl font-bold"
+                style={WRAPPABLE_TEXT}
               >
-                Check your inbox
+                {BRAND_NAME}
               </Text>
-              <Text className="text-muted-foreground text-center text-sm mb-2">
-                {mode === "register"
-                  ? `We sent a sign-up link to ${email}. Tap it on your phone to complete your registration — we'll pick it up automatically.`
-                  : `We sent a sign-in link to ${email}. Tap it on your phone to continue — we'll pick it up automatically.`}
-              </Text>
-              <Text className="text-muted-foreground text-center text-xs mb-6">
-                The link expires in 15 minutes.
-              </Text>
-              <Button
-                testID="login-change-email"
-                variant="ghost"
-                onPress={handleChangeEmail}
+              <Text
+                className="text-muted-foreground text-xs"
+                style={WRAPPABLE_TEXT}
               >
-                Use a different email
-              </Button>
+                {BRAND_TAGLINE}
+              </Text>
             </View>
-          ) : appleOffer ? (
+          </View>
+
+          {/* THE CARD (webapp/components/AuthScreen.tsx's <main>): title,
+              welcome copy, the form or the sent state, the mode toggle, the
+              legal line and the footer links all live together here. */}
+          <View
+            testID="login-card"
+            className="rounded-2xl border border-border bg-card p-5"
+          >
+            <Text
+              testID="login-heading"
+              accessibilityRole="header"
+              className="text-foreground text-2xl font-bold mb-2"
+              style={WRAPPABLE_TEXT}
+            >
+              {authCopy.heading}
+            </Text>
+            <Text className="text-muted-foreground text-sm mb-6">
+              {authCopy.welcome}
+            </Text>
+
+            {sessionMessage ? (
+              <Text
+                testID="login-session-ended"
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
+                className="text-destructive text-center mb-4"
+              >
+                {sessionMessage}
+              </Text>
+            ) : null}
+            {submitted ? (
+              <View
+                testID="login-submitted"
+                accessibilityLiveRegion="polite"
+                style={{ width: "100%" }}
+              >
+                {/* THE GREEN "CHECK YOUR EMAIL" CARD — mirrors
+                    webapp/components/AuthForm.tsx's emailSent branch: a mail
+                    icon, the heading, the address, the expiry note and a
+                    pulsing "Waiting for verification..." dot. */}
+                <View
+                  testID="login-sent-card"
+                  style={{
+                    backgroundColor: tint("success", 0.12),
+                    borderWidth: 1,
+                    borderColor: tint("success", 0.35),
+                    borderRadius: 12,
+                    padding: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: 48,
+                      width: 48,
+                      borderRadius: 24,
+                      backgroundColor: tint("success", 0.2),
+                      alignItems: "center",
+                      justifyContent: "center",
+                      marginBottom: 12,
+                    }}
+                  >
+                    <Mail size={22} color={colors.success} />
+                  </View>
+                  <Text className="text-foreground text-lg font-semibold text-center mb-2">
+                    Check your email
+                  </Text>
+                  <Text className="text-muted-foreground text-sm text-center">
+                    We sent a verification link to
+                  </Text>
+                  <Text
+                    testID="login-sent-email"
+                    className="text-foreground text-sm font-medium text-center mb-3"
+                  >
+                    {email}
+                  </Text>
+                  <Text className="text-muted-foreground text-xs text-center mb-3">
+                    Click the link in the email to{" "}
+                    {mode === "register"
+                      ? "complete your registration"
+                      : "sign in"}
+                    . The link expires in 15 minutes.
+                  </Text>
+                  <View className="flex-row items-center justify-center gap-2">
+                    <Animated.View
+                      testID="login-waiting-dot"
+                      className="h-2 w-2 rounded-full bg-green-500"
+                      style={{ opacity: waitingDotOpacity }}
+                    />
+                    <Text
+                      className="text-muted-foreground text-xs"
+                      style={WRAPPABLE_TEXT}
+                    >
+                      Waiting for verification...
+                    </Text>
+                  </View>
+                </View>
+
+                <Pressable
+                  testID="login-change-email"
+                  accessibilityRole="button"
+                  accessibilityLabel="Use a different email"
+                  onPress={handleChangeEmail}
+                  style={[
+                    minTouchTarget,
+                    { alignSelf: "center", alignItems: "center", justifyContent: "center" },
+                  ]}
+                  className="mt-4"
+                >
+                  <Text className="text-muted-foreground text-sm underline">
+                    Use a different email
+                  </Text>
+                </Pressable>
+              </View>
+            ) : appleOffer ? (
             /* Signed in with Apple, holding the session back. See appleOffer. */
             <View testID="apple-link-offer" style={{ width: "100%" }}>
               <Text
@@ -757,26 +968,54 @@ export default function LoginScreen({
                       />
                     )}
                   </View>
-                  <Text className="text-muted-foreground text-xs leading-5 flex-1">
-                    {CONSENT_STATEMENT}
+                  <Text className="text-foreground text-xs leading-5 flex-1">
+                    I am at least {LEGAL_MINIMUM_AGE} years old, and I agree to the{" "}
+                    <Text
+                      testID="consent-terms-link"
+                      accessibilityRole="link"
+                      accessibilityLabel="Terms of Service"
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        onOpenLink("/terms");
+                      }}
+                      style={minTouchTarget}
+                      className="font-medium text-foreground underline"
+                    >
+                      Terms of Service
+                    </Text>
+                    {" and the "}
+                    <Text
+                      testID="consent-privacy-link"
+                      accessibilityRole="link"
+                      accessibilityLabel="Privacy Policy"
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        onOpenLink("/privacy");
+                      }}
+                      style={minTouchTarget}
+                      className="font-medium text-foreground underline"
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
                   </Text>
                 </Pressable>
               )}
 
               <View style={{ height: 12 }} />
+              {/* THE PRIMARY BUTTON. Black, "Continue with email" on both
+                  modes, exactly like webapp/components/AuthForm.tsx's
+                  `bg-zinc-900 dark:bg-white` submit button (NP-251) — a magic
+                  link is sent either way, so the copy no longer has to say
+                  which mode sent it. */}
               <Button
                 testID="login-submit"
+                variant="inverted"
                 onPress={handleSubmit}
                 disabled={sending || (mode === "register" && !consent)}
-                accessibilityLabel={
-                  mode === "register" ? "Create account" : "Send magic link"
-                }
+                accessibilityLabel="Continue with email"
               >
-                {sending
-                  ? "Sending…"
-                  : mode === "register"
-                    ? "Create account"
-                    : "Send magic link"}
+                {sending ? "Sending…" : "Continue with email"}
               </Button>
 
               {/* THE OTHER WAYS IN. The divider is unconditional now, because
@@ -791,11 +1030,11 @@ export default function LoginScreen({
                 <View className="flex-1 h-px bg-border" />
               </View>
 
-              <GoogleSignInButton
-                intent={mode === "register" ? "sign-up" : "sign-in"}
-                onPress={onGooglePress}
-                disabled={googleBusy}
-              />
+              {/* "Continue with Google" on both modes — webapp's Google
+                  button never varies by mode either (NP-251). Apple's button
+                  below keeps its own sign-in/sign-up wording: Apple draws it,
+                  and the web has no Apple button on this screen to match. */}
+              <GoogleSignInButton onPress={onGooglePress} disabled={googleBusy} />
               {googleBusy ? (
                 <Text
                   testID="google-sign-in-busy"
@@ -849,40 +1088,6 @@ export default function LoginScreen({
                   </View>
                 )}
 
-              <Pressable
-                testID="login-mode-toggle"
-                accessibilityRole="button"
-                accessibilityLabel={
-                  mode === "login"
-                    ? "Don't have an account? Create one"
-                    : "Already have an account? Sign in"
-                }
-                style={minTouchTarget}
-                onPress={() => {
-                  setMode((m) => (m === "login" ? "register" : "login"));
-                  setError(null);
-                }}
-                className="mt-4 py-2 items-center justify-center"
-              >
-                <Text className="text-muted-foreground text-sm text-center">
-                  {mode === "login" ? (
-                    <>
-                      Don&apos;t have an account?{" "}
-                      <Text className="text-foreground font-semibold">
-                        Create one
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      Already have an account?{" "}
-                      <Text className="text-foreground font-semibold">
-                        Sign in
-                      </Text>
-                    </>
-                  )}
-                </Text>
-              </Pressable>
-
               {/* App reviewers. See REVIEW_SIGN_IN_PATH above for why this
                   exists: a reviewer must be able to sign in, and there is no
                   inbox here for a magic link. Sign-in mode only. */}
@@ -931,7 +1136,88 @@ export default function LoginScreen({
                 ))}
             </View>
           )}
-        </View>
+
+            {/* THE MODE TOGGLE, THE LEGAL LINE AND THE FOOTER LINKS — all
+                rendered by webapp/components/AuthScreen.tsx itself, so they
+                sit below the form AND below the green "Check your email"
+                card alike (NP-251). Not drawn over the Apple-link offer,
+                which is a native-only detour with no "mode" of its own. */}
+            {!appleOffer && (
+              <>
+                <Pressable
+                  testID="login-mode-toggle"
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    mode === "login"
+                      ? "Don't have an account? Create one"
+                      : "Already have an account? Sign in"
+                  }
+                  style={minTouchTarget}
+                  onPress={() => {
+                    void handleToggleMode();
+                  }}
+                  className="mt-4 py-2 items-center justify-center"
+                >
+                  <Text className="text-muted-foreground text-sm text-center">
+                    {mode === "login" ? (
+                      <>
+                        Don&apos;t have an account?{" "}
+                        <Text className="text-foreground font-semibold">
+                          Create one
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        Already have an account?{" "}
+                        <Text className="text-foreground font-semibold">
+                          Sign in
+                        </Text>
+                      </>
+                    )}
+                  </Text>
+                </Pressable>
+
+                <View
+                  className="mt-4 pt-4 border-t border-border"
+                  testID="login-legal"
+                >
+                  {/* webapp/components/AuthScreen.tsx: "Registering here IS
+                      the moment of agreement, so the terms have to be
+                      reachable from this screen." */}
+                  <Text className="text-muted-foreground text-xs leading-5">
+                    By continuing you agree to the{" "}
+                    <Text
+                      testID="login-terms-link"
+                      accessibilityRole="link"
+                      accessibilityLabel="Terms of Service"
+                      onPress={() => onOpenLink("/terms")}
+                      style={minTouchTarget}
+                      className="font-medium text-foreground underline"
+                    >
+                      Terms of Service
+                    </Text>
+                    {" and the "}
+                    <Text
+                      testID="login-privacy-link"
+                      accessibilityRole="link"
+                      accessibilityLabel="Privacy Policy"
+                      onPress={() => onOpenLink("/privacy")}
+                      style={minTouchTarget}
+                      className="font-medium text-foreground underline"
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
+                  </Text>
+                  <LegalLinks
+                    testID="login-footer-legal-links"
+                    launcher={launcher}
+                  />
+                </View>
+              </>
+            )}
+          </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

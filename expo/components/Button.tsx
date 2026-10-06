@@ -9,7 +9,12 @@ import {
 } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 
-export type ButtonVariant = "primary" | "secondary" | "destructive" | "ghost";
+export type ButtonVariant =
+  | "primary"
+  | "secondary"
+  | "destructive"
+  | "ghost"
+  | "inverted";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps {
@@ -36,6 +41,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   secondary: "bg-muted",
   destructive: "bg-destructive",
   ghost: "bg-transparent border border-border",
+  // The web's `bg-zinc-900 dark:bg-white` submit button on the sign-in /
+  // sign-up screen (NP-251): foreground on background, which is already the
+  // light/dark-inverted pair every other token follows, so no new colour
+  // literal is needed to match it.
+  inverted: "bg-foreground",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -43,6 +53,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   secondary: "text-foreground",
   destructive: "text-destructive-foreground",
   ghost: "text-foreground",
+  inverted: "text-background",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -121,7 +132,9 @@ export function Button({
             color={
               variant === "primary" || variant === "destructive"
                 ? colors["primary-foreground"]
-                : colors.foreground
+                : variant === "inverted"
+                  ? colors.background
+                  : colors.foreground
             }
           />
         </View>
