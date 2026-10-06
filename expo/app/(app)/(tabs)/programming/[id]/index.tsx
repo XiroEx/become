@@ -485,6 +485,25 @@ export default function ProgramDetailRoute() {
     );
   }, [router, id, activeProgram?.currentPhase, activeProgram?.currentDay, program.phases]);
 
+  // NP-284: Schedule and Training Log were unreachable once enrolled — the
+  // web links straight to this program's schedule and to the workouts tab of
+  // Progress (`/dashboard/progress#workouts`).
+  const onOpenSchedule = useCallback(() => {
+    router.push(`/(tabs)/programming/${encodeURIComponent(id)}/schedule`);
+  }, [router, id]);
+
+  const onOpenTrainingLog = useCallback(() => {
+    router.push("/progress" as never);
+  }, [router]);
+
+  const onBack = useCallback(() => {
+    router.back();
+  }, [router]);
+
+  const onOpenCalendar = useCallback(() => {
+    router.push("/(tabs)/calendar");
+  }, [router]);
+
   if (!id) {
     return (
       <SafeAreaView
@@ -515,6 +534,7 @@ export default function ProgramDetailRoute() {
         program={program}
         isEnrolled={isEnrolled}
         activeProgram={activeProgram}
+        activeProgramLoading={active.loading}
         completedDays={completedDays}
         hasInProgressWorkout={hasInProgressWorkout}
         selectedPhaseIndex={selectedPhaseIndex}
@@ -529,6 +549,10 @@ export default function ProgramDetailRoute() {
         onAbandon={onAbandon}
         onPauseResume={onPauseResume}
         onShift={onShift}
+        onOpenSchedule={onOpenSchedule}
+        onOpenTrainingLog={onOpenTrainingLog}
+        onBack={onBack}
+        onOpenCalendar={onOpenCalendar}
         isSaved={isSaved}
         onToggleSave={onToggleSave}
         onEdit={isOwner ? onEdit : undefined}

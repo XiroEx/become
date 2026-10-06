@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Image, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { ChevronDown, ChevronUp, Dumbbell, Play } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { FramedVideo } from "@/components/FramedVideo";
@@ -90,7 +90,7 @@ export function ExerciseAccordion({
   onPlayPress,
   testID = "program-detail",
 }: ExerciseAccordionProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<AccordionTab>("video");
 
@@ -114,8 +114,7 @@ export function ExerciseAccordion({
 
   const repsText = exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : "";
   const setsReps = exercise.sets ? `${exercise.sets} sets${repsText ? ` · ${repsText}` : ""}` : repsText;
-  const restText = exercise.rest ? ` · ${exercise.rest} rest` : "";
-  const prescription = `${setsReps}${restText}`;
+  const hasPrescription = Boolean(setsReps || exercise.rest);
 
   const tabs: { key: AccordionTab; label: string }[] = [
     { key: "video", label: "Video" },
@@ -155,29 +154,25 @@ export function ExerciseAccordion({
           padding: 12,
         }}
       >
-        {exercise.thumbnailUrl ? (
-          <Image
-            source={{ uri: exercise.thumbnailUrl }}
-            accessibilityLabel={`${exercise.name} thumbnail`}
-            testID={`${testID}-exercise-thumb-${exercise.slug}`}
-            style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: colors.muted }}
-          />
-        ) : (
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: colors.muted,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>
-              {index + 1}
-            </Text>
-          </View>
-        )}
+        {/* Exercise number — ALWAYS a filled number circle, never a thumbnail
+            square: the web numbers every row the same way regardless of
+            whether the exercise carries a thumbnail (that image only shows up
+            inside the expanded video tab). */}
+        <View
+          testID={`${testID}-exercise-number-${exercise.slug}`}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: colors.success,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors["primary-foreground"] }}>
+            {index + 1}
+          </Text>
+        </View>
 
         <View style={{ flex: 1 }}>
           <Text
@@ -186,9 +181,15 @@ export function ExerciseAccordion({
           >
             {exercise.name}
           </Text>
-          {prescription ? (
+          {hasPrescription ? (
             <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
-              {prescription}
+              {setsReps}
+              {exercise.rest ? (
+                <>
+                  {setsReps ? " · " : ""}
+                  <Text style={{ color: colors.success }}>{exercise.rest} rest</Text>
+                </>
+              ) : null}
             </Text>
           ) : null}
           {exercise.details && !isExpanded ? (
@@ -201,28 +202,30 @@ export function ExerciseAccordion({
           ) : null}
         </View>
 
-        {exercise.videoUrl ? (
-          <Pressable
-            testID={`${testID}-exercise-demo-${exercise.slug}`}
-            accessibilityLabel={`${exercise.name} demo video`}
-            accessibilityRole="button"
-            onPress={(e) => {
-              e?.stopPropagation?.();
-              handleVideoClick();
-            }}
-            style={{
-              padding: 8,
-              borderRadius: 20,
-              backgroundColor: isPlaying ? colors.primary : colors.muted,
-            }}
-          >
-            <Play
-              size={14}
-              color={isPlaying ? colors["primary-foreground"] : colors.primary}
-              fill={isPlaying ? colors["primary-foreground"] : colors.primary}
-            />
-          </Pressable>
-        ) : null}
+        {/* Play/demo button — ALWAYS rendered (web shows it on every row and
+            opens the video tab even when there is no demo yet; FramedVideo
+            draws its own "demo is coming" placeholder in that case), grey by
+            default to match the web's `bg-zinc-100 text-zinc-400`. */}
+        <Pressable
+          testID={`${testID}-exercise-demo-${exercise.slug}`}
+          accessibilityLabel={`${exercise.name} demo video`}
+          accessibilityRole="button"
+          onPress={(e) => {
+            e?.stopPropagation?.();
+            handleVideoClick();
+          }}
+          style={{
+            padding: 8,
+            borderRadius: 20,
+            backgroundColor: isPlaying ? tint("success", 0.2) : colors.muted,
+          }}
+        >
+          <Play
+            size={14}
+            color={isPlaying ? colors.success : colors["muted-foreground"]}
+            fill={isPlaying ? colors.success : colors["muted-foreground"]}
+          />
+        </Pressable>
 
         <View style={{ padding: 4 }}>
           {isExpanded ? (

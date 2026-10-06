@@ -25,29 +25,45 @@ describe("ExerciseAccordion", () => {
     videoUrl: "https://cdn.example.com/squat-demo.mp4",
   };
 
-  it("renders collapsed row with thumbnail, name, prescription, and play button", () => {
+  it("renders collapsed row with a green number circle, name, prescription (rest in green), and play button — even with a thumbnail", () => {
     const { getByTestId, getByText } = render(
       <ExerciseAccordion exercise={sampleExercise} index={0} testID="test-acc" />,
     );
 
     expect(getByTestId("test-acc-exercise-barbell-squat")).toBeTruthy();
-    expect(getByTestId("test-acc-exercise-thumb-barbell-squat")).toBeTruthy();
+    // Web numbers every row the same way regardless of thumbnailUrl — no
+    // thumbnail square on the collapsed row, only the number circle.
+    expect(getByTestId("test-acc-exercise-number-barbell-squat")).toBeTruthy();
+    expect(getByText("1")).toBeTruthy();
     expect(getByTestId("test-acc-exercise-name-barbell-squat").props.children).toBe("Barbell Back Squat");
     expect(getByText("3 sets · 8-10 reps · 120s rest")).toBeTruthy();
     expect(getByTestId("test-acc-exercise-demo-barbell-squat")).toBeTruthy();
   });
 
-  it("renders number badge when thumbnail is absent", () => {
+  it("renders the number circle for every row regardless of thumbnailUrl", () => {
     const withoutThumb: ProgramExerciseDetail = {
       ...sampleExercise,
       thumbnailUrl: null,
     };
-    const { getByText, queryByTestId } = render(
+    const { getByText, getByTestId } = render(
       <ExerciseAccordion exercise={withoutThumb} index={2} testID="test-acc" />,
     );
 
     expect(getByText("3")).toBeTruthy();
-    expect(queryByTestId("test-acc-exercise-thumb-barbell-squat")).toBeNull();
+    expect(getByTestId("test-acc-exercise-number-barbell-squat")).toBeTruthy();
+  });
+
+  it("renders the play button even when there is no video yet", () => {
+    const noVideo: ProgramExerciseDetail = {
+      ...sampleExercise,
+      videoUrl: null,
+      thumbnailUrl: null,
+    };
+    const { getByTestId } = render(
+      <ExerciseAccordion exercise={noVideo} index={0} testID="test-acc" />,
+    );
+
+    expect(getByTestId("test-acc-exercise-demo-barbell-squat")).toBeTruthy();
   });
 
   it("does not render expanded content when collapsed", () => {
