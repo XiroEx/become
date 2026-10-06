@@ -578,3 +578,123 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     expect(queryByTestId("estimate-sheet-chooser")).toBeNull();
   });
 });
+
+describe("EstimateSheet review polish (NP-322)", () => {
+  it("shows the web's 'Your plate' header (icon, subtitle, X) outside the describe phase", () => {
+    const onClose = jest.fn();
+    const { getByTestId, getByText } = renderSheet({ onClose });
+    expect(getByTestId("estimate-sheet-header")).toBeTruthy();
+    expect(getByText("Your plate")).toBeTruthy();
+    expect(getByText("AI estimate — tweak before logging")).toBeTruthy();
+    fireEvent.press(getByTestId("estimate-sheet-close"));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("de-dupes tag options case-insensitively, keeping defaults first — each chip renders once", () => {
+    const { getByTestId, getAllByTestId } = render(
+      <EstimateSheet
+        visible
+        onClose={() => {}}
+        onLogged={() => {}}
+        tag="snack"
+        tagOptions={[
+          "Breakfast",
+          "Lunch",
+          "Dinner",
+          "Snack",
+          "Pre-Workout",
+          "Post-Workout",
+          "Breakfast",
+          "Dinner",
+          "Lunch",
+          "Post-Workout",
+          "Pre-Workout",
+          "Snack",
+        ]}
+        dateKey="2026-10-03"
+        todayKey="2026-10-03"
+        initialPhase="review"
+        initialReview={[
+          {
+            name: "Chicken bowl",
+            nutrition: { calories: 500, protein: 30, carbs: 40, fats: 15 },
+            confidence: 0.9,
+          },
+        ]}
+      />,
+    );
+    expect(getByTestId("estimate-sheet-review")).toBeTruthy();
+    for (const tag of [
+      "breakfast",
+      "lunch",
+      "dinner",
+      "snack",
+      "pre-workout",
+      "post-workout",
+    ]) {
+      expect(getAllByTestId(`estimate-sheet-meal-${tag}`)).toHaveLength(1);
+    }
+  });
+
+  it("shows confidence and match-DB chips on each review row instead of plain grey text", () => {
+    const { getByTestId } = render(
+      <EstimateSheet
+        visible
+        onClose={() => {}}
+        onLogged={() => {}}
+        tag="lunch"
+        dateKey="2026-10-03"
+        todayKey="2026-10-03"
+        initialPhase="review"
+        initialReview={[
+          {
+            name: "Chicken bowl",
+            nutrition: { calories: 500, protein: 30, carbs: 40, fats: 15 },
+            confidence: 0.9,
+            matchKind: "food",
+          },
+        ]}
+      />,
+    );
+    // The testID sits on the pill's outer View; the label is its Text child.
+    expect(
+      getByTestId("estimate-sheet-item-0-confidence").props.children.props.children,
+    ).toBe("High");
+    expect(
+      getByTestId("estimate-sheet-item-0-match-badge").props.children.props.children,
+    ).toBe("In your foods");
+  });
+
+  it("puts the best-guess notice above 'Missing something?', not under Save as meal", () => {
+    const { getByText, toJSON } = render(
+      <EstimateSheet
+        visible
+        onClose={() => {}}
+        onLogged={() => {}}
+        tag="lunch"
+        dateKey="2026-10-03"
+        todayKey="2026-10-03"
+        initialPhase="review"
+        initialReview={[
+          {
+            name: "Chicken bowl",
+            nutrition: { calories: 500, protein: 30, carbs: 40, fats: 15 },
+            confidence: 0.9,
+            matchKind: "food",
+          },
+        ]}
+      />,
+    );
+    expect(getByText(/These foods are a best guess/)).toBeTruthy();
+    // Render order, not just presence: the notice sits before "Missing
+    // something?" and well before the Save-as-meal button at the bottom —
+    // the opposite of the pre-fix layout (notice under Save as meal).
+    const json = JSON.stringify(toJSON());
+    const noticeIdx = json.indexOf('"estimate-sheet-notice"');
+    const addMoreIdx = json.indexOf('"estimate-sheet-add-more"');
+    const saveIdx = json.indexOf('"estimate-sheet-save"');
+    expect(noticeIdx).toBeGreaterThan(-1);
+    expect(addMoreIdx).toBeGreaterThan(noticeIdx);
+    expect(saveIdx).toBeGreaterThan(addMoreIdx);
+  });
+});
