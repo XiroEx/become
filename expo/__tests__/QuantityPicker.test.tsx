@@ -158,6 +158,48 @@ describe("QuantityPicker", () => {
     });
   });
 
+  it("(NP-261) a custom primary label and an optional secondary action build the same item independently", () => {
+    const onSubmit = jest.fn();
+    const onSecondaryAction = jest.fn();
+    const { getByTestId, queryByTestId } = render(
+      <QuantityPicker
+        food={bridgedFood}
+        initialQuantity={2}
+        onSubmit={onSubmit}
+        primaryActionLabel="Add to Snack"
+        secondaryActionLabel="Build a meal"
+        onSecondaryAction={onSecondaryAction}
+      />,
+    );
+
+    expect(getByTestId("log-food-button")).toHaveTextContent("Add to Snack");
+
+    fireEvent.press(getByTestId("quantity-picker-secondary-action"));
+    expect(onSecondaryAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ name: "Protein Bar", servings: 2 }),
+        tag: "snack",
+      }),
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId("log-food-button"));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        item: expect.objectContaining({ name: "Protein Bar", servings: 2 }),
+      }),
+    );
+
+    // With no secondary action wired, nothing renders for it — and the
+    // default primary label stays "Log Food" for every other consumer.
+    const { getByTestId: getByTestId2, queryByTestId: queryByTestId2 } = render(
+      <QuantityPicker food={bridgedFood} />,
+    );
+    expect(getByTestId2("log-food-button")).toHaveTextContent("Log Food");
+    expect(queryByTestId2("quantity-picker-secondary-action")).toBeNull();
+    expect(queryByTestId("quantity-picker-secondary-action")).toBeTruthy();
+  });
+
   it("renders serving choices when available", () => {
     const { getByTestId } = render(
       <QuantityPicker food={bridgedFood} />,

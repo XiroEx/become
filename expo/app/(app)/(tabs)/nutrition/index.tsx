@@ -91,7 +91,7 @@ import {
   logSavedMeal,
 } from "@/lib/nutrition/basketLog";
 import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
-import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
+import { buildMealItemPayload, logFoodItem } from "@/lib/nutrition/mealLogActions";
 import { defaultVariantOf } from "@/lib/nutrition/foodMath";
 import { useEntitlements } from "@/lib/entitlements";
 import { useApiErrorHandler } from "@/lib/errors";
@@ -106,7 +106,7 @@ import { EditLoggedMealSheet } from "@/components/nutrition/EditLoggedMealSheet"
 import { EditLogItemSheet } from "@/components/nutrition/EditLogItemSheet";
 import { DateNav } from "@/components/nutrition/DateNav";
 import { TagSection } from "@/components/nutrition/TagSection";
-import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
+import { FoodSearchSheet, type FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
 import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
@@ -1389,6 +1389,42 @@ export default function NutritionIndexRoute() {
 
   const handleRemoveBasketItem = (key: string) => {
     setBasket((prev) => prev.filter((item) => item.key !== key));
+  };
+
+  // NP-261: the inline quantity picker's "Build a meal" — the item already
+  // carries the amount/unit/variant/tag/time the member chose, so it goes
+  // straight into the basket (unlike `handleAddToBasket`, which only ever
+  // had the food's default serving to work with).
+  const handleBuildMealFromPicked = (result: FoodPickResult) => {
+    const key = `${result.item.foodId ?? "food"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const entry: BasketItem = { ...result.item, key };
+    setBasket((prev) => [...prev, entry]);
+  };
+
+  // NP-261: the inline quantity picker's "Add to <tag>" — logs the one
+  // chosen item straight through `/api/meal-logs` (`logFoodItem`, the same
+  // smart-append rules `food/[id].tsx`'s picker uses) instead of collecting
+  // it in the basket for a later Review.
+  const handleLogPickedItem = async (result: FoodPickResult) => {
+    try {
+      await logFoodItem({
+        item: result.item,
+        tag: result.tag,
+        date: result.date,
+        timeMode: result.timeMode,
+        pickedTime: result.pickedTime,
+        existingLogs: displayedLogs,
+        apiFetch,
+        token,
+        baseUrl: WEBAPP_BASE_URL,
+      });
+      setSearchOpen(false);
+      setSearchBarcodeOpen(false);
+      await refetchMealLogs();
+    } catch (err) {
+      const { handled, message } = handleApiError(err);
+      if (!handled) setBasketError(message);
+    }
   };
 
   const handleSubmitBasket = async (opts: {
@@ -2693,7 +2729,11 @@ export default function NutritionIndexRoute() {
         initialBarcodeOpen={searchBarcodeOpen}
         basketMode={addToLogId === null && !isFuture}
         basketCount={basket.length}
-        onAddToBasket={handlePickBasketFood}
+        // NP-261: the inline quantity picker's two actions — "Build a meal"
+        // collects the chosen item in the basket, "Add to <tag>" logs it
+        // straight away through `/api/meal-logs`.
+        onAddToBasket={handleBuildMealFromPicked}
+        onLogItem={handleLogPickedItem}
         onPickFood={isFuture ? handlePickBasketFood : undefined}
         // NP-261 BLOCKER: `BasketSheet` is its own RN `Modal`, same as
         // `FoodSearchSheet`'s `BottomSheet` — iOS refuses to present a

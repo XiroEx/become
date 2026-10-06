@@ -39,6 +39,11 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
 import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
 import {
+  QuantityPicker,
+  type QuantityPickerFood,
+} from "@/components/nutrition/QuantityPicker";
+import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
+import {
   BARCODE_LOOKUP_FAILED_MESSAGE,
   lookupBarcode,
 } from "@/lib/nutrition/barcodeLookup";
@@ -71,6 +76,19 @@ const SOURCE_LABEL: Record<string, string> = {
   off: "OFF",
 };
 
+/**
+ * NP-261: what the inline quantity picker hands back once a quantity, unit,
+ * tag and time are chosen for a search row — the same shape
+ * `QuantityPicker`'s own `onSubmit`/`onSecondaryAction` emit.
+ */
+export interface FoodPickResult {
+  item: MealItemPayload;
+  tag: string;
+  date: string;
+  timeMode: "now" | "picked" | "none";
+  pickedTime?: string | null;
+}
+
 export interface FoodSearchSheetProps {
   visible: boolean;
   onClose: () => void;
@@ -78,13 +96,19 @@ export interface FoodSearchSheetProps {
   onPickFood?: (food: Food) => void;
   onPickMeal?: (meal: Meal) => void;
   /**
-   * Basket mode (NP-094): picking a food adds it to the basket instead of
-   * opening the quantity picker. The screen owns the basket and the log call.
+   * Basket mode (NP-094, inline picker NP-261): picking a food expands the
+   * web's inline quantity picker (amount, unit, time, tag) under the row
+   * instead of navigating to the food detail page. "Add to <tag>" logs that
+   * one item straight away through `onLogItem`; "Build a meal" collects the
+   * built item into the screen's basket through `onAddToBasket` instead.
    */
   basketMode?: boolean;
   /** Rows collected so far, for the basket bar count. */
   basketCount?: number;
-  onAddToBasket?: (food: Food) => void;
+  /** NP-261: "Build a meal" — collects the built item into the basket. */
+  onAddToBasket?: (result: FoodPickResult) => void;
+  /** NP-261: "Add to <tag>" — logs the one built item immediately. */
+  onLogItem?: (result: FoodPickResult) => void | Promise<void>;
   /** Open the basket sheet over what is collected. */
   onOpenBasket?: () => void;
   debounceMs?: number;
@@ -106,6 +130,7 @@ export function FoodSearchSheet({
   basketMode = false,
   basketCount = 0,
   onAddToBasket,
+  onLogItem,
   onOpenBasket,
   debounceMs = 300,
   setTimeoutImpl,
@@ -140,6 +165,11 @@ export function FoodSearchSheet({
   // nutrition basis for its log-correction panel; the search row only shows
   // the flattened default variant, which is exactly that basis.
   const [flagFood, setFlagFood] = useState<Food | null>(null);
+
+  // NP-261: the web's inline quantity picker, expanded under the tapped row
+  // in basket mode instead of jumping straight to a default-serving add.
+  const [pickerFoodId, setPickerFoodId] = useState<string | null>(null);
+  const [pickerFood, setPickerFood] = useState<Food | null>(null);
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
   // up on the server and open the quantity picker on a real food. A miss or
@@ -414,8 +444,12 @@ export function FoodSearchSheet({
         }
       }
 
-      if (basketMode && onAddToBasket) {
-        onAddToBasket(targetFood);
+      // NP-261: basket mode expands the web's inline quantity picker under
+      // the row instead of adding the default serving straight away — see
+      // the picker render below `renderFoodRow`'s `Pressable`.
+      if (basketMode) {
+        setPickerFoodId(id);
+        setPickerFood(targetFood);
         return;
       }
 
@@ -430,7 +464,7 @@ export function FoodSearchSheet({
       onClose();
       router.push(foodDetailHref(targetFood._id, targetFood));
     },
-    [basketMode, onAddToBasket, onClose, onPickFood, router, token],
+    [basketMode, onClose, onPickFood, router, token],
   );
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
@@ -502,10 +536,13 @@ export function FoodSearchSheet({
     const calories = food.nutrition ? rowCalories(food) : undefined;
     const servingLabel = food.nutrition ? preferredServingLabel(food) : "";
     const isImporting = importingRowId === id;
+    const isExpanded = basketMode && pickerFoodId === id && pickerFood != null;
+    const tagLabel = currentTag ?? "snack";
+    const addLabel = `Add to ${tagLabel.charAt(0).toUpperCase()}${tagLabel.slice(1)}`;
 
     return (
+      <View key={id}>
       <Pressable
-        key={id}
         testID={`food-search-result-${id}`}
         onPress={() => handlePickFood(food)}
         accessibilityRole="button"
@@ -517,7 +554,7 @@ export function FoodSearchSheet({
           justifyContent: "space-between",
           paddingVertical: 12,
           paddingHorizontal: 16,
-          borderBottomWidth: 1,
+          borderBottomWidth: isExpanded ? 0 : 1,
           borderBottomColor: colors.border,
           opacity: isImporting ? 0.6 : 1,
         }}
@@ -652,6 +689,60 @@ export function FoodSearchSheet({
           </Pressable>
         </View>
       </Pressable>
+
+      {/* NP-261: the web's inline quantity picker — amount, unit/variant,
+          time and tag, then "Add to <tag>" (logs through `/api/meal-logs`
+          immediately) or "Build a meal" (collects it in the basket). */}
+      {isExpanded ? (
+        <View
+          testID={`food-search-result-${id}-picker`}
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.muted,
+            gap: 12,
+          }}
+        >
+          <QuantityPicker
+            food={pickerFood as QuantityPickerFood | null}
+            initialTag={tagLabel}
+            primaryActionLabel={addLabel}
+            secondaryActionLabel={onAddToBasket ? "Build a meal" : undefined}
+            onSecondaryAction={
+              onAddToBasket
+                ? (result) => {
+                    onAddToBasket(result);
+                    setPickerFoodId(null);
+                    setPickerFood(null);
+                  }
+                : undefined
+            }
+            onSubmit={(result) => {
+              setPickerFoodId(null);
+              setPickerFood(null);
+              void onLogItem?.(result);
+            }}
+            testID={`food-search-result-${id}-quantity-picker`}
+          />
+          <Pressable
+            testID={`food-search-result-${id}-cancel-picker`}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            onPress={() => {
+              setPickerFoodId(null);
+              setPickerFood(null);
+            }}
+            style={{ alignSelf: "center", paddingVertical: 6 }}
+          >
+            <Text className="text-muted-foreground text-xs font-semibold">
+              Cancel
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
+      </View>
     );
   };
 

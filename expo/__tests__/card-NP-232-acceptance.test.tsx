@@ -372,9 +372,18 @@ describe("Card NP-232 acceptance", () => {
     const { getByTestId } = render(<NutritionIndexRoute />);
     await openSearch(getByTestId);
 
-    // Today the search sheet still collects a basket.
+    // Today the search sheet still collects a basket — NP-261's inline
+    // quantity picker expands first, and "Build a meal" adds it.
     await act(async () => {
       fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
+    });
+    await waitFor(() => {
+      expect(
+        getByTestId(`food-search-result-${OATS._id}-picker`),
+      ).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("quantity-picker-secondary-action"));
     });
     await waitFor(() => {
       expect(getByTestId("food-search-basket-bar")).toBeTruthy();

@@ -79,6 +79,25 @@ export interface QuantityPickerProps {
     timeMode: "now" | "picked" | "none";
     pickedTime?: string | null;
   }) => void | Promise<void>;
+  /**
+   * Label for the primary log button (default `"Log Food"`). NP-261's
+   * inline search-row picker renames it to the web's `"Add to <tag>"`.
+   */
+  primaryActionLabel?: string;
+  /**
+   * NP-261: an optional second action next to the primary log button — the
+   * web's `"Build a meal"`, which collects the same built item somewhere
+   * other than an immediate single log (the search sheet's basket). Only
+   * rendered when both this and `onSecondaryAction` are set.
+   */
+  secondaryActionLabel?: string;
+  onSecondaryAction?: (result: {
+    item: MealItemPayload;
+    tag: string;
+    date: string;
+    timeMode: "now" | "picked" | "none";
+    pickedTime?: string | null;
+  }) => void | Promise<void>;
   testID?: string;
 }
 
@@ -103,6 +122,9 @@ export function QuantityPicker({
   showLogControls = true,
   onChange,
   onSubmit,
+  primaryActionLabel = "Log Food",
+  secondaryActionLabel,
+  onSecondaryAction,
   testID = "quantity-picker",
 }: QuantityPickerProps) {
   const { colors } = useThemeTokens();
@@ -322,9 +344,11 @@ export function QuantityPicker({
     onChange,
   ]);
 
-  // 8. Submit / Log handler
-  const handleLog = useCallback(() => {
-    if (!activeVariant) return;
+  // 8. Submit / Log handler — shared between the primary log button and the
+  // optional secondary action (NP-261's "Build a meal"), which both build
+  // the exact same item from the current amount/unit/variant/tag/time/date.
+  const buildResult = useCallback(() => {
+    if (!activeVariant) return null;
     const foodObj = food ?? {
       name: activeVariant.name ?? "Food",
     };
@@ -336,27 +360,28 @@ export function QuantityPicker({
       servingChoice: selectedChoice ?? undefined,
     });
 
-    if (onSubmit) {
-      onSubmit({
-        item,
-        tag,
-        date,
-        timeMode,
-        pickedTime: timeMode === "picked" ? pickedTime : null,
-      });
+    return {
+      item,
+      tag,
+      date,
+      timeMode,
+      pickedTime: timeMode === "picked" ? pickedTime : null,
+    };
+  }, [food, activeVariant, quantity, unit, selectedChoice, tag, date, timeMode, pickedTime]);
+
+  const handleLog = useCallback(() => {
+    const result = buildResult();
+    if (result && onSubmit) {
+      onSubmit(result);
     }
-  }, [
-    food,
-    activeVariant,
-    quantity,
-    unit,
-    selectedChoice,
-    tag,
-    date,
-    timeMode,
-    pickedTime,
-    onSubmit,
-  ]);
+  }, [buildResult, onSubmit]);
+
+  const handleSecondaryAction = useCallback(() => {
+    const result = buildResult();
+    if (result && onSecondaryAction) {
+      onSecondaryAction(result);
+    }
+  }, [buildResult, onSecondaryAction]);
 
   return (
     <View testID={testID} style={{ gap: 16 }}>
@@ -770,7 +795,31 @@ export function QuantityPicker({
           }}
         >
           <Text style={{ fontSize: 16, fontWeight: "bold", color: colors["primary-foreground"] }}>
-            Log Food
+            {primaryActionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* NP-261: the web's secondary "Build a meal" next to the primary log
+          button — collects the same built item without logging it alone. */}
+      {showLogControls && secondaryActionLabel && onSecondaryAction ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={secondaryActionLabel}
+          testID="quantity-picker-secondary-action"
+          onPress={handleSecondaryAction}
+          style={{
+            height: 48,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
+            {secondaryActionLabel}
           </Text>
         </Pressable>
       ) : null}

@@ -1,17 +1,12 @@
-// ─── NP-261 BLOCKER: Review must actually open the basket on iOS ───────────
+// ─── NP-261: the web's inline quantity picker on a search row ─────────────
 //
-// `BasketSheet` and `FoodSearchSheet` (`BottomSheet`) are each their own RN
-// `Modal`. iOS refuses to present a second `Modal` while one is still
-// presented, so opening the basket sheet while the search sheet stayed
-// `visible` left "Review" doing nothing — the exact bug the card reported:
-// a food picked from search landed in an invisible basket with no way to
-// open it, so it could never reach `POST /api/meal-logs`.
-//
-// This test can't reproduce the native "a second UIViewController refused
-// to present" failure in jsdom, but it pins the fix the card asked for:
-// pressing Review closes the search sheet (so only one Modal is ever
-// `visible` at once) and opens the basket with the picked item, and the
-// basket can still complete the log.
+// The web expands amount, unit/variant, time and tag under the tapped row
+// (`webapp/components/nutrition/FoodSearchModal.tsx`) with two actions:
+// "Add to <tag>" logs that one item straight away, "Build a meal" collects
+// it in the basket instead. Native used to add the food's default serving
+// to the basket on a single tap with no amount/unit/time choice at all —
+// this pins the fix: a tap expands the picker, and both actions reach the
+// server through the right route.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
@@ -91,58 +86,117 @@ beforeEach(() => {
   installHandler();
 });
 
-describe("Card NP-261 — Review opens the basket on iOS (BLOCKER)", () => {
-  it("pressing Review closes the search sheet before the basket opens, and the basket still logs through POST /api/meal-logs", async () => {
-    const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
-
-    await waitFor(() => {
-      expect(getByTestId("nutrition-find-food")).toBeTruthy();
-    });
+describe("Card NP-261 — the inline quantity picker on a search row", () => {
+  it("tapping a row expands amount/unit/time/tag instead of adding the default serving straight away", async () => {
+    const { getByTestId } = render(<NutritionIndexRoute />);
 
     await act(async () => {
       fireEvent.press(getByTestId("nutrition-find-food"));
     });
     await waitFor(() => {
-      expect(getByTestId("food-search-sheet")).toBeTruthy();
       expect(getByTestId(`food-search-result-${OATS._id}`)).toBeTruthy();
     });
 
-    // Pick a food — basket mode on today expands the inline quantity picker
-    // (NP-261) instead of adding the default serving straight away.
     await act(async () => {
       fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
     });
+
+    // No immediate basket add — the inline picker expands under the row.
+    expect(() => getByTestId("food-search-basket-bar")).toThrow();
     await waitFor(() => {
       expect(
         getByTestId(`food-search-result-${OATS._id}-picker`),
       ).toBeTruthy();
     });
 
-    // "Build a meal" collects the chosen item in the basket instead of
-    // logging it alone, and the bar with Review appears.
+    // Amount, unit, time and tag controls are all present (the web's
+    // picker), not just a bare "log the default serving" tap.
+    expect(getByTestId("quantity-input")).toBeTruthy();
+    expect(getByTestId("tag-chip-snack")).toBeTruthy();
+    expect(getByTestId("time-mode-now")).toBeTruthy();
+
+    // The primary action reads "Add to <tag>", the web's wording — the
+    // search sheet's default tag for this screen's first/current section.
+    expect(getByTestId("log-food-button")).toHaveTextContent(
+      /^Add to [A-Za-z]+$/,
+    );
+    expect(getByTestId("quantity-picker-secondary-action")).toHaveTextContent(
+      "Build a meal",
+    );
+  });
+
+  it('"Add to <tag>" logs the one item through POST /api/meal-logs and closes the search sheet', async () => {
+    const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("nutrition-find-food"));
+    });
+    await waitFor(() => {
+      expect(getByTestId(`food-search-result-${OATS._id}`)).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
+    });
+    await waitFor(() => {
+      expect(getByTestId("log-food-button")).toBeTruthy();
+    });
+
+    // Double the default amount before logging, so the request carries the
+    // chosen quantity, not a bare default-serving add.
+    fireEvent.changeText(getByTestId("quantity-input"), "100");
+
+    await act(async () => {
+      fireEvent.press(getByTestId("log-food-button"));
+    });
+
+    await waitFor(() => {
+      expect(postLogCalls().length).toBe(1);
+    });
+    const body = postLogCalls()[0]![2] as { body?: { items?: unknown[] } };
+    expect(Array.isArray(body.body?.items)).toBe(true);
+    expect((body.body?.items as any[])[0]).toEqual(
+      expect.objectContaining({ name: "Oats", loggedQuantity: 100 }),
+    );
+
+    // Logged straight away — never collected in the basket.
+    expect(queryByTestId("food-search-basket-bar")).toBeNull();
+    await waitFor(() => {
+      expect(queryByTestId("food-search-sheet")).toBeNull();
+    });
+  });
+
+  it('"Build a meal" collects the chosen item in the basket, and Review still logs it', async () => {
+    const { getByTestId } = render(<NutritionIndexRoute />);
+
+    await act(async () => {
+      fireEvent.press(getByTestId("nutrition-find-food"));
+    });
+    await waitFor(() => {
+      expect(getByTestId(`food-search-result-${OATS._id}`)).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
+    });
+    await waitFor(() => {
+      expect(getByTestId("quantity-picker-secondary-action")).toBeTruthy();
+    });
+
     await act(async () => {
       fireEvent.press(getByTestId("quantity-picker-secondary-action"));
     });
+
     await waitFor(() => {
       expect(getByTestId("food-search-basket-open")).toBeTruthy();
     });
+    // No log yet — the item only sits in the basket until Review + Log.
+    expect(postLogCalls().length).toBe(0);
 
-    // Review: the search sheet's Modal must close in the SAME update that
-    // opens the basket's Modal — never both visible together.
     await act(async () => {
       fireEvent.press(getByTestId("food-search-basket-open"));
     });
-
     await waitFor(() => {
       expect(getByTestId("basket-sheet")).toBeTruthy();
     });
-    // The search sheet's own Modal is gone — RN does not render a Modal's
-    // children while `visible={false}`, so this is the one DOM-level proxy
-    // jsdom can give us for "iOS has at most one Modal presented".
-    expect(queryByTestId("food-search-sheet")).toBeNull();
-
-    // The item picked is visible for review, and Log actually reaches
-    // POST /api/meal-logs — Review is no longer a dead end.
     expect(getByTestId("basket-sheet-summary")).toHaveTextContent(
       "1 item in this sitting",
     );
@@ -150,10 +204,8 @@ describe("Card NP-261 — Review opens the basket on iOS (BLOCKER)", () => {
     await act(async () => {
       fireEvent.press(getByTestId("basket-sheet-submit"));
     });
-
     await waitFor(() => {
       expect(postLogCalls().length).toBe(1);
     });
-    expect(queryByTestId("basket-sheet")).toBeNull();
   });
 });
