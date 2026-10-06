@@ -96,6 +96,8 @@ export const NATIVE_ROUTES = {
   nutritionGoals: "/(tabs)/nutrition/goals",
   recipes: "/(tabs)/nutrition/recipes",
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
+  /** The Meal Plan week — `app/(app)/(tabs)/nutrition/meal-plan.tsx` (NP-267). */
+  mealPlan: "/(tabs)/nutrition/meal-plan",
   calendar: "/(tabs)/calendar",
   scheduleSettings: "/(tabs)/calendar/settings",
   streaks: "/(tabs)/dashboard/streaks",
@@ -518,7 +520,12 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
       ? native(NATIVE_ROUTES.nutrition, params, "nearest")
       : native(`${NATIVE_ROUTES.nutrition}/food/${encodeURIComponent(id)}`, params, "exact");
   }
-  if (section === "meals" || section === "meal-plan" || section === "timeline") {
+  // The Meal Plan week now has a native screen (NP-267) — `become://dashboard/
+  // meal-plan` used to land on the Nutrition day instead of the week.
+  if (section === "meal-plan") {
+    return native(NATIVE_ROUTES.mealPlan, params, "exact");
+  }
+  if (section === "meals" || section === "timeline") {
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
 
