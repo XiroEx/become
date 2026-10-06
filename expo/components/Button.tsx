@@ -14,7 +14,8 @@ export type ButtonVariant =
   | "secondary"
   | "destructive"
   | "ghost"
-  | "inverted";
+  | "inverted"
+  | "success";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps {
@@ -46,6 +47,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // light/dark-inverted pair every other token follows, so no new colour
   // literal is needed to match it.
   inverted: "bg-foreground",
+  // The web's teal/emerald CTA (e.g. SnapPlateModal's "Estimate" button) —
+  // the brand red (`primary`) is reserved for destructive-adjacent native
+  // actions, so a positive confirm that mirrors web's emerald uses the
+  // existing `success` token instead of a new colour literal.
+  success: "bg-success",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -54,6 +60,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   destructive: "text-destructive-foreground",
   ghost: "text-foreground",
   inverted: "text-background",
+  success: "text-primary-foreground",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -130,7 +137,9 @@ export function Button({
           <ActivityIndicator
             size="small"
             color={
-              variant === "primary" || variant === "destructive"
+              variant === "primary" ||
+              variant === "destructive" ||
+              variant === "success"
                 ? colors["primary-foreground"]
                 : variant === "inverted"
                   ? colors.background

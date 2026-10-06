@@ -1101,6 +1101,12 @@ export default function NutritionIndexRoute() {
   const [estimatePhase, setEstimatePhase] = useState<
     "chooser" | "describe" | "review"
   >("chooser");
+  // NP-263: the Upload menu's "Upload photo" opens the photo library
+  // directly (web's `pickGallery`) instead of re-presenting this sheet's
+  // own Take photo / Upload photo / Describe chooser.
+  const [estimateAutoCaptureSource, setEstimateAutoCaptureSource] = useState<
+    "camera" | "library" | null
+  >(null);
   // Estimate history (NP-141): the history list, and the re-opened scan the
   // review opens on (the web's `?scan=<id>` into the review phase).
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -1288,6 +1294,16 @@ export default function NutritionIndexRoute() {
   const openEstimate = (phase: "chooser" | "describe" | "review") => {
     if (phase !== "review") setReopenedScan(null);
     setEstimatePhase(phase === "review" ? "review" : phase);
+    setEstimateAutoCaptureSource(null);
+    setEstimateOpen(true);
+  };
+
+  // NP-263: open straight into the device's photo library, bypassing the
+  // chooser entirely — the Upload menu's "Upload photo" button only.
+  const openEstimateWithLibraryUpload = () => {
+    setReopenedScan(null);
+    setEstimatePhase("chooser");
+    setEstimateAutoCaptureSource("library");
     setEstimateOpen(true);
   };
 
@@ -2589,7 +2605,7 @@ export default function NutritionIndexRoute() {
               variant="secondary"
               onPress={() => {
                 setUploadMenuOpen(false);
-                openEstimate("chooser");
+                openEstimateWithLibraryUpload();
               }}
             >
               Upload photo
@@ -2775,6 +2791,7 @@ export default function NutritionIndexRoute() {
         onClose={() => {
           setEstimateOpen(false);
           setReopenedScan(null);
+          setEstimateAutoCaptureSource(null);
         }}
         onLogged={() => void handleEstimateLogged()}
         tag={reopenedScan?.tag ?? currentDefaultTag}
@@ -2815,6 +2832,7 @@ export default function NutritionIndexRoute() {
         }
         initialImageUrl={reopenedScan?.imageUrl ?? null}
         initialScanId={reopenedScan?.scanId ?? null}
+        initialAutoCaptureSource={reopenedScan ? null : estimateAutoCaptureSource}
       />
 
       {/* Estimate history (NP-141) */}
