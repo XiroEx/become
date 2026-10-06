@@ -146,13 +146,23 @@ export function QuantityPicker({
     return [];
   }, [propVariants, food, propVariant]);
 
-  // Selected variant index
+  // Selected variant index. An explicit `initialVariantId` wins; otherwise
+  // the variant flagged `isDefault` does — the same rule the web's
+  // `defaultVariantOf` / `scalePerServingNutrition(defaultVariant)` headline
+  // uses. Falling back to index 0 regardless of the flag is the NP-269 bug:
+  // a food's default variant ("Grilled") is not always stored first, so the
+  // picker silently preselected whichever happened to be at index 0
+  // ("Raw") instead.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState<number>(() => {
-    if (!initialVariantId || resolvedVariants.length === 0) return 0;
-    const idx = resolvedVariants.findIndex(
-      (v) => (v._id ?? v.id) === initialVariantId || v.name === initialVariantId,
-    );
-    return idx >= 0 ? idx : 0;
+    if (resolvedVariants.length === 0) return 0;
+    if (initialVariantId) {
+      const idx = resolvedVariants.findIndex(
+        (v) => (v._id ?? v.id) === initialVariantId || v.name === initialVariantId,
+      );
+      if (idx >= 0) return idx;
+    }
+    const defaultIdx = resolvedVariants.findIndex((v) => v.isDefault === true);
+    return defaultIdx >= 0 ? defaultIdx : 0;
   });
 
   const handleSelectVariant = (idx: number) => {
