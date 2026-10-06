@@ -533,7 +533,8 @@ describe("Workout tab: acceptance criteria tests", () => {
       expect(getByTestId("programming-browse-recommended")).toBeTruthy();
 
       // Workout tab's catalog header reads "Browse Programs", matching the
-      // web's Workout page (the dedicated Browse screen says "All Programs").
+      // web's Workout page. The dedicated Browse screen (NP-278) says the
+      // same thing now — both mirror the web's one heading.
       await waitFor(() => {
         expect(getByText("Browse Programs")).toBeTruthy();
       });

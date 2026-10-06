@@ -1,17 +1,12 @@
 import type { ProgramCatalogItem } from "@become/api-client";
 import type { ProgramSummary } from "@/components/programs/ProgramsList";
-
-const TARGET_USERS: readonly ProgramSummary["targetUser"][] = [
-  "Beginner",
-  "Intermediate",
-  "Advanced",
-];
+import { BROWSE_LEVELS } from "@/lib/programs/levels";
 
 function narrowTargetUser(
   value: string | undefined,
 ): ProgramSummary["targetUser"] {
-  return TARGET_USERS.includes(value as ProgramSummary["targetUser"])
-    ? (value as ProgramSummary["targetUser"])
+  return (BROWSE_LEVELS as readonly string[]).includes(value ?? "")
+    ? value
     : undefined;
 }
 
@@ -32,6 +27,9 @@ export function toProgramSummary(raw: ProgramCatalogItem): ProgramSummary {
   };
   if (raw.tags !== undefined) {
     summary.tags = raw.tags;
+  }
+  if (raw.isCustom !== undefined) {
+    summary.isCustom = raw.isCustom;
   }
   return summary;
 }
