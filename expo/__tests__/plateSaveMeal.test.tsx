@@ -94,7 +94,7 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { savePlateAsMeal, sendPlateFeedback } from "@/lib/nutrition/plateSaveMeal";
-import { PlateExtras } from "@/components/nutrition/PlateExtras";
+import { PlateExtras, PlateEstimateNotice } from "@/components/nutrition/PlateExtras";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -290,7 +290,6 @@ describe("PlateExtras (sheet)", () => {
         mealsAtCap={false}
         onCappedSave={() => {}}
         onSaveMeal={async () => true}
-        onSendFeedback={async () => true}
         {...overrides}
       />,
     );
@@ -346,7 +345,6 @@ describe("PlateExtras (sheet)", () => {
           }
           throw new Error(result.message);
         }}
-        onSendFeedback={async () => true}
       />,
     );
     fireEvent.press(getByTestId("plate-extras-save"));
@@ -359,9 +357,12 @@ describe("PlateExtras (sheet)", () => {
     });
   });
 
+});
+
+describe("PlateEstimateNotice (NP-322)", () => {
   it("feedback sends with the message and shows the saved confirmation", async () => {
     const onSendFeedback = jest.fn(async () => true);
-    const { getByTestId } = renderExtras({ onSendFeedback });
+    const { getByTestId } = render(<PlateEstimateNotice onSendFeedback={onSendFeedback} />);
     fireEvent.press(getByTestId("plate-extras-feedback-open"));
     fireEvent.changeText(
       getByTestId("plate-extras-feedback-input"),

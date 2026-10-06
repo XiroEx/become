@@ -10,6 +10,13 @@
  * hand the choice back to the screen, which makes the `plateSaveMeal` calls.
  * Until My Stuff exists natively (NP-142) the save confirms IN PLACE instead
  * of opening the meal page.
+ *
+ * `PlateEstimateNotice` is split out from `PlateExtras` (NP-322) because the
+ * web renders the "best guess" notice right after the item list, ABOVE the
+ * "Missing something? Add here" button — not at the very bottom under
+ * "Save as meal" the way native used to. `EstimateSheet` places this
+ * component where the web does; `PlateExtras` keeps only Save as meal, which
+ * stays at the bottom of the review.
  */
 
 import { useState } from "react";
@@ -34,8 +41,6 @@ export interface PlateExtrasProps {
   onCappedSave: () => void;
   /** Keep the plate as a reusable meal. Resolves true on success. */
   onSaveMeal: (name: string) => Promise<boolean>;
-  /** Report a bad estimate. Resolves true on success. */
-  onSendFeedback: (message: string) => Promise<boolean>;
   testID?: string;
 }
 
@@ -44,7 +49,6 @@ export function PlateExtras({
   mealsAtCap,
   onCappedSave,
   onSaveMeal,
-  onSendFeedback,
   testID = "plate-extras",
 }: PlateExtrasProps) {
   const { colors } = useThemeTokens();
@@ -53,11 +57,6 @@ export function PlateExtras({
   const [saving, setSaving] = useState(false);
   const [savedName, setSavedName] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [feedbackText, setFeedbackText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const submitSave = async () => {
     if (!mealName.trim() || saving) return;
@@ -80,33 +79,6 @@ export function PlateExtras({
     } finally {
       setSaving(false);
     }
-  };
-
-  const submitFeedback = async () => {
-    if (!feedbackText.trim() || sending) return;
-    setSending(true);
-    setFeedbackError(null);
-    try {
-      const ok = await onSendFeedback(feedbackText);
-      if (ok) {
-        setSent(true);
-        setFeedbackText("");
-      } else {
-        setFeedbackError("Could not send feedback. Try again in a moment.");
-      }
-    } catch {
-      setFeedbackError("Could not send feedback. Try again in a moment.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const closeFeedback = () => {
-    setFeedbackOpen(false);
-    setFeedbackText("");
-    setSent(false);
-    setSending(false);
-    setFeedbackError(null);
   };
 
   return (
@@ -215,9 +187,64 @@ export function PlateExtras({
           {saveError}
         </Text>
       ) : null}
+    </View>
+  );
+}
+
+export interface PlateEstimateNoticeProps {
+  /** Report a bad estimate. Resolves true on success. */
+  onSendFeedback: (message: string) => Promise<boolean>;
+  testID?: string;
+}
+
+/**
+ * The "best guess" notice + "Send feedback" link (the web's notice box right
+ * after the item list in `SnapPlateModal.tsx`'s `ReviewBody`). Rendered by
+ * `EstimateSheet` directly above "Missing something? Add here" — NOT at the
+ * bottom under "Save as meal" (NP-322).
+ */
+export function PlateEstimateNotice({
+  onSendFeedback,
+  testID = "plate-extras",
+}: PlateEstimateNoticeProps) {
+  const { colors } = useThemeTokens();
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
+
+  const submitFeedback = async () => {
+    if (!feedbackText.trim() || sending) return;
+    setSending(true);
+    setFeedbackError(null);
+    try {
+      const ok = await onSendFeedback(feedbackText);
+      if (ok) {
+        setSent(true);
+        setFeedbackText("");
+      } else {
+        setFeedbackError("Could not send feedback. Try again in a moment.");
+      }
+    } catch {
+      setFeedbackError("Could not send feedback. Try again in a moment.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const closeFeedback = () => {
+    setFeedbackOpen(false);
+    setFeedbackText("");
+    setSent(false);
+    setSending(false);
+    setFeedbackError(null);
+  };
+
+  return (
+    <View testID={`${testID}-notice`}>
       <View
         style={{
-          marginTop: 8,
           borderWidth: 1,
           borderColor: colors.border,
           backgroundColor: colors.muted,

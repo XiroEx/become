@@ -760,6 +760,23 @@ export default function NutritionIndexRoute() {
   const [addTagOpen, setAddTagOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState("");
 
+  // De-duped, case-insensitive, defaults first — the estimate sheet and the
+  // scan history sheet both show every chip once (NP-322). Without this,
+  // `[...availableTags.defaults, ...availableTags.userTags, ...sessionTags]`
+  // rendered "Snack" twice whenever a saved custom tag collided with one of
+  // the four standard meals.
+  const estimateTagOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of [...availableTags.defaults, ...availableTags.userTags, ...sessionTags]) {
+      const norm = String(raw).trim().toLowerCase();
+      if (!norm || seen.has(norm)) continue;
+      seen.add(norm);
+      out.push(norm);
+    }
+    return out;
+  }, [availableTags, sessionTags]);
+
   const rawWindows = scheduleData?.windows;
   const scheduleWindows: TagWindow[] = useMemo(() => {
     if (!Array.isArray(rawWindows)) return [];
@@ -2784,11 +2801,7 @@ export default function NutritionIndexRoute() {
         }}
         onLogged={() => void handleEstimateLogged()}
         tag={reopenedScan?.tag ?? currentDefaultTag}
-        tagOptions={[
-          ...availableTags.defaults,
-          ...availableTags.userTags,
-          ...sessionTags,
-        ]}
+        tagOptions={estimateTagOptions}
         dateKey={activeDate}
         todayKey={today}
         initialPhase={reopenedScan ? "review" : estimatePhase}
@@ -2831,11 +2844,7 @@ export default function NutritionIndexRoute() {
         token={token}
         todayKey={today}
         windows={scheduleWindows}
-        tagOptions={[
-          ...availableTags.defaults,
-          ...availableTags.userTags,
-          ...sessionTags,
-        ]}
+        tagOptions={estimateTagOptions}
         onReopen={(scan) => void handleReopenScan(scan)}
         onLogged={() => void handleHistoryLogged()}
       />
