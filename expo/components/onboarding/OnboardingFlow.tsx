@@ -14,6 +14,7 @@ import {
   Minus,
   TrendingUp,
   HelpCircle,
+  Pencil,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -44,6 +45,8 @@ import {
   explainMacro,
   proteinNeedsFlag,
   MACRO_LABELS,
+  activityFromTrainingDays,
+  HEALTH_DISCLAIMER_SHORT,
   type MacroKey,
   type NutritionDirection,
   type ActivityLevel,
@@ -437,7 +440,7 @@ function RecommendationCard({
         >
           {recommendation.reasons.slice(0, 3).map((reason: string) => (
             <View key={reason} className="flex-row items-start gap-2">
-              <Text className="text-primary font-bold">✓</Text>
+              <Check size={14} color={colors.success} />
               <Text className="text-muted-foreground text-xs flex-1">
                 {reason}
               </Text>
@@ -447,16 +450,20 @@ function RecommendationCard({
       ) : null}
       {onEnroll ? (
         enrolled ? (
-          <Text
-            testID={`${testID}-recommended-program-enrolled`}
-            className="text-primary text-xs font-semibold mt-3"
-          >
-            ✓ Added — it will be waiting on your dashboard.
-          </Text>
+          <View className="flex-row items-center gap-1.5 mt-3">
+            <Check size={14} color={colors.success} />
+            <Text
+              testID={`${testID}-recommended-program-enrolled`}
+              className="text-success text-xs font-semibold"
+            >
+              Added — it will be waiting on your dashboard.
+            </Text>
+          </View>
         ) : (
           <View className="mt-3">
             <Button
               testID={`${testID}-recommended-program-enroll`}
+              variant="inverted"
               onPress={onEnroll}
               disabled={enrolling}
               loading={enrolling}
@@ -484,12 +491,16 @@ function ReviewSection({
   stepNumber,
   onEdit,
   children,
+  why,
 }: {
   title: string;
   stepNumber: number;
   onEdit: (step: number) => void;
   children: React.ReactNode;
+  /** A grey explainer note, matching the web's `ReviewSection` `why` prop. */
+  why?: string;
 }) {
+  const { colors } = useThemeTokens();
   return (
     <View className="p-4 rounded-xl border border-border bg-card mb-3">
       <View className="flex-row items-center justify-between mb-2">
@@ -498,15 +509,19 @@ function ReviewSection({
           accessibilityRole="button"
           accessibilityLabel={`Edit ${title}`}
           onPress={() => onEdit(stepNumber)}
-          style={[
-            minTouchTarget,
-            { justifyContent: "center", alignItems: "flex-end" },
-          ]}
+          style={[minTouchTarget, { flexShrink: 0 }]}
+          className="flex-row items-center gap-1 rounded-lg px-2 py-1 justify-end"
         >
-          <Text className="text-primary text-sm font-semibold">Edit</Text>
+          <Pencil size={12} color={colors["muted-foreground"]} />
+          <Text className="text-muted-foreground text-xs font-medium">Edit</Text>
         </Pressable>
       </View>
       {children}
+      {why ? (
+        <Text className="mt-3 rounded-lg bg-muted/60 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+          {why}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -1742,99 +1757,108 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[4]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              Everything below shapes what the app does for you. Review your
-              answers, then finish.
+              Everything below shapes what the app does for you. Edit
+              anything that isn&apos;t right, then finish.
             </Text>
 
-            {/* Goals review */}
+            {/* Goals review (web parity, NP-249) */}
             <ReviewSection
               title="Your goals"
               stepNumber={1}
               onEdit={goToStep}
+              why={
+                goals.length === 0
+                  ? undefined
+                  : goals.length > 1
+                    ? `${GOAL_LABEL[goals[0]!]} drives your program match and dashboard. Your other ${
+                        goals.length === 2
+                          ? "goal still shifts"
+                          : `${goals.length - 1} goals still shift`
+                      } which programs we rank highest.`
+                    : `${GOAL_LABEL[goals[0]!]} drives your program match, your calorie direction and your dashboard.`
+              }
             >
-              {goals.map((g, i) => (
-                <ReviewRow
-                  key={g}
-                  label={i === 0 ? "Primary" : `Also #${i + 1}`}
-                  value={GOAL_LABEL[g]}
-                />
-              ))}
+              {goals.length === 0 ? (
+                <ReviewRow label="Goals" value="Not set" />
+              ) : (
+                goals.map((g, i) => (
+                  <ReviewRow
+                    key={g}
+                    label={i === 0 ? "Primary" : `Also #${i + 1}`}
+                    value={GOAL_LABEL[g]}
+                  />
+                ))
+              )}
             </ReviewSection>
 
-            {/* About you review */}
+            {/* Training review (web parity, NP-249 — web's "Training"
+                section: Name, Experience, Days / week, with a note on how
+                the days feed activity and program matching). */}
             <ReviewSection
-              title="About you"
+              title="Training"
               stepNumber={2}
               onEdit={goToStep}
+              why={`We treat ${weeklyAvailabilityDays} sessions a week as "${activityFromTrainingDays(
+                weeklyAvailabilityDays,
+              ).replace("_", " ")}" when calculating your calories, and we only surface programs that fit that schedule.`}
             >
               <ReviewRow label="Name" value={name.trim() || "Not set"} />
-              {profile.experienceLevel ? (
-                <ReviewRow
-                  label="Experience"
-                  value={
-                    EXPERIENCE_OPTIONS.find(
-                      (e) => e.value === profile.experienceLevel,
-                    )?.label ?? profile.experienceLevel
-                  }
-                />
-              ) : null}
+              <ReviewRow
+                label="Experience"
+                value={
+                  profile.experienceLevel
+                    ? EXPERIENCE_OPTIONS.find(
+                        (e) => e.value === profile.experienceLevel,
+                      )?.label ?? profile.experienceLevel
+                    : "Not set"
+                }
+              />
               <ReviewRow
                 label="Days / week"
                 value={String(weeklyAvailabilityDays)}
               />
             </ReviewSection>
 
-            {/* Body & nutrition review */}
+            {/* Body & nutrition review (web parity, NP-249 — web's row set
+                and formats exactly: Age, Height, Current/Target weight,
+                Eating, Daily calories, Macros, with the Mifflin-St Jeor
+                note). */}
             <ReviewSection
               title="Body & nutrition"
               stepNumber={3}
               onEdit={goToStep}
+              why={
+                targets
+                  ? `Mifflin-St Jeor puts your TDEE at ~${targets.tdee.toLocaleString()} cal. We applied ${DIRECTION_EXPLANATION[targets.direction]}. These land in your nutrition tab the moment you finish — no setup needed.`
+                  : "Add your age, height, weight and biological sex and we can calculate your calories automatically instead of using generic defaults."
+              }
             >
               <ReviewRow
                 label="Age"
                 value={profile.age ? String(profile.age) : "—"}
               />
               <ReviewRow
-                label="Sex"
+                label="Height"
                 value={
-                  SEX_OPTIONS.find((s) => s.value === profile.biologicalSex)
-                    ?.label ?? "Not set"
+                  profile.heightCm
+                    ? (profile.weightUnit ?? "lbs") === "lbs"
+                      ? `${cmToFtIn(profile.heightCm).ft}'${cmToFtIn(profile.heightCm).inches}"`
+                      : `${profile.heightCm} cm`
+                    : "—"
                 }
               />
               <ReviewRow
-                label="Direction"
+                label="Current weight"
                 value={
-                  effectiveDirection === "lose"
-                    ? "Lose Weight"
-                    : effectiveDirection === "gain"
-                      ? "Gain Weight"
-                      : "Maintain"
+                  profile.currentWeightKg
+                    ? `${displayWeight(
+                        profile.currentWeightKg,
+                        profile.weightUnit ?? "lbs",
+                      )} ${profile.weightUnit ?? "lbs"}`
+                    : "—"
                 }
               />
-              <ReviewRow
-                label="Weight unit"
-                value={profile.weightUnit ?? "lbs"}
-              />
-              {profile.heightCm ? (
-                <ReviewRow
-                  label="Height"
-                  value={
-                    useImperial
-                      ? `${cmToFtIn(profile.heightCm).ft}ft ${cmToFtIn(profile.heightCm).inches}in`
-                      : `${roundHeightCm(profile.heightCm)} cm`
-                  }
-                />
-              ) : null}
-              {profile.currentWeightKg ? (
-                <ReviewRow
-                  label="Current weight"
-                  value={`${displayWeight(
-                    profile.currentWeightKg,
-                    profile.weightUnit ?? "lbs",
-                  )} ${profile.weightUnit ?? "lbs"}`}
-                />
-              ) : null}
-              {profile.targetWeightKg ? (
+              {profile.targetWeightKg != null ? (
                 <ReviewRow
                   label="Target weight"
                   value={`${displayWeight(
@@ -1843,39 +1867,51 @@ export function OnboardingFlow({
                   )} ${profile.weightUnit ?? "lbs"}`}
                 />
               ) : null}
-              {profile.paceKgPerWeek ? (
-                <ReviewRow
-                  label="Pace"
-                  value={`${kgToUnit(
-                    profile.paceKgPerWeek,
-                    profile.weightUnit ?? "lbs",
-                  )} ${profile.weightUnit ?? "lbs"}/wk`}
-                />
-              ) : null}
+              <ReviewRow
+                label="Eating"
+                value={
+                  effectiveDirection === "lose"
+                    ? "Calorie deficit"
+                    : effectiveDirection === "gain"
+                      ? "Calorie surplus"
+                      : "Maintenance"
+                }
+              />
               {targets ? (
-                <ReviewRow
-                  label="Targets"
-                  value={`${targets.calories.toLocaleString()} cal (${targets.protein}p / ${targets.carbs}c / ${targets.fats}f)`}
-                />
+                <>
+                  <ReviewRow
+                    label="Daily calories"
+                    value={`${targets.calories.toLocaleString()} cal`}
+                  />
+                  <ReviewRow
+                    label="Macros"
+                    value={`${targets.protein}p / ${targets.carbs}c / ${targets.fats}f`}
+                  />
+                </>
               ) : null}
             </ReviewSection>
 
-            {/* Equipment review */}
+            {/* Equipment & injuries review (web parity, NP-249 — web's
+                section title, "Equipment" row label and "Not set" fallback,
+                plus the gear/coach note). */}
             <ReviewSection
-              title="Equipment"
+              title="Equipment & injuries"
               stepNumber={4}
               onEdit={goToStep}
+              why="Programs that need gear you don't have get pushed down your recommendations, and your injury notes ride along with your coach's view of your account."
             >
               <ReviewRow
-                label="Access"
+                label="Equipment"
                 value={
-                  profile.equipmentAccess
-                    ?.map(
-                      (e) =>
-                        EQUIPMENT_OPTIONS.find((o) => o.value === e)?.label ??
-                        e,
-                    )
-                    .join(", ") || "None"
+                  profile.equipmentAccess?.length
+                    ? profile.equipmentAccess
+                        .map(
+                          (e) =>
+                            EQUIPMENT_OPTIONS.find((o) => o.value === e)
+                              ?.label ?? e,
+                        )
+                        .join(", ")
+                    : "Not set"
                 }
               />
               <ReviewRow
@@ -1890,7 +1926,8 @@ export function OnboardingFlow({
 
             {/* Program match — server-driven, optional enrolment, never
                 blocking. Entirely optional: the member can also start it
-                later from Home, or browse the full catalog instead. */}
+                later from your dashboard, or browse the full catalog
+                instead (web parity, NP-249). */}
             <View className="p-4 rounded-xl border border-border bg-card mb-3">
               <Text className="text-foreground font-semibold text-base mb-1">
                 Your program match
@@ -1905,12 +1942,24 @@ export function OnboardingFlow({
               />
               {recommendation ? (
                 <Text className="text-muted-foreground text-[11px] leading-relaxed mt-3">
-                  Entirely optional — you can also start it later from Home,
-                  or browse the full catalog if you&apos;d rather pick your
-                  own.
+                  Entirely optional — you can also start it later from your
+                  dashboard, or browse the full catalog if you&apos;d rather
+                  pick your own.
                 </Text>
               ) : null}
             </View>
+
+            {/* The health disclaimer, at the one moment the member is about
+                to receive calorie targets and a program (web parity,
+                NP-249 — web's amber `onboarding-health-disclaimer` box,
+                right above Finish). Section 1 of the Terms in one
+                paragraph; never more than it says. */}
+            <Text
+              testID="onboarding-health-disclaimer"
+              className="mt-3 rounded-xl border border-amber-400 bg-amber-500/10 p-3.5 text-xs leading-relaxed text-amber-800 dark:text-amber-200"
+            >
+              {HEALTH_DISCLAIMER_SHORT}
+            </Text>
           </View>
         ) : null}
       </ScrollView>
