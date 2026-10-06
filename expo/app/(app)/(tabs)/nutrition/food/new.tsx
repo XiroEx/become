@@ -8,13 +8,17 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft } from "lucide-react-native";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { apiFetch, FoodDetailResponseSchema } from "@become/api-client";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
+import {
+  BridgeFieldGroup,
+  type BridgeValues,
+} from "@/components/nutrition/BridgeFieldGroup";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -53,8 +57,9 @@ import {
  *   • THE FORM. Name, brand, category, serving size + unit, display label,
  *     required macros, optional micros, and the two bridge values
  *     (`gramsPerServing` / `mlPerServing`) so the picker's mass↔volume
- *     conversions work later — the web's `BridgeFieldGroup` fields, as two
- *     plain numeric inputs.
+ *     conversions work later — the web's own `BridgeFieldGroup` fields
+ *     (freeform "3.5 oz" / "1 cup" entry, canonicalised on blur), behind the
+ *     same collapsed-by-default disclosure the web uses (NP-272).
  *   • WHERE THE MEMBER LANDS. On a create the new food's own screen is where
  *     this ends, so the member sees what the web would show them.
  */
@@ -117,8 +122,10 @@ export default function NewFoodRoute() {
     sodium: "",
     saturatedFat: "",
   });
-  const [gramsPerServing, setGramsPerServing] = useState("");
-  const [mlPerServing, setMlPerServing] = useState("");
+  // The web's own bridge fields (NP-272): canonical grams/ml, collapsed
+  // behind a disclosure that opens only when a value is already set.
+  const [bridge, setBridge] = useState<BridgeValues>({});
+  const [bridgeOpen, setBridgeOpen] = useState(false);
   const [bookmark, setBookmark] = useState(true);
 
   const [saving, setSaving] = useState(false);
@@ -181,12 +188,10 @@ export default function NewFoodRoute() {
           ? { saturatedFat: toOptionalNumber(micros.saturatedFat) as number }
           : {}),
       },
-      ...(toOptionalNumber(gramsPerServing) != null
-        ? { gramsPerServing: toOptionalNumber(gramsPerServing) as number }
+      ...(bridge.gramsPerServing != null
+        ? { gramsPerServing: bridge.gramsPerServing }
         : {}),
-      ...(toOptionalNumber(mlPerServing) != null
-        ? { mlPerServing: toOptionalNumber(mlPerServing) as number }
-        : {}),
+      ...(bridge.mlPerServing != null ? { mlPerServing: bridge.mlPerServing } : {}),
       bookmark,
     };
   }, [
@@ -198,8 +203,7 @@ export default function NewFoodRoute() {
     displayLabel,
     macros,
     micros,
-    gramsPerServing,
-    mlPerServing,
+    bridge,
     bookmark,
   ]);
 
@@ -292,8 +296,13 @@ export default function NewFoodRoute() {
               <Text className="text-foreground text-2xl font-bold">
                 New custom food
               </Text>
-              <Text className="text-muted-foreground text-sm">
-                Add a food not in our database.
+              <Text
+                testID="food-new-subtitle"
+                className="text-muted-foreground text-sm"
+              >
+                Add a food not in our database — Grandma&apos;s pancake mix,
+                your homemade sauce, anything you eat that you can&apos;t
+                find.
               </Text>
             </View>
           </View>
@@ -509,7 +518,6 @@ export default function NewFoodRoute() {
           <View
             testID="food-new-bridges"
             style={{
-              gap: 8,
               borderWidth: 1,
               borderColor: colors.border,
               borderRadius: 12,
@@ -517,28 +525,35 @@ export default function NewFoodRoute() {
               backgroundColor: colors.card,
             }}
           >
-            <Text className="text-muted-foreground text-xs font-semibold uppercase">
-              Weight / volume per serving (optional)
-            </Text>
-            <Text className="text-muted-foreground text-xs">
-              Lets the picker convert between mass and volume for this food.
-            </Text>
-            <Input
-              testID="food-new-grams-per-serving"
-              label="Grams per serving"
-              placeholder="e.g. 100"
-              keyboardType="decimal-pad"
-              value={gramsPerServing}
-              onChangeText={(v) => setGramsPerServing(v)}
-            />
-            <Input
-              testID="food-new-ml-per-serving"
-              label="Millilitres per serving"
-              placeholder="e.g. 240"
-              keyboardType="decimal-pad"
-              value={mlPerServing}
-              onChangeText={(v) => setMlPerServing(v)}
-            />
+            {/* Collapsed by default, same as the web's disclosure — opens
+                only once a value is already set (NP-272). */}
+            <Pressable
+              testID="food-new-bridges-toggle"
+              accessibilityRole="button"
+              accessibilityLabel="Optional: weight / volume per serving"
+              accessibilityState={{ expanded: bridgeOpen }}
+              onPress={() => setBridgeOpen((v) => !v)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              {bridgeOpen ? (
+                <ChevronDown size={14} color={colors["muted-foreground"]} />
+              ) : (
+                <ChevronRight size={14} color={colors["muted-foreground"]} />
+              )}
+              <Text className="text-muted-foreground text-xs font-medium">
+                Optional: weight / volume per serving
+              </Text>
+            </Pressable>
+            {bridgeOpen ? (
+              <View style={{ marginTop: 12 }}>
+                <BridgeFieldGroup
+                  testID="food-new-bridges-fields"
+                  value={bridge}
+                  onChange={setBridge}
+                  servingUnit={servingUnit}
+                />
+              </View>
+            ) : null}
           </View>
 
           <Pressable
