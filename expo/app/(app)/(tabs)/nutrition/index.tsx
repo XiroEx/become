@@ -2695,7 +2695,17 @@ export default function NutritionIndexRoute() {
         basketCount={basket.length}
         onAddToBasket={handlePickBasketFood}
         onPickFood={isFuture ? handlePickBasketFood : undefined}
-        onOpenBasket={() => setBasketOpen(true)}
+        // NP-261 BLOCKER: `BasketSheet` is its own RN `Modal`, same as
+        // `FoodSearchSheet`'s `BottomSheet` — iOS refuses to present a
+        // second `Modal` while one is already presented, so leaving the
+        // search sheet `visible` while Review opened the basket sheet left
+        // Review silently doing nothing. Closing the search sheet first
+        // means only one native Modal is ever visible at once.
+        onOpenBasket={() => {
+          setSearchOpen(false);
+          setSearchBarcodeOpen(false);
+          setBasketOpen(true);
+        }}
         onPickMeal={handlePickMeal}
       />
 
