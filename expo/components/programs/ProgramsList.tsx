@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { View, Pressable } from "react-native";
-import { Heart } from "lucide-react-native";
+import { Bookmark, ChevronRight } from "lucide-react-native";
 import { Text } from "@/components/Text";
-import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
@@ -13,8 +12,18 @@ export interface ProgramSummary {
   durationWeeks?: number;
   trainingDaysPerWeek?: number;
   goal?: string;
-  targetUser?: "Beginner" | "Intermediate" | "Advanced";
+  /**
+   * Display copy, not an id — any of BROWSE_LEVELS
+   * ("Beginner" … "Intermediate to Advanced"), matched against the raw
+   * webapp `target_user` string. NP-278: narrowed to only 3 of the 5 values
+   * for a while, which dropped the level line for every "X to Y" program.
+   */
+  targetUser?: string;
   tags?: string[];
+  /** True only for a program created by the viewer (api-client's `isCustom`
+   * on ProgramCatalogItem). NP-278: the browse catalog excludes these — a
+   * member's own custom program belongs in "My Programs", not Browse. */
+  isCustom?: boolean;
 }
 
 export interface ProgramsListProps {
@@ -79,37 +88,25 @@ export function ProgramsList({
           savedProgramIds?.has(item.id) || isSaved?.(item.id),
         );
         const isSaving = savingProgramId === item.id;
+        const visibleTags = item.tags?.slice(0, 4) ?? [];
+        const extraTags = (item.tags?.length ?? 0) - visibleTags.length;
         return (
           <View
             key={item.id}
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
+              gap: 10,
+              marginBottom: 12,
+              borderWidth: 1,
+              borderLeftWidth: 4,
+              borderColor: colors.border,
+              borderLeftColor: colors.success,
+              borderRadius: 16,
+              backgroundColor: colors.card,
+              padding: 12,
             }}
           >
-            <Pressable
-              testID={`${testID}-item-${item.id}`}
-              onPress={() => onItemPress?.(item.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open program ${item.name}`}
-              style={{ flex: 1 }}
-            >
-              <Card title={item.name} subtitle={item.description}>
-                {item.targetUser ? (
-                  <Text className="text-muted-foreground text-xs">
-                    {item.targetUser}
-                    {item.durationWeeks
-                      ? ` · ${item.durationWeeks} weeks`
-                      : ""}
-                    {item.trainingDaysPerWeek
-                      ? ` · ${item.trainingDaysPerWeek}d / week`
-                      : ""}
-                  </Text>
-                ) : null}
-              </Card>
-            </Pressable>
             {onToggleSave ? (
               <Pressable
                 testID={`${testID}-save-${item.id}`}
@@ -121,18 +118,89 @@ export function ProgramsList({
                     ? `Unsave program ${item.name}`
                     : `Save program ${item.name}`
                 }
-                className="p-3"
+                className="p-1 shrink-0"
               >
-                <Heart
+                <Bookmark
                   color={
-                    itemSaved ? colors.primary : colors["muted-foreground"]
+                    itemSaved ? colors.success : colors["muted-foreground"]
                   }
-                  fill={itemSaved ? colors.primary : "transparent"}
+                  fill={itemSaved ? colors.success : "transparent"}
                   size={20}
                   strokeWidth={1.5}
                 />
               </Pressable>
             ) : null}
+
+            <Pressable
+              testID={`${testID}-item-${item.id}`}
+              onPress={() => onItemPress?.(item.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open program ${item.name}`}
+              style={{ flex: 1 }}
+            >
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              >
+                <Text
+                  testID={`${testID}-title-${item.id}`}
+                  className="text-foreground text-base font-semibold flex-1"
+                  numberOfLines={1}
+                >
+                  {item.name}
+                </Text>
+                <View style={{ flexDirection: "row", gap: 6, flexShrink: 0 }}>
+                  {item.durationWeeks ? (
+                    <View className="rounded-full bg-muted px-2 py-0.5">
+                      <Text className="text-muted-foreground text-xs font-medium">
+                        {item.durationWeeks}w
+                      </Text>
+                    </View>
+                  ) : null}
+                  {item.trainingDaysPerWeek ? (
+                    <View className="rounded-full bg-muted px-2 py-0.5">
+                      <Text className="text-muted-foreground text-xs font-medium">
+                        {item.trainingDaysPerWeek}x/wk
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+              {item.targetUser ? (
+                <Text className="text-muted-foreground text-sm mt-0.5">
+                  {item.targetUser}
+                </Text>
+              ) : null}
+              {visibleTags.length > 0 ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 4,
+                    marginTop: 6,
+                  }}
+                >
+                  {visibleTags.map((tag) => (
+                    <View
+                      key={tag}
+                      className="rounded-full bg-success/10 px-2 py-0.5"
+                    >
+                      <Text className="text-success text-xs">{tag}</Text>
+                    </View>
+                  ))}
+                  {extraTags > 0 ? (
+                    <Text className="text-muted-foreground text-xs">
+                      +{extraTags} more
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </Pressable>
+
+            <ChevronRight
+              color={colors["muted-foreground"]}
+              size={18}
+              strokeWidth={1.5}
+            />
           </View>
         );
       })}

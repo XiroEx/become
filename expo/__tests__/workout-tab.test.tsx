@@ -402,7 +402,7 @@ describe("Workout tab: acceptance criteria tests", () => {
 
   // Tab Root Integration & Header Links
   describe("Workout Tab Root (ProgrammingIndexRoute)", () => {
-    it("renders header links to History, Browse, Workout Now, Calendar, Search, and Saved", async () => {
+    it("renders header links to History, Workouts, Programs, Generate, Calendar, Search, and Saved", async () => {
       mockApiFetch.mockImplementation(async (path: string) => {
         if (path.startsWith("/api/workouts/in-progress")) {
           return { workout: null, planned: null };
@@ -416,16 +416,18 @@ describe("Workout tab: acceptance criteria tests", () => {
         if (path.startsWith("/api/workouts/logs")) {
           return { logs: [], favoriteSessionOrder: [] };
         }
+        if (path.startsWith("/api/programs/saved")) {
+          return { savedPrograms: [] };
+        }
+        if (path.startsWith("/api/programs/search") || path === "/api/programs") {
+          return { programs: [], pagination: { hasMore: false, total: 0 }, availableTags: [] };
+        }
         return {};
       });
 
       const { getByTestId, getByText } = render(<ProgrammingIndexRoute />);
 
       expect(getByText("Workout")).toBeTruthy();
-
-      // Browse link -> pushes /(tabs)/programming/browse
-      fireEvent.press(getByTestId("workout-open-browse"));
-      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/browse");
 
       // Calendar link -> pushes /(tabs)/calendar
       fireEvent.press(getByTestId("programming-open-calendar"));
@@ -439,13 +441,106 @@ describe("Workout tab: acceptance criteria tests", () => {
       fireEvent.press(getByTestId("programming-open-saved"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/saved");
 
-      // History link
+      // History chip
       fireEvent.press(getByTestId("workout-open-history"));
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/history");
 
-      // Workout Now button opens the sheet in place (NP-076)
-      fireEvent.press(getByTestId("workout-open-workout-now"));
+      // Workouts chip (web's "Workouts" / hub Exercises tab) -> My Exercises screen
+      fireEvent.press(getByTestId("workout-open-exercises"));
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/exercises");
+
+      // Programs chip (web's "Programs" / hub Programs tab) -> My Programs screen
+      fireEvent.press(getByTestId("workout-open-mine"));
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/mine");
+
+      // There is no standalone Browse or header Workout Now chip any more —
+      // Browse's content is now inline (Saved/Recommended/Browse Programs
+      // below Continue Training) and Workout Now lives on the Continue
+      // Training header / empty state.
+      expect(() => getByTestId("workout-open-browse")).toThrow();
+      expect(() => getByTestId("workout-open-workout-now")).toThrow();
+
+      // Workout Now button (Continue Training's empty-state CTA, since no
+      // active programs were mocked) opens the sheet in place (NP-076)
+      await waitFor(() => {
+        expect(getByTestId("workout-now-button")).toBeTruthy();
+      });
+      fireEvent.press(getByTestId("workout-now-button"));
       expect(getByTestId("workout-now-sheet-focus-push")).toBeTruthy();
+    });
+
+    it("renders Saved for Later, Recommended for You and Browse Programs below Continue Training (NP-277)", async () => {
+      mockApiFetch.mockImplementation(async (path: string) => {
+        if (path.startsWith("/api/workouts/in-progress")) {
+          return { workout: null, planned: null };
+        }
+        if (path.startsWith("/api/programs/active")) {
+          return { activePrograms: [] };
+        }
+        if (path.startsWith("/api/schedule")) {
+          return { schedules: [] };
+        }
+        if (path.startsWith("/api/workouts/logs")) {
+          return { logs: [], favoriteSessionOrder: [] };
+        }
+        if (path.startsWith("/api/programs/saved")) {
+          return {
+            savedPrograms: [
+              {
+                program_id: "s1",
+                name: "Saved Strength",
+                duration_weeks: 8,
+                training_days_per_week: 4,
+                savedAt: "2026-09-01T00:00:00.000Z",
+                order: 0,
+              },
+            ],
+          };
+        }
+        if (path.startsWith("/api/programs/search") || path === "/api/programs") {
+          return {
+            programs: [
+              {
+                program_id: "r1",
+                name: "Recommended Hypertrophy",
+                duration_weeks: 10,
+                training_days_per_week: 5,
+                goal: "gain_muscle",
+                target_user: "Intermediate",
+                tags: ["hypertrophy"],
+              },
+            ],
+            pagination: { hasMore: false, total: 1 },
+            availableTags: ["hypertrophy"],
+          };
+        }
+        if (path.startsWith("/api/profile")) {
+          return { profile: { fitnessGoal: "gain_muscle", experienceLevel: "intermediate" } };
+        }
+        return {};
+      });
+
+      const { getByTestId, getByText } = render(<ProgrammingIndexRoute />);
+
+      await waitFor(() => {
+        expect(getByText("Saved for Later")).toBeTruthy();
+      });
+      expect(getByTestId("programming-browse-saved-section")).toBeTruthy();
+
+      await waitFor(() => {
+        expect(getByText("Recommended for You")).toBeTruthy();
+      });
+      expect(getByTestId("programming-browse-recommended")).toBeTruthy();
+
+      // Workout tab's catalog header reads "Browse Programs", matching the
+      // web's Workout page. The dedicated Browse screen (NP-278) says the
+      // same thing now — both mirror the web's one heading.
+      await waitFor(() => {
+        expect(getByText("Browse Programs")).toBeTruthy();
+      });
+      expect(getByTestId("programs-list")).toBeTruthy();
+      expect(getByTestId("programming-browse-search-input")).toBeTruthy();
+      expect(getByTestId("programming-browse-filter-toggle")).toBeTruthy();
     });
   });
 });

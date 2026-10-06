@@ -107,10 +107,18 @@ describe("Card NP-261 — Review opens the basket on iOS (BLOCKER)", () => {
       expect(getByTestId(`food-search-result-${OATS._id}`)).toBeTruthy();
     });
 
-    // Pick a food — basket mode on today collects it instead of logging
-    // straight away, and the bar with Review appears.
+    // Pick a food — basket mode on today expands the inline quantity
+    // picker instead of logging straight away (NP-261). "Build a meal"
+    // adds the chosen quantity to the basket, and the bar with Review
+    // appears.
     await act(async () => {
       fireEvent.press(getByTestId(`food-search-result-${OATS._id}`));
+    });
+    await waitFor(() => {
+      expect(getByTestId("quantity-picker-secondary-action")).toBeTruthy();
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("quantity-picker-secondary-action"));
     });
     await waitFor(() => {
       expect(getByTestId("food-search-basket-open")).toBeTruthy();

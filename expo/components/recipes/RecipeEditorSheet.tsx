@@ -47,9 +47,8 @@ import {
   type RecipeIngredientInput,
   type RecipeIngredientMacros,
 } from "@/lib/nutrition/recipes";
-import { defaultVariantOf } from "@/lib/nutrition/foodMath";
+import type { FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import type { Food } from "@become/api-client";
 
 export interface RecipeEditorIngredient extends RecipeIngredientInput {}
 
@@ -259,33 +258,34 @@ export function RecipeEditorSheet({
     setCustomTagInput("");
   }, [customTagInput]);
 
-  // The web's `handleAddIngredient`: the pick's servings become the amount,
-  // its serving unit the unit, its per-serving nutrition the per-unit basis.
-  const handleAddFood = useCallback((food: Food) => {
-    const variant = defaultVariantOf(food);
-    if (!variant) return;
-    const amount = 1;
+  // NP-261: `FoodSearchSheet`'s inline quantity picker (amount, unit — the
+  // member's own choice, not always the default serving) hands back the
+  // built `MealItemPayload` item directly. The web's `handleAddIngredient`
+  // amount/unit/perUnit model wants PER-ONE-UNIT macros: `item.nutrition`
+  // is the variant's unscaled per-serving basis and `item.servings` is the
+  // scaling factor to the picked quantity (`buildMealItemPayload`), so
+  // `item.nutrition * item.servings / amount` is the total-for-the-pick
+  // divided back down to one `item.loggedUnit`.
+  const handleAddFood = useCallback(({ item }: FoodPickResult) => {
+    const amount = item.loggedQuantity > 0 ? item.loggedQuantity : 1;
+    const unit = item.loggedUnit || item.servingUnit || "serving";
+    const scale = item.servings / amount;
     const perUnit: RecipeIngredientMacros = {
-      calories: variant.nutrition.calories ?? 0,
-      protein: variant.nutrition.protein ?? 0,
-      carbs: variant.nutrition.carbs ?? 0,
-      fats: variant.nutrition.fats ?? 0,
+      calories: (item.nutrition.calories ?? 0) * scale,
+      protein: (item.nutrition.protein ?? 0) * scale,
+      carbs: (item.nutrition.carbs ?? 0) * scale,
+      fats: (item.nutrition.fats ?? 0) * scale,
     };
-    const rawId = (food as { _id?: unknown; id?: unknown })._id ??
-      (food as { _id?: unknown; id?: unknown }).id;
-    const foodId = rawId != null && String(rawId).length > 0 ? String(rawId) : undefined;
     setIngredients((prev) => [
       ...prev,
       {
         key: editorKey(),
-        name: String(food.name ?? "Food"),
-        ...((food as { brand?: unknown }).brand
-          ? { brand: String((food as { brand?: unknown }).brand) }
-          : {}),
+        name: item.name,
+        ...(item.brand ? { brand: item.brand } : {}),
         amount,
-        unit: variant.servingUnit || "serving",
+        unit,
         perUnit,
-        ...(foodId ? { foodId } : {}),
+        ...(item.foodId ? { foodId: item.foodId } : {}),
       },
     ]);
     setSearchOpen(false);
