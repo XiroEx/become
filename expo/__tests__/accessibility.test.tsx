@@ -245,7 +245,7 @@ const V1_SCREENS: Screen[] = [
     noControls: true,
     reveal: async () => {
       fireEvent.changeText(screen.getByLabelText("Email"), "jon@example.com");
-      fireEvent.press(screen.getByRole("button", { name: "Send magic link" }));
+      fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
       await waitFor(() => screen.getByTestId("login-submitted"));
     },
   },
@@ -408,8 +408,8 @@ describe("every interactive element has a role and a label", () => {
   it("a button that is loading keeps its name — the spinner has none", () => {
     render(<LoginScreen />);
     fireEvent.changeText(screen.getByLabelText("Email"), "jon@example.com");
-    const button = screen.getByRole("button", { name: "Send magic link" });
-    expect(button.props.accessibilityLabel).toBe("Send magic link");
+    const button = screen.getByRole("button", { name: "Continue with email" });
+    expect(button.props.accessibilityLabel).toBe("Continue with email");
     // Sending swaps the label for an ActivityIndicator. Without the name
     // computed from the children this becomes "button", with nothing else said.
     const sending = render(
@@ -553,7 +553,7 @@ describe("state changes are announced", () => {
       .mockImplementation(() => {});
     render(<LoginScreen />);
     fireEvent.changeText(screen.getByLabelText("Email"), "jon@example.com");
-    fireEvent.press(screen.getByRole("button", { name: "Send magic link" }));
+    fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
     await waitFor(() => screen.getByTestId("login-submitted"));
     expect(spoken).toHaveBeenCalledWith(
       expect.stringContaining("Check your inbox"),
@@ -580,7 +580,7 @@ describe("state changes are announced", () => {
   it("an error is an alert, not a paragraph three swipes away", () => {
     render(<LoginScreen />);
     fireEvent.changeText(screen.getByLabelText("Email"), "not-an-email");
-    fireEvent.press(screen.getByRole("button", { name: "Send magic link" }));
+    fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
     const error = screen.getByTestId("login-email-error");
     expect(error.props.accessibilityRole).toBe("alert");
     expect(error.props.accessibilityLiveRegion).toBe("assertive");
@@ -596,8 +596,8 @@ describe("sign-in through to Home, by role and name only", () => {
   it("the email field, the send button, the questionnaire, Home and Settings", async () => {
     render(<LoginScreen />);
     fireEvent.changeText(screen.getByLabelText("Email"), "jon@example.com");
-    fireEvent.press(screen.getByRole("button", { name: "Send magic link" }));
-    expect(await screen.findByText("Check your inbox")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Continue with email" }));
+    expect(await screen.findByText("Check your email")).toBeTruthy();
     screen.unmount();
 
     // A new member lands in onboarding, which is 5 steps and Next/Finish
