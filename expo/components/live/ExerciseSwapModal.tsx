@@ -572,7 +572,7 @@ export function ExerciseSwapModal({
         ...new Set(
           searchCandidates
             .map((alt) => alt.bodyRegion)
-            .filter((v): v is string => Boolean(v)),
+            .filter((v): v is NonNullable<typeof v> => v != null),
         ),
       ].sort(),
     [searchCandidates],
@@ -583,7 +583,7 @@ export function ExerciseSwapModal({
         ...new Set(
           searchCandidates
             .map((alt) => alt.difficulty)
-            .filter((v): v is string => Boolean(v)),
+            .filter((v): v is NonNullable<typeof v> => v != null),
         ),
       ].sort(),
     [searchCandidates],
@@ -594,7 +594,7 @@ export function ExerciseSwapModal({
         ...new Set(
           searchCandidates
             .map((alt) => alt.category)
-            .filter((v): v is string => Boolean(v)),
+            .filter((v): v is NonNullable<typeof v> => v != null),
         ),
       ].sort(),
     [searchCandidates],
