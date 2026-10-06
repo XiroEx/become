@@ -1,6 +1,6 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Flame } from "lucide-react-native";
+import { Award, Dumbbell, Flame, TrendingUp } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
@@ -33,9 +33,11 @@ import {
 //   2. No animation library: the web's framer-motion entrance is plain layout
 //      here. Same sections, same order, same words.
 //   3. The web's hero swaps its icon by state (Award for a PR day, Dumbbell
-//      otherwise, Rocket on the program-complete CTA, TrendingUp on the log
-//      link). This port keeps the words and leaves the iconography to the
-//      streak Flame until NP-123 signs off on hero art.
+//      otherwise) inside an emerald ring — ported below, now that NP-123's
+//      token file makes the colour ring-safe for light AND dark. The
+//      program-complete hero and its Rocket CTA stay text-only pending a
+//      card that actually reports them broken; this one's screenshots are
+//      all the non-program "WORKOUT DONE" / "I'll Be Back" state.
 // ────────────────────────────────────────────────────────────────────────────
 
 export const WORKOUT_QUOTES = [
@@ -323,7 +325,7 @@ export function WorkoutSummary({
   testID = "workout-summary",
 }: WorkoutSummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length];
-  const { colors } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const { totalSets, totalVolume } = summaryTotals(setsByExercise);
   const newPRs = computeSummaryPRs(exercises, setsByExercise, exerciseHistory);
   const closing =
@@ -363,6 +365,33 @@ export function WorkoutSummary({
             </Text>
           ) : (
             <View style={{ alignItems: "center" }}>
+              {/* Hero ring — the web's emerald circle behind Award (a PR
+                  day) or Dumbbell (otherwise), bg-emerald-500/15 (20% in
+                  dark) with a 30%-alpha ring in both modes. */}
+              <View
+                testID={`${testID}-hero-icon`}
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: 48,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: 16,
+                  backgroundColor: tint("success", isDark ? 0.2 : 0.15),
+                  borderWidth: 4,
+                  borderColor: tint("success", 0.3),
+                }}
+              >
+                {newPRs.length > 0 ? (
+                  <Award color={colors.success} size={48} strokeWidth={1.5} />
+                ) : (
+                  <Dumbbell
+                    color={colors.success}
+                    size={48}
+                    strokeWidth={1.5}
+                  />
+                )}
+              </View>
               <Text className="text-muted-foreground text-sm mt-2 text-center">
                 {workoutDay} — {workoutTitle}
               </Text>
@@ -388,7 +417,7 @@ export function WorkoutSummary({
             <Card testID={`${testID}-stat-time`} style={{ alignItems: "center" }}>
               <Text
                 testID={`${testID}-time`}
-                className="text-foreground text-2xl font-bold"
+                className="text-emerald-600 dark:text-emerald-400 text-2xl font-bold"
               >
                 {formatSummaryTime(elapsedSeconds)}
               </Text>
@@ -401,7 +430,7 @@ export function WorkoutSummary({
             <Card testID={`${testID}-stat-sets`} style={{ alignItems: "center" }}>
               <Text
                 testID={`${testID}-sets`}
-                className="text-foreground text-2xl font-bold"
+                className="text-blue-600 dark:text-blue-400 text-2xl font-bold"
               >
                 {totalSets}
               </Text>
@@ -414,7 +443,7 @@ export function WorkoutSummary({
             <Card testID={`${testID}-stat-volume`} style={{ alignItems: "center" }}>
               <Text
                 testID={`${testID}-volume`}
-                className="text-foreground text-2xl font-bold"
+                className="text-violet-600 dark:text-violet-400 text-2xl font-bold"
               >
                 {totalVolume.toLocaleString()}
               </Text>
@@ -613,8 +642,17 @@ export function WorkoutSummary({
           <Button
             testID={`${testID}-done`}
             size="lg"
+            // The web's non-program done button is foreground-on-background
+            // (`bg-zinc-900 dark:bg-white`), never the brand red — `primary`
+            // is reserved for destructive-adjacent actions (Button.tsx).
+            variant={programCompleted ? "primary" : "inverted"}
             onPress={onDone}
             accessibilityHint="Returns to the Workout tab"
+            icon={
+              programCompleted ? undefined : (
+                <Dumbbell color={colors.background} size={20} />
+              )
+            }
           >
             {programCompleted ? "Find My Next Challenge" : "I'll Be Back"}
           </Button>
@@ -631,6 +669,7 @@ export function WorkoutSummary({
               testID={`${testID}-secondary`}
               variant="ghost"
               onPress={onViewLog}
+              icon={<TrendingUp color={colors.foreground} size={16} />}
             >
               View Training Log
             </Button>
