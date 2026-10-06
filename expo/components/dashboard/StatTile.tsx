@@ -12,7 +12,6 @@ import {
   Scale,
   Dumbbell,
   Sparkles,
-  ChevronRight,
   Smile,
 } from "lucide-react-native";
 import { describeGoal } from "@become/core";
@@ -21,6 +20,17 @@ import { MoodLogSheet } from "./MoodLogSheet";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
 import type { DashboardStatData } from "@/lib/dashboard/types";
+import type { TokenName } from "@/lib/theme/tokens";
+
+/** Mirrors the web's `MoodCard` `moodConfig[level]` — one colour per mood,
+ * not one flat accent for every level. */
+const MOOD_ACCENT_TOKEN: Record<MoodLevel, TokenName> = {
+  1: "mood-bad",
+  2: "mood-low",
+  3: "mood-okay",
+  4: "mood-good",
+  5: "mood-great",
+};
 
 export interface StatTileProps {
   tile: DashboardTile;
@@ -139,6 +149,11 @@ export function StatTile({
   let badgeBg = tint("accent", 0.15);
   let barColor = colors.accent;
   let handlePress = onPress;
+  // Mood only: the web's value text and face badge are filled in the
+  // SPECIFIC mood's colour (`MoodCard`'s `moodConfig[level].textColor` /
+  // `bgColor`), not one flat accent for every level. `undefined` elsewhere
+  // leaves every other tile's `text-foreground` className untouched.
+  let valueColor: string | undefined;
 
   if (tile.id === "streak") {
     label = "Day Streak";
@@ -166,14 +181,19 @@ export function StatTile({
   } else if (tile.id === "mood") {
     label = "Today's Mood";
     IconComponent = Smile;
-    iconColor = colors.accent;
-    badgeBg = tint("accent", 0.15);
     handlePress =
       handlePress ??
       onOpenMood ??
       (onMoodChange ? () => setInternalMoodOpen(true) : onOpenCheckIn);
 
     const currentMood = statData?.todaysMood;
+    const moodToken = currentMood ? MOOD_ACCENT_TOKEN[currentMood as MoodLevel] : null;
+    // Filled face + coloured value, like the web's `moodConfig[level]`
+    // (`bgColor`/`textColor`) — e.g. "Not Great" is `bg-orange-100
+    // text-orange-700`, never one flat amber regardless of the level.
+    iconColor = moodToken ? colors[moodToken] : colors["muted-foreground"];
+    badgeBg = moodToken ? tint(moodToken, 0.25) : tint("muted", 0.3);
+    valueColor = moodToken ? colors[moodToken] : colors.foreground;
     value = currentMood && MOOD_LABELS[currentMood as MoodLevel] ? MOOD_LABELS[currentMood as MoodLevel] : "Set";
 
     const recent = statData?.recentMoods ?? [];
@@ -243,8 +263,6 @@ export function StatTile({
   } else if (tile.id === "calories") {
     label = "Calories";
     IconComponent = Utensils;
-    iconColor = colors.primary;
-    badgeBg = tint("primary", 0.15);
     handlePress = handlePress ?? onOpenNutrition;
 
     const consumed = Math.round(statData?.caloriesConsumed ?? 0);
@@ -258,10 +276,17 @@ export function StatTile({
       const remaining = Math.max(0, goal - consumed);
       barColor = over ? colors.destructive : pct >= 90 ? colors.accent : colors.success;
       footer = over ? `${consumed - goal} over` : `${remaining} cal left`;
+      // Matches the web's `renderCalories`: green while under goal, red only
+      // when over (or, below, when no goal is set at all) — never a flat red
+      // icon tile for the common "on track" state.
+      iconColor = over ? colors.destructive : colors.success;
+      badgeBg = over ? tint("destructive", 0.15) : tint("success", 0.15);
     } else {
       pct = 0;
       barColor = colors.muted;
       footer = "Set a calorie goal";
+      iconColor = colors.destructive;
+      badgeBg = tint("destructive", 0.15);
     }
   } else if (tile.id === "water") {
     label = "Water";
@@ -374,6 +399,7 @@ export function StatTile({
                 <Text
                   testID={`${rootTestId}-value`}
                   className="text-foreground text-2xl font-bold"
+                  style={valueColor ? { color: valueColor } : undefined}
                   numberOfLines={1}
                 >
                   {value}
@@ -389,8 +415,11 @@ export function StatTile({
                 ) : null}
               </View>
             </View>
+            {/* Web's wide `StatTile` never draws a chevron or a trailing dot
+                — just the bar, and it stretches (`flex-1`) to fill the space
+                beside the value column rather than a short fixed width. */}
             <View style={styles.wideRight}>
-              <View style={[styles.barTrack, { backgroundColor: colors.muted, width: 80 }]}>
+              <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
                 <View
                   style={[
                     styles.barFill,
@@ -401,7 +430,6 @@ export function StatTile({
                   ]}
                 />
               </View>
-              <ChevronRight size={16} color={colors["muted-foreground"]} />
             </View>
           </View>
         ) : (
@@ -420,6 +448,7 @@ export function StatTile({
             <Text
               testID={`${rootTestId}-value`}
               className="text-foreground text-2xl font-bold mt-2"
+              style={valueColor ? { color: valueColor } : undefined}
               numberOfLines={1}
             >
               {value}
@@ -487,9 +516,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   wideRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   badge: {
     width: 44,

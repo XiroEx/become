@@ -18,7 +18,6 @@ import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import Svg, {
   Path,
-  Circle,
   Rect,
   Line,
   Defs,
@@ -93,7 +92,7 @@ export function ProgressChart({
   defaultChart,
   testID = "progress-chart",
 }: ProgressChartProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors } = useThemeTokens();
   const [chartWidth, setChartWidth] = useState<number>(320);
 
   const allTabs: ChartType[] = ["weight", "bmi"];
@@ -146,21 +145,25 @@ export function ProgressChart({
     activeChart === "body_fat" ||
     activeChart === "lean_mass";
 
+  // Matches `webapp/components/ProgressChart.tsx`'s `chartConfig` colours:
+  // weight is blue, BMI green, body fat orange, lean mass purple, mood amber.
   const seriesColor: Record<ChartType, string> = {
-    weight: colors.primary,
+    weight: colors.info,
     bmi: colors.success,
     body_fat: colors.accent,
-    lean_mass: colors.primary,
+    lean_mass: colors.mindset,
     mood: colors.accent,
   };
   const activeColor = seriesColor[activeChart];
 
+  // Matches the web's flat `moodColors` — one colour per mood level that does
+  // not flip with light/dark, same as the web's.
   const moodColors: Record<number, string> = {
-    1: colors.destructive,
-    2: colors.accent,
-    3: colors.accent,
-    4: colors.success,
-    5: colors.success,
+    1: colors["mood-bad"],
+    2: colors["mood-low"],
+    3: colors["mood-okay"],
+    4: colors["mood-good"],
+    5: colors["mood-great"],
   };
 
   // Change color & background
@@ -177,10 +180,6 @@ export function ProgressChart({
     }
   }
   const changeColor = colors[sentimentToken];
-  const changeBg =
-    sentimentToken === "muted-foreground"
-      ? colors.muted
-      : tint(sentimentToken, 0.18);
 
   // Dimensions for SVG plotting
   const height = 180;
@@ -282,7 +281,7 @@ export function ProgressChart({
           <View
             testID="progress-chart-change"
             accessibilityLabel={`${stats.trend === "up" ? "Up" : "Down"} ${Math.abs(stats.change).toFixed(1)} ${config.unit}`}
-            style={[styles.changeBadge, { backgroundColor: changeBg }]}
+            style={styles.changeBadge}
           >
             {stats.trend === "up" ? (
               <ArrowUp size={12} strokeWidth={2.5} color={changeColor} />
@@ -326,24 +325,37 @@ export function ProgressChart({
           {activeChart === "mood" ? (
             /* Mood Bar Chart */
             <Svg width={chartWidth} height={height}>
-              {/* Y Grid lines for 1..5 */}
+              {/* Y Grid lines + face icons for 1..5, matching the web's
+                  `YAxis tickFormatter={(v) => moodLabels[v]}` */}
               {[1, 2, 3, 4, 5].map((level) => {
                 const y = paddingTop + plotHeight - ((level - 1) / 4) * plotHeight;
                 return (
-                  <Line
-                    key={`grid-${level}`}
-                    x1={paddingLeft}
-                    y1={y}
-                    x2={paddingLeft + plotWidth}
-                    y2={y}
-                    stroke={colors.border}
-                    strokeWidth={1}
-                    strokeDasharray="3,3"
-                  />
+                  <React.Fragment key={`grid-${level}`}>
+                    <Line
+                      x1={paddingLeft}
+                      y1={y}
+                      x2={paddingLeft + plotWidth}
+                      y2={y}
+                      stroke={colors.border}
+                      strokeWidth={1}
+                      strokeDasharray="3,3"
+                    />
+                    <SvgText
+                      x={paddingLeft - 8}
+                      y={y + 5}
+                      fontSize={12}
+                      textAnchor="end"
+                    >
+                      {moodLabels[level]}
+                    </SvgText>
+                  </React.Fragment>
                 );
               })}
 
-              {/* Mood Bars */}
+              {/* Mood Bars. Date labels are thinned out the same way the
+                  line/area chart's are (first / last / middle only beyond 6
+                  points) — drawing every one overlaps into one unreadable
+                  string at this chart's width. */}
               {data.map((entry, idx) => {
                 const n = data.length;
                 const slotWidth = plotWidth / n;
@@ -354,6 +366,8 @@ export function ProgressChart({
                 const barH = ((clampedVal - 1) / 4) * plotHeight + 6;
                 const barY = paddingTop + plotHeight - barH;
                 const color = moodColors[entry.value] || activeColor;
+                const showDate =
+                  n <= 6 || idx === 0 || idx === n - 1 || idx === Math.floor(n / 2);
 
                 return (
                   <React.Fragment key={`mood-bar-${idx}`}>
@@ -366,15 +380,17 @@ export function ProgressChart({
                       ry={4}
                       fill={color}
                     />
-                    <SvgText
-                      x={barX + barWidth / 2}
-                      y={paddingTop + plotHeight + 16}
-                      fontSize={10}
-                      fill={colors["muted-foreground"]}
-                      textAnchor="middle"
-                    >
-                      {entry.date}
-                    </SvgText>
+                    {showDate ? (
+                      <SvgText
+                        x={barX + barWidth / 2}
+                        y={paddingTop + plotHeight + 16}
+                        fontSize={10}
+                        fill={colors["muted-foreground"]}
+                        textAnchor="middle"
+                      >
+                        {entry.date}
+                      </SvgText>
+                    ) : null}
                   </React.Fragment>
                 );
               })}
@@ -393,8 +409,9 @@ export function ProgressChart({
                 minVal = Math.min(minVal, targetWeight);
                 maxVal = Math.max(maxVal, targetWeight);
               }
-              let yMin = minVal - 1;
-              let yMax = maxVal + 1;
+              // The web's YAxis domain is `['dataMin - 2', 'dataMax + 2']`.
+              let yMin = minVal - 2;
+              let yMax = maxVal + 2;
               if (yMax <= yMin) {
                 yMin -= 1;
                 yMax += 1;
@@ -526,7 +543,9 @@ export function ProgressChart({
                     />
                   ) : null}
 
-                  {/* Points & Date labels */}
+                  {/* Date labels only — the web's Area chart has no resting-state
+                      dot (`dot` is unset, which Recharts defaults to hidden
+                      until hover), so none is drawn here either. */}
                   {pts.map((pt, i) => {
                     const showDate =
                       pts.length <= 6 ||
@@ -536,14 +555,6 @@ export function ProgressChart({
 
                     return (
                       <React.Fragment key={`point-${i}`}>
-                        <Circle
-                          cx={pt.x}
-                          cy={pt.y}
-                          r={4}
-                          fill={activeColor}
-                          stroke={colors.card}
-                          strokeWidth={2}
-                        />
                         {showDate ? (
                           <SvgText
                             x={pt.x}
@@ -609,12 +620,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   changeBadge: {
+    // Plain text + icon, no pill fill — matches the web's `<span className=
+    // "flex items-center gap-1 text-sm font-medium ...">` (no background).
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
     flexShrink: 0,
   },
   changeText: {

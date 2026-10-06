@@ -216,15 +216,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   link: {
+    // A fixed 2-column grid (the web's `grid grid-cols-2`), not a flexing
+    // row — `flexGrow: 1` let an odd third item (Progress, with Connect
+    // hidden) stretch to claim the whole row instead of staying in its own
+    // half-width cell with an empty cell beside it.
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderRadius: 12,
     borderWidth: 1,
     padding: 10,
-    flexGrow: 1,
+    flexGrow: 0,
     flexShrink: 1,
-    flexBasis: "45%",
+    flexBasis: "48%",
     minHeight: 56,
   },
   linkIcon: {

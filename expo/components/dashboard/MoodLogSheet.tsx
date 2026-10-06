@@ -6,6 +6,17 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { X, Smile } from "lucide-react-native";
 import type { MoodLevel } from "@/components/CheckInModal";
 import { MOOD_LABELS } from "@/components/CheckInModal";
+import type { TokenName } from "@/lib/theme/tokens";
+
+/** Mirrors the web's `MoodCard` `moodConfig[level]` — a selection highlighted
+ * in the SPECIFIC mood's colour, never the brand red for every level. */
+const MOOD_ACCENT_TOKEN: Record<MoodLevel, TokenName> = {
+  1: "mood-bad",
+  2: "mood-low",
+  3: "mood-okay",
+  4: "mood-good",
+  5: "mood-great",
+};
 
 export interface MoodOption {
   level: MoodLevel;
@@ -132,6 +143,10 @@ export function MoodLogSheet({
         <View style={{ gap: 8 }}>
           {MOOD_OPTIONS.map((m) => {
             const isSelected = currentMood === m.level;
+            // The web's selected state is a neutral zinc ring + fill
+            // (`ring-zinc-300 bg-zinc-100`) with the face itself carrying the
+            // mood's colour — never the brand red for every level.
+            const moodToken = MOOD_ACCENT_TOKEN[m.level];
             return (
               <Pressable
                 key={m.level}
@@ -144,10 +159,8 @@ export function MoodLogSheet({
                 style={[
                   styles.optionButton,
                   {
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    backgroundColor: isSelected
-                      ? tint("primary", 0.1)
-                      : colors.card,
+                    borderColor: isSelected ? colors["muted-foreground"] : colors.border,
+                    backgroundColor: isSelected ? colors.muted : colors.card,
                   },
                 ]}
               >
@@ -155,12 +168,18 @@ export function MoodLogSheet({
                   testID={`mood-option-${m.level}`}
                   style={{ flexDirection: "row", alignItems: "center", gap: 12, flex: 1 }}
                 >
-                  <Text style={{ fontSize: 24 }}>{m.emoji}</Text>
+                  <View
+                    style={[
+                      styles.faceBadge,
+                      { backgroundColor: tint(moodToken, 0.25) },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 20 }}>{m.emoji}</Text>
+                  </View>
                   <Text
                     testID={`tile-mood-option-${m.level}`}
-                    className={`text-base font-semibold ${
-                      isSelected ? "text-primary" : "text-foreground"
-                    }`}
+                    className="text-base font-semibold"
+                    style={{ color: isSelected ? colors[moodToken] : colors.foreground }}
                   >
                     {m.label}
                   </Text>
@@ -169,7 +188,7 @@ export function MoodLogSheet({
                   <View
                     style={[
                       styles.indicator,
-                      { backgroundColor: colors.primary },
+                      { backgroundColor: colors[moodToken] },
                     ]}
                   />
                 ) : null}
@@ -197,5 +216,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  faceBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

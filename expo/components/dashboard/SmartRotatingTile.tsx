@@ -224,12 +224,13 @@ export function SmartRotatingTile({
     <View testID={rootTestId} style={styles.wrapper}>
       {card}
       {/* The "live" affordance: a small dot, non-interactive so it can never
-          swallow a press on the card underneath. */}
+          swallow a press on the card underneath. The web's is indigo
+          (`bg-indigo-500`), never the brand red — closest token is `info`. */}
       <View
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[styles.liveDot, { backgroundColor: colors.primary }]}
+        style={[styles.liveDot, { backgroundColor: colors.info }]}
       />
     </View>
   );
