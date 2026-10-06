@@ -8,7 +8,7 @@ import {
   ScrollView,
   View,
 } from "react-native";
-import { BadgeCheck, Bookmark, Pencil, Trash2 } from "lucide-react-native";
+import { BadgeCheck, Bookmark, Check, Pencil, Trash2 } from "lucide-react-native";
 import { z } from "zod";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,10 +23,13 @@ import {
   QuantityPicker,
   type QuantityPickerSelection,
 } from "@/components/nutrition/QuantityPicker";
+import { FoodThumbnail } from "@/components/nutrition/FoodThumbnail";
+import { BridgeFieldGroup, type BridgeValues } from "@/components/nutrition/BridgeFieldGroup";
 import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
+import { BottomSheet } from "@/components/BottomSheet";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -109,6 +112,15 @@ function servingLabelFor(variant: {
 
 function round1(n: number): string {
   return String(Math.round(n * 10) / 10);
+}
+
+/** Mirrors the web's `getDefaultTagForNow` (`webapp/app/dashboard/foods/[id]/page.tsx`). */
+function getDefaultTagForNow(): string {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 11) return "breakfast";
+  if (h >= 11 && h < 14) return "lunch";
+  if (h >= 17 && h < 21) return "dinner";
+  return "snack";
 }
 
 export default function FoodDetailRoute() {
@@ -242,48 +254,28 @@ export default function FoodDetailRoute() {
 
   const [pickerSelection, setPickerSelection] = useState<QuantityPickerSelection | null>(null);
 
+  // The web's sticky black `Log this food` button opens a sheet (NP-269) —
+  // `ADDING TO <tag>`, amount chips, a coloured macro tile, `Log to day` —
+  // rather than rendering the amount/tag/time/date form inline on the page.
+  // Defaults to the food's own default variant (QuantityPicker now selects
+  // by `isDefault`, never index 0) and a time-of-day tag, same as the web.
+  const [logSheetOpen, setLogSheetOpen] = useState(false);
+
   // Bridge editing (owners and admins only): the two canonical numbers per
-  // variant, edited as plain numeric inputs and saved with the whole
-  // `variants` array — the allowlisted field the route accepts.
-  const [bridgeDrafts, setBridgeDrafts] = useState<
-    Record<number, { grams: string; ml: string }>
-  >({});
+  // variant, edited through the web's own fields (`BridgeFieldGroup` —
+  // "Weight per serving (optional)" / "Volume per serving (optional)",
+  // freeform units, commit on blur) and saved with the whole `variants`
+  // array — the allowlisted field the route accepts.
   const [savingBridge, setSavingBridge] = useState<number | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
 
-  const bridgeDraftFor = useCallback(
-    (idx: number, variant: FoodVariant): { grams: string; ml: string } => {
-      const draft = bridgeDrafts[idx];
-      if (draft) return draft;
-      return {
-        grams:
-          variant.gramsPerServing != null
-            ? String(variant.gramsPerServing)
-            : "",
-        ml:
-          variant.mlPerServing != null ? String(variant.mlPerServing) : "",
-      };
-    },
-    [bridgeDrafts],
-  );
-
   const handleBridgeSave = useCallback(
-    async (variantIndex: number) => {
+    async (variantIndex: number, next: BridgeValues) => {
       if (!food || savingBridge !== null) return;
       const target = variants[variantIndex];
       if (!target) return;
-      const draft = bridgeDraftFor(variantIndex, target);
-      const gramsRaw = draft.grams.trim();
-      const mlRaw = draft.ml.trim();
-      const grams = gramsRaw === "" ? undefined : Number(gramsRaw);
-      const ml = mlRaw === "" ? undefined : Number(mlRaw);
-      if (
-        (gramsRaw !== "" && (!Number.isFinite(grams) || (grams as number) <= 0)) ||
-        (mlRaw !== "" && (!Number.isFinite(ml) || (ml as number) <= 0))
-      ) {
-        setBridgeError("Bridge values must be positive numbers.");
-        return;
-      }
+      const grams = next.gramsPerServing;
+      const ml = next.mlPerServing;
       const noChange =
         (target.gramsPerServing ?? null) === (grams ?? null) &&
         (target.mlPerServing ?? null) === (ml ?? null);
@@ -314,11 +306,6 @@ export default function FoodDetailRoute() {
             body: { variants: updated },
           },
         );
-        setBridgeDrafts((prev) => {
-          const next = { ...prev };
-          delete next[variantIndex];
-          return next;
-        });
         await refetchFood();
       } catch (err) {
         const { handled, message } = handleApiError(err);
@@ -331,7 +318,6 @@ export default function FoodDetailRoute() {
       food,
       variants,
       savingBridge,
-      bridgeDraftFor,
       token,
       id,
       refetchFood,
@@ -601,13 +587,30 @@ export default function FoodDetailRoute() {
                   disabled={bookmarking}
                   onPress={() => void handleBookmarkToggle()}
                   hitSlop={8}
-                  style={{ padding: 6, opacity: bookmarking ? 0.5 : 1 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    padding: 6,
+                    opacity: bookmarking ? 0.5 : 1,
+                  }}
                 >
                   <Bookmark
-                    size={18}
+                    size={16}
                     color={isSaved ? colors.primary : colors["muted-foreground"]}
                     fill={isSaved ? colors.primary : "transparent"}
                   />
+                  {/* Web's header reads "Save" / "Saved" next to the icon — the
+                      icon-only button it replaces gave a sighted member no
+                      word for what tapping it does until they'd already
+                      tapped it once. */}
+                  <Text
+                    testID="nutrition-food-bookmark-label"
+                    className="text-xs font-medium"
+                    style={{ color: isSaved ? colors.primary : colors["muted-foreground"] }}
+                  >
+                    {isSaved ? "Saved" : "Save"}
+                  </Text>
                 </Pressable>
               ) : null}
               {canMutate && food ? (
@@ -631,9 +634,16 @@ export default function FoodDetailRoute() {
                       setConfirmDelete(true);
                     }}
                     hitSlop={8}
-                    style={{ padding: 6 }}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4, padding: 6 }}
                   >
-                    <Trash2 size={18} color={colors.destructive} />
+                    <Trash2 size={16} color={colors.destructive} />
+                    <Text
+                      testID="nutrition-food-delete-label"
+                      className="text-xs font-medium"
+                      style={{ color: colors.destructive }}
+                    >
+                      Delete
+                    </Text>
                   </Pressable>
                 </>
               ) : null}
@@ -646,57 +656,84 @@ export default function FoodDetailRoute() {
             </View>
           ) : null}
 
-          <Text
-            testID="nutrition-food-name"
-            className="text-foreground text-2xl font-bold"
-          >
-            {food?.name ?? "Food"}
-          </Text>
-
-          {food?.brand ? (
-            <Text
-              testID="nutrition-food-brand"
-              className="text-muted-foreground text-sm"
-            >
-              {food.brand}
-            </Text>
+          {/* The hero — image or large category-tinted thumbnail, full width
+              above the title. Web (`FoodThumbnail` on
+              `webapp/app/dashboard/foods/[id]/page.tsx`) has always drawn
+              one; native drew nothing at all. */}
+          {food ? (
+            <FoodThumbnail
+              testID="nutrition-food-hero"
+              name={food.name}
+              category={food.category}
+              imageUrl={food.imageUrl}
+            />
           ) : null}
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {food?.isVerified ? (
-              <View
-                testID="nutrition-food-verified"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  borderRadius: 12,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  backgroundColor: colors.muted,
-                }}
+          {/* Title block — name/brand on the left, verified + category
+              stacked on the right, matching the web's
+              `flex items-start justify-between` (native had them below the
+              title, full width, instead of beside it). */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                testID="nutrition-food-name"
+                className="text-foreground text-2xl font-bold"
               >
-                <BadgeCheck size={14} color={colors.success} />
-                <Text className="text-foreground text-[10px] font-semibold">
-                  Verified
+                {food?.name ?? "Food"}
+              </Text>
+              {food?.brand ? (
+                <Text
+                  testID="nutrition-food-brand"
+                  className="text-muted-foreground text-sm"
+                  style={{ marginTop: 2 }}
+                >
+                  {food.brand}
                 </Text>
-              </View>
-            ) : null}
-            {food?.category ? (
-              <View
-                testID="nutrition-food-category"
-                style={{
-                  borderRadius: 12,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  backgroundColor: colors.muted,
-                }}
-              >
-                <Text className="text-muted-foreground text-[10px] font-medium">
-                  {food.category}
-                </Text>
-              </View>
-            ) : null}
+              ) : null}
+            </View>
+            <View style={{ alignItems: "flex-end", gap: 4 }}>
+              {food?.isVerified ? (
+                <View
+                  testID="nutrition-food-verified"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    borderRadius: 12,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    backgroundColor: colors.muted,
+                  }}
+                >
+                  <BadgeCheck size={14} color={colors.success} />
+                  <Text className="text-foreground text-[10px] font-semibold">
+                    Verified
+                  </Text>
+                </View>
+              ) : null}
+              {food?.category ? (
+                <View
+                  testID="nutrition-food-category"
+                  style={{
+                    borderRadius: 12,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    backgroundColor: colors.muted,
+                  }}
+                >
+                  <Text className="text-muted-foreground text-[10px] font-medium">
+                    {food.category}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           </View>
 
           {defaultVariant ? (
@@ -728,15 +765,21 @@ export default function FoodDetailRoute() {
               }}
             >
               {[
-                { label: "Cal", value: String(Math.round(headline.calories)), testID: "nutrition-food-macro-calories" },
-                { label: "Protein", value: `${round1(headline.protein)}g`, testID: "nutrition-food-macro-protein" },
-                { label: "Carbs", value: `${round1(headline.carbs)}g`, testID: "nutrition-food-macro-carbs" },
-                { label: "Fats", value: `${round1(headline.fats)}g`, testID: "nutrition-food-macro-fats" },
+                { label: "Cal", value: String(Math.round(headline.calories)), testID: "nutrition-food-macro-calories", color: colors.foreground },
+                // Protein blue, carbs green, fats amber — the web's
+                // `text-blue-600`/`text-green-600`/`text-amber-600` (and the
+                // dark variants). `info`/`success`/`accent` are these exact
+                // tokens — `lib/theme/tokens.ts` names `info` for precisely
+                // this tile. Native drew every value in plain foreground.
+                { label: "Protein", value: `${round1(headline.protein)}g`, testID: "nutrition-food-macro-protein", color: colors.info },
+                { label: "Carbs", value: `${round1(headline.carbs)}g`, testID: "nutrition-food-macro-carbs", color: colors.success },
+                { label: "Fats", value: `${round1(headline.fats)}g`, testID: "nutrition-food-macro-fats", color: colors.accent },
               ].map((m) => (
                 <View key={m.label} style={{ flex: 1, alignItems: "center" }}>
                   <Text
                     testID={m.testID}
-                    className="text-foreground text-base font-bold"
+                    className="text-base font-bold"
+                    style={{ color: m.color }}
                   >
                     {m.value}
                   </Text>
@@ -764,21 +807,21 @@ export default function FoodDetailRoute() {
                 Nutrition (per serving)
               </Text>
               {[
-                { label: "Calories", value: `${round1(headline.calories)}` },
-                { label: "Protein", value: `${round1(headline.protein)} g` },
-                { label: "Carbohydrates", value: `${round1(headline.carbs)} g` },
+                { label: "Calories", value: `${round1(headline.calories)}`, color: colors.foreground },
+                { label: "Protein", value: `${round1(headline.protein)} g`, color: colors.info },
+                { label: "Carbohydrates", value: `${round1(headline.carbs)} g`, color: colors.success },
                 ...(headline.fiber != null
-                  ? [{ label: "Fiber", value: `${round1(headline.fiber)} g` }]
+                  ? [{ label: "Fiber", value: `${round1(headline.fiber)} g`, color: colors.foreground }]
                   : []),
                 ...(headline.sugar != null
-                  ? [{ label: "Sugar", value: `${round1(headline.sugar)} g` }]
+                  ? [{ label: "Sugar", value: `${round1(headline.sugar)} g`, color: colors.foreground }]
                   : []),
-                { label: "Fats", value: `${round1(headline.fats)} g` },
+                { label: "Fats", value: `${round1(headline.fats)} g`, color: colors.accent },
                 ...(headline.saturatedFat != null
-                  ? [{ label: "Saturated fat", value: `${round1(headline.saturatedFat)} g` }]
+                  ? [{ label: "Saturated fat", value: `${round1(headline.saturatedFat)} g`, color: colors.foreground }]
                   : []),
                 ...(headline.sodium != null
-                  ? [{ label: "Sodium", value: `${round1(headline.sodium)} mg` }]
+                  ? [{ label: "Sodium", value: `${round1(headline.sodium)} mg`, color: colors.foreground }]
                   : []),
               ].map((row) => (
                 <View
@@ -791,7 +834,7 @@ export default function FoodDetailRoute() {
                   }}
                 >
                   <Text className="text-muted-foreground text-sm">{row.label}</Text>
-                  <Text className="text-foreground text-sm font-semibold">
+                  <Text className="text-sm font-semibold" style={{ color: row.color }}>
                     {row.value}
                   </Text>
                 </View>
@@ -834,7 +877,6 @@ export default function FoodDetailRoute() {
                     saturatedFat: v.nutrition.saturatedFat,
                   },
                 });
-                const draft = bridgeDraftFor(idx, v);
                 return (
                   <View
                     key={v._id ?? idx}
@@ -853,14 +895,33 @@ export default function FoodDetailRoute() {
                         justifyContent: "space-between",
                       }}
                     >
-                      <View style={{ flex: 1 }}>
-                        <Text className="text-foreground text-sm font-medium">
-                          {v.name}
-                          {v.isDefault ? " · default" : ""}
-                        </Text>
-                        <Text className="text-muted-foreground text-xs">
-                          {servingLabelFor(v)}
-                        </Text>
+                      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <View style={{ flex: 0 }}>
+                          <Text className="text-foreground text-sm font-medium">
+                            {v.name}
+                          </Text>
+                          <Text className="text-muted-foreground text-xs">
+                            {servingLabelFor(v)}
+                          </Text>
+                        </View>
+                        {v.isDefault ? (
+                          // A `DEFAULT` pill, matching the web's
+                          // `rounded bg-zinc-100 ... uppercase` badge — native
+                          // used to say " · default" as plain trailing text.
+                          <View
+                            testID={`nutrition-food-variant-${idx}-default-pill`}
+                            style={{
+                              borderRadius: 4,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              backgroundColor: colors.muted,
+                            }}
+                          >
+                            <Text className="text-muted-foreground text-[9px] font-medium uppercase">
+                              Default
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text
                         testID={`nutrition-food-variant-${idx}-calories`}
@@ -870,52 +931,16 @@ export default function FoodDetailRoute() {
                       </Text>
                     </View>
                     {canMutate ? (
-                      <View testID={`nutrition-food-bridge-${idx}`} style={{ gap: 6 }}>
-                        <Text className="text-muted-foreground text-[11px]">
-                          Optional: weight / volume per serving
-                        </Text>
-                        <View style={{ flexDirection: "row", gap: 8 }}>
-                          <View style={{ flex: 1 }}>
-                            <Input
-                              testID={`nutrition-food-bridge-${idx}-grams`}
-                              label="Grams / serving"
-                              placeholder="e.g. 100"
-                              keyboardType="decimal-pad"
-                              value={draft.grams}
-                              onChangeText={(text) =>
-                                setBridgeDrafts((prev) => ({
-                                  ...prev,
-                                  [idx]: { ...bridgeDraftFor(idx, v), grams: text },
-                                }))
-                              }
-                            />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Input
-                              testID={`nutrition-food-bridge-${idx}-ml`}
-                              label="ml / serving"
-                              placeholder="e.g. 240"
-                              keyboardType="decimal-pad"
-                              value={draft.ml}
-                              onChangeText={(text) =>
-                                setBridgeDrafts((prev) => ({
-                                  ...prev,
-                                  [idx]: { ...bridgeDraftFor(idx, v), ml: text },
-                                }))
-                              }
-                            />
-                          </View>
-                        </View>
-                        <Button
-                          testID={`nutrition-food-bridge-${idx}-save`}
-                          size="sm"
-                          variant="secondary"
-                          loading={savingBridge === idx}
-                          disabled={savingBridge !== null}
-                          onPress={() => void handleBridgeSave(idx)}
-                        >
-                          {savingBridge === idx ? "Saving…" : "Save bridge"}
-                        </Button>
+                      <View style={{ gap: 6 }}>
+                        <BridgeFieldGroup
+                          testID={`nutrition-food-bridge-${idx}`}
+                          value={{ gramsPerServing: v.gramsPerServing, mlPerServing: v.mlPerServing }}
+                          onChange={(next) => void handleBridgeSave(idx, next)}
+                          servingUnit={v.servingUnit}
+                        />
+                        {savingBridge === idx ? (
+                          <Text className="text-muted-foreground text-[11px]">Saving…</Text>
+                        ) : null}
                       </View>
                     ) : null}
                   </View>
@@ -943,54 +968,18 @@ export default function FoodDetailRoute() {
                 Optional — lets the picker convert between mass and volume for
                 this food.
               </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    testID="nutrition-food-bridge-single-grams"
-                    label="Grams / serving"
-                    placeholder="e.g. 100"
-                    keyboardType="decimal-pad"
-                    value={bridgeDraftFor(0, defaultVariant as FoodVariant).grams}
-                    onChangeText={(text) =>
-                      setBridgeDrafts((prev) => ({
-                        ...prev,
-                        [0]: {
-                          ...bridgeDraftFor(0, defaultVariant as FoodVariant),
-                          grams: text,
-                        },
-                      }))
-                    }
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    testID="nutrition-food-bridge-single-ml"
-                    label="ml / serving"
-                    placeholder="e.g. 240"
-                    keyboardType="decimal-pad"
-                    value={bridgeDraftFor(0, defaultVariant as FoodVariant).ml}
-                    onChangeText={(text) =>
-                      setBridgeDrafts((prev) => ({
-                        ...prev,
-                        [0]: {
-                          ...bridgeDraftFor(0, defaultVariant as FoodVariant),
-                          ml: text,
-                        },
-                      }))
-                    }
-                  />
-                </View>
-              </View>
-              <Button
-                testID="nutrition-food-bridge-single-save"
-                size="sm"
-                variant="secondary"
-                loading={savingBridge === 0}
-                disabled={savingBridge !== null}
-                onPress={() => void handleBridgeSave(0)}
-              >
-                {savingBridge === 0 ? "Saving…" : "Save bridge"}
-              </Button>
+              <BridgeFieldGroup
+                testID="nutrition-food-bridge-single-fields"
+                value={{
+                  gramsPerServing: (defaultVariant as FoodVariant).gramsPerServing,
+                  mlPerServing: (defaultVariant as FoodVariant).mlPerServing,
+                }}
+                onChange={(next) => void handleBridgeSave(0, next)}
+                servingUnit={(defaultVariant as FoodVariant).servingUnit}
+              />
+              {savingBridge === 0 ? (
+                <Text className="text-muted-foreground text-[11px]">Saving…</Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -1001,13 +990,18 @@ export default function FoodDetailRoute() {
           ) : null}
 
           {food ? (
-            <QuantityPicker
-              food={food}
-              initialTag={params.tag}
-              initialDate={params.date ?? today}
-              onChange={setPickerSelection}
-              onSubmit={handleQuantityPickerSubmit}
-            />
+            // The web's sticky black `Log this food` button, which opens a
+            // sheet (`ADDING TO <tag>`, amount, a coloured macro tile,
+            // `Log to day`) rather than the amount/tag/time/date form this
+            // page used to render inline, always on screen, below the fold.
+            <Button
+              testID="nutrition-food-log-open"
+              variant="inverted"
+              icon={<Check size={16} />}
+              onPress={() => setLogSheetOpen(true)}
+            >
+              Log this food
+            </Button>
           ) : importFailed || (food && !defaultVariant) ? (
             <Text testID="nutrition-food-error" className="text-destructive">
               Could not load this food. Try searching for it again.
@@ -1016,6 +1010,26 @@ export default function FoodDetailRoute() {
           {food ? <SaveAsMealButton onSave={onSaveMeal} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <BottomSheet
+        visible={logSheetOpen}
+        onClose={() => setLogSheetOpen(false)}
+        title="Log this food"
+        testID="nutrition-food-log-sheet"
+      >
+        {food ? (
+          <QuantityPicker
+            food={food}
+            initialTag={params.tag ?? getDefaultTagForNow()}
+            initialDate={params.date ?? today}
+            onChange={setPickerSelection}
+            onSubmit={(result) => {
+              setLogSheetOpen(false);
+              return handleQuantityPickerSubmit(result);
+            }}
+          />
+        ) : null}
+      </BottomSheet>
 
       <Modal
         visible={editOpen}
