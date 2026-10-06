@@ -95,12 +95,14 @@ describe("Card NP-261 — Review opens the basket on iOS (BLOCKER)", () => {
   it("pressing Review closes the search sheet before the basket opens, and the basket still logs through POST /api/meal-logs", async () => {
     const { getByTestId, queryByTestId } = render(<NutritionIndexRoute />);
 
+    // NP-262 removed the duplicate "Find a food" button; the search bar is
+    // the way into the search sheet now.
     await waitFor(() => {
-      expect(getByTestId("nutrition-find-food")).toBeTruthy();
+      expect(getByTestId("nutrition-search-bar")).toBeTruthy();
     });
 
     await act(async () => {
-      fireEvent.press(getByTestId("nutrition-find-food"));
+      fireEvent.press(getByTestId("nutrition-search-bar"));
     });
     await waitFor(() => {
       expect(getByTestId("food-search-sheet")).toBeTruthy();

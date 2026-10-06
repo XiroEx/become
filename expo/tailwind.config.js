@@ -43,6 +43,7 @@ module.exports = {
         card: "rgb(var(--card) / <alpha-value>)",
         border: "rgb(var(--border) / <alpha-value>)",
         success: "rgb(var(--success) / <alpha-value>)",
+        teal: "rgb(var(--teal) / <alpha-value>)",
         info: "rgb(var(--info) / <alpha-value>)",
         mindset: "rgb(var(--mindset) / <alpha-value>)",
         "mind-violet": "rgb(var(--mind-violet) / <alpha-value>)",

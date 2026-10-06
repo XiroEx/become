@@ -209,19 +209,19 @@ describe("NP-096: Quick Add, Water Tracker, and Copy Yesterday", () => {
         15,
         "g / ",
         150,
-        "g P",
+        "g",
       ]);
       expect(getByTestId("day-totals-carbs").props.children).toEqual([
         52,
         "g / ",
         200,
-        "g C",
+        "g",
       ]);
       expect(getByTestId("day-totals-fat").props.children).toEqual([
         9,
         "g / ",
         65,
-        "g F",
+        "g",
       ]);
 
       // 2. Open quick add sheet

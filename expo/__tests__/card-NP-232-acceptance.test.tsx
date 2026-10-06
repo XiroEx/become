@@ -219,11 +219,13 @@ function installHandler() {
 }
 
 async function openSearch(getByTestId: (id: string) => any) {
+  // The persistent "Find a food" button duplicated the search bar above it
+  // and is gone (NP-262) — the search bar is the one way in now.
   await waitFor(() => {
-    expect(getByTestId("nutrition-find-food")).toBeTruthy();
+    expect(getByTestId("nutrition-search-bar")).toBeTruthy();
   });
   await act(async () => {
-    fireEvent.press(getByTestId("nutrition-find-food"));
+    fireEvent.press(getByTestId("nutrition-search-bar"));
   });
   await waitFor(() => {
     expect(getByTestId("food-search-sheet")).toBeTruthy();
