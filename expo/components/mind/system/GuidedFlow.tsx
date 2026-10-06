@@ -2,19 +2,56 @@ import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal as RNModal,
   Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowRight, Check, ChevronLeft, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
 import type { GuidedStep } from "@/lib/ai/sanitize";
 
 export type { GuidedStep };
+
+// GuidedFlow (NP-298) — a FULL-SCREEN DARK MODAL over the section, exactly
+// like the web's `fixed inset-0 z-[100] bg-black text-white`
+// (`webapp/components/mind/system/GuidedFlow.tsx`). It used to render inline
+// inside the section page — light, with the header and tab bar still
+// visible, and the caller's theme-driven `colors.accent`/`colors.primary`
+// painting the progress bar the SAME colour for every tool (amber, the app's
+// generic accent) instead of that tool's own. A bare `Modal` fixes both: it
+// floats above the tab bar and header on its own, and it is always dark so a
+// light-mode phone does not get a second, unintended look. The colour comes
+// from the caller as `accentColor` — see `lib/mind/accents.ts`'s
+// `mindAccentColor(system)`, which mirrors the web's `ACCENTS` map.
+const FLOW_WHITE = onDarkForeground; // white, in both modes — the stage is always dark
+const FLOW_INK = resolveToken("mind-ink", "dark"); // ink for the white CTA, static like the session player's `PLAYER_BLACK`
+const FLOW_PLACEHOLDER = tintToken("foreground", "dark", 0.3); // the web's `placeholder-white/30`
+
+/**
+ * This `Modal` is bare (no navigator wraps it), so it has to add its own
+ * device insets rather than lean on a `SafeAreaView`, whose insets are
+ * measured for the screen BEHIND this Modal's own native window — the same
+ * reasoning as `SessionPlayer`'s and `BarcodeScanner`'s own copy of this hook.
+ *
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but this component's
+ * tests don't wrap one. Falling back to zero insets there keeps this a no-op
+ * in tests while fixing the real device.
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 function normalize(s: string): string {
   return s
@@ -35,7 +72,6 @@ export default function GuidedFlow({
   title,
   steps,
   accentColor,
-  accentClass,
   doneText = "Done. That counts.",
   onComplete,
   onExit,
@@ -43,8 +79,8 @@ export default function GuidedFlow({
 }: {
   title: string;
   steps: GuidedStep[];
+  /** The tool's accent — see `lib/mind/accents.ts`'s `mindAccentColor(system)`. */
   accentColor?: string;
-  accentClass?: string;
   doneText?: string;
   onComplete: (answers: { prompt: string; answer: string }[]) => void;
   onExit: () => void;
@@ -52,9 +88,9 @@ export default function GuidedFlow({
     answers: { prompt: string; answer: string }[],
   ) => Promise<string | null>;
 }) {
-  const { colors } = useThemeTokens();
-  const accent = accentColor ?? colors.primary;
-  const barColor = accentClass ?? "bg-primary";
+  const accent = accentColor ?? FLOW_WHITE;
+  const insets = useSafeAreaInsetsOrZero();
+  const reduceMotion = useReducedMotion();
 
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<
@@ -128,244 +164,283 @@ export default function GuidedFlow({
   };
 
   return (
-    <SafeAreaView
+    <RNModal
       testID="guided-flow-screen"
-      className="flex-1 bg-background"
-      edges={["top", "bottom"]}
+      visible
+      animationType={modalAnimation("fade", reduceMotion)}
+      onRequestClose={onExit}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        className="flex-1"
+      <View
+        testID="guided-flow-root"
+        className="flex-1 bg-black"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        {/* Top bar */}
-        <View className="flex-row items-center gap-3 px-4 pt-3 pb-2">
-          <Pressable
-            testID="guided-flow-exit"
-            onPress={onExit}
-            accessibilityRole="button"
-            accessibilityLabel="Exit flow"
-            className="h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted"
-          >
-            <X size={18} color={colors.foreground} />
-          </Pressable>
-
-          <Pressable
-            testID="guided-flow-back"
-            onPress={back}
-            disabled={idx === 0 || done}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            className={`h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted ${
-              idx === 0 || done ? "opacity-0" : "opacity-100"
-            }`}
-          >
-            <ChevronLeft size={18} color={colors.foreground} />
-          </Pressable>
-
-          {/* Progress bar */}
-          <View className="flex-1 flex-row gap-1.5 items-center">
-            {steps.map((_, i) => (
-              <View
-                key={i}
-                className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted"
-              >
-                <View
-                  className={`h-full rounded-full ${
-                    i < idx || done ? barColor : i === idx ? `${barColor} opacity-50` : "opacity-0"
-                  }`}
-                  style={
-                    i < idx || done
-                      ? { width: "100%", backgroundColor: accent }
-                      : i === idx
-                        ? { width: "50%", backgroundColor: accent }
-                        : { width: "0%" }
-                  }
-                />
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Stage */}
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            paddingHorizontal: 24,
-            paddingVertical: 32,
+        {/* A faint top wash in the tool's accent — the web's radial glow,
+            approximated as a flat translucent layer (RN has no CSS
+            radial-gradient). Behind everything, never intercepts a touch. */}
+        <View
+          pointerEvents="none"
+          accessible={false}
+          importantForAccessibility="no"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "40%",
+            backgroundColor: accent,
+            opacity: 0.08,
           }}
-          keyboardShouldPersistTaps="handled"
+        />
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          className="flex-1"
         >
-          {done ? (
-            <View testID="guided-flow-done" className="items-center py-12">
-              <View
-                testID="guided-flow-done-check"
-                className="h-20 w-20 items-center justify-center rounded-full bg-muted mb-5"
-              >
-                <Check size={40} color={accent} strokeWidth={3} />
+          {/* Top bar */}
+          <View className="flex-row items-center gap-3 px-4 pt-3 pb-2">
+            <Pressable
+              testID="guided-flow-exit"
+              onPress={onExit}
+              accessibilityRole="button"
+              accessibilityLabel="Exit flow"
+              style={minTouchTarget}
+              className="shrink-0 items-center justify-center rounded-full bg-white/10"
+            >
+              <X size={18} color={FLOW_WHITE} />
+            </Pressable>
+
+            <Pressable
+              testID="guided-flow-back"
+              onPress={back}
+              disabled={idx === 0 || done}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              style={minTouchTarget}
+              className={`shrink-0 items-center justify-center rounded-full bg-white/10 ${
+                idx === 0 || done ? "opacity-0" : "opacity-100"
+              }`}
+            >
+              <ChevronLeft size={18} color={FLOW_WHITE} />
+            </Pressable>
+
+            {/* Progress bar — filled in the tool's own accent, never one
+                shared colour for every tool. */}
+            <View className="flex-1 flex-row gap-1.5 items-center">
+              {steps.map((_, i) => (
+                <View
+                  key={i}
+                  className="h-1 flex-1 overflow-hidden rounded-full bg-white/15"
+                >
+                  <View
+                    testID={`guided-flow-progress-${i}-fill`}
+                    style={
+                      i < idx || done
+                        ? { width: "100%", backgroundColor: accent }
+                        : i === idx
+                          ? { width: "50%", backgroundColor: accent }
+                          : { width: "0%" }
+                    }
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Stage */}
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "center",
+              paddingHorizontal: 24,
+              paddingVertical: 32,
+            }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {done ? (
+              <View testID="guided-flow-done" className="items-center py-12">
+                <View
+                  testID="guided-flow-done-check"
+                  className="h-20 w-20 items-center justify-center rounded-full mb-5"
+                >
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      height: "100%",
+                      width: "100%",
+                      borderRadius: 999,
+                      backgroundColor: accent,
+                      opacity: 0.15,
+                    }}
+                  />
+                  <Check size={40} color={accent} strokeWidth={3} />
+                </View>
+                <Text
+                  testID="guided-flow-done-text"
+                  className="text-xl font-bold text-white text-center"
+                >
+                  {doneText}
+                </Text>
               </View>
-              <Text
-                testID="guided-flow-done-text"
-                className="text-xl font-bold text-foreground text-center"
-              >
-                {doneText}
-              </Text>
-            </View>
-          ) : showReflectionView ? (
-            /* Adaptive close step */
-            <View testID="guided-flow-reflect" className="items-center w-full">
-              <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground text-center">
-                {title}
-              </Text>
-              <Text className="mt-4 text-2xl font-extrabold text-foreground text-center">
-                {reflecting ? "Taking it in…" : "Here’s what I see"}
-              </Text>
+            ) : showReflectionView ? (
+              /* Adaptive close step */
+              <View testID="guided-flow-reflect" className="items-center w-full">
+                <Text className="text-xs font-semibold uppercase tracking-widest text-white/40 text-center">
+                  {title}
+                </Text>
+                <Text className="mt-4 text-2xl font-extrabold text-white text-center">
+                  {reflecting ? "Taking it in…" : "Here’s what I see"}
+                </Text>
 
-              {reflecting ? (
-                <View className="mt-8 flex-row items-center gap-3">
-                  <ActivityIndicator size="small" color={accent} />
-                  <Text className="text-sm text-muted-foreground">
-                    Reading what you wrote…
+                {reflecting ? (
+                  <View className="mt-8 flex-row items-center gap-3">
+                    <ActivityIndicator size="small" color={accent} />
+                    <Text className="text-sm text-white/60">
+                      Reading what you wrote…
+                    </Text>
+                  </View>
+                ) : reflection ? (
+                  <Text
+                    testID="guided-flow-reflect-content"
+                    className="mt-4 text-base leading-relaxed text-white/80 text-center"
+                  >
+                    {reflection}
                   </Text>
-                </View>
-              ) : reflection ? (
-                <Text
-                  testID="guided-flow-reflect-content"
-                  className="mt-4 text-base leading-relaxed text-foreground text-center"
+                ) : null}
+
+                <Pressable
+                  testID="guided-flow-reflect-finish"
+                  accessibilityRole="button"
+                  onPress={() => commit()}
+                  disabled={reflecting}
+                  style={minTouchTarget}
+                  className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4 active:opacity-90 disabled:opacity-40"
                 >
-                  {reflection}
+                  <Text className="text-base font-bold text-black">
+                    Finish
+                  </Text>
+                  <ArrowRight size={18} color={FLOW_INK} />
+                </Pressable>
+              </View>
+            ) : (
+              /* Standard step */
+              <View testID="guided-flow-step" className="items-center w-full">
+                <Text className="text-xs font-semibold uppercase tracking-widest text-white/40 text-center">
+                  {title}
                 </Text>
-              ) : null}
-
-              <Pressable
-                testID="guided-flow-reflect-finish"
-                accessibilityRole="button"
-                onPress={() => commit()}
-                disabled={reflecting}
-                className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-foreground py-4 active:opacity-90 disabled:opacity-40"
-              >
-                <Text className="text-base font-bold text-background">
-                  Finish
-                </Text>
-                <ArrowRight size={18} color={colors.background} />
-              </Pressable>
-            </View>
-          ) : (
-            /* Standard step */
-            <View testID="guided-flow-step" className="items-center w-full">
-              <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground text-center">
-                {title}
-              </Text>
-              <Text
-                testID="guided-flow-title"
-                className="mt-4 text-2xl font-extrabold text-foreground text-center"
-              >
-                {step.title}
-              </Text>
-
-              {step.body ? (
                 <Text
-                  testID="guided-flow-body"
-                  className="mt-3 text-base leading-relaxed text-muted-foreground text-center"
+                  testID="guided-flow-title"
+                  className="mt-4 text-2xl font-extrabold text-white text-center"
                 >
-                  {step.body}
+                  {step.title}
                 </Text>
-              ) : null}
 
-              {showAsk ? (
-                <Text
-                  testID="guided-flow-ask"
-                  className="mt-4 text-lg font-semibold text-foreground text-center"
-                >
-                  {ask}
-                </Text>
-              ) : null}
+                {step.body ? (
+                  <Text
+                    testID="guided-flow-body"
+                    className="mt-3 text-base leading-relaxed text-white/70 text-center"
+                  >
+                    {step.body}
+                  </Text>
+                ) : null}
 
-              {/* Type-an-answer */}
-              {isInput ? (
-                <TextInput
-                  testID="guided-flow-input"
-                  value={input}
-                  onChangeText={setInput}
-                  placeholder={step.placeholder ?? "Type it honestly…"}
-                  placeholderTextColor={colors["muted-foreground"]}
-                  multiline
-                  numberOfLines={3}
-                  className="mt-6 w-full rounded-2xl border border-border bg-card px-4 py-3 text-base text-foreground"
-                />
-              ) : null}
+                {showAsk ? (
+                  <Text
+                    testID="guided-flow-ask"
+                    className="mt-4 text-lg font-semibold text-white text-center"
+                  >
+                    {ask}
+                  </Text>
+                ) : null}
 
-              {/* Pick-one (choices) */}
-              {isChoice ? (
-                <View className="mt-6 w-full gap-2.5">
-                  {step.choices!.map((c, i) => (
-                    <Pressable
-                      key={c}
-                      testID={`guided-flow-choice-${i}`}
-                      accessibilityRole="button"
-                      onPress={() => commit(c)}
-                      className="w-full rounded-2xl border border-border bg-card px-4 py-3.5 active:opacity-80"
-                    >
-                      <Text className="text-base font-medium text-foreground">
-                        {c}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : null}
+                {/* Type-an-answer */}
+                {isInput ? (
+                  <TextInput
+                    testID="guided-flow-input"
+                    value={input}
+                    onChangeText={setInput}
+                    placeholder={step.placeholder ?? "Type it honestly…"}
+                    placeholderTextColor={FLOW_PLACEHOLDER}
+                    multiline
+                    numberOfLines={3}
+                    className="mt-6 w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-base text-white"
+                  />
+                ) : null}
 
-              {/* Scale */}
-              {isScale ? (
-                <View className="mt-7 w-full">
-                  <View className="flex-row items-center justify-between gap-2">
-                    {Array.from(
-                      { length: step.scale!.max - step.scale!.min + 1 },
-                      (_, i) => step.scale!.min + i,
-                    ).map((n) => (
+                {/* Pick-one (choices) */}
+                {isChoice ? (
+                  <View className="mt-6 w-full gap-2.5">
+                    {step.choices!.map((c, i) => (
                       <Pressable
-                        key={n}
-                        testID={`guided-flow-scale-${n}`}
+                        key={c}
+                        testID={`guided-flow-choice-${i}`}
                         accessibilityRole="button"
-                        onPress={() => commit(String(n))}
-                        className="flex-1 h-12 items-center justify-center rounded-xl border border-border bg-card active:opacity-80"
+                        onPress={() => commit(c)}
+                        className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-3.5 active:opacity-80"
                       >
-                        <Text className="text-lg font-bold text-foreground">
-                          {n}
+                        <Text className="text-base font-medium text-white">
+                          {c}
                         </Text>
                       </Pressable>
                     ))}
                   </View>
-                  <View className="mt-2 flex-row justify-between px-1">
-                    <Text className="text-[11px] text-muted-foreground">
-                      {step.scale!.minLabel}
-                    </Text>
-                    <Text className="text-[11px] text-muted-foreground">
-                      {step.scale!.maxLabel}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
+                ) : null}
 
-              {/* Advance button for info / input steps */}
-              {!isChoice && !isScale ? (
-                <Pressable
-                  testID="guided-flow-next"
-                  accessibilityRole="button"
-                  onPress={() => commit(isInput ? input.trim() : undefined)}
-                  disabled={isInput && !input.trim()}
-                  className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-foreground py-4 active:opacity-90 disabled:opacity-40"
-                >
-                  <Text className="text-base font-bold text-background">
-                    {isLast ? "Finish" : "Next"}
-                  </Text>
-                  <ArrowRight size={18} color={colors.background} />
-                </Pressable>
-              ) : null}
-            </View>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                {/* Scale */}
+                {isScale ? (
+                  <View className="mt-7 w-full">
+                    <View className="flex-row items-center justify-between gap-2">
+                      {Array.from(
+                        { length: step.scale!.max - step.scale!.min + 1 },
+                        (_, i) => step.scale!.min + i,
+                      ).map((n) => (
+                        <Pressable
+                          key={n}
+                          testID={`guided-flow-scale-${n}`}
+                          accessibilityRole="button"
+                          onPress={() => commit(String(n))}
+                          className="flex-1 h-12 items-center justify-center rounded-xl border border-white/15 bg-white/5 active:opacity-80"
+                        >
+                          <Text className="text-lg font-bold text-white">
+                            {n}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                    <View className="mt-2 flex-row justify-between px-1">
+                      <Text className="text-[11px] text-white/40">
+                        {step.scale!.minLabel}
+                      </Text>
+                      <Text className="text-[11px] text-white/40">
+                        {step.scale!.maxLabel}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Advance button for info / input steps */}
+                {!isChoice && !isScale ? (
+                  <Pressable
+                    testID="guided-flow-next"
+                    accessibilityRole="button"
+                    onPress={() => commit(isInput ? input.trim() : undefined)}
+                    disabled={isInput && !input.trim()}
+                    style={minTouchTarget}
+                    className="mt-8 w-full max-w-xs flex-row items-center justify-center gap-2 rounded-2xl bg-white py-4 active:opacity-90 disabled:opacity-40"
+                  >
+                    <Text className="text-base font-bold text-black">
+                      {isLast ? "Finish" : "Next"}
+                    </Text>
+                    <ArrowRight size={18} color={FLOW_INK} />
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </RNModal>
   );
 }

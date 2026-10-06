@@ -42,6 +42,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { routeApiError } from "@/lib/errors";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -469,8 +470,7 @@ export default function VisionDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.success}
-        accentClass="bg-emerald-500"
+        accentColor={mindAccentColor("vision")}
         doneText={DONE_TEXT}
         onReflect={
           flow.aiGenerated

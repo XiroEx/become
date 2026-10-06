@@ -98,6 +98,10 @@ export type TokenName =
   | "mind-violet"
   | "mind-green"
   | "mind-ink"
+  | "mind-cyan"
+  | "mind-blue"
+  | "mind-emerald"
+  | "mind-pink"
   | "orange"
   | "indigo"
   | "rose";
@@ -144,8 +148,22 @@ export const lightTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  // The Mind arsenal's per-tool accents (NP-298) — one colour per tool, same
+  // in both modes, because the GuidedFlow / breath-player modal they paint is
+  // ALWAYS a dark stage (`fixed inset-0 bg-black` on the web) regardless of
+  // the device's light/dark setting. Values mirror the web's `ACCENTS` map in
+  // `webapp/components/mind/ToolIntroGate.tsx` exactly: state-shift `#06b6d4`,
+  // mission `#3b82f6`, vision `#10b981`, social `#ec4899`. Self-image
+  // (`#8b5cf6`) reuses `mind-violet` above, anti-sabotage (`#f97316`) reuses
+  // `orange` below, and discipline (`#ef4444`) reuses the dark half of
+  // `brand` — see `lib/mind/accents.ts`.
+  "mind-cyan": "6 182 212", // cyan-500 — state-shift
+  "mind-blue": "59 130 246", // blue-500 — mission
+  "mind-emerald": "16 185 129", // emerald-500 — vision
+  "mind-pink": "236 72 153", // pink-500 — social
   orange: "249 115 22", // orange-500 — the web's Circuit group badge
-  // (`bg-orange-500`), same in both modes like `primary`
+  // (`bg-orange-500`), same in both modes like `primary`; also the Mind
+  // arsenal's anti-sabotage accent (`#f97316`), see the comment above
   indigo: "99 102 241", // indigo-500 — the web's Triset group badge
   rose: "244 63 94", // rose-500 — the web's Giant Set group badge
 };
@@ -178,6 +196,10 @@ export const darkTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  "mind-cyan": "6 182 212", // cyan-500 — same in both modes, see lightTokens
+  "mind-blue": "59 130 246", // blue-500 — same in both modes, see lightTokens
+  "mind-emerald": "16 185 129", // emerald-500 — same in both modes, see lightTokens
+  "mind-pink": "236 72 153", // pink-500 — same in both modes, see lightTokens
   orange: "249 115 22", // orange-500 — same in both modes
   indigo: "99 102 241", // indigo-500 — same in both modes
   rose: "244 63 94", // rose-500 — same in both modes
