@@ -232,3 +232,106 @@ describe("CalendarIndexRoute — day actions (NP-110)", () => {
     );
   });
 });
+
+// NP-292: the day panel's actions per status must match the web's
+// (CalendarClient.tsx) — a completed day shows its completion time and a
+// green View Summary, no status gets a standalone "Reschedule" row (Manage
+// already reaches it), and a rest day offers Log/Schedule a Workout instead
+// of an unconditional "Workout Now".
+describe("CalendarIndexRoute — day panel actions match the web (NP-292)", () => {
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockApiFetch.mockReset();
+    mockParams = {};
+  });
+
+  function mockSchedule(scheduledWorkouts: Array<Record<string, unknown>>) {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/schedule")) {
+        return Promise.resolve({
+          schedules: [
+            {
+              programId: "prog-1",
+              programName: "Program 1",
+              programStatus: "in-progress",
+              scheduledWorkouts,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ logs: [] });
+    });
+  }
+
+  it("a completed day shows its completion time and a green (success) View Summary, with no standalone Reschedule row", async () => {
+    const past = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+    mockParams = { date: past };
+    mockSchedule([
+      {
+        date: `${past}T00:00:00.000Z`,
+        dayLabel: "Day 1",
+        status: "completed",
+        completedAt: `${past}T15:00:00.000Z`,
+        phase: 1,
+      },
+    ]);
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("day-detail-summary-prog-1-0")).toBeTruthy();
+    });
+    expect(getByTestId("day-detail-completed-at-prog-1-0").props.children).toEqual(
+      expect.arrayContaining(["Completed ", expect.stringContaining(":")]),
+    );
+    expect(getByTestId("day-detail-summary-prog-1-0").props.className).toContain(
+      "bg-success",
+    );
+    expect(queryByTestId("day-detail-reschedule-prog-1-0")).toBeNull();
+  });
+
+  it("no status renders a standalone Reschedule row (scheduled day)", async () => {
+    const future = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+    mockParams = { date: future };
+    mockSchedule([
+      { date: `${future}T00:00:00.000Z`, dayLabel: "Day 1", status: "scheduled", phase: 1 },
+    ]);
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("day-detail-start-prog-1-0")).toBeTruthy();
+    });
+    expect(getByTestId("day-detail-manage-prog-1-0")).toBeTruthy();
+    expect(queryByTestId("day-detail-reschedule-prog-1-0")).toBeNull();
+    // And no generic "Workout Now" leaks onto a day that already has a
+    // scheduled workout — the web has no such button there either.
+    expect(queryByTestId("day-detail-workout-now")).toBeNull();
+  });
+
+  it("a future rest day offers only 'Schedule a Workout'", async () => {
+    const future = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    mockParams = { date: future };
+    mockSchedule([]);
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("day-detail-rest")).toBeTruthy();
+    });
+    expect(getByTestId("day-detail-schedule-workout")).toBeTruthy();
+    expect(queryByTestId("day-detail-log-workout")).toBeNull();
+    expect(queryByTestId("day-detail-workout-now")).toBeNull();
+  });
+
+  it("a past rest day offers only 'Log a Workout'", async () => {
+    const past = new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10);
+    mockParams = { date: past };
+    mockSchedule([]);
+
+    const { getByTestId, queryByTestId } = render(<CalendarIndexRoute />);
+    await waitFor(() => {
+      expect(getByTestId("day-detail-rest")).toBeTruthy();
+    });
+    expect(getByTestId("day-detail-log-workout")).toBeTruthy();
+    expect(queryByTestId("day-detail-schedule-workout")).toBeNull();
+  });
+});
