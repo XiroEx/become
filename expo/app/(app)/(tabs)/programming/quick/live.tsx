@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Text } from "@/components/Text";
@@ -23,6 +23,7 @@ import {
   shouldPromptForQuickSessionName,
   shouldWarnBeforeFinish,
 } from "@become/core";
+import { ProfileResponseSchema, StreakResponseSchema } from "@become/api-client";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import {
   asyncStorageKeyValueStore,
@@ -30,6 +31,8 @@ import {
 } from "@/lib/live/liveWorkoutCache";
 import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useAuth } from "@/lib/auth/useAuth";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useQuickLiveWorkout } from "@/lib/quickSession/useQuickLiveWorkout";
 import { useExerciseHints } from "@/lib/live/useExerciseHints";
 
@@ -50,6 +53,15 @@ export interface QuickLiveRouteProps {
   initialOriginKey?: string;
   /** Clock injection point for tests. */
   getNow?: () => Date;
+  /**
+   * Summary data override for tests — skips the streak/profile fetches and
+   * renders the summary immediately with these values (mirrors the program
+   * route's same-named prop).
+   */
+  summaryDataForTests?: {
+    streak?: { streakDays: number; nextMilestone: number | null } | null;
+    goal?: string | null;
+  };
 }
 
 /**
@@ -69,9 +81,11 @@ export default function QuickLiveRoute({
   autoSaveDelayMs,
   initialOriginKey,
   getNow,
+  summaryDataForTests,
 }: QuickLiveRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
+  const { token } = useAuth();
   const params = useLocalSearchParams<{ session?: string }>();
   const sessionId =
     typeof params.session === "string" ? params.session : "";
@@ -87,6 +101,7 @@ export default function QuickLiveRoute({
     exerciseHistory,
     finishing,
     finishedGrid,
+    finishedTitle,
     finishedElapsedSeconds,
     onGridChange,
     onFinish,
@@ -171,6 +186,68 @@ export default function QuickLiveRoute({
   const summaryHistory: Record<string, (typeof exerciseHistory)[string]> =
     exerciseHistory ?? {};
 
+  // The web's quick-session live view is the SAME `LiveWorkoutClient` the
+  // program route uses (`programId: 'quick'`), so its summary fetches streak
+  // + goal exactly like the program route's — this route is a separate
+  // native component and had been hard-coding both to `null`, which is why
+  // the streak card and closing line never appeared after a quick session.
+  const [summaryStreak, setSummaryStreak] = useState<{
+    streakDays: number;
+    nextMilestone: number | null;
+  } | null>(summaryDataForTests?.streak ?? null);
+  const [summaryGoal, setSummaryGoal] = useState<string | null>(
+    summaryDataForTests?.goal ?? null,
+  );
+  useEffect(() => {
+    if (!showSummary) return;
+    if (summaryDataForTests) return;
+    if (!token) return;
+    let alive = true;
+    const headers = { Authorization: `Bearer ${token}` };
+    void (async () => {
+      try {
+        const impl = fetchImpl ?? fetch;
+        const streakRes = await impl(
+          `${WEBAPP_BASE_URL}/api/streak?tz=${new Date().getTimezoneOffset()}`,
+          { headers },
+        );
+        if (streakRes.ok && alive) {
+          const parsed = StreakResponseSchema.safeParse(
+            await streakRes.json(),
+          );
+          if (parsed.success) {
+            setSummaryStreak({
+              streakDays: parsed.data.streakDays,
+              nextMilestone: parsed.data.nextMilestone ?? null,
+            });
+          }
+        }
+      } catch {
+        // Best-effort: the summary renders without the streak card.
+      }
+      try {
+        const impl = fetchImpl ?? fetch;
+        const profileRes = await impl(`${WEBAPP_BASE_URL}/api/profile`, {
+          headers,
+        });
+        if (profileRes.ok && alive) {
+          const parsed = ProfileResponseSchema.safeParse(
+            await profileRes.json(),
+          );
+          const goal = parsed.success
+            ? (parsed.data.profile?.fitnessGoal ?? null)
+            : null;
+          if (alive) setSummaryGoal(goal);
+        }
+      } catch {
+        // Best-effort: the closing falls back to the general-health line.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [showSummary, summaryDataForTests, token, fetchImpl]);
+
   // In-workout hints (NP-173): one fetch per session load, dismissed on the
   // account — the same `useExerciseHints` the program live route uses.
   const quickSlugs = useMemo(
@@ -252,20 +329,24 @@ export default function QuickLiveRoute({
           }),
         ),
     );
+    // `finishedTitle` (not `stored?.title`): `finishWithTitle` clears `stored`
+    // on success, so by the time this renders the only place the saved name
+    // still lives is the title the finish actually went out under.
+    const savedTitle = finishedTitle ?? workout.workoutTitle;
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <WorkoutSummary
           programCompleted={false}
           completedProgramName=""
           programId="quick"
-          workoutDay={stored?.title ?? workout.workoutTitle}
-          workoutTitle={stored?.title ?? workout.workoutTitle}
+          workoutDay={savedTitle}
+          workoutTitle={savedTitle}
           elapsedSeconds={finishedElapsedSeconds}
           exercises={summaryExercises}
           setsByExercise={summarySets}
           exerciseHistory={summaryHistory}
-          streak={null}
-          goal={null}
+          streak={summaryStreak}
+          goal={summaryGoal}
           onDone={() => router.replace("/(tabs)/programming")}
           onViewJourney={() => router.replace("/(tabs)/programming")}
           onViewLog={() => router.replace("/progress" as never)}
@@ -369,7 +450,7 @@ export default function QuickLiveRoute({
       {pendingCompletion ? (
         <QuickSessionNamePrompt
           initialName={stored?.title ?? ""}
-          confirmLabel="Save workout"
+          confirmLabel="Save name & finish"
           fallbackName={fallbackName}
           onConfirm={handleNamedFinish}
           onSkip={handleNamedFinish}

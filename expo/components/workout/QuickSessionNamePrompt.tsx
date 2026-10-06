@@ -1,5 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { Modal, Pressable, TextInput, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  TextInput,
+  View,
+} from "react-native";
 import { Dumbbell, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { isDefaultQuickSessionName } from "@become/core";
@@ -120,15 +127,24 @@ export function QuickSessionNamePrompt({
       animationType={modalAnimation("fade", reduceMotion)}
       testID={testID}
     >
-      <Pressable
-        testID={`${testID}-backdrop`}
-        onPress={dismiss}
-        accessible={false}
-        importantForAccessibility="no"
-        className="flex-1 items-center justify-center px-6"
-        style={{ backgroundColor: backdrop }}
+      {/* Every screen with a TextInput wraps its content in this (IOS_QUIRKS
+          "Keyboard avoiding"); this centered Modal had not, so the keyboard
+          covered Confirm/Back/Skip the moment the input focused. iOS gets
+          `padding` to lift the card above the keyboard; Android's default
+          `windowSoftInputMode` already resizes the window. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
       >
         <Pressable
+          testID={`${testID}-backdrop`}
+          onPress={dismiss}
+          accessible={false}
+          importantForAccessibility="no"
+          className="flex-1 items-center justify-center px-6"
+          style={{ backgroundColor: backdrop }}
+        >
+          <Pressable
           testID={`${testID}-card`}
           accessibilityRole="alert"
           accessibilityViewIsModal
@@ -271,7 +287,8 @@ export function QuickSessionNamePrompt({
             </Pressable>
           ) : null}
         </Pressable>
-      </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

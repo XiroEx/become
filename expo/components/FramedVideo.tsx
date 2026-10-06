@@ -13,8 +13,36 @@ import {
   resolveExerciseVideo,
   type ExerciseVideoDisplay,
 } from "@/lib/data/exerciseVideos";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 
 const YOUTUBE_REGEX = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i;
+
+/**
+ * Resolve a possibly-RELATIVE media url to one the native video/image players
+ * can actually load (NP-287).
+ *
+ * `Exercise.videoUrl` and the legacy `exercise_videos` rows store catalogue
+ * clips as a path under the webapp's `public/` dir (`/exercises/squat.mov`),
+ * because the web just drops that straight into `<video src>` and the
+ * browser resolves it against the page origin. Native has no page origin —
+ * `expo-video`'s `uri` needs a full URL — so a relative path silently failed
+ * to load and rendered the OS's broken-media glyph (a black box with a
+ * crossed-out play icon) instead of the clip. An absolute `https://` url (a
+ * CDN clip, or a member's own blob upload) is untouched.
+ */
+export function resolveMediaUrl(
+  url: string | null | undefined,
+): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed; // already has a scheme
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("/")) {
+    return `${WEBAPP_BASE_URL.replace(/\/$/, "")}${trimmed}`;
+  }
+  return trimmed;
+}
 
 function isYouTubeUrl(url: string): boolean {
   return /(?:youtube\.com|youtu\.be)/i.test(url);
@@ -388,7 +416,7 @@ export function FramedVideo({
     );
   }, [src, thumbnailUrl, videoWidth, videoHeight, videoFraming, videoTrim, legacyVideo]);
 
-  const activeSrc = resolved.videoUrl;
+  const activeSrc = resolveMediaUrl(resolved.videoUrl);
 
   if (!activeSrc) {
     return (
@@ -408,7 +436,7 @@ export function FramedVideo({
     return (
       <View className={className} style={style}>
         <VideoThumbnailView
-          thumbnailUrl={resolved.thumbnailUrl}
+          thumbnailUrl={resolveMediaUrl(resolved.thumbnailUrl)}
           exerciseName={exerciseName}
           surface={surface}
           onPress={onPlayPress}

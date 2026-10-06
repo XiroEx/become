@@ -10,6 +10,10 @@ const INPUT_SCREENS = [
   "app/(app)/(tabs)/nutrition/search.tsx",
   "app/(app)/(tabs)/nutrition/food/[id].tsx",
   "app/(app)/(tabs)/calendar/settings.tsx",
+  // NP-290: a centered Modal, not a top-level screen, but it carries a
+  // TextInput the same way and was missing this — the keyboard covered
+  // Confirm/Back/Skip the moment the workout-name field focused.
+  "components/workout/QuickSessionNamePrompt.tsx",
 ];
 
 describe("iOS keyboard-avoiding pass", () => {
