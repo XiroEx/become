@@ -43,6 +43,14 @@ the only lever that reaches an already-installed app. See
    `https://become.redbtn.io/.well-known/assetlinks.json` with the real Play
    App Signing SHA-256 fingerprint (placeholder ships in P6 — replace before
    the first Android submission).
+7. **The store name and subtitle**, from
+   [`STORE_LISTING.md`](./STORE_LISTING.md): one name (≤30 characters) used on
+   BOTH stores, the 30-character iOS subtitle and the 80-character Play short
+   description. The App Store name is reserved by creating the app record in
+   prerequisite 1, which is also the only way to find out whether it is free —
+   so that document carries a fallback ladder to try in order. It is a
+   different name from the home-screen label (`app.json` → `expo.name`, which
+   stays `Become`).
 
 ## Cutting a release
 
@@ -173,6 +181,7 @@ only if George asks. Until then, assume no OTA.
 | Internal testers added | TestFlight → Internal Testing group | Up to 100 internal testers — no Apple review |
 | External tester beta review | TestFlight → External Testing group | Apple review takes ~24h, only for the first submission of a new version |
 | Privacy form filled | App Store Connect → App Privacy | See "Apple App Privacy form" below |
+| **Name reserved and subtitle filled** | App Store Connect → App Information → Name, and [version] → Subtitle | **Blocking.** 30 characters each, copied from [`STORE_LISTING.md`](./STORE_LISTING.md). The name is reserved by creating the app record, so this is the FIRST thing done in App Store Connect, not the last |
 | **Demo account filled in** | App Store Connect → App Review Information → Sign-in required | **Blocking.** See "Reviewer demo account" below — an app the reviewer cannot sign in to is rejected under Guideline 2.1 |
 | **Permission audit green** | `npx jest __tests__/releaseCandidatePermissions.test.ts` | **Blocking.** NP-206: every permission v1 requests has its reason on both platforms; the manifest declares only what v1 uses. See "Pre-submission permission audit" below |
 | Submit for App Review | App Store Connect → Distribution | When ready to go GA |
@@ -185,6 +194,7 @@ only if George asks. Until then, assume no OTA.
 | Promote to Closed Testing | Play Console → Closed Testing | Adds Google review (~hours) |
 | Promote to Open Testing / Production | Play Console → Production | After enough internal validation |
 | Data Safety form filled | Play Console → Data Safety | See "Google Data Safety form" below |
+| **App name and short description filled** | Play Console → Main store listing | **Blocking.** The SAME app name as the App Store (30 chars) plus the 80-character short description, both copied from [`STORE_LISTING.md`](./STORE_LISTING.md) |
 | Health apps declaration completed | Play Console → App content → Health apps | **Blocking.** Any `android.permission.health.*` in the manifest (NP-199 adds three) cannot be released until this is filled in and approved. See "Play health apps declaration" below |
 | **Permission audit green** | `npx jest __tests__/releaseCandidatePermissions.test.ts` | **Blocking.** NP-206: the manifest declares only what v1 uses, each with its reason. See "Pre-submission permission audit" below |
 | **Demo account in the release notes** | Play Console → App content → App access | **Blocking.** All functionality is behind sign-in; give the same demo email + review code. See "Reviewer demo account" below |
