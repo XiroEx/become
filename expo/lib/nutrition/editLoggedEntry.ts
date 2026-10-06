@@ -133,6 +133,59 @@ export function mealLogTimePatch(
 }
 
 /**
+ * ─── 12-hour display, native (NP-264) ────────────────────────────────────
+ *
+ * Display-only helpers: the wire format stays the 24-hour "HH:mm" that
+ * `mealLogTimeInputValue` / `mealLogTimePatch` already use (and existing
+ * callers rely on) — these just render it the way the web's
+ * `<input type="time">` shows a 12-hour locale ("4:00 AM") and parse a
+ * member's typed 12-hour text back to that same 24-hour wire format.
+ */
+export function formatTime12Hour(time24: string): string {
+  const match = /^(\d{2}):(\d{2})$/.exec(time24);
+  if (!match) return "";
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return "";
+  const period = hours >= 12 ? "PM" : "AM";
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${String(minutes).padStart(2, "0")} ${period}`;
+}
+
+/**
+ * Parse a member-typed time back to "HH:mm". Accepts 12-hour ("4:00 AM",
+ * "4:00pm") and a bare 24-hour fallback ("16:00") so a pasted value in
+ * either shape still lands. `""` means "cleared" (untimed); `null` means
+ * unparseable — callers should leave the last valid 24-hour value alone and
+ * let the member keep typing.
+ */
+export function parseTime12Hour(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  const withPeriod = /^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/.exec(trimmed);
+  if (withPeriod) {
+    let hours = Number(withPeriod[1]);
+    const minutes = Number(withPeriod[2]);
+    const period = withPeriod[3]!.toUpperCase();
+    if (hours < 1 || hours > 12 || minutes > 59) return null;
+    if (period === "AM") hours = hours === 12 ? 0 : hours;
+    else hours = hours === 12 ? 12 : hours + 12;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  }
+
+  const bare = /^(\d{1,2}):(\d{2})$/.exec(trimmed);
+  if (bare) {
+    const hours = Number(bare[1]);
+    const minutes = Number(bare[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
+/**
  * Build the `tag`/`fromTag` pair the move routes expect. Returns `{}` when
  * the member did not move anything, so callers can spread it unconditionally.
  */
