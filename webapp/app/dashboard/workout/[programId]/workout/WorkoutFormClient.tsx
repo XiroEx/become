@@ -23,7 +23,7 @@ import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/A
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { addIntoGroup, alignCircuitSets, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, groupIndexes, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, writePosition } from "@/lib/workout/position";
 import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
 import { normalizeTracking, tracksTime, tracksSpeed, setUnitLabel, isSetFilled, findPhantomPrefilledSets } from "@/lib/workout/tracking";
@@ -429,7 +429,11 @@ export default function WorkoutFormPage() {
           // denormalize videoUrl/thumbnailUrl/etc through, so resolve them by
           // slug here or this view falls back to the legacy by-name lookup.
           const hydratedExs = await hydrateQuickSessionVideos(exs, localStorage.getItem("token"));
-          const wd: WorkoutData = { day: title, title, exercises: hydratedExs.length ? hydratedExs : fallbackWorkout.exercises };
+          // A circuit runs every exercise for the same number of rounds, so a
+          // saved one whose members disagree is held to its FIRST member's
+          // count HERE, before the per-set rows are built off `ex.sets` — the
+          // Track view and Live share this list's shape.
+          const wd: WorkoutData = { day: title, title, exercises: alignCircuitSets(hydratedExs.length ? hydratedExs : fallbackWorkout.exercises) };
           setWorkout(wd);
 
           // "Last session: 185 lbs × 8" — a quick session has no program to ask
@@ -514,7 +518,10 @@ export default function WorkoutFormPage() {
           let workoutData: WorkoutData = {
             day: data.day || "Day 1",
             title: data.workout?.title || "Training",
-            exercises: data.workout?.exercises || fallbackWorkout.exercises
+            // Held to the circuit rule at the source — see the quick-session
+            // branch above. A coach can write a circuit in the program editor
+            // with a different set count per exercise; it runs as one block.
+            exercises: alignCircuitSets(data.workout?.exercises || fallbackWorkout.exercises)
           };
           setWorkout(workoutData);
           setCurrentPhase(data.phase || 1);

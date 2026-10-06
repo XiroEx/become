@@ -29,6 +29,7 @@ import {
 import { quickScope, shouldPromptForQuickSessionName } from "@become/core";
 import {
   addIntoGroup,
+  alignCircuitSets,
   appendExercise,
   applyOrder,
   type GroupKind,
@@ -425,7 +426,16 @@ export function useQuickLiveWorkout(
         setStored(current);
         setNeedsName(shouldPromptForQuickSessionName(current));
 
-        let live = (current.exercises ?? []).map(draftToLiveExercise);
+        // A circuit runs every exercise for the same number of rounds, so a
+        // saved one whose members disagree (built before that rule existed,
+        // imported, or generated) is held to its FIRST member's count HERE,
+        // before anything reads it: the flow, the set grid, the group header
+        // and the save all come off this one list, so aligning it at the
+        // source is what stops a 5-set/3-set circuit from running as five
+        // rounds with the second exercise missing from two of them.
+        let live = alignCircuitSets(
+          (current.exercises ?? []).map(draftToLiveExercise),
+        );
         exercisesRef.current = live;
 
         // Programs get video fields denormalized server-side; a quick

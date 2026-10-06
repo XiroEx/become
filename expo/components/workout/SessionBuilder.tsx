@@ -66,6 +66,7 @@ import type {
 import {
   DEFAULT_SETS,
   addNextIntoGroup,
+  alignCircuitSets,
   defaultSetsFor,
   fallbackQuickSessionName,
   groupIndexes,
@@ -189,7 +190,14 @@ export function SessionBuilder({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ExerciseSearchResult[]>([]);
   const [customs, setCustoms] = useState<CustomExercise[]>([]);
-  const [chosen, setChosen] = useState<DraftExercise[]>(initialDraft?.exercises ?? []);
+  // A circuit agrees on sets the moment it is SHOWN, not only when this screen
+  // is the one that made it. An imported session can hand us a circuit whose
+  // members disagree — five of one, three of another — and that is the shape
+  // the member reported: a block whose own note says every exercise runs the
+  // same number of rounds, printed over two numbers.
+  const [chosen, setChosen] = useState<DraftExercise[]>(() =>
+    alignCircuitSets(initialDraft?.exercises ?? []),
+  );
   const [unresolvedNote, setUnresolvedNote] = useState<string[] | null>(
     initialDraft?.unresolved && initialDraft.unresolved.length > 0 ? initialDraft.unresolved : null,
   );
@@ -397,7 +405,12 @@ export function SessionBuilder({
       );
       setChosen((current) => {
         const currentSlugs = new Set(current.map((e) => e.exerciseSlug));
-        return [
+        // Same rule as adding by hand: an exercise this screen appends starts
+        // on the FIRST exercise's count, not on whatever the generator chose,
+        // so "Finish this for me" cannot hand back a session that disagrees
+        // with itself before the member has touched anything.
+        const seeded = defaultSetsFor(current);
+        return alignCircuitSets([
           ...current,
           ...appended
             .filter(
@@ -420,7 +433,7 @@ export function SessionBuilder({
                 exerciseSlug: exercise.exerciseSlug,
                 name: exercise.name,
                 trackingType: exercise.trackingType,
-                sets: exercise.sets,
+                sets: seeded,
                 reps: exercise.reps,
                 ...(exercise.rest ? { rest: exercise.rest } : {}),
                 ...(exercise.duration ? { duration: exercise.duration } : {}),
@@ -431,7 +444,7 @@ export function SessionBuilder({
                   : {}),
               }),
             ),
-        ];
+        ]);
       });
     } catch (err) {
       setCompletionError(handleFailure(err));
