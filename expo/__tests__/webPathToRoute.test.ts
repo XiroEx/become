@@ -232,7 +232,15 @@ describe("the table", () => {
     ["/dashboard/recipes/new", "/(tabs)/nutrition/recipes", "nearest"],
     ["/dashboard/recipes/r1/edit", "/(tabs)/nutrition/recipes", "nearest"],
     ["/dashboard/foods/f1", "/(tabs)/nutrition/food/f1", "exact"],
-    ["/dashboard/meals/m1", "/(tabs)/nutrition", "nearest"],
+    // New custom food (NP-270): the native create screen, not the Nutrition
+    // day it used to fall through to.
+    ["/dashboard/foods/new", "/(tabs)/nutrition/food/new", "exact"],
+    // The native meal detail (NP-270), not the Nutrition day it used to fall
+    // through to. `become://dashboard/meals/<id>` is the exact url the card
+    // names.
+    ["/dashboard/meals/m1", "/(tabs)/nutrition/meals/m1", "exact"],
+    ["become://dashboard/meals/m1", "/(tabs)/nutrition/meals/m1", "exact"],
+    ["/dashboard/meals", "/(tabs)/nutrition", "nearest"],
     ["/dashboard/meal-plan", "/(tabs)/nutrition/meal-plan", "exact"],
     ["/dashboard/timeline", "/(tabs)/nutrition", "nearest"],
     // Mind

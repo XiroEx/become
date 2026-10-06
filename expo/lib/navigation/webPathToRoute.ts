@@ -95,6 +95,10 @@ export const NATIVE_ROUTES = {
   nutritionSearch: "/(tabs)/nutrition/search",
   nutritionGoals: "/(tabs)/nutrition/goals",
   recipes: "/(tabs)/nutrition/recipes",
+  /** The saved-meal detail — `app/(app)/(tabs)/nutrition/meals/[id].tsx` (NP-143). */
+  meals: "/(tabs)/nutrition/meals",
+  /** New custom food — `app/(app)/(tabs)/nutrition/food/new.tsx` (NP-145). */
+  foodNew: "/(tabs)/nutrition/food/new",
   mealSchedule: "/(tabs)/nutrition/meal-schedule",
   /** The Meal Plan week — `app/(app)/(tabs)/nutrition/meal-plan.tsx` (NP-267). */
   mealPlan: "/(tabs)/nutrition/meal-plan",
@@ -516,16 +520,31 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
   }
   if (section === "foods") {
     const id = segments[2];
-    return !id || lower(id) === "new"
-      ? native(NATIVE_ROUTES.nutrition, params, "nearest")
-      : native(`${NATIVE_ROUTES.nutrition}/food/${encodeURIComponent(id)}`, params, "exact");
+    if (!id) return native(NATIVE_ROUTES.nutrition, params, "nearest");
+    // New custom food (NP-145/NP-270): the native create screen, not the
+    // Nutrition day it used to fall through to.
+    if (lower(id) === "new") {
+      return native(NATIVE_ROUTES.foodNew, params, "exact");
+    }
+    return native(`${NATIVE_ROUTES.nutrition}/food/${encodeURIComponent(id)}`, params, "exact");
   }
   // The Meal Plan week now has a native screen (NP-267) — `become://dashboard/
   // meal-plan` used to land on the Nutrition day instead of the week.
   if (section === "meal-plan") {
     return native(NATIVE_ROUTES.mealPlan, params, "exact");
   }
-  if (section === "meals" || section === "timeline") {
+  if (section === "meals") {
+    const id = segments[2];
+    // `become://dashboard/meals/<id>` (NP-270): the native meal detail —
+    // `app/(app)/(tabs)/nutrition/meals/[id].tsx` — not the Nutrition day it
+    // used to fall through to. A bare `/dashboard/meals` has no id to
+    // address, so it still lands on the Nutrition day (My Stuff's Meals tab
+    // lives behind the Nutrition tab's own button, not a deep link).
+    return id
+      ? native(`${NATIVE_ROUTES.meals}/${encodeURIComponent(id)}`, params, "exact")
+      : native(NATIVE_ROUTES.nutrition, params, "nearest");
+  }
+  if (section === "timeline") {
     return native(NATIVE_ROUTES.nutrition, params, "nearest");
   }
 

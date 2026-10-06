@@ -103,6 +103,28 @@ export function useFetch<T>(
     optsRef.current = options;
   });
 
+  // Reset `loading` the moment the fetch TARGET changes, not a render later.
+  //
+  // A tab-gated caller (My Stuff's recipes/foods tabs — null `path` while
+  // inactive) flips `path` from null to a real url and `skip` from true to
+  // false on the SAME render that switches tabs. `loading` used to stay
+  // stale until the effect below ran `run()`, which calls `setLoading(true)`
+  // — one render later. In between, `data` was still null and `loading` was
+  // still false, so a tab's empty state ("No favorites yet") painted for a
+  // frame ahead of the fetch even starting.
+  //
+  // Deriving it during render (React's own pattern for "adjust state when a
+  // prop changes") closes that frame: a changed key resets `loading`
+  // immediately, before paint, instead of through a second effect-driven
+  // render.
+  const fetchKey = `${String(path)}:${String(options.skip)}`;
+  const [prevFetchKey, setPrevFetchKey] = useState(fetchKey);
+  if (fetchKey !== prevFetchKey) {
+    setPrevFetchKey(fetchKey);
+    const willFetch = !options.skip && !!path;
+    if (willFetch !== loading) setLoading(willFetch);
+  }
+
   // Async cache seed on mount / path change
   useEffect(() => {
     hasFreshDataRef.current = false;

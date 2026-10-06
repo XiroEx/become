@@ -7,7 +7,14 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Bookmark, ChefHat, Plus, ScrollText, Search } from "lucide-react-native";
+import {
+  BadgeCheck,
+  Bookmark,
+  ChefHat,
+  Plus,
+  ScrollText,
+  Search,
+} from "lucide-react-native";
 import { z } from "zod";
 import {
   apiFetch,
@@ -29,6 +36,14 @@ import { Input } from "@/components/Input";
 import { Text } from "@/components/Text";
 import { MealLogSheet } from "@/components/nutrition/MealLogSheet";
 import { SavedFoodLogSheet } from "@/components/nutrition/SavedFoodLogSheet";
+import { FoodThumbnail } from "@/components/nutrition/FoodThumbnail";
+import {
+  MacroBar,
+  MealThumbnail,
+  RecipeThumbnail,
+  TagChip,
+  titleCaseTag,
+} from "@/components/nutrition/MyStuffCards";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -49,7 +64,7 @@ import {
   MealEditorSheet,
   type MealEditorSubmit,
 } from "@/components/nutrition/MealEditorSheet";
-import { defaultTagAt, minutesOfDay, titleCase } from "@/lib/nutrition/mealSchedule";
+import { defaultTagAt, minutesOfDay } from "@/lib/nutrition/mealSchedule";
 import {
   filterSavedFoodsByQuery,
   foodIdOf,
@@ -87,10 +102,10 @@ import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
 
 type MyStuffTab = "meals" | "recipes" | "foods";
 
-const TABS: { key: MyStuffTab; label: string }[] = [
-  { key: "recipes", label: "Recipes" },
-  { key: "meals", label: "Meals" },
-  { key: "foods", label: "Foods" },
+const TABS: { key: MyStuffTab; label: string; Icon: typeof ScrollText }[] = [
+  { key: "recipes", label: "Recipes", Icon: ScrollText },
+  { key: "meals", label: "Meals", Icon: ChefHat },
+  { key: "foods", label: "Foods", Icon: Bookmark },
 ];
 
 function mealIdOf(meal: Meal): string {
@@ -532,13 +547,27 @@ export default function MyStuffRoute() {
         </Text>
 
         {/* Tab strip */}
+        {/* A single bordered strip with the active segment filled, matching
+            the web's `SegmentedControl` (`components/ui/SegmentedControl.tsx`)
+            — `inline-flex w-full rounded-xl border bg-white p-0.5`, black
+            active segment with its own icon. Native drew three separate
+            bordered buttons with no icon and reddened the active one. */}
         <View
           testID="my-stuff-tabs"
-          style={{ flexDirection: "row", gap: 8 }}
+          style={{
+            flexDirection: "row",
+            gap: 2,
+            padding: 2,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.card,
+          }}
           accessibilityRole="tablist"
         >
           {TABS.map((t) => {
             const active = tab === t.key;
+            const Icon = t.Icon;
             return (
               <Pressable
                 key={t.key}
@@ -552,16 +581,21 @@ export default function MyStuffRoute() {
                 }}
                 style={{
                   flex: 1,
-                  paddingVertical: 10,
-                  borderRadius: 10,
+                  flexDirection: "row",
                   alignItems: "center",
-                  backgroundColor: active ? colors.primary : colors.card,
-                  borderWidth: 1,
-                  borderColor: active ? colors.primary : colors.border,
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                  backgroundColor: active ? colors.primary : "transparent",
                 }}
               >
+                <Icon
+                  size={14}
+                  color={active ? colors["primary-foreground"] : colors["muted-foreground"]}
+                />
                 <Text
-                  className={`text-sm font-semibold ${active ? "text-primary-foreground" : "text-foreground"}`}
+                  className={`text-sm font-semibold ${active ? "text-primary-foreground" : "text-muted-foreground"}`}
                 >
                   {t.label}
                 </Text>
@@ -595,6 +629,29 @@ export default function MyStuffRoute() {
             />
           </View>
         </View>
+
+        {/* New custom food — directly under the search bar, My Foods tab
+            only, matching the web's placement
+            (`app/dashboard/meals/page.tsx`'s `flex justify-end` right after
+            the search input). Native used to put this row below the whole
+            list instead. */}
+        {tab === "foods" ? (
+          <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+            <Button
+              testID="my-stuff-create-food"
+              variant="secondary"
+              size="sm"
+              onPress={handleCreateFood}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Plus size={14} color={colors.foreground} />
+                <Text className="text-foreground text-xs font-semibold">
+                  {mayCreateFoods ? "New custom food" : "New custom food (Plus)"}
+                </Text>
+              </View>
+            </Button>
+          </View>
+        ) : null}
 
         {/* Tag filter chips — Meals tab only, own categories, never meal-times */}
         {tab === "meals" && allTags.length > 0 ? (
@@ -640,7 +697,7 @@ export default function MyStuffRoute() {
                   <Text
                     className={`text-xs font-medium ${active ? "text-primary-foreground" : "text-foreground"}`}
                   >
-                    {titleCase(tag)}
+                    {titleCaseTag(tag)}
                   </Text>
                 </Pressable>
               );
@@ -681,6 +738,12 @@ export default function MyStuffRoute() {
                 const saved = Boolean(recipe.savedFoodId);
                 const busy = busyRecipeId === id;
                 const kcal = recipe.totalsPerServing?.calories;
+                const firstTag = recipe.tags?.[0];
+                const macros = {
+                  protein: recipe.totalsPerServing?.protein ?? 0,
+                  carbs: recipe.totalsPerServing?.carbs ?? 0,
+                  fats: recipe.totalsPerServing?.fats ?? 0,
+                };
                 return (
                   <Pressable
                     key={id}
@@ -693,42 +756,73 @@ export default function MyStuffRoute() {
                       )
                     }
                   >
-                    <Card title={recipe.name} subtitle={recipe.description ?? ""}>
-                      <View testID={`my-stuff-recipe-${id}`}>
-                        {typeof kcal === "number" ? (
-                          <Text testID={`my-stuff-recipe-${id}-kcal`} className="text-muted-foreground text-xs">
-                            {Math.round(kcal)} cal/serving
+                    {/* The web's RecipeCard: a violet scroll thumbnail, a tag
+                        chip, per-serving cal + ingredient count, a macro
+                        bar, then "Save as food"/"Log" — native drew only a
+                        name and a kcal line with a separate Open button. */}
+                    <Card testID={`my-stuff-recipe-${id}`}>
+                      <View style={{ flexDirection: "row", gap: 12 }}>
+                        <RecipeThumbnail
+                          imageUrl={recipe.imageUrl}
+                          name={recipe.name}
+                          testID={`my-stuff-recipe-${id}-thumbnail`}
+                        />
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text
+                            className="text-foreground text-base font-semibold"
+                            numberOfLines={1}
+                          >
+                            {recipe.name}
                           </Text>
-                        ) : null}
-                        <Text className="text-muted-foreground text-xs">
-                          {(recipe.ingredients?.length ?? 0)} ingredients
-                        </Text>
-                        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                          <View style={{ flex: 1 }}>
-                            <Button
-                              testID={`my-stuff-recipe-open-button-${id}`}
-                              variant="secondary"
-                              onPress={() =>
-                                router.push(
-                                  `/(tabs)/nutrition/recipes/${encodeURIComponent(id)}` as never,
-                                )
-                              }
+                          {recipe.description ? (
+                            <Text
+                              className="text-muted-foreground text-xs"
+                              numberOfLines={1}
                             >
-                              Open
-                            </Button>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Button
-                              testID={`my-stuff-recipe-save-or-log-${id}`}
-                              variant="primary"
-                              loading={busy}
-                              disabled={busy}
-                              onPress={() => void handleRecipeSaveOrLog(recipe)}
-                            >
-                              {saved ? "Log" : "Save as food"}
-                            </Button>
+                              {recipe.description}
+                            </Text>
+                          ) : null}
+                          {firstTag ? (
+                            <TagChip
+                              label={titleCaseTag(firstTag)}
+                              testID={`my-stuff-recipe-${id}-tag`}
+                            />
+                          ) : null}
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                              marginTop: 2,
+                            }}
+                          >
+                            {typeof kcal === "number" ? (
+                              <Text
+                                testID={`my-stuff-recipe-${id}-kcal`}
+                                className="text-foreground text-xs font-semibold"
+                              >
+                                {Math.round(kcal)} cal/serving
+                              </Text>
+                            ) : null}
+                            <Text className="text-muted-foreground text-xs">
+                              {(recipe.ingredients?.length ?? 0)} ingredients
+                            </Text>
+                            <View style={{ marginLeft: "auto" }}>
+                              <MacroBar macros={macros} testID={`my-stuff-recipe-${id}-macro`} />
+                            </View>
                           </View>
                         </View>
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Button
+                          testID={`my-stuff-recipe-save-or-log-${id}`}
+                          variant="primary"
+                          loading={busy}
+                          disabled={busy}
+                          onPress={() => void handleRecipeSaveOrLog(recipe)}
+                        >
+                          {saved ? "Log" : "Save as food"}
+                        </Button>
                       </View>
                     </Card>
                   </Pressable>
@@ -757,6 +851,13 @@ export default function MyStuffRoute() {
               {meals.map((meal: MealsListResponse["meals"][number]) => {
                 const id = mealIdOf(meal);
                 const kcal = meal.totalNutrition?.calories;
+                const itemCount = meal.items?.length ?? 0;
+                const firstTag = meal.tags?.[0];
+                const macros = {
+                  protein: meal.totalNutrition?.protein ?? 0,
+                  carbs: meal.totalNutrition?.carbs ?? 0,
+                  fats: meal.totalNutrition?.fats ?? 0,
+                };
                 return (
                   <Pressable
                     key={id}
@@ -769,39 +870,74 @@ export default function MyStuffRoute() {
                       )
                     }
                   >
-                    <Card title={meal.name} subtitle={meal.description ?? ""}>
-                      <View testID={`my-stuff-meal-${id}`}>
-                        <Text className="text-muted-foreground text-xs">
-                          {(meal.items?.length ?? 0)} items
-                          {typeof kcal === "number" ? ` · ${Math.round(kcal)} kcal` : ""}
-                        </Text>
-                        <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                          <View style={{ flex: 1 }}>
-                            <Button
-                              testID={`my-stuff-meal-open-button-${id}`}
-                              variant="secondary"
-                              onPress={() =>
-                                router.push(
-                                  `/(tabs)/nutrition/meals/${encodeURIComponent(id)}` as never,
-                                )
-                              }
+                    {/* The web's MealCard: an amber chef thumbnail, a tag
+                        chip, cal + item count, a macro bar, then a black
+                        "Log to today" — native drew only a name and a
+                        "N items · N kcal" line with Open + a red Log. */}
+                    <Card testID={`my-stuff-meal-${id}`}>
+                      <View style={{ flexDirection: "row", gap: 12 }}>
+                        <MealThumbnail
+                          imageUrl={meal.imageUrl}
+                          name={meal.name}
+                          testID={`my-stuff-meal-${id}-thumbnail`}
+                        />
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <Text
+                            className="text-foreground text-base font-semibold"
+                            numberOfLines={1}
+                          >
+                            {meal.name}
+                          </Text>
+                          {meal.description ? (
+                            <Text
+                              className="text-muted-foreground text-xs"
+                              numberOfLines={1}
                             >
-                              Open
-                            </Button>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Button
-                              testID={`my-stuff-meal-log-${id}`}
-                              variant="primary"
-                              onPress={() => {
-                                setMealLogError(null);
-                                setMealToLog(meal);
-                              }}
-                            >
-                              Log
-                            </Button>
+                              {meal.description}
+                            </Text>
+                          ) : null}
+                          {firstTag ? (
+                            <TagChip
+                              label={titleCaseTag(firstTag)}
+                              testID={`my-stuff-meal-${id}-tag`}
+                            />
+                          ) : null}
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                              marginTop: 2,
+                            }}
+                          >
+                            {typeof kcal === "number" ? (
+                              <Text
+                                testID={`my-stuff-meal-${id}-kcal`}
+                                className="text-foreground text-xs font-semibold"
+                              >
+                                {Math.round(kcal)} cal
+                              </Text>
+                            ) : null}
+                            <Text className="text-muted-foreground text-xs">
+                              {itemCount} {itemCount === 1 ? "item" : "items"}
+                            </Text>
+                            <View style={{ marginLeft: "auto" }}>
+                              <MacroBar macros={macros} testID={`my-stuff-meal-${id}-macro`} />
+                            </View>
                           </View>
                         </View>
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Button
+                          testID={`my-stuff-meal-log-${id}`}
+                          variant="primary"
+                          onPress={() => {
+                            setMealLogError(null);
+                            setMealToLog(meal);
+                          }}
+                        >
+                          Log to today
+                        </Button>
                       </View>
                     </Card>
                   </Pressable>
@@ -830,39 +966,113 @@ export default function MyStuffRoute() {
               {filteredFoods.map((food: SavedFoodsResponse["foods"][number]) => {
                 const id = foodIdOf(food);
                 const kcal = food.nutrition?.calories;
+                const protein = Math.round(food.nutrition?.protein ?? 0);
+                const carbs = Math.round(food.nutrition?.carbs ?? 0);
+                const fats = Math.round(food.nutrition?.fats ?? 0);
+                const servingLabel =
+                  food.displayLabel ||
+                  (food.servingSize != null && food.servingUnit
+                    ? `${food.servingSize} ${food.servingUnit}`
+                    : "");
                 const removing = removingFoodId === id;
                 return (
-                  <Card key={id} title={food.name} subtitle={food.brand ?? ""}>
-                    <View testID={`my-stuff-food-${id}`}>
-                      {typeof kcal === "number" ? (
-                        <Text className="text-muted-foreground text-xs">
-                          {Math.round(kcal)} kcal
-                        </Text>
-                      ) : null}
-                      <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-                        <View style={{ flex: 1 }}>
-                          <Button
-                            testID={`my-stuff-food-log-${id}`}
-                            variant="primary"
-                            onPress={() => {
-                              setFoodLogError(null);
-                              setFoodToLog(food);
-                            }}
-                          >
-                            Log
-                          </Button>
+                  // The web's SavedFoodCard row: a thumbnail, a verified
+                  // tick, "{serving} · {cal} cal", a "P/C/F" grams line, a
+                  // black "+" and an amber bookmark — native drew only a
+                  // name and a "N kcal" line with text Log/Unsave buttons.
+                  <Card key={id} testID={`my-stuff-food-${id}`}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <Pressable
+                        testID={`my-stuff-food-open-${id}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Open ${food.name}`}
+                        onPress={() =>
+                          router.push(
+                            `/(tabs)/nutrition/food/${encodeURIComponent(id)}` as never,
+                          )
+                        }
+                        style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
+                      >
+                        <View style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden" }}>
+                          <FoodThumbnail
+                            testID={`my-stuff-food-${id}-thumbnail`}
+                            name={food.name}
+                            category={food.category}
+                            imageUrl={food.imageUrl}
+                            height={48}
+                            iconSize={20}
+                          />
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Button
-                            testID={`my-stuff-food-remove-${id}`}
-                            variant="secondary"
-                            loading={removing}
-                            disabled={removing}
-                            onPress={() => void handleRemoveFood(id)}
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                            <Text
+                              className="text-foreground text-sm font-semibold"
+                              numberOfLines={1}
+                            >
+                              {food.name}
+                            </Text>
+                            {food.isVerified ? (
+                              <View testID={`my-stuff-food-${id}-verified`}>
+                                <BadgeCheck size={14} color={colors.success} />
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                            {servingLabel}
+                            {typeof kcal === "number" ? `${servingLabel ? " · " : ""}${Math.round(kcal)} cal` : ""}
+                          </Text>
+                          <Text
+                            testID={`my-stuff-food-${id}-macro`}
+                            className="text-muted-foreground text-[10px] tabular-nums"
                           >
-                            Unsave
-                          </Button>
+                            P {protein}g · C {carbs}g · F {fats}g
+                          </Text>
                         </View>
+                      </Pressable>
+
+                      <View style={{ flexDirection: "row", gap: 8 }}>
+                        <Pressable
+                          testID={`my-stuff-food-log-${id}`}
+                          accessibilityRole="button"
+                          accessibilityLabel="Log to today"
+                          onPress={() => {
+                            setFoodLogError(null);
+                            setFoodToLog(food);
+                          }}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: colors.primary,
+                          }}
+                        >
+                          <Plus size={16} color={colors["primary-foreground"]} />
+                        </Pressable>
+                        <Pressable
+                          testID={`my-stuff-food-remove-${id}`}
+                          accessibilityRole="button"
+                          accessibilityLabel="Remove from My Foods"
+                          disabled={removing}
+                          onPress={() => void handleRemoveFood(id)}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 10,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            opacity: removing ? 0.6 : 1,
+                          }}
+                        >
+                          {removing ? (
+                            <ActivityIndicator size="small" color={colors.accent} />
+                          ) : (
+                            <Bookmark size={16} color={colors.accent} fill={colors.accent} />
+                          )}
+                        </Pressable>
                       </View>
                     </View>
                   </Card>
@@ -872,50 +1082,57 @@ export default function MyStuffRoute() {
           )
         ) : null}
 
-        {/* Create buttons — gated by canCreate, upgrade sheet on a real gate */}
-        {tab === "meals" ? (
-          <Button
-            testID="my-stuff-create-meal"
-            variant="secondary"
-            onPress={handleCreateMeal}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Plus size={14} color={colors.foreground} />
-              <Text className="text-foreground text-sm font-semibold">
-                {mayCreateMeals ? "New meal" : "New meal (Plus)"}
-              </Text>
-            </View>
-          </Button>
-        ) : null}
-        {tab === "recipes" ? (
-          <Button
-            testID="my-stuff-create-recipe"
-            variant="secondary"
-            onPress={handleCreateRecipe}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Plus size={14} color={colors.foreground} />
-              <Text className="text-foreground text-sm font-semibold">
-                {mayCreateFoods ? "New recipe" : "New recipe (Plus)"}
-              </Text>
-            </View>
-          </Button>
-        ) : null}
-        {tab === "foods" ? (
-          <Button
-            testID="my-stuff-create-food"
-            variant="secondary"
-            onPress={handleCreateFood}
-          >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Plus size={14} color={colors.foreground} />
-              <Text className="text-foreground text-sm font-semibold">
-                {mayCreateFoods ? "New custom food" : "New custom food (Plus)"}
-              </Text>
-            </View>
-          </Button>
-        ) : null}
       </ScrollView>
+
+      {/* Floating + — Meals & Recipes tabs, matching the web's floating
+          create button (`app/dashboard/meals/page.tsx`'s
+          `fixed bottom-28 right-4 … rounded-full`). Foods has no floating
+          button on the web either — a food is added through the search
+          modal, and "New custom food" sits under the search bar above.
+          Native used to draw an inline "+ New meal"/"+ New recipe" row at
+          the bottom of the list instead. */}
+      {tab === "meals" ? (
+        <Pressable
+          testID="my-stuff-create-meal"
+          accessibilityRole="button"
+          accessibilityLabel={mayCreateMeals ? "Create new meal" : "Create new meal (Plus)"}
+          onPress={handleCreateMeal}
+          style={{
+            position: "absolute",
+            bottom: 24,
+            right: 16,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.primary,
+          }}
+        >
+          <Plus size={24} color={colors["primary-foreground"]} />
+        </Pressable>
+      ) : null}
+      {tab === "recipes" ? (
+        <Pressable
+          testID="my-stuff-create-recipe"
+          accessibilityRole="button"
+          accessibilityLabel={mayCreateFoods ? "Create new recipe" : "Create new recipe (Plus)"}
+          onPress={handleCreateRecipe}
+          style={{
+            position: "absolute",
+            bottom: 24,
+            right: 16,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.primary,
+          }}
+        >
+          <Plus size={24} color={colors["primary-foreground"]} />
+        </Pressable>
+      ) : null}
 
       {/* Log a saved meal with a portion (NP-094 sheet, reused) */}
       <MealLogSheet
