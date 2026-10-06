@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   AppState,
+  BackHandler,
+  Dimensions,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -42,6 +45,10 @@ import {
   type GoogleSignInResult,
 } from "@/lib/auth/googleSignIn";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
 import { createPoller, type Poller } from "@/lib/auth/polling";
 import { announce } from "@/lib/a11y/announce";
 import { signOutMessage } from "@/lib/auth/AuthProvider";
@@ -147,6 +154,8 @@ export interface LoginScreenProps {
   initialMode?: AuthMode;
   /** DI hook for tests — opens the Terms/Privacy/footer legal links. */
   launcher?: BrowserLauncher;
+  /** DI hook for tests — injects `BackHandler` for the hardware-back flip (NP-309). */
+  backHandler?: BackHandlerLike;
 }
 
 export default function LoginScreen({
@@ -166,6 +175,7 @@ export default function LoginScreen({
   now,
   initialMode,
   launcher = defaultBrowserLauncher,
+  backHandler = BackHandler,
 }: LoginScreenProps = {}) {
   const { colors, tint } = useThemeTokens();
   const reducedMotion = useReducedMotion();
@@ -207,6 +217,18 @@ export default function LoginScreen({
   const submittingRef = useRef(false);
   const pollerRef = useRef<Poller | null>(null);
   const isResumedRef = useRef(false);
+
+  // NP-309: on Android, One UI 7's edge-to-edge enforcement stops
+  // `windowSoftInputMode="adjustResize"` from resizing the window the way it
+  // used to, so the keyboard covers "Sign in with review code" with no hint
+  // that the field is still there — the member has to know to press the
+  // keyboard's own dismiss/next arrow. These three refs scroll the review
+  // code field AND its submit button above the keyboard instead of relying
+  // on a resize that no longer happens.
+  const scrollViewRef = useRef<ScrollView>(null);
+  const reviewCodeSectionRef = useRef<View>(null);
+  const reviewCodeFocusedRef = useRef(false);
+  const scrollOffsetRef = useRef(0);
 
   const sendLink =
     sendLinkFn ??
@@ -270,11 +292,14 @@ export default function LoginScreen({
   // backButton=true) always leads to the marketing home page. Native has no
   // such page behind sign-in — a cold launch replaces straight into this
   // screen — so there is nothing to go back to unless something actually
-  // pushed this screen onto the stack (e.g. a web-only hand-off). The button
-  // is drawn either way for visual parity; it is simply inert when there is
-  // no history.
+  // pushed this screen onto the stack (e.g. a web-only hand-off). NP-309: a
+  // button that is always drawn but never does anything is exactly the kind
+  // of thing a Play reviewer flags, so it is hidden rather than left inert
+  // when there is no history, and only shown (and wired to `router.back()`)
+  // on the hand-off path where there actually is one.
+  const canGoBack = router.canGoBack?.() ?? false;
   const handleBack = (): void => {
-    if (router.canGoBack()) router.back();
+    if (canGoBack) router.back();
   };
 
   // Opens a legal page (Terms, Privacy) in the in-app browser. Same shape as
@@ -657,6 +682,46 @@ export default function LoginScreen({
     setError(null);
   };
 
+  // NP-309: system back on "Create account" used to exit the app outright —
+  // web's /register is its own page, so its back goes to /login. Mode here is
+  // state, not a route, so the hardware back button has to be told to flip it
+  // instead. Apple's "link your email" detour isn't a mode, so it is left to
+  // the OS default.
+  useAndroidBackHandler({
+    enabled: mode === "register" && !appleOffer,
+    onBack: () => {
+      void handleToggleMode();
+      return true;
+    },
+    backHandler,
+  });
+
+  // NP-309: scroll the review-code field and its submit button above the
+  // keyboard. See the refs above for why this cannot be left to the OS resize
+  // on Android. iOS already does this itself (its ScrollView focuses the
+  // active TextInput natively), so this only runs on Android.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const subscription = Keyboard.addListener("keyboardDidShow", (event) => {
+      if (!reviewCodeFocusedRef.current) return;
+      const section = reviewCodeSectionRef.current;
+      const scroller = scrollViewRef.current;
+      if (!section || !scroller) return;
+      const keyboardHeight = event?.endCoordinates?.height ?? 0;
+      section.measureInWindow((_x, y, _width, height) => {
+        const visibleBottom = Dimensions.get("window").height - keyboardHeight;
+        const overflow = y + height - visibleBottom;
+        if (overflow > 0) {
+          scroller.scrollTo({
+            y: scrollOffsetRef.current + overflow + 16,
+            animated: true,
+          });
+        }
+      });
+    });
+    return () => subscription.remove();
+  }, []);
+
   // Polling fallback: once the email is sent, poll check-session until verified,
   // expired, or 15 minutes old.
   useEffect(() => {
@@ -716,12 +781,17 @@ export default function LoginScreen({
       testID="login-screen"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
         testID="login-screen-kav"
       >
         <ScrollView
+          ref={scrollViewRef}
           keyboardShouldPersistTaps="handled"
+          onScroll={(e) => {
+            scrollOffsetRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: 24,
@@ -737,23 +807,25 @@ export default function LoginScreen({
             testID="login-header"
             className="flex-row items-center gap-3 mb-6"
           >
-            <Pressable
-              testID="login-back-button"
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={handleBack}
-              style={{
-                height: 56,
-                width: 56,
-                borderRadius: 28,
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <ArrowLeft size={22} color={colors.foreground} />
-            </Pressable>
+            {canGoBack ? (
+              <Pressable
+                testID="login-back-button"
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                onPress={handleBack}
+                style={{
+                  height: 56,
+                  width: 56,
+                  borderRadius: 28,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <ArrowLeft size={22} color={colors.foreground} />
+              </Pressable>
+            ) : null}
             <View className="flex-1">
               <Text
                 className="text-foreground text-xl font-bold"
@@ -934,9 +1006,15 @@ export default function LoginScreen({
             <View style={{ width: "100%" }}>
               <Input
                 testID="login-email"
-                label="Email"
+                accessibilityLabel="Email"
                 autoCapitalize="none"
                 keyboardType="email-address"
+                returnKeyType="go"
+                onSubmitEditing={() => {
+                  // NP-309: web's Enter submits "Continue with email" — the
+                  // keyboard's Go/Done key did nothing but close the keyboard.
+                  void handleSubmit();
+                }}
                 value={email}
                 onChangeText={setEmail}
                 error={error ?? undefined}
@@ -1026,7 +1104,14 @@ export default function LoginScreen({
                   absent where the platform cannot have it. */}
               <View className="my-4 flex-row items-center gap-3">
                 <View className="flex-1 h-px bg-border" />
-                <Text className="text-muted-foreground text-xs">or</Text>
+                {/* web's divider is `uppercase tracking-wide` ("OR"); this one
+                    rendered plain lowercase "or" (NP-309). */}
+                <Text
+                  testID="login-or-divider"
+                  className="text-muted-foreground text-xs uppercase tracking-wide"
+                >
+                  or
+                </Text>
                 <View className="flex-1 h-px bg-border" />
               </View>
 
@@ -1093,27 +1178,48 @@ export default function LoginScreen({
                   inbox here for a magic link. Sign-in mode only. */}
               {mode === "login" &&
                 (showReviewCode ? (
-                  <View className="mt-4 w-full" testID="login-review-code">
+                  <View
+                    ref={reviewCodeSectionRef}
+                    className="mt-4 w-full"
+                    testID="login-review-code"
+                  >
                     <Text className="text-muted-foreground text-xs mb-2">
                       Enter the email and review code you were given.
                     </Text>
                     <Input
                       testID="login-review-code-input"
-                      label="Review code"
+                      accessibilityLabel="Review code"
                       autoCapitalize="none"
                       autoCorrect={false}
-                      autoComplete="one-time-code"
+                      spellCheck={false}
+                      // NP-309: plain "one-time-code" still let the Samsung
+                      // keyboard learn and suggest the code in its suggestion
+                      // strip — a review code is not something to remember or
+                      // offer back later, so autofill is switched off and the
+                      // field is treated as secure-ish entry like a password.
+                      autoComplete="off"
+                      importantForAutofill="no"
+                      secureTextEntry
                       returnKeyType="go"
                       onSubmitEditing={handleReviewSignIn}
+                      onFocus={() => {
+                        reviewCodeFocusedRef.current = true;
+                      }}
+                      onBlur={() => {
+                        reviewCodeFocusedRef.current = false;
+                      }}
                       value={reviewCode}
                       onChangeText={setReviewCode}
                       placeholder="Review code"
                     />
                     <View style={{ height: 8 }} />
+                    {/* web's submit is outlined and disabled until both the
+                        email and the code are filled, not a filled grey
+                        button that is only disabled while sending (NP-309). */}
                     <Button
                       testID="login-review-code-submit"
-                      variant="secondary"
-                      disabled={reviewBusy}
+                      variant="ghost"
+                      disabled={reviewBusy || !email.trim() || !reviewCode.trim()}
                       onPress={handleReviewSignIn}
                       accessibilityLabel="Sign in with review code"
                     >
@@ -1129,7 +1235,10 @@ export default function LoginScreen({
                     onPress={() => setShowReviewCode(true)}
                     className="mt-2 py-2 items-center justify-center"
                   >
-                    <Text className="text-muted-foreground text-xs text-center">
+                    <Text
+                      testID="login-review-code-disclosure-text"
+                      className="text-muted-foreground text-xs text-center underline"
+                    >
                       App reviewer? Use a review code
                     </Text>
                   </Pressable>
