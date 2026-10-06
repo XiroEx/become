@@ -2885,7 +2885,24 @@ export default function LiveWorkoutPage() {
             programId={programId}
             workout={workout}
             elapsedTime={elapsedTime}
-            exerciseData={exerciseData}
+            // This screen types a timed set's SECONDS into its reps box and its
+            // DISTANCE into its weight box (see the save path and the
+            // quick-progress mirror above). Hand the summary the same
+            // translation, or a 10-minute / 2000 m treadmill reads "2000×600"
+            // and lands 1,200,000 lbs in Volume.
+            exerciseData={exerciseData.map((sets, i) => {
+              const ex = exercises[i];
+              const timed = tracksTime(ex?.trackingType);
+              const isTD = normalizeTracking(ex?.trackingType) === 'time_distance';
+              return sets.map((s) => ({
+                reps: timed ? '' : s.reps,
+                weight: timed ? '' : s.weight,
+                duration: timed ? s.reps : '',
+                distance: isTD ? s.weight : '',
+                speed: s.speed,
+                completed: s.completed,
+              }));
+            })}
             exercises={exercises}
             exerciseHistory={exerciseHistory}
             summaryStreak={summaryStreak}

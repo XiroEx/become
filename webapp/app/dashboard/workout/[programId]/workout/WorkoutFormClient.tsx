@@ -2224,6 +2224,9 @@ export default function WorkoutFormPage() {
             completedProgramName={completedProgramName}
             workout={workout}
             elapsedTime={elapsedTime}
+            // This screen already keeps every metric in its own field
+            // (reps/weight/duration/distance/speed), so the sets go over as
+            // they are — the summary reads them by tracking type.
             exerciseData={workout.exercises.map((_, i) => {
               const ep = exerciseProgress.find(p => p.exerciseIndex === i);
               return ep?.sets ?? [];

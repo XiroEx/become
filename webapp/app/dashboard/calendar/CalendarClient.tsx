@@ -9,6 +9,7 @@ import WorkoutSummary from '@/components/WorkoutSummary'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
 import QuickSessionModal from '@/components/QuickSessionModal'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
+import { inferTracking } from '@/lib/workout/tracking'
 import { logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 import { BackButton } from '@/components/ui/BackButton'
 import {
@@ -252,9 +253,26 @@ export default function CalendarClient() {
       phase: number
       completed: boolean
       duration?: number
+      // A saved log keeps every metric it was given and `null` for the rest —
+      // read duration/distance/speed, or a past cardio session renders
+      // "null reps". The group fields are what tell the summary which of these
+      // ran as a circuit and which as a superset.
       exercises: Array<{
         name: string
-        sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }>
+        sets: Array<{
+          setNumber: number
+          reps: number | null
+          weight: number | null
+          duration?: number | null
+          distance?: number | null
+          speed?: number | null
+          completed: boolean
+        }>
+        groupId?: string
+        groupType?: string
+        groupLabel?: string
+        groupRounds?: number
+        prescription?: { trackingType?: string }
       }>
     }
     workout: { day: string; title: string }
@@ -1166,12 +1184,24 @@ export default function CalendarClient() {
             elapsedTime={logSummary.log.duration ? logSummary.log.duration * 60 : 0}
             exerciseData={logSummary.log.exercises.map((ex) =>
               (ex.sets ?? []).map((s) => ({
-                reps: String(s.reps),
-                weight: String(s.weight),
+                reps: s.reps,
+                weight: s.weight,
+                duration: s.duration,
+                distance: s.distance,
+                speed: s.speed,
                 completed: s.completed,
               }))
             )}
-            exercises={logSummary.log.exercises.map((ex) => ({ name: ex.name }))}
+            exercises={logSummary.log.exercises.map((ex) => ({
+              name: ex.name,
+              // Logs written since the type was stored carry it; older ones are
+              // read back off the numbers they recorded.
+              trackingType: ex.prescription?.trackingType ?? inferTracking(ex.sets),
+              groupId: ex.groupId,
+              groupType: ex.groupType,
+              groupLabel: ex.groupLabel,
+              groupRounds: ex.groupRounds,
+            }))}
             exerciseHistory={logSummary.exerciseHistory}
             summaryStreak={null}
             summaryGoal={null}

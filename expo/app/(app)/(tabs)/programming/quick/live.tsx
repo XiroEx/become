@@ -316,6 +316,12 @@ export default function QuickLiveRoute({
     ).map((ex) => ({
       name: ex.name,
       trackingType: ex.trackingType ?? null,
+      // Grouping comes along so the breakdown can say which of these ran as a
+      // circuit and which as a superset.
+      groupId: ex.groupId ?? null,
+      groupType: ex.groupType ?? null,
+      groupLabel: ex.groupLabel ?? null,
+      groupRounds: ex.groupRounds ?? null,
     }));
     const summarySets: WorkoutSummarySet[][] = (workout.exercises ?? []).map(
       (ex) =>
