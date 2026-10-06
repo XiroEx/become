@@ -27,6 +27,14 @@ export interface FoodReportsBadgeProps {
   loadImpl?: typeof loadMyReports;
   /** Re-read when this changes (e.g. after filing a report). */
   refreshKey?: number | string;
+  /**
+   * "pill" (default) — the standalone header pill. "row" — a full-width
+   * dropdown-menu row (icon, label, trailing unread count), matching the
+   * other `nutrition-timeline-*` entries it now sits alongside (NP-262: the
+   * header pill used to force the title to wrap, so it moved into the
+   * Timeline dropdown).
+   */
+  variant?: "pill" | "row";
   testID?: string;
 }
 
@@ -35,6 +43,7 @@ export function FoodReportsBadge({
   onOpen,
   loadImpl = loadMyReports,
   refreshKey,
+  variant = "pill",
   testID = "food-reports-badge",
 }: FoodReportsBadgeProps) {
   const { colors } = useThemeTokens();
@@ -68,15 +77,63 @@ export function FoodReportsBadge({
     };
   }, [loadImpl, token, refreshKey]);
 
+  const label =
+    unread > 0
+      ? `Your food reports, ${unread} unread update${unread === 1 ? "" : "s"}`
+      : "Your food reports";
+
+  if (variant === "row") {
+    return (
+      <Pressable
+        testID={testID}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onOpen}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 10,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <Flag size={16} color={colors.foreground} />
+        <Text className="text-sm font-medium text-foreground" style={{ flex: 1 }}>
+          Food reports
+        </Text>
+        {unread > 0 ? (
+          <View
+            testID={`${testID}-count`}
+            accessibilityLabel={`${unread} unread`}
+            style={{
+              minWidth: 18,
+              height: 18,
+              borderRadius: 9,
+              paddingHorizontal: 5,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.destructive,
+            }}
+          >
+            <Text
+              className="text-[11px] font-bold"
+              style={{ color: colors["primary-foreground"] }}
+            >
+              {unread > 99 ? "99+" : String(unread)}
+            </Text>
+          </View>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable
       testID={testID}
       accessibilityRole="button"
-      accessibilityLabel={
-        unread > 0
-          ? `Your food reports, ${unread} unread update${unread === 1 ? "" : "s"}`
-          : "Your food reports"
-      }
+      accessibilityLabel={label}
       onPress={onOpen}
       hitSlop={8}
       style={{

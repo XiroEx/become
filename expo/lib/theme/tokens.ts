@@ -41,7 +41,8 @@ export type TokenName =
   | "destructive-foreground"
   | "accent"
   | "accent-foreground"
-  | "success";
+  | "success"
+  | "teal";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -61,6 +62,10 @@ export const lightTokens: Record<TokenName, string> = {
   // light value is not the dark one.
   "accent-foreground": "24 24 27",
   success: "22 163 74", // green-600 — the web's `text-green-600`
+  teal: "20 184 166", // teal-500 — the nutrition consultant's identity
+  // colour (NP-262), identical in both modes like `primary`: the web's
+  // `accentFrom="from-emerald-500" accentTo="to-teal-500"` gradient does not
+  // change with the scheme either.
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -77,6 +82,7 @@ export const darkTokens: Record<TokenName, string> = {
   accent: "251 191 36", // amber-400 — the web's `dark:text-amber-400`
   "accent-foreground": "24 24 27",
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
+  teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

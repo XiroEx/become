@@ -424,7 +424,6 @@ describe("FoodSearchSheet — Acceptance Criteria & Parity", () => {
 
     await waitFor(() => {
       expect(getByTestId("nutrition-search-bar")).toBeTruthy();
-      expect(getByTestId("nutrition-find-food")).toBeTruthy();
       expect(getByTestId("nutrition-add-food-breakfast")).toBeTruthy();
     });
 
@@ -437,16 +436,8 @@ describe("FoodSearchSheet — Acceptance Criteria & Parity", () => {
     // Close
     fireEvent.press(getByTestId("food-search-sheet-backdrop"));
 
-    // 2. Open from add button
-    fireEvent.press(getByTestId("nutrition-find-food"));
-    await waitFor(() => {
-      expect(getByTestId("food-search-sheet")).toBeTruthy();
-    });
-
-    // Close
-    fireEvent.press(getByTestId("food-search-sheet-backdrop"));
-
-    // 3. Open from section's add
+    // 2. Open from section's add — the persistent "Find a food" button
+    // duplicated the search bar above it and is gone (NP-262).
     fireEvent.press(getByTestId("nutrition-add-food-breakfast"));
     await waitFor(() => {
       expect(getByTestId("food-search-sheet")).toBeTruthy();
