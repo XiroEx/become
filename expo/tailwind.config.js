@@ -28,6 +28,14 @@ module.exports = {
           DEFAULT: "rgb(var(--primary) / <alpha-value>)",
           foreground: "rgb(var(--primary-foreground) / <alpha-value>)",
         },
+        // The web's red, which is an EXCEPTION and not the base colour
+        // (NP-313): the unread notification badge and the other `bg-red-500` /
+        // `text-red-600` accents. Error text and destructive surfaces keep
+        // using `destructive`.
+        brand: {
+          DEFAULT: "rgb(var(--brand) / <alpha-value>)",
+          foreground: "rgb(var(--brand-foreground) / <alpha-value>)",
+        },
         muted: {
           DEFAULT: "rgb(var(--muted) / <alpha-value>)",
           foreground: "rgb(var(--muted-foreground) / <alpha-value>)",

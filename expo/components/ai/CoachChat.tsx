@@ -64,7 +64,8 @@ export interface CoachChatProps {
   runLabel?: string;
   /**
    * Header icon, user-message bubble, and send-button colour. Defaults to
-   * `colors.primary` (the brand red every other coach uses) — pass this only
+   * `colors.primary` (the neutral zinc-900/white every other coach uses since
+   * NP-313; it was the brand red) — pass this only
    * when a specific consultant has its own identity colour, e.g. the
    * nutrition consultant's teal (NP-262), matching the web's
    * `accentFrom`/`accentTo` gradient on that one sheet.

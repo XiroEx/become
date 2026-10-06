@@ -13,6 +13,7 @@ import { WriteAffirm } from "@/components/mind/session/scenes/WriteAffirm";
 import { useSpeechMatch } from "@/hooks/useSpeechMatch";
 import { lightHaptic, type HapticFn } from "@/lib/feedback/haptics";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground } from "@/lib/theme/tokens";
 
 /**
  * MIRROR SCENE (NP-100).
@@ -40,8 +41,11 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * white text. Tailwind's `bg-black` + `text-white/…` classes carry that
  * without a literal, which is what NP-123 bans — literals, not black. The
  * word highlight reuses the speech tokens (`success` / `accent`), exactly
- * like SpeakScene, and the ring uses the white token (`primary-foreground`
- * is white in both modes).
+ * like SpeakScene, and the ring uses `onDarkForeground` — white in both modes,
+ * because the viewfinder is dark in both modes. (It used to use
+ * `primary-foreground`, which was white in both modes only because `primary`
+ * was the brand red; NP-313 made `primary` the web's neutral, so the ink on an
+ * always-dark surface names the dark palette instead.)
  */
 
 export const MIRROR_PASS = 0.6;
@@ -215,7 +219,7 @@ export function MirrorScene({
         }}
       >
         <View className="flex-row items-center gap-1.5">
-          <Camera size={14} color={colors["primary-foreground"]} />
+          <Camera size={14} color={onDarkForeground} />
           <Text className="text-xs uppercase tracking-widest text-white/60">
             {cameraOn ? "Look at yourself" : "Mirror"}
           </Text>
@@ -309,7 +313,7 @@ export function MirrorScene({
                   cy={60}
                   r={RADIUS}
                   fill="none"
-                  stroke={colors["primary-foreground"]}
+                  stroke={onDarkForeground}
                   strokeWidth={6}
                   strokeLinecap="round"
                   strokeDasharray={`${CIRC} ${CIRC}`}
@@ -348,7 +352,7 @@ export function MirrorScene({
               onPress={begin}
               className="h-28 w-28 items-center justify-center rounded-full bg-white/15 active:scale-95"
             >
-              <Mic size={40} color={colors["primary-foreground"]} />
+              <Mic size={40} color={onDarkForeground} />
             </Pressable>
             <Text className="mt-6 text-sm text-white/60">
               Tap, then say it out loud

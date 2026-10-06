@@ -14,6 +14,18 @@ export interface BottomSheetProps {
   testID?: string;
   accessibilityLabel?: string;
   sheetStyle?: StyleProp<ViewStyle>;
+  /**
+   * Decoration beside the title — e.g. a sheet's own avatar/icon badge
+   * (NP-294's gradient sparkle avatar on Workout Now). Rendered to the left
+   * of the title text; only shown when `title` is also given.
+   */
+  headerLeading?: ReactNode;
+  /**
+   * Decoration beside the title, on the trailing edge — e.g. an explicit ✕
+   * close button alongside the backdrop tap and the scrub gesture. Rendered
+   * to the right of the title text; only shown when `title` is also given.
+   */
+  headerTrailing?: ReactNode;
 }
 
 /**
@@ -34,6 +46,8 @@ export function BottomSheet({
   testID,
   accessibilityLabel,
   sheetStyle,
+  headerLeading,
+  headerTrailing,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   return (
@@ -73,13 +87,17 @@ export function BottomSheet({
             className="w-10 h-1 bg-muted-foreground rounded-full self-center mb-4 opacity-50"
           />
           {title ? (
-            <Text
-              testID={testID ? `${testID}-title` : undefined}
-              accessibilityRole="header"
-              className="text-foreground text-xl font-semibold mb-3"
-            >
-              {title}
-            </Text>
+            <View className="flex-row items-center mb-3" style={{ gap: 8 }}>
+              {headerLeading}
+              <Text
+                testID={testID ? `${testID}-title` : undefined}
+                accessibilityRole="header"
+                className="text-foreground text-xl font-semibold flex-1"
+              >
+                {title}
+              </Text>
+              {headerTrailing}
+            </View>
           ) : null}
           {children}
         </Pressable>

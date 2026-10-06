@@ -18,7 +18,30 @@
  *   background  zinc-50  / #0a0a0a      foreground  zinc-900 / white
  *   card        white    / zinc-900      border      zinc-200 / zinc-800
  *   muted       zinc-100 / zinc-800      muted-fg    zinc-500 / zinc-400
- *   primary     red-500 (brand, both)    destructive red-700  / red-400
+ *   primary     zinc-900 / white         primary-fg  white / zinc-900
+ *                                          THE WEB'S NEUTRAL PRIMARY (NP-313):
+ *                                          `bg-zinc-900 text-white
+ *                                          dark:bg-white dark:text-black` is
+ *                                          what every primary action on the web
+ *                                          is (~790 `bg-zinc-900` uses), and
+ *                                          native drew all of them in red-500
+ *                                          because `primary` WAS red-500 in
+ *                                          both modes. Red is not the base
+ *                                          colour; it is an exception, and it
+ *                                          now has its own two tokens below.
+ *   brand       red-600 / red-500        brand-fg    white (both modes)
+ *                                          The red the web keeps on purpose
+ *                                          OUTSIDE of error text: the unread
+ *                                          notification badge (`TopNav.tsx`'s
+ *                                          `bg-red-500 text-white`) and the
+ *                                          other `bg-red-500` / `text-red-600`
+ *                                          accents. Mode-aware like `accent`,
+ *                                          because red-500 on a near-white page
+ *                                          is 3.6:1 and red-600 is 4.6:1.
+ *   destructive red-700  / red-400       the web's `text-red-600
+ *                                          dark:text-red-400` error/alert text
+ *                                          and its `bg-red-50 dark:bg-red-950/30`
+ *                                          tint — the "danger" red, unchanged
  *   accent      amber-600 / amber-400    success     green-600 / green-400
  *   info        blue-600 / blue-400      (the web's "Calendar"/History links
  *                                          the scheduled-workout icons and the
@@ -53,6 +76,8 @@ export type TokenName =
   | "foreground"
   | "primary"
   | "primary-foreground"
+  | "brand"
+  | "brand-foreground"
   | "muted"
   | "muted-foreground"
   | "card"
@@ -80,8 +105,11 @@ export type TokenName =
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
   foreground: "24 24 27", // zinc-900
-  primary: "239 68 68", // red-500 — the brand red, identical in both modes
-  "primary-foreground": "255 255 255",
+  primary: "24 24 27", // zinc-900 — the web's `bg-zinc-900` primary action
+  "primary-foreground": "255 255 255", // the web's `text-white` on it
+  brand: "220 38 38", // red-600 — the web's light-mode red (`text-red-600`,
+  // `bg-red-600`); the lighter red-500 is 3.6:1 on zinc-50 and this is 4.6:1
+  "brand-foreground": "255 255 255", // the web's `bg-red-500/600 text-white`
   muted: "244 244 245", // zinc-100
   "muted-foreground": "113 113 122", // zinc-500
   card: "255 255 255", // white
@@ -125,8 +153,10 @@ export const lightTokens: Record<TokenName, string> = {
 export const darkTokens: Record<TokenName, string> = {
   background: "10 10 10", // #0a0a0a, the app's first paint
   foreground: "255 255 255",
-  primary: "239 68 68", // red-500
-  "primary-foreground": "255 255 255",
+  primary: "255 255 255", // white — the web's `dark:bg-white` primary action
+  "primary-foreground": "24 24 27", // zinc-900 — the web's `dark:text-black`
+  brand: "239 68 68", // red-500 — the web's flat `bg-red-500` / `dark:text-red-500`
+  "brand-foreground": "255 255 255", // white on red in both modes, like the web
   muted: "39 39 42", // zinc-800
   "muted-foreground": "161 161 170", // zinc-400
   card: "24 24 27", // zinc-900
@@ -161,7 +191,7 @@ export function getTokens(mode: ThemeMode): Record<TokenName, string> {
  * Resolve a token to a CSS-compatible `rgb(r g b)` string for use in places
  * where NativeWind class strings aren't available.
  *
- * Example: `resolveToken("primary", "dark")` → `"rgb(239 68 68)"`.
+ * Example: `resolveToken("brand", "dark")` → `"rgb(239 68 68)"`.
  *
  * `mode` is REQUIRED. It used to default to `"dark"`, and that default is what
  * made 20 call sites paint dark-mode colours on a light-mode phone.
@@ -189,6 +219,22 @@ export function tintToken(
   const [r, g, b] = getTokens(mode)[name].split(" ");
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
+
+/**
+ * WHITE, IN BOTH MODES — the ink for a surface that is dark in both schemes.
+ *
+ * A camera viewfinder, a full-screen photo behind a scrim, the program hero
+ * card: those are black on every phone whatever the system setting is, the way
+ * the web's hero and mirror stage are. Until NP-313 those call sites used
+ * `primary-foreground`, which happened to be white in both modes because
+ * `primary` was the brand red; now `primary-foreground` is the ink on a NEUTRAL
+ * primary (white in light, zinc-900 in dark), so an always-dark surface names
+ * the DARK palette's foreground explicitly instead of riding on a coincidence.
+ *
+ * It is derived, not retyped, so `__tests__/noHexColorLiterals.test.ts` stays
+ * satisfied and there is still exactly one place a colour value is written.
+ */
+export const onDarkForeground = `rgb(${darkTokens.foreground})`;
 
 /**
  * The modal scrim. `--backdrop` in the web's redstyle tokens is
