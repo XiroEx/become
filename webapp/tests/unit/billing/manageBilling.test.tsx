@@ -24,6 +24,14 @@
 //      the same bug in a different font.
 //   4. The button goes somewhere real: a route that exists, posts, and hands
 //      back a Stripe url.
+//   5. THE SUBJECT IS NEVER INVISIBLE. Hiding the button from a member with no
+//      Stripe customer is right; hiding every trace of billing from them is
+//      what kept the bug alive. Three reports of "there is still no button to
+//      manage billing at all" came from a complimentary-Plus member looking at
+//      a plan page that, correctly, had no button — and, incorrectly, had
+//      nothing else either. The block is now unconditional and NoBillingNote
+//      states the absence, in words that borrow neither the control's name nor
+//      a tier.
 //
 // Rendered with renderToStaticMarkup (the house pattern — the repo has no DOM
 // test environment), which is why CurrentPlan and ManageBillingButton are pure
@@ -38,7 +46,9 @@ import TermsPage from '../../../app/terms/page'
 import SupportPage from '../../../app/support/page'
 import { CurrentPlan, UnenforcedPlan } from '../../../app/dashboard/plan/PlanPageClient'
 import ManageBillingButton from '../../../components/billing/ManageBillingButton'
+import NoBillingNote from '../../../components/billing/NoBillingNote'
 import { BILLING_PORTAL_PATH } from '../../../lib/billingPortal'
+import { BILLING_HEADING, NO_BILLING_TO_MANAGE_NOTE } from '../../../lib/billingCopy'
 import {
   MANAGE_BILLING_LABEL,
   MANAGE_BILLING_PORTAL_NOTE,
@@ -204,6 +214,79 @@ test('a subscriber is never shown their plan without a way out of it', () => {
   }
 })
 
+test('the plan page always has a billing block, whoever is looking at it', () => {
+  // THE SECOND HALF OF THE BUG, and the one that kept being reported after the
+  // first was fixed. Hiding the button for a member with no Stripe customer is
+  // correct — the portal answers 409 no_customer — but hiding it also hid the
+  // SUBJECT: the plan page then had no billing anything on it, and "you are not
+  // being billed" was indistinguishable from "this app forgot to ship the
+  // button". Three reports in a row came from a complimentary-Plus member, i.e.
+  // from exactly the member the visibility rule excludes.
+  //
+  // So the block is unconditional in both switch states and for every member;
+  // only its contents branch.
+  const everyone: [string, EntitlementsSnapshot][] = [
+    ['subscriber', snapshot({ subscription: sub({}) })],
+    ['past_due subscriber', snapshot({ tier: 'free', subscription: sub({ status: 'past_due' }) })],
+    ['grandfathered', snapshot({ grandfathered: true, subscription: null })],
+    ['admin', snapshot({ role: 'admin', subscription: null })],
+    ['free', snapshot({ tier: 'free', subscription: null })],
+    ['opened checkout once', snapshot({ tier: 'free', subscription: sub({ status: 'none' }) })],
+  ]
+
+  for (const enforced of [true, false]) {
+    for (const [who, data] of everyone) {
+      const html = planScreen({ ...data, enforced })
+      assert.ok(
+        has(html, BILLING_HEADING),
+        `enforced=${enforced} ${who}: the plan page says nothing at all about billing`,
+      )
+    }
+  }
+})
+
+test('a member with nothing to manage is told so, instead of shown a blank', () => {
+  for (const enforced of [true, false]) {
+    const where = `enforced=${enforced}`
+    for (const [who, data] of [
+      ['grandfathered', snapshot({ grandfathered: true, subscription: null })],
+      ['admin', snapshot({ role: 'admin', subscription: null })],
+      ['free', snapshot({ tier: 'free', subscription: null })],
+      ['opened checkout once', snapshot({ tier: 'free', subscription: sub({ status: 'none' }) })],
+    ] as [string, EntitlementsSnapshot][]) {
+      const html = planScreen({ ...data, enforced })
+      assert.ok(
+        has(html, NO_BILLING_TO_MANAGE_NOTE),
+        `${where} ${who}: nothing explains why there is no billing control`,
+      )
+    }
+
+    // ...and a member Stripe IS billing gets the button and NOT the excuse.
+    const paying = planScreen(snapshot({ enforced, subscription: sub({}) }))
+    assert.ok(
+      !has(paying, NO_BILLING_TO_MANAGE_NOTE),
+      `${where}: a paying member is told they have no payment method`,
+    )
+  }
+})
+
+test('the note is not a control, and never borrows the control’s name', () => {
+  // Rule 2 of NoBillingNote. The Terms, the support page and the renewal line
+  // all send a member to find something called "Manage billing"; printing that
+  // name on a screen where nothing happens is the original bug wearing a hat.
+  assert.ok(
+    !NO_BILLING_TO_MANAGE_NOTE.includes(MANAGE_BILLING_LABEL),
+    'the no-billing note names a control that is not there',
+  )
+  const note = renderToStaticMarkup(<NoBillingNote />)
+  assert.doesNotMatch(note, /<button|<a /, 'nothing here is pressable — there is nowhere to go')
+  assert.ok(has(note, NO_BILLING_TO_MANAGE_NOTE), 'the note does not render its own sentence')
+
+  // Launch-day contract: safe to put on the unenforced card.
+  assert.doesNotMatch(note, /\$\d/, 'no price in the no-billing note')
+  assert.doesNotMatch(note, /\bPlus\b/, 'no tier in the no-billing note')
+})
+
 test('grandfathered members and admins are shown no billing controls', () => {
   // Neither has a Stripe customer, so the portal would answer 409 no_customer.
   // Both switch states again: the unenforced card must not turn into a second
@@ -296,12 +379,20 @@ test('Settings carries the same button, and hides it the same way', () => {
     /hasManageableBilling\(data\?\.subscription\)/,
     'Settings must use the one visibility rule, not a second copy of it',
   )
-  assert.match(section, /return null/, 'it must render nothing for a member with no subscription')
+  // The BUTTON is still only for a member Stripe is billing; everyone else gets
+  // the note. The one thing that still renders nothing at all is a snapshot
+  // that has not arrived yet — guessing out loud before it does is worse than
+  // waiting a beat.
+  assert.match(section, /if \(!data\) return null/, 'an unknown snapshot must render nothing')
+  assert.match(section, /<NoBillingNote/, 'Settings must explain an absent portal, not hide it')
   assert.match(section, /openBillingPortal\(\)/, 'and open the portal through the shared helper')
+  assert.match(section, /BILLING_HEADING/, 'both billing surfaces use one section heading')
   // No second definition of the label anywhere in the app.
   for (const file of [
     'components/billing/BillingSection.tsx',
     'components/billing/ManageBillingButton.tsx',
+    'components/billing/NoBillingNote.tsx',
+    'lib/billingCopy.ts',
     'app/dashboard/plan/PlanPageClient.tsx',
   ]) {
     assert.doesNotMatch(
