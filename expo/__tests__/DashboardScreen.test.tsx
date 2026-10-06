@@ -48,33 +48,24 @@ describe("DashboardScreen", () => {
     expect(getByTestId("tile-streak-value")).toBeTruthy();
   });
 
-  it("renders today's workout teaser when a workout is provided", () => {
-    const { getByTestId } = render(<DashboardScreen {...baseProps} />);
-    expect(getByTestId("dashboard-today-workout").props.children).toBe("Push A");
-    expect(getByTestId("dashboard-today-program").props.children).toEqual([
-      "Foundation",
-      " · ",
-      "Phase 1, Week 2",
-    ]);
-    const exercisesText = getByTestId("dashboard-today-exercises").props.children;
-    expect(exercisesText[0]).toBe(6);
-    expect(exercisesText[2]).toBe("s");
-    expect(typeof exercisesText[1]).toBe("string");
-  });
-
-  it("falls back to a rest-day card when todayWorkout is null", () => {
-    const { getByTestId, queryByTestId } = render(
-      <DashboardScreen {...baseProps} todayWorkout={null} />,
-    );
-    expect(getByTestId("dashboard-rest")).toBeTruthy();
-    expect(queryByTestId("dashboard-today-workout")).toBeNull();
-  });
-
-  it("renders the user's name in the greeting when provided", () => {
-    const { getByTestId } = render(
+  it("renders the web's static header copy regardless of userName (NP-255)", () => {
+    // Native used to show a personalized "Hey, {name}" greeting where the
+    // web shows "Dashboard" / "Track your fitness journey" — now they match.
+    const { getByTestId, getByText } = render(
       <DashboardScreen {...baseProps} userName="Jon" />,
     );
-    expect(getByTestId("dashboard-greeting").props.children).toBe("Hey, Jon");
+    expect(getByTestId("dashboard-greeting").props.children).toBe("Dashboard");
+    expect(getByText("Track your fitness journey")).toBeTruthy();
+  });
+
+  it("does not render a separate Today's workout card (NP-255): Up Next is the one next-workout card", () => {
+    // The dropped card used to render above the tile grid and could disagree
+    // with Up Next (a different data source). It no longer renders at all.
+    const { queryByTestId } = render(<DashboardScreen {...baseProps} />);
+    expect(queryByTestId("dashboard-today")).toBeNull();
+    expect(queryByTestId("dashboard-today-workout")).toBeNull();
+    expect(queryByTestId("dashboard-rest")).toBeNull();
+    expect(queryByTestId("dashboard-start-workout")).toBeNull();
   });
 
   it("opens the check-in modal when checkInOpen is true (prompt-driven parity)", () => {
@@ -109,15 +100,6 @@ describe("DashboardScreen", () => {
     });
   });
 
-  it("fires onStartWorkout when the start-workout button is pressed", () => {
-    const onStartWorkout = jest.fn();
-    const { getByTestId } = render(
-      <DashboardScreen {...baseProps} onStartWorkout={onStartWorkout} />,
-    );
-    fireEvent.press(getByTestId("dashboard-start-workout"));
-    expect(onStartWorkout).toHaveBeenCalledTimes(1);
-  });
-
   it("fires onOpenCalendar when the Up Next calendar link is pressed", () => {
     // The calendar is reached via the Up Next link on Home (NP-211 / NP-106).
     const onOpenCalendar = jest.fn();
@@ -142,22 +124,25 @@ describe("DashboardScreen", () => {
     // The regression this file missed: with `onStartWorkout ?? (() => {})` in
     // the component, a screen rendered without the prop still had a live,
     // pressable button. There is no default any more — `tsc` requires the
-    // prop — so the press has to reach the caller's function.
+    // prop — so the press has to reach the caller's function. Up Next is now
+    // the one next-workout card, and its Start action falls back to
+    // onStartWorkout when onStartNextWorkout is not supplied.
     const onStartWorkout = jest.fn();
+    const upcomingWorkout: UpcomingWorkoutSummary = {
+      dateLabel: "Today",
+      dayLabel: "Day 2 Pull A",
+      workoutTitle: "Pull A",
+      programName: "Foundation",
+    };
     const { getByTestId } = render(
       <DashboardScreen
         {...baseProps}
         onStartWorkout={onStartWorkout}
-        todayWorkout={{
-          programName: "Foundation",
-          workoutTitle: "Pull A",
-          phaseLabel: "Phase 1",
-          exerciseCount: 4,
-        }}
+        upcomingWorkout={upcomingWorkout}
       />,
     );
-    const button = getByTestId("dashboard-start-workout");
-    expect(button.props.accessibilityState?.disabled).toBe(false);
+    const button = getByTestId("up-next-card");
+    expect(button.props.accessibilityState?.disabled).toBeFalsy();
     fireEvent.press(button);
     expect(onStartWorkout).toHaveBeenCalledTimes(1);
   });
