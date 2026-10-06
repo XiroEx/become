@@ -3,11 +3,12 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockRouterBack = jest.fn();
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
-    back: jest.fn(),
+    back: mockRouterBack,
   }),
   useFocusEffect: (effect: () => void | (() => void)) => {
     // Run the focus effect on mount, like the tab coming into view.
@@ -56,7 +57,7 @@ import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { setStoredPushToken, getStoredPushToken } from "@/lib/push/pushTokenStore";
 import { createLiveWorkoutCache, liveCacheKey } from "@/lib/live/liveWorkoutCache";
 import { getOfflineWrites } from "@/lib/offline/writes";
-import { HEALTH_DISCLAIMER_SHORT } from "@become/core";
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL } from "@become/core";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SettingsScreen from "../app/(app)/settings";
 /* eslint-enable import/first */
@@ -90,6 +91,7 @@ describe("SettingsScreen", () => {
     fetchCalls = [];
     mockReplace.mockClear();
     mockPush.mockClear();
+    mockRouterBack.mockClear();
     mockOpenBrowserAsync.mockClear();
     jest.clearAllMocks();
     // Fresh denial-reminder storage per test.
@@ -441,7 +443,12 @@ describe("SettingsScreen", () => {
   });
 
   it("(e015c821) a per-type switch PATCHes its own key flat, like the web", async () => {
-    const { getByTestId } = renderScreen();
+    // NP-303: per-type switches only render once permission is granted AND
+    // notifications are on — like the web.
+    const { getByTestId } = renderScreen({
+      getPermission: async () => "granted",
+      repairPush: async () => ({ kind: "already-registered" }),
+    });
 
     await waitFor(() => {
       expect(getByTestId("notification-toggle-workoutReminder")).toBeTruthy();
@@ -467,7 +474,10 @@ describe("SettingsScreen", () => {
   });
 
   it("(e015c821) chatMessage stays hidden while NP-032 keeps chat out", async () => {
-    const { getByTestId, queryByTestId } = renderScreen();
+    const { getByTestId, queryByTestId } = renderScreen({
+      getPermission: async () => "granted",
+      repairPush: async () => ({ kind: "already-registered" }),
+    });
 
     await waitFor(() => {
       expect(getByTestId("notification-toggle-workoutReminder")).toBeTruthy();
@@ -490,14 +500,20 @@ describe("SettingsScreen", () => {
   });
 
   it("(e015c823) turning notifications off posts unsubscribe with no endpoint (account-wide)", async () => {
-    const { getByTestId } = renderScreen();
+    // NP-303: there is no master switch any more (the web never had one) —
+    // once permission is granted and notifications are on, the web's red
+    // "Turn off notifications" link is what does this, and so is native's.
+    const { getByTestId } = renderScreen({
+      getPermission: async () => "granted",
+      repairPush: async () => ({ kind: "already-registered" }),
+    });
 
     await waitFor(() => {
-      expect(getByTestId("notifications-toggle")).toBeTruthy();
+      expect(getByTestId("notifications-turn-off-link")).toBeTruthy();
     });
 
     await act(async () => {
-      fireEvent.press(getByTestId("notifications-toggle"));
+      fireEvent.press(getByTestId("notifications-turn-off-link"));
     });
 
     await waitFor(() => {
@@ -634,5 +650,88 @@ describe("SettingsScreen", () => {
 
     expect(queryByText("Admin tools")).toBeNull();
     expect(queryByTestId("admin-tools-row")).toBeNull();
+  });
+
+  // NP-303: the full visual pass against the web (back/subtitle, the
+  // notification toggles gated on permission, blue notification controls,
+  // Email as its own card, Billing, and the restyled legal links + the
+  // closing delete-yourself paragraph).
+  describe("NP-303: native-parity visual pass", () => {
+    it("has a back button that calls router.back(), and the web's subtitle", async () => {
+      const { getByTestId, getByText } = renderScreen();
+
+      await waitFor(() => {
+        expect(getByTestId("settings-back-button")).toBeTruthy();
+      });
+      expect(
+        getByText("Manage your account and fitness preferences."),
+      ).toBeTruthy();
+
+      fireEvent.press(getByTestId("settings-back-button"));
+      expect(mockRouterBack).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows only the status row until permission is granted AND notifications are on — no master switch, ever", async () => {
+      const { getByTestId, queryByTestId } = renderScreen();
+
+      await waitFor(() => {
+        expect(getByTestId("notifications-status-row")).toBeTruthy();
+      });
+
+      // The native-only master switch is gone entirely (the web never had one).
+      expect(queryByTestId("notifications-toggle")).toBeNull();
+      // Permission is "undetermined" by default in Jest (the expo-notifications
+      // mock), so neither the per-type switches nor the turn-off link show yet.
+      expect(queryByTestId("notification-toggle-workoutReminder")).toBeNull();
+      expect(queryByTestId("notifications-turn-off-link")).toBeNull();
+    });
+
+    it("shows the per-type switches and a red Turn off notifications link once permission is granted and notifications are on", async () => {
+      const { getByTestId } = renderScreen({
+        getPermission: async () => "granted",
+        repairPush: async () => ({ kind: "already-registered" }),
+      });
+
+      await waitFor(() => {
+        expect(getByTestId("notifications-turn-off-link")).toBeTruthy();
+      });
+      expect(getByTestId("notification-toggle-workoutReminder")).toBeTruthy();
+    });
+
+    it("Email is its own card, separate from Notifications", async () => {
+      const { getByTestId } = renderScreen();
+
+      await waitFor(() => {
+        expect(getByTestId("settings-email-section")).toBeTruthy();
+      });
+      expect(getByTestId("email-engagement-toggle")).toBeTruthy();
+    });
+
+    it("adds the closing delete-yourself paragraph to Legal & support", async () => {
+      const { getByTestId } = renderScreen();
+
+      await waitFor(() => {
+        expect(getByTestId("legal-delete-note")).toBeTruthy();
+      });
+      const note = getByTestId("legal-delete-note");
+      const children = note.props.children as unknown[];
+      expect(children[0]).toContain(
+        "You can delete your account yourself, at the bottom of this screen.",
+      );
+      expect(children[0]).toContain("Cancel any paid plan first, or email");
+      expect(children[2]).toContain("and we will cancel it for you.");
+      expect(getByTestId("legal-delete-note-email").props.children).toBe(
+        LEGAL_CONTACT_EMAIL,
+      );
+    });
+
+    it("renders no Billing card for a member with no manageable subscription", async () => {
+      const { getByTestId, queryByTestId } = renderScreen();
+
+      await waitFor(() => {
+        expect(getByTestId("settings-legal-section")).toBeTruthy();
+      });
+      expect(queryByTestId("settings-billing-section")).toBeNull();
+    });
   });
 });

@@ -14,6 +14,8 @@ import {
   AI_PROVIDER_ROUTE,
   AI_CONSENT_SENDS,
   HEALTH_DISCLAIMER_SHORT,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_DELETION_DAYS,
 } from "@become/core";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -24,6 +26,7 @@ import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { ProfileSettingsScreen } from "@/components/profile/ProfileSettingsScreen";
 import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
 import { NutritionPlanningSection } from "@/components/settings/NutritionPlanningSection";
+import { BillingSection } from "@/components/billing/BillingSection";
 import { LegalLinks, LEGAL_BASE_URL } from "@/components/legal/LegalLinks";
 import { ScreenState } from "@/components/ScreenState";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -53,7 +56,7 @@ import { shouldShowDeniedRepromptAt } from "@/lib/push/reprompt";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
-import { ChevronRight, ExternalLink } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
@@ -184,6 +187,11 @@ export default function SettingsScreen({
     notificationsEnabled,
     deviceRegistered,
   });
+  // NP-303: the web shows only the status row until permission is granted
+  // AND notifications are on; native used to show the per-type switches (and
+  // a master switch the web does not have) regardless of permission, even
+  // while the status read "Not enabled".
+  const notifReady = notifPermission === "granted" && notificationsEnabled;
 
   const probeNotifPermission = useCallback(async () => {
     if (permissionProbeInFlight.current) return;
@@ -558,12 +566,39 @@ export default function SettingsScreen({
       testID="native-settings-screen"
     >
       <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
-        <Text
-          accessibilityRole="header"
-          className="text-foreground text-2xl font-bold"
-        >
-          Settings
-        </Text>
+        {/* NP-303: the web header has a back button and a subtitle; native
+            only ever had the bare title (back was edge-swipe only). */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Pressable
+            testID="settings-back-button"
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => router.back()}
+            style={[
+              minTouchTarget,
+              {
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                justifyContent: "center",
+                alignItems: "center",
+              },
+            ]}
+          >
+            <ChevronLeft size={22} color={colors.foreground} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text
+              accessibilityRole="header"
+              className="text-foreground text-2xl font-bold"
+            >
+              Settings
+            </Text>
+            <Text className="text-muted-foreground text-sm mt-0.5">
+              Manage your account and fitness preferences.
+            </Text>
+          </View>
+        </View>
 
         {/* NP-302: the web's Profile / Training / Settings segmented tabs. */}
         <View
@@ -771,6 +806,7 @@ export default function SettingsScreen({
             {notifAction === "enable" || notifAction === "turn-on" ? (
               <Button
                 testID="notifications-enable-button"
+                variant="info"
                 size="sm"
                 onPress={() => {
                   void onEnableNotifications();
@@ -784,6 +820,7 @@ export default function SettingsScreen({
             {notifAction === "repair" ? (
               <Button
                 testID="notifications-repair-button"
+                variant="info"
                 size="sm"
                 onPress={() => {
                   void onRepairNotifications();
@@ -821,47 +858,31 @@ export default function SettingsScreen({
               </Button>
             </View>
           ) : null}
-          {/* Master switch — account-wide. Off stops notifications to every
-              device of this member; the per-type switches below stay visible
-              so the member can tune first, like the web. */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text className="text-foreground font-medium text-sm">
-                Push notifications
-              </Text>
-              <Text className="text-muted-foreground text-xs">
-                Reminders for workouts, meals and streak alerts.
-              </Text>
-            </View>
-            <Toggle
-              testID="notifications-toggle"
-              accessibilityLabel="Push notifications"
-              value={notificationsEnabled}
-              onValueChange={(val) => {
-                void onToggleNotifications(val);
+          {/* NP-303: web shows ONLY the status row above until permission is
+              granted AND notifications are on; there is no master switch on
+              web at all (that was a native-only extra, shown even while the
+              status read "Not enabled"). Once ready, web shows a red "Turn
+              off notifications" link instead, and the per-type switches. */}
+          {notifReady ? (
+            <Pressable
+              testID="notifications-turn-off-link"
+              accessibilityRole="link"
+              accessibilityLabel="Turn off notifications"
+              onPress={() => {
+                void onToggleNotifications(false);
               }}
-              disabled={savingNotif || enablingNotif || disablingNotif}
-            />
-          </View>
-          {disablingNotif ? (
-            <Text
-              testID="notifications-disabling-note"
-              className="text-muted-foreground text-xs"
+              disabled={disablingNotif}
+              style={[minTouchTarget, { alignSelf: "flex-start" }]}
             >
-              Turning off…
-            </Text>
+              <Text className="text-destructive text-xs font-medium">
+                {disablingNotif ? "Turning off…" : "Turn off notifications"}
+              </Text>
+            </Pressable>
           ) : null}
 
           {/* Per-type switches — the web's ten keys and defaults, PATCHed
               flat. `chatMessage` stays hidden while NP-032 keeps chat out. */}
-          {notificationsEnabled ? (
+          {notifReady ? (
             <View style={{ gap: 12 }}>
               {visibleNotificationToggles().map(({ key, label, sublabel }) => (
                 <View
@@ -884,6 +905,7 @@ export default function SettingsScreen({
                   <Toggle
                     testID={`notification-toggle-${key}`}
                     accessibilityLabel={label}
+                    color="info"
                     value={notifPrefsView[key] ?? false}
                     onValueChange={(val) => {
                       void onToggleNotifPref(key, val);
@@ -894,7 +916,23 @@ export default function SettingsScreen({
               ))}
             </View>
           ) : null}
+        </View>
 
+        {/* 3b. Email Section — its own card on the web (id="email"), not the
+            last row of Notifications: a member with push off, or on a device
+            that never asked, still gets streak mail, and CAN-SPAM needs this
+            switch to exist and work on its own. */}
+        <View
+          testID="settings-email-section"
+          className="rounded-xl border border-border bg-card p-4"
+          style={{ gap: 12 }}
+        >
+          <Text
+            accessibilityRole="header"
+            className="text-foreground text-base font-semibold"
+          >
+            Email
+          </Text>
           <View
             style={{
               flexDirection: "row",
@@ -914,6 +952,7 @@ export default function SettingsScreen({
             <Toggle
               testID="email-engagement-toggle"
               accessibilityLabel="Streak and milestone emails"
+              color="info"
               value={emailEngagement}
               onValueChange={(val) => {
                 void onToggleEmail(val);
@@ -954,6 +993,7 @@ export default function SettingsScreen({
             <Toggle
               testID="ai-consent-toggle"
               accessibilityLabel={`Share my inputs with ${aiProvider}`}
+              color="info"
               value={aiAllowed}
               onValueChange={(val) => {
                 void onToggleAi(val);
@@ -1002,6 +1042,13 @@ export default function SettingsScreen({
             screen (NP-302), matching the web's Settings tab. */}
         <NutritionPlanningSection />
 
+        {/* 4c. Billing (NP-303) — above Legal & support on purpose: the
+            paragraph down there tells a member to cancel a paid plan before
+            deleting the account, and this is the button that does it.
+            Self-contained — renders nothing for a member with no
+            manageable subscription. */}
+        <BillingSection />
+
         {/* 5. Legal & support Section */}
         <View
           testID="settings-legal-section"
@@ -1038,9 +1085,30 @@ export default function SettingsScreen({
             {HEALTH_DISCLAIMER_SHORT}
           </Text>
 
+          {/* NP-303: native omitted this closing paragraph — the web's own
+              words for where the delete control lives and what it does. */}
+          <Text
+            testID="legal-delete-note"
+            className="text-muted-foreground text-xs leading-relaxed mt-3 pt-3 border-t border-border"
+          >
+            {`You can delete your account yourself, at the bottom of this screen. Everything goes within ${LEGAL_DELETION_DAYS} days of the request, and you have a few days to change your mind. Cancel any paid plan first, or email `}
+            <Text
+              testID="legal-delete-note-email"
+              accessibilityRole="link"
+              accessibilityLabel={`Email ${LEGAL_CONTACT_EMAIL}`}
+              className="text-foreground text-xs underline font-medium"
+              onPress={() => {
+                void Linking.openURL(`mailto:${LEGAL_CONTACT_EMAIL}`);
+              }}
+            >
+              {LEGAL_CONTACT_EMAIL}
+            </Text>
+            {" and we will cancel it for you."}
+          </Text>
+
           <Text
             testID="app-version"
-            className="text-muted-foreground text-xs pt-2 border-t border-border"
+            className="text-muted-foreground text-xs pt-2 mt-1"
           >
             {`Version ${appVersion} (${appBuild})`}
           </Text>

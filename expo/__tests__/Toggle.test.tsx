@@ -91,4 +91,32 @@ describe("Toggle", () => {
       MIN_TOUCH_TARGET,
     );
   });
+
+  // NP-303: the web's Settings notification/email switches are blue-600,
+  // never the brand red — `color="info"` draws `bg-info` when on.
+  it('color="info" draws bg-info when on, not the brand red', () => {
+    const { getByTestId } = render(
+      <Toggle
+        testID="t"
+        value
+        color="info"
+        onValueChange={() => {}}
+        accessibilityLabel="Enable feature"
+      />,
+    );
+    expect(getByTestId("t").props.className).toContain("bg-info");
+    expect(getByTestId("t").props.className).not.toContain("bg-primary");
+  });
+
+  it('defaults to the brand red (color="primary") when on', () => {
+    const { getByTestId } = render(
+      <Toggle
+        testID="t"
+        value
+        onValueChange={() => {}}
+        accessibilityLabel="Enable feature"
+      />,
+    );
+    expect(getByTestId("t").props.className).toContain("bg-primary");
+  });
 });

@@ -61,7 +61,7 @@ export function LegalLinks({
         style={{
           flexDirection: "row",
           flexWrap: "wrap",
-          columnGap: 16,
+          columnGap: 20,
           rowGap: 8,
           alignItems: "center",
         }}
@@ -77,7 +77,11 @@ export function LegalLinks({
               onPress={() => onOpenLink(link.href)}
               style={[minTouchTarget, { flexShrink: 1, justifyContent: "center" }]}
             >
-              <Text className="text-muted-foreground text-xs underline">
+              {/* NP-303: the web's row is `text-sm font-medium text-zinc-600`,
+                  not underlined (underline is a web-only hover state) — these
+                  used to be `text-xs underline`, which read small and
+                  underlined next to the web's plainer, larger row. */}
+              <Text className="text-muted-foreground text-sm font-medium">
                 {link.label}
               </Text>
             </Pressable>
