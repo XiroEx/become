@@ -229,6 +229,10 @@ describe("FoodDetailRoute", () => {
       );
     });
 
+    // The web's `Log this food` button opens a sheet (NP-269) — the amount
+    // picker lives there now, not inline on the page.
+    fireEvent.press(getByTestId("nutrition-food-log-open"));
+
     // The picker defaults to one portion — one bar — and previews the bar.
     expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([
       210,
@@ -270,6 +274,12 @@ describe("FoodDetailRoute", () => {
 
   it("scales by the amount the member picks, not by grams/100", async () => {
     const { getByTestId } = render(<FoodDetailRoute />);
+    await waitFor(() => {
+      expect(getByTestId("nutrition-food-log-open")).toBeTruthy();
+    });
+    // The web's `Log this food` button opens the sheet the amount picker
+    // lives in (NP-269) — no longer an inline, always-on-screen form.
+    fireEvent.press(getByTestId("nutrition-food-log-open"));
     await waitFor(() => {
       expect(getByTestId("quantity-input")).toBeTruthy();
     });
@@ -377,6 +387,10 @@ describe("FoodDetailRoute", () => {
       }),
     );
     expect(gatedCreateCalls()).toHaveLength(0);
+
+    // The web's `Log this food` button opens the sheet the amount picker
+    // lives in (NP-269).
+    fireEvent.press(getByTestId("nutrition-food-log-open"));
 
     // Stored per 100 g with a 38 g bag: the picker defaults to the bag.
     expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([

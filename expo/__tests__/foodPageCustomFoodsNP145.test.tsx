@@ -506,9 +506,13 @@ describe("(id: e015c9f1) Edit and Delete appear only on foods the member authore
     expect(screen.getByTestId("nutrition-food-variants-title")).toHaveTextContent(
       /Variants \(2\)/,
     );
-    fireEvent.changeText(screen.getByTestId("nutrition-food-bridge-0-grams"), "120");
+    // The web's own bridge fields (NP-269): a freeform "Weight per serving"
+    // text input, parsed through `parseQuantityString` and committed on
+    // blur — not the native-only numeric "Grams / serving" + "Save bridge"
+    // button trio this replaces.
+    fireEvent.changeText(screen.getByTestId("nutrition-food-bridge-0-weight"), "120 g");
     await act(async () => {
-      fireEvent.press(screen.getByTestId("nutrition-food-bridge-0-save"));
+      fireEvent(screen.getByTestId("nutrition-food-bridge-0-weight"), "blur");
     });
     await waitFor(() => {
       expect(
