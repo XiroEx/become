@@ -310,8 +310,12 @@ export default function DashboardRoute() {
     // No active program → no workout to open. The button is only rendered
     // alongside a `todayWorkout`, which needs both.
     if (!programId) return;
+    // `/live` lands on Track (the web's `…/workout?day=` page): the same
+    // screen Up Next, Current Program's Continue, the calendar and every
+    // other training entry point open (NP-256). Without it this opened the
+    // read-only overview instead.
     router.push(
-      `/(tabs)/programming/${programId}/workout/${workoutIndex}?phase=${workoutPhaseIndex}`,
+      `/(tabs)/programming/${programId}/workout/${workoutIndex}/live?phase=${workoutPhaseIndex}`,
     );
   }, [router, programId, workoutIndex, workoutPhaseIndex]);
 
@@ -335,6 +339,20 @@ export default function DashboardRoute() {
 
   const onOpenNutrition = useCallback(() => {
     router.push("/(tabs)/nutrition" as never);
+  }, [router]);
+
+  // The Goal tile's own destination (web's `/dashboard/nutrition/goals`,
+  // Goals tab with Your plan / pace) — distinct from `onOpenNutrition`,
+  // which the calorie/water tiles use to open the day screen (NP-256).
+  const onOpenNutritionGoals = useCallback(() => {
+    router.push("/(tabs)/nutrition/goals" as never);
+  }, [router]);
+
+  // The Training Log (NP-130): weekly volume, workout detail, this month —
+  // what the web's Progress quick link and the Current Program card's
+  // `Progress` label both open (`/dashboard/progress`, NP-256).
+  const onOpenProgress = useCallback(() => {
+    router.push("/progress" as never);
   }, [router]);
 
   const onQuickAdd = useCallback(() => {
@@ -837,7 +855,7 @@ export default function DashboardRoute() {
         if (/^\d{4}-\d{2}-\d{2}$/.test(sd)) q.push(`sd=${encodeURIComponent(sd)}`);
       }
       router.push(
-        `/(tabs)/programming/${encodeURIComponent(slot.programId)}/workout/${slot.workoutIndex}?${q.join("&")}` as never,
+        `/(tabs)/programming/${encodeURIComponent(slot.programId)}/workout/${slot.workoutIndex}/live?${q.join("&")}` as never,
       );
     },
     [router],
@@ -917,6 +935,8 @@ export default function DashboardRoute() {
       onBrowsePrograms={onBrowsePrograms}
       onOpenPrograms={onBrowsePrograms}
       onOpenHistory={onOpenHistory}
+      onOpenProgress={onOpenProgress}
+      onOpenNutritionGoals={onOpenNutritionGoals}
       quickLinksNutritionDescription={quickLinksNutritionDescription}
       loading={initialLoading}
       errorText={errorText}

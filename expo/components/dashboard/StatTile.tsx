@@ -28,6 +28,8 @@ export interface StatTileProps {
   loading?: boolean;
   onOpenCalendar?: () => void;
   onOpenNutrition?: () => void;
+  /** The Goal tile's own destination: Nutrition Goals, not the day screen (NP-256). */
+  onOpenNutritionGoals?: () => void;
   onOpenCheckIn?: () => void;
   /** Opens the weigh-in sheet (NP-105). The weight tile falls back to onOpenCheckIn. */
   onOpenWeight?: () => void;
@@ -56,6 +58,7 @@ export function StatTile({
   loading = false,
   onOpenCalendar,
   onOpenNutrition,
+  onOpenNutritionGoals,
   onOpenCheckIn,
   onOpenWeight,
   onOpenMood,
@@ -234,7 +237,9 @@ export function StatTile({
     footer = `${arrow}${goalView.footer}`;
     pct = goalView.pct;
     barColor = goalView.atTarget ? colors.success : colors.accent;
-    handlePress = handlePress ?? onOpenNutrition;
+    // Nutrition Goals (web's `/dashboard/nutrition/goals`), not the day
+    // screen — NP-256.
+    handlePress = handlePress ?? onOpenNutritionGoals ?? onOpenNutrition;
   } else if (tile.id === "calories") {
     label = "Calories";
     IconComponent = Utensils;

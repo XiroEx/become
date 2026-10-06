@@ -46,6 +46,8 @@ export interface TileGridProps {
   onDismissSuggestion?: (id: string) => Promise<void> | void;
   onOpenMind?: () => void;
   onOpenNutrition?: () => void;
+  /** The Goal tile's own destination: Nutrition Goals, not the day screen (NP-256). */
+  onOpenNutritionGoals?: () => void;
   onOpenWorkoutNow?: () => void;
   onOpenCalendar?: () => void;
   onOpenCheckIn?: () => void;
@@ -90,6 +92,7 @@ export function TileGrid({
   onDismissSuggestion,
   onOpenMind,
   onOpenNutrition,
+  onOpenNutritionGoals,
   onOpenWorkoutNow,
   onOpenCalendar,
   onOpenCheckIn,
@@ -351,6 +354,7 @@ export function TileGrid({
                 statData={statData}
                 onOpenCalendar={onOpenCalendar}
                 onOpenNutrition={onOpenNutrition}
+                onOpenNutritionGoals={onOpenNutritionGoals}
                 onOpenCheckIn={onOpenCheckIn}
                 onOpenWeight={onOpenWeight}
                 onOpenMood={onOpenMood}
@@ -390,6 +394,7 @@ export function TileGrid({
                 onTap={recordTileTap}
                 onOpenMind={onOpenMind}
                 onOpenNutrition={onOpenNutrition}
+                onOpenNutritionGoals={onOpenNutritionGoals}
                 onOpenWorkoutNow={onOpenWorkoutNow}
                 onOpenCalendar={onOpenCalendar}
                 onOpenCheckIn={onOpenCheckIn}
