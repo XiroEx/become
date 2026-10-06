@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
@@ -60,6 +60,12 @@ export interface LiveWorkoutExercise {
   durationLabel?: string;
   /** Target muscles (the web's `primaryMuscles`); up to 3 shown as pills. */
   primaryMuscles?: string[];
+  /**
+   * The program's difficulty label (the web's `exercise.difficulty`, e.g.
+   * "beginner") — shown in the Track accordion header as "N sets ·
+   * Beginner" (NP-287).
+   */
+  difficulty?: string;
   /** Canonical Exercise trackingType — selects per-set inputs (reps/weight/duration/distance). */
   trackingType?: string | null;
   /**
@@ -226,6 +232,30 @@ export interface LiveWorkoutClientProps {
     /** Button label — e.g. `Exercises (5)`. */
     label?: string;
   };
+  /**
+   * Apply a structural change made from INSIDE the Track accordion card —
+   * Move up / Move down / Remove on a single exercise, Ungroup on a
+   * superset/circuit block (NP-287: the web offers all four from the card
+   * itself, not only from the Exercises sheet). The route wires this to the
+   * same `applyExerciseChange` it already hands `WorkoutExerciseList`, so
+   * both doors land on one permutation rule. Omitted, the card renders
+   * without these controls.
+   */
+  onExerciseChange?: (change: {
+    exercises: LiveWorkoutExercise[];
+    order: number[];
+  }) => void;
+  /**
+   * The workout's day label (the web's `workout.day`, e.g. "Day 1"),
+   * rendered under the title in the Track header (NP-287). Omitted, no day
+   * line renders — matching the web, which hides it for a quick session.
+   */
+  day?: string;
+  /**
+   * Open the member's personal-records list (the web's Track header "View
+   * PRs →" link, NP-287). Omitted, no button renders.
+   */
+  onViewPRs?: () => void;
   testID?: string;
 }
 
@@ -467,6 +497,9 @@ export function LiveWorkoutClient({
   headerAction,
   activeSeconds,
   manageExercises,
+  onExerciseChange,
+  day,
+  onViewPRs,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -1086,6 +1119,14 @@ export function LiveWorkoutClient({
         <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
           {workout.workoutTitle}
         </Text>
+        {/* The day line under the title (the web's `workout.day`, e.g. "Day
+            1"): Track only, and only when the route has one — a quick
+            session has no day and renders nothing here either. */}
+        {day && view === "track" ? (
+          <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center">
+            {day}
+          </Text>
+        ) : null}
         {headerAction ? (
           <View testID={`${testID}-header-action`}>{headerAction}</View>
         ) : null}
@@ -1123,6 +1164,20 @@ export function LiveWorkoutClient({
             {`${overallProgressPercent(grid)}%`}
           </Text>
         </View>
+        {/* "View PRs →" (the web's Track header link to the personal-records
+            list, NP-287): Track only, and only when the route hands a
+            handler. */}
+        {onViewPRs && view === "track" ? (
+          <Pressable
+            testID={`${testID}-view-prs`}
+            onPress={onViewPRs}
+            accessibilityRole="button"
+            accessibilityLabel="View personal records"
+            style={{ alignSelf: "flex-end" }}
+          >
+            <Text className="text-muted-foreground text-xs">View PRs →</Text>
+          </Pressable>
+        ) : null}
         {/* Elapsed time (the web's header timer, ~line 2039-2042): only
             when the route passes a number — the quick session has no
             timer yet, so it renders nothing here. */}
@@ -1172,6 +1227,7 @@ export function LiveWorkoutClient({
               showNotes={completedSets > 0}
               exerciseHints={exerciseHints}
               onDismissHint={onDismissHint}
+              onExerciseChange={onExerciseChange}
             />
           </>
         ) : (

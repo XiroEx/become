@@ -1,6 +1,7 @@
 import { render, fireEvent, act } from "@testing-library/react-native";
 import { Linking } from "react-native";
 import { FramedVideo } from "@/components/FramedVideo";
+import { WEBAPP_BASE_URL } from "@/lib/config";
 
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
@@ -67,6 +68,39 @@ describe("FramedVideo", () => {
         Authorization: "Bearer mock-member-jwt",
       },
     });
+  });
+
+  it("(NP-287) a catalogue demo stored as a relative path resolves against the webapp origin instead of showing the broken-media glyph", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="/exercises/jumping-jacks.mp4"
+        exerciseName="Jumping Jacks"
+        surface="live"
+        testID="relative-video"
+      />,
+    );
+
+    const player = getByTestId("relative-video-player").props.player;
+    expect(player.source).toEqual({
+      uri: `${WEBAPP_BASE_URL}/exercises/jumping-jacks.mp4`,
+    });
+  });
+
+  it("(NP-287) a protocol-relative thumbnail resolves to https", () => {
+    const { getByTestId } = render(
+      <FramedVideo
+        src="https://cdn.example.test/exercises/jumping-jacks.mp4"
+        thumbnailUrl="//cdn.example.test/thumb.jpg"
+        exerciseName="Jumping Jacks"
+        surface="live"
+        isPlaying={false}
+        testID="pr-video"
+      />,
+    );
+
+    expect(
+      getByTestId("pr-video-thumbnail-image").props.source,
+    ).toEqual({ uri: "https://cdn.example.test/thumb.jpg" });
   });
 
   it("catalogue demo does not send Authorization header", () => {
