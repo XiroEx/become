@@ -22,7 +22,8 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChefHat, Pencil, Trash2 } from "lucide-react-native";
+import { ArrowLeftRight, ChefHat, Pencil, Trash2 } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { z } from "zod";
 import {
   apiFetch,
@@ -81,7 +82,7 @@ function mealIdOf(meal: Meal): string {
 }
 
 export function MealDetail() {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -390,9 +391,12 @@ export function MealDetail() {
                 onPress={() => void handleConvertToRecipe()}
                 style={{ paddingHorizontal: 8, paddingVertical: 6 }}
               >
-                <Text className="text-muted-foreground text-xs font-medium">
-                  {converting ? "Converting…" : "To recipe"}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <ArrowLeftRight size={14} color={colors["muted-foreground"]} />
+                  <Text className="text-muted-foreground text-xs font-medium">
+                    {converting ? "Converting…" : "To recipe"}
+                  </Text>
+                </View>
               </Pressable>
               <Pressable
                 testID="meal-detail-edit"
@@ -437,30 +441,48 @@ export function MealDetail() {
           </View>
         ) : (
           <>
-            <Card title={meal.name} subtitle={meal.description ?? ""}>
-              <View testID={`meal-detail-${mealIdOf(meal)}`} style={{ gap: 8 }}>
-                {meal.imageUrl ? (
-                  <AuthedImage
-                    source={meal.imageUrl}
-                    accessibilityLabel={`Photo of ${meal.name}`}
-                    testID="meal-detail-photo"
-                    containerStyle={{ height: 160, borderRadius: 12, overflow: "hidden" }}
-                    style={{ height: 160, width: "100%" }}
-                  />
-                ) : (
-                  <View
-                    testID="meal-detail-photo-fallback"
-                    style={{
-                      height: 128,
-                      borderRadius: 12,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: colors.muted,
-                    }}
-                  >
-                    <ChefHat size={36} color={colors["muted-foreground"]} />
-                  </View>
-                )}
+            {/* Header card — a full-width hero ABOVE the title (the web's
+                `app/dashboard/meals/[id]/page.tsx:252-297`), never the title
+                first: a grey box under the name and the notes repeated as a
+                subtitle were the native drift this card fixes. Notes show
+                once, in their own card below. */}
+            <View
+              testID={`meal-detail-${mealIdOf(meal)}`}
+              className="bg-card rounded-2xl border border-border overflow-hidden"
+            >
+              {meal.imageUrl ? (
+                <AuthedImage
+                  source={meal.imageUrl}
+                  accessibilityLabel={`Photo of ${meal.name}`}
+                  testID="meal-detail-photo"
+                  containerStyle={{ height: 160, width: "100%" }}
+                  style={{ height: 160, width: "100%" }}
+                />
+              ) : (
+                // The web's gradient fallback (amber→orange→rose) with the
+                // chef icon ABOVE the title — never a grey box under it.
+                <LinearGradient
+                  testID="meal-detail-photo-fallback"
+                  colors={[tint("accent", 0.22), tint("accent", 0.06)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    height: 128,
+                    width: "100%",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ChefHat size={36} color={colors.accent} />
+                </LinearGradient>
+              )}
+              <View style={{ padding: 16, gap: 8 }}>
+                <Text
+                  testID="meal-detail-title"
+                  className="text-foreground text-xl font-bold"
+                >
+                  {meal.name}
+                </Text>
                 {(meal.tags?.length ?? 0) > 0 ? (
                   <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                     {(meal.tags ?? []).map((tag) => (
@@ -491,13 +513,19 @@ export function MealDetail() {
                   }}
                 >
                   {[
-                    { label: "Cal", value: String(totalCal) },
-                    { label: "Protein", value: `${totalP}g` },
-                    { label: "Carbs", value: `${totalC}g` },
-                    { label: "Fats", value: `${totalF}g` },
+                    { label: "Cal", value: String(totalCal), color: colors.foreground },
+                    { label: "Protein", value: `${totalP}g`, color: colors.info },
+                    { label: "Carbs", value: `${totalC}g`, color: colors.success },
+                    { label: "Fats", value: `${totalF}g`, color: colors.accent },
                   ].map((m) => (
                     <View key={m.label} style={{ flex: 1, alignItems: "center" }}>
-                      <Text className="text-foreground text-base font-bold">{m.value}</Text>
+                      <Text
+                        testID={`meal-detail-macro-${m.label.toLowerCase()}`}
+                        style={{ color: m.color }}
+                        className="text-base font-bold"
+                      >
+                        {m.value}
+                      </Text>
                       <Text className="text-muted-foreground text-[10px] uppercase">
                         {m.label}
                       </Text>
@@ -505,7 +533,7 @@ export function MealDetail() {
                   ))}
                 </View>
               </View>
-            </Card>
+            </View>
 
             <Card title="Foods">
               <View style={{ gap: 0 }}>
@@ -564,9 +592,11 @@ export function MealDetail() {
               </Text>
             ) : null}
 
+            {/* Black on white / white on black (the web's `bg-zinc-900
+                dark:bg-white`) — never the brand red `primary`. */}
             <Button
               testID="meal-detail-log"
-              variant="primary"
+              variant="inverted"
               onPress={() => {
                 setMealLogError(null);
                 setMealToLog(meal);
@@ -581,7 +611,13 @@ export function MealDetail() {
       <MealLogSheet
         visible={mealToLog !== null}
         meal={mealToLog}
-        currentTag={currentDefaultTag}
+        // ADDING TO starts at the MEAL's own default tag, falling back to
+        // the time-of-day default — the web's
+        // `defaultTag={meal.defaultTag || defaultTagNow()}`
+        // (`app/dashboard/meals/[id]/page.tsx:352`). Native used to ignore
+        // the meal's own tag entirely.
+        currentTag={mealToLog?.defaultTag || currentDefaultTag}
+        availableTags={availableTags}
         submitting={mealLogSubmitting}
         error={mealLogError}
         onClose={() => {

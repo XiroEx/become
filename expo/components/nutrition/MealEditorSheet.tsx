@@ -13,7 +13,7 @@
  * call. See `lib/nutrition/savedMeals.ts`.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -201,6 +201,36 @@ export function MealEditorSheet({
   const [customTagInput, setCustomTagInput] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // The sheet is mounted once by its caller (`BottomSheet`'s `children` are
+  // always in the tree — only the RN `Modal`'s own `visible` toggles), so the
+  // `useState` initialisers above only ever ran against whatever `initial`
+  // was at THAT first mount — typically null, before the meal had loaded.
+  // Edit then opened to every field empty and Save stayed disabled. Re-seed
+  // every time the sheet transitions closed → open, the way the web's own
+  // edit page re-reads its fetched meal into the form on each visit.
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible || wasVisible) return;
+    setName(initial?.name ?? "");
+    setDescription(initial?.description ?? "");
+    setServerImageUrl(initial?.imageUrl);
+    setPendingPhoto(null);
+    setPhotoRemoved(false);
+    setPhotoBusy(false);
+    setPhotoError(null);
+    setDenial(null);
+    setTags(initial?.tags ?? []);
+    setDefaultTag(initial?.defaultTag ?? "");
+    setItems(toEditorItems(initial?.items ?? []));
+    setTagPickerOpen(false);
+    setCustomTagInput("");
+    setSearchOpen(false);
+    setLocalError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   const tagOptions = useMemo(() => {
     const defaults = availableTags?.defaults ?? TAG_FALLBACK;

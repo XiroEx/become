@@ -20,6 +20,7 @@
  *   muted       zinc-100 / zinc-800      muted-fg    zinc-500 / zinc-400
  *   primary     red-500 (brand, both)    destructive red-700  / red-400
  *   accent      amber-600 / amber-400    success     green-600 / green-400
+ *   info        blue-600  / blue-400     (meal macro tiles: protein)
  *
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
@@ -41,7 +42,8 @@ export type TokenName =
   | "destructive-foreground"
   | "accent"
   | "accent-foreground"
-  | "success";
+  | "success"
+  | "info";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -61,6 +63,7 @@ export const lightTokens: Record<TokenName, string> = {
   // light value is not the dark one.
   "accent-foreground": "24 24 27",
   success: "22 163 74", // green-600 — the web's `text-green-600`
+  info: "37 99 235", // blue-600 — the web's `text-blue-600` (meal macro: protein)
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -77,6 +80,7 @@ export const darkTokens: Record<TokenName, string> = {
   accent: "251 191 36", // amber-400 — the web's `dark:text-amber-400`
   "accent-foreground": "24 24 27",
   success: "74 222 128", // green-400 — the web's `dark:text-green-400`
+  info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

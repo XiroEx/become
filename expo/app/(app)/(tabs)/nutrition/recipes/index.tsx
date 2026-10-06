@@ -921,7 +921,16 @@ export default function MyStuffRoute() {
       <MealLogSheet
         visible={mealToLog !== null}
         meal={mealToLog}
-        currentTag={currentDefaultTag}
+        // ADDING TO starts at the MEAL's own default tag, falling back to
+        // the time-of-day default — the web's My Stuff list
+        // (`defaultTag={applyTargetMeal?.defaultTag || defaultTagNow()}`,
+        // `app/dashboard/meals/page.tsx:596`). Native used to ignore the
+        // meal's own tag entirely.
+        currentTag={mealToLog?.defaultTag || currentDefaultTag}
+        availableTags={{
+          defaults: tagsData?.defaults ?? [],
+          userTags: (tagsData?.userTags ?? []) as string[],
+        }}
         submitting={mealLogSubmitting}
         error={mealLogError}
         onClose={() => {
