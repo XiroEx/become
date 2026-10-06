@@ -325,8 +325,14 @@ export default function DashboardRoute() {
 
   const [workoutNowOpen, setWorkoutNowOpen] = useState(false);
 
+  // The web's "View" and the Mindset card's own CTA both open the Mind HUB
+  // (`/dashboard/mind`) — never an auto-started session, even when today's
+  // isn't done yet. The hub itself owns "Begin"; pushing `?start=1`
+  // unconditionally used to skip straight into a session even when the web's
+  // CTA would read "Training Grounds" because today's was already done
+  // (NP-316).
   const onOpenMind = useCallback(() => {
-    router.push("/(tabs)/mind?start=1" as never);
+    router.push("/(tabs)/mind" as never);
   }, [router]);
 
   const onOpenBecoming = useCallback(() => {

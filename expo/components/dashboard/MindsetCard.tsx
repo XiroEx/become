@@ -98,13 +98,15 @@ export function MindsetCard({
         <>
           {/* Level · chapter */}
           <View style={styles.levelRow}>
+            {/* The web's brain tile is violet (`bg-purple-100` /
+                `text-purple-600`), not the orange accent (NP-316). */}
             <View
               style={[
                 styles.brainBadge,
-                { backgroundColor: tint("accent", 0.15) },
+                { backgroundColor: tint("mind-violet", 0.15) },
               ]}
             >
-              <Brain size={20} color={colors.accent} />
+              <Brain size={20} color={colors["mind-violet"]} />
             </View>
             <View style={styles.levelMeta}>
               <Text
@@ -127,7 +129,7 @@ export function MindsetCard({
                     style={[
                       styles.progressBar,
                       {
-                        backgroundColor: colors.accent,
+                        backgroundColor: colors["mind-violet"],
                         width: `${progressPct}%`,
                       },
                     ]}
@@ -159,7 +161,7 @@ export function MindsetCard({
                 {status.done ? (
                   <Check size={16} color={colors.success} />
                 ) : (
-                  <Sparkles size={16} color={colors.accent} />
+                  <Sparkles size={16} color={colors["mind-violet"]} />
                 )}
                 <Text
                   testID="mindset-status-text"

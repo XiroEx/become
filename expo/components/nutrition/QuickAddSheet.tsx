@@ -89,9 +89,23 @@ export function QuickAddSheet({
       // "Quick Add" + X) — BottomSheet's own big title would just repeat it.
       testID="quick-add-sheet"
       accessibilityLabel="Quick Add Sheet"
+      // NP-316: bounding the sheet lets the ScrollView below actually scroll
+      // once the keyboard eats into the available height — without a cap the
+      // sheet sizes itself to its natural (un-keyboard-aware) content height
+      // and nothing can shrink to make room.
+      sheetStyle={{ maxHeight: "90%" }}
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        // NP-316: on Android, `behavior={undefined}` left this sheet's own
+        // Modal window to fend for itself — focusing Calories or Note opened
+        // the keyboard directly over the macros/Note/Cancel+Add without the
+        // sheet lifting, because an RN `Modal` is a separate window that does
+        // not inherit the activity's `windowSoftInputMode` resize. `"height"`
+        // shrinks this view (and the ScrollView inside it) by the keyboard's
+        // height so the focused field and Add stay visible, same fix as the
+        // login screen's Android exception (NP-309).
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
