@@ -21,7 +21,8 @@
  *   primary     red-500 (brand, both)    destructive red-700  / red-400
  *   accent      amber-600 / amber-400    success     green-600 / green-400
  *   info        blue-600 / blue-400      (the web's "Calendar"/History links
- *                                          and the scheduled-workout icons —
+ *                                          the scheduled-workout icons and the
+ *                                          meal macro tile for protein —
  *                                          Tailwind's blue, never the brand red)
  *   mindset     purple-600 / purple-400  (the web's Mindset streak icon —
  *                                          Tailwind's purple, distinct from accent)

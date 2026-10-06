@@ -401,8 +401,10 @@ describe("Card NP-232 acceptance", () => {
     await waitFor(() => {
       expect(getByTestId("meal-log-sheet")).toBeTruthy();
     });
-    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toBe(
-      "Log meal",
+    // The submit label reads the web's `Apply to <Tag>` (NP-268), not a
+    // fixed "Log meal" — the tag is whatever ADDING TO is currently showing.
+    expect(getByTestId("meal-log-sheet-submit").props.accessibilityLabel).toMatch(
+      /^Apply to /,
     );
     await act(async () => {
       fireEvent.press(getByTestId("meal-log-sheet-submit"));
