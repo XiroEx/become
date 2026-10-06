@@ -15,7 +15,8 @@ export type ButtonVariant =
   | "destructive"
   | "ghost"
   | "inverted"
-  | "success";
+  | "success"
+  | "info";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps {
@@ -59,6 +60,10 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // actions, so a positive confirm that mirrors web's emerald uses the
   // existing `success` token instead of a new colour literal.
   success: "bg-success",
+  // NP-303: the web's Settings "Enable" / "Turn on" / "Repair" buttons are
+  // `bg-blue-600`, never the brand red — `info` is that same blue-600/400
+  // token everywhere else in the app (Calendar/History links).
+  info: "bg-info",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -68,6 +73,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   ghost: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
+  info: "text-primary-foreground",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -147,7 +153,8 @@ export function Button({
             color={
               variant === "primary" ||
               variant === "destructive" ||
-              variant === "success"
+              variant === "success" ||
+              variant === "info"
                 ? colors["primary-foreground"]
                 : variant === "inverted"
                   ? colors.background
