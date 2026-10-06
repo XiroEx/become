@@ -30,6 +30,7 @@ import {
   ExerciseSearchResponseSchema,
 } from "@become/api-client";
 import type {
+  AlternativeCandidate,
   CustomExercise,
   ExerciseSearchResult,
 } from "@become/api-client";
@@ -53,6 +54,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
+import { buildSuggestedExercises } from "@/lib/workout/suggestedExercises";
 import { useEntitlements, syntheticGate } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import type { LiveWorkoutExercise } from "@/components/live/LiveWorkoutClient";
@@ -225,14 +227,15 @@ export function AddExerciseSheet({
           { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
         );
         if (cancelled) return;
-        const excluded = new Set(
-          workoutSlugsKey ? workoutSlugsKey.split(",") : [],
-        );
+        // Same source, order and dedupe/limit rules as the web's "Add an
+        // exercise" sheet (`webapp/lib/workout/suggestedExercises.ts`), so
+        // the two apps never show a different suggestion list for the same
+        // anchor exercise (NP-289).
         setSuggested(
-          (data?.alternatives ?? [])
-            .filter((a) => !excluded.has(a.slug))
-            .slice(0, 6)
-            .map((a) => toRow(a, a.isCustom ?? false)),
+          buildSuggestedExercises(
+            (data?.alternatives ?? []) as AlternativeCandidate[],
+            workoutSlugsKey ? workoutSlugsKey.split(",") : [],
+          ).map((a) => toRow(a, a.isCustom ?? false)),
         );
       } catch {
         if (!cancelled) setSuggested([]);

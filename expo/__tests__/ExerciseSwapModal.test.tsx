@@ -44,6 +44,20 @@ const alts: AlternativeCandidate[] = [
   },
 ];
 
+// 12 candidates spanning equipment/bodyRegion/difficulty/category — enough
+// to exercise the "Show more" pagination (4 preview + 8 step) and the filter
+// chips (NP-289).
+const manyAlts: AlternativeCandidate[] = Array.from({ length: 12 }, (_, i) => ({
+  slug: `alt-${i}`,
+  name: `Alt Exercise ${i}`,
+  score: 50,
+  equipment: [i % 2 === 0 ? "dumbbell" : "barbell"],
+  bodyRegion: i % 2 === 0 ? "upper_body" : "lower_body",
+  difficulty: i % 2 === 0 ? "beginner" : "advanced",
+  category: "strength",
+  trackingType: "reps_weight",
+}));
+
 describe("ExerciseSwapModal", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
@@ -252,5 +266,84 @@ describe("ExerciseSwapModal", () => {
       }),
       "session",
     );
+  });
+
+  // NP-289 — web parity: title, filters, result count, Show more.
+  it("shows the web's title and subtitle", () => {
+    const { getByText } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Jumping Jacks"
+        alternatives={alts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(getByText("Swap Exercise")).toBeTruthy();
+    expect(getByText("Replace Jumping Jacks")).toBeTruthy();
+  });
+
+  it("shows a result count that tracks the filtered list", () => {
+    const { getByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Jumping Jacks"
+        alternatives={alts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(getByTestId("swap-modal-result-count").props.children).toEqual([
+      2,
+      " result",
+      "s",
+    ]);
+  });
+
+  it("filters results by equipment via the Filters chips", () => {
+    const { getByTestId, getByText, queryByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Jumping Jacks"
+        alternatives={alts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.press(getByTestId("swap-modal-filters-toggle"));
+    fireEvent.press(getByText("Dumbbell"));
+    expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+    expect(queryByTestId("swap-modal-option-machine-press")).toBeNull();
+    expect(getByTestId("swap-modal-result-count").props.children).toEqual([
+      1,
+      " result",
+      "",
+    ]);
+
+    fireEvent.press(getByTestId("swap-modal-filters-clear"));
+    expect(getByTestId("swap-modal-option-machine-press")).toBeTruthy();
+  });
+
+  it("shows a paginated results list with Show more, mirroring the web's CollapsibleSection", () => {
+    const { getByTestId, getByLabelText, queryByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Jumping Jacks"
+        alternatives={manyAlts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    // Preview count is 4.
+    expect(getByTestId("swap-modal-option-alt-0")).toBeTruthy();
+    expect(getByTestId("swap-modal-option-alt-3")).toBeTruthy();
+    expect(queryByTestId("swap-modal-option-alt-4")).toBeNull();
+    expect(getByLabelText("Show 8 more")).toBeTruthy();
+
+    fireEvent.press(getByTestId("swap-modal-show-more"));
+
+    // Step is 8, so all 12 are now visible and the button disappears.
+    expect(getByTestId("swap-modal-option-alt-11")).toBeTruthy();
+    expect(queryByTestId("swap-modal-show-more")).toBeNull();
   });
 });

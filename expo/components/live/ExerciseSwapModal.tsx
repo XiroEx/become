@@ -33,7 +33,15 @@ import {
 } from "@/lib/workout/customExercises";
 import { useEntitlements, syntheticGate } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
-import { Search, X, ChevronDown, ChevronUp, Sparkles, Plus } from "lucide-react-native";
+import {
+  Search,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Plus,
+  SlidersHorizontal,
+} from "lucide-react-native";
 
 export type SwapScope = "session" | "program";
 
@@ -102,6 +110,84 @@ const DIFFICULTY_LABELS: Record<string, string> = {
   expert: "Expert",
 };
 
+const BODY_REGION_LABELS: Record<string, string> = {
+  upper_body: "Upper Body",
+  lower_body: "Lower Body",
+  core: "Core",
+  full_body: "Full Body",
+};
+
+type SwapFilterKey = "equipment" | "bodyRegion" | "difficulty" | "category";
+
+interface SwapFilters {
+  equipment: string | null;
+  bodyRegion: string | null;
+  difficulty: string | null;
+  category: string | null;
+}
+
+const EMPTY_SWAP_FILTERS: SwapFilters = {
+  equipment: null,
+  bodyRegion: null,
+  difficulty: null,
+  category: null,
+};
+
+/** How many results show before "Show more" — mirrors the web's CollapsibleSection default. */
+const RESULTS_PREVIEW_COUNT = 4;
+/** How many more each "Show more" reveals — mirrors the web's CollapsibleSection default. */
+const RESULTS_STEP = 8;
+
+/** A row of filter chips (web's `FilterRow`, `webapp/components/ExerciseSwapModal.tsx`). */
+function SwapFilterRow({
+  label,
+  options,
+  selected,
+  onSelect,
+  formatLabel,
+}: {
+  label: string;
+  options: string[];
+  selected: string | null;
+  onSelect: (value: string) => void;
+  formatLabel: (value: string) => string;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <View className="flex-row items-start mb-1.5" style={{ gap: 8 }}>
+      <Text
+        className="text-muted-foreground text-[11px] font-medium uppercase"
+        style={{ width: 64, paddingTop: 2 }}
+      >
+        {label}
+      </Text>
+      <View className="flex-row flex-wrap flex-1" style={{ gap: 6 }}>
+        {options.map((opt) => {
+          const isActive = selected === opt;
+          return (
+            <Pressable
+              key={opt}
+              onPress={() => onSelect(opt)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`${label} ${formatLabel(opt)}`}
+              className={`rounded-full px-2.5 py-1 ${isActive ? "bg-primary" : "bg-muted"}`}
+            >
+              <Text
+                className={`text-xs font-medium ${
+                  isActive ? "text-primary-foreground" : "text-muted-foreground"
+                }`}
+              >
+                {formatLabel(opt)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function formatEquipment(eq?: string): string {
   if (!eq) return "Bodyweight";
   return EQUIPMENT_LABELS[eq] || eq.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -151,6 +237,16 @@ export function ExerciseSwapModal({
   const [searchQuery, setSearchQuery] = useState("");
   const [catalogMatches, setCatalogMatches] = useState<AlternativeCandidate[] | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  // Filters (web parity, NP-289): equipment / body region / difficulty /
+  // category chips above the results, same shape as
+  // `webapp/components/ExerciseSwapModal.tsx`.
+  const [filters, setFilters] = useState<SwapFilters>(EMPTY_SWAP_FILTERS);
+  const [showFilters, setShowFilters] = useState(false);
+  // "Show more" pagination over the suggestions/results list — mirrors the
+  // web's `CollapsibleSection` (4 shown, 8 more per tap). Reset to the preview
+  // count whenever the search text or an active filter changes (the render-time
+  // ref-diff below), and again whenever the sheet reopens (the effect below).
+  const [visibleCount, setVisibleCount] = useState(RESULTS_PREVIEW_COUNT);
   const [variationsCache, setVariationsCache] = useState<Record<string, ExerciseVariation[]>>({});
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   // Inline creation (NP-169): the same form the My exercises screen uses,
@@ -196,6 +292,9 @@ export function ExerciseSwapModal({
       setCatalogMatches(null);
       setSelectedVariants({});
       setVariationsCache({});
+      setFilters(EMPTY_SWAP_FILTERS);
+      setShowFilters(false);
+      setVisibleCount(RESULTS_PREVIEW_COUNT);
       setShowCreateForm(false);
       setCreateValues(DEFAULT_CUSTOM_EXERCISE_FORM);
       setCreateError(null);
@@ -393,25 +492,87 @@ export function ExerciseSwapModal({
 
   const filteredAlternatives = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return searchCandidates;
     return searchCandidates.filter((alt) => {
-      const isCatalogMatch =
-        effectiveCatalogMatches?.some((m) => m.slug === alt.slug) ?? false;
-      if (
-        !isCatalogMatch &&
-        !alt.name.toLowerCase().includes(q) &&
-        !alt.equipment?.some((e: string) =>
-          formatEquipment(e).toLowerCase().includes(q),
-        ) &&
-        !alt.primaryMuscles?.some((m: string) =>
-          formatMuscle(m).toLowerCase().includes(q),
-        )
-      ) {
+      if (q) {
+        const isCatalogMatch =
+          effectiveCatalogMatches?.some((m) => m.slug === alt.slug) ?? false;
+        if (
+          !isCatalogMatch &&
+          !alt.name.toLowerCase().includes(q) &&
+          !alt.equipment?.some((e: string) =>
+            formatEquipment(e).toLowerCase().includes(q),
+          ) &&
+          !alt.primaryMuscles?.some((m: string) =>
+            formatMuscle(m).toLowerCase().includes(q),
+          )
+        ) {
+          return false;
+        }
+      }
+      if (filters.equipment && !alt.equipment?.includes(filters.equipment)) {
+        return false;
+      }
+      if (filters.bodyRegion && alt.bodyRegion !== filters.bodyRegion) {
+        return false;
+      }
+      if (filters.difficulty && alt.difficulty !== filters.difficulty) {
+        return false;
+      }
+      if (filters.category && alt.category !== filters.category) {
         return false;
       }
       return true;
     });
-  }, [searchCandidates, searchQuery, effectiveCatalogMatches]);
+  }, [searchCandidates, searchQuery, effectiveCatalogMatches, filters]);
+
+  // Filter chip options — unique values present in the pre-filter candidate
+  // pool, same as `webapp/components/ExerciseSwapModal.tsx`.
+  const equipmentOptions = useMemo(
+    () => [...new Set(searchCandidates.flatMap((a) => a.equipment ?? []))].sort(),
+    [searchCandidates],
+  );
+  const bodyRegionOptions = useMemo(
+    () =>
+      [...new Set(searchCandidates.map((a) => a.bodyRegion).filter((v): v is string => !!v))].sort(),
+    [searchCandidates],
+  );
+  const difficultyOptions = useMemo(
+    () =>
+      [...new Set(searchCandidates.map((a) => a.difficulty).filter((v): v is string => !!v))].sort(),
+    [searchCandidates],
+  );
+  const categoryOptions = useMemo(
+    () =>
+      [...new Set(searchCandidates.map((a) => a.category).filter((v): v is string => !!v))].sort(),
+    [searchCandidates],
+  );
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+  const toggleFilter = useCallback((key: SwapFilterKey, value: string) => {
+    setFilters((prev) => ({
+      ...prev,
+      [key]: prev[key] === value ? null : value,
+    }));
+  }, []);
+
+  // Reset the "Show more" pagination back to the preview whenever the search
+  // text or an active filter changes — the render-time equivalent of the
+  // web's remount-on-key trick (`webapp/components/CollapsibleSection.tsx`).
+  // State (not a ref) holds the last key seen, so this is the React-docs
+  // "adjust state during render" pattern rather than an effect: it bails out
+  // after one extra render and never touches a ref while rendering.
+  const resultsResetKey = `${searchQuery}|${filters.equipment ?? ""}|${filters.bodyRegion ?? ""}|${filters.difficulty ?? ""}|${filters.category ?? ""}`;
+  const [prevResultsResetKey, setPrevResultsResetKey] = useState(resultsResetKey);
+  if (prevResultsResetKey !== resultsResetKey) {
+    setPrevResultsResetKey(resultsResetKey);
+    setVisibleCount(RESULTS_PREVIEW_COUNT);
+  }
+
+  const visibleAlternatives = filteredAlternatives.slice(0, visibleCount);
+  const remainingAlternatives = filteredAlternatives.length - visibleCount;
+  const canShowMoreAlternatives = remainingAlternatives > 0;
+  const resultsSectionTitle =
+    searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions";
 
   // The swap handler must read the LATEST `selectedVariants` at press time
   // (the variation-selection test pins this: picking a variation then tapping
@@ -584,11 +745,9 @@ export function ExerciseSwapModal({
           {/* Header */}
           <View className="flex-row items-center justify-between mb-3">
             <View className="flex-1 mr-2">
-              <Text className="text-foreground text-xl font-bold">
-                {sourceName ? `Swap ${sourceName}` : "Swap exercise"}
-              </Text>
-              <Text className="text-muted-foreground text-xs">
-                Replace exercise and choose session or program scope
+              <Text className="text-foreground text-xl font-bold">Swap Exercise</Text>
+              <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                Replace {sourceName ?? "exercise"}
               </Text>
             </View>
             <Pressable
@@ -627,6 +786,91 @@ export function ExerciseSwapModal({
               </Pressable>
             ) : null}
           </View>
+
+          {/* Filter toggle + result count (web parity, NP-289) */}
+          <View className="flex-row items-center mb-2" style={{ gap: 8 }}>
+            <Pressable
+              testID={`${testID}-filters-toggle`}
+              onPress={() => setShowFilters((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel="Filters"
+              className={`flex-row items-center rounded-full px-3 py-1.5 ${
+                showFilters || activeFilterCount > 0 ? "bg-primary/20" : "bg-muted"
+              }`}
+              style={{ gap: 6 }}
+            >
+              <SlidersHorizontal
+                size={14}
+                color={showFilters || activeFilterCount > 0 ? colors.primary : colors["muted-foreground"]}
+              />
+              <Text
+                className={`text-xs font-medium ${
+                  showFilters || activeFilterCount > 0 ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                Filters
+              </Text>
+              {activeFilterCount > 0 ? (
+                <View
+                  className="items-center justify-center rounded-full bg-primary"
+                  style={{ width: 16, height: 16 }}
+                >
+                  <Text className="text-primary-foreground" style={{ fontSize: 10 }}>
+                    {activeFilterCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+
+            {activeFilterCount > 0 ? (
+              <Pressable
+                testID={`${testID}-filters-clear`}
+                onPress={() => setFilters(EMPTY_SWAP_FILTERS)}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all filters"
+              >
+                <Text className="text-muted-foreground text-xs">Clear all</Text>
+              </Pressable>
+            ) : null}
+
+            <View style={{ flex: 1 }} />
+            <Text testID={`${testID}-result-count`} className="text-muted-foreground text-xs">
+              {filteredAlternatives.length} result{filteredAlternatives.length !== 1 ? "s" : ""}
+            </Text>
+          </View>
+
+          {showFilters ? (
+            <View testID={`${testID}-filters`} className="mb-3">
+              <SwapFilterRow
+                label="Equipment"
+                options={equipmentOptions}
+                selected={filters.equipment}
+                onSelect={(v) => toggleFilter("equipment", v)}
+                formatLabel={formatEquipment}
+              />
+              <SwapFilterRow
+                label="Region"
+                options={bodyRegionOptions}
+                selected={filters.bodyRegion}
+                onSelect={(v) => toggleFilter("bodyRegion", v)}
+                formatLabel={(v) => BODY_REGION_LABELS[v] || v}
+              />
+              <SwapFilterRow
+                label="Difficulty"
+                options={difficultyOptions}
+                selected={filters.difficulty}
+                onSelect={(v) => toggleFilter("difficulty", v)}
+                formatLabel={(v) => DIFFICULTY_LABELS[v] || v}
+              />
+              <SwapFilterRow
+                label="Type"
+                options={categoryOptions}
+                selected={filters.category}
+                onSelect={(v) => toggleFilter("category", v)}
+                formatLabel={(v) => v.charAt(0).toUpperCase() + v.slice(1)}
+              />
+            </View>
+          ) : null}
 
           {/* Content */}
           {isLoading ? (
@@ -694,10 +938,17 @@ export function ExerciseSwapModal({
 
               {/* Suggestions / Search Results */}
               <View className="mb-2">
-                <Text className="text-foreground font-semibold text-sm mb-2">
-                  {searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
+                <Text
+                  testID={`${testID}-results-title`}
+                  className="text-foreground font-semibold text-sm mb-2 uppercase"
+                >
+                  {resultsSectionTitle}
+                  <Text className="text-muted-foreground font-normal">
+                    {" "}
+                    ({filteredAlternatives.length})
+                  </Text>
                 </Text>
-                {filteredAlternatives.map((alt) => {
+                {visibleAlternatives.map((alt) => {
                   const isExpanded = selectedSlug === alt.slug;
                   const scoreBadge = getScoreBadgeStyle(alt.score);
                   const variations = variationsCache[alt.slug] ?? null;
@@ -932,6 +1183,20 @@ export function ExerciseSwapModal({
                     </View>
                   );
                 })}
+                {canShowMoreAlternatives ? (
+                  <Pressable
+                    testID={`${testID}-show-more`}
+                    onPress={() => setVisibleCount((v) => v + RESULTS_STEP)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show ${Math.min(RESULTS_STEP, remainingAlternatives)} more`}
+                    className="rounded-lg border border-border py-2 mt-1 items-center"
+                  >
+                    <Text className="text-muted-foreground text-xs font-semibold">
+                      Show {Math.min(RESULTS_STEP, remainingAlternatives)} more
+                      <Text className="font-normal"> ({remainingAlternatives} left)</Text>
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             </ScrollView>
           )}
