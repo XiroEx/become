@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 let mockParams: { token?: string; mode?: string } = {};
@@ -32,9 +32,12 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn() };
 });
 
-import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
+import { ApiError, apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import VerifyRoute, { VerifyScreen } from "../app/(auth)/verify";
+import VerifyRoute, {
+  VerifyScreen,
+  friendlyVerifyErrorMessage,
+} from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -190,5 +193,102 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     });
     expect(mockSetToken).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+});
+
+// Acceptance criterion (NP-252): the error state is the web's card — an icon,
+// "Verification failed", a friendly message mapped from the error, and a
+// "Try again" button back to sign-in — not a raw error line on a blank
+// screen with no way out.
+describe("VerifyScreen error card (NP-252 web parity)", () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockSetToken.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockApiFetch.mockReset();
+    mockParams = {};
+  });
+
+  it("no token: shows the web's 'No verification token provided.' message", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    expect(getByTestId("verify-error-title").props.children).toBe(
+      "Verification failed",
+    );
+    expect(getByTestId("verify-error-message").props.children).toBe(
+      "No verification token provided.",
+    );
+  });
+
+  it("missing/invalid mode: shows the web's 'expired or invalid' message", () => {
+    mockParams = { token: "real-token-1234", mode: "bogus" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    expect(getByTestId("verify-error-message").props.children).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("a server refusal renders the server's message verbatim, not 'API error 400'", async () => {
+    mockParams = { token: "real-token-1234", mode: "login" };
+    const verifyFn = jest.fn(async () => {
+      throw new ApiError(400, {
+        message: "This link has expired or is invalid. Please request a new one.",
+      });
+    });
+    const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
+    await waitFor(() => {
+      expect(getByTestId("verify-error-message").props.children).toBe(
+        "This link has expired or is invalid. Please request a new one.",
+      );
+    });
+  });
+
+  it("an unclassifiable failure falls back to the web's generic line", async () => {
+    mockParams = { token: "real-token-1234", mode: "login" };
+    const verifyFn = jest.fn(async () => {
+      throw new Error();
+    });
+    const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
+    await waitFor(() => {
+      expect(getByTestId("verify-error-message").props.children).toBe(
+        "Something went wrong. Please try again.",
+      );
+    });
+  });
+
+  it("'Try again' routes back to sign-in — there is always a way back", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    fireEvent.press(getByTestId("verify-retry"));
+    expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+});
+
+describe("friendlyVerifyErrorMessage (pure mapping)", () => {
+  it("maps the native-only local-validation sentinels onto the web's copy", () => {
+    expect(friendlyVerifyErrorMessage("no-token")).toBe(
+      "No verification token provided.",
+    );
+    expect(friendlyVerifyErrorMessage("bad-mode")).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("passes a server ApiError's message through verbatim", () => {
+    const err = new ApiError(400, {
+      message: "This link has expired or is invalid. Please request a new one.",
+    });
+    expect(friendlyVerifyErrorMessage(err)).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("falls back to the web's generic line for anything else", () => {
+    expect(friendlyVerifyErrorMessage(new Error("boom"))).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(friendlyVerifyErrorMessage(null)).toBe(
+      "Something went wrong. Please try again.",
+    );
   });
 });
