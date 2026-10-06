@@ -84,6 +84,9 @@ import {
   toCustomProgramSummary,
   canEditCustomProgram,
 } from "@/lib/programs/customPrograms";
+import { StyleSheet } from "react-native";
+import { colorScheme } from "nativewind";
+import { lightTokens, tintToken } from "@/lib/theme/tokens";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -423,6 +426,123 @@ describe("(id: e015c9b9) Create and Edit open the native builder", () => {
       expect(mockPush).toHaveBeenCalledWith(
         "/(tabs)/programming/custom-abc/edit",
       ),
+    );
+  });
+});
+
+describe("(id: NP-282) the empty state matches the web: icon, copy, CTA and the design tip", () => {
+  it("shows the full EmptyState (not ScreenState's bare title/message) when there are no custom programs", async () => {
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+
+    // `MyPrograms` renders its OWN empty state — `ScreenState`'s `empty`
+    // prop is no longer wired for this screen, or the web's icon, CTA and
+    // tip would never reach the phone (that was exactly the bug: a bare
+    // title/message with neither).
+    await waitFor(() =>
+      expect(screen.getByTestId("my-programs-empty")).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("You haven't created any custom programs yet"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Build your own training program tailored to your goals.",
+      ),
+    ).toBeTruthy();
+    // The generic `ScreenState` empty copy must not leak back in.
+    expect(screen.queryByText("No custom programs yet")).toBeNull();
+
+    // "Create Your First Program" — Title Case, like the web's CTA — opens
+    // the same creator the header's own Create button does.
+    const createCta = screen.getByTestId("my-programs-create-empty");
+    expect(createCta).toBeTruthy();
+    fireEvent.press(createCta);
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/new"),
+    );
+
+    // The "Design your own program" tip, in the web onboarding tour's own
+    // words, with its "Walk me through it" CTA wired to the same creator.
+    expect(screen.getByTestId("my-programs-empty-tip")).toBeTruthy();
+    expect(screen.getByText("Design your own program")).toBeTruthy();
+    const tipCta = screen.getByTestId("my-programs-empty-tip-cta");
+    fireEvent.press(tipCta);
+    await waitFor(() =>
+      expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/new"),
+    );
+  });
+});
+
+describe("(id: NP-282) Enroll, Delete and the header Create button follow the web's colours", () => {
+  afterEach(() => {
+    act(() => {
+      colorScheme.set("light");
+    });
+  });
+
+  it("Enroll and the header Create are the web's green, not the brand red", async () => {
+    act(() => {
+      colorScheme.set("light");
+    });
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [OWNED] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId("my-programs-item-custom-abc")).toBeTruthy(),
+    );
+
+    const success = `rgb(${lightTokens.success})`;
+    const primary = `rgb(${lightTokens.primary})`;
+
+    const headerCreate = StyleSheet.flatten(
+      screen.getByTestId("my-programs-create").props.style,
+    );
+    expect(headerCreate.backgroundColor).toBe(success);
+    expect(headerCreate.backgroundColor).not.toBe(primary);
+
+    const enroll = StyleSheet.flatten(
+      screen.getByTestId("my-programs-enroll-custom-abc").props.style,
+    );
+    expect(enroll.backgroundColor).toBe(success);
+    expect(enroll.backgroundColor).not.toBe(primary);
+  });
+
+  it("Delete is a light-red text button — a tint, not a solid destructive fill", async () => {
+    act(() => {
+      colorScheme.set("light");
+    });
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [OWNED] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    await waitFor(() =>
+      expect(screen.getByTestId("my-programs-item-custom-abc")).toBeTruthy(),
+    );
+
+    const deleteButton = StyleSheet.flatten(
+      screen.getByTestId("my-programs-delete-custom-abc").props.style,
+    );
+    expect(deleteButton.backgroundColor).toBe(
+      tintToken("destructive", "light", 0.12),
+    );
+    expect(deleteButton.backgroundColor).not.toBe(
+      `rgb(${lightTokens.destructive})`,
     );
   });
 });
