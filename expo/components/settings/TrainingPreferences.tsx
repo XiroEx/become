@@ -23,14 +23,12 @@ import {
   EXPERIENCE_LEVEL_OPTIONS,
   FITNESS_GOAL_OPTIONS,
   MAX_FITNESS_GOALS,
-  PLAN_PROMOTE_MODE_OPTIONS,
   buildTrainingProfilePatch,
   clampWeeklyAvailability,
   toggleFitnessGoals,
   type EquipmentValue,
   type ExperienceLevelValue,
   type FitnessGoalValue,
-  type PlanPromoteModeValue,
 } from "@/lib/settings/trainingPreferences";
 
 function isFitnessGoalValue(value: unknown): value is FitnessGoalValue {
@@ -60,18 +58,15 @@ function isEquipmentValue(value: unknown): value is EquipmentValue {
   );
 }
 
-function isPlanPromoteModeValue(value: unknown): value is PlanPromoteModeValue {
-  return value === "manual" || value === "auto";
-}
-
 /**
- * TRAINING PREFERENCES (NP-127) — the native Training tab.
+ * TRAINING PREFERENCES (NP-127) — the native Settings > Training tab.
  *
  * Ports the web's Settings Training tab
  * (`webapp/app/dashboard/settings/page.tsx`, Fitness Goals / Experience &
- * Schedule / Equipment & Injuries) plus the Nutrition Planning choice between
- * manual and automatic promotion, all saved through the page's one
- * `PATCH /api/profile` (NP-048's route).
+ * Schedule / Equipment & Injuries), saved through the page's one
+ * `PATCH /api/profile` (NP-048's route). Nutrition Planning (manual/auto
+ * promotion) lives on the web's SETTINGS tab, not Training — NP-302 moved
+ * it to native Settings > Settings to match, out of this screen.
  *
  * Parity notes:
  * - Goals are ordered and index 0 is the primary, also written as
@@ -84,8 +79,13 @@ function isPlanPromoteModeValue(value: unknown): value is PlanPromoteModeValue {
  */
 export function TrainingPreferencesScreen({
   testID = "training-preferences",
+  embedded = false,
 }: {
   testID?: string;
+  /** True when rendered inside Settings > Training (NP-302): skips the
+   * screen's own SafeAreaView/ScreenState chrome and "Training" title,
+   * since the host screen already supplies those. */
+  embedded?: boolean;
 }) {
   const { colors } = useThemeTokens();
   const { token, refresh } = useAuth();
@@ -110,8 +110,6 @@ export function TrainingPreferencesScreen({
   );
   const [equipmentAccess, setEquipmentAccess] = useState<EquipmentValue[]>([]);
   const [injuryNotes, setInjuryNotes] = useState<string>("");
-  const [planPromoteMode, setPlanPromoteMode] =
-    useState<PlanPromoteModeValue>("manual");
 
   const [saving, setSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -153,11 +151,6 @@ export function TrainingPreferencesScreen({
     setInjuryNotes(
       typeof raw.injuryNotes === "string" ? raw.injuryNotes : "",
     );
-    setPlanPromoteMode(
-      isPlanPromoteModeValue(raw.planPromoteMode)
-        ? raw.planPromoteMode
-        : "manual",
-    );
   }, [profile.data]);
 
 
@@ -187,7 +180,6 @@ export function TrainingPreferencesScreen({
         weeklyAvailability,
         equipmentAccess,
         injuryNotes,
-        planPromoteMode,
       });
       await apiFetch<ProfileResponse>("/api/profile", ProfileResponseSchema, {
         method: "PATCH",
@@ -210,7 +202,6 @@ export function TrainingPreferencesScreen({
     weeklyAvailability,
     equipmentAccess,
     injuryNotes,
-    planPromoteMode,
     profile,
     refresh,
   ]);
@@ -225,6 +216,10 @@ export function TrainingPreferencesScreen({
   }, [profile]);
 
   const selectedBorder = colors.primary;
+  // Embedded (Settings > Training, NP-302): the host screen already supplies
+  // its own SafeAreaView, so this becomes a plain View — a second
+  // SafeAreaView here would double the top/bottom inset padding.
+  const Wrapper: typeof View = embedded ? View : (SafeAreaView as unknown as typeof View);
 
   return (
     <ScreenState
@@ -235,15 +230,17 @@ export function TrainingPreferencesScreen({
       offlineNote="You're offline. Showing last-saved training preferences."
       testID={`${testID}-screen-state`}
     >
-      <SafeAreaView
-        edges={["top", "bottom"]}
+      <Wrapper
+        {...(embedded ? {} : { edges: ["top", "bottom"] })}
         style={{ flex: 1, backgroundColor: colors.background }}
         testID={`${testID}-route`}
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
-          <Text accessibilityRole="header" className="text-foreground text-2xl font-bold">
-            Training
-          </Text>
+          {embedded ? null : (
+            <Text accessibilityRole="header" className="text-foreground text-2xl font-bold">
+              Training
+            </Text>
+          )}
 
           {/* ── Fitness Goals ── */}
           <View testID={`${testID}-goals-section`} style={{ gap: 8 }}>
@@ -549,60 +546,6 @@ export function TrainingPreferencesScreen({
             </View>
           </View>
 
-          {/* ── Nutrition Planning ── */}
-          <View testID={`${testID}-promote-section`} style={{ gap: 8 }}>
-            <Text
-              accessibilityRole="header"
-              className="text-foreground text-lg font-semibold"
-            >
-              Nutrition Planning
-            </Text>
-            <Text className="text-muted-foreground text-xs">
-              When a planned meal&apos;s day arrives, how should it become a
-              log?
-            </Text>
-            <View style={{ gap: 8, marginTop: 4 }}>
-              {PLAN_PROMOTE_MODE_OPTIONS.map((opt) => {
-                const selected = planPromoteMode === opt.value;
-                return (
-                  <Pressable
-                    key={opt.value}
-                    testID={`${testID}-promote-${opt.value}`}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={opt.label}
-                    accessibilityHint={opt.description}
-                    onPress={() => {
-                      setPlanPromoteMode(opt.value);
-                      setSaveSuccess(false);
-                    }}
-                    style={[
-                      minTouchTarget,
-                      {
-                        gap: 4,
-                        padding: 12,
-                        borderRadius: 12,
-                        borderWidth: 2,
-                        borderColor: selected ? selectedBorder : colors.border,
-                        backgroundColor: colors.card,
-                      },
-                    ]}
-                  >
-                    <Text className="text-foreground text-sm font-semibold">
-                      {opt.label}
-                    </Text>
-                    <Text
-                      className="text-muted-foreground text-xs"
-                      style={WRAPPABLE_TEXT}
-                    >
-                      {opt.description}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
           {saveError ? (
             <Text
               testID={`${testID}-save-error`}
@@ -632,7 +575,7 @@ export function TrainingPreferencesScreen({
             {saving ? "Saving…" : "Save training preferences"}
           </Button>
         </ScrollView>
-      </SafeAreaView>
+      </Wrapper>
     </ScreenState>
   );
 }
