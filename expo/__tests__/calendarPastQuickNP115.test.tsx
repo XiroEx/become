@@ -375,7 +375,9 @@ describe("Calendar past days + quick sessions (NP-115)", () => {
     await waitFor(() => {
       expect(getByTestId("day-detail-rest")).toBeTruthy();
     });
-    fireEvent.press(getByTestId("day-detail-workout-now"));
+    // A future rest day only offers "Schedule a Workout" (web's canPlan-only
+    // case) — no "Log a Workout" and no generic "Workout Now" (NP-292).
+    fireEvent.press(getByTestId("day-detail-schedule-workout"));
     await waitFor(() => {
       expect(getByTestId("calendar-workout-now-sheet")).toBeTruthy();
     });

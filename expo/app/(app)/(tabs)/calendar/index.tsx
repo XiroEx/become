@@ -11,7 +11,6 @@ import { Button } from "@/components/Button";
 import { Calendar } from "@/components/schedule/Calendar";
 import { DaySummarySheets } from "@/components/schedule/DaySummarySheets";
 import { QuickSessionMenu } from "@/components/schedule/QuickSessionMenu";
-import { ScheduledList } from "@/components/schedule/ScheduledList";
 import { RescheduleModal } from "@/components/schedule/RescheduleModal";
 import { SlotActionMenu } from "@/components/schedule/SlotActionMenu";
 import { SlotConfirmDialog } from "@/components/schedule/SlotConfirmDialog";
@@ -27,6 +26,7 @@ import {
   skipQuickSession,
 } from "@/lib/schedule/quickSessionDay";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
+import { logPlanAvailability } from "@/lib/quickSession/logPlan";
 import {
   quickSessionOverviewHref,
   stashQuickSessionWithId,
@@ -38,7 +38,6 @@ import {
   quickSessionsForDate,
   isMakeupWorkout,
   toQuickCalItems,
-  upcomingSlots,
   type QuickCalItem,
   type ScheduledSlot,
 } from "@/lib/schedule/slotStatus";
@@ -90,6 +89,15 @@ function formatDateShort(iso: string): string {
   const weekday = DAY_NAMES[dt.getDay()]?.slice(0, 3) ?? "";
   const monthName = MONTH_NAMES[dt.getMonth()]?.slice(0, 3) ?? "";
   return `${weekday}, ${monthName} ${dt.getDate()}`;
+}
+
+// Matches the web's `Completed {time}` line on a completed (non-makeup) day
+// card (CalendarClient.tsx: `toLocaleTimeString('en-US', { hour: 'numeric',
+// minute: '2-digit' })`) — native previously showed no time at all (NP-292).
+function formatCompletedTime(iso: string): string {
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 /**
@@ -220,17 +228,6 @@ export default function CalendarIndexRoute() {
   );
 
   const slots = useMemo(() => toScheduledSlots(data), [data]);
-  // Web's calendar has no "Upcoming" equivalent at all; the day detail panel
-  // covers past sessions. Native keeps this list but, per NP-240, it must
-  // only show what is actually still ahead — today-or-later AND still
-  // `scheduled` — not past completed/missed/skipped slots. `upcomingSlots`
-  // already filters by date and sorts ascending; the status filter here
-  // drops the "done" ones that date filtering alone would still let through.
-  const upcomingScheduledSlots = useMemo(
-    () =>
-      upcomingSlots(slots, todayDate).filter((s) => s.status === "scheduled"),
-    [slots, todayDate],
-  );
   const rawLogs =
     logsData && typeof logsData === "object" && "logs" in logsData
       ? (logsData as { logs?: any[] }).logs
@@ -302,15 +299,6 @@ export default function CalendarIndexRoute() {
       );
     },
     [router],
-  );
-
-  const openSlot = useCallback(
-    (slot: ScheduledSlot) => {
-      // Only future or today, still-scheduled slots are actionable.
-      if (slot.status !== "scheduled" || slot.date < todayDate) return;
-      startSlot(slot);
-    },
-    [startSlot, todayDate],
   );
 
   const closeMenu = useCallback(() => setMenuSlot(null), []);
@@ -549,7 +537,14 @@ export default function CalendarIndexRoute() {
     setSelectedDate((prev) => (prev === date ? null : date));
   }, []);
 
+  // Changing the visible range invalidates the selected day: the schedule
+  // fetch is keyed on the visible range (`schedulePath` above), so a day
+  // selected before the jump may no longer be in `slots` at all — showing it
+  // anyway reads as a scheduled/completed day gone stale to "Rest day" (the
+  // Oct 3 bug, NP-292). Clearing it is simpler and safer than threading a
+  // second targeted fetch for one day that may not even still be visible.
   const onPrev = useCallback(() => {
+    setSelectedDate(null);
     setCurrentDate((prev) => {
       if (viewMode === "month") {
         return new Date(prev.getFullYear(), prev.getMonth() - 1, 1, 12, 0, 0);
@@ -561,6 +556,7 @@ export default function CalendarIndexRoute() {
   }, [viewMode]);
 
   const onNext = useCallback(() => {
+    setSelectedDate(null);
     setCurrentDate((prev) => {
       if (viewMode === "month") {
         return new Date(prev.getFullYear(), prev.getMonth() + 1, 1, 12, 0, 0);
@@ -570,6 +566,13 @@ export default function CalendarIndexRoute() {
       return d;
     });
   }, [viewMode]);
+
+  // Switching month/week also changes the visible (and fetched) range — same
+  // staleness risk as onPrev/onNext.
+  const onChangeViewMode = useCallback((mode: "month" | "week") => {
+    setSelectedDate(null);
+    setViewMode(mode);
+  }, []);
 
   const onGoToToday = useCallback(() => {
     const [y, m, d] = todayDate.split("-").map(Number);
@@ -612,7 +615,7 @@ export default function CalendarIndexRoute() {
           onSelectDay={onSelectDay}
           onPrev={onPrev}
           onNext={onNext}
-          onChangeViewMode={setViewMode}
+          onChangeViewMode={onChangeViewMode}
           onGoToToday={onGoToToday}
         />
 
@@ -861,11 +864,21 @@ export default function CalendarIndexRoute() {
                           Made up on {formatDateShort(slot.completedAt)}
                         </Text>
                       ) : null}
+                      {!isMakeup && slot.status === "completed" && slot.completedAt ? (
+                        <Text
+                          testID={`day-detail-completed-at-${slot.programId}-${slot.workoutIndex}`}
+                          className="text-accent-foreground text-xs mt-2"
+                        >
+                          Completed {formatCompletedTime(slot.completedAt)}
+                        </Text>
+                      ) : null}
 
                       {/* Actions — mirrors the web day sheet: start/do-it-now by
                           day label + marker date, skip/unskip, un-complete
                           (confirmed), and the Manage sheet for reschedule /
-                          shift / pause / resume. */}
+                          shift / pause / resume. No standalone Reschedule row:
+                          web reaches reschedule through this same Manage sheet
+                          (NP-292) — a second button duplicated it. */}
                       <View
                         style={{
                           flexDirection: "row",
@@ -922,7 +935,7 @@ export default function CalendarIndexRoute() {
                         {slot.status === "completed" ? (
                           <Button
                             testID={`day-detail-summary-${slot.programId}-${slot.workoutIndex}`}
-                            variant="secondary"
+                            variant="success"
                             size="sm"
                             onPress={() => setSummarySlot(slot)}
                           >
@@ -947,14 +960,6 @@ export default function CalendarIndexRoute() {
                         >
                           Manage
                         </Button>
-                        <Button
-                          testID={`day-detail-reschedule-${slot.programId}-${slot.workoutIndex}`}
-                          variant="secondary"
-                          size="sm"
-                          onPress={() => setRescheduleSlot(slot)}
-                        >
-                          Reschedule
-                        </Button>
                       </View>
                     </View>
                   );
@@ -963,30 +968,63 @@ export default function CalendarIndexRoute() {
             ) : null}
 
             {daySlots.length === 0 && dayQuick.length === 0 ? (
-              <Text
-                testID="day-detail-rest"
-                className="text-muted-foreground text-sm"
-              >
-                Rest day — no workouts scheduled.
-              </Text>
+              <View testID="day-detail-rest">
+                <Text className="text-muted-foreground text-sm">
+                  Rest day — no workouts scheduled.
+                </Text>
+                {/* Web's rest-day actions (NP-292): "Log a Workout" for a
+                    date that has already happened, "Schedule a Workout" for
+                    one still ahead — both for today, since it is both. Each
+                    opens the same Workout Now sheet pre-filled for this day
+                    (NP-076); the sheet's own title already reads
+                    "Log a Workout" / "Schedule a Workout" / "Workout Now"
+                    from `workoutNowTitle`, so these labels and that title
+                    never drift apart. */}
+                {selectedDate ? (
+                  (() => {
+                    const { canLog, canPlan } = logPlanAvailability(
+                      selectedDate,
+                      todayDate,
+                    );
+                    return (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 8,
+                          marginTop: 12,
+                        }}
+                      >
+                        {canLog ? (
+                          <Button
+                            testID="day-detail-log-workout"
+                            size="sm"
+                            onPress={() => setWorkoutNowDate(selectedDate)}
+                          >
+                            Log a Workout
+                          </Button>
+                        ) : null}
+                        {canPlan ? (
+                          <Button
+                            testID="day-detail-schedule-workout"
+                            variant="secondary"
+                            size="sm"
+                            onPress={() => setWorkoutNowDate(selectedDate)}
+                          >
+                            Schedule a Workout
+                          </Button>
+                        ) : null}
+                      </View>
+                    );
+                  })()
+                ) : null}
+              </View>
             ) : null}
             {quickError ? (
               <Text testID="day-detail-quick-error" className="text-destructive text-sm mt-2">
                 {quickError}
               </Text>
             ) : null}
-
-            {/* Workout Now for this day — pre-fills it for Log/Plan (NP-076). */}
-            <View style={{ marginTop: 12 }}>
-              <Button
-                testID="day-detail-workout-now"
-                variant="secondary"
-                size="sm"
-                onPress={() => selectedDate && setWorkoutNowDate(selectedDate)}
-              >
-                Workout Now
-              </Button>
-            </View>
           </View>
         ) : null}
 
@@ -997,14 +1035,6 @@ export default function CalendarIndexRoute() {
         >
           Schedule settings
         </Button>
-        <View>
-          <Text className="text-foreground font-semibold mb-2">Upcoming</Text>
-          <ScheduledList
-            slots={upcomingScheduledSlots}
-            onSelectSlot={openSlot}
-            onReschedule={setRescheduleSlot}
-          />
-        </View>
       </ScrollView>
 
       {/*
