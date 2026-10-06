@@ -211,18 +211,47 @@ describe("LoginScreen — review code", () => {
     });
 
     it("does not call the server without an email and a code", async () => {
+      // NP-309: the submit button is now disabled until both fields are
+      // filled (web parity), so a tap on it does nothing — the validation
+      // message still has to come from somewhere, and it does: the keyboard's
+      // Go key on the code field calls handleReviewSignIn directly, same as
+      // web's onKeyDown handler bypasses its own disabled submit button.
       const reviewSignInFn = jest.fn();
       const { getByTestId, findByText } = render(
         <LoginScreen reviewSignInFn={reviewSignInFn} />,
       );
 
       fireEvent.press(getByTestId("login-review-code-disclosure"));
-      fireEvent.press(getByTestId("login-review-code-submit"));
+      fireEvent(getByTestId("login-review-code-input"), "submitEditing");
 
       expect(
         await findByText("Enter the email and review code you were given"),
       ).toBeTruthy();
       expect(reviewSignInFn).not.toHaveBeenCalled();
+    });
+
+    // Acceptance criterion (id: np309-review-submit-disabled)
+    it("(id: np309-review-submit-disabled) the review submit is outlined and disabled until email and code are both filled", () => {
+      const { getByTestId } = render(<LoginScreen />);
+      fireEvent.press(getByTestId("login-review-code-disclosure"));
+      const submit = getByTestId("login-review-code-submit");
+      // disabled with nothing filled
+      expect(submit.props.accessibilityState?.disabled).toBe(true);
+
+      fireEvent.changeText(getByTestId("login-email"), "jon@example.com");
+      expect(
+        getByTestId("login-review-code-submit").props.accessibilityState
+          ?.disabled,
+      ).toBe(true);
+
+      fireEvent.changeText(
+        getByTestId("login-review-code-input"),
+        "become-review-2026-a1b2",
+      );
+      expect(
+        getByTestId("login-review-code-submit").props.accessibilityState
+          ?.disabled,
+      ).toBe(false);
     });
   });
 });
