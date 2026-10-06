@@ -42,10 +42,9 @@ import {
   titleCaseMealTag,
   type SavedMealInput,
 } from "@/lib/nutrition/savedMeals";
-import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
-import { defaultVariantOf } from "@/lib/nutrition/foodMath";
+import type { FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import type { Food, Meal } from "@become/api-client";
+import type { Meal } from "@become/api-client";
 import type { MealItemPayload } from "@/lib/nutrition/mealLogActions";
 
 export interface MealEditorItem extends MealItemPayload {
@@ -278,15 +277,11 @@ export function MealEditorSheet({
     setCustomTagInput("");
   }, [customTagInput]);
 
-  const handleAddFood = useCallback((food: Food) => {
-    const variant = defaultVariantOf(food);
-    if (!variant) return;
-    const item = buildMealItemPayload({
-      food: food as unknown as Parameters<typeof buildMealItemPayload>[0]["food"],
-      variant,
-      quantity: 1,
-      unit: variant.servingUnit,
-    });
+  // NP-261: `FoodSearchSheet`'s inline quantity picker (amount, unit, the
+  // member's own choice, not always the default serving) hands back the
+  // built item directly — there's only one action here ("Build a meal",
+  // since no `onLogItem` is wired up), so this fires once per ingredient.
+  const handleAddFood = useCallback(({ item }: FoodPickResult) => {
     setItems((prev) => [...prev, { ...item, key: itemKey() }]);
     setSearchOpen(false);
   }, []);
