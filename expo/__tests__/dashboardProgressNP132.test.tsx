@@ -266,7 +266,11 @@ describe("every metric tab reads in light and dark mode (e015c9a7)", () => {
       path.join(__dirname, "..", "components", "dashboard", "ProgressChart.tsx"),
       "utf8",
     );
-    expect(chartSrc).toContain("colors.primary");
+    // Weight is blue and lean mass is purple, matching the web's chartConfig
+    // (`#3b82f6` / `#8b5cf6`) via the `info` / `mindset` tokens — never the
+    // brand red (`colors.primary`), which the web never uses for a series.
+    expect(chartSrc).toContain("colors.info");
+    expect(chartSrc).toContain("colors.mindset");
     expect(chartSrc).toContain("colors.success");
     expect(chartSrc).toContain("colors.accent");
     expect(chartSrc).toContain("colors.foreground");

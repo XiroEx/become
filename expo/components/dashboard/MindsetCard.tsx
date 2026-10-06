@@ -64,7 +64,11 @@ export function MindsetCard({
       <View style={styles.headerRow}>
         <Text
           testID="mindset-card-title"
-          style={[styles.headerTitle, WRAPPABLE_TEXT]}
+          style={[
+            styles.headerTitle,
+            WRAPPABLE_TEXT,
+            { color: colors.foreground },
+          ]}
         >
           Mindset
         </Text>
@@ -103,7 +107,7 @@ export function MindsetCard({
             <View style={styles.levelMeta}>
               <Text
                 testID="mindset-level-chapter"
-                style={styles.levelTitleText}
+                style={[styles.levelTitleText, { color: colors.foreground }]}
               >
                 Level {summary.level}
                 <Text style={styles.dotText}> · </Text>
@@ -129,7 +133,11 @@ export function MindsetCard({
                 </View>
                 <Text
                   testID="mindset-sessions-progress"
-                  style={[styles.sessionsCountText, WRAPPABLE_TEXT]}
+                  style={[
+                    styles.sessionsCountText,
+                    WRAPPABLE_TEXT,
+                    { color: colors["muted-foreground"] },
+                  ]}
                 >
                   {summary.sessionsIntoChapter}/{summary.sessionsPerChapter} sessions
                 </Text>

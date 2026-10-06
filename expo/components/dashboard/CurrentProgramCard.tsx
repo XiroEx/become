@@ -76,7 +76,7 @@ export function CurrentProgramCard({
       <View style={styles.infoCol}>
         <Text
           testID="current-program-name"
-          className="text-foreground font-semibold text-base"
+          className="text-foreground font-medium text-base"
         >
           {program.name}
         </Text>
@@ -129,11 +129,10 @@ export function CurrentProgramCard({
           { backgroundColor: colors.foreground },
         ]}
       >
-        <Text
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          style={[styles.continueButtonText, { color: colors.background }]}
-        >
+        {/* No `numberOfLines` — the web's Continue label wraps to two lines
+            (`<span className="text-left">`, no truncate class) rather than
+            being cut off with an ellipsis. */}
+        <Text style={[styles.continueButtonText, { color: colors.background }]}>
           {continueLabel}
         </Text>
         <ChevronRight size={16} color={colors.background} />

@@ -65,6 +65,11 @@ export type TokenName =
   | "teal"
   | "info"
   | "mindset"
+  | "mood-bad"
+  | "mood-low"
+  | "mood-okay"
+  | "mood-good"
+  | "mood-great"
   | "mind-violet"
   | "mind-green"
   | "mind-ink"
@@ -99,6 +104,15 @@ export const lightTokens: Record<TokenName, string> = {
   // this token rather than adding a second blue
   mindset: "147 51 234", // purple-600 — the web's Mindset streak icon
   // (`text-purple-600 bg-purple-100`)
+  // The mood chart's 5 bar/face colours (`webapp/components/ProgressChart.tsx`
+  // `moodColors`). The web uses ONE flat palette in both modes — these data
+  // colours identify a mood level, not a surface, so they do not flip with
+  // the scheme — which is why the light and dark values below are identical.
+  "mood-bad": "248 113 113", // red-400 — Bad
+  "mood-low": "251 146 60", // orange-400 — Not Great
+  "mood-okay": "251 191 36", // amber-400 — Okay
+  "mood-good": "163 230 53", // lime-400 — Pretty Good
+  "mood-great": "52 211 153", // emerald-400 — Great
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
@@ -125,6 +139,12 @@ export const darkTokens: Record<TokenName, string> = {
   teal: "20 184 166", // teal-500 — mode-invariant, see lightTokens.teal
   info: "96 165 250", // blue-400 — the web's `dark:text-blue-400`
   mindset: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30`
+  // Same flat mood palette as light mode — see the comment on `lightTokens`.
+  "mood-bad": "248 113 113",
+  "mood-low": "251 146 60",
+  "mood-okay": "251 191 36",
+  "mood-good": "163 230 53",
+  "mood-great": "52 211 153",
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes

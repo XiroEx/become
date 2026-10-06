@@ -73,7 +73,7 @@ export function UpNextCard({
       {/* Header with Calendar link */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <CalendarDays size={16} color={colors.primary} />
+          <CalendarDays size={16} color={colors.info} />
           <Text className="text-foreground text-sm font-semibold">
             Up Next
           </Text>
@@ -86,10 +86,10 @@ export function UpNextCard({
           style={styles.calendarLink}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={[styles.calendarText, { color: colors.primary }]}>
+          <Text style={[styles.calendarText, { color: colors.info }]}>
             Calendar
           </Text>
-          <ChevronRight size={14} color={colors.primary} />
+          <ChevronRight size={14} color={colors.info} />
         </Pressable>
       </View>
 
@@ -102,8 +102,8 @@ export function UpNextCard({
         style={({ pressed }) => [
           styles.tintedRow,
           {
-            backgroundColor: tint("primary", 0.08),
-            borderColor: tint("primary", 0.15),
+            backgroundColor: tint("info", 0.08),
+            borderColor: tint("info", 0.15),
             opacity: pressed ? 0.85 : 1,
           },
         ]}
@@ -111,10 +111,10 @@ export function UpNextCard({
         <View
           style={[
             styles.iconBadge,
-            { backgroundColor: tint("primary", 0.18) },
+            { backgroundColor: tint("info", 0.18) },
           ]}
         >
-          <Dumbbell size={20} color={colors.primary} />
+          <Dumbbell size={20} color={colors.info} />
         </View>
         <View style={styles.meta}>
           <Text
@@ -135,7 +135,7 @@ export function UpNextCard({
             {workout.programName ? ` · ${workout.programName}` : ""}
           </Text>
         </View>
-        <ChevronRight size={18} color={colors.primary} style={styles.chevron} />
+        <ChevronRight size={18} color={colors.info} style={styles.chevron} />
       </Pressable>
     </View>
   );
