@@ -53,7 +53,7 @@ import * as path from "path";
 import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { colorScheme } from "nativewind";
-import { View as RNView } from "react-native";
+import { StyleSheet, View as RNView } from "react-native";
 import { useThemeTokens as useProbeTokens } from "@/lib/theme/useThemeTokens";
 import {
   ProgressApiResponseSchema,
@@ -66,6 +66,7 @@ import {
   formatVolume,
   volumeChartField,
   volumeChartMax,
+  volumeChartYTicks,
 } from "@/components/progress/ProgressCharts";
 import {
   ProgressScreen,
@@ -230,6 +231,16 @@ describe("weekly volume matches the web's numbers (e015c99c)", () => {
     }
   });
 
+  it("draws the y-axis at the web's step count — 5 evenly-spaced ticks, not 3 (NP-259)", () => {
+    // Web's `YAxis` (Recharts, default tick count) draws 0 / 6k / 12k / 18k /
+    // 24k for a ~24k max. Native used to draw only 0 / half / full (the
+    // native screenshot showed 0 / 12k / 23k) — that 3-tick shape is gone.
+    expect(volumeChartYTicks(24000)).toEqual([0, 6000, 12000, 18000, 24000]);
+    expect(volumeChartYTicks(volumeChartMax(WEEKS))).toEqual([
+      0, 3113, 6225, 9338, 12450,
+    ]);
+  });
+
   it("renders the workout list with best sets and per-workout volume", () => {
     setSystemScheme("light");
     const parsed = ProgressApiResponseSchema.parse(
@@ -252,6 +263,22 @@ describe("weekly volume matches the web's numbers (e015c99c)", () => {
       getByTestId("progress-workout-0-exercise-0").props.accessibilityLabel ??
         "has-exercise",
     ).toBeTruthy();
+  });
+
+  it("lays the Workout History row out as a single line, like web's WorkoutRow (NP-259)", () => {
+    // Web: icon tile, title over date on the left, volume over time on the
+    // right, chevron — all on ONE row. Pin the row container's flex layout
+    // so a future change can't stack them back into a tall column.
+    setSystemScheme("light");
+    const parsed = ProgressApiResponseSchema.parse(
+      DETAILED_RESPONSE,
+    ) as ProgressApiResponse;
+    const { getByTestId } = render(<ProgressScreen data={parsed} />);
+    const row = StyleSheet.flatten(
+      getByTestId("progress-workout-toggle-0").props.style,
+    );
+    expect(row.flexDirection).toBe("row");
+    expect(row.alignItems).toBe("center");
   });
 
   it("summarises the month from the workout dates, like the web's calendar", () => {
