@@ -7,7 +7,19 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Camera, Check, ChevronDown, PencilLine, Trash2, X } from "lucide-react-native";
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  PencilLine,
+  RotateCcw,
+  Tag as TagIcon,
+  Trash2,
+  X,
+} from "lucide-react-native";
 import {
   NutritionScansResponseSchema,
   apiFetch,
@@ -23,7 +35,6 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { onDarkForeground } from "@/lib/theme/tokens";
 import { localDateKey } from "@/lib/time/localDay";
 import {
-  anchorMinutesForTag,
   defaultTagAt,
   formatClockLabel,
   formatHHMM,
@@ -62,12 +73,22 @@ function whenLabel(iso: string | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
+  // Date and time are formatted SEPARATELY and joined with a literal ", " —
+  // the web's `d.toLocaleString(undefined, { month, day, hour, minute })`
+  // reads "Oct 5, 10:27 PM" on the web's ICU data, but the same options in
+  // one call read "Oct 5 at 10:27 PM" on Hermes's newer CLDR data (the "at"
+  // joiner is itself valid ICU behaviour, just a different CLDR version). A
+  // combined call cannot be pinned across engines; two calls with no date-
+  // time joiner between them can.
+  const datePart = d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+  });
+  const timePart = d.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
+  return `${datePart}, ${timePart}`;
 }
 
 function scanCalories(scan: NutritionScan): number {
@@ -89,6 +110,213 @@ function itemCalories(item: NutritionScan["items"][number]): number {
 
 function normalizeTag(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"] as const;
+
+/** Parse a `YYYY-MM-DD` key into a local-midnight `Date`. */
+function parseDateKey(key: string): Date {
+  const parts = key.split("-").map(Number);
+  return new Date(parts[0] ?? 2026, (parts[1] ?? 1) - 1, parts[2] ?? 1);
+}
+
+/** Build a 6-row, Sunday-leading month grid — the web's `getMonthDays`. */
+function monthGridDays(year: number, month: number): Date[] {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startPad = firstDay.getDay();
+  const days: Date[] = [];
+  for (let i = startPad; i > 0; i--) days.push(new Date(year, month, 1 - i));
+  for (let i = 1; i <= lastDay.getDate(); i++) days.push(new Date(year, month, i));
+  const remaining = 7 - (days.length % 7);
+  if (remaining < 7) {
+    for (let i = 1; i <= remaining; i++) days.push(new Date(year, month + 1, i));
+  }
+  return days;
+}
+
+interface LogDayCalendarProps {
+  /** YYYY-MM-DD, or null for today. */
+  value: string | null;
+  /** Today's YYYY-MM-DD — the calendar never offers a future day. */
+  todayKey: string;
+  onChange: (next: string | null) => void;
+  /** Container testID. */
+  testID: string;
+  /** Prefix for each day cell's testID: `${dayTestID}-${YYYY-MM-DD}`. */
+  dayTestID: string;
+}
+
+/**
+ * The web's month calendar (`DateOnlyPicker`, any past day) — NP-274 swaps
+ * the native sheet's 7-day-only chip row for this, so re-logging an estimate
+ * from three weeks ago needs month navigation, not a dead end.
+ */
+function LogDayCalendar({
+  value,
+  todayKey,
+  onChange,
+  testID,
+  dayTestID,
+}: LogDayCalendarProps) {
+  const { colors } = useThemeTokens();
+  const selectedKey = value ?? todayKey;
+  const [viewMonth, setViewMonth] = useState<Date>(() => {
+    const base = parseDateKey(selectedKey);
+    return new Date(base.getFullYear(), base.getMonth(), 1);
+  });
+
+  const monthDays = useMemo(
+    () => monthGridDays(viewMonth.getFullYear(), viewMonth.getMonth()),
+    [viewMonth],
+  );
+
+  const nextMonthDisabled = useMemo(() => {
+    const lastDay = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0);
+    return localDateKey(lastDay) >= todayKey;
+  }, [viewMonth, todayKey]);
+
+  return (
+    <View
+      testID={testID}
+      style={{
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 12,
+        padding: 10,
+        gap: 8,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Pressable
+          testID={`${testID}-prev-month`}
+          accessibilityRole="button"
+          accessibilityLabel="Previous month"
+          hitSlop={8}
+          onPress={() =>
+            setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+          }
+          style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
+        >
+          <ChevronLeft size={16} color={colors.foreground} />
+        </Pressable>
+        <Text className="text-foreground text-sm font-semibold">
+          {MONTH_NAMES[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+        </Text>
+        <Pressable
+          testID={`${testID}-next-month`}
+          accessibilityRole="button"
+          accessibilityLabel="Next month"
+          disabled={nextMonthDisabled}
+          hitSlop={8}
+          onPress={() =>
+            setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+          }
+          style={{
+            width: 28,
+            height: 28,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: nextMonthDisabled ? 0.3 : 1,
+          }}
+        >
+          <ChevronRight size={16} color={colors.foreground} />
+        </Pressable>
+      </View>
+      <Pressable
+        testID={`${testID}-today`}
+        accessibilityRole="button"
+        accessibilityLabel="Log to today"
+        accessibilityState={{ selected: value === null }}
+        onPress={() => {
+          const today = parseDateKey(todayKey);
+          setViewMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+          onChange(null);
+        }}
+        style={{
+          alignSelf: "flex-start",
+          borderRadius: 999,
+          paddingHorizontal: 10,
+          paddingVertical: 4,
+          backgroundColor: value === null ? colors.primary : colors.muted,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: "600",
+            color: value === null ? colors["primary-foreground"] : colors.foreground,
+          }}
+        >
+          Today
+        </Text>
+      </Pressable>
+      <View style={{ flexDirection: "row" }}>
+        {DAY_LABELS.map((d, i) => (
+          <View key={`${d}-${i}`} style={{ flex: 1, alignItems: "center" }}>
+            <Text className="text-muted-foreground text-xs font-medium">{d}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+        {monthDays.map((day, idx) => {
+          const key = localDateKey(day);
+          const inViewMonth = day.getMonth() === viewMonth.getMonth();
+          const disabled = key > todayKey;
+          const isSelected = selectedKey === key;
+          const isToday = key === todayKey;
+          return (
+            <View
+              key={`${key}-${idx}`}
+              style={{ width: `${100 / 7}%`, alignItems: "center", paddingVertical: 2 }}
+            >
+              <Pressable
+                testID={`${dayTestID}-${key}`}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isToday ? "Log to today" : `Log to ${key}`
+                }
+                accessibilityState={{ selected: isSelected, disabled }}
+                disabled={disabled}
+                onPress={() => onChange(isToday ? null : key)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: isSelected ? colors.primary : "transparent",
+                  borderWidth: isToday && !isSelected ? 1 : 0,
+                  borderColor: colors.border,
+                  opacity: disabled ? 0.3 : inViewMonth ? 1 : 0.4,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 13,
+                    color: isSelected ? colors["primary-foreground"] : colors.foreground,
+                    fontWeight: isSelected ? "600" : "400",
+                  }}
+                >
+                  {day.getDate()}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 interface LogSheetState {
@@ -120,7 +348,7 @@ export function ScanHistorySheet({
   onLogged,
   testID = "scan-history",
 }: ScanHistorySheetProps) {
-  const { colors, scrim } = useThemeTokens();
+  const { colors, scrim, tint } = useThemeTokens();
   const [scans, setScans] = useState<NutritionScan[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -295,24 +523,6 @@ export function ScanHistorySheet({
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
-  // Today + the six days before it — derived during render from the todayKey
-  // prop, so no effect and no impure call. The sheet never logs into the
-  // future, exactly like the web's DateOnlyPicker with maxDate=today.
-  const dayOptions = useMemo(() => {    const parts = todayKey.split("-").map(Number);
-    const y = parts[0] ?? 2026;
-    const m = parts[1] ?? 1;
-    const d = parts[2] ?? 1;
-    const opts: { key: string; label: string; date: string | null }[] = [
-      { key: "today", label: "Today", date: null },
-    ];
-    for (const delta of [-1, -2, -3, -4, -5, -6]) {
-      const base = new Date(y, m - 1, d + delta);
-      const key = localDateKey(base);
-      opts.push({ key, label: logDateLabel(key), date: key });
-    }
-    return opts;
-  }, [todayKey]);
-
   return (
     <>
       <BottomSheet
@@ -439,19 +649,16 @@ export function ScanHistorySheet({
                               borderRadius: 10,
                               alignItems: "center",
                               justifyContent: "center",
-                              backgroundColor: colors.muted,
+                              // The web's `bg-emerald-100 text-emerald-600
+                              // dark:bg-emerald-900/30 dark:text-emerald-400`
+                              // — a positive, not a neutral, tile.
+                              backgroundColor: tint("success", 0.15),
                             }}
                           >
                             {isPhoto ? (
-                              <Camera
-                                size={16}
-                                color={colors["muted-foreground"]}
-                              />
+                              <Camera size={16} color={colors.success} />
                             ) : (
-                              <PencilLine
-                                size={16}
-                                color={colors["muted-foreground"]}
-                              />
+                              <PencilLine size={16} color={colors.success} />
                             )}
                           </View>
                         )}
@@ -497,6 +704,13 @@ export function ScanHistorySheet({
                           testID={`${testID}-scan-${scan._id}-log-again`}
                           size="sm"
                           disabled={busyId === scan._id}
+                          loading={busyId === scan._id}
+                          icon={
+                            <RotateCcw
+                              size={14}
+                              color={colors["primary-foreground"]}
+                            />
+                          }
                           onPress={() => openLogSheet(scan)}
                         >
                           Log again
@@ -590,19 +804,13 @@ export function ScanHistorySheet({
               Pick the day, time and tag this estimate was actually eaten.
             </Text>
             <View style={{ gap: 6 }}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  fontWeight: "600",
-                  color: colors.foreground,
-                }}
-              >
-                Adding to
-              </Text>
+              {/* The web's single pill: tag icon, uppercase "Adding to",
+                  the tag name, a chevron — not a heading label above a
+                  plain-text toggle (`scans/page.tsx:330-342`). */}
               <Pressable
                 testID={`${testID}-log-tag-toggle`}
                 accessibilityRole="button"
-                accessibilityLabel={`Adding to ${logSheet.tag}`}
+                accessibilityLabel={`Adding to ${logSheet.tag}, tap to change`}
                 onPress={() => setTagOpen((v) => !v)}
                 style={{
                   flexDirection: "row",
@@ -616,6 +824,10 @@ export function ScanHistorySheet({
                   backgroundColor: colors.muted,
                 }}
               >
+                <TagIcon size={14} color={colors["muted-foreground"]} />
+                <Text className="text-muted-foreground text-xs font-semibold uppercase">
+                  Adding to
+                </Text>
                 <Text className="text-foreground text-sm font-semibold capitalize flex-1">
                   {titleCase(logSheet.tag)}
                 </Text>
@@ -732,51 +944,17 @@ export function ScanHistorySheet({
               >
                 Day
               </Text>
-              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                {dayOptions.map((opt) => {
-                  const selected =
-                    (logSheet.date ?? null) === (opt.date ?? null);
-                  return (
-                    <Pressable
-                      key={opt.key}
-                      testID={`${testID}-log-day-${opt.key}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        opt.date ? `Log to ${opt.date}` : "Log to today"
-                      }
-                      accessibilityState={{ selected }}
-                      onPress={() =>
-                        setLogSheet((s) =>
-                          s ? { ...s, date: opt.date } : s,
-                        )
-                      }
-                      style={{
-                        borderWidth: 1,
-                        borderColor: selected
-                          ? colors.primary
-                          : colors.border,
-                        backgroundColor: selected
-                          ? colors.primary
-                          : "transparent",
-                        borderRadius: 999,
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                      }}
-                    >
-                      <Text
-                        className="text-xs font-semibold"
-                        style={{
-                          color: selected
-                            ? colors["primary-foreground"]
-                            : colors.foreground,
-                        }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {/* The web's month calendar (`DateOnlyPicker`, any past day) —
+                  not a 7-day-only chip row. */}
+              <LogDayCalendar
+                value={logSheet.date}
+                todayKey={todayKey}
+                onChange={(next) =>
+                  setLogSheet((s) => (s ? { ...s, date: next } : s))
+                }
+                testID={`${testID}-log-calendar`}
+                dayTestID={`${testID}-log-day`}
+              />
               <Text className="text-muted-foreground text-xs">
                 Logging to {logDateLabel(logSheet.date)}
               </Text>
@@ -791,110 +969,136 @@ export function ScanHistorySheet({
               >
                 Time
               </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {(
-                  [
-                    { mode: "now" as const, label: "Now" },
-                    { mode: "custom" as const, label: "Pick time" },
-                    { mode: "none" as const, label: "No time" },
-                  ]
-                ).map((opt) => {
-                  const selected = logSheet.timeMode === opt.mode;
-                  return (
-                    <Pressable
-                      key={opt.mode}
-                      testID={`${testID}-log-time-${opt.mode}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        opt.mode === "none"
-                          ? "Log with no time"
-                          : opt.mode === "now"
-                            ? "Log time now"
-                            : "Pick custom log time"
-                      }
-                      accessibilityState={{ selected }}
-                      onPress={() =>
-                        setLogSheet((s) =>
-                          s
-                            ? {
-                                ...s,
-                                timeMode: opt.mode,
-                                ...(opt.mode === "custom"
-                                  ? {
-                                      time:
-                                        s.time ??
-                                        formatHHMM(
-                                          anchorMinutesForTag(
-                                            windows,
-                                            s.tag,
-                                          ),
-                                        ),
-                                    }
-                                  : { time: null }),
-                              }
-                            : s,
-                        )
-                      }
-                      style={{
-                        flex: 1,
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                        alignItems: "center",
-                        backgroundColor: selected
-                          ? colors.primary
-                          : colors.card,
-                        borderWidth: 1,
-                        borderColor: selected
-                          ? colors.primary
-                          : colors.border,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: "600",
-                          color: selected
-                            ? colors["primary-foreground"]
-                            : colors.foreground,
-                        }}
-                      >
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              {logSheet.timeMode === "custom" ? (
+              {/* The web's one Time field — a clock icon, the field itself
+                  (always visible, disabled only in "no time"), a Now pill
+                  and a clear X — not three mode chips
+                  (`scans/page.tsx:402-451`). */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  backgroundColor: colors.muted,
+                }}
+              >
+                <Clock size={14} color={colors["muted-foreground"]} />
                 <TextInput
                   testID={`${testID}-log-time-input`}
-                  accessibilityLabel="Picked time in HH:mm"
-                  value={logSheet.time ?? ""}
+                  accessibilityLabel="Time this was eaten"
+                  value={
+                    logSheet.timeMode === "custom" && logSheet.time
+                      ? logSheet.time
+                      : formatHHMM(minutesOfDay(new Date()))
+                  }
                   onChangeText={(v) =>
                     setLogSheet((s) =>
-                      s ? { ...s, time: v || null } : s,
+                      s
+                        ? {
+                            ...s,
+                            time: v || null,
+                            timeMode: v ? "custom" : "none",
+                          }
+                        : s,
                     )
                   }
+                  editable={logSheet.timeMode !== "none"}
                   placeholder="HH:mm"
                   placeholderTextColor={colors["muted-foreground"]}
                   style={{
-                    height: 40,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.card,
-                    paddingHorizontal: 12,
+                    flex: 1,
+                    fontSize: 13,
                     color: colors.foreground,
+                    opacity: logSheet.timeMode === "none" ? 0.4 : 1,
                   }}
                 />
-              ) : null}
+                {logSheet.timeMode === "custom" &&
+                logSheet.time &&
+                parseHHMM(logSheet.time) != null ? (
+                  <Text
+                    style={{ fontSize: 11, color: colors.info }}
+                    className="tabular-nums"
+                  >
+                    {formatClockLabel(parseHHMM(logSheet.time) ?? 0)}
+                  </Text>
+                ) : null}
+                <Pressable
+                  testID={`${testID}-log-time-now`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Log time now"
+                  accessibilityState={{ selected: logSheet.timeMode === "now" }}
+                  onPress={() =>
+                    setLogSheet((s) =>
+                      s ? { ...s, time: null, timeMode: "now" } : s,
+                    )
+                  }
+                  style={{
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    backgroundColor:
+                      logSheet.timeMode === "now"
+                        ? colors.primary
+                        : colors.card,
+                    borderWidth: 1,
+                    borderColor:
+                      logSheet.timeMode === "now"
+                        ? colors.primary
+                        : colors.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      fontWeight: "600",
+                      color:
+                        logSheet.timeMode === "now"
+                          ? colors["primary-foreground"]
+                          : colors.foreground,
+                    }}
+                  >
+                    Now
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID={`${testID}-log-time-clear`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear the time and log for the day only"
+                  onPress={() =>
+                    setLogSheet((s) =>
+                      s ? { ...s, time: null, timeMode: "none" } : s,
+                    )
+                  }
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: 11,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor:
+                      logSheet.timeMode === "none"
+                        ? colors.primary
+                        : "transparent",
+                  }}
+                >
+                  <X
+                    size={12}
+                    color={
+                      logSheet.timeMode === "none"
+                        ? colors["primary-foreground"]
+                        : colors["muted-foreground"]
+                    }
+                  />
+                </Pressable>
+              </View>
               <Text className="text-muted-foreground text-xs">
                 {logSheet.timeMode === "none"
                   ? "No time. This sits in your meal order rather than at a clock position."
-                  : logSheet.timeMode === "now"
-                    ? "Logs untimed, filed by tag — like the web's Now."
-                    : logSheet.time && parseHHMM(logSheet.time) != null
-                      ? `Logs at ${formatClockLabel(parseHHMM(logSheet.time) ?? 0)}.`
-                      : "Pick the clock time this was eaten."}
+                  : "Tap the X to log for the day with no time at all."}
               </Text>
             </View>
             <View style={{ flexDirection: "row", gap: 12, marginTop: 4 }}>
