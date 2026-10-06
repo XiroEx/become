@@ -452,4 +452,74 @@ describe("FoodSearchSheet — Acceptance Criteria & Parity", () => {
       expect(getByTestId("food-search-sheet")).toBeTruthy();
     });
   });
+
+  it("(id: NP-261) rows show per-serving calories, the serving text and a BEST MATCH badge; the header has a close X and an ADDING TO pill", async () => {
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/nutrition/foods")) {
+        return {
+          foods: [
+            {
+              _id: "6512c0ffee00000000000055",
+              name: "Zest Delites Banana",
+              isBestMatch: true,
+              servingSize: 100,
+              servingUnit: "g",
+              alternateServings: [{ label: "1 medium (118 g)", multiplier: 1.18 }],
+              nutrition: { calories: 348, protein: 1.1, carbs: 23, fats: 0.4 },
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const onClose = jest.fn();
+    const { getByTestId, queryByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={onClose}
+        currentTag="breakfast"
+        debounceMs={0}
+      />,
+    );
+
+    // A tag puts an "ADDING TO <TAG>" pill in the header, next to a close X.
+    expect(getByTestId("food-search-adding-to")).toBeTruthy();
+    expect(getByTestId("food-search-adding-to")).toHaveTextContent("ADDING TO BREAKFAST");
+
+    fireEvent.changeText(getByTestId("food-search-input"), "banana");
+
+    await waitFor(() => {
+      expect(getByTestId("food-search-result-6512c0ffee00000000000055")).toBeTruthy();
+    });
+
+    // BEST MATCH badge on the crowned top result.
+    expect(
+      getByTestId("food-search-result-6512c0ffee00000000000055-best-match"),
+    ).toBeTruthy();
+
+    // Per-SERVING calories (348 * 1.18, rounded), not the raw 348 per-100 g
+    // storage figure — and the serving text under the name.
+    const caloriesNode = getByTestId("food-search-result-6512c0ffee00000000000055-calories");
+    expect(caloriesNode).toHaveTextContent("411 cal");
+    expect(
+      getByTestId("food-search-result-6512c0ffee00000000000055-serving"),
+    ).toHaveTextContent("1 medium (118 g)");
+
+    // Close X calls onClose.
+    fireEvent.press(getByTestId("food-search-close"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // A tag-less sheet (standalone search) still shows the close X, but
+    // no ADDING TO pill — there is no tag to name.
+    const { getByTestId: getByTestId2, queryByTestId: queryByTestId2 } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    expect(getByTestId2("food-search-close")).toBeTruthy();
+    expect(queryByTestId2("food-search-adding-to")).toBeNull();
+    expect(queryByTestId("food-search-adding-to")).toBeTruthy();
+  });
 });

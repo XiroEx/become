@@ -29,6 +29,10 @@ import {
   X,
   AlertCircle,
 } from "lucide-react-native";
+import {
+  preferredServingLabel,
+  rowCalories,
+} from "@/lib/nutrition/foodRowDisplay";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { BottomSheet } from "@/components/BottomSheet";
@@ -493,7 +497,10 @@ export function FoodSearchSheet({
     const id = String(food._id ?? food.id ?? "");
     const isSaved = savedFoodIds.has(id) || food.isSaved === true;
     const source = narrowFoodSource(food.source);
-    const calories = food.nutrition?.calories;
+    // NP-261: per-SERVING calories (the web's `rowCalories`), not the raw
+    // per-storage-basis figure — see `lib/nutrition/foodRowDisplay.ts`.
+    const calories = food.nutrition ? rowCalories(food) : undefined;
+    const servingLabel = food.nutrition ? preferredServingLabel(food) : "";
     const isImporting = importingRowId === id;
 
     return (
@@ -516,6 +523,36 @@ export function FoodSearchSheet({
         }}
       >
         <View style={{ flex: 1, paddingRight: 8 }}>
+          {/* NP-261: the web's blue "BEST MATCH" pill on the crowned top
+              result of a confident search (`isBestMatch`, page 0 only). */}
+          {food.isBestMatch ? (
+            <View
+              testID={`food-search-result-${id}-best-match`}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 3,
+                alignSelf: "flex-start",
+                borderRadius: 999,
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                marginBottom: 2,
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Star size={9} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+              <Text
+                style={{
+                  fontSize: 9,
+                  fontWeight: "700",
+                  letterSpacing: 0.4,
+                  color: colors["primary-foreground"],
+                }}
+              >
+                BEST MATCH
+              </Text>
+            </View>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
             <Text className="text-foreground font-semibold">{food.name}</Text>
             {food.isVerified ? (
@@ -526,13 +563,28 @@ export function FoodSearchSheet({
             {food.brand ? (
               <Text className="text-muted-foreground text-xs">{food.brand}</Text>
             ) : null}
-            {calories != null ? (
-              <Text className="text-muted-foreground text-xs">
-                {Math.round(calories)} kcal
+            {/* NP-261: the serving the calorie figure is measured against
+                ("1 medium (118 g)", "serving (100 g)") — dropped natively. */}
+            {servingLabel ? (
+              <Text
+                testID={`food-search-result-${id}-serving`}
+                className="text-muted-foreground text-xs"
+              >
+                {servingLabel}
               </Text>
             ) : null}
           </View>
         </View>
+        {/* NP-261: per-SERVING calories, not the per-100 g/ml storage
+            figure — the row and `QuantityPicker`'s own preview now agree. */}
+        {calories != null ? (
+          <Text
+            testID={`food-search-result-${id}-calories`}
+            className="text-foreground text-sm font-semibold"
+          >
+            {calories} cal
+          </Text>
+        ) : null}
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <View
@@ -655,6 +707,57 @@ export function FoodSearchSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
+        {/* NP-261: the web header's "ADDING TO <tag>" picker + close X.
+            `BottomSheet` already offers a swipe-to-dismiss and a backdrop
+            tap; this is the explicit, visible affordance the web always
+            shows next to its tag picker. */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          {currentTag ? (
+            <View
+              testID="food-search-adding-to"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: colors.muted,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "700",
+                  letterSpacing: 0.5,
+                  color: colors["muted-foreground"],
+                }}
+              >
+                ADDING TO {currentTag.toUpperCase()}
+              </Text>
+            </View>
+          ) : (
+            <View />
+          )}
+          <Pressable
+            testID="food-search-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            hitSlop={8}
+            style={{ padding: 4 }}
+          >
+            <X size={20} color={colors.foreground} />
+          </Pressable>
+        </View>
+
         {/* Search Input + barcode button */}
         <View
           style={{
