@@ -2702,6 +2702,13 @@ export default function NutritionIndexRoute() {
           setBasketOpen(true);
         }}
         onPickMeal={handlePickMeal}
+        // NP-321: the search sheet's own Snap / Upload / Describe hand off
+        // to the same AI capture surface the camera menu uses
+        // (`EstimateSheet`, NP-089) — the search sheet already closes
+        // itself (its own `onClose`) before calling these.
+        onSnapPhoto={() => openEstimate("chooser")}
+        onUpload={openEstimateWithLibraryUpload}
+        onDescribe={() => openEstimate("describe")}
       />
 
       {/* Basket sheet (NP-094) */}

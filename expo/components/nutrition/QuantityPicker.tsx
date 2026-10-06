@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
 } from "react-native";
+import { AlertCircle } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import {
   nutritionForQuantity,
@@ -94,6 +95,13 @@ export interface QuantityPickerProps {
    */
   secondaryActionLabel?: string;
   onSecondaryAction?: (result: QuantityPickerLogResult) => void | Promise<void>;
+  /**
+   * NP-321: the web's "Something look wrong?" link lives on the EXPANDED
+   * picker, not as a standalone flag icon on every collapsed search row —
+   * `FoodSearchSheet` moved its per-row flag button here to match. Omitted
+   * (the edit sheets, the recipe/meal ingredient pickers) hides the link.
+   */
+  onReportFood?: () => void;
   testID?: string;
 }
 
@@ -121,6 +129,7 @@ export function QuantityPicker({
   primaryActionLabel,
   secondaryActionLabel,
   onSecondaryAction,
+  onReportFood,
   testID = "quantity-picker",
 }: QuantityPickerProps) {
   const { colors } = useThemeTokens();
@@ -828,6 +837,30 @@ export function QuantityPicker({
         >
           <Text style={{ fontSize: 16, fontWeight: "bold", color: colors.foreground }}>
             {secondaryActionLabel}
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {/* NP-321: "Something look wrong?" — the web's report entry point on
+          the expanded picker, not a standalone icon on every search row. */}
+      {showLogControls && onReportFood ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Something look wrong? Report this food"
+          testID="quantity-picker-report-food"
+          onPress={onReportFood}
+          hitSlop={8}
+          style={{
+            marginTop: 4,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          <AlertCircle size={14} color={colors["muted-foreground"]} />
+          <Text style={{ fontSize: 12, color: colors["muted-foreground"] }}>
+            Something look wrong?
           </Text>
         </Pressable>
       ) : null}
