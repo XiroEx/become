@@ -313,6 +313,64 @@ describe("ProgramsBrowseRoute (NP-072)", () => {
     });
   });
 
+  // NP-278: native used to list a program the member was already enrolled in
+  // AND their own custom programs on Browse — the web excludes both.
+  it("(NP-278) excludes enrolled programs and the member's own custom programs from Browse", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      const url = String(path);
+      if (url.startsWith("/api/programs/search")) {
+        return Promise.resolve({
+          programs: [
+            ...SAMPLE_PROGRAMS,
+            {
+              program_id: "prog-enrolled-3",
+              name: "Circuit & Superset Shred",
+              description: "4 Week Fat Burn",
+              duration_weeks: 4,
+              training_days_per_week: 4,
+              target_user: "Intermediate",
+            },
+            {
+              program_id: "custom-my-split-4",
+              name: "My Split",
+              description: "A custom program",
+              isCustom: true,
+              createdBy: "self",
+            },
+          ],
+          pagination: { page: 1, limit: 20, total: 4, hasMore: false },
+          availableTags: [],
+        });
+      }
+      if (url === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            { programId: "prog-enrolled-3", programName: "Circuit & Superset Shred" },
+          ],
+        });
+      }
+      if (url === "/api/programs/saved") return Promise.resolve({ savedPrograms: [] });
+      if (url === "/api/profile") return Promise.resolve({ profile: null });
+      return Promise.resolve({});
+    });
+
+    const { getByTestId, queryByTestId, getByText } = render(
+      <ProgramsBrowseRoute />,
+    );
+
+    await waitFor(() => {
+      expect(getByTestId("programs-list-item-prog-strength-1")).toBeTruthy();
+    });
+
+    // The enrolled program and the member's own custom program are both gone.
+    expect(queryByTestId("programs-list-item-prog-enrolled-3")).toBeNull();
+    expect(queryByTestId("programs-list-item-custom-my-split-4")).toBeNull();
+
+    // Heading count reflects what's actually listed (2), not the raw server
+    // total (4) which still counted the enrolled + custom programs.
+    expect(getByText(/\(2\)/)).toBeTruthy();
+  });
+
   it("filters by tag when tag chip is toggled", async () => {
     const { getByTestId } = render(<ProgramsBrowseRoute />);
 
