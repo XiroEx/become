@@ -67,6 +67,79 @@ describe("ExerciseSwapModal", () => {
     expect(onSelect).toHaveBeenCalledWith(alts[0]);
   });
 
+  it("shows the web's static title and a dynamic 'Replace <name>' subtitle", () => {
+    const { getByText } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Jumping Jacks"
+        alternatives={alts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(getByText("Swap Exercise")).toBeTruthy();
+    expect(getByText("Replace Jumping Jacks")).toBeTruthy();
+  });
+
+  it("shows a live result count and narrows it via an equipment filter", () => {
+    const { getByTestId, getByText, queryByTestId } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Bench"
+        alternatives={alts}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(getByTestId("swap-modal-result-count")).toBeTruthy();
+    expect(getByText("2 results")).toBeTruthy();
+
+    // No filters active yet: no badge, no "Clear all".
+    expect(queryByTestId("swap-modal-filters-clear")).toBeNull();
+
+    fireEvent.press(getByTestId("swap-modal-filters-toggle"));
+    fireEvent.press(getByTestId("swap-modal-filter-equipment-dumbbell"));
+
+    expect(getByText("1 result")).toBeTruthy();
+    expect(getByTestId("swap-modal-filters-clear")).toBeTruthy();
+    expect(queryByTestId("swap-modal-option-machine-press")).toBeNull();
+    expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+
+    // Clear all restores the full list.
+    fireEvent.press(getByTestId("swap-modal-filters-clear"));
+    expect(getByText("2 results")).toBeTruthy();
+  });
+
+  it("previews 4 results and reveals more via 'Show N more (M left)'", () => {
+    const many: AlternativeCandidate[] = Array.from({ length: 6 }, (_, i) => ({
+      slug: `alt-${i}`,
+      name: `Alt ${i}`,
+      score: 50,
+      equipment: [],
+      trackingType: "reps_weight",
+    }));
+    const { getByTestId, queryByTestId, getByText } = render(
+      <ExerciseSwapModal
+        visible
+        sourceName="Bench"
+        alternatives={many}
+        onSelect={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    expect(getByTestId("swap-modal-option-alt-0")).toBeTruthy();
+    expect(getByTestId("swap-modal-option-alt-3")).toBeTruthy();
+    expect(queryByTestId("swap-modal-option-alt-4")).toBeNull();
+    expect(getByTestId("swap-modal-show-more")).toBeTruthy();
+    expect(getByText(/Show 2 more/)).toBeTruthy();
+    expect(getByText(/\(2 left\)/)).toBeTruthy();
+
+    fireEvent.press(getByTestId("swap-modal-show-more"));
+    expect(getByTestId("swap-modal-option-alt-4")).toBeTruthy();
+    expect(getByTestId("swap-modal-option-alt-5")).toBeTruthy();
+    expect(queryByTestId("swap-modal-show-more")).toBeNull();
+  });
+
   it("shows a loading state", () => {
     const { getByTestId } = render(
       <ExerciseSwapModal
