@@ -5,6 +5,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useRouter } from "expo-router";
 import { CalendarDays, ChevronRight, Dumbbell } from "lucide-react-native";
 import type { UpcomingWorkoutSummary } from "@/lib/dashboard/types";
+import { usePressed } from "@/lib/a11y/usePressed";
 
 /**
  * NP-106 owns the dashboard training cards: the next workout (by slot
@@ -27,6 +28,7 @@ export function UpNextCard({
 }: UpNextCardProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
+  const rowPress = usePressed();
 
   if (!workout) return null;
 
@@ -99,12 +101,14 @@ export function UpNextCard({
         accessibilityRole="button"
         accessibilityLabel={`Up next: ${dayText}. ${workout.workoutTitle} · ${workout.programName}`}
         onPress={handlePressWorkout}
-        style={({ pressed }) => [
+        onPressIn={rowPress.onPressIn}
+        onPressOut={rowPress.onPressOut}
+        style={[
           styles.tintedRow,
           {
             backgroundColor: tint("info", 0.08),
             borderColor: tint("info", 0.15),
-            opacity: pressed ? 0.85 : 1,
+            opacity: rowPress.pressed ? 0.85 : 1,
           },
         ]}
       >

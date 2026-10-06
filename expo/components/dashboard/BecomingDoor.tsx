@@ -16,6 +16,7 @@ import type {
   MindSummaryResponse,
 } from "@become/api-client";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { usePressed } from "@/lib/a11y/usePressed";
 import { checkBecomingUnread, markBecomingSeen } from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
@@ -48,6 +49,7 @@ export function BecomingDoor({
   const router = useRouter();
   const reduced = useReducedMotion();
   const [isUnread, setIsUnread] = useState(false);
+  const cardPress = usePressed();
 
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
 
@@ -153,7 +155,9 @@ export function BecomingDoor({
             : "The Becoming. Then → now → next, across all three."
         }
         onPress={handlePress}
-        style={({ pressed }) => [
+        onPressIn={cardPress.onPressIn}
+        onPressOut={cardPress.onPressOut}
+        style={[
           minTouchTarget,
           styles.card,
           isUnread
@@ -170,7 +174,7 @@ export function BecomingDoor({
                 borderColor: colors.border,
               },
           {
-            opacity: pressed ? 0.85 : 1,
+            opacity: cardPress.pressed ? 0.85 : 1,
           },
         ]}
       >

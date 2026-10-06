@@ -5,6 +5,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { DashboardTile } from "@become/api-client";
 import { Brain, UtensilsCrossed, Zap, ChevronRight, Scale } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import { usePressed } from "@/lib/a11y/usePressed";
 
 export interface StatActionTileProps {
   tile: DashboardTile;
@@ -32,6 +33,7 @@ export function StatActionTile({
 }: StatActionTileProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
+  const tilePress = usePressed();
   const wide = tile.size === "2x1";
 
   let label = "";
@@ -108,12 +110,14 @@ export function StatActionTile({
         onTap?.();
         handlePress();
       }}
-      style={({ pressed }) => [
+      onPressIn={tilePress.onPressIn}
+      onPressOut={tilePress.onPressOut}
+      style={[
         styles.card,
         {
           backgroundColor: colors.card,
           borderColor: colors.border,
-          opacity: pressed ? 0.8 : 1,
+          opacity: tilePress.pressed ? 0.8 : 1,
         },
       ]}
     >

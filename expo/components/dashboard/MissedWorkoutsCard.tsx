@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { AlertCircle, SkipForward } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { usePressed } from "@/lib/a11y/usePressed";
 import type { MissedWorkoutSummary } from "@/lib/dashboard/trainingCards";
 
 /**
@@ -19,6 +20,38 @@ export interface MissedWorkoutsCardProps {
   onSkip?: (workout: MissedWorkoutSummary) => void;
   onViewAll?: () => void;
   testID?: string;
+}
+
+function DoItButton({
+  testID,
+  label,
+  onPress,
+  backgroundColor,
+}: {
+  testID: string;
+  label: string;
+  onPress: () => void;
+  backgroundColor: string;
+}) {
+  const press = usePressed();
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
+      style={[
+        styles.doIt,
+        { backgroundColor, opacity: press.pressed ? 0.85 : 1 },
+      ]}
+    >
+      <Text className="text-white text-[10px] font-bold" style={styles.doItText}>
+        Do It
+      </Text>
+    </Pressable>
+  );
 }
 
 function displayDate(dateKey: string): string {
@@ -106,26 +139,12 @@ export function MissedWorkoutsCard({
                 </Text>
               </View>
               <View style={styles.rowActions}>
-                <Pressable
+                <DoItButton
                   testID={`missed-workout-doit-${w.date}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Do ${w.dayLabel} from ${displayDate(w.date)}`}
+                  label={`Do ${w.dayLabel} from ${displayDate(w.date)}`}
                   onPress={() => onDoIt?.(w)}
-                  style={({ pressed }) => [
-                    styles.doIt,
-                    {
-                      backgroundColor: colors.destructive,
-                      opacity: pressed ? 0.85 : 1,
-                    },
-                  ]}
-                >
-                  <Text
-                    className="text-white text-[10px] font-bold"
-                    style={styles.doItText}
-                  >
-                    Do It
-                  </Text>
-                </Pressable>
+                  backgroundColor={colors.destructive}
+                />
                 <Pressable
                   testID={`missed-workout-skip-${w.date}`}
                   accessibilityRole="button"
