@@ -19,6 +19,7 @@ import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
 import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
 import {
   addNextIntoGroup,
+  alignCircuitSets,
   defaultSetsFor,
   groupIndexes,
   setGroupKindAt,
@@ -87,7 +88,12 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchExercise[]>([]);
   const [searching, setSearching] = useState(false);
-  const [chosen, setChosen] = useState<DraftExercise[]>(() => initialDraft?.exercises ?? []);
+  // A circuit agrees on sets the moment it is SHOWN, not only when this screen
+  // is the one that made it. An imported session (ImportSessionFlow) can hand
+  // us a circuit whose members disagree — five of one, three of another — and
+  // that is the shape the member reported: a block whose own note says every
+  // exercise runs the same number of rounds, printed over two numbers.
+  const [chosen, setChosen] = useState<DraftExercise[]>(() => alignCircuitSets(initialDraft?.exercises ?? []));
   const [unresolved, setUnresolved] = useState<string[]>(() => initialDraft?.unresolved ?? []);
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
@@ -317,7 +323,17 @@ export default function SessionBuilder({ onLaunch, className, initialDraft }: Se
       );
       setChosen((current) => {
         const currentSlugs = new Set(current.map((exercise) => exercise.exerciseSlug));
-        return [...current, ...appended.filter((exercise) => !currentSlugs.has(exercise.exerciseSlug))];
+        // Same rule as adding by hand: an exercise this screen appends starts
+        // on the FIRST exercise's count, not on whatever the generator chose,
+        // so "Finish this for me" cannot hand back a session that disagrees
+        // with itself before the member has touched anything.
+        const seeded = defaultSetsFor(current);
+        return alignCircuitSets([
+          ...current,
+          ...appended
+            .filter((exercise) => !currentSlugs.has(exercise.exerciseSlug))
+            .map((exercise) => ({ ...exercise, sets: seeded })),
+        ]);
       });
     } catch (error) {
       setCompletionError(error instanceof Error ? error.message : "Could not finish this session.");

@@ -188,6 +188,7 @@ silently empty. For local work run `next dev`, where local env is authoritative.
 - Programs reference exercises by `slug`, hydrated server-side via `hydrateExercises.ts`
 - Exercise grouping supports supersets, circuits, trisets, giant sets, EMOM, AMRAP
 - A **circuit** is rounds of the whole block, so its members may not disagree about how many: `alignCircuitSets` / `setSetsAt` in `lib/workout/buildAsYouGo.ts` hold every member to the FIRST one's `sets` (and mirror it into `groupRounds`). Supersets are explicitly left free to pair 5 sets of one thing with 3 of another. A newly added exercise defaults to `defaultSetsFor(list)` — the first exercise's count — never a hardcoded 3
+- That rule is applied where an exercise list is PRODUCED, not only by the gestures that make a circuit: `SessionBuilder` / `SessionEditor` seed their rows through `alignCircuitSets`, and so do the Live/Track loaders (`LiveWorkoutClient`, `WorkoutFormClient`, expo's `useLiveWorkout` / `useQuickLiveWorkout`). A circuit written in the program editor, imported, generated, or saved before the rule existed therefore still runs as one block — `buildWorkoutFlow` walks `max(groupRounds, …sets)` rounds and OMITS a member with no set left, so an unaligned circuit renders with holes in its tail rounds. Align the list before the set grid is sized off `ex.sets`, never after
 - Lean queries (`.lean()`) for read-only endpoints
 - TTL index on MagicLink for auto-cleanup
 

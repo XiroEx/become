@@ -9,6 +9,7 @@ import type { MindSummaryResponse } from "@become/api-client";
 import { moodGateway, type MoodLevel } from "@become/core";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { usePressed } from "@/lib/a11y/usePressed";
 import {
   computeMindsetCta,
   computeMindsetStatus,
@@ -33,6 +34,7 @@ export function MindsetCard({
 }: MindsetCardProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
+  const ctaPress = usePressed();
 
   const handleOpenMind = () => {
     if (onOpenMind) {
@@ -246,11 +248,13 @@ export function MindsetCard({
         accessibilityRole="button"
         accessibilityLabel={cta}
         onPress={handleOpenMind}
-        style={({ pressed }) => [
+        onPressIn={ctaPress.onPressIn}
+        onPressOut={ctaPress.onPressOut}
+        style={[
           styles.ctaButton,
           {
             backgroundColor: colors.foreground,
-            opacity: pressed ? 0.85 : 1,
+            opacity: ctaPress.pressed ? 0.85 : 1,
           },
         ]}
       >
