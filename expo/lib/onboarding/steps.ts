@@ -119,7 +119,10 @@ export const STEP_TITLES = [
 export const STEP_QUESTIONS: readonly string[] = [
   "What are you here to do?",
   "A bit about you",
-  "Body & nutrition",
+  // Web parity (NP-247): the step-3 heading itself reads "Body stats" —
+  // STEP_TITLES[2] ("Body & nutrition") stays as the "Step 3 of 5 ·" chip
+  // label, which the web keeps unchanged too.
+  "Body stats",
   "What equipment do you have?",
   "Here's what we heard",
 ];
