@@ -38,9 +38,74 @@ only-after-confirmation state install the hook with `enabled={hasInProgressWork}
 - **Recipe create** (web-only via Tier-3 deep-link, so no native handler) —
   no native interception needed; deep-link out + browser owns back.
 
+`onBack` is not only for confirm dialogs — it is whatever "back" should mean on
+that screen:
+
+- **Sign-in / sign-up** (`app/(auth)/login.tsx`, NP-309) — "Create account" is
+  `mode` state, not a route, so system back used to fall through to the OS and
+  exit the app, where web's `/register` is its own page and back returns to
+  `/login`. Enabled only while `mode === "register"`, `onBack` flips `mode`
+  back to `"login"` instead.
+
 `makeConfirmOnBack` from the same module returns a stable handler that
 intercepts the first press, calls `onConfirm`, and lets a second press
 through (an Alert with "Discard" / "Keep editing").
+
+## Keyboard avoiding (NP-319)
+
+`IOS_QUIRKS.md`'s "Keyboard avoiding" section explains the shape of the bug:
+all of the app's `KeyboardAvoidingView`s used
+`behavior={Platform.OS === "ios" ? "padding" : undefined}`, so Android got
+nothing, and "nothing" used to be survivable because
+`windowSoftInputMode=adjustResize` shrank the window on its own. It stopped
+being survivable once targetSdk 35 made edge-to-edge enforcement mandatory —
+the resize no longer happens — and a `Modal` sheet never got the resize
+either way.
+
+**The fix, in three pieces:**
+
+- **A real Android `behavior`.** `undefined` is a no-op, not a fallback to
+  something else — every affected `KeyboardAvoidingView` now sets
+  `behavior={Platform.OS === "ios" ? "padding" : "height"}`. `"height"` is
+  computed from the native keyboard-show event, not a window resize, so it
+  works identically on a plain screen and inside a `Modal` sheet. Fixed in
+  `components/nutrition/EstimateSheet.tsx` (Describe your meal), `BasketSheet.tsx`
+  ("Name this sitting"), `EditLogItemSheet.tsx` (Custom amount),
+  `components/ai/CoachChat.tsx` (the shared Mind coach / nutrition consultant
+  chat), `app/(app)/(tabs)/nutrition/goals.tsx` and
+  `app/(app)/(tabs)/mind/[section].tsx` (Vision's edit form).
+  `__tests__/androidKeyboardAvoiding.test.ts` holds the set.
+- **`useScrollFocusedFieldIntoView`** (`lib/keyboard/useScrollFocusedFieldIntoView.ts`)
+  — Android's `ScrollView`, unlike iOS's, has no built-in "scroll the focused
+  `TextInput` into view" behaviour, so `"height"` alone can still leave a
+  field unreachable on a plain (non-sheet) screen. This is `app/(auth)/login.tsx`'s
+  (NP-309) one-off `keyboardDidShow` + `measureInWindow` + `ScrollView.scrollTo`
+  fix, generalised so a screen with more than one focusable field — Nutrition
+  Goals' Water Goal, Vision's Environment field (and the rest of its domains)
+  — can reuse it instead of re-deriving it. A component that doesn't own its
+  own `ScrollView` (`components/mind/VisionDashboard.tsx`, rendered inside
+  its parent route's) takes `setActiveField` as a prop instead of calling the
+  hook itself; the ref is always dereferenced INSIDE the `onFocus` handler
+  (`onFocus={() => setActiveField?.(fieldRef.current)}`), never passed into
+  a function during render, which `react-hooks/refs` enforces.
+- **`handleSheetRequestClose`** (`lib/keyboard/handleSheetRequestClose.ts`) —
+  a sheet's `Modal` fires `onRequestClose` on the hardware back press; wiring
+  that straight to `onClose` closed the keyboard AND the sheet in the same
+  press (Find a food, Edit item), discarding whatever the member was
+  mid-typing. The first back press now only dismisses the keyboard
+  (`Keyboard.isVisible()` → `Keyboard.dismiss()`); the sheet closes on the
+  next press. Wired into `components/BottomSheet.tsx` (covering every sheet
+  built on it) and `components/ai/CoachChat.tsx` (its own `Modal`).
+  `BottomSheet.tsx` and `CoachChat.tsx` also set `statusBarTranslucent` on
+  their `Modal`, matching `app.json`'s edge-to-edge status bar so the sheet's
+  own window inset calculation agrees with the rest of the app's.
+
+Verified by `__tests__/androidKeyboardAvoiding.test.ts`,
+`__tests__/useScrollFocusedFieldIntoView.test.ts`,
+`__tests__/handleSheetRequestClose.test.ts`, `__tests__/BottomSheet.test.tsx`,
+`__tests__/coachChatAndroidKeyboard.test.tsx`,
+`__tests__/visionDashboardAndroidKeyboard.test.tsx`, and the new case in
+`__tests__/nutritionGoalsNP148.test.tsx`.
 
 ## Material ripple
 
@@ -320,3 +385,15 @@ Android-specific parts:
 - `__tests__/widgetHandoff.test.ts` — open and sign-out, and the four-tile redraw
 - `__tests__/widgetsBridge.test.tsx` — once per session token, once per
   sign-out, and mounted at the root rather than inside `(app)`
+- `__tests__/androidKeyboardAvoiding.test.ts` (NP-319) — every affected sheet
+  and screen sets a real Android `behavior`, never `undefined`
+- `__tests__/useScrollFocusedFieldIntoView.test.ts` (NP-319) — the scroll
+  math (offset + overflow + margin), no-ops on iOS, and no-ops when nothing
+  overflows or nothing is registered
+- `__tests__/handleSheetRequestClose.test.ts` (NP-319) — dismisses the
+  keyboard instead of closing while it's visible, closes once it's down
+- `__tests__/BottomSheet.test.tsx` / `__tests__/coachChatAndroidKeyboard.test.tsx`
+  (NP-319) — `statusBarTranslucent` and the `onRequestClose` guard, wired
+- `__tests__/visionDashboardAndroidKeyboard.test.tsx` (NP-319) — the
+  identity and domain fields' `onFocus` reach the handed-down
+  `setActiveField`, and the component still renders without one

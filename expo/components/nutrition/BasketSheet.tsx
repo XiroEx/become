@@ -132,8 +132,9 @@ export function BasketSheet({
       testID="basket-sheet"
       accessibilityLabel="Your basket"
     >
+      {/* NP-319: real Android keyboard avoidance — see EstimateSheet.tsx. */}
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"

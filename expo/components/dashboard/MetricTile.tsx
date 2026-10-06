@@ -28,6 +28,7 @@ import React from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { usePressed } from "@/lib/a11y/usePressed";
 import type {
   DashboardMetricSummary,
   DashboardTileSize,
@@ -94,6 +95,7 @@ export function MetricTile({
   testID,
 }: MetricTileProps) {
   const { colors } = useThemeTokens();
+  const tilePress = usePressed();
   const rootTestId = testID ?? `tile-${metric?.id ?? fallbackId ?? "metric"}`;
   const cardStyle = [
     styles.card,
@@ -236,7 +238,9 @@ export function MetricTile({
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
         onPress={onTap}
-        style={({ pressed }) => [...cardStyle, { opacity: pressed ? 0.85 : 1 }]}
+        onPressIn={tilePress.onPressIn}
+        onPressOut={tilePress.onPressOut}
+        style={[...cardStyle, { opacity: tilePress.pressed ? 0.85 : 1 }]}
       >
         {content}
       </Pressable>

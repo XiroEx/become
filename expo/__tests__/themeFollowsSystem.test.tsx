@@ -441,7 +441,7 @@ describe("every surface is legible in both modes", () => {
   });
 
   it.each(modes)("%s: icons and spinners clear 3:1 as graphics", (mode) => {
-    for (const name of ["primary", "accent", "success"] as TokenName[]) {
+    for (const name of ["primary", "brand", "accent", "success"] as TokenName[]) {
       for (const surface of ["background", "card"] as TokenName[]) {
         expect(
           contrast(channels(mode, name), channels(mode, surface)),
@@ -450,18 +450,23 @@ describe("every surface is legible in both modes", () => {
     }
   });
 
-  it.each(modes)("%s: a filled button's label stays on its brand pair", (mode) => {
-    // White on red-500 is 3.76:1 — the web's `bg-red-500 text-white`, byte for
-    // byte, and identical in both modes because the brand red is. This card
-    // makes light mode real; it does not repaint the brand, so the bar here is
-    // the graphics bar and the shortfall is recorded rather than hidden.
+  it.each(modes)("%s: a filled button's label stays on its pair", (mode) => {
+    // The primary pair is the web's own neutral one now (NP-313) —
+    // `bg-zinc-900 text-white` / `dark:bg-white dark:text-black` — so its label
+    // clears the TEXT bar, not merely the graphics bar it used to when the
+    // button was red-500 and white on it was 3.76:1.
     expect(
       contrast(channels(mode, "primary-foreground"), channels(mode, "primary")),
-    ).toBeGreaterThanOrEqual(3);
+    ).toBeGreaterThanOrEqual(4.5);
     expect(
       contrast(channels(mode, "accent-foreground"), channels(mode, "accent")),
     ).toBeGreaterThanOrEqual(3);
-    expect(lightTokens.primary).toBe(darkTokens.primary);
+    // White on the brand red is 4.8:1 in light (red-600) and 3.95:1 in dark
+    // (red-500) — the web's `bg-red-500/600 text-white`, byte for byte, so the
+    // bar is the graphics bar and the dark shortfall is recorded, not hidden.
+    expect(
+      contrast(channels(mode, "brand-foreground"), channels(mode, "brand")),
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it.each(modes)("%s: the modal scrim actually darkens the page", (mode) => {
@@ -520,13 +525,21 @@ describe("global.css and lib/theme/tokens.ts are the same palette", () => {
 
   it("the web's zinc palette, where the web is the one that defined it", () => {
     // Spot-checks against `webapp/`'s classes, which is where these values come
-    // from: zinc-50 / zinc-900 surfaces, white cards, the brand red, zinc text.
+    // from: zinc-50 / zinc-900 surfaces, white cards, zinc text, and a NEUTRAL
+    // primary action (NP-313) with red kept for `brand` / `destructive`.
     expect(lightTokens.background).toBe("250 250 250"); // zinc-50
     expect(lightTokens.card).toBe("255 255 255"); // white
     expect(lightTokens.foreground).toBe("24 24 27"); // zinc-900
     expect(darkTokens.card).toBe("24 24 27"); // zinc-900
     expect(darkTokens["muted-foreground"]).toBe("161 161 170"); // zinc-400
-    expect(lightTokens.primary).toBe(darkTokens.primary); // red-500, both modes
+    // `bg-zinc-900 text-white dark:bg-white dark:text-black`
+    expect(lightTokens.primary).toBe("24 24 27");
+    expect(lightTokens["primary-foreground"]).toBe("255 255 255");
+    expect(darkTokens.primary).toBe("255 255 255");
+    expect(darkTokens["primary-foreground"]).toBe("24 24 27");
+    // The brand red is still mode-aware red, on its own token.
+    expect(lightTokens.brand).toBe("220 38 38"); // red-600
+    expect(darkTokens.brand).toBe("239 68 68"); // red-500
     expect(tintToken("destructive", "dark", 0.18)).toBe("rgba(248, 113, 113, 0.18)");
   });
 });

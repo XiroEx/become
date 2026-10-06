@@ -52,6 +52,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { usePressed } from "@/lib/a11y/usePressed";
 import { ScreenState } from "@/components/ScreenState";
 import {
   MonthGrid,
@@ -98,6 +99,8 @@ function WorkoutRow({
   index: number;
 }) {
   const { colors } = useThemeTokens();
+  const togglePress = usePressed();
+  const correctPress = usePressed();
   const hasPR = workout.exercises.some(
     (e: ProgressDetailedWorkout["exercises"][number]) => e.isPR,
   );
@@ -121,15 +124,19 @@ function WorkoutRow({
         accessibilityLabel={`${workout.title || workout.day}`}
         accessibilityState={{ expanded }}
         onPress={onToggle}
-        style={({ pressed }) => ({
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          opacity: pressed ? 0.7 : 1,
-          ...minTouchTarget,
-        })}
+        onPressIn={togglePress.onPressIn}
+        onPressOut={togglePress.onPressOut}
+        style={[
+          {
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 12,
+            opacity: togglePress.pressed ? 0.7 : 1,
+          },
+          minTouchTarget,
+        ]}
       >
         <View
           style={{
@@ -283,16 +290,20 @@ function WorkoutRow({
               accessibilityLabel={`Correct ${workout.title || workout.day}`}
               accessibilityHint="Fix a mistyped set in this finished workout"
               onPress={onCorrect}
-              style={({ pressed }) => ({
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                paddingVertical: 10,
-                alignItems: "center",
-                opacity: pressed ? 0.7 : 1,
-                ...minTouchTarget,
-              })}
+              onPressIn={correctPress.onPressIn}
+              onPressOut={correctPress.onPressOut}
+              style={[
+                {
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                  paddingVertical: 10,
+                  alignItems: "center",
+                  opacity: correctPress.pressed ? 0.7 : 1,
+                },
+                minTouchTarget,
+              ]}
             >
               <Text className="text-foreground text-sm font-semibold">Correct this workout</Text>
             </Pressable>

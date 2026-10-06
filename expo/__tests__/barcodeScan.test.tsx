@@ -196,6 +196,53 @@ describe("BarcodeScanner — component", () => {
     expoCamera.__cameraPermissionState.permission = expoCamera.__GRANTED;
   });
 
+  // NP-321: `androidStatusBar.translucent` draws this Modal's own window
+  // under the status bar on Android — the header must pad itself below it
+  // (and the manual-entry bar above the gesture bar) using real device
+  // insets, not a bare literal that leaves the title/X under the clock.
+  it("(id: np321-insets) pads the header below the status bar and the manual bar above the gesture bar", async () => {
+    const { getByTestId } = render(
+      <BarcodeScanner
+        visible={true}
+        onClose={() => {}}
+        onDetected={() => {}}
+        insetsImpl={() => ({ top: 47, bottom: 34, left: 0, right: 0 })}
+      />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("barcode-scanner-camera")).toBeTruthy();
+    });
+    const header = getByTestId("barcode-scanner-header");
+    const headerStyle = Array.isArray(header.props.style)
+      ? Object.assign({}, ...header.props.style)
+      : header.props.style;
+    expect(headerStyle.paddingTop).toBeGreaterThanOrEqual(47 + 12);
+
+    fireEvent.press(getByTestId("barcode-scanner-manual-toggle"));
+    await waitFor(() => {
+      expect(getByTestId("barcode-scanner-manual-form")).toBeTruthy();
+    });
+    const manualForm = getByTestId("barcode-scanner-manual-form");
+    const manualStyle = Array.isArray(manualForm.props.style)
+      ? Object.assign({}, ...manualForm.props.style)
+      : manualForm.props.style;
+    expect(manualStyle.paddingBottom).toBeGreaterThanOrEqual(34 + 12);
+  });
+
+  it("(id: np321-insets-fallback) falls back to zero insets without a SafeAreaProvider, instead of crashing", async () => {
+    const { getByTestId } = render(
+      <BarcodeScanner visible={true} onClose={() => {}} onDetected={() => {}} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("barcode-scanner-camera")).toBeTruthy();
+    });
+    const header = getByTestId("barcode-scanner-header");
+    const headerStyle = Array.isArray(header.props.style)
+      ? Object.assign({}, ...header.props.style)
+      : header.props.style;
+    expect(headerStyle.paddingTop).toBe(12);
+  });
+
   it("falls back to manual entry when the camera is denied", async () => {
     const expoCamera = jest.requireMock("expo-camera");
     expoCamera.__cameraPermissionState.permission = expoCamera.__DENIED;

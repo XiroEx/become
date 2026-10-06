@@ -236,9 +236,15 @@ describe("weekly volume matches the web's numbers (e015c99c)", () => {
     // 24k for a ~24k max. Native used to draw only 0 / half / full (the
     // native screenshot showed 0 / 12k / 23k) — that 3-tick shape is gone.
     expect(volumeChartYTicks(24000)).toEqual([0, 6000, 12000, 18000, 24000]);
+    // A max that is NOT itself a round number (12450) nices up to the next
+    // even 4k step (16000) instead of rounding each quarter independently —
+    // the fix for NP-314's 0 / 6k / 12k / 17k / 23k (uneven 6/6/5/6 steps).
     expect(volumeChartYTicks(volumeChartMax(WEEKS))).toEqual([
-      0, 3113, 6225, 9338, 12450,
+      0, 4000, 8000, 12000, 16000,
     ]);
+    // The exact repro from the card: a ~23.2k max used to draw 0/6k/12k/17k/23k
+    // (steps of 6, 6, 5, 6); it now nices to the web's even 6k step.
+    expect(volumeChartYTicks(23237)).toEqual([0, 6000, 12000, 18000, 24000]);
   });
 
   it("renders the workout list with best sets and per-workout volume", () => {

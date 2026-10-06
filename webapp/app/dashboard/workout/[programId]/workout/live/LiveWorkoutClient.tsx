@@ -23,7 +23,7 @@ import AddExerciseSheet, { type AddExerciseResult } from "@/components/workout/A
 import ThinSessionModal from "@/components/workout/ThinSessionModal";
 import ConfirmModal from "@/components/workout/ConfirmModal";
 import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
-import { addIntoGroup, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
+import { addIntoGroup, alignCircuitSets, appendExercise, applyOrder, applyOrderToRecord, canRemoveExercise, mergeAdHocFromLog, moveExercise, needsMoreExercises, prescriptionOf, removeExercise, shouldWarnBeforeFinish, ungroupAt, groupIndexes, type AdHocExercise } from "@/lib/workout/buildAsYouGo";
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
 import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
@@ -519,20 +519,28 @@ export default function LiveWorkoutPage() {
           // exercise.
           const token = localStorage.getItem("token");
           const hydratedExs = await hydrateQuickSessionVideos(exs, token);
+          // A circuit runs every exercise for the same number of rounds, so a
+          // saved one whose members disagree (built before that rule existed,
+          // imported, or generated) is held to its FIRST member's count HERE,
+          // before anything reads it: the flow, the set grid, the group header
+          // and the save all come off this one list, so aligning it at the
+          // source is what stops a 5-set/3-set circuit from running as five
+          // rounds with the second exercise missing from two of them.
+          const liveExs = alignCircuitSets(hydratedExs);
 
-          const wd: WorkoutData = { day: title, title, exercises: hydratedExs };
+          const wd: WorkoutData = { day: title, title, exercises: liveExs };
           setWorkout(wd);
-          setExercises(hydratedExs);
+          setExercises(liveExs);
           setCurrentPhase(1);
 
           // Prefill last-time numbers (slug-based — works without a program).
-          const lastPerformance = token ? await fetchLastPerformance(token, hydratedExs) : {};
+          const lastPerformance = token ? await fetchLastPerformance(token, liveExs) : {};
           // "Last session: 185 lbs × 8" and the summary's PR count both read
           // exerciseHistory, keyed by NAME. Programs get it from the workouts
           // endpoint; a quick session had nothing, so it never celebrated a PR
           // it had just watched you set.
           const quickHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
-          for (const ex of hydratedExs) {
+          for (const ex of liveExs) {
             const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || '').toLowerCase();
             const prior = slug ? lastPerformance[slug] : null;
             if (prior) {
@@ -545,14 +553,14 @@ export default function LiveWorkoutPage() {
             }
           }
           setExerciseHistory(quickHistory);
-          const { data, flow } = initializeExercises(hydratedExs);
+          const { data, flow } = initializeExercises(liveExs);
           // Restore shared progress from the Track view (reps/weight/completed) so
           // flipping the Track|Live tab never loses entered sets.
           const savedQP = quickSessionId ? readQuickProgress(quickSessionId) : null;
           const restored = savedQP?.exercises?.length
             ? data.map((sets, i) => {
                 const savedEx = savedQP.exercises[i];
-                const timed = tracksTime(hydratedExs[i]?.trackingType);
+                const timed = tracksTime(liveExs[i]?.trackingType);
                 return sets.map((s, si) => {
                   const ss = savedEx?.sets?.[si];
                   if (!ss) return s;
@@ -628,7 +636,10 @@ export default function LiveWorkoutPage() {
           const workoutData: WorkoutData = {
             day: data.day || "Day 1",
             title: data.workout?.title || "Training",
-            exercises: data.workout?.exercises || fallbackExercises
+            // Held to the circuit rule at the source — see the quick-session
+            // branch above. A coach can write a circuit in the program editor
+            // with a different set count per exercise; it runs as one block.
+            exercises: alignCircuitSets(data.workout?.exercises || fallbackExercises)
           };
           setWorkout(workoutData);
           setExercises(workoutData.exercises);
@@ -839,7 +850,7 @@ export default function LiveWorkoutPage() {
                 const wd: WorkoutData = {
                   day: firstWorkout.day || 'Day 1',
                   title: firstWorkout.title || 'Training',
-                  exercises: firstWorkout.exercises,
+                  exercises: alignCircuitSets(firstWorkout.exercises),
                 }
                 setWorkout(wd)
                 setExercises(wd.exercises)

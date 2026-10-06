@@ -82,7 +82,16 @@ export function ConfirmModal({
                 destructive ? "bg-destructive" : "bg-primary"
               }`}
             >
-              <Text className="text-white font-bold text-sm">
+              {/* The label takes the FILL's own ink, never a literal white:
+                  `primary` is white in dark mode since NP-313, so
+                  `text-white` on it was white on white. */}
+              <Text
+                className={`font-bold text-sm ${
+                  destructive
+                    ? "text-destructive-foreground"
+                    : "text-primary-foreground"
+                }`}
+              >
                 {confirmLabel}
               </Text>
             </Pressable>

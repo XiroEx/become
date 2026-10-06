@@ -53,6 +53,20 @@ const supersetPair: DraftExercise[] = [
 const circuitPair: DraftExercise[] = supersetPair.map((ex, i) =>
   i < 2 ? { ...ex, groupType: 'circuit', groupLabel: 'Circuit', sets: 5, groupRounds: 5 } : ex,
 )
+// The same circuit as it exists in a session SAVED before the agreement rule
+// was written — or generated, imported, or authored by a coach in the program
+// editor: badged a circuit, members still disagreeing. 5 and 3.
+const disagreeingCircuit: DraftExercise[] = supersetPair.map((ex, i) =>
+  i < 2 ? { ...ex, groupType: 'circuit', groupLabel: 'Circuit' } : ex,
+)
+
+/** The set-count input's value for one row of the rendered editor. */
+function setsInputValue(html: string, exerciseName: string): string | null {
+  // The sets field is the row's only `type="number"` input; its aria-label is
+  // "<Sets|Rounds> for <name>" and React renders `value` last.
+  const m = new RegExp(`type="number"[^>]*aria-label="[^"]* for ${exerciseName}"[^>]*value="(\\d+)"`).exec(html)
+  return m?.[1] ?? null
+}
 
 test('SessionEditor: a group offers Superset AND Circuit, once, on its first member', () => {
   const html = renderToStaticMarkup(
@@ -133,4 +147,61 @@ test('the live/track add sheet defaults to the anchor\'s count and locks it for 
     assert.match(hostSrc, /anchorSets=\{/, `${host} should pass anchorSets`)
     assert.match(hostSrc, /anchorGroupType=\{/, `${host} should pass anchorGroupType`)
   }
+})
+
+// ── A circuit that already disagrees ────────────────────────────────────────
+//
+// The rule was applied only by the two gestures that MAKE a circuit, so a
+// circuit arriving from anywhere else still disagreed: the Edit panel opened a
+// 5 and a 3 underneath its own note saying every exercise runs the same number
+// of rounds, and the live view ran five rounds with the goblet squat missing
+// from two of them — the shape in the report. It is now applied where the list
+// is PRODUCED, which is the one place that settles the flow, the set grid, the
+// group header and the save together.
+
+test('SessionEditor opens an already-disagreeing circuit on the first member\'s count', () => {
+  const html = renderToStaticMarkup(
+    <SessionEditor title="Leg day" exercises={disagreeingCircuit} onSave={noop} onCancel={noop} />,
+  )
+  // The jump rope was built on 5, so the goblet squat's row reads 5 — not the
+  // 3 it was stored with, and not a number that contradicts the note below it.
+  assert.equal(setsInputValue(html, 'Jump Rope'), '5')
+  assert.equal(setsInputValue(html, 'Goblet Squat'), '5')
+  assert.match(html, /data-testid="editor-circuit-note-0"/)
+})
+
+test('SessionEditor leaves an already-disagreeing SUPERSET exactly as it was', () => {
+  const html = renderToStaticMarkup(
+    <SessionEditor title="Leg day" exercises={supersetPair} onSave={noop} onCancel={noop} />,
+  )
+  assert.equal(setsInputValue(html, 'Jump Rope'), '5')
+  assert.equal(setsInputValue(html, 'Goblet Squat'), '3')
+})
+
+test('every surface that LOADS a workout holds its circuits to the rule', () => {
+  for (const file of [
+    // The two pre-workout builder surfaces: a session handed to them (an
+    // import, a saved draft) is shown in agreement.
+    'components/SessionBuilder.tsx',
+    'components/workout/SessionEditor.tsx',
+    // Live and Track: the set grid is sized off `ex.sets`, so the list has to
+    // be aligned BEFORE it is built or the flow asks for rows that do not
+    // exist. Both align where the list is produced.
+    'app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx',
+    'app/dashboard/workout/[programId]/workout/WorkoutFormClient.tsx',
+  ]) {
+    assert.match(
+      readSource(file),
+      /alignCircuitSets\(/,
+      `${file} should hold a loaded circuit to its first member's set count`,
+    )
+  }
+})
+
+test('"Finish this for me" seeds what it appends from the session, not from the generator', () => {
+  const src = readSource('components/SessionBuilder.tsx')
+  // Same `defaultSetsFor` rule the search result and the suggestion pill
+  // already go through — one screen, one answer for "how many sets?".
+  assert.match(src, /const seeded = defaultSetsFor\(current\)/)
+  assert.match(src, /sets: seeded/)
 })

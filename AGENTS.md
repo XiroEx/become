@@ -188,6 +188,7 @@ silently empty. For local work run `next dev`, where local env is authoritative.
 - Programs reference exercises by `slug`, hydrated server-side via `hydrateExercises.ts`
 - Exercise grouping supports supersets, circuits, trisets, giant sets, EMOM, AMRAP
 - A **circuit** is rounds of the whole block, so its members may not disagree about how many: `alignCircuitSets` / `setSetsAt` in `lib/workout/buildAsYouGo.ts` hold every member to the FIRST one's `sets` (and mirror it into `groupRounds`). Supersets are explicitly left free to pair 5 sets of one thing with 3 of another. A newly added exercise defaults to `defaultSetsFor(list)` — the first exercise's count — never a hardcoded 3
+- That rule is applied where an exercise list is PRODUCED, not only by the gestures that make a circuit: `SessionBuilder` / `SessionEditor` seed their rows through `alignCircuitSets`, and so do the Live/Track loaders (`LiveWorkoutClient`, `WorkoutFormClient`, expo's `useLiveWorkout` / `useQuickLiveWorkout`). A circuit written in the program editor, imported, generated, or saved before the rule existed therefore still runs as one block — `buildWorkoutFlow` walks `max(groupRounds, …sets)` rounds and OMITS a member with no set left, so an unaligned circuit renders with holes in its tail rounds. Align the list before the set grid is sized off `ex.sets`, never after
 - Lean queries (`.lean()`) for read-only endpoints
 - TTL index on MagicLink for auto-cleanup
 
@@ -1009,9 +1010,9 @@ With enforcement off the page does not `return null` (a route that renders
 nothing is a blank screen); it returns a neutral card that names no tier, no cap
 and no amount — `UnenforcedPlan`, exported from `PlanPageClient.tsx` so it can be
 rendered in a test — and `uiSurfaces.test.tsx` pins it for what it must NOT
-contain. **It still carries "Manage billing" for a member who holds a
-subscription**; see the next section for why that is not an exception to the
-launch-day contract.
+contain. **It still carries a billing block**: "Manage billing" for a member who
+holds a subscription, `NoBillingNote` for everybody else; see the next section
+for why neither is an exception to the launch-day contract.
 
 #### "Manage billing" — the way OUT, and where it lives
 
@@ -1036,11 +1037,24 @@ Five rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
   the row every member gets the moment they open checkout, so it does not count.
 - **Two mount points, one rule.** `CurrentPlan` on the plan page (the card is
   all a subscriber sees there — the pricing block is hidden for Plus) and
-  `components/billing/BillingSection.tsx` in Settings, which renders nothing for
-  anyone without a subscription. The button itself
+  `components/billing/BillingSection.tsx` in Settings. The button itself
   (`components/billing/ManageBillingButton.tsx`) is pure and takes the portal
   state as a prop, because a control only reachable through an effect is one no
   test in this repo can see.
+- **THE BLOCK IS UNCONDITIONAL; ONLY ITS CONTENTS BRANCH.** Hiding the button
+  from a member with no Stripe customer is right. Hiding every trace of billing
+  from them is what kept this card open: both surfaces used to render nothing at
+  all, so a complimentary-Plus member — exactly the member the rule excludes —
+  opened the Plan page, found no billing anything on it, and reported "there is
+  still no button to manage billing at all" three times running. Where the
+  button is not drawn, `components/billing/NoBillingNote.tsx` now states the
+  absence. It is not pressable, it never contains `MANAGE_BILLING_LABEL` (that
+  would point a member following the Terms at a dead end) and it names no tier,
+  no cap and no price, which is what makes it safe on `UnenforcedPlan`. The
+  sentence and the section heading live in `lib/billingCopy.ts`, NOT in
+  `lib/legal`: `lib/legal` re-exports the published `@become/core` and the
+  webapp cannot add an export to it without a manual publish, and neither string
+  is quoted by any document.
 - **BILLING IS NOT A TIER SURFACE, so it does NOT bail on `enforced === false`.**
   The kill-switch governs whether TIER is enforced, not whether money is real —
   `lib/billing/apply.ts` applies webhooks regardless of it — so a member can hold
@@ -1052,7 +1066,8 @@ Five rules, all asserted in `tests/unit/billing/manageBilling.test.tsx`:
   `UnenforcedPlan` now does too. A billing exit names no tier, no cap and no
   price, so nothing about the dark launch changes; the member it can appear for
   is one Stripe is charging, and that member must always be able to cancel.
-  `manageBilling.test.tsx` asserts the whole thing in BOTH switch states.
+  `manageBilling.test.tsx` asserts the whole thing in BOTH switch states —
+  including that the block itself is present for every member, in both states.
 - **One way to open it**: `openBillingPortal()` in `lib/billingPortal.ts`. Every
   failure — 503 (no portal configuration in the Stripe dashboard), 409, 502, a
   dropped connection — collapses to "didn't open, try again", never to "you have

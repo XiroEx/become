@@ -13,7 +13,7 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
-import { PlateExtras } from "@/components/nutrition/PlateExtras";
+import { PlateExtras, PlateEstimateNotice } from "@/components/nutrition/PlateExtras";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PermissionDeniedNotice } from "@/components/media/PermissionDeniedNotice";
 import { AuthedImage } from "@/components/media/AuthedImage";
@@ -121,6 +121,62 @@ export interface EstimateSheetProps {
 const STANDARD_MEALS = ["breakfast", "lunch", "dinner", "snack"];
 
 /**
+ * De-dupe tag options case-insensitively, keeping the first-seen casing and
+ * order (defaults before userTags before session tags — whatever order the
+ * caller concatenated in). Mirrors `ScheduleMealsDrawer`'s `buildSlotTags`
+ * and `MealEditorSheet`'s `tagOptions` memo (NP-322): without this, a caller
+ * that spreads `defaults` and `userTags` separately (as the nutrition
+ * screen's `EstimateSheet`/`ScanHistorySheet` wiring does) renders every tag
+ * chip twice whenever a user tag collides with a default one.
+ */
+function dedupeTagOptions(options: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of options) {
+    const norm = String(raw).trim().toLowerCase();
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
+  }
+  return out;
+}
+
+/** High / Medium / Low — the web's `FoodItemRow.tsx:confidenceLabel`. */
+function confidenceChipLabel(c: number): string {
+  if (c >= 0.8) return "High";
+  if (c >= 0.5) return "Medium";
+  return "Low";
+}
+
+/** A small rounded pill — the web's confidence/match badges on each review
+ *  row, which native used to render as plain grey text instead (NP-322). */
+function ReviewChip({
+  label,
+  bg,
+  fg,
+  testID,
+}: {
+  label: string;
+  bg: string;
+  fg: string;
+  testID?: string;
+}) {
+  return (
+    <View
+      testID={testID}
+      style={{
+        backgroundColor: bg,
+        borderRadius: 999,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+      }}
+    >
+      <Text style={{ color: fg, fontSize: 10, fontWeight: "600" }}>{label}</Text>
+    </View>
+  );
+}
+
+/**
  * Native meal-photo / describe estimate sheet (NP-089).
  *
  * The web's `SnapPlateModal.tsx` as a bottom sheet: chooser (Take photo,
@@ -189,7 +245,10 @@ export function EstimateSheet({
   // affects rendering.
   const allowanceTicketRef = useRef<string | undefined>(undefined);
 
-  const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS;
+  const mealOptions = useMemo(
+    () => dedupeTagOptions(tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS),
+    [tagOptions],
+  );
 
   // Reset on open; jump to the requested surface.
   useEffect(() => {
@@ -638,69 +697,88 @@ export function EstimateSheet({
 
   const sourceLabel = mealLogSourceFor(origin);
 
+  // The web's header (`SnapPlateModal.tsx`): a camera/pencil icon tile,
+  // title + subtitle, and an explicit X — ONE component keyed only on
+  // describe vs. not, not re-derived per phase (NP-322). Native used to show
+  // this only for the describe phase and fall back to the BottomSheet's
+  // generic text-only title ("Snap your plate", no icon, no X) everywhere
+  // else, including review — this header now renders for every phase.
+  const isDescribePhase = phase === "describe";
+  const headerTitle = isDescribePhase ? "Describe your meal" : "Your plate";
+  const headerSubtitle = isDescribePhase
+    ? "Add a photo too, or just use your words"
+    : "AI estimate — tweak before logging";
+  const headerTestID = isDescribePhase ? `${testID}-describe-header` : `${testID}-header`;
+  const headerCloseTestID = isDescribePhase ? `${testID}-describe-close` : `${testID}-close`;
+
   return (
     <>
       <BottomSheet
         visible={visible && !addMoreOpen}
         onClose={onClose}
-        // The describe phase renders its own header (icon, title, subtitle,
-        // close) to match the web's pencil-icon header — the generic title
-        // would duplicate it.
-        title={phase === "describe" ? undefined : "Snap your plate"}
+        // The header below replaces the generic title row entirely.
+        accessibilityLabel={headerTitle}
         testID={testID}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* NP-319: "undefined" on Android did nothing — a real Android
+            behaviour is needed since this view lives inside a `Modal`, where
+            targetSdk 35's edge-to-edge resize never reaches. "height" is
+            computed from the keyboard-show event, not a window resize, so it
+            works inside the sheet too. */}
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView
             testID={`${testID}-body`}
             keyboardShouldPersistTaps="handled"
             style={{ maxHeight: 520 }}
             contentContainerStyle={{ paddingBottom: 8 }}
           >
-          {phase === "describe" && (
-            <View
-              testID={`${testID}-describe-header`}
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 8,
-                marginBottom: 4,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: tint("success", 0.15),
-                  }}
-                >
-                  <PencilLine size={16} color={colors.success} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text className="text-foreground text-base font-bold">
-                    Describe your meal
-                  </Text>
-                  <Text className="text-muted-foreground text-xs">
-                    Add a photo too, or just use your words
-                  </Text>
-                </View>
-              </View>
-              <Pressable
-                testID={`${testID}-describe-close`}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                onPress={onClose}
-                hitSlop={8}
-                style={{ padding: 4 }}
+          <View
+            testID={headerTestID}
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: tint("success", 0.15),
+                }}
               >
-                <X size={20} color={colors["muted-foreground"]} />
-              </Pressable>
+                {isDescribePhase ? (
+                  <PencilLine size={16} color={colors.success} />
+                ) : (
+                  <Camera size={16} color={colors.success} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text className="text-foreground text-base font-bold">
+                  {headerTitle}
+                </Text>
+                <Text className="text-muted-foreground text-xs">
+                  {headerSubtitle}
+                </Text>
+              </View>
             </View>
-          )}
+            <Pressable
+              testID={headerCloseTestID}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={onClose}
+              hitSlop={8}
+              style={{ padding: 4 }}
+            >
+              <X size={20} color={colors["muted-foreground"]} />
+            </Pressable>
+          </View>
 
           {phase === "chooser" && (
             <View testID={`${testID}-chooser`} style={{ gap: 10, paddingTop: 4 }}>
@@ -981,15 +1059,33 @@ export function EstimateSheet({
               ) : null}
               {items.map((item, idx) => {
                 const scaled = scaledNutrition(item, item.multiplier);
-                const badge = item.match
-                  ? item.match.kind === "food"
-                    ? "In your foods"
-                    : item.match.kind === "recipe"
-                      ? "Recipe"
-                      : "Your meal"
+                // Match badge — the web's `[{label, tone}]` on `FoodItemRow`
+                // (green for a real DB match, zinc for "New"). No chip at
+                // all while the match check is still in flight, same as web.
+                const matchBadge: { label: string; tone: "green" | "zinc" } | null = item.match
+                  ? {
+                      label:
+                        item.match.kind === "food"
+                          ? "In your foods"
+                          : item.match.kind === "recipe"
+                            ? "Recipe"
+                            : "Your meal",
+                      tone: "green",
+                    }
                   : item.matchChecked
-                    ? "New"
-                    : "Checking…";
+                    ? { label: "New", tone: "zinc" }
+                    : null;
+                const checking = !item.match && !item.matchChecked;
+                const confidenceValue =
+                  typeof item.confidence === "number" ? item.confidence : null;
+                const confidenceTone =
+                  confidenceValue == null
+                    ? null
+                    : confidenceValue >= 0.8
+                      ? "success"
+                      : confidenceValue >= 0.5
+                        ? "accent"
+                        : "destructive";
                 return (
                   <View
                     key={`${item.name}-${idx}`}
@@ -1005,16 +1101,50 @@ export function EstimateSheet({
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <View style={{ flex: 1 }}>
-                        <Text className="text-foreground text-sm font-semibold" numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                            gap: 6,
+                          }}
+                        >
+                          <Text className="text-foreground text-sm font-semibold" numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          {confidenceValue != null && confidenceTone ? (
+                            <ReviewChip
+                              testID={`${testID}-item-${idx}-confidence`}
+                              label={confidenceChipLabel(confidenceValue)}
+                              bg={tint(confidenceTone, 0.15)}
+                              fg={colors[confidenceTone]}
+                            />
+                          ) : null}
+                          {matchBadge ? (
+                            <ReviewChip
+                              testID={`${testID}-item-${idx}-match-badge`}
+                              label={matchBadge.label}
+                              bg={
+                                matchBadge.tone === "green"
+                                  ? tint("success", 0.15)
+                                  : colors.muted
+                              }
+                              fg={
+                                matchBadge.tone === "green"
+                                  ? colors.success
+                                  : colors["muted-foreground"]
+                              }
+                            />
+                          ) : null}
+                        </View>
                         {item.brand ? (
                           <Text className="text-muted-foreground text-xs" numberOfLines={1}>
                             {item.brand}
                           </Text>
                         ) : null}
                         <Text className="text-muted-foreground text-xs">
-                          {formatAmount(item.multiplier, item.unitLabel)} · {badge}
+                          {formatAmount(item.multiplier, item.unitLabel)}
+                          {checking ? " · Checking…" : ""}
                         </Text>
                       </View>
                       <Text className="text-foreground text-sm font-bold tabular-nums">
@@ -1084,6 +1214,10 @@ export function EstimateSheet({
                   </View>
                 );
               })}
+              {/* Best-guess notice + send feedback — the web renders this
+                  right after the items, above "Missing something?", not at
+                  the bottom under "Save as meal" (NP-322). */}
+              <PlateEstimateNotice onSendFeedback={handleSendFeedback} testID={testID} />
               <Pressable
                 testID={`${testID}-add-more`}
                 accessibilityRole="button"
@@ -1182,13 +1316,13 @@ export function EstimateSheet({
                   </Button>
                 </View>
               </View>
-              {/* Save as meal + estimate feedback (the web's ReviewFooter). */}
+              {/* Save as meal (the web's ReviewFooter) — the notice + send
+                  feedback now render above, next to the items. */}
               <PlateExtras
                 activeCount={activeCount}
                 mealsAtCap={mealsAtCap}
                 onCappedSave={handleCappedSave}
                 onSaveMeal={handleSaveMeal}
-                onSendFeedback={handleSendFeedback}
                 testID={testID}
               />
             </View>

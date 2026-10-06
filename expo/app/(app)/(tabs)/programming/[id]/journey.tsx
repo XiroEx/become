@@ -79,6 +79,7 @@ export default function ProgramJourneyRoute() {
           {data ? (
             <ProgramJourney
               journey={data}
+              onBack={() => router.back()}
               onFindNext={() => router.replace("/(tabs)/programming")}
               onViewLog={() => router.replace("/progress" as never)}
             />
@@ -95,6 +96,7 @@ export default function ProgramJourneyRoute() {
     >
       <ProgramJourney
         journey={data}
+        onBack={() => router.back()}
         onFindNext={() => router.replace("/(tabs)/programming")}
         onViewLog={() => router.replace("/progress" as never)}
       />

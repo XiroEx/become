@@ -55,4 +55,16 @@ describe("Button", () => {
     expect(onPress).not.toHaveBeenCalled();
     expect(getByTestId("btn").props.accessibilityState?.busy).toBe(true);
   });
+
+  // NP-303: the web's Settings "Enable" / "Turn on" / "Repair" buttons are
+  // blue-600, never the brand red — `info` draws the `bg-info` token.
+  it("variant=info draws the bg-info class, not the brand red", () => {
+    const { getByTestId } = render(
+      <Button testID="btn" variant="info">
+        Enable
+      </Button>,
+    );
+    expect(getByTestId("btn").props.className).toContain("bg-info");
+    expect(getByTestId("btn").props.className).not.toContain("bg-primary");
+  });
 });

@@ -5,6 +5,7 @@ import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -14,6 +15,18 @@ export interface BottomSheetProps {
   testID?: string;
   accessibilityLabel?: string;
   sheetStyle?: StyleProp<ViewStyle>;
+  /**
+   * Decoration beside the title — e.g. a sheet's own avatar/icon badge
+   * (NP-294's gradient sparkle avatar on Workout Now). Rendered to the left
+   * of the title text; only shown when `title` is also given.
+   */
+  headerLeading?: ReactNode;
+  /**
+   * Decoration beside the title, on the trailing edge — e.g. an explicit ✕
+   * close button alongside the backdrop tap and the scrub gesture. Rendered
+   * to the right of the title text; only shown when `title` is also given.
+   */
+  headerTrailing?: ReactNode;
 }
 
 /**
@@ -25,6 +38,13 @@ export interface BottomSheetProps {
  * sheet confines VoiceOver to itself, the two-finger scrub closes it, and the
  * slide honours Reduce Motion. A Reanimated rewrite keeps all four (see
  * `lib/a11y/reducedMotion.ts`).
+ *
+ * `statusBarTranslucent` + `onRequestClose` guarding the keyboard are NP-319:
+ * without the former, Android's edge-to-edge enforcement (targetSdk 35) can
+ * misreport the window's usable height to a Modal, which is part of why real
+ * keyboard avoidance inside a sheet was broken; without the latter, the
+ * hardware back button closed the keyboard AND the sheet in one press — see
+ * `handleSheetRequestClose`.
  */
 export function BottomSheet({
   visible,
@@ -34,13 +54,16 @@ export function BottomSheet({
   testID,
   accessibilityLabel,
   sheetStyle,
+  headerLeading,
+  headerTrailing,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   return (
     <RNModal
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={() => handleSheetRequestClose(onClose)}
       transparent
+      statusBarTranslucent
       animationType={modalAnimation("slide", reduceMotion)}
       testID={testID}
     >
@@ -73,13 +96,17 @@ export function BottomSheet({
             className="w-10 h-1 bg-muted-foreground rounded-full self-center mb-4 opacity-50"
           />
           {title ? (
-            <Text
-              testID={testID ? `${testID}-title` : undefined}
-              accessibilityRole="header"
-              className="text-foreground text-xl font-semibold mb-3"
-            >
-              {title}
-            </Text>
+            <View className="flex-row items-center mb-3" style={{ gap: 8 }}>
+              {headerLeading}
+              <Text
+                testID={testID ? `${testID}-title` : undefined}
+                accessibilityRole="header"
+                className="text-foreground text-xl font-semibold flex-1"
+              >
+                {title}
+              </Text>
+              {headerTrailing}
+            </View>
           ) : null}
           {children}
         </Pressable>

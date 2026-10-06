@@ -40,9 +40,14 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn(() => new Promise(() => {})) };
 });
 
+import fs from "node:fs";
+import path from "node:path";
 import type { DraftExercise } from "@become/core";
 import { SessionEditor } from "../components/workout/SessionEditor";
 /* eslint-enable import/first */
+
+const readSource = (rel: string) =>
+  fs.readFileSync(path.join(__dirname, "..", rel), "utf8");
 
 const GID = "adhoc-1";
 
@@ -63,6 +68,12 @@ const SUPERSET_PAIR: DraftExercise[] = [
 ];
 const CIRCUIT_PAIR: DraftExercise[] = SUPERSET_PAIR.map((ex, i) =>
   i < 2 ? { ...ex, groupType: "circuit", groupLabel: "Circuit", sets: 5, groupRounds: 5 } : ex,
+);
+// The same circuit as it exists in a session SAVED before the agreement rule
+// was written — or generated, imported, or authored by a coach in the program
+// editor: badged a circuit, members still disagreeing. 5 and 3.
+const DISAGREEING_CIRCUIT: DraftExercise[] = SUPERSET_PAIR.map((ex, i) =>
+  i < 2 ? { ...ex, groupType: "circuit", groupLabel: "Circuit" } : ex,
 );
 
 function renderEditor(exercises: DraftExercise[]) {
@@ -135,5 +146,48 @@ describe("the pre-workout builder can make a circuit", () => {
     circuit.unmount();
     const superset = renderEditor(SUPERSET_PAIR);
     expect(superset.queryByTestId("session-editor-circuit-note-0")).toBeNull();
+  });
+});
+
+// The rule used to be applied only by the two gestures that MAKE a circuit, so
+// a circuit that arrived from anywhere else still disagreed: the editor opened
+// a 5 and a 3 underneath its own note saying every exercise runs the same
+// number of rounds, and Live ran five rounds with the goblet squat missing
+// from two of them — the shape in the report.
+describe("a circuit that already disagrees agrees the moment it is shown", () => {
+  it("the editor opens it on the first member's count, and saves it that way", () => {
+    const { getByTestId, saved } = renderEditor(DISAGREEING_CIRCUIT);
+    // The goblet squat's row reads 5, not the 3 it was stored with.
+    expect(getByTestId("session-editor-sets-1").props.value).toBe("5");
+    const next = saved();
+    expect(next.exercises.map((e) => e.sets)).toEqual([5, 5, 2]);
+    expect(next.exercises.map((e) => e.groupRounds)).toEqual([5, 5, undefined]);
+  });
+
+  it("a superset that disagrees is still left exactly as it was", () => {
+    const { getByTestId, saved } = renderEditor(SUPERSET_PAIR);
+    expect(getByTestId("session-editor-sets-1").props.value).toBe("3");
+    expect(saved().exercises.map((e) => e.sets)).toEqual([5, 3, 2]);
+  });
+
+  it("the builder and both live loaders hold a loaded circuit to the rule", () => {
+    // Where the list is produced is the only place that can do this once for
+    // the flow, the set grid, the group header and the save all at once.
+    for (const file of [
+      "components/workout/SessionEditor.tsx",
+      "components/workout/SessionBuilder.tsx",
+      "lib/live/useLiveWorkout.ts",
+      "lib/quickSession/useQuickLiveWorkout.ts",
+    ]) {
+      expect(readSource(file)).toMatch(/alignCircuitSets\(/);
+    }
+  });
+
+  it("\"Finish this for me\" seeds what it appends from the session", () => {
+    const src = readSource("components/workout/SessionBuilder.tsx");
+    // Not the generator's own count — the same `defaultSetsFor` rule the
+    // search result and the suggestion pill already go through.
+    expect(src).toMatch(/const seeded = defaultSetsFor\(current\)/);
+    expect(src).toMatch(/sets: seeded,/);
   });
 });

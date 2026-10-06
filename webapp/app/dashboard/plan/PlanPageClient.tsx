@@ -37,9 +37,15 @@ import LegalLinks from '@/components/legal/LegalLinks'
 // The way into the Stripe portal, named exactly as the Terms and the support
 // page name it. Pure and props-driven, so this page keeps owning the request.
 import ManageBillingButton from '@/components/billing/ManageBillingButton'
+// ...and what stands in its place for a member Stripe is not billing, so the
+// absence of the button is stated rather than left as a blank card.
+import NoBillingNote from '@/components/billing/NoBillingNote'
 import { useEntitlements } from '@/hooks/useEntitlements'
 import { getToken } from '@/lib/clientAuth'
 import { BILLING_PORTAL_PATH, openBillingPortal } from '@/lib/billingPortal'
+// Section furniture and the explanation of an absence. App copy, never a
+// clause — the control's NAME still comes from lib/legal, via the button.
+import { BILLING_HEADING } from '@/lib/billingCopy'
 // The automatic-renewal wording is NOT written here. New York GBL 527-a wants
 // it in visual proximity to the request for consent, and the request for
 // consent is the button below — but it also has to be the same words the Terms
@@ -392,10 +398,18 @@ export interface CurrentPlanProps {
  * support page and the renewal line all pointed at a button that did not exist,
  * and the only way to cancel was to email.
  *
- * Drawn from `hasManageableBilling`, i.e. from whether STRIPE has a
- * subscription for this member — never from the tier. Grandfathered members and
- * admins are on Plus with no Stripe customer and get nothing; a past_due member
- * is gated as free and still has a card to fix.
+ * The BUTTON is drawn from `hasManageableBilling`, i.e. from whether STRIPE has
+ * a subscription for this member — never from the tier. Grandfathered members
+ * and admins are on Plus with no Stripe customer and never get it (the portal
+ * would answer `409 no_customer`); a past_due member is gated as free and still
+ * has a card to fix.
+ *
+ * The BLOCK, though, is unconditional. Hiding the button also hid the subject:
+ * a complimentary-Plus member opened this page, found no billing anything on
+ * it, and reported "there is still no button to manage billing at all" — three
+ * times. They were right about the screen and the rule was right about the
+ * button, so the block now always renders and `NoBillingNote` says why there is
+ * nothing in it.
  */
 export function CurrentPlan({ snapshot, portalState, onOpenPortal }: CurrentPlanProps) {
   const isPlus = snapshot.tier !== 'free'
@@ -438,14 +452,22 @@ export function CurrentPlan({ snapshot, portalState, onOpenPortal }: CurrentPlan
           </p>
         </div>
       </div>
-      {manageable && (
-        <ManageBillingButton
-          state={portalState}
-          onOpenPortal={onOpenPortal}
-          showNote
-          className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800"
-        />
-      )}
+      {/* THE BILLING BLOCK IS ALWAYS DRAWN; only its contents branch. The
+          button itself is still `hasManageableBilling` and nothing else, but a
+          member who is not being billed now gets told so here instead of being
+          shown a plan card with no billing anything on it — which is what was
+          reported, repeatedly, as "there is still no button to manage billing
+          at all". */}
+      <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {BILLING_HEADING}
+        </h3>
+        {manageable ? (
+          <ManageBillingButton state={portalState} onOpenPortal={onOpenPortal} showNote />
+        ) : (
+          <NoBillingNote />
+        )}
+      </div>
     </Card>
   )
 }
@@ -479,9 +501,11 @@ export interface UnenforcedPlanProps {
  * deliberately ignores the switch for exactly this reason — but the Plan page is
  * the one the documents name.
  *
- * Visibility is hasManageableBilling(), the same single rule the enforced card
- * and Settings use, so grandfathered members and admins — Plus with no Stripe
- * customer — still get nothing here.
+ * Visibility of the BUTTON is hasManageableBilling(), the same single rule the
+ * enforced card and Settings use, so grandfathered members and admins — Plus
+ * with no Stripe customer — never get it here either. What they get instead is
+ * `NoBillingNote`, which names no tier, no cap and no price and therefore does
+ * not touch the launch-day contract this card exists to honour.
  */
 export function UnenforcedPlan({ snapshot, portalState, onOpenPortal }: UnenforcedPlanProps) {
   return (
@@ -499,14 +523,18 @@ export function UnenforcedPlan({ snapshot, portalState, onOpenPortal }: Unenforc
         Back to your dashboard
         <ArrowRight className="h-4 w-4" />
       </Link>
-      {hasManageableBilling(snapshot.subscription) && (
-        <ManageBillingButton
-          state={portalState}
-          onOpenPortal={onOpenPortal}
-          showNote
-          className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800"
-        />
-      )}
+      <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+        <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          {BILLING_HEADING}
+        </h3>
+        {hasManageableBilling(snapshot.subscription) ? (
+          <ManageBillingButton state={portalState} onOpenPortal={onOpenPortal} showNote />
+        ) : (
+          /* Names no tier, no cap and no price — see NoBillingNote. The neutral
+             card stays neutral and stops being silent about money. */
+          <NoBillingNote />
+        )}
+      </div>
     </Card>
   )
 }

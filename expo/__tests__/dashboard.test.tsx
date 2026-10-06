@@ -501,9 +501,11 @@ describe("DashboardRoute navigation", () => {
       expect(getByTestId("tile-mindset")).toBeTruthy();
     });
 
-    // Mindset opens Mind tab and auto-starts (?start=1)
+    // Mindset opens the Mind hub — never auto-starts a session (NP-316):
+    // the hub owns "Begin", and the web's own View/CTA never append a start
+    // param either.
     fireEvent.press(getByTestId("tile-mindset"));
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/mind?start=1");
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/mind");
 
     // Nutrition opens Nutrition tab
     fireEvent.press(getByTestId("tile-nutrition"));

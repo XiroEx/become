@@ -31,9 +31,10 @@ jest.mock("expo-secure-store", () => {
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
 let mockParams: Record<string, string | undefined> = {};
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: mockBack }),
   useLocalSearchParams: () => mockParams,
 }));
 
@@ -132,6 +133,7 @@ describe("the recap carries the web's numbers", () => {
     mockApiFetch.mockReset();
     mockPush.mockReset();
     mockReplace.mockReset();
+    mockBack.mockReset();
     mockApiFetch.mockResolvedValue(JOURNEY);
     mockParams = { id: "p1" };
 
@@ -169,6 +171,9 @@ describe("the recap carries the web's numbers", () => {
     expect(mockReplace).toHaveBeenCalledWith("/(tabs)/programming");
     fireEvent.press(getByTestId(`${JOURNEY_TEST_ID}-log`));
     expect(mockReplace).toHaveBeenCalledWith("/progress");
+    // The header's back arrow (NP-286) is wired to `router.back()`.
+    fireEvent.press(getByTestId(`${JOURNEY_TEST_ID}-back`));
+    expect(mockBack).toHaveBeenCalled();
   });
 
   it("the web journey path resolves to the native journey screen", () => {
@@ -191,7 +196,7 @@ describe("the recap reads in both modes", () => {
 
   it("(id: e015ca68) renders sessions, volume, weight change and the top PRs", () => {
     const { getByTestId, queryByTestId } = render(
-      <ProgramJourney journey={JOURNEY} onFindNext={noop} onViewLog={noop} />,
+      <ProgramJourney journey={JOURNEY} onBack={noop} onFindNext={noop} onViewLog={noop} />,
     );
     expect(getByTestId(`${JOURNEY_TEST_ID}-title`)).toHaveTextContent(
       "PROGRAM COMPLETE",
@@ -223,6 +228,7 @@ describe("the recap reads in both modes", () => {
     const empty = render(
       <ProgramJourney
         journey={{ ...JOURNEY, topPRs: [], totalVolumeLbs: 0, weightChange: null }}
+        onBack={noop}
         onFindNext={noop}
         onViewLog={noop}
       />,
@@ -239,7 +245,7 @@ describe("the recap reads in both modes", () => {
   it.each(["light", "dark"] as const)("renders under the %s system scheme", (mode) => {
     setSystemScheme(mode);
     const { getByTestId } = render(
-      <ProgramJourney journey={JOURNEY} onFindNext={noop} onViewLog={noop} />,
+      <ProgramJourney journey={JOURNEY} onBack={noop} onFindNext={noop} onViewLog={noop} />,
     );
     expect(getByTestId(`${JOURNEY_TEST_ID}-sessions`).props.children).toBe("14");
     expect(getByTestId(`${JOURNEY_TEST_ID}-pr-0-weight`).props.children).toBe(

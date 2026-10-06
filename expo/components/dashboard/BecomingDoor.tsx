@@ -16,6 +16,7 @@ import type {
   MindSummaryResponse,
 } from "@become/api-client";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { usePressed } from "@/lib/a11y/usePressed";
 import { checkBecomingUnread, markBecomingSeen } from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
@@ -48,6 +49,7 @@ export function BecomingDoor({
   const router = useRouter();
   const reduced = useReducedMotion();
   const [isUnread, setIsUnread] = useState(false);
+  const cardPress = usePressed();
 
   const pulseAnim = useMemo(() => new Animated.Value(1), []);
 
@@ -153,7 +155,9 @@ export function BecomingDoor({
             : "The Becoming. Then → now → next, across all three."
         }
         onPress={handlePress}
-        style={({ pressed }) => [
+        onPressIn={cardPress.onPressIn}
+        onPressOut={cardPress.onPressOut}
+        style={[
           minTouchTarget,
           styles.card,
           isUnread
@@ -170,7 +174,7 @@ export function BecomingDoor({
                 borderColor: colors.border,
               },
           {
-            opacity: pressed ? 0.85 : 1,
+            opacity: cardPress.pressed ? 0.85 : 1,
           },
         ]}
       >
@@ -184,7 +188,7 @@ export function BecomingDoor({
                     ? isDark
                       ? "hsla(258, 80%, 70%, 0.25)"
                       : "hsla(258, 80%, 50%, 0.15)"
-                    : tint("accent", 0.15),
+                    : tint("mind-violet", 0.15),
                 },
               ]}
             >
@@ -195,7 +199,7 @@ export function BecomingDoor({
                     ? isDark
                       ? "hsl(258, 90%, 80%)"
                       : "hsl(258, 90%, 45%)"
-                    : colors.accent
+                    : colors["mind-violet"]
                 }
               />
             </View>
@@ -208,7 +212,7 @@ export function BecomingDoor({
                       ? isDark
                         ? "hsl(258, 90%, 80%)"
                         : "hsl(258, 90%, 45%)"
-                      : colors.accent,
+                      : colors["mind-violet"],
                   },
                 ]}
               >
@@ -406,24 +410,28 @@ export function BecomingDoor({
                   ? isDark
                     ? "hsl(38, 90%, 65%)"
                     : "hsl(38, 90%, 45%)"
-                  : colors.accent
+                  : colors["mind-violet"]
               }
             />
+            {/* One truncated line, like the web's `truncate` paragraph — two
+                SEPARATELY-styled Text nodes nested inside one outer Text so
+                `numberOfLines` governs the pair together instead of each
+                wrapping into its own second line (NP-316). */}
             <Text
-              style={[
-                styles.nextTitle,
-                { color: colors.foreground },
-              ]}
+              style={styles.nextTextWrap}
+              numberOfLines={1}
+              ellipsizeMode="tail"
             >
-              {top.title}
-            </Text>
-            <Text
-              style={[
-                styles.nextSub,
-                { color: colors["muted-foreground"] },
-              ]}
-            >
-              · {top.sub}
+              <Text
+                style={[styles.nextTitle, { color: colors.foreground }]}
+              >
+                {top.title}
+              </Text>
+              <Text
+                style={[styles.nextSub, { color: colors["muted-foreground"] }]}
+              >
+                {" "}· {top.sub}
+              </Text>
             </Text>
           </View>
         ) : null}
@@ -510,13 +518,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
+  nextTextWrap: {
+    flex: 1,
+  },
   nextTitle: {
     fontSize: 12,
     fontWeight: "600",
   },
   nextSub: {
     fontSize: 11,
-    flexShrink: 1,
   },
 });
 

@@ -343,6 +343,31 @@ test('a circuit that already disagrees is repaired, and nothing else is touched'
   assert.equal(alignCircuitSets(lonely), lonely)
 })
 
+test('repairing a saved circuit is what makes it runnable', () => {
+  // A circuit as it comes back from storage — written before the agreement
+  // rule existed, or by a coach in the program editor, which lets every
+  // exercise carry its own set count.
+  const gid = 'g1'
+  const saved = [
+    ex('Jump Rope', 5, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+    ex('Goblet Squat', 3, { groupId: gid, groupType: 'circuit', groupLabel: 'Circuit' }),
+  ]
+
+  // As stored: `buildWorkoutFlow` walks max(sets) = 5 rounds but only emits a
+  // step where the member has a set left, so rounds 4 and 5 are a "circuit"
+  // of one exercise. That is the shape the member photographed.
+  const asStored = buildWorkoutFlow(saved)
+  assert.equal(asStored.length, 8)
+  assert.deepEqual(asStored.map(s => s.exerciseIndex), [0, 1, 0, 1, 0, 1, 0, 0])
+
+  // Aligned at load: five rounds of two, every round whole.
+  const flow = buildWorkoutFlow(alignCircuitSets(saved))
+  assert.equal(flow.length, 10)
+  assert.deepEqual(flow.map(s => s.exerciseIndex), [0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+  // And the grid a host builds from `ex.sets` now has a row for every step.
+  assert.deepEqual(alignCircuitSets(saved).map(e => e.sets), [5, 5])
+})
+
 test('editing any member of a circuit edits the circuit; outside one, only the row', () => {
   const gid = 'g1'
   const list = [

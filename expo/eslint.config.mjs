@@ -48,6 +48,26 @@ export default [
           message:
             "No hand-written rgb()/rgba() (NP-123): the two palettes live in lib/theme/tokens.ts — reach them through useThemeTokens().",
         },
+        // NO STYLE CALLBACKS (NP-314). On RN 0.86.3 + NativeWind 4.2, a
+        // `Pressable` (or any component) whose `style` prop is a FUNCTION
+        // (`style={({ pressed }) => [...]}` / `=> ({...})`) renders with NONE
+        // of those styles applied on Android — children render, the
+        // container style does not. Nine call sites across 8 files were all
+        // broken this way (an invisible CTA button, stacked rows, a card
+        // drawn with no border). Build a static style array from
+        // `lib/a11y/usePressed.ts`'s boolean instead.
+        {
+          selector:
+            "JSXAttribute[name.name='style'] > JSXExpressionContainer > ArrowFunctionExpression",
+          message:
+            "No style callbacks (NP-314): style={({ pressed }) => [...]} renders unstyled on Android (RN 0.86.3 + NativeWind 4.2). Use a static style array and lib/a11y/usePressed() for the pressed state instead.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='style'] > JSXExpressionContainer > FunctionExpression",
+          message:
+            "No style callbacks (NP-314): style={function ({ pressed }) {...}} renders unstyled on Android (RN 0.86.3 + NativeWind 4.2). Use a static style array and lib/a11y/usePressed() for the pressed state instead.",
+        },
       ],
     },
   },

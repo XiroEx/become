@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
+import type { SetActiveField } from "@/lib/keyboard/useScrollFocusedFieldIntoView";
 import {
+  AlertCircle,
   ArrowRight,
   Brain,
   Check,
@@ -10,6 +12,7 @@ import {
   Pencil,
   Repeat,
   Target,
+  Telescope,
   Users,
 } from "lucide-react-native";
 import {
@@ -221,7 +224,21 @@ const EMPTY_FORM: VisionForm = {
 const IDENTITY_PLACEHOLDER =
   "e.g. A disciplined, present leader people can count on";
 
-export default function VisionDashboard() {
+export interface VisionDashboardProps {
+  /**
+   * NP-319: this dashboard is rendered INSIDE a parent route's own
+   * `ScrollView` (`app/(app)/(tabs)/mind/[section].tsx`), not one it owns
+   * itself, so the Android "scroll the focused field into view" fix has to
+   * be handed down rather than set up here — see
+   * `useScrollFocusedFieldIntoView`. Optional so this component still works
+   * standalone (tests, Storybook-style usage) without it.
+   */
+  setActiveField?: SetActiveField;
+}
+
+export default function VisionDashboard({
+  setActiveField,
+}: VisionDashboardProps = {}) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
   const [vision, setVision] = useState<VisionData | null>(null);
@@ -249,56 +266,70 @@ export default function VisionDashboard() {
   const [form, setForm] = useState<VisionForm>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // NP-319: refs the focused-field-into-view fix measures against — one for
+  // the identity statement, one per domain (keyed so a field that mounts via
+  // `DOMAINS.map()` is still read fresh at keyboard-show time).
+  const identityFieldRef = useRef<View>(null);
+  const domainFieldRefs = useRef<Partial<Record<DomainKey, View | null>>>({});
+
+  // Tracks the core GET /api/mind/vision call specifically (not the
+  // secondary journal fetch below) so a slow or failed request shows a
+  // loading or error state instead of the empty "Paint your vision" CTA,
+  // which previously meant exactly the same thing as "never set one up".
+  const [visionStatus, setVisionStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+
   const hasVision = !!(vision && vision.identityStatement);
 
   const load = useCallback(async () => {
-    try {
-      const tz = tzOffsetMinutes();
-      const [vr, jr] = await Promise.allSettled([
-        apiFetch("/api/mind/vision", MindVisionResponseSchema, {
-          baseUrl: WEBAPP_BASE_URL,
-          getToken: () => token ?? undefined,
-          tz,
-        }),
-        apiFetch("/api/mind/journal?system=vision&limit=8", MindJournalResponseSchema, {
-          baseUrl: WEBAPP_BASE_URL,
-          getToken: () => token ?? undefined,
-          tz,
-        }),
-      ]);
+    setVisionStatus("loading");
+    const tz = tzOffsetMinutes();
+    const [vr, jr] = await Promise.allSettled([
+      apiFetch("/api/mind/vision", MindVisionResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        tz,
+      }),
+      apiFetch("/api/mind/journal?system=vision&limit=8", MindJournalResponseSchema, {
+        baseUrl: WEBAPP_BASE_URL,
+        getToken: () => token ?? undefined,
+        tz,
+      }),
+    ]);
 
-      if (vr.status === "fulfilled") {
-        setVision(vr.value.vision ?? null);
-        if (vr.value.alignment) {
-          const a = vr.value.alignment;
-          setAlign({
-            avg7: a.avg7,
-            entries7: a.entries7,
-            todayScore: a.todayScore ?? null,
-            checkedToday: a.checkedToday,
-          });
-        }
+    if (vr.status === "fulfilled") {
+      setVision(vr.value.vision ?? null);
+      if (vr.value.alignment) {
+        const a = vr.value.alignment;
+        setAlign({
+          avg7: a.avg7,
+          entries7: a.entries7,
+          todayScore: a.todayScore ?? null,
+          checkedToday: a.checkedToday,
+        });
       }
+      setVisionStatus("ready");
+    } else {
+      setVisionStatus("error");
+    }
 
-      if (jr.status === "fulfilled") {
-        const raw = jr.value.entries ?? [];
-        setEntries(
-          raw.map((e) => ({
-            id: String(e.id ?? (e as { _id?: unknown })._id ?? ""),
-            title: e.title,
-            kind: e.kind,
-            createdAt: e.createdAt ?? new Date().toISOString(),
-          })),
-        );
-        const counts = jr.value.counts ?? {};
-        const sum = Object.values(counts as Record<string, number>).reduce(
-          (a, b) => a + b,
-          0,
-        );
-        setReps(sum);
-      }
-    } catch {
-      // ignore
+    if (jr.status === "fulfilled") {
+      const raw = jr.value.entries ?? [];
+      setEntries(
+        raw.map((e) => ({
+          id: String(e.id ?? (e as { _id?: unknown })._id ?? ""),
+          title: e.title,
+          kind: e.kind,
+          createdAt: e.createdAt ?? new Date().toISOString(),
+        })),
+      );
+      const counts = jr.value.counts ?? {};
+      const sum = Object.values(counts as Record<string, number>).reduce(
+        (a, b) => a + b,
+        0,
+      );
+      setReps(sum);
     }
   }, [token]);
 
@@ -490,7 +521,7 @@ export default function VisionDashboard() {
       />
 
       <SystemHero
-        Icon={Eye}
+        Icon={Telescope}
         title="Vision"
         tagline="The future you — habits, mind, body, and life"
         statValue={
@@ -511,7 +542,7 @@ export default function VisionDashboard() {
           <Text className="text-xs font-semibold uppercase tracking-widest text-emerald-500">
             {hasVision ? "Edit your vision" : "Paint your vision"}
           </Text>
-          <View>
+          <View ref={identityFieldRef}>
             <Text className="mb-1 text-[11px] font-semibold text-muted-foreground">
               Who you’re becoming (one line)
             </Text>
@@ -524,13 +555,17 @@ export default function VisionDashboard() {
               placeholder={IDENTITY_PLACEHOLDER}
               multiline
               className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+              onFocus={() => setActiveField?.(identityFieldRef.current)}
             />
           </View>
           {DOMAINS.map((d) => (
-            <View key={d.key}>
-              <Text className="mb-1 text-[11px] font-semibold text-muted-foreground">
-                {d.label}
-              </Text>
+            <View key={d.key} ref={(el) => { domainFieldRefs.current[d.key] = el; }}>
+              <View className="mb-1 flex-row items-center gap-1.5">
+                <d.Icon size={12} color={colors["muted-foreground"]} />
+                <Text className="text-[11px] font-semibold text-muted-foreground">
+                  {d.label}
+                </Text>
+              </View>
               <TextInput
                 testID={`vision-domain-${d.key}`}
                 value={form[d.key]}
@@ -540,6 +575,7 @@ export default function VisionDashboard() {
                 placeholder={d.placeholder}
                 multiline
                 className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+                onFocus={() => setActiveField?.(domainFieldRefs.current[d.key] ?? null)}
               />
             </View>
           ))}
@@ -572,6 +608,38 @@ export default function VisionDashboard() {
               </Pressable>
             ) : null}
           </View>
+        </View>
+      ) : visionStatus === "loading" ? (
+        <View
+          testID="vision-loading"
+          className="rounded-2xl border border-dashed border-emerald-500/40 p-5 items-center justify-center bg-card"
+        >
+          <ActivityIndicator size="small" color={colors.success} />
+          <Text className="mt-2 text-xs text-muted-foreground">
+            Loading your vision…
+          </Text>
+        </View>
+      ) : visionStatus === "error" ? (
+        <View
+          testID="vision-error"
+          className="rounded-2xl border border-destructive/30 bg-destructive/10 p-5 items-center justify-center"
+        >
+          <AlertCircle size={28} color={colors.destructive} />
+          <Text className="mt-2 text-sm font-bold text-foreground">
+            Could not load your vision
+          </Text>
+          <Text className="mt-1 text-xs text-muted-foreground text-center">
+            Check your connection and try again.
+          </Text>
+          <Pressable
+            testID="vision-error-retry"
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            onPress={() => void load()}
+            className="mt-3 rounded-xl bg-emerald-500 px-4 py-2.5 items-center justify-center"
+          >
+            <Text className="text-sm font-bold text-white">Try again</Text>
+          </Pressable>
         </View>
       ) : hasVision ? (
         <View
@@ -676,7 +744,7 @@ export default function VisionDashboard() {
           onPress={openEditor}
           className="rounded-2xl border border-dashed border-emerald-500/40 p-5 items-center justify-center bg-card"
         >
-          <Eye size={28} color={colors.success} />
+          <Telescope size={28} color={colors.success} />
           <Text className="mt-2 text-sm font-bold text-foreground">
             Paint your vision
           </Text>

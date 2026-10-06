@@ -15,7 +15,8 @@ export type ButtonVariant =
   | "destructive"
   | "ghost"
   | "inverted"
-  | "success";
+  | "success"
+  | "info";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps {
@@ -52,13 +53,20 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // The web's `bg-zinc-900 dark:bg-white` submit button on the sign-in /
   // sign-up screen (NP-251): foreground on background, which is already the
   // light/dark-inverted pair every other token follows, so no new colour
-  // literal is needed to match it.
+  // literal is needed to match it. Since NP-313 made `primary` that same
+  // neutral pair, `inverted` and `primary` draw the same button — it is kept
+  // because ~30 call sites name it and because `text-background` (zinc-50 /
+  // #0a0a0a) is a hair off `text-primary-foreground` (white / zinc-900).
   inverted: "bg-foreground",
-  // The web's teal/emerald CTA (e.g. SnapPlateModal's "Estimate" button) —
-  // the brand red (`primary`) is reserved for destructive-adjacent native
-  // actions, so a positive confirm that mirrors web's emerald uses the
-  // existing `success` token instead of a new colour literal.
+  // The web's teal/emerald CTA (e.g. SnapPlateModal's "Estimate" button) — a
+  // positive confirm that mirrors web's emerald uses the existing `success`
+  // token instead of a new colour literal. (Before NP-313 this also existed
+  // to keep such CTAs off the brand red that `primary` used to be.)
   success: "bg-success",
+  // NP-303: the web's Settings "Enable" / "Turn on" / "Repair" buttons are
+  // `bg-blue-600` — `info` is that same blue-600/400 token everywhere else in
+  // the app (Calendar/History links).
+  info: "bg-info",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -68,6 +76,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   ghost: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
+  info: "text-primary-foreground",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -147,7 +156,8 @@ export function Button({
             color={
               variant === "primary" ||
               variant === "destructive" ||
-              variant === "success"
+              variant === "success" ||
+              variant === "info"
                 ? colors["primary-foreground"]
                 : variant === "inverted"
                   ? colors.background

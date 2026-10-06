@@ -29,7 +29,7 @@ import {
   equippedCustomAvatar,
   presetIcon,
 } from "@/lib/profile/icons";
-import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { onDarkForeground } from "@/lib/theme/tokens";
 
 export interface AvatarProps {
   /** PRESET_ICONS id, or 'custom' to use imageUrl. */
@@ -49,7 +49,6 @@ export function Avatar({
   style,
   testID = "avatar",
 }: AvatarProps) {
-  const { colors } = useThemeTokens();
   const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
 
   const src = avatarImageSrc(icon, imageUrl);
@@ -118,7 +117,7 @@ export function Avatar({
         className="bg-zinc-500 dark:bg-zinc-600"
       >
         <UserRound
-          color={colors["primary-foreground"]}
+          color={onDarkForeground}
           size={size * 0.55}
           strokeWidth={2.25}
         />
@@ -148,7 +147,7 @@ export function Avatar({
       ]}
     >
       <Icon
-        color={colors["primary-foreground"]}
+        color={onDarkForeground}
         size={size * 0.55}
         strokeWidth={2.25}
       />

@@ -21,11 +21,15 @@ import {
 import {
   BadgeCheck,
   Bookmark,
+  Camera,
   ChefHat,
   Clock,
-  Flag,
+  Globe,
+  PencilLine,
+  Plus,
   ScanBarcode,
   Star,
+  Upload,
   X,
   AlertCircle,
 } from "lucide-react-native";
@@ -70,12 +74,6 @@ const TABS: { id: Exclude<FoodSearchTabId, "all">; label: string; Icon: typeof B
   { id: "recent", label: "Recent", Icon: Clock, testID: "food-filter-recent" },
   { id: "frequent", label: "Frequent", Icon: Star, testID: "food-filter-frequent" },
 ];
-
-const SOURCE_LABEL: Record<string, string> = {
-  custom: "Custom",
-  usda: "USDA",
-  off: "OFF",
-};
 
 /**
  * NP-261: what a row's inline `QuantityPicker` hands back once a member
@@ -122,6 +120,18 @@ export interface FoodSearchSheetProps {
   initialBarcodeOpen?: boolean;
   /** Injection point for the barcode lookup; the app leaves it unset. */
   lookupBarcodeImpl?: typeof lookupBarcode;
+  /**
+   * NP-321: the web's capture row (`FoodSearchModal.tsx`'s Barcode / Snap /
+   * Upload) hands these three off to the same AI capture surface the camera
+   * menu uses (`EstimateSheet`, NP-089). Barcode works unconditionally
+   * (this sheet owns it); Snap/Upload only render when the caller wires a
+   * capture surface — omitting them, like the web's `searchOnly` mode, is
+   * not a bug.
+   */
+  onSnapPhoto?: () => void;
+  onUpload?: () => void;
+  /** The green describe-send button beside the search box when typing. */
+  onDescribe?: (text: string) => void;
   testID?: string;
 }
 
@@ -141,9 +151,12 @@ export function FoodSearchSheet({
   clearTimeoutImpl,
   initialBarcodeOpen = false,
   lookupBarcodeImpl = lookupBarcode,
+  onSnapPhoto,
+  onUpload,
+  onDescribe,
   testID = "food-search-sheet",
 }: FoodSearchSheetProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token } = useAuth();
   const router = useRouter();
 
@@ -182,6 +195,10 @@ export function FoodSearchSheet({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from the sheet's own open/close prop, not a render-derivable value
       setExpandedRowId(null);
       setExpandedFood(null);
+      // NP-321: the web's search box starts empty every time the modal
+      // opens; natively the last query stuck around across opens because
+      // nothing ever reset it.
+      setQuery("");
     }
   }, [visible]);
 
@@ -592,8 +609,9 @@ export function FoodSearchSheet({
         }}
       >
         <View style={{ flex: 1, paddingRight: 8 }}>
-          {/* NP-261: the web's blue "BEST MATCH" pill on the crowned top
-              result of a confident search (`isBestMatch`, page 0 only). */}
+          {/* NP-321: the web's "Best Match" pill is a literal blue
+              (`bg-blue-100 text-blue-700`), never the brand-red `primary` —
+              that mismatch was the whole "badge is red" bug. */}
           {food.isBestMatch ? (
             <View
               testID={`food-search-result-${id}-best-match`}
@@ -606,16 +624,16 @@ export function FoodSearchSheet({
                 paddingHorizontal: 6,
                 paddingVertical: 1,
                 marginBottom: 2,
-                backgroundColor: colors.primary,
+                backgroundColor: tint("info", 0.15),
               }}
             >
-              <Star size={9} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+              <Star size={9} color={colors.info} fill={colors.info} />
               <Text
                 style={{
                   fontSize: 9,
                   fontWeight: "700",
                   letterSpacing: 0.4,
-                  color: colors["primary-foreground"],
+                  color: colors.info,
                 }}
               >
                 BEST MATCH
@@ -623,9 +641,26 @@ export function FoodSearchSheet({
             </View>
           ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text className="text-foreground font-semibold">{food.name}</Text>
+            <Text className="text-foreground font-semibold" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {food.name}
+            </Text>
+            {/* NP-321: the web shows ONE source signal — a verified tick, or
+                a globe for an external catalogue — never a coloured chip
+                per source plus a flag icon on every row (that's the "red
+                Custom badge + OFF/USDA badge + flag icon" the card flagged;
+                "Something look wrong?" now lives on the expanded picker). */}
             {food.isVerified ? (
-              <BadgeCheck size={14} color={colors.success} />
+              <View testID={`food-search-result-${id}-verified`}>
+                <BadgeCheck size={14} color={colors.success} />
+              </View>
+            ) : source === "usda" ? (
+              <View testID={`food-search-result-${id}-source`}>
+                <Globe size={12} color={colors.success} />
+              </View>
+            ) : source === "off" ? (
+              <View testID={`food-search-result-${id}-source`}>
+                <Globe size={12} color={colors.info} />
+              </View>
             ) : null}
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
@@ -644,63 +679,16 @@ export function FoodSearchSheet({
             ) : null}
           </View>
         </View>
-        {/* NP-261: per-SERVING calories, not the per-100 g/ml storage
-            figure — the row and `QuantityPicker`'s own preview now agree. */}
-        {calories != null ? (
-          <Text
-            testID={`food-search-result-${id}-calories`}
-            className="text-foreground text-sm font-semibold"
-          >
-            {calories} cal
-          </Text>
-        ) : null}
-
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <View
-            testID={`food-search-result-${id}-source`}
-            style={{
-              borderRadius: 12,
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              backgroundColor:
-                source === "custom"
-                  ? colors.primary
-                  : source === "usda"
-                    ? colors.muted
-                    : colors.accent,
-            }}
-          >
+          {/* NP-261: per-SERVING calories, not the per-100 g/ml storage
+              figure — the row and `QuantityPicker`'s own preview now agree. */}
+          {calories != null ? (
             <Text
-              style={{
-                fontSize: 10,
-                fontWeight: "600",
-                color:
-                  source === "custom"
-                    ? colors["primary-foreground"]
-                    : source === "usda"
-                      ? colors.foreground
-                      : colors["accent-foreground"],
-              }}
+              testID={`food-search-result-${id}-calories`}
+              className="text-foreground text-sm font-semibold"
             >
-              {SOURCE_LABEL[source] ?? "Custom"}
+              {calories} cal
             </Text>
-          </View>
-
-          {isObjectIdString(id) ? (
-            <Pressable
-              testID={`food-flag-${id}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Report ${food.name}`}
-              accessibilityHint="Something look wrong? Report this food without changing your entry"
-              onPress={(e) => {
-                e?.stopPropagation?.();
-                setFlagFood(food);
-              }}
-              hitSlop={8}
-              style={{ padding: 4 }}
-            >
-              <Flag size={18} color={colors["muted-foreground"]} />
-            </Pressable>
           ) : null}
           <Pressable
             testID={`food-bookmark-${id}`}
@@ -757,6 +745,7 @@ export function FoodSearchSheet({
                   }
                 : undefined
             }
+            onReportFood={() => setFlagFood(pickerFood)}
           />
         </View>
       ) : null}
@@ -808,14 +797,66 @@ export function FoodSearchSheet({
     <BottomSheet
       visible={visible}
       onClose={onClose}
-      title="Find a food"
       testID={testID}
+      // NP-321: `BottomSheet`'s own `title` sits inside the same padded
+      // container as everything else — zeroing that container's horizontal
+      // padding (every row below manages its own 16px) stripped the title's
+      // padding too, leaving it flush against the screen edge. Rendering
+      // the title ourselves, padded like every other row, keeps the
+      // full-bleed body AND a padded title.
       sheetStyle={{ height: "85%", maxHeight: "90%", paddingHorizontal: 0 }}
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <Text
+            testID={`${testID}-title`}
+            accessibilityRole="header"
+            className="text-foreground text-xl font-semibold"
+          >
+            Find a food
+          </Text>
+          {/* NP-261/NP-321: the web's "Custom Food" shortcut beside the
+              title — a bare barcode icon and search box left no way to
+              create a custom food from here at all. */}
+          <Pressable
+            testID="food-search-custom-food"
+            accessibilityRole="button"
+            accessibilityLabel="Create a custom food"
+            onPress={() => {
+              onClose();
+              router.push("/(tabs)/nutrition/food/new");
+            }}
+            hitSlop={8}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Plus size={14} color={colors.foreground} />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>
+              Custom
+            </Text>
+          </Pressable>
+        </View>
+
         {/* NP-261: the web header's "ADDING TO <tag>" picker + close X.
             `BottomSheet` already offers a swipe-to-dismiss and a backdrop
             tap; this is the explicit, visible affordance the web always
@@ -867,7 +908,9 @@ export function FoodSearchSheet({
           </Pressable>
         </View>
 
-        {/* Search Input + barcode button */}
+        {/* Search / describe box (NP-321/NP-261): the web's placeholder
+            covers both search and the describe flow; a green send button
+            slides in beside it once there's text and a describe handler. */}
         <View
           style={{
             paddingHorizontal: 16,
@@ -880,7 +923,7 @@ export function FoodSearchSheet({
           <View style={{ flex: 1 }}>
             <Input
               testID="food-search-input"
-              placeholder="Apple, chicken breast…"
+              placeholder="Search or describe foods and meals…"
               autoCapitalize="none"
               value={query}
               onChangeText={(text) => {
@@ -889,29 +932,137 @@ export function FoodSearchSheet({
               }}
             />
           </View>
-          <Pressable
-            testID="food-search-barcode-button"
-            accessibilityRole="button"
-            accessibilityLabel="Scan barcode"
-            onPress={() => {
-              setBarcodeError(null);
-              setScannerOpen(true);
-            }}
-            hitSlop={8}
+          {query.trim().length > 0 && onDescribe ? (
+            <Pressable
+              testID="food-search-describe-button"
+              accessibilityRole="button"
+              accessibilityLabel="Describe this meal to estimate macros"
+              onPress={() => {
+                const text = query;
+                onClose();
+                onDescribe(text);
+              }}
+              hitSlop={8}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                backgroundColor: colors.success,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <PencilLine size={18} color={colors["primary-foreground"]} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        {/* Capture row (NP-321): one place for every way to add food,
+            matching the web's Barcode / Snap / Upload — collapses once a
+            query is typed, the same way the web's does. Snap/Upload only
+            act when the caller wires a capture surface (`EstimateSheet`);
+            without one they render disabled rather than disappear, so the
+            row's shape doesn't jump around call sites that haven't wired
+            them yet. */}
+        {query.trim().length === 0 ? (
+          <View
+            testID="food-search-capture-row"
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              alignItems: "center",
-              justifyContent: "center",
+              paddingHorizontal: 16,
+              marginBottom: 8,
+              flexDirection: "row",
+              gap: 8,
             }}
           >
-            <ScanBarcode size={18} color={colors.foreground} />
-          </Pressable>
-        </View>
+            <Pressable
+              testID="food-search-barcode-button"
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode"
+              onPress={() => {
+                setBarcodeError(null);
+                setScannerOpen(true);
+              }}
+              hitSlop={8}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                height: 40,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+              }}
+            >
+              <ScanBarcode size={16} color={colors.foreground} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>
+                Barcode
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="food-search-snap-button"
+              accessibilityRole="button"
+              accessibilityLabel="Snap a photo to estimate macros"
+              disabled={!onSnapPhoto}
+              onPress={() => {
+                if (!onSnapPhoto) return;
+                onClose();
+                onSnapPhoto();
+              }}
+              hitSlop={8}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                height: 40,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                opacity: onSnapPhoto ? 1 : 0.4,
+              }}
+            >
+              <Camera size={16} color={colors.foreground} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>
+                Snap
+              </Text>
+            </Pressable>
+            <Pressable
+              testID="food-search-upload-button"
+              accessibilityRole="button"
+              accessibilityLabel="Upload a photo to estimate macros"
+              disabled={!onUpload}
+              onPress={() => {
+                if (!onUpload) return;
+                onClose();
+                onUpload();
+              }}
+              hitSlop={8}
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                height: 40,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+                opacity: onUpload ? 1 : 0.4,
+              }}
+            >
+              <Upload size={16} color={colors.foreground} />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: colors.foreground }}>
+                Upload
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Barcode loading / miss feedback — the web's message + Search by name */}
         {barcodeLoading ? (
@@ -1106,6 +1257,28 @@ export function FoodSearchSheet({
           {/* OVERVIEW MODE (Empty query + all tab) */}
           {isOverview ? (
             <View testID="food-search-overview">
+              {/* NP-321: the web's bookmark tip — missing natively, so
+                  there was no hint the star icon on a row even does
+                  anything until a member happened to tap it. */}
+              {savedFoodIds.size === 0 ? (
+                <View
+                  testID="food-search-bookmark-tip"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 8,
+                    backgroundColor: colors.muted,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <Bookmark size={14} color={colors["muted-foreground"]} />
+                  <Text className="text-muted-foreground text-xs" style={{ flex: 1 }}>
+                    Save foods you eat often — tap the bookmark on any result
+                    to add it here.
+                  </Text>
+                </View>
+              ) : null}
               {overview?.foods && overview.foods.length > 0 ? (
                 <View>
                   <View
@@ -1302,12 +1475,14 @@ export function FoodSearchSheet({
               {results.length > 0 ? (
                 results.map(renderFoodRow)
               ) : !loading ? (
-                <Text
-                  testID="food-search-empty"
-                  className="text-muted-foreground text-center py-10"
-                >
-                  No saved foods yet.
-                </Text>
+                <View style={{ alignItems: "center", paddingVertical: 40, gap: 4 }}>
+                  <Text testID="food-search-empty" className="text-muted-foreground text-sm">
+                    No saved foods yet.
+                  </Text>
+                  <Text className="text-muted-foreground text-xs text-center" style={{ maxWidth: 240 }}>
+                    Tap the bookmark on any search result to add it here.
+                  </Text>
+                </View>
               ) : null}
             </View>
           ) : null}

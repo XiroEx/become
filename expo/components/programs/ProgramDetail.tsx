@@ -503,11 +503,11 @@ export function ProgramDetail({
                   paddingHorizontal: 12,
                   paddingVertical: 6,
                   borderRadius: 9999,
-                  backgroundColor: heroTint("primary-foreground", 0.1),
+                  backgroundColor: heroTint("foreground", 0.1),
                 }}
               >
-                <ChevronLeft size={16} color={heroRgb("primary-foreground")} strokeWidth={2} />
-                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                <ChevronLeft size={16} color={heroRgb("foreground")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("foreground") }}>
                   All Programs
                 </Text>
               </Pressable>
@@ -527,11 +527,11 @@ export function ProgramDetail({
                   paddingHorizontal: 12,
                   paddingVertical: 6,
                   borderRadius: 9999,
-                  backgroundColor: heroTint("primary-foreground", 0.1),
+                  backgroundColor: heroTint("foreground", 0.1),
                 }}
               >
-                <Calendar size={16} color={heroRgb("primary-foreground")} strokeWidth={2} />
-                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                <Calendar size={16} color={heroRgb("foreground")} strokeWidth={2} />
+                <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("foreground") }}>
                   Calendar
                 </Text>
               </Pressable>
@@ -582,17 +582,17 @@ export function ProgramDetail({
           <View style={{ flex: 1 }}>
             <Text
               testID={`${testID}-name`}
-              style={{ fontSize: 24, fontWeight: "800", color: heroRgb("primary-foreground") }}
+              style={{ fontSize: 24, fontWeight: "800", color: heroRgb("foreground") }}
             >
               {program.name}
             </Text>
             {program.targetUser ? (
-              <Text style={{ fontSize: 15, color: heroRgb("primary-foreground"), opacity: 0.85, marginTop: 6 }}>
+              <Text style={{ fontSize: 15, color: heroRgb("foreground"), opacity: 0.85, marginTop: 6 }}>
                 {program.targetUser}
               </Text>
             ) : null}
             {program.goal ? (
-              <Text style={{ fontSize: 13, color: heroRgb("primary-foreground"), opacity: 0.6, marginTop: 4 }}>
+              <Text style={{ fontSize: 13, color: heroRgb("foreground"), opacity: 0.6, marginTop: 4 }}>
                 {program.goal}
               </Text>
             ) : null}
@@ -612,13 +612,18 @@ export function ProgramDetail({
               style={{
                 borderRadius: 12,
                 borderWidth: 1,
-                borderColor: heroTint("primary-foreground", 0.3),
+                borderColor: heroTint("foreground", 0.3),
                 padding: 10,
               }}
             >
               <Heart
-                color={isSaved ? colors.primary : heroRgb("primary-foreground")}
-                fill={isSaved ? colors.primary : "transparent"}
+                // Saved reads as a filled RED heart, which is the one thing on
+                // this hero that is a brand accent rather than chrome — and the
+                // hero is dark-pinned, so it takes the dark palette's `brand`
+                // (red-500, the colour this heart has always been). `primary`
+                // is zinc-900 in light mode now (NP-313) and would vanish here.
+                color={isSaved ? heroRgb("brand") : heroRgb("foreground")}
+                fill={isSaved ? heroRgb("brand") : "transparent"}
                 size={22}
                 strokeWidth={1.5}
               />
@@ -681,7 +686,7 @@ export function ProgramDetail({
               borderRadius: 9999,
               backgroundColor: hasInProgressWorkout
                 ? heroTint("accent", 0.2)
-                : heroTint("primary-foreground", 0.1),
+                : heroTint("foreground", 0.1),
             }}
           >
             {hasInProgressWorkout ? (
@@ -691,8 +696,8 @@ export function ProgramDetail({
               </>
             ) : (
               <>
-                <Play size={16} color={heroRgb("primary-foreground")} fill={heroRgb("primary-foreground")} />
-                <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("primary-foreground") }}>
+                <Play size={16} color={heroRgb("foreground")} fill={heroRgb("foreground")} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("foreground") }}>
                   Workout
                 </Text>
               </>
@@ -740,7 +745,7 @@ export function ProgramDetail({
                   style={{
                     height: 6,
                     width: "100%",
-                    backgroundColor: heroTint("primary-foreground", 0.2),
+                    backgroundColor: heroTint("foreground", 0.2),
                     borderRadius: 3,
                     overflow: "hidden",
                   }}

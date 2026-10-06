@@ -9,6 +9,7 @@ import type { MindSummaryResponse } from "@become/api-client";
 import { moodGateway, type MoodLevel } from "@become/core";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { usePressed } from "@/lib/a11y/usePressed";
 import {
   computeMindsetCta,
   computeMindsetStatus,
@@ -33,6 +34,7 @@ export function MindsetCard({
 }: MindsetCardProps) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
+  const ctaPress = usePressed();
 
   const handleOpenMind = () => {
     if (onOpenMind) {
@@ -96,13 +98,15 @@ export function MindsetCard({
         <>
           {/* Level · chapter */}
           <View style={styles.levelRow}>
+            {/* The web's brain tile is violet (`bg-purple-100` /
+                `text-purple-600`), not the orange accent (NP-316). */}
             <View
               style={[
                 styles.brainBadge,
-                { backgroundColor: tint("accent", 0.15) },
+                { backgroundColor: tint("mind-violet", 0.15) },
               ]}
             >
-              <Brain size={20} color={colors.accent} />
+              <Brain size={20} color={colors["mind-violet"]} />
             </View>
             <View style={styles.levelMeta}>
               <Text
@@ -125,7 +129,7 @@ export function MindsetCard({
                     style={[
                       styles.progressBar,
                       {
-                        backgroundColor: colors.accent,
+                        backgroundColor: colors["mind-violet"],
                         width: `${progressPct}%`,
                       },
                     ]}
@@ -157,7 +161,7 @@ export function MindsetCard({
                 {status.done ? (
                   <Check size={16} color={colors.success} />
                 ) : (
-                  <Sparkles size={16} color={colors.accent} />
+                  <Sparkles size={16} color={colors["mind-violet"]} />
                 )}
                 <Text
                   testID="mindset-status-text"
@@ -246,11 +250,13 @@ export function MindsetCard({
         accessibilityRole="button"
         accessibilityLabel={cta}
         onPress={handleOpenMind}
-        style={({ pressed }) => [
+        onPressIn={ctaPress.onPressIn}
+        onPressOut={ctaPress.onPressOut}
+        style={[
           styles.ctaButton,
           {
             backgroundColor: colors.foreground,
-            opacity: pressed ? 0.85 : 1,
+            opacity: ctaPress.pressed ? 0.85 : 1,
           },
         ]}
       >

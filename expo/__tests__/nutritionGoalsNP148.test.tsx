@@ -499,4 +499,23 @@ describe("NutritionGoalsRoute (NP-148)", () => {
       "bg-purple-100",
     );
   });
+
+  // NP-319: Water Goal is a plain screen, not a sheet — Android has no
+  // built-in "scroll the focused field into view" the way iOS does, so
+  // focusing this field used to leave it under the keyboard with no way to
+  // see it or the Save button. The scroll math itself is pinned exhaustively
+  // by `useScrollFocusedFieldIntoView.test.ts`; this just checks the field
+  // is actually wired to it and that the wiring doesn't throw when driven.
+  it("wires the Water Goal field's onFocus to the Android scroll-into-view fix (NP-319)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-water")).toBeTruthy();
+    });
+
+    expect(getByTestId("nutrition-goals-water-field")).toBeTruthy();
+    const onFocus = getByTestId("nutrition-goals-water").props.onFocus;
+    expect(typeof onFocus).toBe("function");
+    expect(() => onFocus()).not.toThrow();
+  });
 });

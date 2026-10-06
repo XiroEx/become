@@ -21,6 +21,7 @@ import {
   saveCoachChat,
   type ChatMessage,
 } from "@/lib/ai/coachChatStore";
+import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
 
 /**
  * ─── COACH CHAT (NP-155) ────────────────────────────────────────────────────
@@ -64,7 +65,8 @@ export interface CoachChatProps {
   runLabel?: string;
   /**
    * Header icon, user-message bubble, and send-button colour. Defaults to
-   * `colors.primary` (the brand red every other coach uses) — pass this only
+   * `colors.primary` (the neutral zinc-900/white every other coach uses since
+   * NP-313; it was the brand red) — pass this only
    * when a specific consultant has its own identity colour, e.g. the
    * nutrition consultant's teal (NP-262), matching the web's
    * `accentFrom`/`accentTo` gradient on that one sheet.
@@ -223,8 +225,11 @@ export function CoachChat({
   return (
     <RNModal
       visible={visible}
-      onRequestClose={onClose}
+      // NP-319 point 8: don't let the hardware back button close the keyboard
+      // AND the chat sheet in one press — see `handleSheetRequestClose`.
+      onRequestClose={() => handleSheetRequestClose(onClose)}
       transparent
+      statusBarTranslucent
       animationType="slide"
       testID={testID}
     >
@@ -253,8 +258,12 @@ export function CoachChat({
             overflow: "hidden",
           }}
         >
+          {/* NP-319: real Android keyboard avoidance — "undefined" did
+              nothing, and this sheet is a `Modal`, where targetSdk 35's
+              edge-to-edge resize never reaches. "height" is computed from
+              the keyboard-show event instead. */}
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ flex: 1 }}
           >
             {/* Header */}

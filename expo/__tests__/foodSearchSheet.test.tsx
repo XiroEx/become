@@ -514,3 +514,165 @@ describe("FoodSearchSheet — Acceptance Criteria & Parity", () => {
     expect(queryByTestId("food-search-adding-to")).toBeTruthy();
   });
 });
+
+describe("Card NP-321 — FoodSearchSheet header, capture row and badges", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockPush.mockReset();
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/meals")) return { meals: [] };
+      return {};
+    });
+  });
+
+  it("(id: np321-title) renders its own padded title ('Find a food' is no longer flush to the edge) and a Custom shortcut that routes to food/new", async () => {
+    const onClose = jest.fn();
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={onClose} debounceMs={0} />,
+    );
+    const title = getByTestId("food-search-sheet-title");
+    expect(title).toHaveTextContent("Find a food");
+    const titleRowStyle = title.props.style;
+    const flat = Array.isArray(titleRowStyle)
+      ? Object.assign({}, ...titleRowStyle)
+      : titleRowStyle;
+    // Not asserting an exact px value (that's the sheet's job) — only that
+    // this component no longer renders the title with zero padding.
+    expect(flat.paddingHorizontal).not.toBe(0);
+
+    fireEvent.press(getByTestId("food-search-custom-food"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/food/new");
+  });
+
+  it("(id: np321-placeholder) the search box matches the web's placeholder, not the stale 'Apple, chicken breast…'", () => {
+    const { getByPlaceholderText, queryByPlaceholderText } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    expect(
+      getByPlaceholderText("Search or describe foods and meals…"),
+    ).toBeTruthy();
+    expect(queryByPlaceholderText("Apple, chicken breast…")).toBeNull();
+  });
+
+  it("(id: np321-capture-row) shows Barcode / Snap / Upload while the box is empty, collapses once typing starts, and Snap/Upload only fire (and close the sheet first) when the caller wires them", async () => {
+    const onClose = jest.fn();
+    const onSnapPhoto = jest.fn();
+    const { getByTestId, queryByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={onClose}
+        debounceMs={0}
+        onSnapPhoto={onSnapPhoto}
+      />,
+    );
+    expect(getByTestId("food-search-capture-row")).toBeTruthy();
+    expect(getByTestId("food-search-barcode-button")).toBeTruthy();
+    expect(getByTestId("food-search-snap-button")).toBeTruthy();
+    // Upload has no handler here — disabled, but still rendered (same shape
+    // as the web's `disabled={!onUpload}`, not a vanishing button).
+    expect(getByTestId("food-search-upload-button").props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(getByTestId("food-search-snap-button"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSnapPhoto).toHaveBeenCalledTimes(1);
+
+    fireEvent.changeText(getByTestId("food-search-input"), "banana");
+    await waitFor(() => {
+      expect(queryByTestId("food-search-capture-row")).toBeNull();
+    });
+  });
+
+  it("(id: np321-describe) the green describe button only shows once there's text and a handler, and hands the sheet's own query off", () => {
+    const onClose = jest.fn();
+    const onDescribe = jest.fn();
+    const { getByTestId, queryByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={onClose}
+        debounceMs={0}
+        onDescribe={onDescribe}
+      />,
+    );
+    expect(queryByTestId("food-search-describe-button")).toBeNull();
+    fireEvent.changeText(getByTestId("food-search-input"), "two eggs and toast");
+    expect(getByTestId("food-search-describe-button")).toBeTruthy();
+    fireEvent.press(getByTestId("food-search-describe-button"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDescribe).toHaveBeenCalledWith("two eggs and toast");
+  });
+
+  it("(id: np321-reopen-empty) the query does not survive a close/reopen, matching the web starting empty", async () => {
+    const { getByTestId, rerender } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    fireEvent.changeText(getByTestId("food-search-input"), "banana");
+    expect(getByTestId("food-search-input").props.value).toBe("banana");
+
+    rerender(<FoodSearchSheet visible={false} onClose={() => {}} debounceMs={0} />);
+    rerender(<FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />);
+
+    await waitFor(() => {
+      expect(getByTestId("food-search-input").props.value).toBe("");
+    });
+  });
+
+  it("(id: np321-bookmark-tip) hints at the bookmark when nothing is saved yet, the web's 'Save foods you eat often' tip", async () => {
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("food-search-overview")).toBeTruthy();
+    });
+    expect(getByTestId("food-search-bookmark-tip")).toHaveTextContent(
+      "Save foods you eat often — tap the bookmark on any result to add it here.",
+    );
+  });
+
+  it("(id: np321-best-match-color) the BEST MATCH badge is a blue tint, not the brand-red primary used elsewhere on the same row", async () => {
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/nutrition/foods")) {
+        return {
+          foods: [
+            {
+              _id: "6512c0ffee00000000000099",
+              name: "Zest Delites Banana",
+              isBestMatch: true,
+              isSaved: true, // so the row's bookmark icon renders in `colors.primary`
+              servingSize: 100,
+              servingUnit: "g",
+              nutrition: { calories: 348, protein: 1.1, carbs: 23, fats: 0.4 },
+            },
+          ],
+        };
+      }
+      if (url.startsWith("/api/meals")) return { meals: [] };
+      return {};
+    });
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    fireEvent.changeText(getByTestId("food-search-input"), "banana");
+
+    const rowId = "6512c0ffee00000000000099";
+    await waitFor(() => {
+      expect(getByTestId(`food-search-result-${rowId}`)).toBeTruthy();
+    });
+
+    const badge = getByTestId(`food-search-result-${rowId}-best-match`);
+    const badgeStyle = Array.isArray(badge.props.style)
+      ? Object.assign({}, ...badge.props.style)
+      : badge.props.style;
+
+    // `tint("info", …)` always renders `rgba(r, g, b, a)` (see
+    // `lib/theme/tokens.ts`'s `tintToken`) — a flat `colors.primary` (what
+    // the badge used to reuse) is a bare `rgb(r g b)`, never this shape.
+    expect(String(badgeStyle.backgroundColor)).toMatch(/^rgba\(/);
+  });
+});
