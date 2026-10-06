@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { Dumbbell, History, RefreshCw, Sparkles, Zap } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import {
+  ArrowRight,
+  ChevronRight,
+  Dumbbell,
+  History,
+  RefreshCw,
+  Sparkles,
+  X,
+  Zap,
+} from "lucide-react-native";
 import { useRouter } from "expo-router";
 import {
   apiFetch,
@@ -8,12 +18,14 @@ import {
   GenerateSessionResponseSchema,
   WorkoutHistoryResponseSchema,
   type GenerateSessionResponse,
+  type ShareCreateRequest,
   type WorkoutHistoryEntry,
 } from "@become/api-client";
 import type { DraftExercise } from "@become/core";
 import { Text } from "@/components/Text";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
+import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -62,7 +74,24 @@ import {
  *  - An allowance refusal falls through to the standard generator and is a
  *    note, never a wall; a 429 spend cap is never an upsell.
  *  - Post once per member action and never retry the POST.
+ *
+ * NP-294 (visual parity pass): the web header is a gradient sparkle avatar
+ * plus a ✕ (`BottomSheet`'s new `headerLeading`/`headerTrailing`), the empty
+ * "My Sessions" state and "See all" both deep-link to the native Sessions hub
+ * (`expo/app/(app)/(tabs)/programming/sessions.tsx`), "Build a custom
+ * session" opens the native builder already in place
+ * (`expo/app/(app)/(tabs)/programming/quick/build.tsx`, NP-137), the preview
+ * gets the web's Share button (`NativeShareButton`, NP-165), and the web's
+ * purple (`mindset`) dumbbell icons / AI toggle and green (`success`)
+ * selected chip / Start button replace the red (`primary`) native had been
+ * using for all four.
  */
+
+// Deep links out of the sheet — native counterparts of the web's
+// `webapp/lib/quickSession/hubLinks.ts` (`SESSIONS_HUB_HREF` /
+// `BUILD_SESSION_HREF`).
+const SESSIONS_HUB_ROUTE = "/(tabs)/programming/sessions";
+const BUILD_SESSION_ROUTE = "/(tabs)/programming/quick/build";
 
 export const QUICK_FOCUS_ORDER = [
   "full_body",
@@ -257,6 +286,7 @@ export function WorkoutNowSheet({
   date,
   testID = "workout-now-sheet",
 }: WorkoutNowSheetProps) {
+  const { colors } = useThemeTokens();
   const today = localDateKey();
 
   // Reset transient state when the sheet closes: the body remounts on the
@@ -275,6 +305,35 @@ export function WorkoutNowSheet({
       visible={visible}
       onClose={handleClose}
       title={workoutNowTitle(date, today)}
+      // The web header is a green→purple gradient sparkle avatar and a ✕
+      // close button beside the title; the sheet had neither.
+      headerLeading={
+        <LinearGradient
+          colors={[colors.success, colors.mindset]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Sparkles size={16} color={colors["primary-foreground"]} />
+        </LinearGradient>
+      }
+      headerTrailing={
+        <Pressable
+          testID={`${testID}-close-button`}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={handleClose}
+          className="h-8 w-8 items-center justify-center rounded-full bg-muted"
+        >
+          <X size={16} color={colors["muted-foreground"]} />
+        </Pressable>
+      }
     >
       <WorkoutNowBody
         key={resetKey}
@@ -575,11 +634,28 @@ function WorkoutNowBody({
 
         {/* 1. My Sessions */}
         <View>
-          <View className="flex-row items-center mb-2">
-            <History size={14} color={colors["muted-foreground"]} />
-            <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide ml-1.5">
-              My Sessions
-            </Text>
+          <View className="flex-row items-center justify-between mb-2">
+            <View className="flex-row items-center">
+              <History size={14} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide ml-1.5">
+                My Sessions
+              </Text>
+            </View>
+            {!loadingRecent && recentQuick.length > 0 ? (
+              <Pressable
+                testID={`${testID}-see-all`}
+                accessibilityRole="button"
+                accessibilityLabel="See all sessions"
+                onPress={() => {
+                  onClose();
+                  router.push(SESSIONS_HUB_ROUTE as never);
+                }}
+                className="flex-row items-center"
+              >
+                <Text className="text-success text-xs font-semibold">See all</Text>
+                <ChevronRight size={14} color={colors.success} />
+              </Pressable>
+            ) : null}
           </View>
           {loadingRecent ? (
             <View style={{ gap: 6 }}>
@@ -592,12 +668,24 @@ function WorkoutNowBody({
               ))}
             </View>
           ) : recentQuick.length === 0 ? (
-            <Text
+            <Pressable
               testID={`${testID}-recent-empty`}
-              className="text-muted-foreground text-sm"
+              accessibilityRole="button"
+              accessibilityLabel="No sessions yet. Build your first session."
+              onPress={() => {
+                onClose();
+                router.push(SESSIONS_HUB_ROUTE as never);
+              }}
+              className="flex-row items-center justify-between rounded-xl border border-dashed border-border px-4 py-4"
             >
-              No sessions yet — pick a focus below to build your first one.
-            </Text>
+              <View>
+                <Text className="text-foreground text-sm font-semibold">No sessions yet</Text>
+                <Text className="text-muted-foreground text-xs mt-0.5">
+                  Build your first session
+                </Text>
+              </View>
+              <ArrowRight size={16} color={colors.success} />
+            </Pressable>
           ) : (
             <View style={{ gap: 6 }}>
               {recentQuick.map((log, i) => (
@@ -619,14 +707,31 @@ function WorkoutNowBody({
                       {log.exerciseCount === 1 ? "exercise" : "exercises"}
                     </Text>
                   </View>
-                  <Text className="text-primary text-xs font-semibold">Repeat</Text>
+                  <Text className="text-success text-xs font-semibold">Repeat</Text>
                 </Pressable>
               ))}
             </View>
           )}
         </View>
 
-        {/* 2. Quick start by focus */}
+        {/* 2. Build your own — hands off to the native session builder
+            (NP-137), already open, rather than the focus chips below. */}
+        <Pressable
+          testID={`${testID}-build-custom`}
+          accessibilityRole="button"
+          accessibilityLabel="Build a custom session"
+          onPress={() => {
+            onClose();
+            router.push(BUILD_SESSION_ROUTE as never);
+          }}
+          className="flex-row items-center justify-center rounded-xl border border-border py-3"
+          style={{ gap: 6 }}
+        >
+          <Text className="text-foreground text-sm font-semibold">Build a custom session</Text>
+          <ArrowRight size={16} color={colors.foreground} />
+        </Pressable>
+
+        {/* 3. Quick start by focus */}
         <View>
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wide">
@@ -650,7 +755,7 @@ function WorkoutNowBody({
               }}
               disabled={busy}
               className={`flex-row items-center rounded-full px-2.5 py-1 ${
-                useAi ? "bg-primary" : "border border-border bg-card"
+                useAi ? "bg-mindset" : "border border-border bg-card"
               }`}
             >
               <Sparkles
@@ -678,10 +783,10 @@ function WorkoutNowBody({
                   onPress={() => void generateFor(key)}
                   disabled={busy}
                   className={`flex-row items-center rounded-2xl border px-3.5 py-2 ${
-                    active ? "border-primary bg-primary/10" : "border-border bg-card"
+                    active ? "border-success bg-success/10" : "border-border bg-card"
                   }`}
                 >
-                  <Dumbbell size={14} color={colors.primary} />
+                  <Dumbbell size={14} color={colors.mindset} />
                   <View className="ml-1.5">
                     <Text className="text-foreground text-sm font-semibold">
                       {QUICK_FOCUS_LABELS[key]}
@@ -723,10 +828,10 @@ function WorkoutNowBody({
                       {aiUsed ? (
                         <View
                           testID={`${testID}-preview-ai-badge`}
-                          className="flex-row items-center rounded-full bg-primary/10 px-1.5 py-0.5"
+                          className="flex-row items-center rounded-full bg-mindset/10 px-1.5 py-0.5"
                         >
-                          <Sparkles size={10} color={colors.primary} />
-                          <Text className="text-primary text-[9px] font-semibold ml-0.5">
+                          <Sparkles size={10} color={colors.mindset} />
+                          <Text className="text-mindset text-[9px] font-semibold ml-0.5">
                             AI
                           </Text>
                         </View>
@@ -778,9 +883,27 @@ function WorkoutNowBody({
                         <Text className="text-foreground text-sm font-semibold">Regenerate</Text>
                       </View>
                     </Button>
+                    {/* The web's Share icon beside Regenerate/Start — a
+                        one-off snapshot of the un-started preview, same as
+                        the web's `ShareButton kind="session"`. */}
+                    <NativeShareButton
+                      testID={`${testID}-share`}
+                      getToken={() => token ?? undefined}
+                      body={
+                        {
+                          kind: "session",
+                          session: {
+                            title: preview.title,
+                            ...(preview.focus ? { focus: preview.focus } : {}),
+                            exercises: preview.exercises,
+                          },
+                        } as ShareCreateRequest
+                      }
+                    />
                     <View className="flex-1">
                       <Button
                         testID={`${testID}-start`}
+                        variant="success"
                         onPress={() => void startPreview()}
                         disabled={busy}
                       >
