@@ -1,7 +1,10 @@
-import { View, ScrollView } from "react-native";
+import { View, ScrollView, Pressable } from "react-native";
+import { Calculator, X, Info, AlertTriangle } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import type { CalcStep, MacroNote } from "@become/core";
 
 export interface MacroExplainSheetProps {
@@ -16,10 +19,18 @@ export interface MacroExplainSheetProps {
 }
 
 /**
- * MacroExplainSheet (NP-056 / NP-148).
+ * MacroExplainSheet (NP-056 / NP-148 / NP-247).
  *
  * Shows the calculated breakdown of calories or macros (steps and notes)
  * using the shared math in @become/core.
+ *
+ * Web parity (NP-247): the title row carries a calculator icon and its own
+ * close "X" (`webapp/components/nutrition/MacroExplainSheet.tsx`), and the
+ * note callout carries a tone icon — a caution triangle or an info circle,
+ * matching the web's AlertTriangle / Info. The step values are a bold plain
+ * number, not `font-mono`: the web never sets a monospace face here, so a
+ * figure like "1,750 cal" read in a different typeface than everything
+ * around it on native for no reason.
  */
 export function MacroExplainSheet({
   isOpen,
@@ -31,17 +42,42 @@ export function MacroExplainSheet({
   onClose,
   testID = "macro-explain-sheet",
 }: MacroExplainSheetProps) {
+  const { colors } = useThemeTokens();
   const isVisible = Boolean(isOpen ?? visible);
 
   return (
     <BottomSheet
       visible={isVisible}
       onClose={onClose}
-      title={title}
       testID={testID}
       accessibilityLabel={title}
     >
       <View testID={`${testID}-container`}>
+        {/* Title row: calculator icon, title, close X (web parity, NP-247) */}
+        <View className="flex-row items-center justify-between gap-3 mb-4">
+          <View className="flex-row items-center gap-2 flex-1">
+            <Calculator size={16} color={colors["muted-foreground"]} />
+            <Text
+              testID={`${testID}-title`}
+              accessibilityRole="header"
+              className="text-foreground text-sm font-semibold flex-1"
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+          </View>
+          <Pressable
+            testID={`${testID}-close-icon`}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            style={minTouchTarget}
+            className="items-center justify-center"
+          >
+            <X size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+        </View>
+
         {/* Headline */}
         <Text
           testID="explain-headline"
@@ -65,7 +101,7 @@ export function MacroExplainSheet({
                     {s.label}
                   </Text>
                 </View>
-                <Text className="text-foreground text-xs font-bold font-mono">
+                <Text className="text-foreground text-xs font-bold tabular-nums">
                   {s.value}
                 </Text>
               </View>
@@ -86,6 +122,13 @@ export function MacroExplainSheet({
                 : "border-emerald-400 bg-emerald-500/10"
             }`}
           >
+            <View className="mt-0.5">
+              {note.tone === "caution" ? (
+                <AlertTriangle size={14} color={colors.accent} />
+              ) : (
+                <Info size={14} color={colors.success} />
+              )}
+            </View>
             <Text
               className={`text-xs flex-1 ${
                 note.tone === "caution"
