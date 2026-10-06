@@ -161,6 +161,47 @@ function OptionRow({
 }
 
 /**
+ * Equipment access as a wrapping pill chip (web parity, NP-248 — the web's
+ * step 4 renders `EQUIPMENT_OPTIONS` as `rounded-full` chips in a
+ * `flex-wrap` row rather than full-width rows, `webapp/app/onboarding/page.tsx`'s
+ * `Step4`). Multi-select, so `accessibilityRole="checkbox"` like the
+ * `OptionRow` chips it replaces for this one step.
+ */
+function EquipmentChip({
+  testID,
+  label,
+  selected,
+  onPress,
+}: {
+  testID: string;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected, selected }}
+      accessibilityLabel={label}
+      style={minTouchTarget}
+      className={`rounded-full border-2 px-4 py-2 items-center justify-center ${
+        selected ? "border-foreground bg-foreground" : "border-border bg-card"
+      }`}
+    >
+      <Text
+        className={`text-sm font-medium ${
+          selected ? "text-background" : "text-foreground"
+        }`}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
  * The decorative unit label inside a height/weight input (web parity,
  * NP-247 — the web overlays "ft" / "in" / "lbs" / "kg" at the right edge of
  * the field, `webapp/app/onboarding/page.tsx`'s absolutely-positioned
@@ -818,7 +859,9 @@ export function OnboardingFlow({
     (step === 1 && goals.length > 0) ||
     (step === 2 && name.trim().length > 0) ||
     (step === 3 && canComputeTargets && isAgeValid) ||
-    (step === 4 && (profile.equipmentAccess?.length ?? 0) > 0) ||
+    // Web parity (NP-248): web's step 4 Next is enabled with nothing picked
+    // (no check at all on `equipmentAccess` before advancing).
+    step === 4 ||
     (step === 5 &&
       !submitting &&
       goals.length > 0 &&
@@ -1650,19 +1693,42 @@ export function OnboardingFlow({
               {STEP_QUESTIONS[3]}
             </Text>
             <Text className="text-muted-foreground text-sm mb-4">
-              Tell us what you have access to so we can recommend the right
-              exercises.
+              We won&apos;t recommend a barbell program to someone training
+              in a living room. Tell us what you actually have.
             </Text>
-            {EQUIPMENT_OPTIONS.map((o) => (
-              <OptionRow
-                key={o.value}
-                testID={`${testID}-equipment-${o.value}`}
-                label={o.label}
-                multiple
-                selected={(profile.equipmentAccess ?? []).includes(o.value)}
-                onPress={() => toggleEquipment(o.value)}
+
+            <Text className="text-foreground text-sm font-medium mb-3">
+              Equipment access
+            </Text>
+            <View
+              testID={`${testID}-equipment-chips`}
+              style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+            >
+              {EQUIPMENT_OPTIONS.map((o) => (
+                <EquipmentChip
+                  key={o.value}
+                  testID={`${testID}-equipment-${o.value}`}
+                  label={o.label}
+                  selected={(profile.equipmentAccess ?? []).includes(o.value)}
+                  onPress={() => toggleEquipment(o.value)}
+                />
+              ))}
+            </View>
+
+            {/* Injury notes (web parity, NP-248 — native had no equivalent
+                field; saved as `injuryNotes` and shown on the review step). */}
+            <View className="mt-7">
+              <Input
+                testID={`${testID}-injury-notes`}
+                label="Injury notes"
+                placeholder="Any injuries or areas to avoid? (optional)"
+                value={profile.injuryNotes ?? ""}
+                onChangeText={(v) => set({ injuryNotes: v })}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
               />
-            ))}
+            </View>
           </View>
         ) : null}
 
@@ -1810,6 +1876,14 @@ export function OnboardingFlow({
                         e,
                     )
                     .join(", ") || "None"
+                }
+              />
+              <ReviewRow
+                label="Injury notes"
+                value={
+                  profile.injuryNotes?.trim()
+                    ? profile.injuryNotes.trim()
+                    : "None"
                 }
               />
             </ReviewSection>
