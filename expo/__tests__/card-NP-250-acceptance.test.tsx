@@ -174,8 +174,8 @@ describe("NP-250: plan comparison matches the web", () => {
 
   it("subtitles the Mind sessions row with the length of the Mind path", () => {
     const total = SESSIONS_PER_CHAPTER * MAX_CHAPTER;
-    expect(rowDetail(rows[0])).toBe(`The Mind path runs ${total} sessions.`);
-    expect(rowDetail(rows[1])).toBeNull();
+    expect(rowDetail(rows[0]!)).toBe(`The Mind path runs ${total} sessions.`);
+    expect(rowDetail(rows[1]!)).toBeNull();
 
     const screen = render(<PlanComparison rows={rows} snapshot={SNAPSHOT} />);
     expect(
