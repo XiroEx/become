@@ -21,6 +21,7 @@ import {
   saveCoachChat,
   type ChatMessage,
 } from "@/lib/ai/coachChatStore";
+import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
 
 /**
  * ─── COACH CHAT (NP-155) ────────────────────────────────────────────────────
@@ -224,8 +225,11 @@ export function CoachChat({
   return (
     <RNModal
       visible={visible}
-      onRequestClose={onClose}
+      // NP-319 point 8: don't let the hardware back button close the keyboard
+      // AND the chat sheet in one press — see `handleSheetRequestClose`.
+      onRequestClose={() => handleSheetRequestClose(onClose)}
       transparent
+      statusBarTranslucent
       animationType="slide"
       testID={testID}
     >
@@ -254,8 +258,12 @@ export function CoachChat({
             overflow: "hidden",
           }}
         >
+          {/* NP-319: real Android keyboard avoidance — "undefined" did
+              nothing, and this sheet is a `Modal`, where targetSdk 35's
+              edge-to-edge resize never reaches. "height" is computed from
+              the keyboard-show event instead. */}
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ flex: 1 }}
           >
             {/* Header */}

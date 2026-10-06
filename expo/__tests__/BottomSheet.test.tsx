@@ -1,5 +1,5 @@
 import { render, fireEvent } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { Keyboard, Text } from "react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 
 describe("BottomSheet", () => {
@@ -50,5 +50,52 @@ describe("BottomSheet", () => {
     );
     expect(queryByTestId("s-title")).toBeNull();
     expect(queryByTestId("s-body")).toBeNull();
+  });
+
+  // NP-319: Android's edge-to-edge enforcement (targetSdk 35) is part of why
+  // real keyboard avoidance inside a Modal sheet was broken.
+  it("sets statusBarTranslucent on the underlying Modal", () => {
+    const { getByTestId } = render(
+      <BottomSheet testID="s" visible onClose={() => {}}>
+        <Text>x</Text>
+      </BottomSheet>,
+    );
+    expect(getByTestId("s").props.statusBarTranslucent).toBe(true);
+  });
+
+  describe("system back while the keyboard is up (NP-319 point 8)", () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it("the first back press only dismisses the keyboard, not the sheet", () => {
+      jest.spyOn(Keyboard, "isVisible").mockReturnValue(true);
+      const dismiss = jest.spyOn(Keyboard, "dismiss").mockImplementation(() => {});
+      const onClose = jest.fn();
+      const { getByTestId } = render(
+        <BottomSheet testID="s" visible onClose={onClose}>
+          <Text>x</Text>
+        </BottomSheet>,
+      );
+
+      getByTestId("s").props.onRequestClose();
+
+      expect(dismiss).toHaveBeenCalledTimes(1);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("a second back press, once the keyboard is already down, closes the sheet", () => {
+      jest.spyOn(Keyboard, "isVisible").mockReturnValue(false);
+      const onClose = jest.fn();
+      const { getByTestId } = render(
+        <BottomSheet testID="s" visible onClose={onClose}>
+          <Text>x</Text>
+        </BottomSheet>,
+      );
+
+      getByTestId("s").props.onRequestClose();
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -720,7 +720,12 @@ export function EstimateSheet({
         accessibilityLabel={headerTitle}
         testID={testID}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* NP-319: "undefined" on Android did nothing — a real Android
+            behaviour is needed since this view lives inside a `Modal`, where
+            targetSdk 35's edge-to-edge resize never reaches. "height" is
+            computed from the keyboard-show event, not a window resize, so it
+            works inside the sheet too. */}
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <ScrollView
             testID={`${testID}-body`}
             keyboardShouldPersistTaps="handled"

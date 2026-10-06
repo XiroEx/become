@@ -5,6 +5,7 @@ import {
   modalAnimation,
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
+import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -37,6 +38,13 @@ export interface BottomSheetProps {
  * sheet confines VoiceOver to itself, the two-finger scrub closes it, and the
  * slide honours Reduce Motion. A Reanimated rewrite keeps all four (see
  * `lib/a11y/reducedMotion.ts`).
+ *
+ * `statusBarTranslucent` + `onRequestClose` guarding the keyboard are NP-319:
+ * without the former, Android's edge-to-edge enforcement (targetSdk 35) can
+ * misreport the window's usable height to a Modal, which is part of why real
+ * keyboard avoidance inside a sheet was broken; without the latter, the
+ * hardware back button closed the keyboard AND the sheet in one press — see
+ * `handleSheetRequestClose`.
  */
 export function BottomSheet({
   visible,
@@ -53,8 +61,9 @@ export function BottomSheet({
   return (
     <RNModal
       visible={visible}
-      onRequestClose={onClose}
+      onRequestClose={() => handleSheetRequestClose(onClose)}
       transparent
+      statusBarTranslucent
       animationType={modalAnimation("slide", reduceMotion)}
       testID={testID}
     >

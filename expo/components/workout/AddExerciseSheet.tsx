@@ -39,6 +39,7 @@ import {
   setUnitLabel,
   type GroupKind,
 } from "@become/core";
+import { buildSuggestedExercises } from "@/lib/workout/suggestedExercises";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
@@ -225,15 +226,15 @@ export function AddExerciseSheet({
           { baseUrl: WEBAPP_BASE_URL, getToken: () => token ?? undefined },
         );
         if (cancelled) return;
-        const excluded = new Set(
-          workoutSlugsKey ? workoutSlugsKey.split(",") : [],
+        // Same source/order/dedupe/limit rules as the web sheet (NP-289):
+        // webapp/lib/workout/suggestedExercises.ts, ported verbatim to
+        // expo/lib/workout/suggestedExercises.ts. Row-map first so dedupe
+        // operates on the same shape the list renders.
+        const rows = (data?.alternatives ?? []).map((a) =>
+          toRow(a, a.isCustom ?? false),
         );
-        setSuggested(
-          (data?.alternatives ?? [])
-            .filter((a) => !excluded.has(a.slug))
-            .slice(0, 6)
-            .map((a) => toRow(a, a.isCustom ?? false)),
-        );
+        const excludedSlugs = workoutSlugsKey ? workoutSlugsKey.split(",") : [];
+        setSuggested(buildSuggestedExercises(rows, excludedSlugs));
       } catch {
         if (!cancelled) setSuggested([]);
       } finally {
