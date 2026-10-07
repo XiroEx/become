@@ -19,8 +19,15 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    back: mockBack,
+    canGoBack: mockCanGoBack,
+  }),
   useLocalSearchParams: () => ({}),
 }));
 
@@ -152,6 +159,9 @@ beforeEach(async () => {
   jest.setSystemTime(WEDNESDAY_NOON);
   mockPush.mockReset();
   mockBack.mockReset();
+  mockReplace.mockReset();
+  mockCanGoBack.mockReset();
+  mockCanGoBack.mockReturnValue(true);
   mockApiFetch.mockReset();
   mockHistory();
   await AsyncStorage.clear();
@@ -353,5 +363,55 @@ describe("(id: e015c936) A quick session can be reopened from history", () => {
     // Resumed under its OWN id, so finishing consumes the same log.
     const stashed = await readQuickSession("qs-open");
     expect(stashed?.title).toBe("Open Session");
+  });
+});
+
+describe("(NP-315) History's back target falls back to Home, not the tab navigator's history", () => {
+  it("the header back button pops locally when there is history to pop to", async () => {
+    mockCanGoBack.mockReturnValue(true);
+    const { getByTestId } = render(<HistoryRoute />);
+    await waitFor(() => expect(getByTestId("history-list")).toBeTruthy());
+
+    fireEvent.press(getByTestId("history-back-button"));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("the header back button lands on Home when opened cross-tab (no local history)", async () => {
+    // This is the cross-tab case: Home's "This Week" tile pushes History into
+    // the Workout tab's own stack, which can land with nothing local to pop.
+    mockCanGoBack.mockReturnValue(false);
+    const { getByTestId } = render(<HistoryRoute />);
+    await waitFor(() => expect(getByTestId("history-list")).toBeTruthy());
+
+    fireEvent.press(getByTestId("history-back-button"));
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it("Android hardware back follows the same fallback logic as the header button", async () => {
+    mockCanGoBack.mockReturnValue(false);
+    const listeners: (() => boolean)[] = [];
+    const fakeBackHandler = {
+      addEventListener: (_type: "hardwareBackPress", handler: () => boolean) => {
+        listeners.push(handler);
+        return {
+          remove: () => {
+            const idx = listeners.indexOf(handler);
+            if (idx >= 0) listeners.splice(idx, 1);
+          },
+        };
+      },
+    };
+
+    const { getByTestId } = render(<HistoryRoute backHandler={fakeBackHandler} />);
+    await waitFor(() => expect(getByTestId("history-list")).toBeTruthy());
+
+    expect(listeners).toHaveLength(1);
+    const intercepted = listeners[0]!();
+
+    expect(intercepted).toBe(true);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });

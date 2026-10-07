@@ -5,8 +5,15 @@ import { View } from "react-native";
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: mockReplace,
+    back: mockBack,
+    canGoBack: mockCanGoBack,
+  }),
   useLocalSearchParams: () => mockParams,
 }));
 
@@ -161,6 +168,9 @@ describe("NutritionGoalsRoute (NP-148)", () => {
     mockParams = {};
     mockPush.mockReset();
     mockBack.mockReset();
+    mockReplace.mockReset();
+    mockCanGoBack.mockReset();
+    mockCanGoBack.mockReturnValue(true);
   });
 
   it("Setting the same inputs natively and on the web saves identical targets (id: e015ca04)", async () => {
@@ -517,5 +527,70 @@ describe("NutritionGoalsRoute (NP-148)", () => {
     const onFocus = getByTestId("nutrition-goals-water").props.onFocus;
     expect(typeof onFocus).toBe("function");
     expect(() => onFocus()).not.toThrow();
+  });
+});
+
+describe("(NP-315) Goals' back target falls back to Home, not the Workout hub", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockImplementation(async (url: string) => defaultApiHandler(url));
+    mockParams = {};
+    mockPush.mockReset();
+    mockBack.mockReset();
+    mockReplace.mockReset();
+    mockCanGoBack.mockReset();
+    mockCanGoBack.mockReturnValue(true);
+  });
+
+  it("'Back to nutrition' pops locally when there is history to pop to", async () => {
+    mockCanGoBack.mockReturnValue(true);
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+    await waitFor(() => expect(getByTestId("nutrition-goals-back-button")).toBeTruthy());
+
+    fireEvent.press(getByTestId("nutrition-goals-back-button"));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("'Back to nutrition' lands on Home when opened cross-tab (no local history)", async () => {
+    // This is the cross-tab case: Home's Goal tile pushes Goals into the
+    // Nutrition tab's own stack, which can land with nothing local to pop —
+    // it used to fall through to the tab navigator's own back history, which
+    // pointed at the Workout hub (the first declared tab), not Home.
+    mockCanGoBack.mockReturnValue(false);
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+    await waitFor(() => expect(getByTestId("nutrition-goals-back-button")).toBeTruthy());
+
+    fireEvent.press(getByTestId("nutrition-goals-back-button"));
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockBack).not.toHaveBeenCalled();
+  });
+
+  it("Android hardware back follows the same fallback logic as 'Back to nutrition'", async () => {
+    mockCanGoBack.mockReturnValue(false);
+    const listeners: (() => boolean)[] = [];
+    const fakeBackHandler = {
+      addEventListener: (_type: "hardwareBackPress", handler: () => boolean) => {
+        listeners.push(handler);
+        return {
+          remove: () => {
+            const idx = listeners.indexOf(handler);
+            if (idx >= 0) listeners.splice(idx, 1);
+          },
+        };
+      },
+    };
+
+    const { getByTestId } = render(
+      <NutritionGoalsRoute backHandler={fakeBackHandler} />,
+    );
+    await waitFor(() => expect(getByTestId("nutrition-goals-back-button")).toBeTruthy());
+
+    expect(listeners).toHaveLength(1);
+    const intercepted = listeners[0]!();
+
+    expect(intercepted).toBe(true);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockBack).not.toHaveBeenCalled();
   });
 });
