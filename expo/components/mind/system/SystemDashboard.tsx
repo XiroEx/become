@@ -10,6 +10,11 @@ export interface TrackRecordEntry {
   createdAt: string;
 }
 
+// NP-299: no `intro` entry here — on purpose. The web's equivalent map
+// (`webapp/components/mind/system/SystemDashboard.tsx`'s `KIND_LABEL`) has
+// none either, so an intro-kind entry's subtitle falls through to the raw
+// `e.kind` string ("intro"), not a prettified label. Native used to say
+// "Intro completed · today"; web says "intro · today" — this used to drift.
 const KIND_LABEL: Record<string, string> = {
   protocol: "Protocol run",
   "fear-breakdown": "Fear broken down",
@@ -18,7 +23,6 @@ const KIND_LABEL: Record<string, string> = {
   nonnegotiable: "Non-negotiable set",
   "fight-check": "Fight check",
   connect: "Reached out",
-  intro: "Intro completed",
 };
 
 function relDay(d: string): string {
@@ -37,6 +41,7 @@ export function AdaptiveSession({
   onStart,
   colorClass,
   bgClass,
+  iconColor,
   title = "Built from where you are right now",
   subtitle = "Shaped by your recent check-ins, wins, and workouts.",
   testID = "mind-adaptive-session",
@@ -45,11 +50,16 @@ export function AdaptiveSession({
   onStart: () => void;
   colorClass: string;
   bgClass: string;
+  /** NP-299: the sparkle is tool-coloured on the web (its own `color` class
+   *  doubles as the icon tint there); defaults to the generic accent for the
+   *  dashboards that don't pass one, unchanged from before this card. */
+  iconColor?: string;
   title?: string;
   subtitle?: string;
   testID?: string;
 }) {
   const { colors } = useThemeTokens();
+  const ic = iconColor ?? colors.accent;
 
   return (
     <Pressable
@@ -61,7 +71,7 @@ export function AdaptiveSession({
     >
       <View className="flex-row items-center gap-3">
         <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card">
-          <Sparkles size={20} color={colors.accent} />
+          <Sparkles size={20} color={ic} />
         </View>
         <View className="min-w-0 flex-1">
           <Text className={`text-[10px] font-bold uppercase tracking-widest ${colorClass}`}>

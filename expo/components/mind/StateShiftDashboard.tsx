@@ -314,6 +314,7 @@ const FOCUS_DURATIONS = [
 
 function FocusRow() {
   const { colors } = useThemeTokens();
+  const accent = mindAccentColor("state-shift");
   const [selectedSeconds, setSelectedSeconds] = useState(25 * 60);
   const [remaining, setRemaining] = useState(25 * 60);
   const [running, setRunning] = useState(false);
@@ -358,7 +359,7 @@ function FocusRow() {
       className="rounded-2xl border border-border bg-card p-4"
     >
       <View className="mb-2.5 flex-row items-center gap-1.5">
-        <Timer size={14} color={colors.accent} />
+        <Timer size={14} color={accent} />
         <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Focus mode
         </Text>
@@ -637,7 +638,10 @@ const STATES: {
 ];
 
 export default function StateShiftDashboard() {
-  const { colors } = useThemeTokens();
+  // NP-299: the web colours this dashboard's icons in its own cyan everywhere
+  // (hero, state tiles, breathwork/reset toolkit cards, the adaptive sparkle),
+  // never the generic accent (amber) — see `mindAccentColor`'s own comment.
+  const accent = mindAccentColor("state-shift");
   const { token } = useAuth();
   const [entries, setEntries] = useState<TrackRecordEntry[]>([]);
   const [reps, setReps] = useState<number | null>(null);
@@ -835,7 +839,7 @@ export default function StateShiftDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.accent}
+        accentColor={accent}
       />
 
       <SystemHero
@@ -846,7 +850,7 @@ export default function StateShiftDashboard() {
         statLabel="shifts"
         colorClass="text-cyan-500"
         bgClass="border-cyan-500/30 bg-cyan-500/10"
-        iconColor={colors.accent}
+        iconColor={accent}
       />
 
       {/* Where's your head right now? */}
@@ -877,7 +881,7 @@ export default function StateShiftDashboard() {
                 className="w-[48%] flex-row items-center gap-2.5 rounded-xl border border-border bg-card p-3 active:opacity-80"
               >
                 <View className="h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15">
-                  <SIcon size={16} color={colors.accent} />
+                  <SIcon size={16} color={accent} />
                 </View>
                 <Text className="text-sm font-semibold text-foreground">
                   {s.label}
@@ -902,6 +906,7 @@ export default function StateShiftDashboard() {
         }
         colorClass="text-cyan-500"
         bgClass="border-cyan-500/30 bg-cyan-500/10"
+        iconColor={accent}
         subtitle="A reset shaped by your recent state check-ins and reflections."
       />
 
@@ -918,7 +923,7 @@ export default function StateShiftDashboard() {
               title={b.name}
               blurb={`${b.rounds} rounds · ${b.bestFor}`}
               colorClass="text-cyan-500"
-              iconColor={colors.accent}
+              iconColor={accent}
               onClick={() => setBreath(b)}
             />
           ))}
@@ -941,7 +946,7 @@ export default function StateShiftDashboard() {
               title={f.title}
               blurb={f.blurb}
               colorClass="text-cyan-500"
-              iconColor={colors.accent}
+              iconColor={accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"
