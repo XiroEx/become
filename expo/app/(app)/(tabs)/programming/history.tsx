@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, RefreshControl, View } from "react-native";
+import { BackHandler, FlatList, Pressable, RefreshControl, View } from "react-native";
 import type { z } from "zod";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +26,10 @@ import {
   type HistoryFilter,
 } from "@/lib/history/history";
 import { openHistoryQuickSession } from "@/lib/history/openHistoryQuick";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
 
 /**
  * TRAINING HISTORY (NP-112).
@@ -51,6 +55,15 @@ import { openHistoryQuickSession } from "@/lib/history/openHistoryQuick";
  * that used to sit outside the card duplicated that control and starved the
  * title of width. Corrections stay reachable from the Training Log
  * (`app/(app)/progress.tsx`, NP-130).
+ *
+ * NP-315: reached two ways — the Workout hub's own link
+ * (`programming/index.tsx`, a same-tab push with real local history) and the
+ * Home dashboard's "This Week" / "Total Workouts" tiles (a cross-tab push,
+ * which lands here with NO local back entry — the tab navigator's own back
+ * history is not to be trusted either, see `(tabs)/_layout.tsx`). Both the
+ * header's round back button and the Android hardware back/gesture go through
+ * `handleBack`: pop if there is somewhere local to pop to, otherwise land on
+ * Home — never on whatever tab happens to be first in the bar.
  */
 
 function HistoryRow({
@@ -202,16 +215,40 @@ export interface HistoryRouteProps {
   initialLogs?: WorkoutHistoryEntry[] | null;
   /** DI for tests — the auth token. */
   tokenForTests?: string | null;
+  /** DI for tests — injects `BackHandler` for the Android hardware-back fix (NP-315). */
+  backHandler?: BackHandlerLike;
 }
 
 export default function HistoryRoute({
   initialLogs,
   tokenForTests,
+  backHandler = BackHandler,
 }: HistoryRouteProps = {}) {
   const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const { token: authToken } = useAuth();
   const token = tokenForTests !== undefined ? tokenForTests : authToken;
+
+  // NP-315: opened cross-tab from Home, this screen can land with no local
+  // back entry — `router.back()` would then silently no-op (the header
+  // button) or bubble to the tab navigator's own unreliable back history
+  // (system back). Fall back to Home explicitly instead of trusting either.
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/dashboard");
+    }
+  }, [router]);
+
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      handleBack();
+      return true;
+    },
+    backHandler,
+  });
 
   const [filter, setFilter] = useState<HistoryFilter>("all");
   const [opening, setOpening] = useState<string | null>(null);
@@ -331,7 +368,7 @@ export default function HistoryRoute({
               testID="history-back-button"
               accessibilityRole="button"
               accessibilityLabel="Back"
-              onPress={() => router.back()}
+              onPress={handleBack}
               style={[
                 minTouchTarget,
                 {

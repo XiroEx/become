@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BackHandler,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -70,6 +71,10 @@ import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
 import { GoalsWeightChart } from "@/components/nutrition/GoalsWeightChart";
 import { useScrollFocusedFieldIntoView } from "@/lib/keyboard/useScrollFocusedFieldIntoView";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
 
 /**
  * Nutrition goals (NP-148) — the native port of
@@ -86,6 +91,14 @@ import { useScrollFocusedFieldIntoView } from "@/lib/keyboard/useScrollFocusedFi
  * chart is `GoalsWeightChart` (NP-266) — a 1:1 port of the web's PLAIN
  * weight line (react-native-svg, theme tokens), not the dashboard's
  * multi-metric `ProgressChart`, which the web's goals screen never embeds.
+ *
+ * NP-315: reached two ways — the Nutrition tab's own link
+ * (`nutrition/index.tsx`, a same-tab push with real local history) and the
+ * Home dashboard's Goal tile (a cross-tab push, which lands here with NO
+ * local back entry). Both "Back to nutrition" and the Android hardware
+ * back/gesture go through `handleBack`: pop if there is somewhere local to
+ * pop to, otherwise land on Home — not the Workout hub, which is where the
+ * tab navigator's own back history used to send both (see `(tabs)/_layout.tsx`).
  */
 
 type GoalType = NutritionDirection;
@@ -157,11 +170,39 @@ function presetLabel(key: MacroPreset, split: MacroSplit | null): string {
   return split ? `${name} — ${split.protein}/${split.carbs}/${split.fats}` : name;
 }
 
-export default function NutritionGoalsRoute() {
+export interface NutritionGoalsRouteProps {
+  /** DI for tests — injects `BackHandler` for the Android hardware-back fix (NP-315). */
+  backHandler?: BackHandlerLike;
+}
+
+export default function NutritionGoalsRoute({
+  backHandler = BackHandler,
+}: NutritionGoalsRouteProps = {}) {
   const router = useRouter();
   const { token } = useAuth();
   const { colors } = useThemeTokens();
   const { tzOffset } = useLocalDay();
+
+  // NP-315: opened cross-tab from Home's Goal tile, this screen can land with
+  // no local back entry — `router.back()` would then land on whatever tab the
+  // navigator's own (unreliable) back history points to, which used to be the
+  // Workout hub. Fall back to Home explicitly instead of trusting it.
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(tabs)/dashboard");
+    }
+  }, [router]);
+
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      handleBack();
+      return true;
+    },
+    backHandler,
+  });
 
   // NP-319: Android has no built-in "scroll the focused field into view" the
   // way iOS's ScrollView does, and this is a plain screen (not a sheet), so
@@ -693,7 +734,7 @@ export default function NutritionGoalsRoute() {
                 accessibilityRole="button"
                 accessibilityLabel="Back to nutrition"
                 testID="nutrition-goals-back-button"
-                onPress={() => router.back()}
+                onPress={handleBack}
                 style={[
                   minTouchTarget,
                   {

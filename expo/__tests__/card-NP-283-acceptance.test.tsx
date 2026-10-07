@@ -27,7 +27,12 @@ import { Calendar } from "lucide-react-native";
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: mockBack }),
+  useRouter: () => ({
+    push: mockPush,
+    replace: jest.fn(),
+    back: mockBack,
+    canGoBack: () => true,
+  }),
   useLocalSearchParams: () => ({}),
 }));
 
