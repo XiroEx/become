@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
-import { Pressable, View } from "react-native";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Modal, Platform, Pressable, View } from "react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react-native";
 import { Text } from "@/components/Text";
-import { Input } from "@/components/Input";
 import { localDateKey } from "@/lib/time/localDay";
 import { suggestStartDate } from "@/lib/programs/enrollment";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -15,6 +17,17 @@ export interface DatePickerProps {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDateKey(dateKey: string): Date {
+  if (!DATE_RE.test(dateKey)) {
+    return new Date();
+  }
+  const parts = dateKey.split("-").map(Number);
+  const y = parts[0] ?? 2026;
+  const m = (parts[1] ?? 1) - 1;
+  const d = parts[2] ?? 1;
+  return new Date(y, m, d, 12, 0, 0);
+}
 
 function stepDay(dateKey: string, deltaDays: number): string {
   const parts = dateKey.split("-").map(Number);
@@ -47,7 +60,7 @@ function formatDateDisplay(dateKey: string): string {
  * Provides:
  * 1. Quick presets: "Today", "Next Monday".
  * 2. Day stepper (-1 day / +1 day).
- * 3. Formatted display and direct YYYY-MM-DD input.
+ * 3. Platform date picker dialog / modal and formatted display.
  *
  * Rules:
  * - Dates are ALWAYS device-local calendar dates (YYYY-MM-DD), never `toISOString()`.
@@ -59,29 +72,12 @@ export function DatePicker({
   minDate,
   testID = "date-picker",
 }: DatePickerProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint, scrim } = useThemeTokens();
   const [inputError, setInputError] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   const todayKey = localDateKey(new Date());
   const nextMondayKey = suggestStartDate(null, new Date());
-
-  const handleTextChange = useCallback(
-    (text: string) => {
-      onChange(text);
-      if (text.length === 10) {
-        if (!DATE_RE.test(text)) {
-          setInputError("Format must be YYYY-MM-DD");
-        } else if (minDate && text < minDate) {
-          setInputError(`Date cannot be before ${minDate}`);
-        } else {
-          setInputError(null);
-        }
-      } else {
-        setInputError(null);
-      }
-    },
-    [onChange, minDate],
-  );
 
   const handleStep = useCallback(
     (delta: number) => {
@@ -93,6 +89,32 @@ export function DatePicker({
     },
     [value, minDate, onChange],
   );
+
+  const handlePickerChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      if (Platform.OS === "android") {
+        setShowPicker(false);
+      }
+      if (event.type === "set" && selectedDate) {
+        if (Platform.OS !== "android") {
+          setShowPicker(false);
+        }
+        const nextKey = localDateKey(selectedDate);
+        if (minDate && nextKey < minDate) {
+          setInputError(`Date cannot be before ${minDate}`);
+          return;
+        }
+        setInputError(null);
+        onChange(nextKey);
+      } else if (event.type === "dismissed") {
+        setShowPicker(false);
+      }
+    },
+    [minDate, onChange],
+  );
+
+  const pickerDate = parseDateKey(value);
+  const minimumDate = minDate && DATE_RE.test(minDate) ? parseDateKey(minDate) : undefined;
 
   return (
     <View testID={testID} style={{ gap: 12 }}>
@@ -113,7 +135,7 @@ export function DatePicker({
             borderRadius: 8,
             borderWidth: 1,
             borderColor: value === todayKey ? colors.primary : colors.border,
-            backgroundColor: value === todayKey ? colors.primary + "15" : colors.card,
+            backgroundColor: value === todayKey ? tint("primary", 0.08) : colors.card,
             alignItems: "center",
           }}
         >
@@ -143,7 +165,7 @@ export function DatePicker({
             borderRadius: 8,
             borderWidth: 1,
             borderColor: value === nextMondayKey ? colors.primary : colors.border,
-            backgroundColor: value === nextMondayKey ? colors.primary + "15" : colors.card,
+            backgroundColor: value === nextMondayKey ? tint("primary", 0.08) : colors.card,
             alignItems: "center",
           }}
         >
@@ -192,7 +214,21 @@ export function DatePicker({
           <ChevronLeft size={20} color={colors.foreground} />
         </Pressable>
 
-        <View style={{ alignItems: "center" }}>
+        <Pressable
+          testID={`${testID}-display-btn`}
+          accessibilityRole="button"
+          accessibilityLabel={`Selected date: ${formatDateDisplay(value)}. Tap to open calendar`}
+          onPress={() => setShowPicker(true)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            paddingVertical: 4,
+            paddingHorizontal: 8,
+          }}
+        >
+          <Calendar size={16} color={colors.primary} />
           <Text
             testID={`${testID}-display`}
             style={{
@@ -203,7 +239,7 @@ export function DatePicker({
           >
             {formatDateDisplay(value)}
           </Text>
-        </View>
+        </Pressable>
 
         <Pressable
           testID={`${testID}-next-day`}
@@ -223,15 +259,101 @@ export function DatePicker({
         </Pressable>
       </View>
 
-      {/* Direct YYYY-MM-DD Input */}
-      <Input
-        testID={`${testID}-input`}
-        label="Calendar Date (YYYY-MM-DD)"
-        value={value}
-        onChangeText={handleTextChange}
-        placeholder="YYYY-MM-DD"
-        error={inputError ?? undefined}
-      />
+      {/* Platform date picker trigger */}
+      <Pressable
+        testID={`${testID}-picker-btn`}
+        accessibilityRole="button"
+        accessibilityLabel={`Choose date from calendar. Currently ${formatDateDisplay(value)}`}
+        onPress={() => setShowPicker(true)}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          borderRadius: 8,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+        }}
+      >
+        <Calendar size={16} color={colors.primary} />
+        <Text style={{ color: colors.foreground, fontSize: 13, fontWeight: "500" }}>
+          Choose from calendar
+        </Text>
+      </Pressable>
+
+      {inputError ? (
+        <Text
+          testID={`${testID}-error`}
+          accessibilityRole="alert"
+          style={{ fontSize: 12, color: colors.destructive }}
+        >
+          {inputError}
+        </Text>
+      ) : null}
+
+      {showPicker &&
+        (Platform.OS === "ios" ? (
+          <Modal
+            transparent
+            animationType="fade"
+            visible={showPicker}
+            onRequestClose={() => setShowPicker(false)}
+          >
+            <Pressable
+              style={{
+                flex: 1,
+                justifyContent: "flex-end",
+                backgroundColor: scrim,
+              }}
+              onPress={() => setShowPicker(false)}
+            >
+              <Pressable
+                style={{
+                  backgroundColor: colors.card,
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                  padding: 16,
+                  gap: 12,
+                }}
+                onPress={(e) => e.stopPropagation()}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+                  <Pressable
+                    testID={`${testID}-picker-done`}
+                    accessibilityRole="button"
+                    accessibilityLabel="Done"
+                    onPress={() => setShowPicker(false)}
+                    hitSlop={8}
+                  >
+                    <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 16 }}>
+                      Done
+                    </Text>
+                  </Pressable>
+                </View>
+                <DateTimePicker
+                  testID={`${testID}-native-picker`}
+                  value={pickerDate}
+                  mode="date"
+                  display="spinner"
+                  minimumDate={minimumDate}
+                  onChange={handlePickerChange}
+                />
+              </Pressable>
+            </Pressable>
+          </Modal>
+        ) : (
+          <DateTimePicker
+            testID={`${testID}-native-picker`}
+            value={pickerDate}
+            mode="date"
+            display="default"
+            minimumDate={minimumDate}
+            onChange={handlePickerChange}
+          />
+        ))}
     </View>
   );
 }

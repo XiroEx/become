@@ -97,7 +97,7 @@ export function ScheduleSetup({
   error = null,
   testID = "schedule-setup",
 }: ScheduleSetupProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isRecreating, setIsRecreating] = useState(false);
 
@@ -187,11 +187,12 @@ export function ScheduleSetup({
 
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <View
+              testID="schedule-header-icon-tile"
               style={{
                 width: 40,
                 height: 40,
                 borderRadius: 12,
-                backgroundColor: colors.info + "20",
+                backgroundColor: tint("info", 0.12),
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -284,11 +285,12 @@ export function ScheduleSetup({
                   }}
                 >
                   <View
+                    testID={`upcoming-workout-${idx}-date-tile`}
                     style={{
                       width: 40,
                       height: 40,
                       borderRadius: 10,
-                      backgroundColor: colors.info + "20",
+                      backgroundColor: tint("info", 0.12),
                       alignItems: "center",
                       justifyContent: "center",
                     }}
@@ -404,7 +406,7 @@ export function ScheduleSetup({
           testID={`${testID}-error`}
           style={{
             padding: 12,
-            backgroundColor: colors.destructive + "15",
+            backgroundColor: tint("destructive", 0.08),
             borderRadius: 8,
           }}
         >
@@ -567,7 +569,7 @@ export function ScheduleSetup({
                           width: 20,
                           height: 20,
                           borderRadius: 10,
-                          backgroundColor: colors.primary + "20",
+                          backgroundColor: tint("primary", 0.08),
                           alignItems: "center",
                           justifyContent: "center",
                         }}

@@ -482,7 +482,7 @@ export function SessionBuilder({
           fetchOpts,
         );
         onLaunch?.();
-        router.push(
+        router.replace(
           (done
             ? quickSessionOverviewHref(id)
             : quickSessionOverviewHref(id, { saved: true })) as never,
