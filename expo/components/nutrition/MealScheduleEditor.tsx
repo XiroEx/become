@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { View, TextInput, Pressable, ActivityIndicator, Platform } from "react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import {
   apiFetch,
   MealScheduleResponseSchema,
@@ -9,8 +12,8 @@ import {
   type MealScheduleWindow,
 } from "@become/api-client";
 import { Text } from "@/components/Text";
-import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -23,7 +26,27 @@ import {
   titleCase,
   windowLength,
 } from "@/lib/nutrition/mealSchedule";
-import { ChevronUp, ChevronDown, X, Check, Plus } from "lucide-react-native";
+import {
+  ChevronUp,
+  ChevronDown,
+  Clock,
+  GripVertical,
+  X,
+  Check,
+  Plus,
+} from "lucide-react-native";
+
+type TimeField = "start" | "end";
+
+/** "HH:MM" (or blank) -> a Date carrying that time, defaulting to now. Used
+ *  only to seed the Android system time picker's initial value. */
+function timeStringToDate(value: string): Date {
+  const minutes = parseTimeValue(value);
+  const d = new Date();
+  if (minutes === null) return d;
+  d.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
+  return d;
+}
 
 export interface MealScheduleRow {
   tag: string;
@@ -48,6 +71,14 @@ export function MealScheduleEditor({
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [newTag, setNewTag] = useState("");
+  // Android only: which row/field's system time picker dialog is open. A
+  // plain TextInput on Android opens the full QWERTY keyboard for "08:00",
+  // so Android taps the clock icon instead and this drives a native
+  // DateTimePicker(mode="time") dialog rather than free text entry.
+  const [androidPicker, setAndroidPicker] = useState<{
+    tag: string;
+    field: TimeField;
+  } | null>(null);
 
   const saveTimer = useRef<NodeJS.Timeout | null>(null);
   const loadedRef = useRef(false);
@@ -165,6 +196,22 @@ export function MealScheduleEditor({
     setRows((prev) =>
       prev.map((r) => (r.tag === tag ? { ...r, ...patch } : r)),
     );
+  };
+
+  const openAndroidPicker = (tag: string, field: TimeField) => {
+    setAndroidPicker({ tag, field });
+  };
+
+  const handleAndroidPickerChange = (
+    event: DateTimePickerEvent,
+    date?: Date,
+  ) => {
+    const current = androidPicker;
+    setAndroidPicker(null);
+    if (!current || event.type !== "set" || !date) return;
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    setRow(current.tag, { [current.field]: `${hh}:${mm}` });
   };
 
   const move = (index: number, delta: number) => {
@@ -322,6 +369,13 @@ export function MealScheduleEditor({
                       </Pressable>
                     </View>
 
+                    {/* Decorative, matching the web row — reordering happens via
+                        the arrows above, not a drag gesture (a mis-grabbed drag
+                        on a phone list is a worse failure than one extra tap). */}
+                    <View testID={`drag-handle-${row.tag}`}>
+                      <GripVertical size={14} color={colors["muted-foreground"]} />
+                    </View>
+
                     <Text className="text-foreground text-base font-semibold">
                       {titleCase(row.tag)}
                     </Text>
@@ -357,30 +411,70 @@ export function MealScheduleEditor({
                   )}
                 </View>
 
-                {/* Time Inputs */}
+                {/* Time Inputs. Unscheduled stays visually blank — a real
+                    "08:00"/"10:00" placeholder reads as an already-set time —
+                    and the clock icon is the affordance to set one. On
+                    Android the field itself is read-only: a plain TextInput
+                    there pops the full QWERTY keyboard for a time, so Android
+                    opens the system time picker dialog instead (iOS keeps
+                    typing, which is not the problem being fixed here). */}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <TextInput
-                    testID={`start-${row.tag}`}
-                    accessibilityLabel={`${titleCase(row.tag)} start time`}
-                    placeholder="08:00"
-                    placeholderTextColor={colors["muted-foreground"]}
-                    value={row.start}
-                    onChangeText={(val) => setRow(row.tag, { start: val })}
-                    className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-foreground text-sm tabular-nums"
-                    style={minTouchTarget}
-                  />
-                  <Text className="text-muted-foreground text-xs">to</Text>
-                  <TextInput
-                    testID={`end-${row.tag}`}
-                    accessibilityLabel={`${titleCase(row.tag)} end time`}
-                    placeholder="10:00"
-                    placeholderTextColor={colors["muted-foreground"]}
-                    value={row.end}
-                    onChangeText={(val) => setRow(row.tag, { end: val })}
-                    className="flex-1 bg-background border border-border rounded-xl px-3 py-2 text-foreground text-sm tabular-nums"
-                    style={minTouchTarget}
-                  />
+                  {(["start", "end"] as const).map((field, i) => {
+                    const FieldWrapper = Platform.OS === "android" ? Pressable : View;
+                    return (
+                      <View
+                        key={field}
+                        style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 8 }}
+                      >
+                        {i === 1 ? (
+                          <Text className="text-muted-foreground text-xs">to</Text>
+                        ) : null}
+                        <FieldWrapper
+                          testID={`time-field-${field}-${row.tag}`}
+                          {...(Platform.OS === "android"
+                            ? {
+                                accessibilityRole: "button" as const,
+                                accessibilityLabel: `Open time picker for ${titleCase(row.tag)} ${field} time`,
+                                onPress: () => openAndroidPicker(row.tag, field),
+                              }
+                            : {})}
+                          className="flex-1 bg-background border border-border rounded-xl px-3 flex-row items-center"
+                          style={minTouchTarget}
+                        >
+                          <Clock
+                            size={14}
+                            color={colors["muted-foreground"]}
+                            style={{ marginRight: 6 }}
+                          />
+                          <TextInput
+                            testID={`${field}-${row.tag}`}
+                            accessibilityLabel={`${titleCase(row.tag)} ${field} time`}
+                            placeholder="--:--"
+                            placeholderTextColor={colors["muted-foreground"]}
+                            value={row[field]}
+                            editable={Platform.OS !== "android"}
+                            pointerEvents={Platform.OS === "android" ? "none" : "auto"}
+                            onChangeText={(val) => setRow(row.tag, { [field]: val })}
+                            className="flex-1 py-2 text-foreground text-sm tabular-nums"
+                          />
+                        </FieldWrapper>
+                      </View>
+                    );
+                  })}
                 </View>
+
+                {Platform.OS === "android" &&
+                androidPicker &&
+                androidPicker.tag === row.tag ? (
+                  <DateTimePicker
+                    testID={`time-picker-${androidPicker.field}-${row.tag}`}
+                    value={timeStringToDate(row[androidPicker.field])}
+                    mode="time"
+                    is24Hour
+                    display="default"
+                    onChange={handleAndroidPickerChange}
+                  />
+                ) : null}
 
                 {/* Feedback Notes */}
                 {wraps && len !== null ? (
@@ -426,13 +520,14 @@ export function MealScheduleEditor({
         </View>
       </Card>
 
-      {/* Status & Save bar */}
+      {/* Status bar. No Save button: like the web, every change autosaves
+          (debounced) and this chip is the only feedback — a manual Save next
+          to it would imply something was still waiting to be committed. */}
       <View
         testID="save-status-container"
         style={{
           flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
           paddingVertical: 4,
         }}
       >
@@ -469,16 +564,6 @@ export function MealScheduleEditor({
             </Text>
           )}
         </View>
-
-        <Button
-          testID="meal-schedule-save-button"
-          variant="secondary"
-          size="sm"
-          loading={saving}
-          onPress={() => void saveNow(rows)}
-        >
-          Save
-        </Button>
       </View>
     </View>
   );
