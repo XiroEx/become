@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { AlertTriangle, Check, Pencil } from "lucide-react-native";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { AlertTriangle, Check, Pencil, X } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Text } from "@/components/Text";
 import { EvidencePhotoPicker } from "@/components/nutrition/EvidencePhotoPicker";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   FOOD_FLAG_KIND_LABELS,
   FOOD_FLAG_KINDS,
@@ -235,12 +236,45 @@ export function FlagFoodSheet({
   // to act on, so the correction fields ARE the sheet.
   const showFixFirst = !canReport;
 
+  // ONE header, not two (NP-275): the web shows a single title row — an
+  // AlertTriangle + "Something look wrong?" (or, mid-fix, just "Fix it for
+  // this entry") plus an explicit X — and no header row at all on the
+  // success screen, which carries its own "Report sent" copy instead. This
+  // used to print "Something look wrong?" a second time, inline in the body,
+  // right under that same title.
+  const onFixScreen = fixing || showFixFirst;
+  const showHeader = !result;
+  const sheetTitle = showHeader
+    ? onFixScreen
+      ? "Fix it for this entry"
+      : "Something look wrong?"
+    : undefined;
+
   return (
     <BottomSheet
       visible={visible}
       onClose={close}
-      title={fixing || showFixFirst ? "Fix it for this entry" : "Something look wrong?"}
+      title={sheetTitle}
       testID={testID}
+      headerLeading={
+        showHeader && !onFixScreen ? (
+          <AlertTriangle size={16} color={colors.accent} />
+        ) : undefined
+      }
+      headerTrailing={
+        showHeader ? (
+          <Pressable
+            testID={`${testID}-close`}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={close}
+            hitSlop={8}
+            className="h-8 w-8 items-center justify-center rounded-full bg-muted"
+          >
+            <X size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+        ) : undefined
+      }
     >
       <ScrollView
         testID={`${testID}-scroll`}
@@ -330,14 +364,6 @@ export function FlagFoodSheet({
             </View>
           ) : (
             <>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <AlertTriangle size={16} color={colors.accent} />
-                <Text className="text-foreground text-sm font-semibold">
-                  Something look wrong?
-                </Text>
-              </View>
               <Text className="text-muted-foreground text-xs">
                 Tell us what looks off about{" "}
                 <Text className="text-foreground font-medium">{foodName}</Text>{" "}
@@ -410,6 +436,7 @@ export function FlagFoodSheet({
                 photos={photos}
                 onChange={setPhotos}
                 onError={setPhotoError}
+                choosePhotoLabel="Upload photo"
                 testID={`${testID}-photos`}
               />
               {photoError ? (
@@ -421,10 +448,13 @@ export function FlagFoodSheet({
                 </Text>
               ) : null}
 
+              <Text className="text-muted-foreground text-[11px] font-semibold uppercase">
+                Anything else? (optional)
+              </Text>
               <Input
                 testID={`${testID}-note`}
-                label="Anything else? (optional)"
-                placeholder="e.g. label says 190, app says 413"
+                accessibilityLabel="Anything else? (optional)"
+                placeholder="e.g. my label says 45 cal per container"
                 multiline
                 numberOfLines={2}
                 value={note}
@@ -440,14 +470,49 @@ export function FlagFoodSheet({
                 </Text>
               ) : null}
 
-              <Button
-                testID={`${testID}-submit`}
-                loading={submitting}
-                disabled={submitting || !token}
-                onPress={() => void submit()}
-              >
-                {submitting ? "Sending…" : "Send report"}
-              </Button>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    testID={`${testID}-cancel`}
+                    variant="secondary"
+                    disabled={submitting}
+                    onPress={close}
+                  >
+                    Cancel
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  {/* Amber "Report it", matching the web's `bg-amber-600` CTA —
+                      no `Button` variant draws this hue, so it is built off the
+                      existing `accent`/`accent-foreground` Tailwind classes
+                      rather than a literal (NP-123). */}
+                  <Pressable
+                    testID={`${testID}-submit`}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report it"
+                    accessibilityState={{
+                      disabled: submitting || !token,
+                      busy: submitting,
+                    }}
+                    disabled={submitting || !token}
+                    onPress={() => void submit()}
+                    style={minTouchTarget}
+                    className={`flex-row items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 ${
+                      submitting || !token ? "opacity-50" : ""
+                    }`}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={colors["accent-foreground"]}
+                      />
+                    ) : null}
+                    <Text className="text-accent-foreground text-base font-semibold">
+                      {submitting ? "Sending…" : "Report it"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
               {!token ? (
                 <Text className="text-muted-foreground text-xs text-center">
                   Sign in to send a report.

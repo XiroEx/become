@@ -11,8 +11,9 @@
 //     match the web's options (focus/difficulty/equipment + counts);
 //   • (e015c9ac) saving at the custom-programs cap raises the upgrade sheet;
 //     below the cap the program is created (POST /api/programs/custom);
-//   • (e015c9ad) a generated session starts through the quick-session
-//     overview (stash with needsName + quickSessionOverviewHref push).
+//   • (e015c9ad) a generated session starts Live, the way the web's
+//     `startSession` does (NP-295): stash with needsName + quickSessionLiveHref
+//     push.
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
@@ -55,7 +56,7 @@ jest.mock("@/lib/quickSession/store", () => {
 import { apiFetch } from "@become/api-client";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import {
-  quickSessionOverviewHref,
+  quickSessionLiveHref,
   stashQuickSession,
 } from "@/lib/quickSession/store";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
@@ -176,7 +177,11 @@ describe("(id: e015c9ab) session and four-week program generate without AI and m
     fireEvent.press(getByTestId("generate-sheet-focus-push"));
     fireEvent.press(getByTestId("generate-sheet-difficulty-advanced"));
     fireEvent.press(getByTestId("generate-sheet-equipment-dumbbell"));
-    fireEvent.press(getByTestId("generate-sheet-exercise-count-increment"));
+    // The web's slider steps by 1 via the arrow keys; the native slider
+    // carries the same step through VoiceOver's increment action.
+    fireEvent(getByTestId("generate-sheet-exercise-count-track"), "accessibilityAction", {
+      nativeEvent: { actionName: "increment" },
+    });
     fireEvent.press(getByTestId("generate-sheet-cardio"));
     fireEvent.press(getByTestId("generate-sheet-generate-session"));
     await waitFor(() => {
@@ -301,8 +306,8 @@ describe("(id: e015c9ac) saving a generated program honours the custom-programs 
   });
 });
 
-describe("(id: e015c9ad) a generated session starts through the quick-session overview", () => {
-  it("stashes with needsName and pushes the overview href", async () => {
+describe("(id: e015c9ad) a generated session starts Live, not the overview", () => {
+  it("stashes with needsName and pushes the Live href", async () => {
     mockApiFetch.mockResolvedValue(SESSION_RESPONSE);
     const onClose = jest.fn();
     const { getByTestId } = render(<GenerateSheet visible onClose={onClose} />);
@@ -322,6 +327,6 @@ describe("(id: e015c9ad) a generated session starts through the quick-session ov
       );
     });
     expect(onClose).toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith(quickSessionOverviewHref("qs-123"));
+    expect(mockPush).toHaveBeenCalledWith(quickSessionLiveHref("qs-123"));
   });
 });
