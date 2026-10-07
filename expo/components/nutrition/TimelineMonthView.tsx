@@ -1,6 +1,13 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { View, Pressable } from "react-native";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  MoreVertical,
+  CopyPlus,
+  ChefHat,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useLocalDay, withTz } from "@/lib/time/localDay";
@@ -9,8 +16,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useFetch } from "@/lib/hooks/useFetch";
 import {
   MealLogsRangeResponseSchema,
+  TagsResponseSchema,
   type MealLogsRangeResponse,
   type MealLog,
+  type TagsResponse,
 } from "@become/api-client";
 import {
   PlansResponseSchema,
@@ -30,6 +39,22 @@ import {
   tintForCalories,
   TINT_BG_CLASSES,
 } from "@/lib/nutrition/timelinePlanning";
+import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+
+/**
+ * ─── Month header controls + tag-dot-only cells (NP-318) ────────────────────
+ *
+ * Ports the two month-header controls the web's `MonthView`
+ * (`webapp/app/dashboard/timeline/MonthView.tsx:329-414`) sits between the
+ * arrows — a settings gear (here: a single "Show calorie % on cells" toggle,
+ * off by default like the web's mobile default) and a kebab ("Plan tools":
+ * the same `CopyDaySheet` / `ApplyMealSheet` NP-260 wired into Week view) —
+ * plus moves the "Today" pill back in front of the month label instead of
+ * stacked underneath it. Grid cells drop the raw calorie number per cell
+ * (native-only drift; the web shows only tag dots, and conditionally a %,
+ * never a bare calorie count).
+ */
 
 export interface TimelineMonthViewProps {
   selectedDate: string; // YYYY-MM-DD
@@ -105,6 +130,14 @@ export function TimelineMonthView({
     setViewMonth(t.getMonth());
   };
 
+  // Header controls (NP-318) — gear toggle + kebab plan-tools menu.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showCaloriePct, setShowCaloriePct] = useState(false);
+  const [planToolsOpen, setPlanToolsOpen] = useState(false);
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
+  const [applyMealOpen, setApplyMealOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
   // Build grid of dates for the month
   const monthDays = useMemo(() => {
     return getMonthDays(viewYear, viewMonth);
@@ -122,7 +155,7 @@ export function TimelineMonthView({
 
   // Fetch logs & plans for the visible month range
   const logsPath = withTz(`/api/meal-logs?from=${fromStr}&to=${toStr}`, tzOffset);
-  const { data: logsData } = useFetch<MealLogsRangeResponse>(
+  const { data: logsData, refetch: refetchLogs } = useFetch<MealLogsRangeResponse>(
     logsPath,
     MealLogsRangeResponseSchema,
     {
@@ -133,7 +166,7 @@ export function TimelineMonthView({
   );
 
   const plansPath = `/api/meal-plans?from=${fromStr}&to=${toStr}`;
-  const { data: plansData } = useFetch<PlansResponse>(
+  const { data: plansData, refetch: refetchPlans } = useFetch<PlansResponse>(
     plansPath,
     PlansResponseSchema,
     {
@@ -141,6 +174,27 @@ export function TimelineMonthView({
       getToken: () => token ?? undefined,
       skip: !token,
     },
+  );
+
+  // Tag choices for `ApplyMealSheet` — the same `/api/tags` source Week
+  // view's plan tools use.
+  const { data: tagsData } = useFetch<TagsResponse>(
+    "/api/tags",
+    TagsResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+      skip: !token,
+    },
+  );
+
+  const handleBulkApplied = useCallback(
+    (toastText: string) => {
+      setToast(toastText);
+      void refetchLogs();
+      void refetchPlans();
+    },
+    [refetchLogs, refetchPlans],
   );
 
   const activePlans = useMemo(() => {
@@ -212,10 +266,10 @@ export function TimelineMonthView({
           <ChevronLeft size={20} color={colors.foreground} />
         </Pressable>
 
-        <View className="items-center gap-1">
-          <Text className="text-foreground text-sm font-bold">
-            {monthLabel}
-          </Text>
+        {/* Today pill, month label, gear and kebab — one row, the web's
+            order (`MonthView.tsx:340-406`), not "Today" stacked under the
+            month name with no gear/kebab at all. */}
+        <View className="flex-row items-center gap-1.5">
           <Pressable
             testID="timeline-month-today"
             accessibilityRole="button"
@@ -227,6 +281,80 @@ export function TimelineMonthView({
               Today
             </Text>
           </Pressable>
+
+          <Text className="text-foreground text-sm font-bold">
+            {monthLabel}
+          </Text>
+
+          <Pressable
+            testID="timeline-month-settings"
+            accessibilityRole="button"
+            accessibilityLabel="Month view settings"
+            accessibilityState={{ expanded: settingsOpen }}
+            onPress={() => {
+              setPlanToolsOpen(false);
+              setSettingsOpen((o) => !o);
+            }}
+            className="h-8 w-8 items-center justify-center rounded-lg"
+          >
+            <Settings size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+
+          <View>
+            <Pressable
+              testID="timeline-month-kebab"
+              accessibilityRole="button"
+              accessibilityLabel="Plan tools"
+              accessibilityState={{ expanded: planToolsOpen }}
+              onPress={() => {
+                setSettingsOpen(false);
+                setPlanToolsOpen((o) => !o);
+              }}
+              className="h-8 w-8 items-center justify-center rounded-lg"
+            >
+              <MoreVertical size={16} color={colors["muted-foreground"]} />
+            </Pressable>
+
+            {planToolsOpen ? (
+              <View
+                testID="timeline-month-plan-tools-menu"
+                className="absolute right-0 top-9 z-40 min-w-[190px] gap-0.5 rounded-lg border border-border bg-card p-1"
+              >
+                <Pressable
+                  testID="timeline-month-copy-day"
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy a day forward"
+                  onPress={() => {
+                    setPlanToolsOpen(false);
+                    setToast(null);
+                    setCopyDayOpen(true);
+                  }}
+                  className="flex-row items-center gap-2 rounded px-2 py-1.5"
+                >
+                  <CopyPlus size={14} color={colors.primary} />
+                  <Text className="text-foreground text-xs font-medium">
+                    Copy a day forward…
+                  </Text>
+                </Pressable>
+                <Pressable
+                  testID="timeline-month-apply-meal"
+                  accessibilityRole="button"
+                  accessibilityLabel="Apply meal to days"
+                  onPress={() => {
+                    setPlanToolsOpen(false);
+                    setToast(null);
+                    setApplyMealOpen(true);
+                  }}
+                  className="flex-row items-center gap-2 rounded px-2 py-1.5"
+                >
+                  <ChefHat size={14} color={colors.accent} />
+                  <Text className="text-foreground text-xs font-medium">
+                    Apply meal to days…
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
         </View>
 
         <Pressable
@@ -239,6 +367,46 @@ export function TimelineMonthView({
           <ChevronRight size={20} color={colors.foreground} />
         </Pressable>
       </View>
+
+      {/* Settings panel — the gear's one toggle (NP-318). Off by default,
+          matching the web's mobile default (`MonthView.tsx:90-97`). */}
+      {settingsOpen ? (
+        <View
+          testID="timeline-month-settings-panel"
+          className="rounded-xl border border-border bg-card p-3"
+        >
+          <Pressable
+            testID="timeline-month-settings-calorie-pct"
+            accessibilityRole="switch"
+            accessibilityState={{ checked: showCaloriePct }}
+            onPress={() => setShowCaloriePct((v) => !v)}
+            className="flex-row items-center justify-between py-1"
+          >
+            <Text className="text-foreground text-sm">Show calorie % on cells</Text>
+            <View
+              className={`h-5 w-9 justify-center rounded-full px-0.5 ${
+                showCaloriePct ? "items-end bg-foreground" : "items-start bg-muted"
+              }`}
+            >
+              <View className="h-4 w-4 rounded-full bg-card" />
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
+
+      {toast ? (
+        <Pressable
+          testID="timeline-month-toast"
+          accessibilityRole="button"
+          accessibilityLabel={`${toast}. Dismiss`}
+          onPress={() => setToast(null)}
+          className="rounded-xl bg-muted px-3 py-2"
+        >
+          <Text className="text-foreground text-xs font-medium text-center">
+            {toast}
+          </Text>
+        </Pressable>
+      ) : null}
 
       {/* Month Calendar Grid Card */}
       <View
@@ -351,10 +519,13 @@ export function TimelineMonthView({
                   ) : null}
                 </View>
 
-                {/* Calorie text if logged */}
-                {cals > 0 && isThisMonth ? (
+                {/* Calorie % micro-label — gear-toggled, off by default, and
+                    a PERCENT of goal when on, never a bare calorie count
+                    (the web shows tag dots and, optionally, a %; it never
+                    shows raw calories on a cell — `MonthView.tsx:530-535`). */}
+                {showCaloriePct && cals > 0 && isThisMonth && calorieGoal > 0 ? (
                   <Text className="text-[9px] font-medium text-muted-foreground tabular-nums">
-                    {cals}
+                    {Math.round((cals / calorieGoal) * 100)}%
                   </Text>
                 ) : (
                   <View className="h-3" />
@@ -385,6 +556,25 @@ export function TimelineMonthView({
           </Text>
         </View>
       </View>
+
+      <CopyDaySheet
+        visible={copyDayOpen}
+        defaultSourceDate={selectedDate}
+        onClose={() => setCopyDayOpen(false)}
+        onApplied={handleBulkApplied}
+      />
+      <ApplyMealSheet
+        visible={applyMealOpen}
+        defaultFromDate={selectedDate}
+        defaultToDate={selectedDate}
+        availableTags={
+          tagsData
+            ? { defaults: tagsData.defaults ?? [], userTags: tagsData.userTags ?? [] }
+            : undefined
+        }
+        onClose={() => setApplyMealOpen(false)}
+        onApplied={handleBulkApplied}
+      />
     </View>
   );
 }

@@ -2951,7 +2951,14 @@ export default function NutritionIndexRoute() {
         />
       ) : null}
 
-      {/* Floating Add Food Button (FAB) */}
+      {/* Floating Add Food Button (FAB) — Day view only (NP-318). Week view
+          has its own per-day `+` inline with each row (the web's
+          `WeekDayGroup` trailing control), and the FAB's fixed
+          bottom-right position used to sit directly on top of the first
+          visible day's own `+`, which reads as "add to today" there, not
+          "add to this day". Month view has no add-food affordance of its
+          own either, so the FAB stays there. */}
+      {viewMode !== "week" ? (
       <Pressable
         testID="nutrition-fab-add"
         accessibilityRole="button"
@@ -2977,6 +2984,7 @@ export default function NutritionIndexRoute() {
       >
         <Plus size={28} color={colors.background} />
       </Pressable>
+      ) : null}
     </SafeAreaView>
   );
 }
