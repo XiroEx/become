@@ -52,17 +52,22 @@ export type PlanPromoteModeValue = "manual" | "auto";
 /** The web's cap: `MAX_FITNESS_GOALS = 3` in the settings page. */
 export const MAX_FITNESS_GOALS = 3;
 
-/** The goal list at the top of the web's settings page. */
+/**
+ * The goal list at the top of the web's settings page, including its emoji
+ * (NP-307 — native had none, which was the whole card): `icon` is the exact
+ * character from `webapp/app/dashboard/settings/page.tsx`'s `FITNESS_GOALS`.
+ */
 export const FITNESS_GOAL_OPTIONS: readonly {
   value: FitnessGoalValue;
   label: string;
   description: string;
+  icon: string;
 }[] = [
-  { value: "lose_weight", label: "Lose Weight", description: "Burn fat and get leaner" },
-  { value: "gain_muscle", label: "Gain Muscle", description: "Build size and strength" },
-  { value: "maintain", label: "Maintain", description: "Stay at current fitness" },
-  { value: "improve_performance", label: "Performance", description: "Enhance athletic output" },
-  { value: "general_health", label: "General Health", description: "Move and feel better" },
+  { value: "lose_weight", label: "Lose Weight", description: "Burn fat and get leaner", icon: "🔥" },
+  { value: "gain_muscle", label: "Gain Muscle", description: "Build size and strength", icon: "💪" },
+  { value: "maintain", label: "Maintain", description: "Stay at current fitness", icon: "⚖️" },
+  { value: "improve_performance", label: "Performance", description: "Enhance athletic output", icon: "⚡" },
+  { value: "general_health", label: "General Health", description: "Move and feel better", icon: "❤️" },
 ];
 
 /** The experience list at the top of the web's settings page. */

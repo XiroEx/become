@@ -24,12 +24,25 @@ import { apiFetch } from "@become/api-client";
 import { clearAll } from "@/lib/cache/lastKnown";
 import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
 import {
+  FITNESS_GOAL_OPTIONS,
   MAX_FITNESS_GOALS,
   buildTrainingProfilePatch,
   clampWeeklyAvailability,
   toggleFitnessGoals,
 } from "@/lib/settings/trainingPreferences";
+import { darkTokens, lightTokens } from "@/lib/theme/tokens";
 /* eslint-enable import/first */
+
+function flattenStyle(style: unknown): Record<string, unknown> {
+  return Object.assign({}, ...(Array.isArray(style) ? style : [style]));
+}
+
+/** `colors.success` resolves to one of these two `rgb(...)` strings
+ * depending on the scheme NativeWind reports in this jest environment —
+ * asserting against both keeps the test honest without pinning a mode. */
+const SUCCESS_RGBS = [lightTokens.success, darkTokens.success].map(
+  (triplet) => `rgb(${triplet})`,
+);
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
 
@@ -301,5 +314,77 @@ describe("Training preferences screen (NP-127)", () => {
     });
     expect(queryByText("Training")).toBeNull();
     expect(queryByText("Nutrition Planning")).toBeNull();
+  });
+
+  it("(NP-307) every fitness goal shows the web's emoji icon", async () => {
+    const { getByTestId, queryByText } = render(<TrainingPreferencesScreen />);
+    await waitFor(() => {
+      expect(getByTestId("training-preferences-route")).toBeTruthy();
+    });
+    for (const goal of FITNESS_GOAL_OPTIONS) {
+      expect(queryByText(goal.icon)).toBeTruthy();
+    }
+  });
+
+  it("(NP-307) selected goal, experience and equipment are green (`success`), not red or black/white (`primary`)", async () => {
+    const { getByTestId } = render(<TrainingPreferencesScreen />);
+    await waitFor(() => {
+      expect(getByTestId("training-preferences-route")).toBeTruthy();
+    });
+
+    // Seeded selected: goal "lose_weight", experience "beginner",
+    // equipment "dumbbells" (see mockProfileData above).
+    await waitFor(() => {
+      const goalStyle = flattenStyle(
+        getByTestId("training-preferences-goal-lose_weight").props.style,
+      );
+      expect(SUCCESS_RGBS).toContain(goalStyle.borderColor);
+
+      const experienceStyle = flattenStyle(
+        getByTestId("training-preferences-experience-beginner").props.style,
+      );
+      expect(SUCCESS_RGBS).toContain(experienceStyle.borderColor);
+
+      const equipmentStyle = flattenStyle(
+        getByTestId("training-preferences-equipment-dumbbells").props.style,
+      );
+      expect(SUCCESS_RGBS).toContain(equipmentStyle.borderColor);
+    });
+
+    // The primary-goal check is a green circled check, not the old red/black
+    // tick, and the unselected "maintain" goal carries neither. It is a
+    // decorative icon (lucide sets `aria-hidden` since it carries no a11y
+    // prop of its own — the row around it already speaks for it), so the
+    // query needs `includeHiddenElements` to see it.
+    expect(
+      getByTestId("primary-goal-badge", { includeHiddenElements: true }),
+    ).toBeTruthy();
+    expect(() => getByTestId("training-preferences-goal-maintain")).not.toThrow();
+    const unselectedGoalStyle = flattenStyle(
+      getByTestId("training-preferences-goal-maintain").props.style,
+    );
+    expect(SUCCESS_RGBS).not.toContain(unselectedGoalStyle.borderColor);
+  });
+
+  it("(NP-307) Fitness Goals, Experience & Schedule and Equipment & Injuries render as bordered cards, and Save reads 'Save Changes'", async () => {
+    const { getByTestId, queryByText } = render(<TrainingPreferencesScreen />);
+    await waitFor(() => {
+      expect(getByTestId("training-preferences-route")).toBeTruthy();
+    });
+
+    for (const sectionTestId of [
+      "training-preferences-goals-section",
+      "training-preferences-experience-section",
+      "training-preferences-equipment-section",
+    ]) {
+      const sectionStyle = flattenStyle(
+        getByTestId(sectionTestId).props.style,
+      );
+      expect(sectionStyle.borderWidth).toBeGreaterThanOrEqual(1);
+      expect(sectionStyle.borderRadius).toBeGreaterThan(0);
+    }
+
+    expect(queryByText("Save Changes")).toBeTruthy();
+    expect(queryByText("Save training preferences")).toBeNull();
   });
 });
