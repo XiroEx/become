@@ -24,6 +24,7 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
 });
 
 import { DangerZone } from "@/components/settings/DangerZone";
+import { DELETION_COVERS, DELETION_EXCEPTIONS } from "@become/core";
 import {
   DELETE_CONFIRMATION,
   cancelAccountDeletion,
@@ -40,6 +41,50 @@ import {
  */
 describe("DangerZone", () => {
   const idleStatus = async () => ({ ok: true, deletion: { pending: false } });
+
+  it("(NP-304) ports the web's card: deletion list, collapsible exceptions, outlined button, inline Cancel", async () => {
+    const requestImpl = jest.fn(async () => ({ ok: true }));
+
+    const { getByTestId, getByText, queryByTestId } = render(
+      <DangerZone
+        token="jwt"
+        requestImpl={requestImpl}
+        statusImpl={idleStatus}
+        source="ios"
+      />,
+    );
+
+    // The six "what is deleted" lines come from the shared constant, not a
+    // native-only rewrite of the words.
+    await waitFor(() => expect(getByTestId("delete-account-covers")).toBeTruthy());
+    for (const line of DELETION_COVERS) {
+      expect(getByText(line)).toBeTruthy();
+    }
+
+    // The exceptions are collapsed until the disclosure is opened.
+    expect(queryByTestId("delete-account-exceptions")).toBeNull();
+    fireEvent.press(getByTestId("delete-account-exceptions-toggle"));
+    await waitFor(() => expect(getByTestId("delete-account-exceptions")).toBeTruthy());
+    for (const line of DELETION_EXCEPTIONS) {
+      expect(getByText(line)).toBeTruthy();
+    }
+
+    // The request button is the outlined variant, not the filled one, and
+    // confirming happens inline — never a Modal.
+    expect(queryByTestId("delete-account-modal")).toBeNull();
+    fireEvent.press(getByTestId("delete-account"));
+    expect(
+      getByText(
+        "Delete your account? You will be signed out, and your devices stop getting notifications immediately.",
+      ),
+    ).toBeTruthy();
+    expect(getByTestId("delete-account-confirm")).toBeTruthy();
+    // Web's wording: `Cancel`, not `Keep my account` (that label is reserved
+    // for undoing an ALREADY pending deletion, a different screen state).
+    expect(getByTestId("delete-account-cancel")).toHaveTextContent("Cancel");
+
+    expect(requestImpl).not.toHaveBeenCalled();
+  });
 
   it("does not delete anything until the confirmation is pressed", async () => {
     const requestImpl = jest.fn(async () => ({ ok: true }));

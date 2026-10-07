@@ -13,6 +13,7 @@ export type ButtonVariant =
   | "primary"
   | "secondary"
   | "destructive"
+  | "destructive-outline"
   | "ghost"
   | "inverted"
   | "success"
@@ -51,6 +52,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-primary",
   secondary: "bg-muted",
   destructive: "bg-destructive",
+  // NP-304: the web's Delete-account button is an OUTLINED red control
+  // (`border border-red-300 text-red-600 dark:border-red-900 dark:text-red-400`),
+  // not the filled `destructive` above — a distinct variant rather than a
+  // one-off style so the border/text pairing stays a single source of truth.
+  "destructive-outline": "bg-transparent border border-destructive/40",
   ghost: "bg-transparent border border-border",
   // The web's `bg-zinc-900 dark:bg-white` submit button on the sign-in /
   // sign-up screen (NP-251): foreground on background, which is already the
@@ -86,6 +92,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   primary: "text-primary-foreground",
   secondary: "text-foreground",
   destructive: "text-destructive-foreground",
+  "destructive-outline": "text-destructive",
   ghost: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
@@ -171,7 +178,9 @@ export function Button({
             color={
               variant === "accent"
                 ? colors["accent-foreground"]
-                : variant === "primary" ||
+                : variant === "destructive-outline"
+                  ? colors.destructive
+                  : variant === "primary" ||
                     variant === "destructive" ||
                     variant === "success" ||
                     variant === "info" ||

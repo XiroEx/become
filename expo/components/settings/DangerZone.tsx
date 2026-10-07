@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Platform, View } from "react-native";
+import { ChevronDown, ChevronRight } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
-import { Modal } from "@/components/Modal";
+import { DELETION_COVERS, DELETION_EXCEPTIONS } from "@become/core";
 import {
   RESTORE_WINDOW_DAYS,
   cancelAccountDeletion,
@@ -10,6 +11,7 @@ import {
   requestAccountDeletion,
   type DeletionStatus,
 } from "@/lib/account/deleteAccount";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { sessionStore } from "@/lib/auth/secureStoreToken";
 import { clearAll as clearAllLastKnownCache, setCacheMemberId } from "@/lib/cache/lastKnown";
 import { clearAppBadge } from "@/lib/widgets/badge";
@@ -29,6 +31,14 @@ import { clearAppBadge } from "@/lib/widgets/badge";
  * SecureStore is already worthless. Leaving it there would show a signed-in app
  * for an account that is being deleted. `onDeleted` then sends the member to
  * the sign-in screen.
+ *
+ * NP-304: this mirrors `webapp/components/settings/DangerZone.tsx` — the
+ * bordered card, the six-item "what is deleted" list, the collapsible "What
+ * does not simply disappear" exceptions, the outlined (not solid) button and
+ * the inline confirmation with its `Cancel` button all come from the same
+ * `DELETION_COVERS` / `DELETION_EXCEPTIONS` / `RESTORE_WINDOW_DAYS` constants
+ * the web reads, rather than a second copy of the words or a modal the web
+ * does not have.
  *
  * Everything that talks to the network or to the Keychain is injectable, so
  * this renders and behaves in jest without a device.
@@ -71,11 +81,13 @@ export function DangerZone({
   source,
   testID = "danger-zone",
 }: DangerZoneProps) {
+  const { colors } = useThemeTokens();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<DeletionStatus | null>(null);
   const [kept, setKept] = useState(false);
+  const [showExceptions, setShowExceptions] = useState(false);
 
   const platform: "ios" | "android" | "unknown" =
     source ?? (Platform.OS === "ios" || Platform.OS === "android" ? Platform.OS : "unknown");
@@ -172,7 +184,11 @@ export function DangerZone({
       : "";
 
   return (
-    <View testID={testID} style={{ gap: 8 }}>
+    <View
+      testID={testID}
+      className="rounded-xl border border-destructive/30 bg-card p-4"
+      style={{ gap: 8 }}
+    >
       <Text
         accessibilityRole="header"
         className="text-destructive text-lg font-semibold"
@@ -201,19 +217,93 @@ export function DangerZone({
       ) : (
         <>
           <Text className="text-muted-foreground text-sm">
-            This deletes your account and the data attached to it — training, nutrition, mind and
-            everything you logged. You have {RESTORE_WINDOW_DAYS} days to change your mind using the link
-            we email you. After that it cannot be undone.
+            This deletes your account and the data attached to it. You have {RESTORE_WINDOW_DAYS}{" "}
+            days to change your mind — after that it cannot be undone.
           </Text>
 
-          <Button
-            testID="delete-account"
-            variant="destructive"
-            disabled={!token || busy}
-            onPress={() => setConfirming(true)}
-          >
-            Delete account
-          </Button>
+          {DELETION_COVERS.length > 0 ? (
+            <View testID="delete-account-covers" style={{ gap: 4 }}>
+              {DELETION_COVERS.map((line) => (
+                <View key={line} style={{ flexDirection: "row", gap: 6 }}>
+                  <Text className="text-muted-foreground text-xs">{"•"}</Text>
+                  <Text className="text-muted-foreground text-xs flex-1">{line}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {DELETION_EXCEPTIONS.length > 0 ? (
+            <View>
+              <Button
+                variant="ghost"
+                size="sm"
+                testID="delete-account-exceptions-toggle"
+                accessibilityHint={
+                  showExceptions ? "Collapses this list" : "Expands this list"
+                }
+                onPress={() => setShowExceptions((v) => !v)}
+                icon={
+                  showExceptions ? (
+                    <ChevronDown size={14} color={colors["muted-foreground"]} />
+                  ) : (
+                    <ChevronRight size={14} color={colors["muted-foreground"]} />
+                  )
+                }
+              >
+                What does not simply disappear
+              </Button>
+              {showExceptions ? (
+                <View testID="delete-account-exceptions" style={{ gap: 4, marginTop: 6 }}>
+                  {DELETION_EXCEPTIONS.map((line) => (
+                    <View key={line} style={{ flexDirection: "row", gap: 6 }}>
+                      <Text className="text-muted-foreground text-xs">{"•"}</Text>
+                      <Text className="text-muted-foreground text-xs flex-1">{line}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {confirming ? (
+            <View style={{ gap: 8 }}>
+              <Text
+                testID="delete-account-confirm-prompt"
+                className="text-foreground text-sm font-medium"
+              >
+                Delete your account? You will be signed out, and your devices stop getting
+                notifications immediately.
+              </Text>
+              <Button
+                testID="delete-account-confirm"
+                variant="destructive"
+                loading={busy}
+                disabled={busy}
+                onPress={() => {
+                  void onConfirm();
+                }}
+              >
+                Yes, delete my account
+              </Button>
+              <Button
+                testID="delete-account-cancel"
+                variant="ghost"
+                disabled={busy}
+                onPress={() => setConfirming(false)}
+              >
+                Cancel
+              </Button>
+            </View>
+          ) : (
+            <Button
+              testID="delete-account"
+              variant="destructive-outline"
+              disabled={!token || busy}
+              onPress={() => setConfirming(true)}
+            >
+              Delete account
+            </Button>
+          )}
           {kept ? (
             <Text testID="keep-account-notice" className="text-muted-foreground text-xs">
               Your account is safe. Notifications stay off until you turn them back on with the
@@ -233,39 +323,6 @@ export function DangerZone({
           {error}
         </Text>
       ) : null}
-
-      <Modal
-        testID="delete-account-modal"
-        visible={confirming}
-        onClose={() => (busy ? undefined : setConfirming(false))}
-        title="Delete your account?"
-      >
-        <Text className="text-muted-foreground text-sm mb-4">
-          You will be signed out on this device and notifications will stop everywhere. We will email
-          you a link that undoes this for the next {RESTORE_WINDOW_DAYS} days.
-        </Text>
-        <View style={{ gap: 8 }}>
-          <Button
-            testID="delete-account-confirm"
-            variant="destructive"
-            loading={busy}
-            disabled={busy}
-            onPress={() => {
-              void onConfirm();
-            }}
-          >
-            Yes, delete my account
-          </Button>
-          <Button
-            testID="delete-account-cancel"
-            variant="ghost"
-            disabled={busy}
-            onPress={() => setConfirming(false)}
-          >
-            Keep my account
-          </Button>
-        </View>
-      </Modal>
     </View>
   );
 }
