@@ -18,7 +18,10 @@ import {
   Clock,
   Copy,
   History,
+  ImagePlus,
+  Pencil,
   Plus,
+  ScanBarcode,
   Search,
   Trash2,
   Upload,
@@ -110,6 +113,9 @@ import { TagSection } from "@/components/nutrition/TagSection";
 import { FoodSearchSheet, type FoodPickResult } from "@/components/nutrition/FoodSearchSheet";
 import { EstimateSheet } from "@/components/nutrition/EstimateSheet";
 import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+import { DateOnlyPicker } from "@/components/nutrition/DateOnlyPicker";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
@@ -311,6 +317,14 @@ export default function NutritionIndexRoute() {
   });
 
   useOnForeground(() => {
+    void refetchMealLogs();
+    void refetchSideTables();
+    if (showPlans) {
+      void refetchMealPlans();
+    }
+  });
+
+  useScreenFocus(() => {
     void refetchMealLogs();
     void refetchSideTables();
     if (showPlans) {
@@ -1143,6 +1157,55 @@ export default function NutritionIndexRoute() {
   // mirroring the web's `showSuccessToast` + refetch.
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
   const [planToolsNotice, setPlanToolsNotice] = useState<string | null>(null);
+
+  // NP-320: Apply meal sheet per tag and Plan date dialog from TagSection kebab
+  const [applyMealTag, setApplyMealTag] = useState<string | null>(null);
+  const [planDatePickerTag, setPlanDatePickerTag] = useState<string | null>(null);
+  const [planDateInput, setPlanDateInput] = useState<string>("");
+
+  const openPlanDatePicker = useCallback((tag: string) => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    setPlanDateInput(localDateKey(tomorrow));
+    setPlanDatePickerTag(tag.toLowerCase());
+  }, []);
+
+  const confirmPlanDate = useCallback(() => {
+    if (!planDatePickerTag || !planDateInput) return;
+    const tag = planDatePickerTag;
+    const date = planDateInput;
+    setPlanDatePickerTag(null);
+    setExplicitDate(date);
+    openSearch(tag);
+  }, [planDatePickerTag, planDateInput]);
+
+  const handleDeleteSectionLogs = useCallback(
+    async (tag: string, entries: { logId: string; itemId: string }[]) => {
+      for (const e of entries) {
+        setRemovedItemIds((prev) => new Set(prev).add(e.itemId));
+      }
+      try {
+        await Promise.all(
+          entries.map((e) =>
+            apiFetch(
+              `/api/meal-logs/${encodeURIComponent(e.logId)}/items/${encodeURIComponent(e.itemId)}`,
+              z.any(),
+              {
+                method: "DELETE",
+                baseUrl: WEBAPP_BASE_URL,
+                getToken: () => token ?? undefined,
+              },
+            ),
+          ),
+        );
+      } catch (err) {
+        console.error("Failed to delete section logs:", err);
+      } finally {
+        await refetchMealLogs();
+      }
+    },
+    [token, refetchMealLogs],
+  );
   // Food reports (NP-174): the unread-outcomes badge and the My reports
   // list. `reportsRefreshKey` re-reads the badge after filing a report or
   // after the list marks outcomes read.
@@ -1895,7 +1958,7 @@ export default function NutritionIndexRoute() {
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
+          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}
         >
           {viewMode === "day" ? (
             <>
@@ -2015,6 +2078,12 @@ export default function NutritionIndexRoute() {
             onSelectDate={(newDateKey) => setExplicitDate(newDateKey)}
           />
 
+          {/* Future-day schedule CTA — leads above the tag list, same spot
+              the web puts it: scheduling is the only thing you can do on a
+              day you have not lived yet (NP-262). Sits directly under DateNav
+              and above CalorieRing (NP-320). */}
+          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
+
           {/* Calorie Ring & Macro Bars */}
           <CalorieRing
             consumed={consumedCalories}
@@ -2040,21 +2109,24 @@ export default function NutritionIndexRoute() {
             onEditGoals={handleEditGoals}
           />
 
-          {/* Future-day schedule CTA — leads above the tag list, same spot
-              the web puts it: scheduling is the only thing you can do on a
-              day you have not lived yet (NP-262). The ScheduleMealsDrawer's
-              own "Copy day" / "From meals" tabs replace the separate
-              "Copy day…" / "Repeat a meal…" buttons this used to render
-              (NP-265) — one blue CTA, matching the web exactly. */}
-          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
-
           {/* Empty State when nothing logged and nothing planned — fork/knife
               icon, a black (web: `bg-zinc-900 dark:bg-white`) Add food pill,
               and icons on the secondary actions (NP-262). */}
           {sections.length === 0 && quickAdds.length === 0 && (
             <Card testID="nutrition-empty-state">
               <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
-                <UtensilsCrossed size={24} color={colors["muted-foreground"]} />
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: colors.muted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <UtensilsCrossed size={22} color={colors["muted-foreground"]} />
+                </View>
                 <Text className="text-foreground text-lg font-bold text-center">
                   {isFuture ? "Nothing planned yet" : "Nothing logged yet"}
                 </Text>
@@ -2078,28 +2150,20 @@ export default function NutritionIndexRoute() {
                         testID="nutrition-empty-add-food"
                         variant="inverted"
                         size="sm"
+                        icon={<Plus size={14} color={colors.background} />}
                         onPress={() => openSearch()}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Plus size={14} color={colors.background} />
-                          <Text className="text-background text-sm font-semibold">
-                            Add food
-                          </Text>
-                        </View>
+                        Add food
                       </Button>
                       <Button
                         testID="nutrition-copy-yesterday"
                         variant="secondary"
                         size="sm"
                         disabled={copyingYesterday}
+                        icon={<Copy size={14} color={colors.foreground} />}
                         onPress={copyYesterday}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Copy size={14} color={colors.foreground} />
-                          <Text className="text-foreground text-sm font-semibold">
-                            {copyingYesterday ? "Copying…" : "Copy yesterday"}
-                          </Text>
-                        </View>
+                        {copyingYesterday ? "Copying…" : "Copy yesterday"}
                       </Button>
                     </>
                   )}
@@ -2107,14 +2171,10 @@ export default function NutritionIndexRoute() {
                     testID="nutrition-empty-browse-my-stuff"
                     variant="secondary"
                     size="sm"
+                    icon={<ChefHat size={14} color={colors.foreground} />}
                     onPress={() => router.push("/(tabs)/nutrition/recipes")}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <ChefHat size={14} color={colors.foreground} />
-                      <Text className="text-foreground text-sm font-semibold">
-                        Browse My Stuff
-                      </Text>
-                    </View>
+                    Browse My Stuff
                   </Button>
                 </View>
               </View>
@@ -2135,6 +2195,9 @@ export default function NutritionIndexRoute() {
               onRemoveTag={handleRemoveTag}
               onAddFood={openSearch}
               onAddToMeal={handleAddToMeal}
+              onPlan={openPlanDatePicker}
+              onApplyMeal={(tag) => setApplyMealTag(tag)}
+              onDeleteSectionLogs={handleDeleteSectionLogs}
               onLogPlan={isToday ? handleLogPlan : undefined}
               onRemovePlan={handleRemovePlan}
               onSkipPlan={handleSkipPlan}
@@ -2404,7 +2467,7 @@ export default function NutritionIndexRoute() {
                 className="bg-orange-100 dark:bg-orange-900/30"
                 style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
               >
-                <BookOpen size={18} color={colors.foreground} />
+                <BookOpen size={18} color={colors.orange} />
               </View>
               <Text className="text-foreground text-xs font-medium">My Stuff</Text>
             </Pressable>
@@ -2581,9 +2644,10 @@ export default function NutritionIndexRoute() {
           style={{
             flex: 1,
             backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
+            justifyContent: "flex-start",
+            alignItems: "flex-end",
+            paddingTop: 110,
+            paddingRight: 60,
           }}
           onPress={() => setCameraMenuOpen(false)}
         >
@@ -2592,39 +2656,59 @@ export default function NutritionIndexRoute() {
             accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
-              borderRadius: 16,
+              borderRadius: 14,
               borderWidth: 1,
               borderColor: colors.border,
-              padding: 20,
-              width: "100%",
-              maxWidth: 300,
-              gap: 10,
+              overflow: "hidden",
+              width: 180,
+              shadowColor: colors.foreground,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 5,
             }}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text className="text-foreground text-base font-bold mb-1">
-              Camera options
-            </Text>
-            <Button
+            <Pressable
               testID="nutrition-camera-take-photo"
-              variant="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openEstimate("chooser");
               }}
             >
-              Take photo
-            </Button>
-            <Button
+              <Camera size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Take photo</Text>
+            </Pressable>
+            <Pressable
               testID="nutrition-camera-scan-barcode"
-              variant="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openSearch(undefined, { barcode: true });
               }}
             >
-              Scan barcode
-            </Button>
+              <ScanBarcode size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Scan barcode</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2642,9 +2726,10 @@ export default function NutritionIndexRoute() {
           style={{
             flex: 1,
             backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
+            justifyContent: "flex-start",
+            alignItems: "flex-end",
+            paddingTop: 110,
+            paddingRight: 16,
           }}
           onPress={() => setUploadMenuOpen(false)}
         >
@@ -2653,42 +2738,154 @@ export default function NutritionIndexRoute() {
             accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
-              borderRadius: 16,
+              borderRadius: 14,
               borderWidth: 1,
               borderColor: colors.border,
-              padding: 20,
-              width: "100%",
-              maxWidth: 300,
-              gap: 10,
+              overflow: "hidden",
+              width: 180,
+              shadowColor: colors.foreground,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 5,
             }}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text className="text-foreground text-base font-bold mb-1">
-              Upload options
-            </Text>
-            <Button
+            <Pressable
               testID="nutrition-upload-photo"
-              variant="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Upload photo"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimateWithLibraryUpload();
               }}
             >
-              Upload photo
-            </Button>
-            <Button
+              <ImagePlus size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Upload photo</Text>
+            </Pressable>
+            <Pressable
               testID="nutrition-upload-describe"
-              variant="secondary"
+              accessibilityRole="button"
+              accessibilityLabel="Describe"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimate("describe");
               }}
             >
-              Describe
-            </Button>
+              <Pencil size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Describe</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Plan Date Picker Dialog (NP-320) */}
+      <Modal
+        visible={planDatePickerTag !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlanDatePickerTag(null)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close plan date picker backdrop"
+          style={{
+            flex: 1,
+            backgroundColor: scrim,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 24,
+          }}
+          onPress={() => setPlanDatePickerTag(null)}
+        >
+          <Pressable
+            testID="nutrition-plan-date-modal"
+            accessibilityRole="none"
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              padding: 20,
+              width: "100%",
+              maxWidth: 340,
+              gap: 12,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text className="text-foreground text-base font-bold">
+              Plan {planDatePickerTag}
+            </Text>
+            <Text className="text-muted-foreground text-xs">
+              Pick a future date to plan a meal for.
+            </Text>
+            <DateOnlyPicker
+              testID="nutrition-plan-date-picker"
+              value={planDateInput}
+              minDate={(() => {
+                const d = new Date();
+                d.setDate(d.getDate() + 1);
+                return localDateKey(d);
+              })()}
+              onChange={(next) => {
+                if (next) setPlanDateInput(next);
+              }}
+            />
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
+              <Button
+                testID="nutrition-plan-date-cancel"
+                variant="secondary"
+                size="sm"
+                style={{ flex: 1 }}
+                onPress={() => setPlanDatePickerTag(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                testID="nutrition-plan-date-confirm"
+                variant="inverted"
+                size="sm"
+                style={{ flex: 1 }}
+                disabled={!planDateInput}
+                onPress={confirmPlanDate}
+              >
+                Continue
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Apply saved meal sheet (NP-320) */}
+      <ApplyMealSheet
+        visible={applyMealTag !== null}
+        defaultFromDate={activeDate}
+        defaultToDate={activeDate}
+        defaultTag={applyMealTag ?? "lunch"}
+        availableTags={availableTags}
+        onClose={() => setApplyMealTag(null)}
+        onApplied={async (toast) => {
+          setApplyMealTag(null);
+          setPlanToolsNotice(toast);
+          await Promise.all([refetchMealLogs(), refetchMealPlans()]);
+        }}
+      />
 
       {/* Food Search Sheet (NP-092). On a future day the basket is hidden
           (the web hides it in plan mode, `FoodSearchModal.tsx:2495`): picks

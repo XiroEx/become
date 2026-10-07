@@ -85,6 +85,7 @@ jest.mock("@/components/nutrition/ApplyMealSheet", () => ({
 /* eslint-disable import/first */
 import { apiFetch } from "@become/api-client";
 import { ScheduleMealsDrawer } from "../components/nutrition/ScheduleMealsDrawer";
+import { formatDatePillLabel } from "../components/nutrition/DateOnlyPicker";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -128,14 +129,14 @@ beforeEach(() => {
 });
 
 describe("ScheduleMealsDrawer (NP-265)", () => {
-  it("renders the By day tab by default, under a FOR <date> subtitle", async () => {
+  it("renders the By day tab by default, under a formatted date subtitle", async () => {
     const { getByTestId, queryByTestId } = render(
       <ScheduleMealsDrawer visible defaultDate={TODAY} onClose={() => {}} />,
     );
     await waitFor(() => {
       expect(getByTestId("schedule-meals-drawer")).toBeTruthy();
     });
-    expect(getByTestId("schedule-meals-subtitle")).toHaveTextContent(`FOR ${TODAY}`);
+    expect(getByTestId("schedule-meals-subtitle")).toHaveTextContent(formatDatePillLabel(TODAY));
     expect(getByTestId("schedule-meals-tab-by-day")).toBeTruthy();
     expect(getByTestId("schedule-meals-by-day-tab")).toBeTruthy();
     expect(queryByTestId("schedule-meals-from-meals-tab")).toBeNull();
@@ -170,7 +171,9 @@ describe("ScheduleMealsDrawer (NP-265)", () => {
     expect(getByTestId("schedule-meals-to")).toBeTruthy();
     // Range on with no `by-day` tab left selected falls onto "From meals".
     expect(getByTestId("schedule-meals-from-meals-tab")).toBeTruthy();
-    expect(getByText(`${TODAY} → 2026-06-21`)).toBeTruthy();
+    expect(
+      getByText(`${formatDatePillLabel(TODAY)} → ${formatDatePillLabel("2026-06-21")}`),
+    ).toBeTruthy();
   });
 
   it("By day renders a slot per tag with Add + saved-meal actions", async () => {

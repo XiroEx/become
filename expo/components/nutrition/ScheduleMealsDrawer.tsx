@@ -4,10 +4,19 @@ import {
   AlertTriangle,
   CalendarDays,
   ChefHat,
+  Cookie,
+  Dumbbell,
+  Flame,
+  Moon,
   Plus,
   Repeat,
+  Sandwich,
+  Sun,
+  Sunrise,
+  Tag as TagIcon,
   Trash2,
   Utensils,
+  X,
 } from "lucide-react-native";
 import {
   MealsListResponseSchema,
@@ -51,7 +60,41 @@ import { SOURCE_OPTIONS } from "@/components/nutrition/CopyDaySheet";
 import { FoodSearchSheet } from "@/components/nutrition/FoodSearchSheet";
 import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
 import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+import {
+  DateOnlyPicker,
+  formatDatePillLabel,
+} from "@/components/nutrition/DateOnlyPicker";
 import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
+
+const TAG_VISUALS: Record<string, { Icon: typeof Sun; bgClass: string }> = {
+  breakfast: { Icon: Sunrise, bgClass: "bg-amber-100 dark:bg-amber-900/30" },
+  lunch: { Icon: Sandwich, bgClass: "bg-orange-100 dark:bg-orange-900/30" },
+  dinner: { Icon: Utensils, bgClass: "bg-indigo-100 dark:bg-indigo-900/30" },
+  snack: { Icon: Cookie, bgClass: "bg-emerald-100 dark:bg-emerald-900/30" },
+  "pre-workout": {
+    Icon: Dumbbell,
+    bgClass: "bg-purple-100 dark:bg-purple-900/30",
+  },
+  "post-workout": {
+    Icon: Flame,
+    bgClass: "bg-rose-100 dark:bg-rose-900/30",
+  },
+  brunch: { Icon: Sun, bgClass: "bg-yellow-100 dark:bg-yellow-900/30" },
+  dessert: { Icon: Cookie, bgClass: "bg-pink-100 dark:bg-pink-900/30" },
+  "late-night": {
+    Icon: Moon,
+    bgClass: "bg-slate-100 dark:bg-slate-800/60",
+  },
+};
+
+function getTagVisuals(tag: string) {
+  return (
+    TAG_VISUALS[tag.toLowerCase()] ?? {
+      Icon: TagIcon,
+      bgClass: "bg-zinc-100 dark:bg-zinc-800",
+    }
+  );
+}
 
 /**
  * ─── Schedule meals, natively (NP-265) ───────────────────────────────────────
@@ -298,6 +341,7 @@ function ByDayTab({
             for (const it of p.items) items.push({ planId: p._id, ...itemDisplay(it) });
           }
           const cals = items.reduce((s, it) => s + it.cal, 0);
+          const visuals = getTagVisuals(tag);
           return (
             <View
               key={tag}
@@ -312,6 +356,19 @@ function ByDayTab({
               }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View
+                  testID={`schedule-meals-slot-icon-${tag}`}
+                  className={visuals.bgClass}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <visuals.Icon size={16} color={colors.foreground} />
+                </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text className="text-foreground text-sm font-semibold">
                     {titleCaseTag(tag)}
@@ -750,6 +807,7 @@ interface CopyDayTabProps {
 function CopyDayTab({ active, targetDates, apiFetch, token, onApplied }: CopyDayTabProps) {
   const { colors } = useThemeTokens();
   const [sourceKey, setSourceKey] = useState(() => addDaysToKey(todayLocalKey(), -1));
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
   const [sourceType, setSourceType] = useState<BulkSourceType>("log");
   const [preview, setPreview] = useState<PreviewItem[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -863,19 +921,31 @@ function CopyDayTab({ active, targetDates, apiFetch, token, onApplied }: CopyDay
         {targetDates.length === 1 ? "this date" : `${targetDates.length} target dates`}.
       </Text>
 
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <View style={{ flex: 1 }}>
-          <Input
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text className="text-muted-foreground text-xs uppercase font-semibold">From</Text>
+          <Pressable
             testID="schedule-meals-copy-source"
-            label="From (YYYY-MM-DD)"
-            placeholder={todayLocalKey()}
-            value={sourceKey}
-            onChangeText={(v) => {
-              setSourceKey(v.trim());
-              setConfirmArmed(false);
+            accessibilityRole="button"
+            accessibilityLabel={`Source date ${formatDatePillLabel(sourceKey)}`}
+            aria-expanded={sourcePickerOpen}
+            onPress={() => setSourcePickerOpen((o) => !o)}
+            {...({ value: sourceKey } as any)}
+            className="bg-blue-100 dark:bg-blue-900/40"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 5,
+              borderRadius: 16,
             }}
-            accessibilityLabel="Source date"
-          />
+          >
+            <CalendarDays size={13} color="#2563eb" />
+            <Text style={{ fontSize: 12, fontWeight: "600", color: "#2563eb" }}>
+              {formatDatePillLabel(sourceKey)}
+            </Text>
+          </Pressable>
         </View>
         <View style={{ flexDirection: "row", gap: 4, alignSelf: "flex-end", marginBottom: 2 }}>
           {SOURCE_OPTIONS.map((opt) => {
@@ -908,6 +978,21 @@ function CopyDayTab({ active, targetDates, apiFetch, token, onApplied }: CopyDay
           })}
         </View>
       </View>
+
+      {sourcePickerOpen ? (
+        <View style={{ marginVertical: 4 }}>
+          <DateOnlyPicker
+            testID="schedule-meals-copy-source-picker"
+            value={sourceKey}
+            onChange={(next) => {
+              if (!next) return;
+              setSourceKey(next);
+              setConfirmArmed(false);
+              setSourcePickerOpen(false);
+            }}
+          />
+        </View>
+      ) : null}
 
       <View style={{ gap: 4 }}>
         <Text className="text-muted-foreground text-xs" style={{ textTransform: "uppercase", fontWeight: "600" }}>
@@ -1009,6 +1094,8 @@ export function ScheduleMealsDrawer({
   const [rangeMode, setRangeMode] = useState(false);
   const [fromKey, setFromKey] = useState(defaultDate);
   const [toKey, setToKey] = useState(defaultDate);
+  const [fromOpen, setFromOpen] = useState(false);
+  const [toOpen, setToOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<DrawerTab>("by-day");
   // "By day" doesn't fit a range (per-slot composition is for ONE day), so a
   // range forces the tab bar onto "From meals" at RENDER time rather than via
@@ -1028,6 +1115,8 @@ export function ScheduleMealsDrawer({
       setRangeMode(false);
       setFromKey(defaultDate);
       setToKey(defaultDate);
+      setFromOpen(false);
+      setToOpen(false);
       setActiveTab("by-day");
       setSubFlow(null);
     }
@@ -1041,6 +1130,8 @@ export function ScheduleMealsDrawer({
       }
       return next;
     });
+    setFromOpen(false);
+    setToOpen(false);
   }, [fromKey]);
 
   const handleClose = useCallback(() => {
@@ -1094,54 +1185,165 @@ export function ScheduleMealsDrawer({
         testID="schedule-meals-drawer"
         accessibilityLabel="Schedule meals"
         sheetStyle={{ maxHeight: "90%" }}
+        headerLeading={
+          <View
+            testID="schedule-meals-header-icon"
+            className="bg-blue-100 dark:bg-blue-900/40"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CalendarDays size={18} color="#2563eb" />
+          </View>
+        }
+        headerTrailing={
+          <Pressable
+            testID="schedule-meals-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close schedule meals"
+            onPress={handleClose}
+            style={{ padding: 4 }}
+          >
+            <X size={20} color={colors.foreground} />
+          </Pressable>
+        }
       >
         <View style={{ gap: 12 }}>
           <Text testID="schedule-meals-subtitle" className="text-muted-foreground text-xs">
-            {rangeMode ? `${fromKey} → ${toKey}` : `FOR ${fromKey}`}
+            {rangeMode
+              ? `${formatDatePillLabel(fromKey)} → ${formatDatePillLabel(toKey)}`
+              : formatDatePillLabel(fromKey)}
           </Text>
 
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Input
-                testID="schedule-meals-from"
-                label={rangeMode ? "From (YYYY-MM-DD)" : "For (YYYY-MM-DD)"}
-                value={fromKey}
-                onChangeText={(v) => setFromKey(v.trim())}
-                accessibilityLabel="Date"
-              />
-            </View>
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <Text className="text-muted-foreground text-xs uppercase font-semibold">
+              {rangeMode ? "From" : "For"}
+            </Text>
+            <Pressable
+              testID="schedule-meals-from"
+              accessibilityRole="button"
+              accessibilityLabel={`Date ${formatDatePillLabel(fromKey)}`}
+              aria-expanded={fromOpen}
+              onPress={() => {
+                setFromOpen((o) => !o);
+                setToOpen(false);
+              }}
+              {...({ value: fromKey } as any)}
+              className="bg-blue-100 dark:bg-blue-900/40"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 16,
+              }}
+            >
+              <CalendarDays size={13} color="#2563eb" />
+              <Text style={{ fontSize: 12, fontWeight: "600", color: "#2563eb" }}>
+                {formatDatePillLabel(fromKey)}
+              </Text>
+            </Pressable>
+
             {rangeMode ? (
-              <View style={{ flex: 1 }}>
-                <Input
+              <>
+                <Text className="text-muted-foreground text-xs">→</Text>
+                <Text className="text-muted-foreground text-xs uppercase font-semibold">To</Text>
+                <Pressable
                   testID="schedule-meals-to"
-                  label="To (YYYY-MM-DD)"
-                  value={toKey}
-                  onChangeText={(v) => setToKey(v.trim())}
-                  accessibilityLabel="End date"
-                />
-              </View>
+                  accessibilityRole="button"
+                  accessibilityLabel={`End date ${formatDatePillLabel(toKey)}`}
+                  aria-expanded={toOpen}
+                  onPress={() => {
+                    setToOpen((o) => !o);
+                    setFromOpen(false);
+                  }}
+                  {...({ value: toKey } as any)}
+                  className="bg-blue-100 dark:bg-blue-900/40"
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 16,
+                  }}
+                >
+                  <CalendarDays size={13} color="#2563eb" />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#2563eb" }}>
+                    {formatDatePillLabel(toKey)}
+                  </Text>
+                </Pressable>
+              </>
             ) : null}
+
+            <Pressable
+              testID="schedule-meals-range-toggle"
+              accessibilityRole="button"
+              accessibilityState={{ selected: rangeMode }}
+              accessibilityLabel="Range"
+              onPress={handleToggleRange}
+              style={{
+                marginLeft: "auto",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 16,
+                backgroundColor: rangeMode ? colors.primary : colors.card,
+                borderWidth: 1,
+                borderColor: rangeMode ? colors.primary : colors.border,
+              }}
+            >
+              <Repeat size={13} color={rangeMode ? colors["primary-foreground"] : colors.foreground} />
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "600",
+                  color: rangeMode ? colors["primary-foreground"] : colors.foreground,
+                }}
+              >
+                Range
+              </Text>
+            </Pressable>
           </View>
 
-          <Pressable
-            testID="schedule-meals-range-toggle"
-            accessibilityRole="button"
-            accessibilityState={{ selected: rangeMode }}
-            accessibilityLabel="Range"
-            onPress={handleToggleRange}
-            style={{
-              alignSelf: "flex-start",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 16,
-              backgroundColor: rangeMode ? colors.primary : colors.card,
-              borderWidth: 1,
-              borderColor: rangeMode ? colors.primary : colors.border,
-            }}
-          >
+          {fromOpen ? (
+            <View style={{ marginVertical: 4 }}>
+              <DateOnlyPicker
+                testID="schedule-meals-from-picker"
+                value={fromKey}
+                onChange={(next) => {
+                  if (!next) return;
+                  setFromKey(next);
+                  if (rangeMode && compareDateKeys(toKey, next) < 0) {
+                    setToKey(next);
+                  }
+                  setFromOpen(false);
+                }}
+              />
+            </View>
+          ) : null}
+
+          {toOpen && rangeMode ? (
+            <View style={{ marginVertical: 4 }}>
+              <DateOnlyPicker
+                testID="schedule-meals-to-picker"
+                value={toKey}
+                minDate={fromKey}
+                onChange={(next) => {
+                  if (!next) return;
+                  setToKey(next);
+                  setToOpen(false);
+                }}
+              />
+            </View>
+          ) : null}
             <Repeat size={14} color={rangeMode ? colors["primary-foreground"] : colors.foreground} />
             <Text
               style={{

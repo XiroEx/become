@@ -1,20 +1,27 @@
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Alert, Modal, Pressable, View } from "react-native";
 import {
+  CalendarDays,
+  Camera,
   Check,
   ChevronDown,
+  ChefHat,
   Cookie,
   Dumbbell,
   Flag,
   Flame,
   Moon,
+  MoreVertical,
   Pencil,
+  PencilLine,
   Plus,
   Sandwich,
+  ScanBarcode,
   Sun,
   Sunrise,
   Tag as TagIcon,
   Trash2,
+  Upload,
   Utensils,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
@@ -23,7 +30,10 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { Occurrence } from "@/lib/nutrition/dayOrder";
 import type { MealLog } from "@become/api-client";
 import type { MealPlan } from "@/lib/nutrition/mealPlans";
-import { NutritionPlanCard, type MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
+import {
+  NutritionPlanCard,
+  type MealPlanItem,
+} from "@/components/nutrition/NutritionPlanCard";
 import {
   canCombine,
   combineTotals,
@@ -37,82 +47,69 @@ export interface TagSectionProps {
   empty?: boolean;
   removable?: boolean;
   onRemoveItem: (logId: string, itemId: string) => void;
-  /**
-   * Edit a logged row (NP-095). The screen opens the item editor sheet.
-   */
-  onEditItem?: (logId: string, item: MealLog["items"][number], tag: string) => void;
-  /**
-   * Edit a whole logged meal (NP-095). Offered on the section header when the
-   * sitting holds logs; the screen opens the meal editor sheet.
-   */
-  onEditMeal?: (logId: string, mealName: string | undefined, tag: string) => void;
-  /**
-   * "Something look wrong?" on a logged row (NP-174). Offered only for rows
-   * with a real catalogue food behind them; the screen opens the flag sheet.
-   */
+  /** Edit a logged row (NP-095). */
+  onEditItem?: (
+    logId: string,
+    item: MealLog["items"][number],
+    tag: string,
+  ) => void;
+  /** Edit a whole logged meal (NP-095). */
+  onEditMeal?: (
+    logId: string,
+    mealName: string | undefined,
+    tag: string,
+  ) => void;
+  /** Flag a catalogue food item (NP-174). */
   onFlagItem?: (logId: string, item: MealLog["items"][number]) => void;
   onRemoveTag?: (tag: string) => void;
   onAddFood: (tag: string) => void;
-  /**
-   * Add into THIS sitting (NP-094) — the web's "add to this meal" on a
-   * logged group. Offered on the section footer when the sitting holds logs;
-   * the screen opens the search sheet pinned to the sitting's log id.
-   */
+  /** Add into THIS sitting (NP-094) — the web's "add to this meal" on a logged group. */
   onAddToMeal?: (logId: string, tag: string) => void;
+  /** Plan for a future day — opens the plan date dialog (NP-320). */
+  onPlan?: (tag: string) => void;
+  /** Apply a saved meal to this tag (NP-320). */
+  onApplyMeal?: (tag: string) => void;
+  /** Delete all logged entries in this section (NP-320). */
+  onDeleteSectionLogs?: (
+    tag: string,
+    entries: { logId: string; itemId: string }[],
+  ) => void;
   onLogPlan?: (planId: string) => void;
   onRemovePlan?: (planId: string, scope?: "one" | "series") => void;
   onSkipPlan?: (planId: string) => void;
-  /**
-   * Edit one planned item (NP-233). The screen opens `EditLogItemSheet` in
-   * `planId` + `planItems` mode; the card hands back the plan id, the item,
-   * and the plan's full items array.
-   */
   onEditPlanItem?: (
     planId: string,
     item: MealPlanItem,
     planItems: MealPlanItem[],
   ) => void;
-  /**
-   * ── Select mode (NP-175) ──────────────────────────────────────────────────
-   *
-   * Pick rows already logged in this sitting, then fold them into one entry.
-   * The screen owns the selection and the sheet, because a combine is ONE
-   * server request over whatever was picked — see `lib/nutrition/combineItems`.
-   * Omit `onStartSelect` and the section has no select mode at all, which is
-   * what a day with nothing addressable in it should have.
-   *
-   * It hands back the OCCURRENCE key, not the tag: a day with a 10am snack and
-   * a 3pm snack is two sittings, and selecting in one must not light up the
-   * other.
-   */
   onStartSelect?: (sectionKey: string) => void;
   selecting?: boolean;
   selectedKeys?: ReadonlySet<string>;
   onToggleSelect?: (logId: string, itemId: string) => void;
   onCancelSelect?: () => void;
-  /** Open the combine sheet over what is picked. */
   onCombine?: () => void;
   testID?: string;
 }
 
-/**
- * Icon + colour per tag — ported from the web's `tagVisuals` map
- * (`webapp/components/nutrition/TagSection.tsx`), so a breakfast section
- * reads the same icon tile natively as it does on the web (NP-262).
- */
 const TAG_VISUALS: Record<string, { Icon: typeof Sun; bgClass: string }> = {
-  // Icon colour tile per tag — the web's `tagVisuals` map. The icon GLYPH
-  // itself paints `colors.foreground` (no hex/rgb literal is allowed outside
-  // `lib/theme/tokens.ts`, NP-123); the tile behind it carries the hue.
   breakfast: { Icon: Sunrise, bgClass: "bg-amber-100 dark:bg-amber-900/30" },
   lunch: { Icon: Sandwich, bgClass: "bg-orange-100 dark:bg-orange-900/30" },
   dinner: { Icon: Utensils, bgClass: "bg-indigo-100 dark:bg-indigo-900/30" },
   snack: { Icon: Cookie, bgClass: "bg-emerald-100 dark:bg-emerald-900/30" },
-  "pre-workout": { Icon: Dumbbell, bgClass: "bg-purple-100 dark:bg-purple-900/30" },
-  "post-workout": { Icon: Flame, bgClass: "bg-rose-100 dark:bg-rose-900/30" },
+  "pre-workout": {
+    Icon: Dumbbell,
+    bgClass: "bg-purple-100 dark:bg-purple-900/30",
+  },
+  "post-workout": {
+    Icon: Flame,
+    bgClass: "bg-rose-100 dark:bg-rose-900/30",
+  },
   brunch: { Icon: Sun, bgClass: "bg-yellow-100 dark:bg-yellow-900/30" },
   dessert: { Icon: Cookie, bgClass: "bg-pink-100 dark:bg-pink-900/30" },
-  "late-night": { Icon: Moon, bgClass: "bg-slate-100 dark:bg-slate-800/60" },
+  "late-night": {
+    Icon: Moon,
+    bgClass: "bg-slate-100 dark:bg-slate-800/60",
+  },
 };
 
 function getTagVisuals(tag: string) {
@@ -139,6 +136,15 @@ function formatTimeString(loggedAt: string | Date | undefined): string {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+interface FlattenedLogItem {
+  logId: string;
+  item: MealLog["items"][number];
+  mealName?: string;
+  source?: string;
+  loggedAt?: string | Date;
+  untimed?: boolean;
+}
+
 export function TagSection({
   occurrence,
   empty,
@@ -150,6 +156,9 @@ export function TagSection({
   onRemoveTag,
   onAddFood,
   onAddToMeal,
+  onPlan,
+  onApplyMeal,
+  onDeleteSectionLogs,
   onLogPlan,
   onRemovePlan,
   onSkipPlan,
@@ -162,8 +171,20 @@ export function TagSection({
   onCombine,
   testID,
 }: TagSectionProps) {
-  const { colors } = useThemeTokens();
+  const { colors, scrim } = useThemeTokens();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [kebabOpen, setKebabOpen] = useState(false);
+  const [kebabPos, setKebabPos] = useState<{ top: number; right: number }>({
+    top: 100,
+    right: 20,
+  });
+  const [expandedMealGroups, setExpandedMealGroups] = useState<
+    Record<string, boolean>
+  >({});
+  const [expandedCaptureGroups, setExpandedCaptureGroups] = useState<
+    Record<string, boolean>
+  >({});
+
   const sectionTag = occurrence.tag;
   const sectionTestId = testID ?? `nutrition-section-${sectionTag}`;
   const visuals = getTagVisuals(sectionTag);
@@ -173,9 +194,6 @@ export function TagSection({
   const hasLogs = (occurrence.logs ?? []).length > 0;
   const hasContent = !empty && (hasLogs || hasPlans);
 
-  // Only rows with a real subdocument id can be combined — the route addresses
-  // a pick as `{ logId, itemId }`. Two of them is the floor: one item is not a
-  // combination, it would just rename a row.
   const selectable = selectableLogItems(occurrence.logs);
   const canStartSelect =
     Boolean(onStartSelect) && !isPlannedOccurrence && canCombine(selectable);
@@ -187,11 +205,29 @@ export function TagSection({
   let totalCarbs = 0;
   let totalFats = 0;
 
+  const flattenedItems: FlattenedLogItem[] = [];
+
   for (const log of occurrence.logs ?? []) {
+    const logId = String(log._id ?? (log as { id?: unknown }).id ?? "");
     for (const item of log.items ?? []) {
+      flattenedItems.push({
+        logId,
+        item,
+        mealName: log.mealName,
+        source: (log as { source?: string }).source,
+        loggedAt: log.loggedAt,
+        untimed: log.untimed,
+      });
       const servings =
-        typeof item.servings === "number" && item.servings > 0 ? item.servings : 1;
-      const nut = item.nutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
+        typeof item.servings === "number" && item.servings > 0
+          ? item.servings
+          : 1;
+      const nut = item.nutrition ?? {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+      };
       totalCals += (nut.calories ?? 0) * servings;
       totalProtein += (nut.protein ?? 0) * servings;
       totalCarbs += (nut.carbs ?? 0) * servings;
@@ -209,8 +245,15 @@ export function TagSection({
     } else {
       for (const item of plan.items ?? []) {
         const servings =
-          typeof item.servings === "number" && item.servings > 0 ? item.servings : 1;
-        const nut = item.nutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
+          typeof item.servings === "number" && item.servings > 0
+            ? item.servings
+            : 1;
+        const nut = item.nutrition ?? {
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fats: 0,
+        };
         totalCals += (nut.calories ?? 0) * servings;
         totalProtein += (nut.protein ?? 0) * servings;
         totalCarbs += (nut.carbs ?? 0) * servings;
@@ -219,12 +262,207 @@ export function TagSection({
     }
   }
 
+  // Group flattened items
+  type ItemGroup = {
+    key: string;
+    mealName?: string;
+    source?: string;
+    items: FlattenedLogItem[];
+  };
+  const groups: ItemGroup[] = [];
+  let lastGroupKey = "";
+  for (const fi of flattenedItems) {
+    const gKey = fi.mealName
+      ? `meal:${fi.logId}`
+      : fi.source &&
+          fi.source !== "manual" &&
+          fi.source !== "search"
+        ? `${fi.source}:${fi.logId}`
+        : `loose:${fi.logId}`;
+    if (gKey !== lastGroupKey) {
+      groups.push({
+        key: gKey,
+        mealName: fi.mealName,
+        source: fi.source,
+        items: [],
+      });
+      lastGroupKey = gKey;
+    }
+    groups[groups.length - 1].items.push(fi);
+  }
+
   const firstLog = occurrence.logs?.[0];
   const timeLabel = isPlannedOccurrence
     ? ""
     : occurrence.untimed
       ? "Untimed"
       : formatTimeString(firstLog?.loggedAt);
+
+  const handleDeleteSection = () => {
+    setKebabOpen(false);
+    const entries = flattenedItems
+      .filter((fi) => fi.item._id)
+      .map((fi) => ({ logId: fi.logId, itemId: String(fi.item._id) }));
+    if (entries.length === 0) return;
+
+    const doDelete = () => {
+      if (onDeleteSectionLogs) {
+        onDeleteSectionLogs(sectionTag, entries);
+      } else {
+        for (const fi of entries) {
+          onRemoveItem(fi.logId, fi.itemId);
+        }
+      }
+    };
+
+    if (entries.length === 1) {
+      doDelete();
+    } else {
+      Alert.alert(
+        "Delete logged entries",
+        `Delete all ${entries.length} logged entries in ${capitalizeTag(sectionTag)}?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: doDelete },
+        ],
+      );
+    }
+  };
+
+  const renderItemRow = (fi: FlattenedLogItem, idx: number) => {
+    const { logId, item } = fi;
+    const itemId = String(item._id ?? (item as { id?: unknown }).id ?? `${logId}-item-${idx}`);
+    const servings =
+      typeof item.servings === "number" && item.servings > 0
+        ? item.servings
+        : 1;
+    const nut = item.nutrition ?? {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fats: 0,
+    };
+    const itemCals = (nut.calories ?? 0) * servings;
+    const servingDesc =
+      item.servingSize && item.servingUnit
+        ? `${servings !== 1 ? `${servings} × ` : ""}${item.servingSize} ${item.servingUnit}`
+        : `${servings} serving${servings !== 1 ? "s" : ""}`;
+
+    const pickKey = item._id
+      ? selectionKey(logId, String(item._id))
+      : null;
+    const selectableRow = selecting && pickKey !== null;
+    const isSelected =
+      pickKey !== null && Boolean(selectedKeys?.has(pickKey));
+
+    const body = (
+      <>
+        {selectableRow ? (
+          <View
+            testID={`nutrition-combine-check-${itemId}`}
+            style={{
+              width: 20,
+              height: 20,
+              marginRight: 10,
+              borderRadius: 4,
+              borderWidth: 1,
+              alignItems: "center",
+              justifyContent: "center",
+              borderColor: isSelected ? colors.primary : colors.border,
+              backgroundColor: isSelected ? colors.primary : "transparent",
+            }}
+          >
+            {isSelected ? (
+              <Check size={13} color={colors["primary-foreground"]} />
+            ) : null}
+          </View>
+        ) : null}
+        <View style={{ flex: 1, marginRight: 12 }}>
+          <Text className="text-foreground text-sm font-semibold">
+            {item.name}
+          </Text>
+          <Text className="text-muted-foreground text-xs mt-0.5">
+            {servingDesc} · {Math.round(itemCals)} kcal
+          </Text>
+        </View>
+
+        {selectableRow ? null : (
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            {onEditItem && item._id ? (
+              <Pressable
+                testID={`day-totals-entry-${itemId}-edit`}
+                accessibilityLabel={`Edit ${item.name}`}
+                accessibilityRole="button"
+                onPress={() => onEditItem(logId, item, sectionTag)}
+                hitSlop={8}
+                style={{ padding: 6 }}
+              >
+                <Pencil size={16} color={colors["muted-foreground"]} />
+              </Pressable>
+            ) : null}
+            {onFlagItem && item.foodId ? (
+              <Pressable
+                testID={`day-totals-entry-${itemId}-flag`}
+                accessibilityLabel={`Report ${item.name}`}
+                accessibilityHint="Something look wrong? Report this food without changing your entry"
+                accessibilityRole="button"
+                onPress={() => onFlagItem(logId, item)}
+                hitSlop={8}
+                style={{ padding: 6 }}
+              >
+                <Flag size={16} color={colors["muted-foreground"]} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              testID={`day-totals-entry-${itemId}-remove`}
+              accessibilityLabel={`Remove ${item.name}`}
+              accessibilityRole="button"
+              onPress={() => onRemoveItem(logId, itemId)}
+              hitSlop={8}
+              style={{ padding: 6 }}
+            >
+              <Trash2 size={16} color={colors.destructive} />
+            </Pressable>
+          </View>
+        )}
+      </>
+    );
+
+    const rowStyle = {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingVertical: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    };
+
+    if (selectableRow) {
+      return (
+        <Pressable
+          key={itemId}
+          testID={`nutrition-item-row-${itemId}`}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: isSelected }}
+          accessibilityLabel={`${isSelected ? "Deselect" : "Select"} ${item.name}`}
+          onPress={() => onToggleSelect?.(logId, String(item._id))}
+          style={rowStyle}
+        >
+          {body}
+        </Pressable>
+      );
+    }
+
+    return (
+      <View
+        key={itemId}
+        testID={`nutrition-item-row-${itemId}`}
+        style={rowStyle}
+      >
+        {body}
+      </View>
+    );
+  };
 
   return (
     <Card
@@ -235,141 +473,301 @@ export function TagSection({
           : undefined
       }
     >
-      {/* Header — tap the icon/title to collapse the section, matching the
-          web's icon tile + collapse chevron (NP-262). */}
-      <Pressable
-        testID={`nutrition-section-collapse-${sectionTag}`}
-        accessibilityRole="button"
-        accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${capitalizeTag(sectionTag)}`}
-        onPress={() => setIsCollapsed((c) => !c)}
+      {/* Header — matching web header: icon tile, title, time, cal, +, kebab, collapse chevron */}
+      <View
         style={{
           flexDirection: "row",
-          justifyContent: "space-between",
           alignItems: "center",
+          justifyContent: "space-between",
           marginBottom: 8,
         }}
       >
-        <View
-          testID={`nutrition-section-icon-${sectionTag}`}
-          className={visuals.bgClass}
+        <Pressable
+          testID={`nutrition-section-collapse-${sectionTag}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${isCollapsed ? "Expand" : "Collapse"} ${capitalizeTag(sectionTag)}`}
+          onPress={() => setIsCollapsed((c) => !c)}
           style={{
-            width: 36,
-            height: 36,
-            borderRadius: 10,
+            flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
-            marginRight: 10,
+            flex: 1,
+            minWidth: 0,
+            gap: 10,
           }}
         >
-          <visuals.Icon size={16} color={colors.foreground} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text
-              testID={`${sectionTestId}-title`}
-              className="text-foreground text-lg font-bold"
-            >
-              {capitalizeTag(sectionTag)}
-            </Text>
-            {isPlannedOccurrence && (
-              <View
-                testID="nutrition-plan-badge"
-                className="bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full"
-              >
-                <Text className="text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wider">
-                  Planned
-                </Text>
-              </View>
-            )}
-            {timeLabel ? (
-              <Text className="text-muted-foreground text-xs font-medium">
-                {timeLabel}
-              </Text>
-            ) : null}
+          <View
+            testID={`nutrition-section-icon-${sectionTag}`}
+            className={visuals.bgClass}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <visuals.Icon size={16} color={colors.foreground} />
           </View>
-          {hasContent && (
-            <Text className="text-muted-foreground text-xs mt-0.5">
-              {Math.round(totalCals)} kcal · {Math.round(totalProtein)}g P ·{" "}
-              {Math.round(totalCarbs)}g C · {Math.round(totalFats)}g F
-            </Text>
-          )}
-        </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              <Text
+                testID={`${sectionTestId}-title`}
+                className="text-foreground text-sm font-semibold truncate"
+              >
+                {capitalizeTag(sectionTag)}
+              </Text>
+              {isPlannedOccurrence && (
+                <View
+                  testID="nutrition-plan-badge"
+                  className="bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full"
+                >
+                  <Text className="text-blue-700 dark:text-blue-300 text-[10px] font-bold uppercase tracking-wider">
+                    Planned
+                  </Text>
+                </View>
+              )}
+              {timeLabel ? (
+                <Text className="text-muted-foreground text-[11px] tabular-nums">
+                  {timeLabel}
+                </Text>
+              ) : null}
+              {hasContent ? (
+                <Text className="text-muted-foreground text-xs tabular-nums">
+                  {Math.round(totalCals)} cal
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
 
-        {empty && removable && onRemoveTag ? (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          {empty && removable && onRemoveTag ? (
+            <Pressable
+              testID={`nutrition-remove-tag-${sectionTag}`}
+              accessibilityLabel={`Remove tag ${sectionTag}`}
+              accessibilityRole="button"
+              onPress={() => onRemoveTag(sectionTag)}
+              hitSlop={8}
+              style={{ padding: 6 }}
+            >
+              <Trash2 size={16} color={colors.destructive} />
+            </Pressable>
+          ) : null}
+
+          {/* Header + button (NP-320 web parity) */}
           <Pressable
-            testID={`nutrition-remove-tag-${sectionTag}`}
-            accessibilityLabel={`Remove tag ${sectionTag}`}
+            testID={`nutrition-add-food-${sectionTag}`}
+            accessibilityLabel={`Add food to ${capitalizeTag(sectionTag)}`}
             accessibilityRole="button"
-            onPress={() => onRemoveTag(sectionTag)}
+            onPress={() => onAddFood(sectionTag)}
+            hitSlop={8}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              backgroundColor: colors.muted,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Plus size={16} color={colors.foreground} />
+          </Pressable>
+
+          {/* Tag kebab button (NP-320 web parity) */}
+          <Pressable
+            testID={`nutrition-section-kebab-${sectionTag}`}
+            accessibilityLabel={`More actions for ${capitalizeTag(sectionTag)}`}
+            accessibilityRole="button"
+            onPress={(e) => {
+              const target = e.target as {
+                measureInWindow?: (
+                  cb: (x: number, y: number, w: number, h: number) => void,
+                ) => void;
+              };
+              if (target && typeof target.measureInWindow === "function") {
+                target.measureInWindow((x, y, w, h) => {
+                  setKebabPos({ top: y + h + 4, right: 16 });
+                  setKebabOpen(true);
+                });
+              } else {
+                setKebabPos({ top: 120, right: 16 });
+                setKebabOpen(true);
+              }
+            }}
+            hitSlop={8}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <MoreVertical size={16} color={colors["muted-foreground"]} />
+          </Pressable>
+
+          {/* Collapse chevron */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={isCollapsed ? "Expand section" : "Collapse section"}
+            onPress={() => setIsCollapsed((c) => !c)}
             hitSlop={8}
             style={{ padding: 4 }}
           >
-            <Trash2 size={16} color={colors.destructive} />
+            <ChevronDown
+              size={16}
+              color={colors["muted-foreground"]}
+              style={{
+                transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }],
+              }}
+            />
           </Pressable>
-        ) : null}
+        </View>
+      </View>
 
-        {/* Select mode's way in and out (NP-175) */}
-        {selecting ? (
-          <Pressable
-            testID={`nutrition-combine-cancel-${sectionTag}`}
-            accessibilityLabel={`Stop selecting items in ${sectionTag}`}
-            accessibilityRole="button"
-            onPress={onCancelSelect}
-            hitSlop={8}
-            style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+      {/* Kebab Dropdown Menu */}
+      <Modal
+        visible={kebabOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setKebabOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: scrim }}
+          onPress={() => setKebabOpen(false)}
+        >
+          <View
+            testID={`nutrition-kebab-menu-${sectionTag}`}
+            style={{
+              position: "absolute",
+              top: kebabPos.top,
+              right: kebabPos.right,
+              minWidth: 190,
+              backgroundColor: colors.card,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              overflow: "hidden",
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 8,
+            }}
           >
-            <Text className="text-muted-foreground text-xs font-semibold">
-              Cancel
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            {onEditMeal && hasLogs && firstLog ? (
+            {onPlan ? (
               <Pressable
-                testID={`nutrition-edit-meal-${sectionTag}`}
-                accessibilityLabel={`Edit ${capitalizeTag(sectionTag)} meal`}
+                testID={`nutrition-kebab-plan-${sectionTag}`}
                 accessibilityRole="button"
-                onPress={() =>
-                  onEditMeal(
-                    String(firstLog._id ?? (firstLog as { id?: unknown }).id ?? ""),
-                    firstLog.mealName,
-                    sectionTag,
-                  )
-                }
-                hitSlop={8}
-                style={{ padding: 6 }}
+                accessibilityLabel="Plan for a future day…"
+                onPress={() => {
+                  setKebabOpen(false);
+                  onPlan(sectionTag);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}
               >
-                <Pencil size={16} color={colors["muted-foreground"]} />
-              </Pressable>
-            ) : null}
-            {canStartSelect ? (
-              <Pressable
-                testID={`nutrition-combine-start-${sectionTag}`}
-                accessibilityLabel={`Select items in ${sectionTag} to combine`}
-                accessibilityRole="button"
-                onPress={() => onStartSelect?.(occurrence.key)}
-                hitSlop={8}
-                style={{ paddingHorizontal: 6, paddingVertical: 4 }}
-              >
-                <Text className="text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                  Select
+                <CalendarDays size={16} color="#3b82f6" />
+                <Text className="text-foreground text-xs font-medium">
+                  Plan for a future day…
                 </Text>
               </Pressable>
             ) : null}
-            <View style={{ padding: 6 }}>
-              <ChevronDown
-                size={16}
-                color={colors["muted-foreground"]}
-                style={{ transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }] }}
-              />
-            </View>
-          </View>
-        )}
-      </Pressable>
 
-      {/* The running count, so it stays visible while a long sitting scrolls.
-          Green, like the web's `border-emerald-200 bg-emerald-50` — not the
-          brand red, which here would read as an error rather than a mode. */}
+            {onApplyMeal ? (
+              <Pressable
+                testID={`nutrition-kebab-apply-${sectionTag}`}
+                accessibilityRole="button"
+                accessibilityLabel="Apply a saved meal…"
+                onPress={() => {
+                  setKebabOpen(false);
+                  onApplyMeal(sectionTag);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <ChefHat size={16} color={colors.orange} />
+                <Text className="text-foreground text-xs font-medium">
+                  Apply a saved meal…
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {canStartSelect ? (
+              <Pressable
+                testID={`nutrition-combine-start-${sectionTag}`}
+                accessibilityRole="button"
+                accessibilityLabel="Combine into a meal…"
+                onPress={() => {
+                  setKebabOpen(false);
+                  setIsCollapsed(false);
+                  onStartSelect?.(occurrence.key);
+                }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <ChefHat size={16} color={colors.success} />
+                <Text className="text-foreground text-xs font-medium">
+                  Combine into a meal…
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {hasLogs ? (
+              <Pressable
+                testID={`nutrition-kebab-delete-${sectionTag}`}
+                accessibilityRole="button"
+                accessibilityLabel="Delete logged entries"
+                onPress={handleDeleteSection}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.border,
+                }}
+              >
+                <Trash2 size={16} color={colors.destructive} />
+                <Text className="text-destructive text-xs font-medium">
+                  {flattenedItems.length === 1
+                    ? "Delete logged entry"
+                    : "Delete logged entries"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Select mode banner */}
       {selecting ? (
         <View
           testID={`nutrition-combine-bar-${sectionTag}`}
@@ -403,30 +801,42 @@ export function TagSection({
               </Text>
             ) : null}
           </View>
-          <Pressable
-            testID={`nutrition-combine-submit-${sectionTag}`}
-            accessibilityLabel={`Combine ${picked.length} selected items`}
-            accessibilityRole="button"
-            accessibilityState={{ disabled: !canCombine(picked) }}
-            disabled={!canCombine(picked)}
-            onPress={onCombine}
-            hitSlop={8}
-            className="bg-emerald-600"
-            style={{
-              paddingHorizontal: 10,
-              paddingVertical: 6,
-              borderRadius: 8,
-              opacity: canCombine(picked) ? 1 : 0.5,
-            }}
-          >
-            <Text className="text-white text-xs font-semibold">
-              Combine
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Pressable
+              testID={`nutrition-combine-cancel-${sectionTag}`}
+              accessibilityLabel={`Stop selecting items in ${sectionTag}`}
+              accessibilityRole="button"
+              onPress={onCancelSelect}
+              hitSlop={8}
+              style={{ paddingHorizontal: 6, paddingVertical: 4 }}
+            >
+              <Text className="text-muted-foreground text-xs font-semibold">
+                Cancel
+              </Text>
+            </Pressable>
+            <Pressable
+              testID={`nutrition-combine-submit-${sectionTag}`}
+              accessibilityLabel={`Combine ${picked.length} selected items`}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canCombine(picked) }}
+              disabled={!canCombine(picked)}
+              onPress={onCombine}
+              hitSlop={8}
+              className="bg-emerald-600"
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                opacity: canCombine(picked) ? 1 : 0.5,
+              }}
+            >
+              <Text className="text-white text-xs font-semibold">Combine</Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
-      {/* Content — hidden while collapsed. */}
+      {/* Content — hidden while collapsed */}
       {isCollapsed ? null : !hasContent ? (
         <View style={{ paddingVertical: 12 }}>
           <Text className="text-muted-foreground text-sm italic">
@@ -435,147 +845,231 @@ export function TagSection({
         </View>
       ) : (
         <View style={{ marginTop: 4 }}>
-          {/* Logged items */}
+          {/* Groups: MEAL rows, DESCRIBED/capture rows, and loose rows */}
           {hasLogs &&
-            occurrence.logs.flatMap((log) => {
-              const logId = String(log._id ?? log.id ?? "");
-              return (log.items ?? []).map((item, idx) => {
-                const itemId = String(item._id ?? item.id ?? `${logId}-item-${idx}`);
+            groups.map((group) => {
+              const groupTotalCals = group.items.reduce((s, fi) => {
+                const nut = fi.item.nutrition ?? { calories: 0 };
                 const servings =
-                  typeof item.servings === "number" && item.servings > 0
-                    ? item.servings
+                  typeof fi.item.servings === "number" && fi.item.servings > 0
+                    ? fi.item.servings
                     : 1;
-                const nut = item.nutrition ?? { calories: 0, protein: 0, carbs: 0, fats: 0 };
-                const itemCals = (nut.calories ?? 0) * servings;
-                const servingDesc =
-                  item.servingSize && item.servingUnit
-                    ? `${servings !== 1 ? `${servings} × ` : ""}${item.servingSize} ${item.servingUnit}`
-                    : `${servings} serving${servings !== 1 ? "s" : ""}`;
+                return s + (nut.calories ?? 0) * servings;
+              }, 0);
 
-                // Addressable only with a real subdocument id; the fallback key
-                // above is for React, not for the server.
-                const pickKey = item._id
-                  ? selectionKey(logId, String(item._id))
-                  : null;
-                const selectableRow = selecting && pickKey !== null;
-                const isSelected = pickKey !== null && Boolean(selectedKeys?.has(pickKey));
-
-                const body = (
-                  <>
-                    {selectableRow ? (
-                      <View
-                        testID={`nutrition-combine-check-${itemId}`}
-                        style={{
-                          width: 20,
-                          height: 20,
-                          marginRight: 10,
-                          borderRadius: 4,
-                          borderWidth: 1,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderColor: isSelected ? colors.primary : colors.border,
-                          backgroundColor: isSelected ? colors.primary : "transparent",
-                        }}
-                      >
-                        {isSelected ? (
-                          <Check size={13} color={colors["primary-foreground"]} />
-                        ) : null}
-                      </View>
-                    ) : null}
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <Text className="text-foreground text-sm font-semibold">
-                        {item.name}
+              // 1. MEAL Group Card
+              if (group.mealName) {
+                const isExpanded = expandedMealGroups[group.key] ?? false;
+                const first = group.items[0];
+                return (
+                  <View
+                    key={group.key}
+                    testID={`meal-group-${first.logId}`}
+                    className="border border-orange-200 dark:border-orange-900/40 bg-orange-50/40 dark:bg-orange-900/10"
+                    style={{
+                      borderRadius: 12,
+                      marginVertical: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Pressable
+                      onPress={() =>
+                        setExpandedMealGroups((prev) => ({
+                          ...prev,
+                          [group.key]: !isExpanded,
+                        }))
+                      }
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                        gap: 8,
+                      }}
+                    >
+                      <ChefHat size={14} color={colors.orange} />
+                      <Text className="text-orange-600 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider">
+                        MEAL
                       </Text>
-                      <Text className="text-muted-foreground text-xs mt-0.5">
-                        {servingDesc} · {Math.round(itemCals)} kcal
-                      </Text>
-                    </View>
-
-                    {/* In select mode the row is a checkbox target and its
-                        delete affordance is withheld — tapping to pick must
-                        never delete a log. */}
-                    {selectableRow ? null : (
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                        }}
+                      <Text
+                        className="text-foreground text-sm font-semibold flex-1 truncate"
+                        numberOfLines={1}
                       >
-                        {onEditItem && item._id ? (
-                          <Pressable
-                            testID={`day-totals-entry-${itemId}-edit`}
-                            accessibilityLabel={`Edit ${item.name}`}
-                            accessibilityRole="button"
-                            onPress={() => onEditItem(logId, item, sectionTag)}
-                            hitSlop={8}
-                            style={{ padding: 6 }}
-                          >
-                            <Pencil size={16} color={colors["muted-foreground"]} />
-                          </Pressable>
-                        ) : null}
-                        {onFlagItem && item.foodId ? (
-                          <Pressable
-                            testID={`day-totals-entry-${itemId}-flag`}
-                            accessibilityLabel={`Report ${item.name}`}
-                            accessibilityHint="Something look wrong? Report this food without changing your entry"
-                            accessibilityRole="button"
-                            onPress={() => onFlagItem(logId, item)}
-                            hitSlop={8}
-                            style={{ padding: 6 }}
-                          >
-                            <Flag size={16} color={colors["muted-foreground"]} />
-                          </Pressable>
-                        ) : null}
+                        {group.mealName}
+                      </Text>
+                      <Text className="text-muted-foreground text-xs tabular-nums">
+                        {Math.round(groupTotalCals)} cal
+                      </Text>
+                      {onEditMeal && first ? (
                         <Pressable
-                          testID={`day-totals-entry-${itemId}-remove`}
-                          accessibilityLabel={`Remove ${item.name}`}
+                          testID={`nutrition-edit-meal-${first.logId}`}
+                          accessibilityLabel={`Edit ${group.mealName || "meal"}`}
                           accessibilityRole="button"
-                          onPress={() => onRemoveItem(logId, itemId)}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            onEditMeal(
+                              first.logId,
+                              group.mealName,
+                              sectionTag,
+                            );
+                          }}
                           hitSlop={8}
-                          style={{ padding: 6 }}
+                          style={{ padding: 4 }}
                         >
-                          <Trash2 size={16} color={colors.destructive} />
+                          <Pencil
+                            size={14}
+                            color={colors["muted-foreground"]}
+                          />
                         </Pressable>
+                      ) : null}
+                      <ChevronDown
+                        size={14}
+                        color={colors["muted-foreground"]}
+                        style={{
+                          transform: [
+                            { rotate: isExpanded ? "0deg" : "-90deg" },
+                          ],
+                        }}
+                      />
+                    </Pressable>
+
+                    {isExpanded && (
+                      <View
+                        style={{
+                          paddingHorizontal: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                        }}
+                      >
+                        {group.items.map((fi, idx) =>
+                          renderItemRow(fi, idx),
+                        )}
+                        {onAddToMeal && first ? (
+                          <Pressable
+                            testID={`nutrition-add-to-meal-${sectionTag}`}
+                            accessibilityLabel={`Add to this meal in ${capitalizeTag(sectionTag)}`}
+                            accessibilityRole="button"
+                            onPress={() =>
+                              onAddToMeal(first.logId, sectionTag)
+                            }
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 6,
+                              paddingVertical: 8,
+                              borderTopWidth: 1,
+                              borderTopColor: colors.border,
+                            }}
+                          >
+                            <Plus size={14} color={colors.primary} />
+                            <Text className="text-primary text-xs font-semibold">
+                              Add food to this meal
+                            </Text>
+                          </Pressable>
+                        ) : null}
                       </View>
                     )}
-                  </>
+                  </View>
                 );
+              }
 
-                const rowStyle = {
-                  flexDirection: "row" as const,
-                  justifyContent: "space-between" as const,
-                  alignItems: "center" as const,
-                  paddingVertical: 10,
-                  borderTopWidth: 1,
-                  borderTopColor: colors.border,
-                };
-
-                if (selectableRow) {
-                  return (
-                    <Pressable
-                      key={itemId}
-                      testID={`nutrition-item-row-${itemId}`}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: isSelected }}
-                      accessibilityLabel={`${isSelected ? "Deselect" : "Select"} ${item.name}`}
-                      onPress={() => onToggleSelect?.(logId, String(item._id))}
-                      style={rowStyle}
-                    >
-                      {body}
-                    </Pressable>
-                  );
-                }
+              // 2. DESCRIBED / CAPTURE Group Card
+              if (
+                group.source &&
+                group.source !== "manual" &&
+                group.source !== "search" &&
+                group.items.length > 1
+              ) {
+                const isExpanded = expandedCaptureGroups[group.key] ?? false;
+                const source = group.source.toLowerCase();
+                const CaptureIcon =
+                  source === "describe"
+                    ? PencilLine
+                    : source === "barcode"
+                      ? ScanBarcode
+                      : source === "upload"
+                        ? Upload
+                        : Camera;
+                const label =
+                  source === "describe"
+                    ? "DESCRIBED"
+                    : source === "barcode"
+                      ? "BARCODE"
+                      : source === "upload"
+                        ? "UPLOAD"
+                        : "PHOTO";
 
                 return (
                   <View
-                    key={itemId}
-                    testID={`nutrition-item-row-${itemId}`}
-                    style={rowStyle}
+                    key={group.key}
+                    testID={`capture-group-${group.items[0]?.logId}`}
+                    className="border border-cyan-200 dark:border-cyan-900/40 bg-cyan-50/40 dark:bg-cyan-900/10"
+                    style={{
+                      borderRadius: 12,
+                      marginVertical: 4,
+                      overflow: "hidden",
+                    }}
                   >
-                    {body}
+                    <Pressable
+                      onPress={() =>
+                        setExpandedCaptureGroups((prev) => ({
+                          ...prev,
+                          [group.key]: !isExpanded,
+                        }))
+                      }
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                        gap: 8,
+                      }}
+                    >
+                      <CaptureIcon size={14} color="#06b6d4" />
+                      <Text className="text-cyan-600 dark:text-cyan-400 text-[10px] font-bold uppercase tracking-wider">
+                        {label}
+                      </Text>
+                      <Text className="text-foreground text-xs font-medium flex-1">
+                        {group.items.length} items
+                      </Text>
+                      <Text className="text-muted-foreground text-xs tabular-nums">
+                        {Math.round(groupTotalCals)} cal
+                      </Text>
+                      <ChevronDown
+                        size={14}
+                        color={colors["muted-foreground"]}
+                        style={{
+                          transform: [
+                            { rotate: isExpanded ? "0deg" : "-90deg" },
+                          ],
+                        }}
+                      />
+                    </Pressable>
+
+                    {isExpanded && (
+                      <View
+                        style={{
+                          paddingHorizontal: 10,
+                          borderTopWidth: 1,
+                          borderTopColor: colors.border,
+                        }}
+                      >
+                        {group.items.map((fi, idx) =>
+                          renderItemRow(fi, idx),
+                        )}
+                      </View>
+                    )}
                   </View>
                 );
-              });
+              }
+
+              // 3. Loose items
+              return (
+                <View key={group.key}>
+                  {group.items.map((fi, idx) => renderItemRow(fi, idx))}
+                </View>
+              );
             })}
 
           {/* Planned meals */}
@@ -593,51 +1087,36 @@ export function TagSection({
               ))}
             </View>
           )}
-        </View>
-      )}
 
-      {/* Add food to this section button — hidden while collapsed. */}
-      {isCollapsed ? null : (
-      <View
-        style={{
-          marginTop: 8,
-          borderTopWidth: 1,
-          borderTopColor: colors.border,
-          paddingTop: 8,
-        }}
-      >
-        <Pressable
-          testID={`nutrition-add-food-${sectionTag}`}
-          accessibilityLabel={`Add food to ${sectionTag}`}
-          accessibilityRole="button"
-          onPress={() => onAddFood(sectionTag)}
-          style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
-        >
-          <Plus size={16} color={colors.primary} />
-          <Text className="text-primary text-xs font-semibold">
-            Add to {capitalizeTag(sectionTag)}
-          </Text>
-        </Pressable>
-        {onAddToMeal && hasLogs && firstLog ? (
-          <Pressable
-            testID={`nutrition-add-to-meal-${sectionTag}`}
-            accessibilityLabel={`Add to this meal in ${capitalizeTag(sectionTag)}`}
-            accessibilityRole="button"
-            onPress={() =>
-              onAddToMeal(
-                String(firstLog._id ?? (firstLog as { id?: unknown }).id ?? ""),
-                sectionTag,
-              )
-            }
-            style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 4 }}
+          {/* Card footer totals (NP-320 parity: P: 36g C: 84g F: 6g  528 cal) */}
+          <View
+            testID={`nutrition-section-footer-${sectionTag}`}
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingTop: 10,
+              marginTop: 8,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
           >
-            <Plus size={16} color={colors.primary} />
-            <Text className="text-primary text-xs font-semibold">
-              Add to this meal
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <Text className="text-muted-foreground text-xs font-mono">
+                P: {Math.round(totalProtein)}g
+              </Text>
+              <Text className="text-muted-foreground text-xs font-mono">
+                C: {Math.round(totalCarbs)}g
+              </Text>
+              <Text className="text-muted-foreground text-xs font-mono">
+                F: {Math.round(totalFats)}g
+              </Text>
+            </View>
+            <Text className="text-foreground text-xs font-semibold font-mono">
+              {Math.round(totalCals)} cal
             </Text>
-          </Pressable>
-        ) : null}
-      </View>
+          </View>
+        </View>
       )}
     </Card>
   );
