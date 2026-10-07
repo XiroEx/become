@@ -17,6 +17,7 @@ import { SYSTEM_INFO, syntheticGate } from "@become/core";
 import { Text } from "@/components/Text";
 import { useEntitlements } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import type { TokenName } from "@/lib/theme/tokens";
 
@@ -88,7 +89,12 @@ export function getSystemIconColor(
     case "vision":
       return colors.success;
     default:
-      return colors.accent;
+      // NP-299: the web's tile icon is MATCHED to each segment dashboard's own
+      // signature color (`webapp/components/mind/TrainingGrounds.tsx`'s `TILE`
+      // map — state-shift=cyan, self-image=violet, mission=blue, social=pink).
+      // The generic `colors.accent` (amber) painted all four of these tiles
+      // the same orange-ish hue instead.
+      return mindAccentColor(system);
   }
 }
 

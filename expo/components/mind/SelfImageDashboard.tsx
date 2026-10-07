@@ -278,6 +278,11 @@ interface Win {
 
 export default function SelfImageDashboard() {
   const { colors } = useThemeTokens();
+  // NP-299: this dashboard's icons are violet on the web (hero, the "Define
+  // who you're becoming" fingerprint, identity-protocol toolkit cards, the
+  // adaptive sparkle), never the generic accent (amber) — see
+  // `mindAccentColor`'s own comment.
+  const accent = mindAccentColor("self-image");
   const { token } = useAuth();
   const [profile, setProfile] = useState<IdentityProfileData | null>(null);
   const [affirm, setAffirm] = useState<AffirmData>({
@@ -577,7 +582,7 @@ export default function SelfImageDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.accent}
+        accentColor={accent}
       />
 
       <SystemHero
@@ -588,7 +593,7 @@ export default function SelfImageDashboard() {
         statLabel="evolution"
         colorClass="text-violet-500"
         bgClass="border-violet-500/30 bg-violet-500/10"
-        iconColor={colors.accent}
+        iconColor={accent}
       />
 
       {/* Who you're becoming */}
@@ -665,7 +670,7 @@ export default function SelfImageDashboard() {
               onPress={openEditor}
               className="h-8 w-8 items-center justify-center rounded-full"
             >
-              <Pencil size={16} color={colors.accent} />
+              <Pencil size={16} color={accent} />
             </Pressable>
           </View>
           <Text
@@ -685,7 +690,7 @@ export default function SelfImageDashboard() {
           <View className="mt-3">
             <View className="mb-1 flex-row items-center justify-between">
               <View className="flex-row items-center gap-1">
-                <TrendingUp size={14} color={colors.accent} />
+                <TrendingUp size={14} color={colors["muted-foreground"]} />
                 <Text className="text-[11px] font-medium text-muted-foreground">
                   Evolution
                 </Text>
@@ -760,7 +765,7 @@ export default function SelfImageDashboard() {
           }
           className="rounded-2xl border border-dashed border-violet-500/40 p-5 items-center justify-center bg-card active:opacity-80"
         >
-          <Fingerprint size={28} color={colors.accent} />
+          <Fingerprint size={28} color={accent} />
           <Text className="mt-2 text-sm font-bold text-foreground">
             Define who you’re becoming
           </Text>
@@ -782,6 +787,7 @@ export default function SelfImageDashboard() {
         }
         colorClass="text-violet-500"
         bgClass="border-violet-500/30 bg-violet-500/10"
+        iconColor={accent}
         subtitle="Shaped by who you’re becoming and your recent reflections."
       />
 
@@ -842,7 +848,7 @@ export default function SelfImageDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-violet-500"
-              iconColor={colors.accent}
+              iconColor={accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"
