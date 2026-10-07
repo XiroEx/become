@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Modal as RNModal, Pressable, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 import {
   Activity,
   Check,
@@ -38,13 +40,31 @@ import { validateGuidedSteps } from "@/lib/ai/sanitize";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { lightHaptic } from "@/lib/feedback/haptics";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { recentFeelingLabel } from "@/lib/mind/recentFeeling";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
+import { onDarkForeground, tintToken } from "@/lib/theme/tokens";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
 const DONE_TEXT = "Back in the room.";
+
+// The breath player's fixed dark stage (NP-298) — see `GuidedFlow.tsx`'s own
+// comment for why this is a bare `Modal` with literal `bg-black`/`text-white`
+// classes rather than a themed inline screen.
+const BREATH_WHITE = onDarkForeground;
+const BREATH_WHITE_15 = tintToken("foreground", "dark", 0.15);
+const RING_R = 46;
+const RING_C = 2 * Math.PI * RING_R;
+
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 // ── Breath protocols ──────────────────────────────────────────────────────────
 
@@ -140,21 +160,30 @@ function BreathSession({
   onExit: () => void;
   onDone: () => void;
 }) {
-  const { colors } = useThemeTokens();
+  const insets = useSafeAreaInsetsOrZero();
+  const accent = mindAccentColor("state-shift");
   const [round, setRound] = useState(1);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [done, setDone] = useState(false);
+  // The progress ring's clock. Every write happens inside the interval's own
+  // callback below (an async tick, not the effect's synchronous body), which
+  // is the same shape the ORIGINAL `setPhaseIdx`/`setRound`/`setDone` calls
+  // already used — never a direct `setState` in the effect body itself
+  // (`react-hooks/set-state-in-effect`, see AGENTS.md) and never a `Date.now()`
+  // / ref read during render (`react-hooks/purity` / `react-hooks/refs`).
+  const [elapsedMs, setElapsedMs] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const currentPhase = protocol.phases[phaseIdx];
+  const duration = currentPhase?.durationMs ?? 4000;
 
   useEffect(() => {
     lightHaptic();
-    const duration = currentPhase?.durationMs ?? 4000;
     const start = Date.now();
     intervalRef.current = setInterval(() => {
       const elapsed = Date.now() - start;
       if (elapsed >= duration) {
         if (intervalRef.current) clearInterval(intervalRef.current);
+        setElapsedMs(0); // the NEXT phase's clock starts fresh
         const nextPhase = phaseIdx + 1;
         if (nextPhase < protocol.phases.length) {
           setPhaseIdx(nextPhase);
@@ -164,75 +193,113 @@ function BreathSession({
         } else {
           setDone(true);
         }
+      } else {
+        setElapsedMs(elapsed);
       }
     }, 100);
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [phaseIdx, round, currentPhase?.durationMs, protocol.phases.length, protocol.rounds]);
+  }, [phaseIdx, round, duration, protocol.phases.length, protocol.rounds]);
 
-  if (done) {
-    return (
-      <View
-        testID="breath-session-done"
-        className="flex-1 items-center justify-center bg-card p-6 gap-4"
-      >
-        <View className="h-20 w-20 items-center justify-center rounded-full bg-cyan-500/20 mb-2">
-          <Check size={40} color={colors.success} strokeWidth={3} />
-        </View>
-        <Text className="text-xl font-bold text-foreground text-center">
-          {DONE_TEXT}
-        </Text>
-        <Text className="text-sm text-muted-foreground text-center">
-          {protocol.rounds} rounds complete
-        </Text>
-        <Pressable
-          testID="breath-session-finish"
-          accessibilityRole="button"
-          accessibilityLabel="Finish"
-          onPress={onDone}
-          className="mt-6 rounded-2xl bg-foreground px-8 py-3.5"
-        >
-          <Text className="text-base font-semibold text-background">
-            Finish
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
+  // The progress ring sweeps the current phase so a hold never looks frozen —
+  // the native twin of the web's `BreathScene` ring (`mindBreathScene.test.tsx`).
+  const progress = Math.min(1, elapsedMs / duration);
 
   return (
-    <View
-      testID="breath-session-screen"
-      className="flex-1 items-center justify-center bg-background px-6"
+    <RNModal
+      testID="breath-session-modal"
+      visible
+      animationType="fade"
+      onRequestClose={onExit}
     >
-      <Pressable
-        testID="breath-session-exit"
-        accessibilityRole="button"
-        accessibilityLabel="Exit breath session"
-        onPress={onExit}
-        className="absolute right-5 top-5 h-10 w-10 items-center justify-center rounded-full bg-muted"
+      <View
+        testID="breath-session-screen"
+        className="flex-1 items-center justify-center bg-black px-6"
+        style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
       >
-        <X size={18} color={colors.foreground} />
-      </Pressable>
-      <Text className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-        {protocol.name}
-      </Text>
-      <Text className="mt-1 text-sm text-muted-foreground mb-8">
-        Round {round} of {protocol.rounds}
-      </Text>
+        {done ? (
+          <View testID="breath-session-done" className="items-center gap-4">
+            <View className="h-20 w-20 items-center justify-center rounded-full bg-white/10 mb-2">
+              <Check size={40} color={accent} strokeWidth={3} />
+            </View>
+            <Text className="text-xl font-bold text-white text-center">
+              {DONE_TEXT}
+            </Text>
+            <Text className="text-sm text-white/60 text-center">
+              {protocol.rounds} rounds complete
+            </Text>
+            <Pressable
+              testID="breath-session-finish"
+              accessibilityRole="button"
+              accessibilityLabel="Finish"
+              onPress={onDone}
+              className="mt-6 rounded-2xl bg-white px-8 py-3.5"
+            >
+              <Text className="text-base font-semibold text-black">
+                Finish
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <>
+            <Pressable
+              testID="breath-session-exit"
+              accessibilityRole="button"
+              accessibilityLabel="Exit breath session"
+              onPress={onExit}
+              className="absolute right-5 top-5 h-10 w-10 items-center justify-center rounded-full bg-white/10"
+            >
+              <X size={18} color={BREATH_WHITE} />
+            </Pressable>
+            <Text className="text-xs font-semibold uppercase tracking-widest text-white/40">
+              {protocol.name}
+            </Text>
+            <Text className="mt-1 text-sm text-white/60 mb-8">
+              Round {round} of {protocol.rounds}
+            </Text>
 
-      <View className="h-44 w-44 items-center justify-center rounded-full border-4 border-cyan-500/30 bg-card my-4">
-        <Text className="text-2xl font-bold text-foreground">
-          {currentPhase?.label}
-        </Text>
+            <View className="h-44 w-44 items-center justify-center my-4">
+              <Svg
+                width={176}
+                height={176}
+                viewBox="0 0 100 100"
+                style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
+              >
+                <Circle
+                  cx="50"
+                  cy="50"
+                  r={RING_R}
+                  fill="none"
+                  stroke={BREATH_WHITE_15}
+                  strokeWidth="4"
+                />
+                <Circle
+                  testID="breath-session-ring"
+                  cx="50"
+                  cy="50"
+                  r={RING_R}
+                  fill="none"
+                  stroke={accent}
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray={RING_C}
+                  strokeDashoffset={RING_C * (1 - progress)}
+                />
+              </Svg>
+              <Text className="text-2xl font-bold text-white">
+                {currentPhase?.label}
+              </Text>
+            </View>
+
+            <Text className="mt-6 max-w-xs text-center text-sm text-white/60">
+              {currentPhase?.instruction}
+            </Text>
+          </>
+        )}
       </View>
-
-      <Text className="mt-6 max-w-xs text-center text-sm text-muted-foreground">
-        {currentPhase?.instruction}
-      </Text>
-    </View>
+    </RNModal>
   );
 }
 
@@ -738,8 +805,7 @@ export default function StateShiftDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.accent}
-        accentClass="bg-cyan-500"
+        accentColor={mindAccentColor("state-shift")}
         doneText={DONE_TEXT}
         onReflect={
           flow.aiGenerated

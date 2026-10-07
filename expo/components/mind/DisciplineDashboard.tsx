@@ -41,6 +41,7 @@ import { validateGuidedSteps } from "@/lib/ai/sanitize";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { celebrationHaptic, lightHaptic } from "@/lib/feedback/haptics";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
@@ -458,8 +459,7 @@ export default function DisciplineDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.primary}
-        accentClass="bg-red-500"
+        accentColor={mindAccentColor("discipline")}
         doneText={DONE_TEXT}
         onReflect={
           flow.aiGenerated || flow.kind !== "protocol"
