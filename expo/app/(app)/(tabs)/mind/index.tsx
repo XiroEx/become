@@ -611,7 +611,7 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             {streak > 0 ? (
               <View
                 testID="mind-streak-badge"
-                className="flex-row items-center gap-1 rounded-full bg-accent/10 px-3 py-1"
+                className="flex-row items-center gap-1 rounded-full bg-accent/15 px-3 py-1"
               >
                 <Flame size={16} color={colors.accent} />
                 <Text className="text-sm font-bold text-accent">

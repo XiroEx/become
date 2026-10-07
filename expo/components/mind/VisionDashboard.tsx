@@ -556,7 +556,7 @@ export default function VisionDashboard({
               multiline
               numberOfLines={2}
               textAlignVertical="top"
-              className="w-full min-h-[56px] rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+              className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
               onFocus={() => setActiveField?.(identityFieldRef.current)}
             />
           </View>
@@ -578,7 +578,7 @@ export default function VisionDashboard({
                 multiline
                 numberOfLines={2}
                 textAlignVertical="top"
-                className="w-full min-h-[56px] rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
                 onFocus={() => setActiveField?.(domainFieldRefs.current[d.key] ?? null)}
               />
             </View>

@@ -1,16 +1,17 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { ActivityIndicator, BackHandler, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   apiFetch,
   MindIntroduceResponseSchema,
   MindJournalCreateResponseSchema,
   MindProgressResponseSchema,
+  type MindProgressResponse,
 } from "@become/api-client";
 import { getUnlockedSystems, SYSTEM_INFO } from "@become/core";
-import { AlertCircle } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import GuidedFlow from "@/components/mind/system/GuidedFlow";
+import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 import { mindAccentColor } from "@/lib/mind/accents";
 import { INTRO_FLOWS } from "@/lib/mind/introFlows";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -20,21 +21,21 @@ import { tzOffsetMinutes } from "@/lib/time/localDay";
 
 // NP-299: no "locked" state here — on purpose. The web's equivalent
 // (`webapp/components/mind/ToolIntroGate.tsx`) has no locked UI either: it
-// just `router.replace('/dashboard/mind')`s and never renders. Native used to
-// show a dedicated "<Tool> is Locked / Unlocks in Chapter N / Back to Mind"
-// screen instead of bouncing back like every other locked-tool deep link.
-// NP-336: on progress fetch failure, show an error with retry rather than
-// failing open, which allowed locked tools to open and expose actions.
+// just `router.replace('/dashboard/mind')`s and never renders.
+// NP-336: error state for failed progress call instead of fail-open.
 type GateState = "loading" | "intro" | "ready" | "error";
 
 export default function ToolIntroGate({
   system,
   children,
   onExit,
+  backHandler = BackHandler,
 }: {
   system: string;
   children: ReactNode;
   onExit?: () => void;
+  /** DI hook for tests — injects BackHandler for Android system back handling (NP-336). */
+  backHandler?: BackHandlerLike;
 }) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
@@ -42,12 +43,21 @@ export default function ToolIntroGate({
   const [state, setState] = useState<GateState>("loading");
   const [retryCount, setRetryCount] = useState(0);
 
+  // NP-336: system back inside a tool intro closes the intro flow back to the dashboard
+  useAndroidBackHandler({
+    enabled: state === "intro",
+    onBack: () => {
+      setState("ready");
+      return true;
+    },
+    backHandler,
+  });
+
   useEffect(() => {
     let cancelled = false;
-    setState("loading");
     (async () => {
       try {
-        const p = await apiFetch(
+        const p = await apiFetch<MindProgressResponse>(
           "/api/mind/progress",
           MindProgressResponseSchema,
           {
@@ -78,7 +88,8 @@ export default function ToolIntroGate({
           setState("intro");
         }
       } catch {
-        if (!cancelled) setState("error"); // NP-336: error + retry instead of failing open
+        // NP-336: never open a locked tool on a failed progress call (error + retry)
+        if (!cancelled) setState("error");
       }
     })();
 
@@ -111,9 +122,8 @@ export default function ToolIntroGate({
         testID="mind-intro-gate-error"
         className="flex-1 items-center justify-center p-8 gap-4"
       >
-        <AlertCircle size={32} color={colors.destructive} />
-        <Text className="text-base font-bold text-foreground text-center">
-          Could not load progress
+        <Text className="text-base font-semibold text-foreground text-center">
+          Could not verify access
         </Text>
         <Text className="text-sm text-muted-foreground text-center">
           Check your connection and try again.
@@ -122,12 +132,13 @@ export default function ToolIntroGate({
           testID="mind-intro-gate-retry"
           accessibilityRole="button"
           accessibilityLabel="Try again"
-          onPress={() => setRetryCount((c) => c + 1)}
-          className="mt-2 rounded-xl bg-primary px-5 py-2.5 items-center justify-center"
+          onPress={() => {
+            setState("loading");
+            setRetryCount((c) => c + 1);
+          }}
+          className="rounded-xl px-4 py-2.5 items-center justify-center bg-primary"
         >
-          <Text className="text-sm font-bold text-primary-foreground">
-            Try again
-          </Text>
+          <Text className="text-sm font-bold text-white">Try again</Text>
         </Pressable>
       </View>
     );
@@ -143,6 +154,7 @@ export default function ToolIntroGate({
           steps={flow.steps}
           accentColor={mindAccentColor(system)}
           doneText="Enter"
+          backHandler={backHandler}
           onComplete={(answers) => {
             void apiFetch(
               "/api/mind/progress/introduce",
@@ -181,7 +193,7 @@ export default function ToolIntroGate({
 
             setState("ready");
           }}
-          onExit={() => setState("ready")}
+          onExit={onExit ?? (() => setState("ready"))}
         />
       </View>
     );

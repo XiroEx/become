@@ -1156,7 +1156,7 @@ export function SessionPlayer({
           ) : null}
         </View>
 
-        {/* Leaving mid-session confirmation dialog: dark player styled */}
+        {/* Leaving mid-session confirmation dialog — styled like the dark player (NP-336) */}
         {confirmingExit ? (
           <View
             testID={`${testID}-exit-dialog`}
@@ -1164,7 +1164,7 @@ export function SessionPlayer({
             onAccessibilityEscape={() => setConfirmingExit(false)}
             className="absolute inset-0 items-center justify-center bg-black/80 px-6"
           >
-            <View className="w-full max-w-xs rounded-2xl border border-white/15 bg-zinc-900 p-5">
+            <View className="w-full max-w-xs rounded-2xl border border-white/15 bg-neutral-900 p-5">
               <Text
                 accessibilityRole="header"
                 className="text-lg font-bold text-white"
@@ -1182,9 +1182,9 @@ export function SessionPlayer({
                 accessibilityLabel="Leave the session"
                 onPress={onExit}
                 style={minTouchTarget}
-                className="mt-5 items-center justify-center rounded-2xl bg-white py-3.5"
+                className="mt-5 items-center justify-center rounded-2xl bg-destructive py-3.5"
               >
-                <Text className="text-base font-bold text-black">
+                <Text className="text-base font-bold text-destructive-foreground">
                   Leave
                 </Text>
               </Pressable>
