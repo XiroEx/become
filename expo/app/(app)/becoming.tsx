@@ -13,7 +13,18 @@ import { ChevronLeft, BookOpen } from "lucide-react-native";
 import {
   apiFetch,
   BecomingJourneyResponseSchema,
+  GoalProgressResponseSchema,
+  MindProgressResponseSchema,
+  MindWinsResponseSchema,
+  MindStateResponseSchema,
+  MindSessionStateResponseSchema,
+  ProgressApiResponseSchema,
   type BecomingJourneyResponse,
+  type GoalProgressResponse,
+  type MindProgressResponse,
+  type MindWin,
+  type MindStateLog,
+  type ProgressCurrentProgram,
 } from "@become/api-client";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -50,6 +61,18 @@ export default function BecomingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // The Becoming's Details sheet — same sources web's BecomingDetails fetches
+  // itself (NP-335): goals (Training/Fuel then→now→next), Mind progress/wins/
+  // state/session (streak, chapter history, mood dots) and the active
+  // program (Training's "Next" sub). Best-effort: a screen with none of this
+  // still renders Story from the journey alone, same as web.
+  const [goals, setGoals] = useState<GoalProgressResponse | null>(null);
+  const [mindProgress, setMindProgress] = useState<MindProgressResponse | null>(null);
+  const [wins, setWins] = useState<MindWin[]>([]);
+  const [stateLogs, setStateLogs] = useState<MindStateLog[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [program, setProgram] = useState<ProgressCurrentProgram | null>(null);
 
   const flatListRef = useRef<FlatList<WeekSnapshot>>(null);
 
@@ -98,6 +121,57 @@ export default function BecomingScreen() {
       cancelled = true;
     };
   }, [memberId, token]);
+
+  // 2. The Details sheet's own data — fetched alongside the journey, never
+  // blocking it. Each call is independent (Promise.allSettled): a member with
+  // no Mind history still gets Training/Fuel, and vice versa — same as web's
+  // "screens show what they have" (NP-335).
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const [goalsRes, progRes, winsRes, stateRes, sessRes, progressRes] =
+        await Promise.allSettled([
+          apiFetch<GoalProgressResponse>("/api/goals", GoalProgressResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+          apiFetch<MindProgressResponse>("/api/mind/progress", MindProgressResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+          apiFetch("/api/mind/wins?limit=60", MindWinsResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+          apiFetch("/api/mind/state?limit=60", MindStateResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+          apiFetch("/api/mind/session", MindSessionStateResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+          apiFetch("/api/progress", ProgressApiResponseSchema, {
+            baseUrl: WEBAPP_BASE_URL,
+            getToken: () => token ?? undefined,
+          }),
+        ]);
+      if (cancelled) return;
+      if (goalsRes.status === "fulfilled") setGoals(goalsRes.value);
+      if (progRes.status === "fulfilled") setMindProgress(progRes.value);
+      if (winsRes.status === "fulfilled") setWins(winsRes.value.wins ?? []);
+      if (stateRes.status === "fulfilled") setStateLogs(stateRes.value.logs ?? []);
+      if (sessRes.status === "fulfilled") setStreak(sessRes.value.streak ?? 0);
+      if (progressRes.status === "fulfilled") {
+        setProgram(progressRes.value.currentProgram ?? null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   const weeks: WeekSnapshot[] = useMemo(() => data?.weeks ?? [], [data?.weeks]);
 
@@ -346,6 +420,12 @@ export default function BecomingScreen() {
         identity={data?.identity}
         chapter={data?.chapter}
         becomingScore={data?.becomingScore}
+        goals={goals}
+        mindProgress={mindProgress}
+        wins={wins}
+        stateLogs={stateLogs}
+        streak={streak}
+        program={program}
         onJumpToWeek={jumpToWeek}
         onNavigate={handleNavigate}
       />

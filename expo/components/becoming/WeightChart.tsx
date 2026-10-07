@@ -33,6 +33,7 @@ export function WeightChart({
   target,
   unit,
   todayKey,
+  direction,
 }: WeightChartProps) {
   const { colors, tint } = useThemeTokens()
   const [view, setView] = useState<WeightView>('week')
@@ -62,11 +63,17 @@ export function WeightChart({
   }, [linePath, s.points])
 
   const hue = PILLAR.fuel.hsl
+  const good =
+    direction === 'lose'
+      ? (s.delta ?? 0) < 0
+      : direction === 'gain'
+        ? (s.delta ?? 0) > 0
+        : Math.abs(s.delta ?? 0) < 1
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="weight-chart">
       <View style={styles.header}>
-        <Text style={[styles.caption, { color: colors.foreground }]}>{weightCaption(s, unit)}</Text>
+        <Text style={[styles.topLabel, { color: colors['muted-foreground'] }]}>Weight</Text>
         <View style={[styles.switchRow, { backgroundColor: tint('muted', 0.5) }]} role="tablist">
           <Pressable
             style={[
@@ -229,6 +236,26 @@ export function WeightChart({
           })}
         </Svg>
       </View>
+
+      {selectedPoint ? null : (
+        <View style={styles.footer} testID="weight-caption">
+          <Text style={[styles.footerEdge, { color: colors['muted-foreground'] }]} numberOfLines={1}>
+            {s.first ? `${s.first.label} · ${Math.round(s.first.value)} ${unit}` : ''}
+          </Text>
+          <Text
+            style={[
+              styles.footerCaption,
+              { color: good ? colors.success : colors['muted-foreground'] },
+            ]}
+            numberOfLines={1}
+          >
+            {weightCaption(s, unit)}
+          </Text>
+          <Text style={[styles.footerEdge, { color: colors['muted-foreground'] }]} numberOfLines={1}>
+            {s.last ? `${Math.round(s.last.value)} ${unit} · now` : ''}
+          </Text>
+        </View>
+      )}
     </View>
   )
 }
@@ -243,10 +270,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  caption: {
-    fontSize: 12,
-    fontWeight: '600',
+  topLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     flex: 1,
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginTop: 4,
+  },
+  footerEdge: {
+    fontSize: 11,
+    flex: 1,
+  },
+  footerCaption: {
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   switchRow: {
     flexDirection: 'row',

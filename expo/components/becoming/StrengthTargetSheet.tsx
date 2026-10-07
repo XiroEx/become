@@ -12,8 +12,11 @@ import type { LiftProgress } from '@/lib/becoming/types'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
-export const EST_MAX_LABEL = 'Estimated 1RM'
-export const EST_MAX_LABEL_SHORT = 'Est 1RM'
+// Mirrors webapp/lib/strength/language.ts#EST_MAX_LABEL(_SHORT). Native used
+// to say "Estimated 1RM" / "Est 1RM" here, which read as a different metric
+// from the web's "Estimated max" / "Est. max" copy (NP-335).
+export const EST_MAX_LABEL = 'Estimated max'
+export const EST_MAX_LABEL_SHORT = 'Est. max'
 
 export interface StrengthTargetSheetProps {
   open: boolean
@@ -60,7 +63,7 @@ export function StrengthTargetSheet({
                 )}
               </View>
               <View>
-                <Text style={[styles.kicker, { color: colors['muted-foreground'] }]}>Estimated 1RM & Target</Text>
+                <Text style={[styles.kicker, { color: colors['muted-foreground'] }]}>{EST_MAX_LABEL} & Target</Text>
                 <Text style={[styles.title, { color: colors.foreground }]}>{lift.name}</Text>
               </View>
             </View>

@@ -108,6 +108,7 @@ export type TokenName =
   | "mood-okay"
   | "mood-good"
   | "mood-great"
+  | "state-low-energy"
   | "mind-violet"
   | "mind-green"
   | "mind-ink"
@@ -159,6 +160,11 @@ export const lightTokens: Record<TokenName, string> = {
   "mood-okay": "251 191 36", // amber-400 — Okay
   "mood-good": "163 230 53", // lime-400 — Pretty Good
   "mood-great": "52 211 153", // emerald-400 — Great
+  // Mind's "how you've shown up" dots (The Becoming's details sheet, NP-335)
+  // reuse the flat mood palette above for locked_in/distracted/stressed —
+  // same hues as webapp's STATE_META. low_energy has no mood-palette match
+  // (blue, not in the 5-level scale), so it gets its own flat token.
+  "state-low-energy": "96 165 250", // blue-400 — same in both modes
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
@@ -201,6 +207,7 @@ export const darkTokens: Record<TokenName, string> = {
   "mood-okay": "251 191 36",
   "mood-good": "163 230 53",
   "mood-great": "52 211 153",
+  "state-low-energy": "96 165 250", // blue-400 — same in both modes
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes

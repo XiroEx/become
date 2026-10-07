@@ -39,11 +39,15 @@ const LABEL: Record<SummaryPillar, string> = {
   you: 'You',
 }
 
+// How a mind state reads INSIDE a sentence — "mostly stressed", never "mostly
+// Stressed". Mirrors webapp/lib/becoming/weeks.ts#STATE_WORD, which this one
+// drifted from: the signals.ts STATE_WORD (title case, for a card's own line)
+// is a different map for a different place and must not be reused here.
 const STATE_WORD: Record<string, string> = {
-  stressed: 'Stressed',
-  distracted: 'Distracted',
-  low_energy: 'Low energy',
-  locked_in: 'Locked in',
+  stressed: 'stressed',
+  distracted: 'distracted',
+  low_energy: 'low on energy',
+  locked_in: 'locked in',
 }
 
 type Severity = 'warn' | 'nudge' | 'info' | 'good'
