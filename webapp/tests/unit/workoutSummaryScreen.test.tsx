@@ -201,7 +201,7 @@ describe('REGRESSION: the three callers feed the summary real metrics', () => {
   it('the Track view passes its own duration/distance/speed fields straight through', () => {
     const src = readSource(TRACK)
     // Its SetData is already canonical — it has the three cardio fields.
-    assert.match(src, /interface SetData \{[^}]*duration: string;[^}]*distance: string;[^}]*speed: string;/s)
+    assert.match(src, /interface SetData \{[^}]*duration: string;[^}]*distance: string;[^}]*speed: string;/)
     assert.match(src, /exercises=\{workout\.exercises\}/)
   })
 
