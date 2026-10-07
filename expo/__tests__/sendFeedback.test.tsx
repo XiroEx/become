@@ -272,18 +272,29 @@ describe("<FeedbackSheet />", () => {
     });
   });
 
-  it("an empty message shows 'Message is required' without sending", () => {
+  it("(NP-305) Send is disabled, grey, until there is text — not merely while idle", () => {
     const sendImpl = jest.fn(async () => ({ status: "sent" as const }));
     const { getByTestId, queryByTestId } = render(
       <FeedbackSheet token="jwt" sendImpl={sendImpl} />,
     );
     fireEvent.press(getByTestId("feedback-row"));
-    fireEvent.press(getByTestId("feedback-send"));
-    expect(getByTestId("feedback-error").props.children).toBe(
-      "Message is required",
-    );
+
+    const send = getByTestId("feedback-send");
+    expect(send.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(send);
     expect(sendImpl).not.toHaveBeenCalled();
     expect(queryByTestId("feedback-sent")).toBeNull();
+
+    // Whitespace-only still counts as empty, matching the web's `!message.trim()`.
+    fireEvent.changeText(getByTestId("feedback-message"), "   ");
+    expect(getByTestId("feedback-send").props.accessibilityState?.disabled).toBe(
+      true,
+    );
+
+    fireEvent.changeText(getByTestId("feedback-message"), "now it has text");
+    expect(getByTestId("feedback-send").props.accessibilityState?.disabled).toBe(
+      false,
+    );
   });
 
   it("attaches up to three screenshots and removes one", async () => {
@@ -320,5 +331,84 @@ describe("<FeedbackSheet />", () => {
     fireEvent.press(getByTestId("feedback-image-0-remove"));
     expect(queryByTestId("feedback-image-2")).toBeNull();
     expect(getByTestId("feedback-add-photo")).toBeTruthy();
+  });
+
+  it("(NP-305) has a close X beside the title, matching the web's modal", () => {
+    const { getByTestId, queryByTestId } = render(
+      <FeedbackSheet token="jwt" />,
+    );
+    fireEvent.press(getByTestId("feedback-row"));
+    expect(getByTestId("feedback-modal-title").props.children).toBe(
+      "Send Feedback",
+    );
+    const closeButton = getByTestId("feedback-close");
+    expect(closeButton.props.accessibilityLabel).toBe("Close");
+    fireEvent.press(closeButton);
+    // Pressing it closes the sheet, same as the backdrop tap did before.
+    expect(queryByTestId("feedback-modal-title")).toBeNull();
+  });
+
+  it("(NP-305) type chips carry an icon each, same as the web's Bug/Lightbulb/MessageSquare", () => {
+    const { getByTestId, UNSAFE_getAllByType } = render(
+      <FeedbackSheet token="jwt" />,
+    );
+    fireEvent.press(getByTestId("feedback-row"));
+    const { Bug, Lightbulb, MessageSquare } = jest.requireActual(
+      "lucide-react-native",
+    ) as typeof import("lucide-react-native");
+    for (const type of [Bug, Lightbulb, MessageSquare]) {
+      expect(UNSAFE_getAllByType(type).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("(NP-305) the message field has the web's placeholder and no label above it", () => {
+    const { getByTestId, queryByTestId } = render(
+      <FeedbackSheet token="jwt" />,
+    );
+    fireEvent.press(getByTestId("feedback-row"));
+    const field = getByTestId("feedback-message");
+    expect(field.props.placeholder).toBe("What's on your mind?");
+    expect(field.props.multiline).toBe(true);
+    // `Input`'s label renders as `${testID}-label` — there should be none.
+    expect(queryByTestId("feedback-message-label")).toBeNull();
+  });
+
+  it("(NP-305) the 0/2000 counter and Add photo sit in one row, not a line of their own", () => {
+    const { getByTestId, toJSON } = render(<FeedbackSheet token="jwt" />);
+    fireEvent.press(getByTestId("feedback-row"));
+    fireEvent.changeText(getByTestId("feedback-message"), "hi there");
+
+    expect(getByTestId("feedback-counter").props.children).toBe("8/2000");
+
+    // Walk the rendered (host-only) tree for a flex-row container that holds
+    // both the counter and `Add photo` but NOT `Send` — i.e. a row of their
+    // own, distinct from the full footer row that also holds Send. Unlike
+    // the old layout (counter on its own line above an outlined pill), one
+    // should exist.
+    function flatStyle(style: unknown): Record<string, unknown> {
+      if (!style) return {};
+      if (Array.isArray(style)) {
+        return style.reduce(
+          (acc, s) => ({ ...acc, ...flatStyle(s) }),
+          {} as Record<string, unknown>,
+        );
+      }
+      return style as Record<string, unknown>;
+    }
+    function findNarrowRow(node: unknown): boolean {
+      if (Array.isArray(node)) return node.some(findNarrowRow);
+      if (!node || typeof node !== "object") return false;
+      const n = node as { props?: { style?: unknown }; children?: unknown };
+      if (findNarrowRow(n.children)) return true;
+      const style = flatStyle(n.props?.style);
+      const text = JSON.stringify(node);
+      return (
+        style.flexDirection === "row" &&
+        text.includes("8/2000") &&
+        text.includes("Add photo") &&
+        !text.includes("Send")
+      );
+    }
+    expect(findNarrowRow(toJSON())).toBe(true);
   });
 });

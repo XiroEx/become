@@ -1,5 +1,5 @@
 /**
- * "Send feedback" on the native Settings screen (NP-162).
+ * "Send feedback" on the native Settings screen (NP-162, visual pass NP-305).
  *
  * The web's user menu opens `FeedbackModal.tsx` (type, message, up to three
  * screenshots). This is the same form as a bottom sheet on the Settings screen:
@@ -9,13 +9,27 @@
  * that POSTs `lib/feedback/sendFeedback.ts` with the app version, build, OS
  * and device model in `metadata`.
  *
+ * NP-305 closed four gaps against `FeedbackModal.tsx`: a close X beside the
+ * title (the backdrop tap still closes it too), icon chips for the type
+ * selector (Bug / Lightbulb / MessageSquare, same as the web), a multi-line
+ * message field carrying the web's placeholder with no extra label above it,
+ * and a one-row footer whose Send button is disabled (grey, with its send
+ * icon) until there is text — not merely while sending or already sent.
+ *
  * Everything that touches the network or the photo library is injectable, so
  * this renders and behaves in jest without a device.
  */
 
 import { useState } from "react";
 import { Image, Pressable, View } from "react-native";
-import { ImagePlus, X } from "lucide-react-native";
+import {
+  Bug,
+  ImagePlus,
+  Lightbulb,
+  MessageSquare,
+  Send as SendIcon,
+  X,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -33,13 +47,19 @@ import {
   type SendFeedbackInput,
 } from "@/lib/feedback/sendFeedback";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 
-const TYPE_OPTIONS: { id: FeedbackType; label: string }[] = [
-  { id: "bug", label: "Bug" },
-  { id: "feature", label: "Feature" },
-  { id: "general", label: "General" },
+// Same three types, same icons, as `webapp/components/FeedbackModal.tsx`'s
+// `typeOptions`.
+const TYPE_OPTIONS: {
+  id: FeedbackType;
+  label: string;
+  Icon: typeof Bug;
+}[] = [
+  { id: "bug", label: "Bug", Icon: Bug },
+  { id: "feature", label: "Feature", Icon: Lightbulb },
+  { id: "general", label: "General", Icon: MessageSquare },
 ];
 
 export interface FeedbackSheetProps {
@@ -135,8 +155,10 @@ export function FeedbackSheet({
     if (sending || sent) return;
     const trimmed = message.trim();
     if (!trimmed) {
-      // The server answers 400 'Message is required'; showing its sentence
-      // up front keeps an empty tap from looking broken while offline.
+      // Send is disabled whenever the message is blank (see `canSend`
+      // below), so a normal tap cannot reach this branch any more — it is
+      // defense in depth for a caller that invokes `handleSend` some other
+      // way, mirroring the server's own 400 'Message is required'.
       setError(FEEDBACK_MESSAGE_REQUIRED);
       return;
     }
@@ -166,10 +188,9 @@ export function FeedbackSheet({
     }
   }
 
-  // The button stays enabled on an empty message on purpose: unlike the web
-  // (whose Send is disabled until there is text), an empty tap must SHOW the
-  // server's 'Message is required' rather than silently doing nothing.
-  const canSend = !sending && !sent;
+  // NP-305: Send now matches the web — grey and disabled until there is
+  // text, not only while sending or already sent.
+  const canSend = !sending && !sent && message.trim().length > 0;
 
   return (
     <View testID={testID}>
@@ -201,8 +222,39 @@ export function FeedbackSheet({
         testID={`${testID}-modal`}
         visible={open}
         onClose={close}
-        title="Send Feedback"
+        accessibilityLabel="Send Feedback"
       >
+        {/* Own header, not `Modal`'s `title` prop, so a close X can sit
+            beside the title — the web's modal has one top right; the
+            backdrop tap (still wired through `onClose`) is the only way
+            native had before NP-305. */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 12,
+          }}
+        >
+          <Text
+            testID={`${testID}-modal-title`}
+            accessibilityRole="header"
+            className="text-foreground text-xl font-semibold"
+          >
+            Send Feedback
+          </Text>
+          <Pressable
+            testID={`${testID}-close`}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={close}
+            hitSlop={hitSlopToMinTarget(32, 32)}
+            style={{ padding: 8, borderRadius: 999 }}
+          >
+            <X size={20} color={colors["muted-foreground"]} />
+          </Pressable>
+        </View>
+
         {sent ? (
           <View
             testID={`${testID}-sent`}
@@ -229,18 +281,25 @@ export function FeedbackSheet({
                     accessibilityState={{ selected }}
                     accessibilityLabel={opt.label}
                     onPress={() => setType(opt.id)}
-                    style={[
-                      minTouchTarget,
-                      {
-                        paddingHorizontal: 12,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                        backgroundColor: selected
-                          ? colors.foreground
-                          : colors.muted,
-                      },
-                    ]}
+                    hitSlop={hitSlopToMinTarget(60, 30)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 4,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                      backgroundColor: selected
+                        ? colors.foreground
+                        : colors.muted,
+                    }}
                   >
+                    <opt.Icon
+                      size={12}
+                      color={
+                        selected ? colors.background : colors["muted-foreground"]
+                      }
+                    />
                     <Text
                       style={[
                         WRAPPABLE_TEXT,
@@ -261,17 +320,16 @@ export function FeedbackSheet({
 
             <Input
               testID={`${testID}-message`}
-              label="What's on your mind?"
-              placeholder="Describe the problem or idea…"
+              placeholder="What's on your mind?"
+              accessibilityLabel="What's on your mind?"
               value={message}
               onChangeText={setMessage}
               multiline
+              numberOfLines={4}
+              textAlignVertical="top"
               maxLength={2000}
               accessibilityHint={`${message.length} of 2000 characters`}
             />
-            <Text className="text-muted-foreground text-xs">
-              {message.length}/2000
-            </Text>
 
             {images.length > 0 ? (
               <View
@@ -332,6 +390,9 @@ export function FeedbackSheet({
               </Text>
             ) : null}
 
+            {/* One row, like the web: `0/2000 · Add photo` on the left, Send
+                on the right — not the counter on its own line above an
+                outlined pill. */}
             <View
               style={{
                 flexDirection: "row",
@@ -340,42 +401,65 @@ export function FeedbackSheet({
                 gap: 8,
               }}
             >
-              {images.length < MAX_FEEDBACK_IMAGES ? (
-                <Button
-                  testID={`${testID}-add-photo`}
-                  variant="ghost"
-                  size="sm"
-                  disabled={picking}
-                  loading={picking}
-                  accessibilityHint="Pick a screenshot from your photo library"
-                  onPress={() => {
-                    void handlePick();
-                  }}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  flexShrink: 1,
+                }}
+              >
+                <Text
+                  testID={`${testID}-counter`}
+                  className="text-muted-foreground text-xs"
                 >
-                  <View
+                  {`${message.length}/2000`}
+                </Text>
+                {images.length < MAX_FEEDBACK_IMAGES ? (
+                  <Pressable
+                    testID={`${testID}-add-photo`}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      images.length === 0
+                        ? "Add photo"
+                        : `Add photo (${images.length}/${MAX_FEEDBACK_IMAGES} attached)`
+                    }
+                    accessibilityHint="Pick a screenshot from your photo library"
+                    accessibilityState={{ disabled: picking }}
+                    disabled={picking}
+                    onPress={() => {
+                      void handlePick();
+                    }}
+                    hitSlop={hitSlopToMinTarget(80, 28)}
                     style={{
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 4,
+                      opacity: picking ? 0.5 : 1,
                     }}
                   >
-                    <ImagePlus size={14} color={colors.foreground} />
-                    <Text className="text-foreground text-xs font-medium">
+                    <ImagePlus size={14} color={colors["muted-foreground"]} />
+                    <Text className="text-muted-foreground text-xs font-medium">
                       {images.length === 0
                         ? "Add photo"
                         : `${images.length}/${MAX_FEEDBACK_IMAGES}`}
                     </Text>
-                  </View>
-                </Button>
-              ) : (
-                <Text className="text-muted-foreground text-xs">
-                  {images.length}/{MAX_FEEDBACK_IMAGES} photos
-                </Text>
-              )}
+                  </Pressable>
+                ) : (
+                  <Text className="text-muted-foreground text-xs">
+                    {images.length}/{MAX_FEEDBACK_IMAGES} photos
+                  </Text>
+                )}
+              </View>
               <Button
                 testID={`${testID}-send`}
                 disabled={!canSend}
                 loading={sending}
+                icon={
+                  sending ? undefined : (
+                    <SendIcon size={14} color={colors["primary-foreground"]} />
+                  )
+                }
                 onPress={() => {
                   void handleSend();
                 }}
