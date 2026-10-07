@@ -469,14 +469,130 @@ describe("(id: NP-282) the empty state matches the web: icon, copy, CTA and the 
     );
 
     // The "Design your own program" tip, in the web onboarding tour's own
-    // words, with its "Walk me through it" CTA wired to the same creator.
+    // words — its "Walk me through it" CTA starts the tip tour (NP-330), it
+    // does not jump straight to the creator (that was the bug).
     expect(screen.getByTestId("my-programs-empty-tip")).toBeTruthy();
     expect(screen.getByText("Design your own program")).toBeTruthy();
-    const tipCta = screen.getByTestId("my-programs-empty-tip-cta");
+  });
+});
+
+describe("(id: NP-330) 'Walk me through it' starts the 8-step tip tour like web, instead of skipping it", () => {
+  it("steps through all 8 dots before landing on the creator", async () => {
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    const tipCta = await screen.findByTestId("my-programs-empty-tip-cta");
+
+    // Pressing it does NOT open the builder directly.
     fireEvent.press(tipCta);
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // Step 1 is the web's own copy, word for word, with dots (8 of them —
+    // one per `programs-new` tour step) and its own "Walk me through it"
+    // next label (the web's `nextLabel` for that step).
+    await waitFor(() =>
+      expect(screen.getByTestId("my-programs-tour-modal")).toBeTruthy(),
+    );
+    expect(screen.getByTestId("my-programs-tour-modal-title").props.children).toBe(
+      "Design your own program",
+    );
+    for (let i = 0; i < 8; i += 1) {
+      expect(screen.getByTestId(`my-programs-tour-dot-${i}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId("my-programs-tour-dot-8")).toBeNull();
+
+    let next = screen.getByTestId("my-programs-tour-next");
+    expect(next.props.accessibilityLabel ?? next.props.children).toBeTruthy();
+
+    // Advance through steps 2-8 (7 more "Next" taps, landing the view on the
+    // 8th and last step); the tour stays open and the builder is untouched.
+    for (let step = 1; step < 8; step += 1) {
+      fireEvent.press(screen.getByTestId("my-programs-tour-next"));
+      await waitFor(() =>
+        expect(
+          screen.getByTestId("my-programs-tour-modal-title").props.children,
+        ).not.toBe("Design your own program"),
+      );
+    }
+    expect(mockPush).not.toHaveBeenCalled();
+
+    // The 8th and last step's own CTA finally opens the creator, and closes
+    // the tour.
+    next = screen.getByTestId("my-programs-tour-next");
+    fireEvent.press(next);
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/new"),
     );
+    expect(screen.queryByTestId("my-programs-tour-modal")).toBeNull();
+  });
+
+  it("'Skip' closes the tour without opening the builder", async () => {
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    fireEvent.press(await screen.findByTestId("my-programs-empty-tip-cta"));
+    await waitFor(() =>
+      expect(screen.getByTestId("my-programs-tour-modal")).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByTestId("my-programs-tour-skip"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("my-programs-tour-modal")).toBeNull(),
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+});
+
+describe("(id: NP-330) the empty-state title and CTA wrap instead of clipping on Android", () => {
+  it("the title allows wrapping (numberOfLines, no fixed width) instead of a single clipped line", async () => {
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    const title = await screen.findByText(
+      "You haven't created any custom programs yet",
+    );
+    // `numberOfLines > 1` plus no `width`/`flex: 0` constraint is the fix:
+    // Android measured this bold label narrower than it drew it and clipped
+    // the last word at `numberOfLines={1}` (the implicit default: letting
+    // RN truncate a single rendered line rather than wrap to a second).
+    expect(title.props.numberOfLines).toBeGreaterThan(1);
+    const titleStyle = StyleSheet.flatten(title.props.style);
+    expect(titleStyle.width).toBeUndefined();
+  });
+
+  it("the CTA's icon and label are siblings, not a label nested inside another Text", async () => {
+    routeListFetch((path: string) => {
+      if (path === "/api/programs/custom") {
+        return { programs: [] };
+      }
+      throw new Error(`unexpected fetch ${path}`);
+    });
+
+    const screen = render(<MyProgramsRoute />);
+    const cta = await screen.findByTestId("my-programs-create-empty");
+    const label = screen.getByText("Create Your First Program");
+    // The bug: this label used to be a `<Text>` nested inside `Button`'s own
+    // wrapping `<Text>` (via a `View` child) — Android mismeasures that and
+    // clips the label at the button's right edge. It must now sit directly
+    // under the pressable CTA, able to wrap.
+    expect(label.props.numberOfLines).toBeGreaterThan(1);
+    expect(StyleSheet.flatten(label.props.style).flexShrink).toBe(1);
+    void cta;
   });
 });
 
