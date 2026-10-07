@@ -27,6 +27,7 @@ import { addIntoGroup, alignCircuitSets, appendExercise, applyOrder, applyOrderT
 import { programScope, quickScope, readPosition, resolveStartStep, writePosition, clearPosition } from "@/lib/workout/position";
 import { workoutAttemptId, clearWorkoutAttemptId } from "@/lib/workout/attemptId";
 import { normalizeTracking, tracksTime, setUnitLabel, blankSet } from "@/lib/workout/tracking";
+import { summarySetsFromLiveInputs } from "@/lib/workout/summaryMetrics";
 import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloorsExercise, type DurationUnit } from "@/lib/workout/durationUnit";
 import { clearQuickProgress, readQuickProgress, writeQuickProgress } from "@/lib/quickSession/progress";
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
@@ -2885,7 +2886,10 @@ export default function LiveWorkoutPage() {
             programId={programId}
             workout={workout}
             elapsedTime={elapsedTime}
-            exerciseData={exerciseData}
+            // This view types cardio into the reps/weight boxes; the summary
+            // reads canonical duration/distance. Translate on the way in, the
+            // same way saveWorkout does on the way out.
+            exerciseData={summarySetsFromLiveInputs(exercises, exerciseData)}
             exercises={exercises}
             exerciseHistory={exerciseHistory}
             summaryStreak={summaryStreak}
