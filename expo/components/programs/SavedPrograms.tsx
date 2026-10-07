@@ -35,7 +35,7 @@ export function SavedPrograms({
 
   if (programs.length === 0) {
     return (
-      <View testID={`${testID}-empty`} style={{ padding: 16 }}>
+      <View testID={`${testID}-empty`} style={{ paddingVertical: 16 }}>
         <Text className="text-muted-foreground text-center">
           No saved programs yet. Browse to save one.
         </Text>
@@ -158,8 +158,12 @@ export function SavedPrograms({
     );
   };
 
+  // No horizontal padding here — the screens embedding this list (Workout
+  // tab / Browse / the dedicated Saved screen) already pad their own
+  // content area, so adding it again inset this row ~20px narrower than
+  // the full-width cards around it (NP-327).
   return (
-    <View testID={testID} style={{ padding: 16 }}>
+    <View testID={testID} style={{ paddingVertical: 16 }}>
       <DraggableFlatList
         data={programs}
         keyExtractor={(item) => item.id}

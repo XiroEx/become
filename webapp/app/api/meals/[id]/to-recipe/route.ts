@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Meal, { IMealItem } from '@/models/Meal'
 import Recipe from '@/models/Recipe'
 import { verifyAuth } from '@/lib/auth'
+import { mealItemToRecipeIngredientAmount } from '@/lib/nutrition/mealItemToRecipeIngredient'
 
 // POST /api/meals/[id]/to-recipe — convert a Meal (loggable group) into a Recipe
 // (a group intended to become a Food). Copies items → ingredients and derives
@@ -34,13 +35,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const ingredients = (meal.items || []).map((it: IMealItem) => {
       const qty = it.servings ?? 1
+      // Display amount/unit: what the member actually entered ("1 × 3oz",
+      // "1.5 × 100g"), not the bare scaling factor against the base unit —
+      // see `mealItemToRecipeIngredient.ts`. Calories still scale off `qty`.
+      const { amount, unit } = mealItemToRecipeIngredientAmount(it)
       return {
         foodId: it.foodId,
         variantId: it.variantId,
         variantName: it.variantName,
         name: it.name,
-        amount: qty,
-        unit: it.servingUnit || 'serving',
+        amount,
+        unit,
         // Recipe ingredient nutrition is the total contribution of that amount.
         nutrition: {
           calories: Math.round((it.nutrition?.calories ?? 0) * qty),

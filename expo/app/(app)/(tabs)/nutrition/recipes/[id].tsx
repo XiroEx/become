@@ -11,6 +11,8 @@ import {
 import { Text } from "@/components/Text";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/Button";
+import { Toast } from "@/components/Toast";
+import { useToast } from "@/lib/toast/useToast";
 import {
   RecipeDetail,
   type RecipeDetailViewModel,
@@ -107,7 +109,9 @@ export default function RecipeDetailRoute() {
   const [converting, setConverting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
+  // The web's `showToast` (NP-271) — a floating toast, not a plain line of
+  // text sitting at the bottom of the scroll flow.
+  const { toast, showToast } = useToast();
 
   const [foodToLog, setFoodToLog] = useState<Food | null>(null);
   const [foodLogSubmitting, setFoodLogSubmitting] = useState(false);
@@ -127,7 +131,6 @@ export default function RecipeDetailRoute() {
   const handleSaveOrLog = useCallback(async () => {
     if (!id || savingFood) return;
     setSavingFood(true);
-    setBanner(null);
     try {
       const res = await saveRecipeAsFood(id, {
         apiFetch,
@@ -150,26 +153,26 @@ export default function RecipeDetailRoute() {
         setFoodLogError(null);
         setFoodToLog(food);
       } else {
-        setBanner("Saved to your Foods — tap again to log it");
+        // The web's exact toast (`showToast(..., 'success')`).
+        showToast("Saved to your Foods — tap again to log it", "success");
       }
     } catch (err) {
       // A plan gate (e.g. the custom-foods cap) raises the upgrade sheet
       // through the handler above; an ordinary refusal keeps the server's
-      // own words in the banner. The web only toasts the sentence; native
+      // own words in the toast. The web only toasts the sentence; native
       // raises the sheet, as the plan-gates story requires.
       const { handled, message } = handleApiError(err);
-      if (!handled) setBanner(message);
+      if (!handled) showToast(message, "error");
     } finally {
       setSavingFood(false);
     }
-  }, [handleApiError, id, refreshEntitlements, savedFoodId, savingFood, token]);
+  }, [handleApiError, id, refreshEntitlements, savedFoodId, savingFood, showToast, token]);
 
   // Convert to a meal (loggable group). MOVE for the owner, COPY otherwise —
   // the response says which, so the screen never guesses.
   const handleConvertToMeal = useCallback(async () => {
     if (!id || converting) return;
     setConverting(true);
-    setBanner(null);
     try {
       const { mealId, mode } = await convertRecipeToMeal(id, {
         apiFetch,
@@ -182,12 +185,12 @@ export default function RecipeDetailRoute() {
         // recipe, so the snapshot is stale either way.
         await refreshEntitlements().catch(() => {});
         if (mode === "move") invalidateEntitlements();
-        setBanner(mode === "move" ? "Converted to a meal" : "Saved as a meal");
+        showToast(mode === "move" ? "Converted to a meal" : "Saved as a meal", "success");
         router.replace(
           `/(tabs)/nutrition/meals/${encodeURIComponent(mealId)}` as never,
         );
       } else {
-        setBanner("Could not convert that meal.");
+        showToast("Could not convert that meal.", "error");
         setConverting(false);
       }
     } catch (err) {
@@ -199,10 +202,10 @@ export default function RecipeDetailRoute() {
       // A refusal means the snapshot disagrees with the server; re-read it
       // so the lock matches what just happened.
       await refreshEntitlements().catch(() => {});
-      if (!routed.handled) setBanner(routed.message);
+      if (!routed.handled) showToast(routed.message, "error");
       setConverting(false);
     }
-  }, [converting, id, refreshEntitlements, router, token]);
+  }, [converting, id, refreshEntitlements, router, showToast, token]);
 
   const handleDelete = useCallback(async () => {
     if (!id || deleting) return;
@@ -217,10 +220,10 @@ export default function RecipeDetailRoute() {
       router.back();
     } catch (err) {
       const { handled, message } = handleApiError(err);
-      if (!handled) setBanner(message);
+      if (!handled) showToast(message, "error");
       setDeleting(false);
     }
-  }, [deleting, handleApiError, id, router, token]);
+  }, [deleting, handleApiError, id, router, showToast, token]);
 
   const handleLogSavedFood = useCallback(
     async (opts: {
@@ -246,7 +249,7 @@ export default function RecipeDetailRoute() {
           baseUrl: WEBAPP_BASE_URL,
         });
         setFoodToLog(null);
-        setBanner(`Logged ${foodToLog.name}`);
+        showToast(`Logged ${foodToLog.name}`, "success");
       } catch (err) {
         const { handled, message } = handleApiError(err);
         if (!handled) setFoodLogError(message);
@@ -254,7 +257,7 @@ export default function RecipeDetailRoute() {
         setFoodLogSubmitting(false);
       }
     },
-    [foodLogSubmitting, foodToLog, handleApiError, token],
+    [foodLogSubmitting, foodToLog, handleApiError, showToast, token],
   );
 
   if (!id) {
@@ -324,13 +327,13 @@ export default function RecipeDetailRoute() {
         onDelete={() => setConfirmDelete(true)}
       />
 
-      {banner ? (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <Text testID="recipe-detail-banner" className="text-muted-foreground text-xs">
-            {banner}
-          </Text>
-        </View>
-      ) : null}
+      {/* A floating toast (the web's own), not a plain line of scroll-flow text. */}
+      <View
+        pointerEvents="none"
+        style={{ position: "absolute", left: 0, right: 0, bottom: 24, alignItems: "center" }}
+      >
+        <Toast toast={toast} testID="recipe-detail-toast" />
+      </View>
 
       {/* Log the saved food (the web's FoodLogSheet). */}
       <SavedFoodLogSheet

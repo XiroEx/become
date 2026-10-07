@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
-import { ChevronDown, ChevronUp, RefreshCw, Sparkles, Wand2, X } from "lucide-react-native";
+import { ActivityIndicator, PanResponder, Pressable, ScrollView, View } from "react-native";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Dumbbell,
+  RefreshCw,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
@@ -32,7 +41,7 @@ import {
   type GeneratedSession,
 } from "@/lib/programs/generate";
 import {
-  quickSessionOverviewHref,
+  quickSessionLiveHref,
   stashQuickSession,
 } from "@/lib/quickSession/store";
 import { CustomProgramResponseSchema, apiFetch } from "@become/api-client";
@@ -97,8 +106,8 @@ export interface GenerateSheetProps {
  *   own words, never the sheet.
  * - Save as program reads `canCreate("custom-programs")`, not `allowed`,
  *   and bails (no lock, no counter, no sheet) when `enforced` is false.
- * - A generated session starts through the quick-session overview:
- *   stash with `needsName: true`, push `quickSessionOverviewHref(id)`.
+ * - A generated session starts Live, the way the web's `startSession` does
+ *   (NP-295): stash with `needsName: true`, push `quickSessionLiveHref(id)`.
  * - Consent is checked on the server before any charge: a consent refusal
  *   opens the consent prompt (NP-046) and nothing else, and declining
  *   leaves the standard generator working.
@@ -107,7 +116,7 @@ export interface GenerateSheetProps {
  * - Post once per member action and never retry the POST.
  */
 export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: GenerateSheetProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -399,7 +408,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
         { needsName: true },
       );
       onClose();
-      router.push(quickSessionOverviewHref(id) as never);
+      router.push(quickSessionLiveHref(id) as never);
     } finally {
       setStarting(false);
     }
@@ -459,19 +468,6 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
     router,
   ]);
 
-  const adjust = useCallback(
-    (
-      value: number,
-      delta: number,
-      min: number,
-      max: number,
-      set: (n: number) => void,
-    ) => {
-      set(Math.max(min, Math.min(max, value + delta)));
-    },
-    [],
-  );
-
   return (
     <BottomSheet
       visible={visible}
@@ -480,6 +476,34 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
       testID={testID}
       accessibilityLabel="Generate a workout"
       sheetStyle={{ maxHeight: "90%" }}
+      // The web header is a purple wand-icon badge plus a ✕ close button
+      // beside the title (NP-295); the sheet had neither.
+      headerLeading={
+        <View
+          testID={`${testID}-header-icon`}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 12,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: tint("mindset", 0.1),
+          }}
+        >
+          <Wand2 size={18} color={colors.mindset} />
+        </View>
+      }
+      headerTrailing={
+        <Pressable
+          testID={`${testID}-close-button`}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={onClose}
+          style={[minTouchTarget, { width: 36, height: 36, alignItems: "center", justifyContent: "center" }]}
+        >
+          <X size={18} color={colors["muted-foreground"]} />
+        </Pressable>
+      }
     >
       <ScrollView
         testID={`${testID}-scroll`}
@@ -517,8 +541,10 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                 ]}
               >
                 {tab === "session" ? (
-                  <Wand2 size={16} color={selected ? colors["primary-foreground"] : colors.foreground} />
-                ) : null}
+                  <Dumbbell size={16} color={selected ? colors["primary-foreground"] : colors.foreground} />
+                ) : (
+                  <Calendar size={16} color={selected ? colors["primary-foreground"] : colors.foreground} />
+                )}
                 <Text
                   style={{
                     fontSize: 14,
@@ -560,8 +586,8 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                       paddingVertical: 8,
                       justifyContent: "center",
                       borderWidth: 1,
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? colors.primary : colors.card,
+                      borderColor: selected ? colors.mindset : colors.border,
+                      backgroundColor: selected ? colors.mindset : colors.card,
                     },
                   ]}
                 >
@@ -604,7 +630,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                       justifyContent: "center",
                       borderRadius: 12,
                       paddingVertical: 10,
-                      backgroundColor: selected ? colors.primary : colors.muted,
+                      backgroundColor: selected ? colors.mindset : colors.muted,
                     },
                   ]}
                 >
@@ -653,8 +679,8 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                       paddingVertical: 8,
                       justifyContent: "center",
                       borderWidth: 1,
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? colors.primary : colors.card,
+                      borderColor: selected ? colors.mindset : colors.border,
+                      backgroundColor: selected ? colors.mindset : colors.card,
                     },
                   ]}
                 >
@@ -676,16 +702,13 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
         {/* Tab-specific controls */}
         {activeTab === "session" ? (
           <View style={{ gap: 16 }}>
-            <StepperRow
+            <SliderRow
               testID={`${testID}-exercise-count`}
               label="Exercises"
               value={exerciseCount}
-              onDecrement={() =>
-                adjust(exerciseCount, -1, GENERATE_SESSION_EXERCISES.min, GENERATE_SESSION_EXERCISES.max, setExerciseCount)
-              }
-              onIncrement={() =>
-                adjust(exerciseCount, 1, GENERATE_SESSION_EXERCISES.min, GENERATE_SESSION_EXERCISES.max, setExerciseCount)
-              }
+              min={GENERATE_SESSION_EXERCISES.min}
+              max={GENERATE_SESSION_EXERCISES.max}
+              onChange={setExerciseCount}
             />
             <View
               style={{
@@ -710,6 +733,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
             </View>
             <Button
               testID={`${testID}-generate-session`}
+              variant="mindset"
               onPress={() => void runGenerateSession()}
               disabled={loading}
               loading={loading}
@@ -782,6 +806,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   <View style={{ flex: 1 }}>
                     <Button
                       testID={`${testID}-session-start`}
+                      variant="mindset"
                       onPress={() => void startSession()}
                       disabled={starting}
                       loading={starting}
@@ -796,53 +821,33 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
           </View>
         ) : (
           <View style={{ gap: 16 }}>
-            <StepperRow
+            <SliderRow
               testID={`${testID}-days-per-week`}
               label="Days per week"
               value={daysPerWeek}
-              onDecrement={() =>
-                adjust(daysPerWeek, -1, GENERATE_PROGRAM_DAYS_PER_WEEK.min, GENERATE_PROGRAM_DAYS_PER_WEEK.max, setDaysPerWeek)
-              }
-              onIncrement={() =>
-                adjust(daysPerWeek, 1, GENERATE_PROGRAM_DAYS_PER_WEEK.min, GENERATE_PROGRAM_DAYS_PER_WEEK.max, setDaysPerWeek)
-              }
+              min={GENERATE_PROGRAM_DAYS_PER_WEEK.min}
+              max={GENERATE_PROGRAM_DAYS_PER_WEEK.max}
+              onChange={setDaysPerWeek}
             />
-            <StepperRow
+            <SliderRow
               testID={`${testID}-weeks`}
               label="Weeks"
               value={weeks}
-              onDecrement={() =>
-                adjust(weeks, -1, GENERATE_PROGRAM_WEEKS.min, GENERATE_PROGRAM_WEEKS.max, setWeeks)
-              }
-              onIncrement={() =>
-                adjust(weeks, 1, GENERATE_PROGRAM_WEEKS.min, GENERATE_PROGRAM_WEEKS.max, setWeeks)
-              }
+              min={GENERATE_PROGRAM_WEEKS.min}
+              max={GENERATE_PROGRAM_WEEKS.max}
+              onChange={setWeeks}
             />
-            <StepperRow
+            <SliderRow
               testID={`${testID}-exercises-per-day`}
               label="Exercises per day"
               value={exercisesPerDay}
-              onDecrement={() =>
-                adjust(
-                  exercisesPerDay,
-                  -1,
-                  GENERATE_PROGRAM_EXERCISES_PER_DAY.min,
-                  GENERATE_PROGRAM_EXERCISES_PER_DAY.max,
-                  setExercisesPerDay,
-                )
-              }
-              onIncrement={() =>
-                adjust(
-                  exercisesPerDay,
-                  1,
-                  GENERATE_PROGRAM_EXERCISES_PER_DAY.min,
-                  GENERATE_PROGRAM_EXERCISES_PER_DAY.max,
-                  setExercisesPerDay,
-                )
-              }
+              min={GENERATE_PROGRAM_EXERCISES_PER_DAY.min}
+              max={GENERATE_PROGRAM_EXERCISES_PER_DAY.max}
+              onChange={setExercisesPerDay}
             />
             <Button
               testID={`${testID}-generate-program`}
+              variant="mindset"
               onPress={() => void runGenerateProgram()}
               disabled={loading}
               loading={loading}
@@ -968,6 +973,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   <View style={{ flex: 1 }}>
                     <Button
                       testID={`${testID}-program-save`}
+                      variant="mindset"
                       onPress={() => void saveProgram()}
                       disabled={saving || saved}
                       loading={saving}
@@ -1065,70 +1071,120 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
   );
 }
 
-function StepperRow({
+/**
+ * NP-295: the web draws `Exercises` / `Days per week` / `Weeks` / `Exercises
+ * per day` as an `<input type="range">` with the value in purple
+ * (`accent-purple-600`); native had − / + steppers instead. No slider
+ * library is in `package.json` (and NP-040 bans adding an Expo-hosted
+ * service, not a plain gesture — but a new native module still means a new
+ * store build before it can ship), so this is a plain `PanResponder` drag
+ * over a track, sized to the step's own min/max/step, with VoiceOver's
+ * `adjustable` role carrying the same increment the web's arrow keys bump by
+ * (`step`, default 1) through `accessibilityActions`.
+ */
+function SliderRow({
   testID,
   label,
   value,
-  onDecrement,
-  onIncrement,
+  min,
+  max,
+  step = 1,
+  onChange,
 }: {
   testID: string;
   label: string;
   value: number;
-  onDecrement: () => void;
-  onIncrement: () => void;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
 }) {
   const { colors } = useThemeTokens();
+  const [trackWidth, setTrackWidth] = useState(0);
+
+  const clampToStep = useCallback(
+    (raw: number) => {
+      const stepped = Math.round((raw - min) / step) * step + min;
+      return Math.max(min, Math.min(max, stepped));
+    },
+    [min, max, step],
+  );
+
+  const valueFromLocationX = useCallback(
+    (locationX: number) => {
+      if (trackWidth <= 0) return value;
+      const ratio = Math.max(0, Math.min(1, locationX / trackWidth));
+      return clampToStep(min + ratio * (max - min));
+    },
+    [trackWidth, min, max, clampToStep, value],
+  );
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (evt) => onChange(valueFromLocationX(evt.nativeEvent.locationX)),
+        onPanResponderMove: (evt) => onChange(valueFromLocationX(evt.nativeEvent.locationX)),
+      }),
+    [valueFromLocationX, onChange],
+  );
+
+  const handleAccessibilityAction = useCallback(
+    (event: { nativeEvent: { actionName: string } }) => {
+      if (event.nativeEvent.actionName === "increment") {
+        onChange(Math.min(max, value + step));
+      } else if (event.nativeEvent.actionName === "decrement") {
+        onChange(Math.max(min, value - step));
+      }
+    },
+    [value, min, max, step, onChange],
+  );
+
+  const ratio = max > min ? (value - min) / (max - min) : 0;
+  const fillPercent = `${Math.round(ratio * 100)}%` as const;
+
   return (
-    <View
-      testID={testID}
-      style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-    >
-      <Text className="text-muted-foreground text-xs font-semibold uppercase">{label}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable
-          testID={`${testID}-decrement`}
-          accessibilityRole="button"
-          accessibilityLabel={`Decrease ${label}`}
-          onPress={onDecrement}
-          style={[
-            minTouchTarget,
-            {
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text className="text-foreground text-lg font-bold">−</Text>
-        </Pressable>
-        <Text testID={`${testID}-value`} className="text-foreground text-base font-bold" style={{ minWidth: 24, textAlign: "center" }}>
+    <View testID={testID} style={{ gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" }}>
+        <Text className="text-muted-foreground text-xs font-semibold uppercase">{label}</Text>
+        <Text testID={`${testID}-value`} className="text-mindset text-sm font-bold">
           {value}
         </Text>
-        <Pressable
-          testID={`${testID}-increment`}
-          accessibilityRole="button"
-          accessibilityLabel={`Increase ${label}`}
-          onPress={onIncrement}
-          style={[
-            minTouchTarget,
-            {
-              width: 44,
-              height: 44,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 999,
-              borderWidth: 1,
-              borderColor: colors.border,
-            },
-          ]}
+      </View>
+      <View
+        testID={`${testID}-track`}
+        accessibilityRole="adjustable"
+        accessibilityLabel={label}
+        accessibilityValue={{ min, max, now: value }}
+        accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+        onAccessibilityAction={handleAccessibilityAction}
+        onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+        style={[minTouchTarget, { justifyContent: "center" }]}
+        {...panResponder.panHandlers}
+      >
+        <View
+          style={{
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: colors.border,
+            overflow: "hidden",
+          }}
         >
-          <Text className="text-foreground text-lg font-bold">+</Text>
-        </Pressable>
+          <View className="bg-mindset" style={{ height: 4, width: fillPercent }} />
+        </View>
+        <View
+          testID={`${testID}-thumb`}
+          className="bg-mindset"
+          style={{
+            position: "absolute",
+            left: fillPercent,
+            marginLeft: -10,
+            width: 20,
+            height: 20,
+            borderRadius: 10,
+          }}
+        />
       </View>
     </View>
   );

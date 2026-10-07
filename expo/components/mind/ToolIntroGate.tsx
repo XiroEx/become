@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, View } from "react-native";
-import { Lock } from "lucide-react-native";
+import { ActivityIndicator, View } from "react-native";
+import { useRouter } from "expo-router";
 import {
   apiFetch,
   MindIntroduceResponseSchema,
@@ -17,7 +17,12 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { tzOffsetMinutes } from "@/lib/time/localDay";
 
-type GateState = "loading" | "locked" | "intro" | "ready";
+// NP-299: no "locked" state here — on purpose. The web's equivalent
+// (`webapp/components/mind/ToolIntroGate.tsx`) has no locked UI either: it
+// just `router.replace('/dashboard/mind')`s and never renders. Native used to
+// show a dedicated "<Tool> is Locked / Unlocks in Chapter N / Back to Mind"
+// screen instead of bouncing back like every other locked-tool deep link.
+type GateState = "loading" | "intro" | "ready";
 
 export default function ToolIntroGate({
   system,
@@ -30,8 +35,8 @@ export default function ToolIntroGate({
 }) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+  const router = useRouter();
   const [state, setState] = useState<GateState>("loading");
-  const [chapterNeeded, setChapterNeeded] = useState<number>(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,9 +57,12 @@ export default function ToolIntroGate({
           p.unlockedSystems ?? getUnlockedSystems(chapter);
 
         if (!unlocked.includes(system)) {
-          const sysInfo = SYSTEM_INFO[system];
-          setChapterNeeded(sysInfo?.chapter ?? 1);
-          setState("locked");
+          // NP-299: bounce to the Mind hub like web's
+          // `router.replace('/dashboard/mind')` — never a dedicated locked
+          // page. State stays "loading" so the skeleton keeps showing for the
+          // instant it takes the navigation to land, same as web leaving its
+          // GateState at "loading" after the replace.
+          router.replace("/(tabs)/mind" as any);
           return;
         }
 
@@ -72,6 +80,12 @@ export default function ToolIntroGate({
     return () => {
       cancelled = true;
     };
+    // `router` is deliberately excluded: `useRouter()` returns a fresh object
+    // every render in this codebase's test doubles (and isn't guaranteed
+    // referentially stable from real expo-router either), so including it
+    // would re-run this fetch — and jump a mid-intro user back to "loading"
+    // — on every render instead of once per `system`/`token` change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [system, token]);
 
   if (state === "loading") {
@@ -82,40 +96,6 @@ export default function ToolIntroGate({
       >
         <ActivityIndicator size="large" color={colors.primary} />
         <Text className="text-sm text-muted-foreground">Loading…</Text>
-      </View>
-    );
-  }
-
-  if (state === "locked") {
-    const sysInfo = SYSTEM_INFO[system];
-    const label = sysInfo?.label ?? system;
-    return (
-      <View
-        testID="mind-system-locked"
-        className="flex-1 items-center justify-center p-8 gap-4"
-      >
-        <View className="h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-          <Lock size={32} color={colors["muted-foreground"]} />
-        </View>
-        <Text className="text-xl font-bold text-foreground text-center">
-          {label} is Locked
-        </Text>
-        <Text className="text-sm text-muted-foreground text-center max-w-xs">
-          Unlocks in Chapter {chapterNeeded}. Keep putting in reps to open this
-          tool.
-        </Text>
-        {onExit ? (
-          <Pressable
-            testID="mind-locked-back"
-            accessibilityRole="button"
-            onPress={onExit}
-            className="mt-4 rounded-xl bg-muted px-6 py-3"
-          >
-            <Text className="text-sm font-semibold text-foreground">
-              Back to Mind
-            </Text>
-          </Pressable>
-        ) : null}
       </View>
     );
   }

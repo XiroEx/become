@@ -220,6 +220,11 @@ interface MomentumData {
 
 export default function MissionDashboard() {
   const { colors } = useThemeTokens();
+  // NP-299: this dashboard's icons are blue on the web (hero, the "Define
+  // your mission" compass, mission-protocol toolkit cards, the adaptive
+  // sparkle), never the generic accent (amber) — see `mindAccentColor`'s own
+  // comment.
+  const accent = mindAccentColor("mission");
   const { token } = useAuth();
   const [mission, setMission] = useState<MissionData | null>(null);
   const [momentum, setMomentum] = useState<MomentumData>({
@@ -472,7 +477,7 @@ export default function MissionDashboard() {
       <ProtocolUnlockModal
         unlocked={justUnlocked}
         onDismiss={dismissUnlock}
-        accentColor={colors.accent}
+        accentColor={accent}
       />
 
       <SystemHero
@@ -485,7 +490,7 @@ export default function MissionDashboard() {
         statLabel="on mission"
         colorClass="text-blue-500"
         bgClass="border-blue-500/30 bg-blue-500/10"
-        iconColor={colors.accent}
+        iconColor={accent}
       />
 
       {/* Your Mission */}
@@ -573,7 +578,7 @@ export default function MissionDashboard() {
               onPress={openEditor}
               className="h-8 w-8 items-center justify-center rounded-full"
             >
-              <Pencil size={16} color={colors.accent} />
+              <Pencil size={16} color={accent} />
             </Pressable>
           </View>
           <Text
@@ -655,7 +660,7 @@ export default function MissionDashboard() {
           }
           className="rounded-2xl border border-dashed border-blue-500/40 p-5 items-center justify-center bg-card active:opacity-80"
         >
-          <Compass size={28} color={colors.accent} />
+          <Compass size={28} color={accent} />
           <Text className="mt-2 text-sm font-bold text-foreground">
             Define your mission
           </Text>
@@ -677,6 +682,7 @@ export default function MissionDashboard() {
         }
         colorClass="text-blue-500"
         bgClass="border-blue-500/30 bg-blue-500/10"
+        iconColor={accent}
         subtitle="Pointed at your purpose and where you’re actually stuck."
       />
 
@@ -693,7 +699,7 @@ export default function MissionDashboard() {
               title={p.title}
               blurb={p.blurb}
               colorClass="text-blue-500"
-              iconColor={colors.accent}
+              iconColor={accent}
               locked={i >= 1 + (reps ?? 0)}
               lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${
                 i - (reps ?? 0) === 1 ? "" : "s"

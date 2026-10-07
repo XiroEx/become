@@ -41,6 +41,12 @@ export interface EvidencePhotoPickerProps {
   uploadImpl?: (image: UploadableImage) => Promise<UploadResult>;
   /** Thumbnail renderer. Defaults to `AuthedImage` (per-member blob URLs need the session). */
   thumbImpl?: (url: string, index: number) => ReactNode;
+  /**
+   * Label on the library button. Defaults to "Choose photo" (`FoodReportsSheet`'s
+   * second-chance evidence flow); `FlagFoodSheet` passes "Upload photo" to match
+   * the web's `Take photo` / `Upload photo` pair on its first-report sheet (NP-275).
+   */
+  choosePhotoLabel?: string;
   testID?: string;
 }
 
@@ -53,6 +59,7 @@ export function EvidencePhotoPicker({
   captureImpl = captureImage,
   uploadImpl = uploadFoodFlagImage,
   thumbImpl,
+  choosePhotoLabel = "Choose photo",
   testID = "evidence-photos",
 }: EvidencePhotoPickerProps) {
   const { colors } = useThemeTokens();
@@ -231,7 +238,7 @@ export function EvidencePhotoPicker({
           >
             <ImagePlus size={16} color={colors.foreground} />
             <Text className="text-foreground text-xs font-semibold">
-              Choose photo
+              {choosePhotoLabel}
             </Text>
           </Pressable>
         </View>

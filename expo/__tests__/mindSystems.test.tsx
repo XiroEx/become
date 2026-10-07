@@ -3,11 +3,12 @@ import React from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 let mockParams: Record<string, string> = {};
+const mockReplace = jest.fn();
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => mockParams,
   useRouter: () => ({
     push: jest.fn(),
-    replace: jest.fn(),
+    replace: mockReplace,
     back: jest.fn(),
   }),
 }));
@@ -73,6 +74,7 @@ describe("Mind System Framework (NP-151)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = {};
+    mockReplace.mockReset();
   });
 
   describe("Utility: rotation.ts", () => {
@@ -168,7 +170,7 @@ describe("Mind System Framework (NP-151)", () => {
   });
 
   describe("Chapter Gating in ToolIntroGate", () => {
-    it("displays locked state and never an error when user chapter is below system unlock", async () => {
+    it("bounces back to the Mind hub — never a dedicated locked page — when user chapter is below system unlock", async () => {
       mockedApiFetch.mockImplementation(async (path: string) => {
         if (path === "/api/mind/progress") {
           return {
@@ -180,17 +182,20 @@ describe("Mind System Framework (NP-151)", () => {
         return {};
       });
 
-      // Discipline unlocks in chapter 3, user is in chapter 1
-      const { getByTestId, queryByTestId } = render(
+      // Discipline unlocks in chapter 3, user is in chapter 1 — NP-299: this
+      // must redirect like the web's `router.replace('/dashboard/mind')`,
+      // not render a "Discipline is Locked" screen.
+      const { queryByTestId } = render(
         <ToolIntroGate system="discipline">
           <Text testID="unlocked-content">Content</Text>
         </ToolIntroGate>,
       );
 
       await waitFor(() => {
-        expect(getByTestId("mind-system-locked")).toBeTruthy();
+        expect(mockReplace).toHaveBeenCalledWith("/(tabs)/mind");
       });
 
+      expect(queryByTestId("mind-system-locked")).toBeNull();
       expect(queryByTestId("unlocked-content")).toBeNull();
     });
   });

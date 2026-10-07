@@ -258,6 +258,52 @@ describe("<FlagFoodSheet /> (NP-174)", () => {
       expect.objectContaining({ calories: 195 }),
     );
   });
+
+  // NP-275: native printed "Something look wrong?" TWICE — once as the
+  // sheet's own title, once again inline right under it — while the web has
+  // one header (title + warning icon) and an explicit X. The X, the web's
+  // Cancel + "Report it" footer and its copy were all missing too.
+  it("prints the header once, with an X close, and the web's Cancel + Report it footer (NP-275)", () => {
+    const onClose = jest.fn();
+    const { getByTestId, getByText, queryAllByText } = render(
+      <FlagFoodSheet {...baseProps} onClose={onClose} />,
+    );
+
+    // One header, not two.
+    expect(queryAllByText("Something look wrong?")).toHaveLength(1);
+
+    // The explicit X closes the sheet, same as the backdrop tap.
+    fireEvent.press(getByTestId("flag-food-close"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    // Cancel + an amber "Report it", not a single "Send report".
+    expect(getByTestId("flag-food-cancel")).toBeTruthy();
+    expect(getByText("Report it")).toBeTruthy();
+
+    // The web's copy, byte for byte.
+    expect(
+      getByTestId("flag-food-note").props.placeholder,
+    ).toBe("e.g. my label says 45 cal per container");
+    expect(getByText("Anything else? (optional)")).toBeTruthy();
+  });
+
+  it("pressing Cancel closes the sheet without filing a report (NP-275)", async () => {
+    const onClose = jest.fn();
+    const { getByTestId } = render(
+      <FlagFoodSheet {...baseProps} onClose={onClose} />,
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("flag-food-cancel"));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it("the evidence picker reads 'Upload photo' here, not the default 'Choose photo' (NP-275)", () => {
+    const { getByText, queryByText } = render(<FlagFoodSheet {...baseProps} />);
+    expect(getByText("Upload photo")).toBeTruthy();
+    expect(queryByText("Choose photo")).toBeNull();
+  });
 });
 
 describe("<FoodReportsSheet /> + <FoodReportsBadge /> (NP-174)", () => {
