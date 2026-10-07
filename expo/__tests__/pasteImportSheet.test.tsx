@@ -13,8 +13,10 @@
 //     again button that returns to the paste field;
 //   • `ok` closes the sheet, same as `consent`.
 
+import { KeyboardAvoidingView, Platform } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { PasteImportSheet, type ImportOutcome } from "@/components/workout/PasteImportSheet";
+import type { PickedImportFile } from "@/lib/programs/importProgramFile";
 
 const TEST_ID = "paste-import";
 
@@ -162,5 +164,84 @@ describe("ok closes the sheet", () => {
     fireEvent.press(getByTestId(`${TEST_ID}-submit`));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+});
+
+// NP-279 — the paste field and submit button stay reachable above the
+// keyboard: this sheet was missed by NP-319's own Android pass even though it
+// lives inside the same `BottomSheet` `Modal` every sheet on that list does.
+describe("NP-279: the paste step is wrapped in a real KeyboardAvoidingView", () => {
+  it("gives Android a real behavior ('height'), not undefined, like every other sheet on NP-319's list", () => {
+    const { UNSAFE_getByType } = renderSheet(jest.fn());
+    const kav = UNSAFE_getByType(KeyboardAvoidingView);
+    expect(kav.props.behavior).toBe(Platform.OS === "ios" ? "padding" : "height");
+    expect(kav.props.behavior).not.toBeUndefined();
+  });
+});
+
+// NP-279 — the session import gets the web's second door: an icon-only
+// "Upload a file" button beside Import session, reusing the same
+// `pickProgramTextFile` the program chooser's own upload button uses.
+describe("NP-279: the file door (session only)", () => {
+  function renderWithPickFile(pickFile: () => Promise<PickedImportFile>, kind: "session" | "program" = "session") {
+    const onSubmit = jest.fn();
+    const onClose = jest.fn();
+    const utils = render(
+      <PasteImportSheet
+        visible
+        kind={kind}
+        onSubmit={onSubmit}
+        onClose={onClose}
+        pickFile={pickFile}
+        testID={TEST_ID}
+      />,
+    );
+    return { ...utils, onSubmit, onClose };
+  }
+
+  it("renders the upload button for a session import", () => {
+    const { getByTestId } = renderWithPickFile(jest.fn());
+    expect(getByTestId(`${TEST_ID}-upload`)).toBeTruthy();
+  });
+
+  it("does NOT render the upload button for a program import — its own chooser already has one", () => {
+    const { queryByTestId } = renderWithPickFile(jest.fn(), "program");
+    expect(queryByTestId(`${TEST_ID}-upload`)).toBeNull();
+  });
+
+  it("a cancelled picker is a no-op — stays on the paste step, never calls onSubmit", async () => {
+    const pickFile = jest.fn().mockResolvedValue({ status: "cancelled" });
+    const { getByTestId, onSubmit } = renderWithPickFile(pickFile);
+    fireEvent.press(getByTestId(`${TEST_ID}-upload`));
+    await waitFor(() => expect(pickFile).toHaveBeenCalledTimes(1));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(getByTestId(`${TEST_ID}-text`)).toBeTruthy();
+  });
+
+  it("a picker error (too large / wrong type / unreadable) renders the picker's own message with Try again", async () => {
+    const pickFile = jest.fn().mockResolvedValue({
+      status: "error",
+      message: "That file is too large. Try pasting the text instead.",
+    });
+    const { getByTestId } = renderWithPickFile(pickFile);
+    fireEvent.press(getByTestId(`${TEST_ID}-upload`));
+    await waitFor(() => expect(getByTestId(`${TEST_ID}-error`)).toBeTruthy());
+    expect(getByTestId(`${TEST_ID}-error-message`).props.children).toBe(
+      "That file is too large. Try pasting the text instead.",
+    );
+  });
+
+  it("a successfully read file runs the same onSubmit the paste field uses, with the file's text", async () => {
+    const pickFile = jest.fn().mockResolvedValue({
+      status: "ok",
+      text: "Bench Press 4x8",
+      name: "workout.txt",
+    });
+    const { getByTestId, onSubmit, onClose } = renderWithPickFile(pickFile);
+    onSubmit.mockResolvedValue({ status: "ok" });
+
+    fireEvent.press(getByTestId(`${TEST_ID}-upload`));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith("Bench Press 4x8");
   });
 });
