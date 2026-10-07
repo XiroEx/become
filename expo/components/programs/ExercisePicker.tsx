@@ -34,6 +34,12 @@ export interface ExercisePickerSelection {
 export interface ExercisePickerProps {
   /** Slugs already in this workout — picked rows are hidden, not disabled. */
   excludeSlugs?: readonly string[];
+  /**
+   * The search box opens on this (NP-281's Quick Add chips: "+ Bench Press"
+   * opens the picker already searching for Bench Press, so the row that lands
+   * still carries a catalogue `exerciseSlug` rather than a typed name).
+   */
+  initialQuery?: string;
   onSelect: (selection: ExercisePickerSelection) => void;
   onClose: () => void;
   testID?: string;
@@ -72,13 +78,17 @@ const EMPTY_RESULTS: ExerciseSearchResult[] = [];
  */
 export function ExercisePicker({
   excludeSlugs = [],
+  initialQuery = "",
   onSelect,
   onClose,
   testID = "exercise-picker",
 }: ExercisePickerProps) {
   const { colors } = useThemeTokens();
   const { token } = useAuth();
-  const [query, setQuery] = useState("");
+  // Seeded once, from the prop: the picker is mounted fresh per opening (the
+  // caller unmounts it on select/close), so a later prop change is not a
+  // thing that happens.
+  const [query, setQuery] = useState(initialQuery);
   const [customExercises, setCustomExercises] = useState<CustomExercise[]>([]);
   const [customFailed, setCustomFailed] = useState(false);
   const [results, setResults] = useState<ExerciseSearchResult[]>([]);

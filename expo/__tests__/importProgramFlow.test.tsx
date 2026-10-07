@@ -201,20 +201,33 @@ function importedProgramFixture(): ImportedProgram {
   };
 }
 
+/**
+ * NP-281 put the web's chooser in front of the builder and gave the import
+ * the web's own two doors, so the paste field is two taps in: "Import a
+ * program" → "Paste text".
+ */
 async function openImportAndSubmit(
   screen: ReturnType<typeof render>,
   text = "Bench Press 4x8\nLat Pulldown 3x10-12",
 ) {
   fireEvent.press(screen.getByTestId("programming-new-entry-import"));
   await waitFor(() =>
-    expect(screen.getByTestId("programming-new-import-sheet-text")).toBeTruthy(),
+    expect(screen.getByTestId("programming-new-import-paste")).toBeTruthy(),
+  );
+  fireEvent.press(screen.getByTestId("programming-new-import-paste"));
+  await waitFor(() =>
+    expect(
+      screen.getByTestId("programming-new-import-paste-sheet-text"),
+    ).toBeTruthy(),
   );
   fireEvent.changeText(
-    screen.getByTestId("programming-new-import-sheet-text"),
+    screen.getByTestId("programming-new-import-paste-sheet-text"),
     text,
   );
   await act(async () => {
-    fireEvent.press(screen.getByTestId("programming-new-import-sheet-submit"));
+    fireEvent.press(
+      screen.getByTestId("programming-new-import-paste-sheet-submit"),
+    );
   });
 }
 
@@ -241,26 +254,30 @@ describe("(id: e5ced3ba) Importing pasted program text opens the builder pre-fil
       "Bench Press 4x8\nLat Pulldown 3x10-12",
     );
 
-    // The sheet closed itself (an `ok` outcome) and the builder underneath
-    // is pre-filled — nothing has been posted to the server.
+    // The sheet closed itself (an `ok` outcome) and the builder opened
+    // pre-filled — nothing has been posted to the server.
     await waitFor(() =>
       expect(screen.getByTestId("program-builder-name").props.value).toBe(
         "Pasted 5-Day Split",
       ),
     );
-    expect(screen.queryByTestId("programming-new-import-sheet-text")).toBeNull();
+    expect(
+      screen.queryByTestId("programming-new-import-paste-sheet-text"),
+    ).toBeNull();
     expect(mockApiFetch).not.toHaveBeenCalledWith(
       "/api/programs/custom",
       expect.anything(),
       expect.objectContaining({ method: "POST" }),
     );
 
-    // The exercises rode along too — not just the headline fields.
+    // The exercises rode along too — not just the headline fields. The
+    // sessions are Day tabs (NP-281), so the second one is one tap away.
     fireEvent.press(screen.getByTestId("program-builder-step-phases"));
     expect(
       screen.getByTestId("program-builder-phase-0-workout-0-title").props
         .value,
     ).toBe("Upper");
+    fireEvent.press(screen.getByTestId("program-builder-phase-0-day-1"));
     expect(
       screen.getByTestId("program-builder-phase-0-workout-1-title").props
         .value,
@@ -284,15 +301,24 @@ describe("(id: e5ced3bb) A stale scratch draft never overrides the import", () =
       program: importedProgramFixture(),
     });
 
-    const screen = render(<NewProgramRoute />);
-    // Before importing anything, today's scratch behaviour restores the
-    // stale draft — this is the baseline the import has to beat.
+    // THE BASELINE the import has to beat: scratch still restores that
+    // draft. Taken on its own render and then thrown away WITHOUT cancelling
+    // (Cancel is what discards a draft since NP-281), so the draft is still
+    // on disk when the import runs below.
+    const baseline = render(<NewProgramRoute />);
     await waitFor(() =>
-      expect(screen.getByTestId("program-builder-name").props.value).toBe(
+      expect(baseline.getByTestId("programming-new-entry-scratch")).toBeTruthy(),
+    );
+    fireEvent.press(baseline.getByTestId("programming-new-entry-scratch"));
+    await waitFor(() =>
+      expect(baseline.getByTestId("program-builder-name").props.value).toBe(
         "Stale abandoned split",
       ),
     );
+    baseline.unmount();
+    expect(await AsyncStorage.getItem(PROGRAM_CREATE_DRAFT_KEY)).not.toBeNull();
 
+    const screen = render(<NewProgramRoute />);
     await openImportAndSubmit(screen);
 
     // The import won, not the stale draft, and the stale draft is gone from
@@ -346,11 +372,15 @@ describe("a consent outcome leaves the member on the choice screen", () => {
     await openImportAndSubmit(screen);
 
     expect(mockImportProgramFromText).toHaveBeenCalledTimes(1);
-    // The sheet is gone, and the member is right back on this same screen:
-    // the entry choice and the (untouched, still-blank) scratch builder.
-    expect(screen.queryByTestId("programming-new-import-sheet-text")).toBeNull();
-    expect(screen.getByTestId("programming-new-entry-choice")).toBeTruthy();
-    expect(screen.getByTestId("program-builder-name").props.value).toBe("");
+    // The sheet is gone and the member is right back on the import's own two
+    // doors (the consent prompt is over the top of them), with nothing saved
+    // and nowhere navigated.
+    expect(
+      screen.queryByTestId("programming-new-import-paste-sheet-text"),
+    ).toBeNull();
+    expect(screen.getByTestId("programming-new-import-paste")).toBeTruthy();
+    expect(screen.getByTestId("programming-new-import-upload")).toBeTruthy();
+    expect(screen.queryByTestId("program-builder-name")).toBeNull();
     expect(mockPush).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });

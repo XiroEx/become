@@ -16,10 +16,11 @@
  * this sheet sees it (setting the handoff / navigating), and the outcome
  * returned from `onSubmit` is used here only to decide what to show.
  *
- * File upload (`expo-document-picker`) is NOT wired up: it is not yet a
- * dependency of `expo/`, and the card says paste-only in that case. Paste is
- * the only way in; a note under the field says so rather than silently
- * omitting the "Choose a file" button the web has.
+ * File upload: the PROGRAM import has it as of NP-281 — not through
+ * `expo-document-picker` but through `expo-file-system`'s own
+ * `File.pickFileAsync` (`lib/programs/importProgramFile.ts`), offered as the
+ * chooser's second door rather than a button inside this sheet. A SESSION
+ * import is still paste-only and still says so under the field.
  *
  * RULES THAT TRAVEL (from NP-242's own docblock):
  *   • `empty` / `error` render the outcome's own message, with Try again
@@ -76,8 +77,12 @@ const PLACEHOLDER = "Bench Press 4x8\nOverhead Press 3x10\nLat Pulldown 3x12\n..
 
 // NP-242's `rate_limited` carries no message of its own (a deliberately
 // upsell-free refusal) — the sheet supplies the plain try-again-later line.
-const RATE_LIMITED_MESSAGE = "You've used today's import limit. Try again later.";
-const UNEXPECTED_ERROR_MESSAGE = "Couldn't reach the import AI. Try again in a minute.";
+// Exported since NP-281: the program import's FILE door renders the same two
+// lines, and two copies of a sentence drift.
+export const RATE_LIMITED_MESSAGE =
+  "You've used today's import limit. Try again later.";
+export const UNEXPECTED_ERROR_MESSAGE =
+  "Couldn't reach the import AI. Try again in a minute.";
 
 type Phase = { step: "paste" } | { step: "loading" } | { step: "error"; message: string };
 
@@ -160,14 +165,18 @@ export function PasteImportSheet({
             autoCorrect={false}
             accessibilityHint="Paste the exercises, one per line"
           />
-          {/* expo-document-picker is not yet a dependency — paste only for
-              now (see the module docblock). */}
-          <Text
-            testID={`${testID}-paste-only-note`}
-            className="text-muted-foreground text-xs"
-          >
-            Paste only for now — file upload is coming in a later update.
-          </Text>
+          {/* The PROGRAM import grew its own file door in NP-281 (the
+              chooser's "Upload a file", `lib/programs/importProgramFile.ts`),
+              so the note would now be wrong there. A session import is still
+              paste-only and still says so. */}
+          {kind === "session" ? (
+            <Text
+              testID={`${testID}-paste-only-note`}
+              className="text-muted-foreground text-xs"
+            >
+              Paste only for now — file upload is coming in a later update.
+            </Text>
+          ) : null}
           <Button
             testID={`${testID}-submit`}
             accessibilityLabel={submitLabel}

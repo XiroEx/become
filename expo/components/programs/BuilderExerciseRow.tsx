@@ -15,30 +15,46 @@ import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   BUILDER_EXERCISE_ROLES,
+  BUILDER_EXERCISE_TYPES,
   BUILDER_GROUP_LABELS,
   BUILDER_GROUP_TYPES,
   BUILDER_PERCENT_1RM_MAX,
   BUILDER_PERCENT_1RM_MIN,
+  BUILDER_QUICK_ADD_EXERCISES,
   BUILDER_RPE_MAX,
   BUILDER_RPE_MIN,
   builderExerciseName,
+  builderExerciseTypeLabel,
   builderGroupAt,
   parseBuilderGroupRounds,
   parseBuilderPercentOf1RM,
   parseBuilderRpe,
   parseBuilderSets,
+  quickAddDefaults,
   validateBuilderExercise,
   type BuilderExercise,
   type BuilderExerciseRole,
   type BuilderGroupType,
+  type BuilderQuickAdd,
 } from "@/lib/programs/programBuilder";
 import {
   ExercisePicker,
   type ExercisePickerSelection,
 } from "@/components/programs/ExercisePicker";
+import { ExerciseVariationChips } from "@/components/programs/ExerciseVariationChips";
+
+/**
+ * A control that must stay SMALL so the name column survives (NP-280's
+ * lesson, NP-281's bug): a 28pt box with the slop that still makes it a legal
+ * 44pt target. Six 44pt-wide controls in one row left the name about one
+ * character wide, which is how "Barbell Bench Press" came out as
+ * `Barbel` / `l` / `Bench` / `Press` on the edit screen.
+ */
+const COMPACT_CONTROL = { width: 28, height: 28 } as const;
+const COMPACT_HIT_SLOP = hitSlopToMinTarget(28, 28);
 
 export interface BuilderExerciseRowProps {
   exercise: BuilderExercise;
@@ -82,6 +98,13 @@ const ROLE_LABELS: Record<BuilderExerciseRole, string> = {
  * to `react-native-draggable-flatlist`) and the up/down buttons (which call
  * `onMove`). Grouping arrives as the Combine checkbox (`onToggleSelect`):
  * the parent collects the picks and stamps the web's own group fields.
+ *
+ * NP-281 brought the row the rest of the web's card — the `#1` index, the
+ * type chip and the five Type chips behind it (which write `category`), the
+ * `Exercise Name` field, `PICK A VARIATION` and the web's `Additional Notes`
+ * wording — and fixed the squeeze: the header is two lines with every control
+ * compact, because six 44pt controls in one row left "Barbell Bench Press"
+ * wrapping a few letters per line on the edit screen.
  */
 export function BuilderExerciseRow({
   exercise,
@@ -143,14 +166,13 @@ export function BuilderExerciseRow({
       className="border border-border rounded-xl p-3"
       style={{ gap: 8, opacity: dragging ? 0.7 : 1 }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-        }}
-      >
+      {/* THE ROW HEADER. The web's is `#1 [Strength] Barbell Bench Press` on
+          ONE line because a desktop row is 700pt wide; a phone row is not, so
+          the index and the type chip sit on their own line above the name and
+          every control in the right-hand cluster is 28pt with slop. The name
+          then gets the whole width and, at worst, two lines — never one
+          letter per line. */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         {onDragStart ? (
           <Pressable
             testID={`${testID}-drag-handle`}
@@ -158,16 +180,17 @@ export function BuilderExerciseRow({
             accessibilityLabel={`Reorder ${title}, exercise ${exerciseIndex + 1}. Long press to drag.`}
             onLongPress={onDragStart}
             delayLongPress={100}
+            hitSlop={COMPACT_HIT_SLOP}
             style={[
-              minTouchTarget,
+              COMPACT_CONTROL,
               {
                 alignItems: "center",
                 justifyContent: "center",
-                borderRadius: 12,
+                borderRadius: 8,
               },
             ]}
           >
-            <GripVertical size={18} color={colors["muted-foreground"]} />
+            <GripVertical size={16} color={colors["muted-foreground"]} />
           </Pressable>
         ) : null}
         {onToggleSelect ? (
@@ -181,21 +204,18 @@ export function BuilderExerciseRow({
                 : `Select ${title} to combine into a superset, circuit, or other group`
             }
             onPress={onToggleSelect}
+            hitSlop={COMPACT_HIT_SLOP}
             style={[
-              minTouchTarget,
+              COMPACT_CONTROL,
               {
                 alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 999,
                 borderWidth: 2,
-                borderColor: selectedForGroup
-                  ? colors.primary
-                  : colors.border,
+                borderColor: selectedForGroup ? colors.primary : colors.border,
                 backgroundColor: selectedForGroup
                   ? colors.primary
                   : "transparent",
-                width: 28,
-                height: 28,
               },
             ]}
           >
@@ -206,21 +226,50 @@ export function BuilderExerciseRow({
             ) : null}
           </Pressable>
         ) : null}
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, flexShrink: 1, gap: 2 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 6,
+            }}
+          >
+            <Text
+              testID={`${testID}-index`}
+              className="text-muted-foreground text-xs font-semibold"
+            >
+              {`#${exerciseIndex + 1}`}
+            </Text>
+            <View
+              testID={`${testID}-type-badge`}
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: colors.muted,
+              }}
+            >
+              <Text className="text-muted-foreground text-xs font-semibold">
+                {builderExerciseTypeLabel(exercise.category)}
+              </Text>
+            </View>
+            {groupBadge ? (
+              <Text
+                testID={`${testID}-group-badge`}
+                className="text-mindset text-xs font-semibold"
+              >
+                {groupBadge}
+              </Text>
+            ) : null}
+          </View>
           <Text
             testID={`${testID}-name`}
             className="text-foreground text-sm font-semibold"
+            numberOfLines={2}
           >
             {title}
           </Text>
-          {groupBadge ? (
-            <Text
-              testID={`${testID}-group-badge`}
-              className="text-primary text-xs font-semibold"
-            >
-              {groupBadge}
-            </Text>
-          ) : null}
           {prescriptionSummary ? (
             <Text
               testID={`${testID}-summary`}
@@ -230,88 +279,94 @@ export function BuilderExerciseRow({
             </Text>
           ) : null}
         </View>
-        {onMove ? (
-          <View style={{ flexDirection: "row", gap: 2 }}>
-            <Pressable
-              testID={`${testID}-move-up`}
-              accessibilityRole="button"
-              accessibilityLabel={`Move ${title} up`}
-              accessibilityState={{ disabled: !canMoveUp }}
-              disabled={!canMoveUp}
-              onPress={() => onMove(-1)}
-              style={[
-                minTouchTarget,
-                {
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 12,
-                  backgroundColor: colors.muted,
-                  opacity: canMoveUp ? 1 : 0.4,
-                },
-              ]}
-            >
-              <ArrowUp size={16} color={colors["muted-foreground"]} />
-            </Pressable>
-            <Pressable
-              testID={`${testID}-move-down`}
-              accessibilityRole="button"
-              accessibilityLabel={`Move ${title} down`}
-              accessibilityState={{ disabled: !canMoveDown }}
-              disabled={!canMoveDown}
-              onPress={() => onMove(1)}
-              style={[
-                minTouchTarget,
-                {
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 12,
-                  backgroundColor: colors.muted,
-                  opacity: canMoveDown ? 1 : 0.4,
-                },
-              ]}
-            >
-              <ArrowDown size={16} color={colors["muted-foreground"]} />
-            </Pressable>
-          </View>
-        ) : null}
-        <Pressable
-          testID={`${testID}-toggle`}
-          accessibilityRole="button"
-          accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}, exercise ${exerciseIndex + 1}`}
-          accessibilityState={{ expanded }}
-          onPress={() => setExpanded((prev) => !prev)}
-          style={[
-            minTouchTarget,
-            {
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 12,
-              backgroundColor: colors.muted,
-            },
-          ]}
-        >
-          {expanded ? (
-            <ChevronUp size={18} color={colors["muted-foreground"]} />
-          ) : (
-            <ChevronDown size={18} color={colors["muted-foreground"]} />
-          )}
-        </Pressable>
-        <Pressable
-          testID={`${testID}-remove`}
-          accessibilityRole="button"
-          accessibilityLabel={`Remove ${title} from this workout`}
-          onPress={() => setConfirmRemove(true)}
-          style={[
-            minTouchTarget,
-            {
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 12,
-            },
-          ]}
-        >
-          <Trash2 size={16} color={colors.destructive} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          {onMove ? (
+            <>
+              <Pressable
+                testID={`${testID}-move-up`}
+                accessibilityRole="button"
+                accessibilityLabel={`Move ${title} up`}
+                accessibilityState={{ disabled: !canMoveUp }}
+                disabled={!canMoveUp}
+                onPress={() => onMove(-1)}
+                hitSlop={COMPACT_HIT_SLOP}
+                style={[
+                  COMPACT_CONTROL,
+                  {
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 8,
+                    backgroundColor: colors.muted,
+                    opacity: canMoveUp ? 1 : 0.4,
+                  },
+                ]}
+              >
+                <ArrowUp size={14} color={colors["muted-foreground"]} />
+              </Pressable>
+              <Pressable
+                testID={`${testID}-move-down`}
+                accessibilityRole="button"
+                accessibilityLabel={`Move ${title} down`}
+                accessibilityState={{ disabled: !canMoveDown }}
+                disabled={!canMoveDown}
+                onPress={() => onMove(1)}
+                hitSlop={COMPACT_HIT_SLOP}
+                style={[
+                  COMPACT_CONTROL,
+                  {
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 8,
+                    backgroundColor: colors.muted,
+                    opacity: canMoveDown ? 1 : 0.4,
+                  },
+                ]}
+              >
+                <ArrowDown size={14} color={colors["muted-foreground"]} />
+              </Pressable>
+            </>
+          ) : null}
+          <Pressable
+            testID={`${testID}-toggle`}
+            accessibilityRole="button"
+            accessibilityLabel={`${expanded ? "Collapse" : "Expand"} ${title}, exercise ${exerciseIndex + 1}`}
+            accessibilityState={{ expanded }}
+            onPress={() => setExpanded((prev) => !prev)}
+            hitSlop={COMPACT_HIT_SLOP}
+            style={[
+              COMPACT_CONTROL,
+              {
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 8,
+                backgroundColor: colors.muted,
+              },
+            ]}
+          >
+            {expanded ? (
+              <ChevronUp size={16} color={colors["muted-foreground"]} />
+            ) : (
+              <ChevronDown size={16} color={colors["muted-foreground"]} />
+            )}
+          </Pressable>
+          <Pressable
+            testID={`${testID}-remove`}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${title} from this workout`}
+            onPress={() => setConfirmRemove(true)}
+            hitSlop={COMPACT_HIT_SLOP}
+            style={[
+              COMPACT_CONTROL,
+              {
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 8,
+              },
+            ]}
+          >
+            <Trash2 size={14} color={colors.destructive} />
+          </Pressable>
+        </View>
       </View>
 
       {missingSlug ? (
@@ -327,6 +382,77 @@ export function BuilderExerciseRow({
 
       {expanded ? (
         <View style={{ gap: 12 }}>
+          {/* EXERCISE NAME (the web's `Exercise Name *`). The LINK is the
+              slug the picker handed back and this does not change it: the
+              name is the display copy the program stores alongside it, which
+              is exactly what the web's own field edits (`dehydrateProgram`
+              persists `name` so a rename survives a hydrate cycle). */}
+          <Input
+            testID={`${testID}-name-input`}
+            label="Exercise Name *"
+            placeholder="e.g. Bench Press"
+            value={exercise.name ?? ""}
+            onChangeText={(text) => onChange({ name: text })}
+          />
+
+          {/* TYPE (the web's five chips). The stored field is `category` —
+              see `BUILDER_EXERCISE_TYPES`. */}
+          <View style={{ gap: 6 }}>
+            <Text className="text-foreground text-sm font-medium">Type</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {BUILDER_EXERCISE_TYPES.map((type) => {
+                const selected =
+                  (exercise.category ?? "").trim().toLowerCase() === type.value;
+                return (
+                  <Pressable
+                    key={type.value}
+                    testID={`${testID}-type-${type.value}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`${type.label} exercise`}
+                    onPress={() => onChange({ category: type.value })}
+                    style={[
+                      minTouchTarget,
+                      {
+                        justifyContent: "center",
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                        backgroundColor: selected
+                          ? colors.primary
+                          : colors.muted,
+                      },
+                    ]}
+                  >
+                    <Text
+                      className={
+                        selected
+                          ? "text-primary-foreground text-xs font-semibold"
+                          : "text-muted-foreground text-xs font-semibold"
+                      }
+                    >
+                      {type.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* PICK A VARIATION — the same chips the web surfaces here, from
+              the same `GET /api/exercises/variations`. Renders nothing until
+              the movement actually has siblings. */}
+          <ExerciseVariationChips
+            slug={exercise.exerciseSlug}
+            onSelect={(variation) =>
+              onChange({
+                exerciseSlug: variation.slug,
+                name: variation.name,
+              })
+            }
+            testID={`${testID}-variations`}
+          />
+
           <View style={{ flexDirection: "row", gap: 8 }}>
             <View style={{ flex: 1 }}>
               <Input
@@ -486,8 +612,8 @@ export function BuilderExerciseRow({
 
           <Input
             testID={`${testID}-details`}
-            label="Coach notes"
-            placeholder="e.g. Pause at the bottom"
+            label="Additional Notes"
+            placeholder="e.g. Tempo 3-1-2, pause at bottom"
             value={exercise.details ?? ""}
             onChangeText={(text) => onChange({ details: text })}
             multiline
@@ -541,7 +667,14 @@ export function BuilderExerciseRow({
 
 export interface BuilderWorkoutExercisesProps {
   exercises: BuilderExercise[];
-  onAdd: (selection: ExercisePickerSelection) => void;
+  /**
+   * Adds a picked row. `defaults` arrives from a Quick Add chip and is the
+   * prescription that chip carries (the web's `addQuickExercise`).
+   */
+  onAdd: (
+    selection: ExercisePickerSelection,
+    defaults?: Partial<BuilderExercise>,
+  ) => void;
   onChange: (exerciseIndex: number, patch: Partial<BuilderExercise>) => void;
   onRemove: (exerciseIndex: number) => void;
   /** Reorder rows (drag end or move buttons). Absent while reorder is off. */
@@ -571,6 +704,11 @@ export interface BuilderWorkoutExercisesProps {
  * label, rest and rounds, and the Combine flow stamps the web's own group
  * fields so the saved order and the saved block are what the web editor shows
  * and what Live interleaves.
+ *
+ * QUICK ADD (NP-281) is the web's chip row, with one difference that is the
+ * slug rule: a chip opens the picker already searching for that name instead
+ * of writing a bare typed name, and its prescription rides over to the row
+ * the member taps (`quickAddDefaults`).
  */
 export function BuilderWorkoutExercises({
   exercises,
@@ -586,6 +724,13 @@ export function BuilderWorkoutExercises({
 }: BuilderWorkoutExercisesProps) {
   const { colors } = useThemeTokens();
   const [picking, setPicking] = useState(false);
+  /**
+   * The Quick Add chip being resolved, if any: the picker opens on its name
+   * and its prescription rides over to whatever row the member taps, so the
+   * saved row still carries a catalogue `exerciseSlug` (NP-171's rule) rather
+   * than the bare typed name the web writes.
+   */
+  const [pendingQuick, setPendingQuick] = useState<BuilderQuickAdd | null>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [showGroupMenu, setShowGroupMenu] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -712,6 +857,42 @@ export function BuilderWorkoutExercises({
 
   return (
     <View style={{ gap: 8 }}>
+      {/* QUICK ADD (the web's chip row, same eight). A chip opens the picker
+          already searching for that name — see `pendingQuick`. */}
+      <View style={{ gap: 6 }}>
+        <Text className="text-muted-foreground text-xs font-semibold">
+          QUICK ADD
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {BUILDER_QUICK_ADD_EXERCISES.map((quick) => (
+            <Pressable
+              key={quick.name}
+              testID={`${testID}-quick-${quick.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${quick.name}`}
+              accessibilityHint="Opens the exercise picker on this name"
+              onPress={() => {
+                setPendingQuick(quick);
+                setPicking(true);
+              }}
+              style={[
+                minTouchTarget,
+                {
+                  justifyContent: "center",
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  backgroundColor: colors.muted,
+                },
+              ]}
+            >
+              <Text className="text-muted-foreground text-xs font-medium">
+                {`+ ${quick.name}`}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
       <Text className="text-foreground text-sm font-medium">
         {exercises.length === 0
           ? "Exercises"
@@ -883,11 +1064,17 @@ export function BuilderWorkoutExercises({
         <ExercisePicker
           testID={`${testID}-picker`}
           excludeSlugs={excludeSlugs}
+          initialQuery={pendingQuick?.name ?? ""}
           onSelect={(selection) => {
             setPicking(false);
-            onAdd(selection);
+            const quick = pendingQuick;
+            setPendingQuick(null);
+            onAdd(selection, quick ? quickAddDefaults(quick) : undefined);
           }}
-          onClose={() => setPicking(false)}
+          onClose={() => {
+            setPicking(false);
+            setPendingQuick(null);
+          }}
         />
       ) : (
         <Button

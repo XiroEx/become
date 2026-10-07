@@ -210,6 +210,9 @@ function routeBuilderFetch(impl: (path: string, init?: unknown) => unknown) {
 
 /** Fill step 1 and open the phases step, as a member would. */
 function fillDetails(screen: ReturnType<typeof render>) {
+  // NP-281 put the web's chooser ("Start from scratch" / "Import a program")
+  // in front of the builder, so a scratch build starts with that one tap.
+  fireEvent.press(screen.getByTestId("programming-new-entry-scratch"));
   fireEvent.changeText(screen.getByTestId("program-builder-name"), "My Split");
   fireEvent.changeText(
     screen.getByTestId("program-builder-description"),
