@@ -20,7 +20,7 @@ import {
 } from 'lucide-react-native'
 import type { Fact, WeekSnapshot, CardPillar, Highlight, WeekSignals, Suggestion, NextStep } from '@/lib/becoming/types'
 import { rankSuggestions, MAX_CARD_STEPS } from '@/lib/becoming/weekSummary'
-import { PILLAR, pillarColor } from '@/lib/becoming/pillarColors'
+import { pillarColor } from '@/lib/becoming/pillarColors'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
@@ -163,6 +163,7 @@ export interface WeekCardProps {
   next?: { nutrition?: Suggestion | null; training?: Suggestion | null; fuel?: Suggestion | null } | NextStep[] | null
   onDetails?: () => void
   onNavigate?: (url: string) => void
+  isPeak?: boolean
 }
 
 export const WeekCard = memo(function WeekCard({
@@ -173,12 +174,13 @@ export const WeekCard = memo(function WeekCard({
   next,
   onDetails,
   onNavigate,
+  isPeak,
 }: WeekCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
-  const subj = PILLAR[w.subject] ?? PILLAR.empty
   const leadHl = signals.highlights[0] ?? null
   const extraHls = signals.highlights.slice(1)
   const currentWeek = !!w.isCurrent
+  const stepText = w.gap ? 'held' : isPeak ? 'new high' : w.step === 'up' ? 'climbed' : w.step === 'flat' ? 'held' : w.step === 'down' ? 'a dip' : 'start'
 
   // Step badge
   const isUp = w.step === 'up'
@@ -219,10 +221,13 @@ export const WeekCard = memo(function WeekCard({
         <View style={styles.eyebrowRow}>
           <View>
             <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>
-              {w.isCurrent ? 'Current week' : `Week ${w.index + 1}`}
-              {totalWeeks && totalWeeks > 1 ? ` of ${totalWeeks}` : ''} · {w.label}
+              {w.gap
+                ? 'Away'
+                : w.isCurrent
+                ? `This week · day ${w.daysElapsed ?? 1} of 7`
+                : `Week ${w.index + 1}${totalWeeks && totalWeeks > 1 ? ` of ${totalWeeks}` : ''}`}
             </Text>
-            <Text style={[styles.eyebrowLabel, { color: colors.foreground }]}>{subj.name}</Text>
+            <Text style={[styles.eyebrowLabel, { color: colors.foreground }]}>{w.label}</Text>
           </View>
 
           <View style={styles.eyebrowRight}>
@@ -231,31 +236,33 @@ export const WeekCard = memo(function WeekCard({
             {w.isCurrent ? (
               <View style={[styles.liveBadge, { backgroundColor: tint('muted', 0.5) }]} testID="week-card-live">
                 <View style={[styles.liveDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.liveText, { color: colors.foreground }]}>In progress</Text>
+                <Text style={[styles.liveText, { color: colors.foreground }]}>live</Text>
               </View>
-            ) : w.step ? (
+            ) : w.step || isPeak ? (
               <View
                 style={[
                   styles.stepBadge,
                   {
-                    backgroundColor: isUp
+                    backgroundColor: isPeak
+                      ? tint('accent', 0.22)
+                      : isUp
                       ? tint('accent', 0.2)
                       : tint('muted', 0.4),
                   },
                 ]}
-                testID={`week-card-step-${w.step}`}
+                testID={`week-card-step-${isPeak ? 'peak' : w.step}`}
               >
                 <StepIcon
                   size={12}
-                  color={isUp ? colors.accent : colors.foreground}
+                  color={isPeak || isUp ? colors.accent : colors.foreground}
                 />
                 <Text
                   style={[
                     styles.stepText,
-                    { color: isUp ? colors.accent : colors.foreground },
+                    { color: isPeak || isUp ? colors.accent : colors.foreground },
                   ]}
                 >
-                  {w.step}
+                  {stepText}
                 </Text>
               </View>
             ) : null}
@@ -288,7 +295,7 @@ export const WeekCard = memo(function WeekCard({
             )}
 
             {signals.hasDeltas && (
-              <Text style={[styles.deltasNote, { color: colors['muted-foreground'] }]}>Deltas compared to last week</Text>
+              <Text style={[styles.deltasNote, { color: colors['muted-foreground'] }]}>Changes vs the week before</Text>
             )}
           </View>
         )}
@@ -327,7 +334,7 @@ export const WeekCard = memo(function WeekCard({
         {/* What writes it (Steps) */}
         {steps.length > 0 && (
           <View style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]} testID="week-card-steps">
-            <Text style={[styles.stepsKicker, { color: colors['muted-foreground'] }]}>What writes the next card</Text>
+            <Text style={[styles.stepsKicker, { color: colors['muted-foreground'] }]}>What to work on</Text>
             <View style={styles.stepsList}>
               {steps.map((st) => {
                 const Icon = PILLAR_ICON[st.pillar] ?? Brain
@@ -397,6 +404,7 @@ export function HorizonCard({
   onNavigate,
 }: HorizonCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
+  const trendText = trend === 'up' ? 'Horizon lifting' : trend === 'down' ? 'Horizon eased' : 'Horizon holding'
   const steps = React.useMemo(() => {
     if (!next) return []
     if (Array.isArray(next)) return next
@@ -422,14 +430,15 @@ export function HorizonCard({
       <View style={styles.cardPadding}>
         <View style={styles.eyebrowRow}>
           <View>
-            <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>The horizon</Text>
-            <Text style={[styles.eyebrowLabel, { color: colors.foreground }]}>Next Sunday · unwritten</Text>
-          </View>
-          <View style={styles.eyebrowRight}>
-            <Compass size={16} color={isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)'} />
+            <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>Next Sunday</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <Compass size={16} color={isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)'} />
+              <Text style={[styles.eyebrowLabel, { color: colors.foreground, marginTop: 0 }]}>{trendText}</Text>
+            </View>
           </View>
         </View>
 
+        <Text style={[styles.stepsKicker, { color: colors['muted-foreground'], marginTop: 16 }]}>Who am I becoming?</Text>
         <Text style={[styles.horizonIdentity, { color: colors.foreground }]}>
           {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
         </Text>

@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
   StyleSheet,
   Modal,
   Pressable,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import { Text } from '@/components/Text'
 import {
@@ -17,17 +18,19 @@ import {
   Sparkles,
   Lock,
   ArrowRight,
+  TrendingUp,
   Check,
   Minus,
+  Flame,
   HelpCircle,
   ChevronDown,
   Info,
 } from 'lucide-react-native'
 import type { WeekSnapshot, SummaryPillar } from '@/lib/becoming/types'
-import { CHAPTERS } from '@become/core/mindXP'
+import { CHAPTERS, SYSTEM_INFO, getXpToNextChapter } from '@become/core/mindXP'
 import type { GoalProgressResponse } from '@become/api-client'
-import { readReached } from '@become/core/goals/status'
-import { PILLAR as SUBJECT, pillarColor as weekColor } from '@/lib/becoming/pillarColors'
+import { fmtUnit, readReached } from '@become/core'
+import { PILLAR as SUBJECT, pillarColor as weekColor, STREAK_INK } from '@/lib/becoming/pillarColors'
 import { WeightChart } from './WeightChart'
 import {
   StrengthTargetSheet,
@@ -41,11 +44,55 @@ import {
 } from '@/lib/becoming/weekSummary'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
+import type { TokenName } from '@/lib/theme/tokens'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
+import { useAuth } from '@/lib/auth/useAuth'
+import { WEBAPP_BASE_URL } from '@/lib/config'
 
 export type DetailsTab = 'story' | 'training' | 'fuel' | 'mind'
 
 type TrainView = 'week' | 'strength'
+
+export type MindState = 'locked_in' | 'low_energy' | 'distracted' | 'stressed'
+
+interface ProgressData {
+  chapter: number
+  xp: number
+  xpBank: number
+  vision: { identityStatement?: string } | null
+  chapterHistory: { chapter: number; unlockedAt: string }[]
+}
+interface Win {
+  _id?: string
+  win: string
+  date: string
+}
+interface StateLogEntry {
+  state: MindState
+  timestamp: string
+}
+interface ProgramLite {
+  name: string
+  completedWorkouts?: number
+  totalWorkouts?: number
+  currentWeek: number
+  totalWeeks: number
+  programId: string
+}
+
+const STATE_META: Record<MindState, { label: string; token: TokenName }> = {
+  locked_in: { label: 'Locked in', token: 'mood-great' },
+  low_energy: { label: 'Low energy', token: 'info' },
+  distracted: { label: 'Distracted', token: 'accent' },
+  stressed: { label: 'Stressed', token: 'destructive' },
+}
+
+const FOCUS_BY_STATE: Record<MindState, { title: string; sub: string }> = {
+  stressed: { title: 'Calm the storm', sub: 'Stress keeps showing up — lean on state-shift + breath.' },
+  distracted: { title: 'Cut the noise', sub: 'Distraction is the pattern — practice focus + one-thing.' },
+  low_energy: { title: 'Do it anyway', sub: 'Low energy lately — discipline reps move you regardless.' },
+  locked_in: { title: 'Keep stacking', sub: 'You’re locked in — bank the momentum and protect the streak.' },
+}
 
 type SheetState =
   | { kind: 'metric' }
@@ -228,8 +275,10 @@ export interface BecomingDetailsProps {
   identity?: string | null
   chapter?: number
   becomingScore?: number
+  streak?: number
   initialTab?: DetailsTab
   goals?: GoalProgressResponse | null
+  token?: string | null
   onJumpToWeek?: (weekKey: string) => void
   onNavigate?: (url: string) => void
 }
@@ -244,30 +293,149 @@ export function BecomingDetails({
   identity: propIdentity,
   chapter: propChapter = 1,
   becomingScore: propScore = 0,
+  streak: propStreak = 0,
   initialTab = 'story',
-  goals = null,
+  goals: propGoals = null,
+  token,
   onJumpToWeek,
   onNavigate,
 }: BecomingDetailsProps) {
   const insets = useSafeAreaInsets()
   const { colors, tint, isDark } = useThemeTokens()
+  let authTok: string | null = null
+  try {
+    const auth = useAuth()
+    authTok = auth.token
+  } catch {
+    // Optional when rendered outside AuthProvider
+  }
+  const effectiveToken = token ?? authTok
+
   const [tab, setTab] = useState<DetailsTab>(initialTab)
   const [trainView, setTrainView] = useState<TrainView>('week')
   const [sheet, setSheet] = useState<SheetState | null>(null)
   const [allWeeks, setAllWeeks] = useState(false)
   const [allWins, setAllWins] = useState(false)
 
-  const chapter = propChapter
-  const score = propScore
-  const identity = propIdentity
+  const [prog, setProg] = useState<ProgressData | null>(null)
+  const [wins, setWins] = useState<Win[]>([])
+  const [logs, setLogs] = useState<StateLogEntry[]>([])
+  const [internalStreak, setInternalStreak] = useState<number | null>(null)
+  const [internalGoals, setInternalGoals] = useState<GoalProgressResponse | null>(null)
+  const [program, setProgram] = useState<ProgramLite | null>(null)
+  const [settingLifts, setSettingLifts] = useState(false)
+
+  const streak = internalStreak ?? propStreak
+
+  const tz = new Date().getTimezoneOffset()
+
+  useEffect(() => {
+    if (!open || !effectiveToken) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const h = { Authorization: `Bearer ${effectiveToken}` }
+        const [pRes, wRes, sRes, sessRes, gRes, prRes] = await Promise.all([
+          fetch(`${WEBAPP_BASE_URL}/api/mind/progress`, { headers: h }),
+          fetch(`${WEBAPP_BASE_URL}/api/mind/wins?limit=60`, { headers: h }),
+          fetch(`${WEBAPP_BASE_URL}/api/mind/state?limit=60`, { headers: h }),
+          fetch(`${WEBAPP_BASE_URL}/api/mind/session?tz=${tz}`, { headers: h }),
+          fetch(`${WEBAPP_BASE_URL}/api/goals?tz=${tz}`, { headers: h }),
+          fetch(`${WEBAPP_BASE_URL}/api/progress?tz=${tz}`, { headers: h }),
+        ])
+        if (cancelled) return
+        if (pRes.ok) setProg(await pRes.json())
+        if (wRes.ok) setWins((await wRes.json()).wins ?? [])
+        if (sRes.ok) setLogs((await sRes.json()).logs ?? [])
+        if (sessRes.ok) setInternalStreak((await sessRes.json()).streak ?? 0)
+        if (gRes.ok) setInternalGoals(await gRes.json())
+        if (prRes.ok) {
+          const pData = await prRes.json()
+          setProgram(pData.currentProgram ?? null)
+        }
+      } catch {
+        // Silently keep whatever data we have
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, effectiveToken, tz])
+
+  const setSuggestedLifts = async () => {
+    if (!effectiveToken) return
+    setSettingLifts(true)
+    try {
+      const res = await fetch(`${WEBAPP_BASE_URL}/api/goals`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${effectiveToken}`,
+        },
+        body: JSON.stringify({ pillar: 'training', lifts: 'suggested', tz }),
+      })
+      if (res.ok) setInternalGoals(await res.json())
+    } finally {
+      setSettingLifts(false)
+    }
+  }
+
+  // Mind derivations
+  const chapter = prog?.chapter ?? propChapter
+  const score = prog?.xpBank ?? propScore
+  const identity = prog?.vision?.identityStatement?.trim() || propIdentity || null
+  const xpProgress = useMemo(() => getXpToNextChapter(chapter, prog?.xp ?? 0), [chapter, prog?.xp])
+
+  const sinceDate = useMemo(() => {
+    const c: number[] = []
+    const lastLog = logs[logs.length - 1]
+    if (lastLog?.timestamp) c.push(new Date(lastLog.timestamp).getTime())
+    const first = prog?.chapterHistory?.[0]?.unlockedAt
+    if (first) c.push(new Date(first).getTime())
+    const lastWin = wins[wins.length - 1]
+    if (lastWin?.date) c.push(new Date(lastWin.date).getTime())
+    const firstWeek = weeks[0]
+    if (firstWeek?.weekKey) c.push(new Date(firstWeek.weekKey + 'T12:00:00Z').getTime())
+    return c.length ? Math.min(...c) : null
+  }, [logs, wins, prog, weeks])
+
+  const recentStates = useMemo(() => logs.slice(0, 14).reverse(), [logs])
+  const dominantState = useMemo<MindState | null>(() => {
+    if (!logs.length) return null
+    const counts: Record<string, number> = {}
+    for (const l of logs.slice(0, 14)) counts[l.state] = (counts[l.state] ?? 0) + 1
+    return (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] as MindState) ?? null
+  }, [logs])
+  const lockedInPct = useMemo(() => {
+    const r = logs.slice(0, 14)
+    return r.length ? Math.round((r.filter((l) => l.state === 'locked_in').length / r.length) * 100) : null
+  }, [logs])
+
+  const thisWeek: WeekSnapshot | null = weeks.length ? (weeks[weeks.length - 1] ?? null) : null
+  const fallbackDominant = (thisWeek?.mind?.dominant as MindState) ?? null
+  const effectiveDominant = dominantState ?? fallbackDominant
+  const focus = effectiveDominant ? FOCUS_BY_STATE[effectiveDominant] : null
+
   const currentCh = CHAPTERS[chapter - 1]
   const nextCh = chapter < 5 ? CHAPTERS[chapter] : null
 
-  // Fuel derivations
-  const n = goals?.nutrition
-  const t = goals?.training
+  // Pillar derivations
+  const goalsData = internalGoals ?? propGoals
+  const n = goalsData?.nutrition
+  const t = goalsData?.training
   const tWeek = t?.week ?? null
-  const tUnit: 'lbs' | 'kg' = (t?.unit as 'lbs' | 'kg') ?? unit
+  const tUnit: 'lbs' | 'kg' = (t?.unit as 'lbs' | 'kg') ?? (unit === 'kg' ? 'kg' : 'lbs')
+  const rationale = sheet?.kind === 'target' ? t?.liftRationales?.[sheet.slug] ?? null : null
+  const sheetExplanation = rationale
+    ? typeof rationale === 'string'
+      ? rationale
+      : [rationale.headline, ...(rationale.why ?? [])].filter(Boolean).join(' · ')
+    : null
+  const progPct = program && program.totalWorkouts && program.completedWorkouts != null
+    ? Math.round((program.completedWorkouts / program.totalWorkouts) * 100)
+    : program
+      ? Math.round((program.currentWeek / (program.totalWeeks || 1)) * 100)
+      : null
 
   // Story derivations
   const prTimeline = useMemo(
@@ -279,7 +447,11 @@ export function BecomingDetails({
     [weeks],
   )
   const weeksDesc = useMemo(() => [...weeks].reverse(), [weeks])
-  const thisWeek: WeekSnapshot | null = weeks.length ? (weeks[weeks.length - 1] ?? null) : null
+
+  const mindStep = useMemo(
+    () => (focus && effectiveDominant ? { key: `mind.${effectiveDominant}`, title: focus.title, sub: focus.sub, severity: 'info' as const, url: '/dashboard/mind' } : null),
+    [focus, effectiveDominant],
+  )
 
   const summary = useMemo(
     () =>
@@ -288,16 +460,17 @@ export function BecomingDetails({
         unit,
         loadUnit: tUnit,
         training: tWeek,
-        suggestions: { training: t?.suggestion, fuel: n?.suggestion },
+        streak,
+        suggestions: { training: t?.suggestion, fuel: n?.suggestion, mind: mindStep },
       }),
-    [thisWeek, unit, tUnit, tWeek, t?.suggestion, n?.suggestion],
+    [thisWeek, unit, tUnit, tWeek, streak, t?.suggestion, n?.suggestion, mindStep],
   )
 
   const weekList = previewList(weeksDesc, allWeeks)
-  const allWinsList = useMemo(
-    () => weeks.flatMap((w) => (w.mind.wins ?? []).map((win) => ({ win, date: w.weekKey }))),
-    [weeks],
-  )
+  const allWinsList: Win[] = useMemo(() => {
+    if (wins.length) return wins
+    return weeks.flatMap((w) => (w.mind.wins ?? []).map((win) => ({ win, date: w.weekKey })))
+  }, [wins, weeks])
   const winList = previewList(allWinsList, allWins)
 
   const handleLinkPress = (url: string) => {
@@ -470,20 +643,17 @@ export function BecomingDetails({
                 </Glass>
               )}
 
-              {/* Evidence of Becoming (Wins) */}
-              <Glass>
-                <View style={styles.cardHeaderRow}>
-                  <Eyebrow>Evidence of Becoming</Eyebrow>
-                  <Text style={[styles.cardHeaderDate, { color: colors['muted-foreground'] }]}>from Mind sessions</Text>
-                </View>
+              {/* Evidence wall */}
+              <Glass hue="hsl(258, 90%, 76%)">
+                <Eyebrow>Evidence wall</Eyebrow>
                 {allWinsList.length === 0 ? (
                   <Text style={[styles.emptyText, { color: colors['muted-foreground'] }]}>
-                    Mind sessions bank the quiet wins you notice along the way. Your evidence stacks up here.
+                    No wins banked yet. Bank one in a session — the proof that you’re changing builds here.
                   </Text>
                 ) : (
                   <View style={{ gap: 8 }}>
                     {winList.shown.map((w, idx) => (
-                      <View key={`win-${idx}`} style={styles.evidenceRow}>
+                      <View key={w._id ?? `win-${idx}`} style={styles.evidenceRow}>
                         <View
                           style={[
                             styles.evidenceDot,
@@ -574,27 +744,42 @@ export function BecomingDetails({
                           ]}
                         >
                           This week {t.thisWeek?.done ?? 0}/{t.target.daysPerWeek}
+                          {t.thisWeek?.weekLost ? ' · off track' : t.thisWeek?.remaining === 0 ? ' · done' : ''}
                         </Text>
                       ) : null}
                     </View>
-                    <View style={styles.cellsRow}>
-                      <Cell
-                        label="Then"
-                        value={t?.baseline?.prs?.length ? `${t.baseline.prs.length} lifts` : '—'}
-                        sub="baseline"
-                      />
-                      <Cell
-                        label="Now"
-                        value={t?.avgLast4 != null ? `${t.avgLast4}/wk` : '—'}
-                        sub="avg, last 4 wks"
-                        hue={SUBJECT.training.hsl}
-                      />
-                      <Cell
-                        label="Next"
-                        value={t?.target?.daysPerWeek ? `${t.target.daysPerWeek}/wk` : '—'}
-                        sub="your target"
-                      />
-                    </View>
+                    {!goalsData ? (
+                      <ActivityIndicator size="small" color={colors.foreground} style={{ marginVertical: 12 }} />
+                    ) : t && t.target.daysPerWeek ? (
+                      <View style={styles.cellsRow}>
+                        <Cell
+                          label="Then"
+                          value={
+                            t.baseline?.prs?.length
+                              ? `${t.baseline.prs.length} lifts`
+                              : t.startedAt
+                              ? fmtDate(t.startedAt)
+                              : '—'
+                          }
+                          sub={t.baseline?.date ? `PRs on ${fmtDate(t.baseline.date)}` : 'baseline'}
+                        />
+                        <Cell
+                          label="Now"
+                          value={t.avgLast4 != null ? `${t.avgLast4}/wk` : '—'}
+                          sub="avg, last 4 weeks"
+                          hue={SUBJECT.training.hsl}
+                        />
+                        <Cell
+                          label="Next"
+                          value={`${t.target.daysPerWeek}/wk`}
+                          sub={program && progPct != null ? `${program.name} · ${progPct}%` : 'your target'}
+                        />
+                      </View>
+                    ) : (
+                      <Text style={[styles.emptyText, { color: colors['muted-foreground'] }]}>
+                        Set how many days a week you train in Settings — the week, the streak and this screen are measured against it.
+                      </Text>
+                    )}
                   </Glass>
 
                   {tWeek && tWeek.sessions > 0 && (
@@ -604,13 +789,13 @@ export function BecomingDetails({
                         <Cell
                           label="Sessions"
                           value={String(tWeek.sessions)}
-                          sub={tWeek.exercises ? `${tWeek.exercises} exercises` : undefined}
+                          sub={tWeek.exercises ? `${tWeek.exercises} exercise${tWeek.exercises === 1 ? '' : 's'}` : undefined}
                           hue={SUBJECT.training.hsl}
                         />
                         <Cell
                           label="Sets"
                           value={String(tWeek.sets)}
-                          sub={tWeek.reps ? `${tWeek.reps} reps` : undefined}
+                          sub={tWeek.reps ? `${tWeek.reps.toLocaleString()} reps` : undefined}
                         />
                         <Cell
                           label="Load moved"
@@ -654,7 +839,7 @@ export function BecomingDetails({
                         testID="details-what-is-est-max"
                         style={[minTouchTarget, styles.helpPill, { backgroundColor: tint('muted', 0.4) }]}
                         accessibilityRole="button"
-                        accessibilityLabel="What is estimated 1RM?"
+                        accessibilityLabel={`What is ${EST_MAX_LABEL_SHORT}?`}
                       >
                         <HelpCircle size={12} color={colors['muted-foreground']} />
                         <Text style={[styles.helpPillText, { color: colors['muted-foreground'] }]}>{EST_MAX_LABEL_SHORT}?</Text>
@@ -662,53 +847,83 @@ export function BecomingDetails({
                     </View>
 
                     {t?.lifts && t.lifts.length > 0 ? (
-                      <View style={{ gap: 6 }}>
-                        {t.lifts.slice(0, 5).map((l) => {
-                          const hasTarget = l.target != null
-                          return (
-                            <Pressable
-                              key={l.slug}
-                              testID="details-lift-target"
-                              onPress={() => {
-                                if (hasTarget) {
-                                  setSheet({
-                                    kind: 'target',
-                                    slug: l.slug,
-                                    name: l.name,
-                                    current: l.now,
-                                    target: l.target as number,
-                                    reached: !!l.reached,
-                                  })
-                                }
-                              }}
-                              style={styles.liftRow}
-                              accessibilityRole="button"
-                              accessibilityLabel={`${l.name}: current ${l.now}${hasTarget ? `, target ${l.target}` : ''}`}
-                            >
-                              <Text style={[styles.liftName, { color: colors.foreground }]} numberOfLines={1}>
-                                {l.name}
-                              </Text>
-                              <View style={styles.liftRight}>
-                                <Text style={[styles.liftNumbers, { color: colors['muted-foreground'] }]}>
-                                  {l.then} → <Text style={{ color: colors.foreground, fontWeight: '700' }}>{l.now}</Text>
-                                  {hasTarget && (
-                                    l.reached ? (
-                                      <Text style={{ color: colors.success }}> reached ✓</Text>
-                                    ) : (
-                                      <Text style={{ color: SUBJECT.training.hsl }}> → {l.target}</Text>
-                                    )
-                                  )}
+                      <>
+                        <View style={{ gap: 6 }}>
+                          {t.lifts.slice(0, 5).map((l) => {
+                            const hasTarget = l.target != null
+                            return (
+                              <Pressable
+                                key={l.slug}
+                                testID="details-lift-target"
+                                onPress={() => {
+                                  if (hasTarget) {
+                                    setSheet({
+                                      kind: 'target',
+                                      slug: l.slug,
+                                      name: l.name,
+                                      current: l.now,
+                                      target: l.target as number,
+                                      reached: !!l.reached,
+                                    })
+                                  }
+                                }}
+                                style={styles.liftRow}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${l.name}: current ${l.now}${hasTarget ? `, target ${l.target}` : ''}`}
+                              >
+                                <Text style={[styles.liftName, { color: colors.foreground }]} numberOfLines={1}>
+                                  {l.name}
                                 </Text>
-                                {hasTarget && <Info size={12} color={colors['muted-foreground']} />}
-                              </View>
-                            </Pressable>
-                          )
-                        })}
-                      </View>
+                                <View style={styles.liftRight}>
+                                  <Text style={[styles.liftNumbers, { color: colors['muted-foreground'] }]}>
+                                    {l.then} → <Text style={{ color: colors.foreground, fontWeight: '700' }}>{l.now}</Text>
+                                    {hasTarget && (
+                                      l.reached ? (
+                                        <Text style={{ color: colors.success }}> reached ✓</Text>
+                                      ) : (
+                                        <Text style={{ color: SUBJECT.training.hsl }}> → {l.target}</Text>
+                                      )
+                                    )}
+                                    {l.delta !== 0 && (
+                                      <Text style={{ color: l.delta > 0 ? colors.success : colors['muted-foreground'] }}>
+                                        {' '}{l.delta > 0 ? '+' : ''}{l.delta}
+                                      </Text>
+                                    )}
+                                  </Text>
+                                  {hasTarget && <Info size={12} color={colors['muted-foreground']} />}
+                                </View>
+                              </Pressable>
+                            )
+                          })}
+                        </View>
+                        <Text style={[styles.liftFootnote, { color: colors['muted-foreground'] }]}>
+                          {EST_MAX_LABEL}, in {tUnit} — where you started → where you are{t.hasLiftTargets ? ' → what you are working toward' : ''}.{t.hasLiftTargets ? ' Tap a lift to see why that target.' : ''}
+                        </Text>
+                      </>
                     ) : (
                       <Text style={[styles.emptyText, { color: colors['muted-foreground'] }]}>
                         Log a few weighted sets and your lifts show up here, with an {EST_MAX_LABEL.toLowerCase()} for each.
                       </Text>
+                    )}
+
+                    {t && !t.hasLiftTargets && t.suggestedLifts && t.suggestedLifts.length > 0 && (
+                      <Pressable
+                        testID="details-set-lifts"
+                        onPress={setSuggestedLifts}
+                        disabled={settingLifts}
+                        style={[
+                          minTouchTarget,
+                          styles.setLiftsBtn,
+                          { backgroundColor: tint('muted', 0.4) },
+                          settingLifts && { opacity: 0.5 },
+                        ]}
+                        accessibilityRole="button"
+                      >
+                        <TrendingUp size={14} color={colors.foreground} />
+                        <Text style={[styles.setLiftsBtnText, { color: colors.foreground }]}>
+                          Set targets for {t.suggestedLifts.map((s) => s.name).join(', ')}
+                        </Text>
+                      </Pressable>
                     )}
                   </Glass>
 
@@ -739,6 +954,9 @@ export function BecomingDetails({
                           </Pressable>
                         ))}
                       </View>
+                      <Text style={[styles.liftFootnote, { color: colors['muted-foreground'] }]}>
+                        Best {EST_MAX_LABEL.toLowerCase()} for each lift, and the week you hit it.
+                      </Text>
                     </Glass>
                   )}
                 </>
@@ -753,7 +971,7 @@ export function BecomingDetails({
                 <Glass hue={SUBJECT.fuel.hsl}>
                   <WeightChart
                     weighIns={weighIns}
-                    target={n?.target.weight ?? null}
+                    target={n?.target?.weight ?? null}
                     unit={unit}
                     todayKey={todayKey}
                     direction={n?.direction ?? null}
@@ -764,47 +982,95 @@ export function BecomingDetails({
               <Glass hue={SUBJECT.fuel.hsl} testID="weight-plan">
                 <View style={styles.cardHeaderRow}>
                   <Eyebrow>Weight plan</Eyebrow>
-                  {readReached(n?.status, n?.pace?.status) === 'reached' ? (
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.success }}>
+                  {n?.pace && n.status === 'active' && n.pace.status !== 'done' && (
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: '600',
+                        color: n.pace.status === 'behind' ? colors.accent : colors.success,
+                      }}
+                    >
+                      {n.pace.status === 'behind'
+                        ? `${fmtUnit(n.pace.behindByKg, unit)} behind pace`
+                        : n.pace.status === 'ahead'
+                        ? `${fmtUnit(n.pace.aheadByKg, unit)} ahead`
+                        : n.pace.status === 'on'
+                        ? 'On pace'
+                        : ''}
+                    </Text>
+                  )}
+                  {readReached(n?.status, n?.pace?.status) === 'reached' && (
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.success }}>
                       Reached ✓
                     </Text>
-                  ) : null}
+                  )}
+                  {readReached(n?.status, n?.pace?.status) === 'at-goal' && (
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: colors.success }}>
+                      At goal · hold a week
+                    </Text>
+                  )}
                 </View>
 
-                {n?.target.weight ? (
+                {!goalsData ? (
+                  <ActivityIndicator size="small" color={colors.foreground} style={{ marginVertical: 12 }} />
+                ) : n && n.target.weight ? (
                   <>
                     <View style={styles.cellsRow}>
                       <Cell
                         label="Then"
                         value={n.baseline?.weight != null ? `${Math.round(n.baseline.weight)} ${unit}` : '—'}
-                        sub={n.baseline?.date ? fmtDate(n.baseline.date) : undefined}
+                        sub={n.baseline?.date ? `plan from ${fmtDate(n.baseline.date)}` : undefined}
                       />
                       <Cell
                         label="Now"
                         value={n.now?.weight != null ? `${Math.round(n.now.weight)} ${unit}` : '—'}
-                        sub={n.now?.date ? fmtDayMarker(n.now.date) : undefined}
+                        sub={
+                          n.now?.fourWeeksAgo != null && n.now?.weight != null
+                            ? `${n.now.weight - n.now.fourWeeksAgo <= -0.05 ? '↓' : n.now.weight - n.now.fourWeeksAgo >= 0.05 ? '↑' : '→'} ${Math.abs(n.now.weight - n.now.fourWeeksAgo).toFixed(1)} in 4 wks`
+                            : n.now?.date
+                            ? fmtDayMarker(n.now.date)
+                            : undefined
+                        }
                         hue={SUBJECT.fuel.hsl}
                       />
                       <Cell
                         label="Next"
                         value={`${Math.round(n.target.weight)} ${unit}`}
-                        sub={n.pace?.etaDate ? fmtDate(n.pace.etaDate) : undefined}
+                        sub={
+                          n.pace?.etaDate
+                            ? `${n.pace.eta} → ${fmtDate(n.pace.etaDate)}`
+                            : n.direction === 'maintain'
+                            ? 'hold ±2'
+                            : n.target.pacePerWeek
+                            ? `${n.target.pacePerWeek} ${unit}/wk`
+                            : undefined
+                        }
                       />
                     </View>
+
+                    {n.journeyStart?.weight != null && n.journeyStart.date && n.baseline.date && new Date(n.journeyStart.date) < new Date(n.baseline.date) && (
+                      <Text style={[styles.firstWeighInText, { color: colors['muted-foreground'] }]}>
+                        First weigh-in {Math.round(n.journeyStart.weight)} {unit} on {fmtDayMarker(n.journeyStart.date)}.
+                      </Text>
+                    )}
 
                     {n.adherence && (
                       <View style={styles.adherenceRow}>
                         <View style={[styles.adherenceChip, { backgroundColor: tint('muted', 0.3) }]}>
                           {n.adherence.logOk ? <Check size={12} color={colors.success} /> : <Minus size={12} color={colors['muted-foreground']} />}
                           <Text style={[styles.adherenceText, { color: colors.foreground }]}>
-                            Logged {n.adherence.logDays}/{n.adherence.totalDays} days
+                            Logged {n.adherence.logDays}/{n.adherence.totalDays} days{' '}
+                            <Text style={{ color: colors['muted-foreground'] }}>(aim {n.adherence.logTarget})</Text>
                           </Text>
                         </View>
                         {n.adherence.proteinJudged && (
                           <View style={[styles.adherenceChip, { backgroundColor: tint('muted', 0.3) }]}>
                             {n.adherence.proteinOk ? <Check size={12} color={colors.success} /> : <Minus size={12} color={colors['muted-foreground']} />}
                             <Text style={[styles.adherenceText, { color: colors.foreground }]}>
-                              Protein hit {n.adherence.proteinDays}/{n.adherence.totalDays}
+                              Protein hit {n.adherence.proteinDays}/{n.adherence.totalDays}{' '}
+                              <Text style={{ color: colors['muted-foreground'] }}>
+                                (aim {n.adherence.proteinTarget}{n.proteinGoal ? ` · ${n.proteinGoal}g` : ''})
+                              </Text>
                             </Text>
                           </View>
                         )}
@@ -827,6 +1093,22 @@ export function BecomingDetails({
                   onPress={handleLinkPress}
                 />
               )}
+
+              <Pressable
+                onPress={() => handleLinkPress('/dashboard/nutrition/goals')}
+                style={[
+                  minTouchTarget,
+                  styles.navRowBtn,
+                  { backgroundColor: tint('muted', 0.2), borderColor: colors.border },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Pace, targets and macros"
+              >
+                <Text style={[styles.navRowBtnText, { color: colors.foreground }]}>
+                  Pace, targets and macros
+                </Text>
+                <ArrowRight size={16} color={colors['muted-foreground']} />
+              </Pressable>
             </View>
           )}
 
@@ -846,16 +1128,35 @@ export function BecomingDetails({
               >
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <View>
-                    <Text
-                      style={[
-                        styles.scoreKicker,
-                        { color: isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)' },
-                      ]}
-                    >
-                      Becoming score
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Trophy size={14} color={isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)'} />
+                      <Text
+                        style={[
+                          styles.scoreKicker,
+                          { color: isDark ? 'hsl(258, 90%, 80%)' : 'hsl(258, 90%, 45%)' },
+                        ]}
+                      >
+                        Becoming score
+                      </Text>
+                    </View>
                     <Text style={[styles.scoreNumber, { color: colors.foreground }]}>{score.toLocaleString()}</Text>
                   </View>
+                  {streak > 0 && (
+                    <View
+                      style={[
+                        styles.streakTile,
+                        { backgroundColor: isDark ? tint('foreground', 0.15) : tint('muted', 0.6) },
+                      ]}
+                      testID="mind-streak-tile"
+                      accessibilityLabel={`${streak} day streak`}
+                    >
+                      <Flame size={18} color={STREAK_INK.day.hsl} />
+                      <Text style={[styles.streakNumber, { color: colors.foreground }]}>{streak}</Text>
+                      <Text style={[styles.streakLabel, { color: colors['muted-foreground'] }]}>
+                        {streak === 1 ? '1 DAY STREAK' : `${streak} DAY STREAK`}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 {identity ? (
                   <Text style={[styles.scoreIdentity, { color: colors.foreground }]}>“{identity}”</Text>
@@ -863,6 +1164,7 @@ export function BecomingDetails({
               </View>
 
               <View style={styles.cellsRow}>
+                <Cell label="Then" value={sinceDate ? fmtDate(sinceDate) : '—'} sub="where you started" />
                 <Cell label="Now" value={`Ch ${chapter} · ${currentCh?.name ?? 'Reset'}`} sub={currentCh?.theme} hue={SUBJECT.mind.hsl} />
                 <Cell label="Next" value={nextCh ? nextCh.name : 'Architect+'} sub={nextCh ? nextCh.theme : 'keep building'} />
               </View>
@@ -902,12 +1204,93 @@ export function BecomingDetails({
                           </Text>
                           <Text style={[styles.arcSub, { color: colors['muted-foreground'] }]} numberOfLines={1}>{c.theme}</Text>
                         </View>
+                        {active && xpProgress && (
+                          <Text style={[styles.arcPct, { color: colors['muted-foreground'] }]}>{xpProgress.pct}%</Text>
+                        )}
                         {done && <Check size={16} color={colors.success} />}
                       </View>
                     )
                   })}
                 </View>
               </Glass>
+
+              {recentStates.length > 0 && (
+                <Glass>
+                  <View style={styles.cardHeaderRow}>
+                    <Eyebrow>How you’ve shown up</Eyebrow>
+                    {lockedInPct !== null && (
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: colors.success }}>
+                        {lockedInPct}% locked in
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginVertical: 8 }}>
+                    {recentStates.map((l, i) => (
+                      <View
+                        key={i}
+                        style={{
+                          width: 12,
+                          height: 12,
+                          borderRadius: 6,
+                          backgroundColor:
+                            l.state && STATE_META[l.state]
+                              ? colors[STATE_META[l.state].token]
+                              : colors['muted-foreground'],
+                        }}
+                      />
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
+                    {(Object.keys(STATE_META) as MindState[]).map((s) => (
+                      <View key={s} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: colors[STATE_META[s].token],
+                          }}
+                        />
+                        <Text style={{ fontSize: 11, color: colors['muted-foreground'] }}>
+                          {STATE_META[s].label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </Glass>
+              )}
+
+              {focus && (
+                <NextCard
+                  title={focus.title}
+                  sub={focus.sub}
+                  url="/dashboard/mind"
+                  hue={SUBJECT.mind.hsl}
+                  onPress={handleLinkPress}
+                />
+              )}
+
+              {nextCh && (
+                <Pressable
+                  onPress={() => handleLinkPress('/dashboard/mind')}
+                  style={[
+                    minTouchTarget,
+                    styles.navRowBtn,
+                    { backgroundColor: tint('muted', 0.2), borderColor: colors.border },
+                  ]}
+                  accessibilityRole="button"
+                >
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.navRowBtnText, { color: colors.foreground }]}>
+                      Next: {nextCh.name}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: colors['muted-foreground'], marginTop: 2 }}>
+                      Unlocks {nextCh.systems.map((s) => SYSTEM_INFO[s]?.label ?? s).join(', ')}
+                    </Text>
+                  </View>
+                  <ArrowRight size={16} color={colors['muted-foreground']} />
+                </Pressable>
+              )}
             </View>
           )}
         </ScrollView>
@@ -924,7 +1307,7 @@ export function BecomingDetails({
                   name: sheet.name,
                   e1RM: sheet.current,
                   target: sheet.target,
-                  targetJustification: null,
+                  targetJustification: sheetExplanation,
                 }
               : null
           }
@@ -1187,6 +1570,24 @@ const styles = StyleSheet.create({
   liftNumbers: {
     fontSize: 11,
   },
+  liftFootnote: {
+    fontSize: 10,
+    marginTop: 8,
+    lineHeight: 14,
+  },
+  setLiftsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  setLiftsBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
   recordRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1198,6 +1599,10 @@ const styles = StyleSheet.create({
   },
   recordMeta: {
     fontSize: 11,
+  },
+  firstWeighInText: {
+    fontSize: 11,
+    marginTop: 6,
   },
   adherenceRow: {
     flexDirection: 'row',
@@ -1215,6 +1620,19 @@ const styles = StyleSheet.create({
   },
   adherenceText: {
     fontSize: 11,
+  },
+  navRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  navRowBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   scoreBanner: {
     borderRadius: 20,
@@ -1235,6 +1653,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     lineHeight: 19,
+  },
+  streakTile: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  streakNumber: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  streakLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   arcRow: {
     flexDirection: 'row',
@@ -1261,6 +1697,10 @@ const styles = StyleSheet.create({
   },
   arcSub: {
     fontSize: 11,
+  },
+  arcPct: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 })
 

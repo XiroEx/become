@@ -40,10 +40,10 @@ const LABEL: Record<SummaryPillar, string> = {
 }
 
 const STATE_WORD: Record<string, string> = {
-  stressed: 'Stressed',
-  distracted: 'Distracted',
-  low_energy: 'Low energy',
-  locked_in: 'Locked in',
+  stressed: 'stressed',
+  distracted: 'distracted',
+  low_energy: 'low on energy',
+  locked_in: 'locked in',
 }
 
 type Severity = 'warn' | 'nudge' | 'info' | 'good'
@@ -165,3 +165,18 @@ export function summarizeWeek(input: WeekSummaryInput): WeekSummary {
     next,
   }
 }
+
+/** Indexes whose altitude is a new peak at that point (for the "new high" chip). */
+export function peakIndexes(weeks: { index: number; altitude: number; isCurrent?: boolean }[]): Set<number> {
+  const out = new Set<number>()
+  let peak = -Infinity
+  for (const w of weeks) {
+    if (w.isCurrent) continue
+    if (w.altitude > peak + 1e-9) {
+      peak = w.altitude
+      if (w.index > 0) out.add(w.index)
+    }
+  }
+  return out
+}
+
