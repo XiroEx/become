@@ -12,7 +12,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import type { VerifyMode } from "@/lib/auth";
-import { CheckCircle2, XCircle } from "lucide-react-native";
+import { CheckCircle2, X } from "lucide-react-native";
 import {
   defaultPendingSessionStore,
   type PendingSessionStore,
@@ -221,11 +221,16 @@ export function VerifyScreen({
             </Text>
           </View>
         ) : (
-          // Web parity (NP-252): a red X, "Verification failed", the friendly
-          // message mapped from the error above, and a way BACK to sign-in —
-          // previously this was a raw red error line on a blank screen with no
-          // control at all, leaving a bad or expired link with no way out.
+          // Web parity (NP-252, NP-312): a plain X, "Verification failed", the
+          // friendly message mapped from the error above, and a way BACK to
+          // sign-in — all inside the same rounded card web draws
+          // (`webapp/app/verify/page.tsx`: "rounded-lg bg-white dark:bg-zinc-900
+          // ... shadow dark:border"). Previously this rendered straight on the
+          // page background with a circled-X glyph (a circle baked into the
+          // icon itself, sitting inside our own tint circle) instead of web's
+          // plain X on a single light-red circle.
           <View
+            className="w-full rounded-2xl border border-border bg-card p-6"
             style={{ alignItems: "center", gap: 16, maxWidth: 320 }}
             testID="verify-error"
             accessibilityRole="alert"
@@ -240,7 +245,7 @@ export function VerifyScreen({
                 justifyContent: "center",
               }}
             >
-              <XCircle size={28} color={colors.destructive} />
+              <X size={28} color={colors.destructive} />
             </View>
             <Text
               accessibilityRole="header"

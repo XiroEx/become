@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 let mockParams: { token?: string; mode?: string } = {};
@@ -34,6 +34,7 @@ jest.mock("@become/api-client", () => {
 
 import { ApiError, apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { X, XCircle } from "lucide-react-native";
 import VerifyRoute, {
   VerifyScreen,
   friendlyVerifyErrorMessage,
@@ -261,6 +262,36 @@ describe("VerifyScreen error card (NP-252 web parity)", () => {
     const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
     fireEvent.press(getByTestId("verify-retry"));
     expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+});
+
+// NP-312: the error state must sit inside the same rounded card web draws
+// (`webapp/app/verify/page.tsx`: "rounded-lg bg-white dark:bg-zinc-900 ...
+// shadow dark:border"), and use a plain X icon — not a circled-X glyph drawn
+// on top of our own tint circle.
+describe("VerifyScreen error card (NP-312 native-vs-web parity)", () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockSetToken.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockApiFetch.mockReset();
+    mockParams = {};
+  });
+
+  it("wraps the error state in the card surface (bg-card + border-border), not the bare page background", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    const card = getByTestId("verify-error");
+    expect(card.props.className).toContain("bg-card");
+    expect(card.props.className).toContain("border-border");
+  });
+
+  it("uses the plain X icon, not the circled XCircle glyph", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    const card = getByTestId("verify-error");
+    expect(within(card).UNSAFE_getByType(X)).toBeTruthy();
+    expect(() => within(card).UNSAFE_getByType(XCircle)).toThrow();
   });
 });
 
