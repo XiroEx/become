@@ -135,11 +135,13 @@ describe("(id: e015c89a) Logging two sets in Track and switching to Live opens L
     expect(queryByTestId("live-workout-track")).toBeNull();
     // THE THIRD SET — not back at set 1 (which is what rebuilding the flow from
     // scratch used to do) and not sitting on the set just finished.
+    // NP-288: the web's own position line (`Exercise 1/1` · `Set 3/4`),
+    // not native's old `Step 3 of 4` / `Set 3 of 4` pair.
     expect(getByTestId("live-workout-live-step").props.children).toBe(
-      "Step 3 of 4",
+      "Exercise 1/1",
     );
     expect(getByTestId("live-workout-live-set-label").props.children).toBe(
-      "Set 3 of 4",
+      "Set 3/4",
     );
     // And it is the SAME grid: the third set's inputs are empty, the finished
     // ones kept their numbers when we flip back.
@@ -163,7 +165,7 @@ describe("(id: e015c89a) Logging two sets in Track and switching to Live opens L
 
     fireEvent.press(getByTestId("live-workout-view-live"));
     expect(getByTestId("live-workout-live-set-label").props.children).toBe(
-      "Set 2 of 4",
+      "Set 2/4",
     );
   });
 
@@ -207,7 +209,7 @@ describe("(id: e015c89a) Logging two sets in Track and switching to Live opens L
     fireEvent.press(fresh.getByTestId("live-workout-view-live"));
     expect(
       fresh.getByTestId("live-workout-live-set-label").props.children,
-    ).toBe("Set 4 of 4");
+    ).toBe("Set 4/4");
     fresh.unmount();
 
     // Thirteen hours old: past POSITION_MAX_AGE_MS, so it is no opinion at all
@@ -231,7 +233,7 @@ describe("(id: e015c89a) Logging two sets in Track and switching to Live opens L
     fireEvent.press(second.getByTestId("live-workout-view-live"));
     expect(
       second.getByTestId("live-workout-live-set-label").props.children,
-    ).toBe("Set 1 of 4");
+    ).toBe("Set 1/4");
   });
 });
 

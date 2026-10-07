@@ -229,6 +229,15 @@ function VideoThumbnailView({
 interface DirectVideoProps {
   src: string;
   surface: VideoSurface;
+  /**
+   * Shown OVER the player until the clip is ready to draw (NP-288). A
+   * freshly mounted `expo-video` view is pure black for as long as the
+   * clip takes to open — ~3 s on a mid-range Android, every time the live
+   * step changes exercise — which reads as a broken video rather than a
+   * loading one.
+   */
+  posterUrl?: string | null;
+  exerciseName?: string;
   videoWidth?: number | null;
   videoHeight?: number | null;
   videoFraming?: VideoFramingOverride | null;
@@ -242,6 +251,8 @@ interface DirectVideoProps {
 function DirectVideo({
   src,
   surface,
+  posterUrl,
+  exerciseName,
   videoWidth,
   videoHeight,
   videoFraming,
@@ -250,8 +261,12 @@ function DirectVideo({
   showBadge,
   testID,
 }: DirectVideoProps) {
+  const { colors } = useThemeTokens();
   const { token } = useAuth();
   const [duration, setDuration] = useState<number | null>(null);
+  // False until the clip can actually draw a frame. Drives the poster
+  // above the player — see `posterUrl`.
+  const [ready, setReady] = useState(false);
 
   const trim = useMemo(() => {
     return resolveTrim({ videoTrim }, duration);
@@ -293,6 +308,8 @@ function DirectVideo({
   // Handle trim loop and duration listeners
   useEffect(() => {
     const timeSub = player.addListener("timeUpdate", (event) => {
+      // A frame has been drawn: the poster can go.
+      if (event.currentTime > 0) setReady(true);
       const currentTrim = trimRef.current;
       if (currentTrim.isFullLength) return;
       const end = currentTrim.end;
@@ -315,16 +332,22 @@ function DirectVideo({
     });
 
     const loadSub = player.addListener("sourceLoad", (event) => {
+      setReady(true);
       if (event.duration > 0) {
         setDuration(event.duration);
         onDuration?.(event.duration);
       }
     });
 
+    const statusSub = player.addListener("statusChange", (event) => {
+      if (event.status === "readyToPlay") setReady(true);
+    });
+
     return () => {
       timeSub.remove();
       endSub.remove();
       loadSub.remove();
+      statusSub.remove();
     };
   }, [player, onDuration]);
 
@@ -357,6 +380,36 @@ function DirectVideo({
           transform,
         }}
       />
+      {/* The poster, over the player until it can draw: the clip's own
+          thumbnail when there is one, else a neutral framed box with the
+          exercise's name. Anything but three seconds of black. */}
+      {!ready ? (
+        <View
+          testID={testID ? `${testID}-poster` : "framed-video-poster"}
+          className="absolute inset-0 items-center justify-center p-4"
+          style={{ backgroundColor: colors.card }}
+        >
+          {posterUrl ? (
+            <Image
+              testID={testID ? `${testID}-poster-image` : "framed-video-poster-image"}
+              source={{ uri: posterUrl }}
+              className="absolute inset-0 w-full h-full"
+              resizeMode="cover"
+            />
+          ) : (
+            <>
+              <Dumbbell
+                size={28}
+                color={colors["muted-foreground"]}
+                style={{ marginBottom: 6, opacity: 0.5 }}
+              />
+              <Text className="text-muted-foreground text-xs font-medium text-center">
+                {exerciseName ? `Loading ${exerciseName} demo…` : "Loading demo…"}
+              </Text>
+            </>
+          )}
+        </View>
+      ) : null}
       {showBadge && surface !== "live" ? (
         <View className="absolute top-2 right-2 rounded bg-black/60 px-2 py-1">
           <Text className="text-xs font-medium text-white">Demo</Text>
@@ -465,6 +518,8 @@ export function FramedVideo({
       <DirectVideo
         src={activeSrc}
         surface={surface}
+        posterUrl={resolveMediaUrl(resolved.thumbnailUrl)}
+        exerciseName={exerciseName}
         videoWidth={resolved.videoWidth}
         videoHeight={resolved.videoHeight}
         videoFraming={resolved.videoFraming}

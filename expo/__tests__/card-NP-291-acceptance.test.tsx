@@ -232,8 +232,12 @@ describe("(id: np291-jump) The manage sheet's 'Tap to jump' actually jumps", () 
     // Standing on exercise 1 (Bench Press); Plank is not on screen yet.
     expect(queryByTestId("live-workout-live-exercise-plank")).toBeNull();
 
+    // NP-288 collapsed Live's two exercise buttons (`Exercises` and
+    // `Exercises (12)`, which opened two different panels) into the web's
+    // ONE entry: the rail beside the clip, which opens the route's manage
+    // panel when there is one.
     await act(async () => {
-      fireEvent.press(getByTestId("live-workout-live-manage"));
+      fireEvent.press(getByTestId("live-workout-live-exercises"));
     });
     await waitFor(() => {
       expect(getByTestId("quick-live-manage-row-1")).toBeTruthy();

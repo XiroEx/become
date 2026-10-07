@@ -17,6 +17,7 @@ export type ButtonVariant =
   | "inverted"
   | "success"
   | "info"
+  | "accent"
   | "mindset";
 export type ButtonSize = "sm" | "md" | "lg";
 
@@ -68,6 +69,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // `bg-blue-600` — `info` is that same blue-600/400 token everywhere else in
   // the app (Calendar/History links).
   info: "bg-info",
+  // NP-288: the live skip modal's `Skip All Sets (3 sets total)` is
+  // `bg-amber-600` on the web — a warning, not a danger, so it may not be
+  // the destructive red. `accent` is that same amber-600/400 token the rest
+  // of the app already uses for a caution (the in-workout nudge card).
+  accent: "bg-accent",
   // NP-295: the Generate sheet's purple CTAs (`Generate session`, `Start
   // session`, `Save program`) are `bg-purple-600` on the web, flat in both
   // modes there — `mindset` is the same purple-600/400 token the rest of the
@@ -84,6 +90,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   inverted: "text-background",
   success: "text-primary-foreground",
   info: "text-primary-foreground",
+  accent: "text-accent-foreground",
   mindset: "text-primary-foreground",
 };
 
@@ -162,15 +169,17 @@ export function Button({
           <ActivityIndicator
             size="small"
             color={
-              variant === "primary" ||
-              variant === "destructive" ||
-              variant === "success" ||
-              variant === "info" ||
-              variant === "mindset"
-                ? colors["primary-foreground"]
-                : variant === "inverted"
-                  ? colors.background
-                  : colors.foreground
+              variant === "accent"
+                ? colors["accent-foreground"]
+                : variant === "primary" ||
+                    variant === "destructive" ||
+                    variant === "success" ||
+                    variant === "info" ||
+                    variant === "mindset"
+                  ? colors["primary-foreground"]
+                  : variant === "inverted"
+                    ? colors.background
+                    : colors.foreground
             }
           />
         </View>
