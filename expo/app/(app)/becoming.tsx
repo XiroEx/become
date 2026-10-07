@@ -25,6 +25,7 @@ import {
   sameWeek,
 } from "@/lib/becoming/storage";
 import { journeySignals } from "@/lib/becoming/signals";
+import { peakIndexes } from "@/lib/becoming/weekSummary";
 import type { WeekSnapshot, JourneyPayload } from "@/lib/becoming/types";
 import { WeekCard, HorizonCard } from "@/components/becoming/WeekCard";
 import { BecomingDetails } from "@/components/becoming/BecomingDetails";
@@ -111,6 +112,8 @@ export default function BecomingScreen() {
     [weeks, data?.unit, data?.target?.direction],
   );
 
+  const peaks = useMemo(() => peakIndexes(weeks), [weeks]);
+
   // Determine which week to focus / open on
   const thisWeekIndex = useMemo(() => {
     if (weeks.length === 0) return 0;
@@ -123,11 +126,23 @@ export default function BecomingScreen() {
     return weeks.length - 1;
   }, [weeks, initialWeekKey]);
 
+  useEffect(() => {
+    if (weeks.length > 0 && thisWeekIndex >= 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: thisWeekIndex,
+          animated: false,
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [weeks.length, thisWeekIndex]);
+
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.push("/(tabs)/dashboard" as never);
+      router.push("/(tabs)/mind" as never);
     }
   };
 
@@ -297,6 +312,7 @@ export default function BecomingScreen() {
             totalWeeks={weeks.length}
             identity={data?.identity ?? null}
             next={item.isCurrent ? (data?.next ?? null) : null}
+            isPeak={peaks.has(index)}
             onDetails={() => setDetailsOpen(true)}
             onNavigate={handleNavigate}
           />
@@ -327,8 +343,8 @@ export default function BecomingScreen() {
         }}
         windowSize={5}
         maxToRenderPerBatch={3}
-        initialNumToRender={3}
-        removeClippedSubviews={true}
+        initialNumToRender={Math.max(weeks.length + 1, 10)}
+        removeClippedSubviews={false}
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: Math.max(insets.bottom, 24) + 16 },
@@ -346,6 +362,7 @@ export default function BecomingScreen() {
         identity={data?.identity}
         chapter={data?.chapter}
         becomingScore={data?.becomingScore}
+        token={token}
         onJumpToWeek={jumpToWeek}
         onNavigate={handleNavigate}
       />

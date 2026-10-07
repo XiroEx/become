@@ -224,7 +224,8 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(getByTestId('week-card-headline')).toBeTruthy()
       expect(getByText('Momentum build')).toBeTruthy()
       expect(getByTestId('week-card-sub')).toBeTruthy()
-      expect(getByText('In progress')).toBeTruthy()
+      expect(getByText('live')).toBeTruthy()
+      expect(getByText('What to work on')).toBeTruthy()
       expect(getByTestId('week-card-wins')).toBeTruthy()
       expect(getByText('Kept focus under pressure')).toBeTruthy()
 
@@ -234,19 +235,37 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(onDetails).toHaveBeenCalledTimes(1)
     })
 
+    it('renders peak chip as new high and deltas label', () => {
+      const signals = {
+        ...weekSignals([MOCK_WEEK], 0),
+        hasDeltas: true,
+      }
+      const { getByText } = render(
+        <WeekCard
+          week={{ ...MOCK_WEEK, isCurrent: false, step: 'up' }}
+          signals={signals}
+          isPeak={true}
+        />,
+      )
+      expect(getByText('new high')).toBeTruthy()
+      expect(getByText('Changes vs the week before')).toBeTruthy()
+    })
+
     it('renders HorizonCard with unwritten future and next steps', () => {
       const onNavigate = jest.fn()
       const { getByTestId, getByText } = render(
         <HorizonCard
           identity="Consistent, disciplined builder"
           next={MOCK_JOURNEY.next}
+          trend="up"
           onNavigate={onNavigate}
         />,
       )
 
       expect(getByTestId('horizon-card')).toBeTruthy()
-      expect(getByText('The horizon')).toBeTruthy()
-      expect(getByText('Next Sunday · unwritten')).toBeTruthy()
+      expect(getByText('Next Sunday')).toBeTruthy()
+      expect(getByText('Horizon lifting')).toBeTruthy()
+      expect(getByText('Who am I becoming?')).toBeTruthy()
       expect(getByText('“Consistent, disciplined builder”')).toBeTruthy()
       expect(getByTestId('horizon-writes')).toBeTruthy()
     })
@@ -295,6 +314,316 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(getByTestId('details-screen-mind')).toBeTruthy()
       expect(getByText('Becoming score')).toBeTruthy()
       expect(getByText('1,250')).toBeTruthy()
+    })
+
+    it('renders Training tab with Then/Now/Next, What you moved, suggestions, and Est. max sheet', () => {
+      const mockGoals = {
+        training: {
+          status: 'active' as const,
+          unit: 'lbs' as const,
+          target: { daysPerWeek: 3 },
+          thisWeek: { done: 1, remaining: 2, weekLost: false },
+          baseline: { prs: [], date: '2026-09-30' },
+          startedAt: '2026-09-30',
+          avgLast4: 2,
+          hasLiftTargets: false,
+          lifts: [
+            { slug: 'bench', name: 'Bench Press', then: 200, now: 225, delta: 25, target: 250, reached: false },
+          ],
+          suggestedLifts: [],
+          week: {
+            sessions: 1,
+            sets: 6,
+            reps: 30,
+            volume: 7800,
+            workSeconds: 0,
+            hasWeightedWork: true,
+            topSet: { name: 'Bench Press', weight: 225, reps: 5, e1RM: 260 },
+            exercises: 1,
+          },
+          suggestion: {
+            key: 't-more',
+            title: '2 more by Saturday',
+            sub: 'Keep momentum going',
+            url: '/dashboard/workout',
+            severity: 'nudge' as const,
+          },
+        },
+        nutrition: null,
+      }
+
+      const { getByTestId, getByText } = render(
+        <SafeAreaProvider
+          initialMetrics={{
+            insets: { top: 0, left: 0, right: 0, bottom: 0 },
+            frame: { x: 0, y: 0, width: 375, height: 812 },
+          }}
+        >
+          <BecomingDetails
+            open={true}
+            onClose={jest.fn()}
+            initialTab="training"
+            goals={mockGoals as any}
+          />
+        </SafeAreaProvider>,
+      )
+
+      expect(getByText('This week 1/3')).toBeTruthy()
+      expect(getByText('Sep 30')).toBeTruthy()
+      expect(getByText('PRs on Sep 30')).toBeTruthy()
+      expect(getByText('2/wk')).toBeTruthy()
+      expect(getByText('avg, last 4 weeks')).toBeTruthy()
+      expect(getByText('3/wk')).toBeTruthy()
+
+      // What you moved
+      expect(getByText('What you moved')).toBeTruthy()
+      expect(getByText('Sessions')).toBeTruthy()
+      expect(getByText('1')).toBeTruthy()
+      expect(getByText('Sets')).toBeTruthy()
+      expect(getByText('6')).toBeTruthy()
+      expect(getByText('Load moved')).toBeTruthy()
+      expect(getByText('7.8k lbs')).toBeTruthy()
+      expect(getByText(/Best set:.*Bench Press.*225 lbs × 5/)).toBeTruthy()
+
+      // Suggestion
+      expect(getByText('2 more by Saturday')).toBeTruthy()
+
+      // Switch to Strength view
+      fireEvent.press(getByTestId('training-subswitch-strength'))
+      expect(getByText('Est. max?')).toBeTruthy()
+      fireEvent.press(getByTestId('details-what-is-est-max'))
+      expect(getByText('What is an estimated max?')).toBeTruthy()
+      expect(getByText(/Weight × \(36 \/ \(37 − Reps\)\)/)).toBeTruthy()
+    })
+
+    it('renders Fuel tab with weight plan, adherence aim, first weigh-in, and macros link', () => {
+      const mockGoals = {
+        nutrition: {
+          status: 'active' as const,
+          direction: 'lose' as const,
+          unit: 'lbs' as const,
+          pace: {
+            status: 'on' as const,
+            behindByKg: 0,
+            aheadByKg: 0,
+            eta: '~12 wks',
+            etaDate: null,
+          },
+          baseline: { weight: 175, date: '2026-09-30' },
+          now: { weight: 175, date: '2026-10-06', fourWeeksAgo: 175 },
+          target: { weight: 181, pacePerWeek: 0.5 },
+          journeyStart: { weight: 173, date: '2026-09-09' },
+          adherence: {
+            logDays: 7,
+            totalDays: 7,
+            logTarget: 5,
+            logOk: true,
+            proteinJudged: true,
+            proteinOk: true,
+            proteinDays: 6,
+            proteinTarget: 5,
+          },
+          suggestion: {
+            key: 'on-pace',
+            title: 'On pace',
+            sub: 'Hold the habits',
+            url: '/dashboard/nutrition',
+            severity: 'good' as const,
+          },
+        },
+        training: null,
+      }
+
+      const { getByTestId, getByText, getAllByText } = render(
+        <SafeAreaProvider
+          initialMetrics={{
+            insets: { top: 0, left: 0, right: 0, bottom: 0 },
+            frame: { x: 0, y: 0, width: 375, height: 812 },
+          }}
+        >
+          <BecomingDetails
+            open={true}
+            onClose={jest.fn()}
+            initialTab="fuel"
+            goals={mockGoals as any}
+            weighIns={[
+              { day: '2026-10-05', value: 175 },
+              { day: '2026-10-06', value: 175 },
+            ]}
+          />
+        </SafeAreaProvider>,
+      )
+
+      expect(getByTestId('weight-plan')).toBeTruthy()
+      expect(getAllByText('On pace').length).toBe(2)
+      expect(getByText('plan from Sep 30')).toBeTruthy()
+      expect(getByText('181 lbs')).toBeTruthy()
+      expect(getByText('First weigh-in 173 lbs on Sep 9.')).toBeTruthy()
+      expect(getByText(/Logged 7\/7 days/)).toBeTruthy()
+      expect(getAllByText('(aim 5)').length).toBeGreaterThanOrEqual(1)
+      expect(getByText('Pace, targets and macros')).toBeTruthy()
+    })
+
+    it('renders Mind tab with streak tile, arc progress %, how you shown up, and next chapter', async () => {
+      const mockProgress = {
+        chapter: 2,
+        xp: 150,
+        xpBank: 1250,
+        vision: { identityStatement: 'Disciplined builder' },
+        chapterHistory: [{ chapter: 1, unlockedAt: '2026-09-01' }],
+      }
+      const mockWins = [{ _id: '1', win: 'Kept calm under pressure', date: '2026-10-01' }]
+      const mockLogs = [
+        { state: 'stressed', timestamp: '2026-10-02' },
+        { state: 'locked_in', timestamp: '2026-10-01' },
+      ]
+
+      const originalFetch = global.fetch
+      global.fetch = jest.fn((url: string) => {
+        if (url.includes('/api/mind/progress')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(mockProgress) })
+        }
+        if (url.includes('/api/mind/wins')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ wins: mockWins }) })
+        }
+        if (url.includes('/api/mind/state')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ logs: mockLogs }) })
+        }
+        if (url.includes('/api/mind/session')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ streak: 1 }) })
+        }
+        if (url.includes('/api/goals')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+        }
+        if (url.includes('/api/progress')) {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({}) })
+        }
+        return Promise.reject(new Error(`Unknown url: ${url}`))
+      }) as any
+
+      try {
+        const { getByTestId, getByText, getAllByText, findByText } = render(
+          <SafeAreaProvider
+            initialMetrics={{
+              insets: { top: 0, left: 0, right: 0, bottom: 0 },
+              frame: { x: 0, y: 0, width: 375, height: 812 },
+            }}
+          >
+            <BecomingDetails
+              open={true}
+              onClose={jest.fn()}
+              initialTab="mind"
+              token="test-token"
+            />
+          </SafeAreaProvider>,
+        )
+
+        await findByText('1 DAY STREAK')
+
+        expect(getByTestId('mind-streak-tile')).toBeTruthy()
+        expect(getByText('where you started')).toBeTruthy()
+        expect(getByText('Ch 2 · Foundation')).toBeTruthy()
+        expect(getAllByText('Edge').length).toBeGreaterThanOrEqual(1)
+
+        // 150 XP on Chapter 2 is 100% of chapter 2 (50 to 150)
+        expect(getByText('100%')).toBeTruthy()
+
+        // How you've shown up: 1 of 2 is locked_in -> 50%
+        expect(getByText('50% locked in')).toBeTruthy()
+        expect(getByText('Locked in')).toBeTruthy()
+        expect(getByText('Stressed')).toBeTruthy()
+
+        // Dominant is stressed / focus action
+        expect(getByText('Calm the storm')).toBeTruthy()
+
+        // Next chapter
+        expect(getByText('Next: Edge')).toBeTruthy()
+        expect(getByText('Unlocks Discipline')).toBeTruthy()
+      } finally {
+        global.fetch = originalFetch
+      }
+    })
+
+    it('renders Story tab with training metrics, mostly stressed, 1-day streak, and empty evidence wall copy', () => {
+      const mockWeekWithMetrics: WeekSnapshot = {
+        ...MOCK_WEEK,
+        mind: {
+          sessions: 1,
+          moodDays: 2,
+          dominant: 'stressed',
+          wins: [],
+          chapterUnlocked: null,
+        },
+        training: {
+          workouts: 1,
+          target: 3,
+          hit: false,
+          prs: [],
+          prCount: 0,
+        },
+      }
+
+      const mockGoals = {
+        training: {
+          unit: 'lbs' as const,
+          target: { daysPerWeek: 3 },
+          week: {
+            sessions: 1,
+            sets: 6,
+            volume: 7800,
+            hasWeightedWork: true,
+          },
+          suggestion: {
+            key: 'train-sug',
+            title: '2 more by Saturday',
+            sub: 'On track',
+            url: '/workout',
+            severity: 'nudge' as const,
+          },
+        },
+        nutrition: {
+          suggestion: {
+            key: 'fuel-sug',
+            title: 'On pace',
+            sub: 'Hold the habits',
+            url: '/nutrition',
+            severity: 'good' as const,
+          },
+        },
+      }
+
+      const { getByTestId, getByText } = render(
+        <SafeAreaProvider
+          initialMetrics={{
+            insets: { top: 0, left: 0, right: 0, bottom: 0 },
+            frame: { x: 0, y: 0, width: 375, height: 812 },
+          }}
+        >
+          <BecomingDetails
+            open={true}
+            onClose={jest.fn()}
+            initialTab="story"
+            weeks={[mockWeekWithMetrics]}
+            goals={mockGoals as any}
+            streak={1}
+          />
+        </SafeAreaProvider>,
+      )
+
+      expect(getByTestId('story-summary')).toBeTruthy()
+      expect(getByText('1 of 3 workouts · 6 sets · 7.8k lbs moved')).toBeTruthy()
+      expect(getByText(/mostly stressed/)).toBeTruthy()
+      expect(getByText('1-day streak')).toBeTruthy()
+
+      // What to do next
+      expect(getByText('What to do next')).toBeTruthy()
+      expect(getByText('2 more by Saturday')).toBeTruthy()
+      expect(getByText('Calm the storm')).toBeTruthy()
+      expect(getByText('On pace')).toBeTruthy()
+
+      // Evidence wall empty copy
+      expect(getByText('Evidence wall')).toBeTruthy()
+      expect(getByText('No wins banked yet. Bank one in a session — the proof that you’re changing builds here.')).toBeTruthy()
     })
   })
 })

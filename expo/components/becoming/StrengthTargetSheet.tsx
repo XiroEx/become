@@ -12,8 +12,8 @@ import type { LiftProgress } from '@/lib/becoming/types'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
-export const EST_MAX_LABEL = 'Estimated 1RM'
-export const EST_MAX_LABEL_SHORT = 'Est 1RM'
+export const EST_MAX_LABEL = 'Estimated max'
+export const EST_MAX_LABEL_SHORT = 'Est. max'
 
 export interface StrengthTargetSheetProps {
   open: boolean
@@ -31,9 +31,10 @@ export function StrengthTargetSheet({
   hue = 'hsl(142, 71%, 58%)',
 }: StrengthTargetSheetProps) {
   const { colors, tint, scrim } = useThemeTokens()
-  if (!lift) return null
+  if (!open) return null
 
-  const reached = lift.target ? lift.e1RM >= lift.target : false
+  const reached = lift?.target ? lift.e1RM >= lift.target : false
+  const isTargetMode = !!lift
 
   return (
     <Modal
@@ -60,8 +61,12 @@ export function StrengthTargetSheet({
                 )}
               </View>
               <View>
-                <Text style={[styles.kicker, { color: colors['muted-foreground'] }]}>Estimated 1RM & Target</Text>
-                <Text style={[styles.title, { color: colors.foreground }]}>{lift.name}</Text>
+                <Text style={[styles.kicker, { color: colors['muted-foreground'] }]}>
+                  {isTargetMode ? `${EST_MAX_LABEL} & Target` : 'Definition'}
+                </Text>
+                <Text style={[styles.title, { color: colors.foreground }]}>
+                  {isTargetMode ? lift.name : `What is an ${EST_MAX_LABEL.toLowerCase()}?`}
+                </Text>
               </View>
             </View>
             <Pressable
@@ -76,37 +81,39 @@ export function StrengthTargetSheet({
 
           <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 32 }}>
             <View style={styles.section}>
-              <View style={[styles.targetCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}>
-                <View style={styles.metricRow}>
-                  <View style={styles.metricBox}>
-                    <Text style={[styles.metricLabel, { color: colors['muted-foreground'] }]}>Current best</Text>
-                    <Text style={[styles.metricValue, { color: colors.foreground }]}>
-                      {lift.e1RM} <Text style={{ fontSize: 13, fontWeight: '500', color: colors['muted-foreground'] }}>{unit}</Text>
-                    </Text>
+              {isTargetMode && (
+                <View style={[styles.targetCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}>
+                  <View style={styles.metricRow}>
+                    <View style={styles.metricBox}>
+                      <Text style={[styles.metricLabel, { color: colors['muted-foreground'] }]}>Current best</Text>
+                      <Text style={[styles.metricValue, { color: colors.foreground }]}>
+                        {lift.e1RM} <Text style={{ fontSize: 13, fontWeight: '500', color: colors['muted-foreground'] }}>{unit}</Text>
+                      </Text>
+                    </View>
+
+                    {lift.target ? (
+                      <>
+                        <Text style={{ color: colors['muted-foreground'], fontSize: 16 }}>→</Text>
+                        <View style={styles.metricBox}>
+                          <Text style={[styles.metricLabel, { color: colors['muted-foreground'] }]}>Target</Text>
+                          <Text style={[styles.metricValue, { color: hue }]}>
+                            {lift.target} <Text style={{ fontSize: 13, fontWeight: '500', color: colors['muted-foreground'] }}>{unit}</Text>
+                          </Text>
+                        </View>
+                      </>
+                    ) : null}
                   </View>
 
-                  {lift.target ? (
-                    <>
-                      <Text style={{ color: colors['muted-foreground'], fontSize: 16 }}>→</Text>
-                      <View style={styles.metricBox}>
-                        <Text style={[styles.metricLabel, { color: colors['muted-foreground'] }]}>Target</Text>
-                        <Text style={[styles.metricValue, { color: hue }]}>
-                          {lift.target} <Text style={{ fontSize: 13, fontWeight: '500', color: colors['muted-foreground'] }}>{unit}</Text>
-                        </Text>
-                      </View>
-                    </>
-                  ) : null}
+                  {reached && (
+                    <View style={[styles.reachedPill, { backgroundColor: tint('success', 0.15) }]}>
+                      <Check size={12} color={colors.success} />
+                      <Text style={[styles.reachedText, { color: colors.success }]}>Target achieved</Text>
+                    </View>
+                  )}
                 </View>
+              )}
 
-                {reached && (
-                  <View style={[styles.reachedPill, { backgroundColor: tint('success', 0.15) }]}>
-                    <Check size={12} color={colors.success} />
-                    <Text style={[styles.reachedText, { color: colors.success }]}>Target achieved</Text>
-                  </View>
-                )}
-              </View>
-
-              {lift.targetJustification ? (
+              {isTargetMode && lift.targetJustification ? (
                 <View style={[styles.explanationBox, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}>
                   <Text style={[styles.explanationKicker, { color: colors['muted-foreground'] }]}>Why this target</Text>
                   <Text style={[styles.explanationText, { color: colors.foreground }]}>{lift.targetJustification}</Text>
@@ -114,7 +121,7 @@ export function StrengthTargetSheet({
               ) : null}
 
               <View style={[styles.explanationBox, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}>
-                <Text style={[styles.explanationKicker, { color: colors['muted-foreground'] }]}>How estimated max is calculated</Text>
+                <Text style={[styles.explanationKicker, { color: colors['muted-foreground'] }]}>How {EST_MAX_LABEL.toLowerCase()} is calculated</Text>
                 <Text style={[styles.bodyText, { color: colors['muted-foreground'] }]}>
                   Every working set gives a data point. When you lift a weight for multiple reps,
                   we calculate your one-rep maximum using the Brzycki equation:
