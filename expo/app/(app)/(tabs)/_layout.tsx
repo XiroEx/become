@@ -67,6 +67,18 @@ const ICON_BY_ROUTE: Record<TabRouteConfig["name"], typeof Home> = {
  * `__tests__/navigation-shell.test.tsx` renders this layout over the REAL app
  * directory and reads the bar that comes out, so it fails if the bar ever grows
  * a fifth button or reorders the four.
+ *
+ * `initialRouteName="dashboard"` + `backBehavior="history"` (NP-315): without
+ * an explicit initial route, this navigator's back history is seeded with its
+ * FIRST declared screen — `programming` (Workout), per `TAB_ROUTES` above —
+ * even though every member actually lands on Home (`dashboard`) first. System
+ * back on Home then popped to Workout instead of exiting, and any screen
+ * opened cross-tab from Home (History, Nutrition Goals) fell back to that same
+ * phantom Workout entry instead of Home once its own stack ran out of local
+ * history — `programming/history.tsx` and `nutrition/goals.tsx` both guard
+ * their own back targets for this too (`router.canGoBack()` → Home).
+ * `backBehavior="history"` is bottom-tabs' default; named here so a future
+ * edit has to say out loud that it is changing it.
  */
 export default function TabsLayout() {
   // The bar is a native navigator surface, so none of it can be a class: the
@@ -76,6 +88,8 @@ export default function TabsLayout() {
 
   return (
     <Tabs
+      initialRouteName="dashboard"
+      backBehavior="history"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
