@@ -31,6 +31,7 @@ import { validateGuidedSteps } from "@/lib/ai/sanitize";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { celebrationHaptic } from "@/lib/feedback/haptics";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -309,8 +310,7 @@ export default function AntiSabotageDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.accent}
-        accentClass="bg-orange-500"
+        accentColor={mindAccentColor("anti-sabotage")}
         doneText={DONE_TEXT}
         onReflect={
           flow.aiGenerated || flow.kind !== "protocol"
