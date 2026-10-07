@@ -173,6 +173,12 @@ describe("FoodDetailRoute", () => {
         // The real route 404s for a synthetic id — nothing should ask it.
         return Promise.reject(new Error("Food not found"));
       }
+      if (String(path).startsWith("/api/tags")) {
+        return Promise.resolve({
+          defaults: ["breakfast", "lunch", "dinner", "snack"],
+          userTags: [],
+        });
+      }
       return Promise.resolve({ success: true });
     });
   });
@@ -207,11 +213,12 @@ describe("FoodDetailRoute", () => {
       );
     });
 
-    // Pick a meal and confirm.
-    fireEvent.press(getByTestId("save-as-meal-open"));
-    fireEvent.press(getByTestId("save-as-meal-option-lunch"));
+    // Open the `Log this food` sheet (NP-325), pick a tag and log.
+    fireEvent.press(getByTestId("nutrition-food-log-open"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-toggle"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-lunch"));
     await act(async () => {
-      fireEvent.press(getByTestId("save-as-meal-confirm"));
+      fireEvent.press(getByTestId("nutrition-food-log-sheet-submit"));
     });
 
     await waitFor(() => {
@@ -229,20 +236,19 @@ describe("FoodDetailRoute", () => {
       );
     });
 
-    // The web's `Log this food` button opens a sheet (NP-269) — the amount
-    // picker lives there now, not inline on the page.
+    // The web's `Log this food` button opens a sheet (NP-269, NP-325) — the
+    // amount chips live there now, not inline on the page.
     fireEvent.press(getByTestId("nutrition-food-log-open"));
 
-    // The picker defaults to one portion — one bar — and previews the bar.
-    expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([
-      210,
-      " kcal",
-    ]);
+    // The sheet defaults to one portion — one bar — and previews the bar.
+    expect(getByTestId("nutrition-food-log-sheet-macro-cal").props.children).toBe(
+      "210",
+    );
 
-    fireEvent.press(getByTestId("save-as-meal-open"));
-    fireEvent.press(getByTestId("save-as-meal-option-dinner"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-toggle"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-dinner"));
     await act(async () => {
-      fireEvent.press(getByTestId("save-as-meal-confirm"));
+      fireEvent.press(getByTestId("nutrition-food-log-sheet-submit"));
     });
 
     await waitFor(() => {
@@ -277,20 +283,21 @@ describe("FoodDetailRoute", () => {
     await waitFor(() => {
       expect(getByTestId("nutrition-food-log-open")).toBeTruthy();
     });
-    // The web's `Log this food` button opens the sheet the amount picker
-    // lives in (NP-269) — no longer an inline, always-on-screen form.
+    // The web's `Log this food` button opens the sheet the amount chips
+    // live in (NP-269, NP-325) — no longer an inline, always-on-screen form.
     fireEvent.press(getByTestId("nutrition-food-log-open"));
     await waitFor(() => {
-      expect(getByTestId("quantity-input")).toBeTruthy();
+      expect(getByTestId("nutrition-food-log-sheet-amount-custom")).toBeTruthy();
     });
 
-    // Two bars.
-    fireEvent.changeText(getByTestId("quantity-input"), "2");
+    // Two bars, via the Custom amount fallback.
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-amount-custom"));
+    fireEvent.changeText(getByTestId("nutrition-food-log-sheet-amount-custom-input"), "2");
 
-    fireEvent.press(getByTestId("save-as-meal-open"));
-    fireEvent.press(getByTestId("save-as-meal-option-snack"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-toggle"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-snack"));
     await act(async () => {
-      fireEvent.press(getByTestId("save-as-meal-confirm"));
+      fireEvent.press(getByTestId("nutrition-food-log-sheet-submit"));
     });
 
     await waitFor(() => {
@@ -312,18 +319,25 @@ describe("FoodDetailRoute", () => {
 
   it("says so rather than logging zeros when the hit cannot be resolved", async () => {
     mockApiFetch.mockReset();
-    mockApiFetch.mockImplementation((path: string) =>
-      String(path).startsWith("/api/nutrition/foods/import")
-        ? Promise.reject(new Error("USDA 502"))
-        : Promise.resolve({ success: true }),
-    );
+    mockApiFetch.mockImplementation((path: string) => {
+      if (String(path).startsWith("/api/nutrition/foods/import")) {
+        return Promise.reject(new Error("USDA 502"));
+      }
+      if (String(path).startsWith("/api/tags")) {
+        return Promise.resolve({
+          defaults: ["breakfast", "lunch", "dinner", "snack"],
+          userTags: [],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
 
     const { getByTestId, queryByTestId } = render(<FoodDetailRoute />);
     await waitFor(() => {
       expect(getByTestId("nutrition-food-error")).toBeTruthy();
     });
-    // No picker and no save button → nothing can be logged.
-    expect(queryByTestId("save-as-meal-open")).toBeNull();
+    // No sticky `Log this food` button → nothing can be logged.
+    expect(queryByTestId("nutrition-food-log-open")).toBeNull();
     expect(findCall("/api/meal-logs", "POST")).toBeUndefined();
   });
 
@@ -360,6 +374,12 @@ describe("FoodDetailRoute", () => {
           },
         });
       }
+      if (String(path).startsWith("/api/tags")) {
+        return Promise.resolve({
+          defaults: ["breakfast", "lunch", "dinner", "snack"],
+          userTags: [],
+        });
+      }
       return Promise.resolve({ success: true });
     });
 
@@ -388,20 +408,19 @@ describe("FoodDetailRoute", () => {
     );
     expect(gatedCreateCalls()).toHaveLength(0);
 
-    // The web's `Log this food` button opens the sheet the amount picker
-    // lives in (NP-269).
+    // The web's `Log this food` button opens the sheet the amount chips
+    // live in (NP-269, NP-325).
     fireEvent.press(getByTestId("nutrition-food-log-open"));
 
-    // Stored per 100 g with a 38 g bag: the picker defaults to the bag.
-    expect(getByTestId("serving-picker-preview-kcal").props.children).toEqual([
-      201,
-      " kcal",
-    ]);
+    // Stored per 100 g with a 38 g bag: the sheet defaults to the bag.
+    expect(getByTestId("nutrition-food-log-sheet-macro-cal").props.children).toBe(
+      "201",
+    );
 
-    fireEvent.press(getByTestId("save-as-meal-open"));
-    fireEvent.press(getByTestId("save-as-meal-option-snack"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-toggle"));
+    fireEvent.press(getByTestId("nutrition-food-log-sheet-tag-snack"));
     await act(async () => {
-      fireEvent.press(getByTestId("save-as-meal-confirm"));
+      fireEvent.press(getByTestId("nutrition-food-log-sheet-submit"));
     });
     await waitFor(() => {
       expect(findCall("/api/meal-logs", "POST")).toBeTruthy();
