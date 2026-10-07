@@ -514,11 +514,21 @@ export default function LiveWorkoutRoute({
         exercisePRs={exercisePRs}
         exerciseHints={exerciseHints}
         onDismissHint={(slug) => void dismissHint(slug)}
+        onExit={() => router.back()}
         manageExercises={
           workout
             ? {
                 onOpen: () => setShowExerciseList(true),
                 label: `Exercises (${workout.exercises.length})`,
+                // The web's `Add Exercise` pill on the live step opens the
+                // add sheet straight away (NP-288); the manage panel's own
+                // Add still works too.
+                onAdd: () => {
+                  setAddAnchorIndex(
+                    Math.max(0, (workout.exercises.length ?? 1) - 1),
+                  );
+                  setShowAddExercise(true);
+                },
               }
             : undefined
         }

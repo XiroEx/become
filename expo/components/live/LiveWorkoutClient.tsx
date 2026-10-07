@@ -25,6 +25,7 @@ import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
+import { RestOverlay, upNextDetail } from "@/components/live/RestOverlay";
 import { prHaptic, setCompleteHaptic } from "@/lib/feedback/haptics";
 import type {
   ExerciseHistoryEntry,
@@ -231,7 +232,19 @@ export interface LiveWorkoutClientProps {
     onOpen: () => void;
     /** Button label — e.g. `Exercises (5)`. */
     label?: string;
+    /**
+     * Open the route-owned add sheet directly (the web's `Add Exercise`
+     * pill beside `Swap Exercise` on the live step). Omitted, no pill
+     * renders and adding stays inside the manage panel.
+     */
+    onAdd?: () => void;
   };
+  /**
+   * Leave the live screen — the web's top-left `✕` (its own handler:
+   * `router.back()` for a program workout, `router.replace` to the session
+   * overview for a quick one). Omitted, no exit button renders.
+   */
+  onExit?: () => void;
   /**
    * A jump requested by the route's OWN manage panel (`WorkoutExerciseList`,
    * which says "Tap to jump · hold to move" but has no access to this
@@ -426,14 +439,22 @@ function setsByExercise(
  * A set in words for the edit-confirm modal's Before / After boxes - the
  * web shows `weight lbs x reps` beside each. Timed work reads as its
  * duration; anything with neither reads as logged.
+ *
+ * The unit of a REP count is "reps" (NP-288). It used to be
+ * `setUnitLabel(trackingType, 1)` — which names the SET ("Set", "Round",
+ * "Interval"), not what is in it — so a bodyweight set of 18 reps read
+ * "Before: 18 set → After: 18 set".
  */
-function describeSet(state: LiveSetState, trackingType?: string | null): string {
+export function describeSet(
+  state: LiveSetState,
+  _trackingType?: string | null,
+): string {
   const num = (v: number | null | undefined) =>
     v === null || v === undefined ? null : String(v);
   const reps = num(state.reps);
   const weight = num(state.weight);
-  if (reps !== null && weight !== null) return weight + " lbs x " + reps;
-  if (reps !== null) return reps + " " + setUnitLabel(trackingType ?? null, 1).toLowerCase();
+  if (reps !== null && weight !== null) return weight + " lbs × " + reps + " reps";
+  if (reps !== null) return reps + " reps";
   if (weight !== null) return weight + " lbs";
   if (state.durationSec !== null && state.durationSec !== undefined)
     return String(state.durationSec) + "s";
@@ -511,6 +532,7 @@ export function LiveWorkoutClient({
   onExerciseChange,
   day,
   onViewPRs,
+  onExit,
   testID = "live-workout",
 }: LiveWorkoutClientProps) {
   const { colors, tint } = useThemeTokens();
@@ -724,10 +746,18 @@ export function LiveWorkoutClient({
       if (manualToggle && !resolved.completed) {
         // The member explicitly reopened the set: forget what was done.
         completedSnapshot.current.delete(key);
-      } else if (justCompleted && !completedSnapshot.current.has(key)) {
-        // First completion records what was done; further typing into a
-        // done set dirties it against this snapshot (the web's Before vs
-        // inputs) instead of moving the goalposts.
+      } else if (resolved.completed) {
+        // THIS path is Track's (and Track's rule is the web's Track rule):
+        // typing IS logging there — a set ticks itself the moment it holds
+        // what its tracking type asks for, and the web's Track view has no
+        // edit-confirm gate at all. So the snapshot follows every keystroke
+        // here. It used to be written only on the FIRST tick, which made a
+        // set that ticks on its first digit ("1" of "18" reps) permanently
+        // disagree with itself: pressing Complete then asked "Update Set?
+        // … Before: 18 → After: 18" about a set nobody had completed
+        // (NP-288). Live's own input path does NOT come through here and
+        // does NOT touch the snapshot, which is exactly what makes editing
+        // an already-logged set in Live still ask first.
         completedSnapshot.current.set(key, { ...resolved });
       }
 
@@ -763,6 +793,43 @@ export function LiveWorkoutClient({
     [workout.exercises, workoutFlow, flowIndexByKey, onGridChange, onSetComplete, rememberAfterEdit, rest],
   );
 
+  /**
+   * THE LIVE STEP'S INPUTS (NP-288) — typing, and nothing else.
+   *
+   * The web's live view keeps what is typed in its own input state and
+   * writes it into the set only when `completeSet` runs, so typing there
+   * neither logs the set nor starts a rest. Native holds one grid for both
+   * views, so the keystrokes do land in it — but they must not carry the
+   * Track rules with them:
+   *
+   *  - no self-tick (`isSetFilled`): a half-typed set is not a logged set.
+   *    The tick used to fire on the first digit, which started the rest
+   *    timer while the member was still typing their reps and left the
+   *    step standing on a set that was already "done".
+   *  - no rest, no immediate save: `Complete Set →` owns both.
+   *  - `completed` is carried over untouched, so editing a set that IS
+   *    logged (a skipped one, or one logged in Track) keeps it logged and
+   *    still asks before overwriting it.
+   */
+  const handleLiveSetChange = useCallback(
+    (exerciseIndex: number, setIndex: number, next: LiveSetState) => {
+      const ex = workout.exercises[exerciseIndex];
+      if (!ex) return;
+      const prev = gridRef.current[ex.slug]?.[setIndex];
+      const resolved: LiveSetState = {
+        ...next,
+        completed: prev?.completed ?? false,
+      };
+      const updated = applySetUpdate(gridRef.current, ex.slug, setIndex, resolved);
+      gridRef.current = updated;
+      setGrid(updated);
+      setShowResumed(false);
+      onGridChange?.(updated);
+      rememberPosition(exerciseIndex, setIndex);
+    },
+    [workout.exercises, onGridChange, rememberPosition],
+  );
+
   const handleStepChange = useCallback(
     (nextIndex: number) => {
       setLiveStepIndex(nextIndex);
@@ -793,21 +860,14 @@ export function LiveWorkoutClient({
     const changedSinceDone =
       !!prev?.completed && (!snap || !sameSetValues(snap, prev));
     if (changedSinceDone) {
+      // Before is what the set WAS LOGGED AS (the snapshot), After is what
+      // is typed now. Both used to read `prev` — the row — so the modal
+      // asked about a change it then showed as `18 → 18` (NP-288).
       setEditConfirm({
         exerciseIndex: step.exerciseIndex,
         setIndex: step.setIndex,
-        before: describeSet(prev, ex.trackingType),
-        after: describeSet(
-          {
-            reps: prev.reps ?? null,
-            weight: prev.weight ?? null,
-            durationSec: prev.durationSec ?? null,
-            distance: prev.distance ?? null,
-            speed: prev.speed ?? null,
-            completed: true,
-          },
-          ex.trackingType,
-        ),
+        before: describeSet(snap ?? prev, ex.trackingType),
+        after: describeSet(prev, ex.trackingType),
       });
       return;
     }
@@ -1005,7 +1065,13 @@ export function LiveWorkoutClient({
     handleJumpToExercise(jumpRequest.exerciseIndex);
   }, [jumpRequest, handleJumpToExercise]);
 
-  /** The edit-confirm modal's Save Changes: overwrite the finished set. */
+  /**
+   * The edit-confirm modal's Save Changes: overwrite the finished set — and
+   * then MOVE ON, exactly as the web does (its Save Changes calls
+   * `completeSet`, which advances the step). Native used to save and leave
+   * the member standing on the same set, so confirming an edit looked like
+   * nothing had happened (NP-288).
+   */
   const handleConfirmEdit = useCallback(() => {
     if (!editConfirm) return;
     const ex = workout.exercises[editConfirm.exerciseIndex];
@@ -1029,9 +1095,25 @@ export function LiveWorkoutClient({
     gridRef.current = updated;
     setGrid(updated);
     onGridChange?.(updated);
-    rememberPosition(at.exerciseIndex, at.setIndex);
     void onSetComplete?.({ exerciseSlug: ex.slug, setIndex: at.setIndex, state: resolved });
-  }, [editConfirm, workout.exercises, onGridChange, onSetComplete, rememberPosition]);
+    const flowIndex = flowIndexByKey.get(at.exerciseIndex + ":" + at.setIndex);
+    const nextStep =
+      flowIndex === undefined ? undefined : workoutFlow[flowIndex + 1];
+    if (flowIndex !== undefined && nextStep) {
+      setLiveStepIndex(flowIndex + 1);
+      rememberPosition(nextStep.exerciseIndex, nextStep.setIndex);
+      return;
+    }
+    rememberPosition(at.exerciseIndex, at.setIndex);
+  }, [
+    editConfirm,
+    workout.exercises,
+    workoutFlow,
+    flowIndexByKey,
+    onGridChange,
+    onSetComplete,
+    rememberPosition,
+  ]);
 
   const handleViewChange = useCallback(
     (nextView: WorkoutView) => {
@@ -1127,158 +1209,223 @@ export function LiveWorkoutClient({
       </Button>
     ) : null;
 
+  // Offline / failure banners, shown in BOTH views (Live is a full-screen
+  // step now, so it cannot borrow Track's scroll view for them).
+  const banners = (
+    <>
+      {pendingSync && !saveError ? (
+        <View
+          testID={`${testID}-pending-sync-banner`}
+          style={{
+            padding: 12,
+            borderRadius: 8,
+            backgroundColor: tint("primary", 0.12),
+            gap: 8,
+            marginTop: 12,
+          }}
+        >
+          <Text
+            testID={`${testID}-pending-sync-message`}
+            className="text-foreground font-medium text-sm"
+          >
+            Saved on this phone — will sync when you&apos;re back online.
+          </Text>
+          <Button
+            testID={`${testID}-retry`}
+            variant="secondary"
+            size="sm"
+            onPress={() => onFinish?.(gridRef.current)}
+          >
+            Retry
+          </Button>
+        </View>
+      ) : null}
+      {saveError ? (
+        <View
+          testID={`${testID}-error-banner`}
+          style={{
+            padding: 12,
+            borderRadius: 8,
+            backgroundColor: tint("destructive", 0.15),
+            gap: 8,
+            marginTop: 12,
+          }}
+        >
+          <Text
+            testID={`${testID}-error-message`}
+            className="text-destructive font-medium text-sm"
+          >
+            {typeof saveError === "string"
+              ? saveError
+              : "Couldn’t save workout. You appear to be offline."}
+          </Text>
+          <Button
+            testID={`${testID}-retry`}
+            variant="secondary"
+            size="sm"
+            onPress={() => onFinish?.(gridRef.current)}
+          >
+            Retry
+          </Button>
+        </View>
+      ) : null}
+    </>
+  );
+
+  const liveSets = liveExercise ? (grid[liveExercise.slug] ?? []) : [];
+  const liveTotalSets = liveSets.length || liveExercise?.sets || 1;
+  // ONE exercises entry (NP-288): the route's manage panel when there is
+  // one — it lists, jumps, adds, reorders and removes, which is the whole
+  // of the web's `EXERCISES` popover — else the built-in jump sheet. Live
+  // used to show BOTH as two buttons side by side, labelled `Exercises`
+  // and `Exercises (12)`.
+  const openExercises = manageExercises
+    ? manageExercises.onOpen
+    : () => setSheetOpen(true);
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
       style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-        <WorkoutViewToggle
-          testID={`${testID}-view`}
-          active={view}
-          onChange={handleViewChange}
-        />
-        <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
-          {workout.workoutTitle}
-        </Text>
-        {/* The day line under the title (the web's `workout.day`, e.g. "Day
-            1"): Track only, and only when the route has one — a quick
-            session has no day and renders nothing here either. */}
-        {day && view === "track" ? (
-          <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center">
-            {day}
+      {view === "track" ? (
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <WorkoutViewToggle
+            testID={`${testID}-view`}
+            active={view}
+            onChange={handleViewChange}
+          />
+          <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
+            {workout.workoutTitle}
           </Text>
-        ) : null}
-        {headerAction ? (
-          <View testID={`${testID}-header-action`}>{headerAction}</View>
-        ) : null}
-        <Text
-          testID={`${testID}-progress`}
-          className="text-muted-foreground text-xs"
-        >
-          {`${completedSets} of ${totalSets} sets done`}
-        </Text>
-        {/* Overall progress bar + N% (the web's header progress bar,
-            ~line 2457-2468): SETS, not steps, in both views. */}
-        <View
-          testID={`${testID}-overall-progress`}
-          style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-        >
+          {/* The day line under the title (the web's `workout.day`, e.g. "Day
+              1"): Track only — a quick session has no day and renders
+              nothing here either. */}
+          {day ? (
+            <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center">
+              {day}
+            </Text>
+          ) : null}
+          {headerAction ? (
+            <View testID={`${testID}-header-action`}>{headerAction}</View>
+          ) : null}
+          <Text
+            testID={`${testID}-progress`}
+            className="text-muted-foreground text-xs"
+          >
+            {`${completedSets} of ${totalSets} sets done`}
+          </Text>
+          {/* Overall progress bar + N% (the web's header progress bar,
+              ~line 2457-2468): SETS, not steps. */}
           <View
-            style={{
-              flex: 1,
-              height: 6,
-              overflow: "hidden",
-              borderRadius: 999,
-              backgroundColor: colors.muted,
-            }}
+            testID={`${testID}-overall-progress`}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
           >
             <View
               style={{
-                height: "100%",
+                flex: 1,
+                height: 6,
+                overflow: "hidden",
                 borderRadius: 999,
-                width: `${overallProgressPercent(grid)}%`,
-                backgroundColor: colors.primary,
+                backgroundColor: colors.muted,
               }}
-            />
-          </View>
-          <Text className="text-muted-foreground text-xs font-medium tabular-nums">
-            {`${overallProgressPercent(grid)}%`}
-          </Text>
-        </View>
-        {/* "View PRs →" (the web's Track header link to the personal-records
-            list, NP-287): Track only, and only when the route hands a
-            handler. */}
-        {onViewPRs && view === "track" ? (
-          <Pressable
-            testID={`${testID}-view-prs`}
-            onPress={onViewPRs}
-            accessibilityRole="button"
-            accessibilityLabel="View personal records"
-            style={{ alignSelf: "flex-end" }}
-          >
-            <Text className="text-muted-foreground text-xs">View PRs →</Text>
-          </Pressable>
-        ) : null}
-        {/* Elapsed time (the web's header timer, ~line 2039-2042): only
-            when the route passes a number — the quick session has no
-            timer yet, so it renders nothing here. */}
-        {typeof activeSeconds === "number" ? (
-          <Text
-            testID={`${testID}-elapsed`}
-            className="text-muted-foreground font-mono text-sm tabular-nums"
-          >
-            {formatElapsed(activeSeconds)}
-          </Text>
-        ) : null}
-        {showResumed ? (
-          <Text
-            testID={`${testID}-resume-indicator`}
-            className="text-muted-foreground text-xs"
-          >
-            Resuming where you left off
-          </Text>
-        ) : null}
-
-        {view === "track" ? (
-          <>
-            {manageExercises ? (
-              <Button
-                testID={`${testID}-manage-exercises`}
-                variant="secondary"
-                onPress={manageExercises.onOpen}
-                accessibilityLabel={manageExercises.label ?? "Manage exercises"}
-              >
-                {manageExercises.label ?? "Exercises"}
-              </Button>
-            ) : null}
-            <TrackWorkoutView
-              testID={testID}
-              exercises={workout.exercises}
-              grid={grid}
-              workoutFlow={workoutFlow}
-              flowIndexByKey={flowIndexByKey}
-              groupType={workout.groupType}
-              round={round}
-              totalRounds={totalRounds}
-              onRoundChange={setRound}
-              onSetChange={handleSetChange}
-              onRequestSwap={onRequestSwap}
-              notes={notes}
-              onNotesChange={handleNotesChange}
-              showNotes={completedSets > 0}
-              exerciseHints={exerciseHints}
-              onDismissHint={onDismissHint}
-              onExerciseChange={onExerciseChange}
-            />
-          </>
-        ) : (
-          <>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Button
-                testID={`${testID}-live-exercises`}
-                variant="secondary"
-                onPress={() => setSheetOpen(true)}
-                accessibilityLabel="Open exercise list"
-              >
-                Exercises
-              </Button>
+            >
+              <View
+                style={{
+                  height: "100%",
+                  borderRadius: 999,
+                  width: `${overallProgressPercent(grid)}%`,
+                  backgroundColor: colors.primary,
+                }}
+              />
             </View>
-            {manageExercises ? (
-              <View style={{ flex: 1 }}>
-                <Button
-                  testID={`${testID}-live-manage`}
-                  variant="secondary"
-                  onPress={manageExercises.onOpen}
-                  accessibilityLabel={manageExercises.label ?? "Manage exercises"}
-                >
-                  {manageExercises.label ?? "Manage"}
-                </Button>
-              </View>
-            ) : null}
+            <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+              {`${overallProgressPercent(grid)}%`}
+            </Text>
           </View>
+          {/* "View PRs →" (the web's Track header link to the personal-records
+              list, NP-287): Track only, and only when the route hands a
+              handler. */}
+          {onViewPRs ? (
+            <Pressable
+              testID={`${testID}-view-prs`}
+              onPress={onViewPRs}
+              accessibilityRole="button"
+              accessibilityLabel="View personal records"
+              style={{ alignSelf: "flex-end" }}
+            >
+              <Text className="text-muted-foreground text-xs">View PRs →</Text>
+            </Pressable>
+          ) : null}
+          {/* Elapsed time (the web's header timer, ~line 2039-2042): only
+              when the route passes a number — the quick session has no
+              timer yet, so it renders nothing here. */}
+          {typeof activeSeconds === "number" ? (
+            <Text
+              testID={`${testID}-elapsed`}
+              className="text-muted-foreground font-mono text-sm tabular-nums"
+            >
+              {formatElapsed(activeSeconds)}
+            </Text>
+          ) : null}
+          {showResumed ? (
+            <Text
+              testID={`${testID}-resume-indicator`}
+              className="text-muted-foreground text-xs"
+            >
+              Resuming where you left off
+            </Text>
+          ) : null}
+          {manageExercises ? (
+            <Button
+              testID={`${testID}-manage-exercises`}
+              variant="secondary"
+              onPress={manageExercises.onOpen}
+              accessibilityLabel={manageExercises.label ?? "Manage exercises"}
+            >
+              {manageExercises.label ?? "Exercises"}
+            </Button>
+          ) : null}
+          <TrackWorkoutView
+            testID={testID}
+            exercises={workout.exercises}
+            grid={grid}
+            workoutFlow={workoutFlow}
+            flowIndexByKey={flowIndexByKey}
+            groupType={workout.groupType}
+            round={round}
+            totalRounds={totalRounds}
+            onRoundChange={setRound}
+            onSetChange={handleSetChange}
+            onRequestSwap={onRequestSwap}
+            notes={notes}
+            onNotesChange={handleNotesChange}
+            showNotes={completedSets > 0}
+            exerciseHints={exerciseHints}
+            onDismissHint={onDismissHint}
+            onExerciseChange={onExerciseChange}
+          />
+          {/* Track keeps the compact rest bar: the web's Track page has no
+              rest UI at all, and a full-screen overlay there would cover the
+              grid the member is editing. Live gets the web's overlay. */}
+          {rest.active && rest.remainingSec > 0 ? (
+            <RestTimerBar
+              testID={`${testID}-rest`}
+              remainingSec={rest.remainingSec}
+              totalSec={rest.totalSec}
+              running={rest.running}
+              onPause={rest.pause}
+              onResume={rest.resume}
+              onSkip={rest.skip}
+            />
+          ) : null}
+          {banners}
+          <View style={{ height: 24 }} />
+          {finishButton}
+        </ScrollView>
+      ) : (
+        <View style={{ flex: 1 }}>
           <LiveStepView
             testID={testID}
             exercises={workout.exercises}
@@ -1286,7 +1433,7 @@ export function LiveWorkoutClient({
             workoutFlow={workoutFlow}
             stepIndex={liveStepIndex}
             onStepChange={handleStepChange}
-            onSetChange={handleSetChange}
+            onSetChange={handleLiveSetChange}
             onCompleteStep={handleCompleteStep}
             onRequestSkip={enableSkipFlow ? () => setSkipOpen(true) : undefined}
             isSkipping={isSkippingLive}
@@ -1295,7 +1442,49 @@ export function LiveWorkoutClient({
             exercisePRs={exercisePRs}
             exerciseHints={exerciseHints}
             onDismissHint={onDismissHint}
+            {...(onExit ? { onExit } : {})}
+            viewToggle={
+              <WorkoutViewToggle
+                testID={`${testID}-view`}
+                active={view}
+                onChange={handleViewChange}
+              />
+            }
+            {...(typeof activeSeconds === "number" ? { activeSeconds } : {})}
+            resumed={showResumed}
+            onOpenExercises={openExercises}
+            exercisesLabel={manageExercises?.label ?? "Exercises"}
+            exerciseDone={exerciseDoneFlags}
+            {...(manageExercises?.onAdd
+              ? { onAddExercise: manageExercises.onAdd }
+              : {})}
           />
+          {banners}
+        </View>
+      )}
+
+      {/* The Live overlays: the rest overlay, the jump sheet, the skip
+          modal and the edit-confirm modal. */}
+      {view === "live" ? (
+        <>
+          {rest.active && rest.remainingSec > 0 ? (
+            <RestOverlay
+              testID={`${testID}-rest`}
+              remainingSec={rest.remainingSec}
+              totalSec={rest.totalSec}
+              running={rest.running}
+              onPause={rest.pause}
+              onResume={rest.resume}
+              onSkip={rest.skip}
+              onPreset={(secs) => rest.start(secs)}
+              {...(liveExercise ? { upNextName: liveExercise.name } : {})}
+              upNextDetail={upNextDetail(
+                liveStep,
+                liveTotalSets,
+                setUnitLabel(liveExercise?.trackingType ?? null, 1),
+              )}
+            />
+          ) : null}
           <LiveExerciseSheet
             visible={sheetOpen}
             onClose={() => setSheetOpen(false)}
@@ -1311,6 +1500,14 @@ export function LiveWorkoutClient({
               onClose={() => setSkipOpen(false)}
               onSkipSet={handleSkipSet}
               onSkipExercise={handleSkipExercise}
+              {...(onRequestSwap
+                ? {
+                    onSwap: () => {
+                      setSkipOpen(false);
+                      onRequestSwap(skipStep.exercise.slug);
+                    },
+                  }
+                : {})}
               exercise={skipStep.exercise}
               setIndex={skipStep.setIndex}
               testID={testID}
@@ -1327,79 +1524,8 @@ export function LiveWorkoutClient({
             afterLabel={editConfirm?.after}
             testID={testID}
           />
-          </>
-        )}
-
-        {rest.active && rest.remainingSec > 0 ? (
-          <RestTimerBar
-            testID={`${testID}-rest`}
-            remainingSec={rest.remainingSec}
-            totalSec={rest.totalSec}
-            running={rest.running}
-            onPause={rest.pause}
-            onResume={rest.resume}
-            onSkip={rest.skip}
-          />
-        ) : null}
-        {pendingSync && !saveError ? (
-          <View
-            testID={`${testID}-pending-sync-banner`}
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: tint("primary", 0.12),
-              gap: 8,
-              marginTop: 12,
-            }}
-          >
-            <Text
-              testID={`${testID}-pending-sync-message`}
-              className="text-foreground font-medium text-sm"
-            >
-              Saved on this phone — will sync when you&apos;re back online.
-            </Text>
-            <Button
-              testID={`${testID}-retry`}
-              variant="secondary"
-              size="sm"
-              onPress={() => onFinish?.(gridRef.current)}
-            >
-              Retry
-            </Button>
-          </View>
-        ) : null}
-        {saveError ? (
-          <View
-            testID={`${testID}-error-banner`}
-            style={{
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: tint("destructive", 0.15),
-              gap: 8,
-              marginTop: 12,
-            }}
-          >
-            <Text
-              testID={`${testID}-error-message`}
-              className="text-destructive font-medium text-sm"
-            >
-              {typeof saveError === "string"
-                ? saveError
-                : "Couldn’t save workout. You appear to be offline."}
-            </Text>
-            <Button
-              testID={`${testID}-retry`}
-              variant="secondary"
-              size="sm"
-              onPress={() => onFinish?.(gridRef.current)}
-            >
-              Retry
-            </Button>
-          </View>
-        ) : null}
-        <View style={{ height: 24 }} />
-        {finishButton}
-      </ScrollView>
+        </>
+      ) : null}
     </SafeAreaView>
   );
 }

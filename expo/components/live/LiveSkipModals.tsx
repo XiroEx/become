@@ -12,6 +12,12 @@ export interface LiveSkipModalProps {
   onSkipSet: () => void;
   /** Skip every remaining set of the current exercise. */
   onSkipExercise: () => void;
+  /**
+   * The web's FIRST option — `Swap for Alternative` (blue): close the sheet
+   * and open the swap picker instead of logging a skip. Omitted, the sheet
+   * carries the three skip actions only.
+   */
+  onSwap?: () => void;
   exercise?: LiveWorkoutExercise;
   /** Which set of the exercise the member is standing on (0-based). */
   setIndex: number;
@@ -23,16 +29,22 @@ export interface LiveSkipModalProps {
  *
  * Web equivalent: the `showSkipModal` dialog in
  * `webapp/app/dashboard/workout/[programId]/workout/live/LiveWorkoutClient.tsx`
- * (`Skip {setUnit}?` → `Skip This {setUnit} Only` /
- * `Skip All {setUnitPlural} (… total)` / Cancel). The web's fourth action —
- * "Swap for Alternative" — is already one tap away on the Live step itself
- * (`Swap exercise`), so the sheet carries the three skip actions only.
+ * (`Skip {setUnit}?` → `Swap for Alternative` / `Skip This {setUnit} Only` /
+ * `Skip All {setUnitPlural} (… total)` / Cancel).
+ *
+ * All FOUR of the web's actions, in its order and its colours (NP-288):
+ * swapping is the first thing the web offers a member about to skip —
+ * "I can't do this one" far more often means "give me another" than "log a
+ * zero" — and it used to be missing here, leaving the native sheet a
+ * skip-only dead end. `Skip All` is amber because it writes zeros over
+ * every remaining set; nothing here is destructive-red.
  */
 export function LiveSkipModal({
   visible,
   onClose,
   onSkipSet,
   onSkipExercise,
+  onSwap,
   exercise,
   setIndex,
   testID,
@@ -60,6 +72,15 @@ export function LiveSkipModal({
         {`${unit} ${setIndex + 1} of ${total}`}
       </Text>
       <View style={{ gap: 12 }}>
+        {onSwap ? (
+          <Button
+            testID={`${testID}-skip-swap`}
+            variant="info"
+            onPress={onSwap}
+          >
+            Swap for Alternative
+          </Button>
+        ) : null}
         <Button
           testID={`${testID}-skip-set`}
           variant="secondary"
@@ -69,7 +90,7 @@ export function LiveSkipModal({
         </Button>
         <Button
           testID={`${testID}-skip-exercise`}
-          variant="secondary"
+          variant="accent"
           onPress={onSkipExercise}
         >
           {`Skip All ${unitPlural} (${total} ${unitPlural.toLowerCase()} total)`}

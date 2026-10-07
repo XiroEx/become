@@ -34,8 +34,13 @@ const SOLO: LiveWorkoutViewModel = {
   exercises: [{ slug: "a", name: "A", sets: 2, trackingType: "reps_weight" }],
 };
 
+/** The web's position line — `Exercise 1/2` · `Set 2/2` (NP-288). */
 function stepText(getByTestId: (id: string) => ReactTestInstance): string {
-  return getByTestId("live-workout-live-step").props.children as string;
+  const exercise = getByTestId("live-workout-live-step").props
+    .children as string;
+  const set = getByTestId("live-workout-live-set-label").props
+    .children as string;
+  return `${exercise} • ${set}`;
 }
 
 function liveExerciseOnScreen(
@@ -60,11 +65,11 @@ describe("(id: e015c875) Jumping to an exercise opens its first incomplete set",
     // set 1, land on bench set 2, then jump to Row.
     fireEvent.press(getByTestId("live-workout-live-complete"));
     fireEvent.press(getByTestId("live-workout-skip-set"));
-    expect(stepText(getByTestId)).toBe("Step 2 of 4");
+    expect(stepText(getByTestId)).toBe("Exercise 1/2 • Set 2/2");
     fireEvent.press(getByTestId("live-workout-live-exercises"));
     fireEvent.press(getByTestId("live-workout-exercise-sheet-row-1"));
     expect(liveExerciseOnScreen(queryByTestId)).toBe("row");
-    expect(stepText(getByTestId)).toBe("Step 3 of 4");
+    expect(stepText(getByTestId)).toBe("Exercise 2/2 • Set 1/2");
   });
 
   it("jumping to a half-done exercise lands on its first incomplete set", () => {
@@ -83,7 +88,7 @@ describe("(id: e015c875) Jumping to an exercise opens its first incomplete set",
     fireEvent.press(getByTestId("live-workout-skip-set"));
     fireEvent.press(getByTestId("live-workout-live-exercises"));
     fireEvent.press(getByTestId("live-workout-exercise-sheet-row-0"));
-    expect(stepText(getByTestId)).toBe("Step 2 of 4");
+    expect(stepText(getByTestId)).toBe("Exercise 1/2 • Set 2/2");
     void onGridChange;
   });
 });
@@ -147,7 +152,7 @@ describe("(id: e015c874) Skipping the last exercise leads to the finish flow, as
     fireEvent.press(getByTestId("live-workout-skip-set"));
     const grid = onGridChange.mock.calls.at(-1)![0] as LiveGrid;
     expect(grid.bench![0]).toMatchObject({ reps: 0, weight: 0, completed: true });
-    expect(stepText(getByTestId)).toBe("Step 2 of 4");
+    expect(stepText(getByTestId)).toBe("Exercise 1/2 • Set 2/2");
   });
 });
 
