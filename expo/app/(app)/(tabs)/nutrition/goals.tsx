@@ -123,6 +123,17 @@ const MACRO_PRESET_KEYS: MacroPreset[] = [
 
 const MACRO_KCAL_PER_G = { protein: 4, carbs: 4, fats: 9 } as const;
 
+/** NP-323: the per-macro %/g readout beside each target used to be flat
+ *  `text-muted-foreground` grey on native — the web colours it the same
+ *  blue/green/amber as the macro bar below (`text-blue-600`/`text-green-600`/
+ *  `text-yellow-600`, both read from `webapp/app/dashboard/nutrition/goals/
+ *  page.tsx`'s Protein/Carbs/Fats rows). */
+const MACRO_PERCENT_LABEL_CLASS: Record<MacroKey, string> = {
+  protein: "text-blue-600 dark:text-blue-400",
+  carbs: "text-green-600 dark:text-green-400",
+  fats: "text-yellow-600 dark:text-yellow-400",
+};
+
 /** Same three values as the NutritionGoal schema enum. */
 function asGoalType(v: unknown): GoalType {
   return v === "lose" || v === "gain" ? v : "maintain";
@@ -830,10 +841,17 @@ export default function NutritionGoalsRoute({
                       targetWeight={targetWeightDisplay}
                       testID="nutrition-goals-weight-chart"
                     />
-                    <View style={{ marginTop: 8 }}>
+                    {/* NP-323: `alignItems: "flex-start"` is the fix — a
+                        plain column View defaults to `alignItems: "stretch"`,
+                        which was stretching the Button to the View's full
+                        width even though Button itself never asks for
+                        `w-full`. The web's button is a compact inline
+                        `<button>`, left-aligned, never full width. */}
+                    <View style={{ marginTop: 8, alignItems: "flex-start" }}>
                       <Button
                         testID="nutrition-goals-log-weight"
                         variant="inverted"
+                        size="sm"
                         onPress={() => setWeightSheetOpen(true)}
                       >
                         <Scale size={16} color={colors.background} /> Log Weight
@@ -841,11 +859,12 @@ export default function NutritionGoalsRoute({
                     </View>
                   </>
                 ) : (
-                  <View className="gap-3">
+                  <View className="gap-3 items-start">
                     <Text className="text-muted-foreground text-sm">No weight logged yet</Text>
                     <Button
                       testID="nutrition-goals-log-weight"
                       variant="inverted"
+                      size="sm"
                       onPress={() => setWeightSheetOpen(true)}
                     >
                       <Scale size={16} color={colors.background} /> Log Weight
@@ -1006,9 +1025,14 @@ export default function NutritionGoalsRoute({
                       );
                     })}
                   </View>
-                  <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
-                    {goalCards.find((c) => c.type === form.goalType)?.description}
-                  </Text>
+                  {/* NP-323: the web computes `card.description` (from
+                      `DIRECTION_EXPLANATION`) for every goal card but never
+                      renders it anywhere on this screen — only
+                      `card.adjustment` ("TDEE − 500 cal") shows, above. A
+                      floating "calories at maintenance — hold your weight
+                      while you train" line here was native-only (NP-266
+                      item 4, left unresolved); dropped so this section
+                      matches the web exactly. */}
                 </View>
 
                 {/* Pace — the chosen weekly rate the calorie delta scales with. */}
@@ -1179,7 +1203,10 @@ export default function NutritionGoalsRoute({
                         <Text className="text-foreground text-sm font-medium">
                           {label} {isPercentMode ? "(%)" : "(g)"}
                         </Text>
-                        <Text className="text-xs text-muted-foreground">
+                        <Text
+                          testID={`nutrition-goals-${key}-percent`}
+                          className={`text-xs ${MACRO_PERCENT_LABEL_CLASS[key]}`}
+                        >
                           {isPercentMode
                             ? `${form[key]}g`
                             : `${percentages[key]}%`}
