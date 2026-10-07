@@ -33,6 +33,7 @@ export function WeightChart({
   target,
   unit,
   todayKey,
+  direction,
 }: WeightChartProps) {
   const { colors, tint } = useThemeTokens()
   const [view, setView] = useState<WeightView>('week')
@@ -42,6 +43,13 @@ export function WeightChart({
     () => buildWeightSeries(weighIns, view, target, todayKey),
     [weighIns, view, target, todayKey],
   )
+
+  const good =
+    direction === 'lose'
+      ? (s.delta ?? 0) < 0
+      : direction === 'gain'
+        ? (s.delta ?? 0) > 0
+        : Math.abs(s.delta ?? 0) < 1
 
   const px = (x: number) => L + x * (W - L - R)
   const py = (y: number) => T + y * (H - T - B)
@@ -66,7 +74,7 @@ export function WeightChart({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={[styles.caption, { color: colors.foreground }]}>{weightCaption(s, unit)}</Text>
+        <Text style={[styles.eyebrow, { color: colors['muted-foreground'] }]}>WEIGHT</Text>
         <View style={[styles.switchRow, { backgroundColor: tint('muted', 0.5) }]} role="tablist">
           <Pressable
             style={[
@@ -163,8 +171,8 @@ export function WeightChart({
               y1={py(s.targetY)}
               x2={W - R}
               y2={py(s.targetY)}
-              stroke={colors.accent}
-              strokeDasharray="4 3"
+              stroke={colors.success}
+              strokeDasharray="5 5"
               strokeWidth={1.5}
             />
           )}
@@ -174,11 +182,12 @@ export function WeightChart({
             <SvgText
               x={W - R}
               y={py(s.targetY) - 4}
-              fontSize={8}
+              fontSize={9}
+              fontWeight="600"
               textAnchor="end"
-              fill={colors.accent}
+              fill={colors.success}
             >
-              goal {target}
+              goal {Math.round(target as number)}
             </SvgText>
           )}
 
@@ -229,6 +238,35 @@ export function WeightChart({
           })}
         </Svg>
       </View>
+
+      {/* Footer */}
+      <View style={styles.footerRow} testID="weight-caption">
+        {selectedPoint ? (
+          <Text style={[styles.footerText, { color: colors.foreground, fontWeight: '700' }]}>
+            {selectedPoint.longLabel} · {selectedPoint.value.toFixed(1)} {unit}
+          </Text>
+        ) : (
+          <>
+            <Text style={[styles.footerText, { color: colors['muted-foreground'] }]}>
+              {s.first ? `${s.first.label} · ${Math.round(s.first.value)} ${unit}` : ''}
+            </Text>
+            <Text
+              style={[
+                styles.footerText,
+                {
+                  color: good ? colors.success : colors['muted-foreground'],
+                  fontWeight: good ? '700' : '500',
+                },
+              ]}
+            >
+              {weightCaption(s, unit)}
+            </Text>
+            <Text style={[styles.footerText, { color: colors['muted-foreground'] }]}>
+              {Math.round(s.last?.value ?? 0)} {unit} · now
+            </Text>
+          </>
+        )}
+      </View>
     </View>
   )
 }
@@ -242,6 +280,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+  },
+  eyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingHorizontal: 2,
+  },
+  footerText: {
+    fontSize: 11,
   },
   caption: {
     fontSize: 12,
