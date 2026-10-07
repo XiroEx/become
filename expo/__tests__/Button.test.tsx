@@ -67,4 +67,16 @@ describe("Button", () => {
     expect(getByTestId("btn").props.className).toContain("bg-info");
     expect(getByTestId("btn").props.className).not.toContain("bg-primary");
   });
+
+  // NP-295: the Generate sheet's CTAs are the web's purple-600, drawn from
+  // the existing `mindset` token rather than a new colour literal.
+  it("variant=mindset draws the bg-mindset class, not the brand red", () => {
+    const { getByTestId } = render(
+      <Button testID="btn" variant="mindset">
+        Generate session
+      </Button>,
+    );
+    expect(getByTestId("btn").props.className).toContain("bg-mindset");
+    expect(getByTestId("btn").props.className).not.toContain("bg-primary");
+  });
 });
