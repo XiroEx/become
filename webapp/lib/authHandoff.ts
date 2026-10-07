@@ -57,6 +57,9 @@ export const HANDOFF_ALLOWED_PATHS = [
   // Recipes — create and edit (NP-144).
   '/dashboard/recipes/new',
   '/dashboard/recipes/:recipeId/edit',
+  // Workout hub and library (NP-328). Exercises, sessions, programs tabs and custom exercise videos.
+  '/dashboard/workout/hub',
+  '/dashboard/workout/library',
   // Admin (NP-122). Coach-only screens; the session minted is still the
   // member's own, so these open with exactly the rights they already had.
   '/dashboard/admin',
