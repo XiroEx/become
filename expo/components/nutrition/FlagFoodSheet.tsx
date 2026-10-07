@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
-import { AlertTriangle, Check, Pencil } from "lucide-react-native";
+import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import { AlertTriangle, Check, Pencil, X } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -235,11 +235,40 @@ export function FlagFoodSheet({
   // to act on, so the correction fields ARE the sheet.
   const showFixFirst = !canReport;
 
+  // ONE header, not two: the web's sheet has a single title row — the
+  // warning icon + "Something look wrong?" on the report screen, just the
+  // title on "Fix it for this entry", and an explicit X beside either (NP-275
+  // — native used to print the title a second time inline AND had no X,
+  // relying on the backdrop tap / scrub gesture alone). The success screen
+  // keeps neither, same as web: it ends on its own "Done" button.
+  const sheetTitle = result
+    ? undefined
+    : fixing || showFixFirst
+      ? "Fix it for this entry"
+      : "Something look wrong?";
+  const headerIcon =
+    !result && !fixing && !showFixFirst ? (
+      <AlertTriangle size={16} color={colors.accent} />
+    ) : undefined;
+  const headerClose = !result ? (
+    <Pressable
+      testID={`${testID}-close`}
+      accessibilityRole="button"
+      accessibilityLabel="Close"
+      onPress={close}
+      hitSlop={8}
+    >
+      <X size={18} color={colors["muted-foreground"]} />
+    </Pressable>
+  ) : undefined;
+
   return (
     <BottomSheet
       visible={visible}
       onClose={close}
-      title={fixing || showFixFirst ? "Fix it for this entry" : "Something look wrong?"}
+      title={sheetTitle}
+      headerLeading={headerIcon}
+      headerTrailing={headerClose}
       testID={testID}
     >
       <ScrollView
@@ -330,14 +359,6 @@ export function FlagFoodSheet({
             </View>
           ) : (
             <>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <AlertTriangle size={16} color={colors.accent} />
-                <Text className="text-foreground text-sm font-semibold">
-                  Something look wrong?
-                </Text>
-              </View>
               <Text className="text-muted-foreground text-xs">
                 Tell us what looks off about{" "}
                 <Text className="text-foreground font-medium">{foodName}</Text>{" "}
@@ -410,6 +431,11 @@ export function FlagFoodSheet({
                 photos={photos}
                 onChange={setPhotos}
                 onError={setPhotoError}
+                // The web's two buttons read "Take photo" / "Upload photo";
+                // this picker's default ("Choose photo") stays for its other
+                // caller (FoodReportsSheet's second-chance flow), so only
+                // this sheet renames its own label (NP-275).
+                choosePhotoLabel="Upload photo"
                 testID={`${testID}-photos`}
               />
               {photoError ? (
@@ -421,15 +447,20 @@ export function FlagFoodSheet({
                 </Text>
               ) : null}
 
-              <Input
-                testID={`${testID}-note`}
-                label="Anything else? (optional)"
-                placeholder="e.g. label says 190, app says 413"
-                multiline
-                numberOfLines={2}
-                value={note}
-                onChangeText={setNote}
-              />
+              <View>
+                <Text className="text-muted-foreground text-[11px] font-semibold uppercase mb-1">
+                  Anything else? (optional)
+                </Text>
+                <Input
+                  testID={`${testID}-note`}
+                  accessibilityLabel="Anything else? (optional)"
+                  placeholder="e.g. my label says 45 cal per container"
+                  multiline
+                  numberOfLines={2}
+                  value={note}
+                  onChangeText={setNote}
+                />
+              </View>
 
               {error ? (
                 <Text
@@ -440,14 +471,55 @@ export function FlagFoodSheet({
                 </Text>
               ) : null}
 
-              <Button
-                testID={`${testID}-submit`}
-                loading={submitting}
-                disabled={submitting || !token}
-                onPress={() => void submit()}
-              >
-                {submitting ? "Sending…" : "Send report"}
-              </Button>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    testID={`${testID}-cancel`}
+                    variant="secondary"
+                    onPress={close}
+                  >
+                    Cancel
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  {/* The web's report CTA is a flat amber (`bg-amber-600`),
+                      distinct from every destructive/primary red in this app
+                      — `Button` has no matching variant, so this is styled
+                      directly off the `accent` token (amber-600/400, NP-275). */}
+                  <Pressable
+                    testID={`${testID}-submit`}
+                    accessibilityRole="button"
+                    accessibilityLabel={submitting ? "Sending…" : "Report it"}
+                    accessibilityState={{
+                      disabled: submitting || !token,
+                      busy: submitting,
+                    }}
+                    disabled={submitting || !token}
+                    onPress={() => void submit()}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      minHeight: 44,
+                      borderRadius: 12,
+                      paddingVertical: 10,
+                      backgroundColor: colors.accent,
+                      opacity: submitting || !token ? 0.5 : 1,
+                    }}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : null}
+                    <Text
+                      className="text-sm font-semibold"
+                      style={{ color: "#fff" }}
+                    >
+                      {submitting ? "Sending…" : "Report it"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
               {!token ? (
                 <Text className="text-muted-foreground text-xs text-center">
                   Sign in to send a report.

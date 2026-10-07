@@ -258,7 +258,49 @@ describe("<FlagFoodSheet /> (NP-174)", () => {
       expect.objectContaining({ calories: 195 }),
     );
   });
+
+  it("prints the title once, with an X close and Cancel + Report it, matching the web copy (NP-275)", () => {
+    const { getByTestId, getByText, queryAllByText } = render(
+      <FlagFoodSheet {...baseProps} />,
+    );
+
+    // "Something look wrong?" used to print twice (the sheet's own title bar
+    // AND an inline header repeating it) — now there is exactly one.
+    expect(queryAllByText("Something look wrong?")).toHaveLength(1);
+    expect(getByTestId("flag-food-title")).toBeTruthy();
+    // An explicit X beside it, not just the backdrop tap / scrub gesture.
+    expect(getByTestId("flag-food-close")).toBeTruthy();
+
+    // Footer: Cancel + Report it, not a single "Send report".
+    expect(getByTestId("flag-food-cancel")).toBeTruthy();
+    expect(getByText("Report it")).toBeTruthy();
+    expect(() => getByText("Send report")).toThrow();
+
+    // The web's note-field copy.
+    expect(getByText("Anything else? (optional)")).toBeTruthy();
+    expect(
+      getByPlaceholder(getByTestId, "flag-food-note", "e.g. my label says 45 cal per container"),
+    ).toBe(true);
+
+    fireEvent.press(getByTestId("flag-food-close"));
+    expect(baseProps.onClose).toHaveBeenCalled();
+  });
+
+  it("offers the web's photo buttons: Take photo / Upload photo (NP-275)", () => {
+    const { getByText, queryByText } = render(<FlagFoodSheet {...baseProps} />);
+    expect(getByText("Take photo")).toBeTruthy();
+    expect(getByText("Upload photo")).toBeTruthy();
+    expect(queryByText("Choose photo")).toBeNull();
+  });
 });
+
+function getByPlaceholder(
+  getByTestId: (id: string) => { props: { placeholder?: string } },
+  testID: string,
+  expected: string,
+): boolean {
+  return getByTestId(testID).props.placeholder === expected;
+}
 
 describe("<FoodReportsSheet /> + <FoodReportsBadge /> (NP-174)", () => {
   const report = {
@@ -317,6 +359,13 @@ describe("<FoodReportsSheet /> + <FoodReportsBadge /> (NP-174)", () => {
     await waitFor(() => {
       expect(getByTestId("food-reports-badge-count")).toBeTruthy();
     });
+  });
+
+  it("defaults its library-pick button to 'Choose photo' for callers that don't override it (NP-275)", () => {
+    const { getByText } = render(
+      <EvidencePhotoPicker photos={[]} onChange={jest.fn()} />,
+    );
+    expect(getByText("Choose photo")).toBeTruthy();
   });
 
   it("capture + upload seam attaches photos through the flag image route", async () => {
