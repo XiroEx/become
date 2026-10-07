@@ -554,6 +554,8 @@ export default function VisionDashboard({
               }
               placeholder={IDENTITY_PLACEHOLDER}
               multiline
+              numberOfLines={2}
+              textAlignVertical="top"
               className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
               onFocus={() => setActiveField?.(identityFieldRef.current)}
             />
@@ -574,6 +576,8 @@ export default function VisionDashboard({
                 }
                 placeholder={d.placeholder}
                 multiline
+                numberOfLines={2}
+                textAlignVertical="top"
                 className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-sm text-foreground"
                 onFocus={() => setActiveField?.(domainFieldRefs.current[d.key] ?? null)}
               />
