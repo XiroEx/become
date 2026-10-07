@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import { ChevronDown } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import {
+  MIN_TOUCH_TARGET,
+  hitSlopToMinTarget,
+  minTouchTarget,
+} from "@/lib/a11y/touchTarget";
+
+const COMPACT_CHIP_HIT_SLOP = hitSlopToMinTarget(MIN_TOUCH_TARGET, 28);
 import {
   CUSTOM_EXERCISE_CATEGORIES,
   CUSTOM_EXERCISE_CATEGORY_LABELS,
@@ -135,21 +142,21 @@ export function CustomExerciseForm({
                 key={group}
                 testID={`${testID}-muscle-${group}`}
                 onPress={() => set("muscleGroup", group)}
+                hitSlop={COMPACT_CHIP_HIT_SLOP}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
                 accessibilityLabel={CUSTOM_EXERCISE_MUSCLE_GROUP_LABELS[group]}
-                style={[
-                  minTouchTarget,
-                  {
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? colors.success : colors.border,
-                    backgroundColor: active ? tint("success", 0.1) : "transparent",
-                    justifyContent: "center",
-                  },
-                ]}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  height: 28,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? colors.success : colors.border,
+                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
               >
                 <Text className="text-foreground text-xs font-medium">
                   {CUSTOM_EXERCISE_MUSCLE_GROUP_LABELS[group]}
@@ -170,21 +177,21 @@ export function CustomExerciseForm({
                 key={category}
                 testID={`${testID}-category-${category}`}
                 onPress={() => pickCategory(category)}
+                hitSlop={COMPACT_CHIP_HIT_SLOP}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
                 accessibilityLabel={CUSTOM_EXERCISE_CATEGORY_LABELS[category]}
-                style={[
-                  minTouchTarget,
-                  {
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? colors.success : colors.border,
-                    backgroundColor: active ? tint("success", 0.1) : "transparent",
-                    justifyContent: "center",
-                  },
-                ]}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  height: 28,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? colors.success : colors.border,
+                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
               >
                 <Text className="text-foreground text-xs font-medium">
                   {CUSTOM_EXERCISE_CATEGORY_LABELS[category]}
@@ -213,24 +220,23 @@ export function CustomExerciseForm({
                 key={role}
                 testID={`${testID}-role-${role}`}
                 onPress={() => set("role", role)}
+                hitSlop={COMPACT_CHIP_HIT_SLOP}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
                 accessibilityLabel={`${CUSTOM_EXERCISE_ROLE_LABELS[role]} — ${CUSTOM_EXERCISE_ROLE_HINTS[role]}`}
-                style={[
-                  minTouchTarget,
-                  {
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: active ? colors.success : colors.border,
-                    backgroundColor: active ? tint("success", 0.1) : "transparent",
-                    justifyContent: "center",
-                  },
-                ]}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  height: 28,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? colors.success : colors.border,
+                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  justifyContent: "center",
+                }}
               >
                 <Text className="text-foreground text-xs font-medium">
                   {CUSTOM_EXERCISE_ROLE_LABELS[role]}
@@ -268,37 +274,89 @@ export function CustomExerciseForm({
 
       {/* Advanced detail (exact muscles, equipment, movement) stays on the web
           with demo upload and trim — this discloses that instead of faking it.
-          Web's own collapsed subtitle ("Exact muscles, equipment & movement",
-          `CustomExerciseFields.tsx`) rides along here too (NP-276). */}
-      <Pressable
-        testID={`${testID}-advanced-toggle`}
-        onPress={() => setAdvancedOpen((open) => !open)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: advancedOpen }}
-        accessibilityLabel="Advanced details"
-        style={[minTouchTarget, { justifyContent: "center" }]}
+          Bordered collapsible card with chevron matching the web styling
+          (CustomExerciseFields.tsx). */}
+      <View
+        testID={`${testID}-advanced-card`}
+        style={{
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: tint("muted", 0.4),
+          overflow: "hidden",
+        }}
       >
-        <Text className="text-foreground text-xs font-medium">
-          Advanced <Text className="text-muted-foreground font-normal">· optional</Text>
-        </Text>
-        <Text
-          testID={`${testID}-advanced-hint`}
-          className="text-muted-foreground text-[11px]"
+        <Pressable
+          testID={`${testID}-advanced-toggle`}
+          onPress={() => setAdvancedOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: advancedOpen }}
+          accessibilityLabel="Advanced details"
+          style={{
+            minHeight: 48,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+          }}
         >
-          {advancedOpen
-            ? "Exact muscles, equipment and movement stay on the web"
-            : "Exact muscles, equipment & movement"}
-        </Text>
-      </Pressable>
-      {advancedOpen ? (
-        <Text
-          testID={`${testID}-advanced-note`}
-          className="text-muted-foreground text-xs"
-        >
-          Add exact muscles, equipment and movement detail from the web library
-          — everything else about this exercise is complete as entered here.
-        </Text>
-      ) : null}
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text className="text-foreground text-sm font-semibold">
+              Advanced <Text className="text-muted-foreground font-normal">· optional</Text>
+            </Text>
+            <Text
+              testID={`${testID}-advanced-hint`}
+              className="text-muted-foreground text-[11px]"
+            >
+              Exact muscles, equipment &amp; movement
+            </Text>
+          </View>
+          <ChevronDown
+            size={16}
+            color={colors["muted-foreground"]}
+            style={{
+              transform: [{ rotate: advancedOpen ? "180deg" : "0deg" }],
+            }}
+          />
+        </Pressable>
+        {advancedOpen ? (
+          <View
+            style={{
+              borderTopWidth: 1,
+              borderColor: colors.border,
+              paddingHorizontal: 12,
+              paddingTop: 12,
+              paddingBottom: 16,
+              gap: 8,
+            }}
+          >
+            <View
+              style={{
+                borderRadius: 8,
+                backgroundColor: tint("success", 0.12),
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+              }}
+            >
+              <Text
+                className="text-success text-[11px]"
+                style={{ lineHeight: 16 }}
+              >
+                Add only what you know. Exact primary muscles replace the broad group above; every other field is optional.
+              </Text>
+            </View>
+            <Text
+              testID={`${testID}-advanced-note`}
+              className="text-muted-foreground text-xs"
+              style={{ lineHeight: 18 }}
+            >
+              Add exact muscles, equipment and movement detail from the web library
+              — everything else about this exercise is complete as entered here.
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
       {error ? (
         <Text

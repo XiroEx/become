@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 import {
+  ArrowDownAZ,
   ChevronDown,
   Clock,
   Dumbbell,
   Globe2,
   Pencil,
+  Search,
   Sparkles,
   Trash2,
-  Video,
+  Upload,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
@@ -17,7 +19,13 @@ import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { CustomExerciseForm } from "@/components/workout/CustomExerciseForm";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import {
+  MIN_TOUCH_TARGET,
+  hitSlopToMinTarget,
+  minTouchTarget,
+} from "@/lib/a11y/touchTarget";
+
+const COMPACT_CHIP_HIT_SLOP = hitSlopToMinTarget(MIN_TOUCH_TARGET, 28);
 import {
   CUSTOM_EXERCISE_BODY_PART_FILTERS,
   CUSTOM_EXERCISE_ROLE_FILTERS,
@@ -179,7 +187,7 @@ export function MyExercises({
           No custom exercises yet
         </Text>
         <Text className="text-muted-foreground text-sm text-center">
-          Tap &quot;Create&quot; to build your first exercise.
+          Tap &quot;Add&quot; to create your first exercise.
         </Text>
         {onCreate ? (
           <Button
@@ -215,6 +223,13 @@ export function MyExercises({
         autoCorrect={false}
         accessibilityLabel="Search exercises"
         accessibilityHint="Filters the list by name, muscle or tag"
+        leadingIcon={
+          <Search
+            size={16}
+            color={colors["muted-foreground"]}
+            strokeWidth={2}
+          />
+        }
       />
 
       <View
@@ -223,27 +238,35 @@ export function MyExercises({
       >
         {CUSTOM_EXERCISE_SORT_OPTIONS.map((opt) => {
           const active = sortMode === opt.value;
+          const Icon = opt.value === "recent" ? Clock : ArrowDownAZ;
           return (
             <Pressable
               key={opt.value}
               testID={`${testID}-sort-${opt.value}`}
               onPress={() => setSortMode(opt.value)}
+              hitSlop={COMPACT_CHIP_HIT_SLOP}
               accessibilityRole="radio"
               accessibilityState={{ checked: active }}
               accessibilityLabel={`Sort by ${opt.label}`}
-              style={[
-                minTouchTarget,
-                {
-                  paddingHorizontal: 10,
-                  paddingVertical: 4,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: active ? colors.success : colors.border,
-                  backgroundColor: active ? tint("success", 0.12) : "transparent",
-                  justifyContent: "center",
-                },
-              ]}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                height: 28,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: active ? colors.success : colors.border,
+                backgroundColor: active ? tint("success", 0.12) : "transparent",
+                justifyContent: "center",
+              }}
             >
+              <Icon
+                size={12}
+                color={active ? colors.success : colors["muted-foreground"]}
+                strokeWidth={2}
+              />
               <Text
                 className="text-xs font-medium"
                 style={{ color: active ? colors.success : colors["muted-foreground"] }}
@@ -264,6 +287,7 @@ export function MyExercises({
           label="All body parts"
           active={bodyPartFilter === null}
           onPress={() => setBodyPartFilter(null)}
+          solidOnActive
         />
         {CUSTOM_EXERCISE_BODY_PART_FILTERS.map((opt) => (
           <FilterChip
@@ -285,6 +309,7 @@ export function MyExercises({
           label="All roles"
           active={roleFilter === null}
           onPress={() => setRoleFilter(null)}
+          solidOnActive
         />
         {CUSTOM_EXERCISE_ROLE_FILTERS.map((opt) => (
           <FilterChip
@@ -483,39 +508,40 @@ export function MyExercises({
                       </View>
 
                       {onOpenWebLibrary ? (
-                        <View style={{ gap: 2 }}>
+                        <View style={{ gap: 4, alignItems: "flex-start" }}>
                           <Pressable
                             testID={`${testID}-video-${ex.slug}`}
                             onPress={() => void onOpenWebLibrary()}
+                            hitSlop={hitSlopToMinTarget(MIN_TOUCH_TARGET, 32)}
                             accessibilityRole="button"
                             accessibilityLabel={
                               ex.videoUrl
                                 ? `Manage demo video for ${ex.name} on the web`
                                 : `Add a video for ${ex.name} on the web`
                             }
-                            style={[
-                              minTouchTarget,
-                              {
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 6,
-                                paddingVertical: 8,
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: colors.border,
-                              },
-                            ]}
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 6,
+                              paddingHorizontal: 12,
+                              paddingVertical: 6,
+                              borderRadius: 8,
+                              backgroundColor: colors.foreground,
+                            }}
                           >
-                            <Video size={14} color={colors["muted-foreground"]} />
-                            <Text className="text-muted-foreground text-xs font-medium">
+                            <Upload size={14} color={colors.background} />
+                            <Text
+                              className="text-xs font-medium"
+                              style={{ color: colors.background }}
+                            >
                               {ex.videoUrl ? "Manage demo video on the web" : "Add a video"}
                             </Text>
                           </Pressable>
                           {!ex.videoUrl ? (
                             <Text
                               testID={`${testID}-video-hint-${ex.slug}`}
-                              className="text-muted-foreground text-[11px] text-center"
+                              className="text-muted-foreground text-[11px]"
+                              style={{ marginTop: 2 }}
                             >
                               Pick a clip from your photo library, files, or camera. MP4 /
                               MOV / WebM, up to 100 MB — on the web library.
@@ -660,36 +686,55 @@ function FilterChip({
   label,
   active,
   onPress,
+  solidOnActive = false,
 }: {
   testID: string;
   label: string;
   active: boolean;
   onPress: () => void;
+  solidOnActive?: boolean;
 }) {
   const { colors, tint } = useThemeTokens();
+  const isSolid = solidOnActive && active;
+  const borderColor = isSolid
+    ? colors.foreground
+    : active
+      ? colors.success
+      : colors.border;
+  const backgroundColor = isSolid
+    ? colors.foreground
+    : active
+      ? tint("success", 0.12)
+      : "transparent";
+  const textColor = isSolid
+    ? colors.background
+    : active
+      ? colors.success
+      : colors["muted-foreground"];
+
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
+      hitSlop={COMPACT_CHIP_HIT_SLOP}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={label}
-      style={[
-        minTouchTarget,
-        {
-          paddingHorizontal: 10,
-          paddingVertical: 4,
-          borderRadius: 999,
-          borderWidth: 1,
-          borderColor: active ? colors.success : colors.border,
-          backgroundColor: active ? tint("success", 0.12) : "transparent",
-          justifyContent: "center",
-        },
-      ]}
+      style={{
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        height: 28,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor,
+        backgroundColor,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
     >
       <Text
         className="text-[11px] font-medium"
-        style={{ color: active ? colors.success : colors["muted-foreground"] }}
+        style={{ color: textColor }}
       >
         {label}
       </Text>

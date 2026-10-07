@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { View, TextInput } from "react-native";
 import { Text } from "@/components/Text";
 import type { TextInputProps } from "react-native";
@@ -9,6 +10,7 @@ export interface InputProps extends Omit<TextInputProps, "style"> {
   label?: string;
   error?: string;
   testID?: string;
+  leadingIcon?: ReactNode;
 }
 
 export function Input({
@@ -17,6 +19,7 @@ export function Input({
   testID,
   accessibilityLabel,
   accessibilityHint,
+  leadingIcon,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
@@ -46,17 +49,35 @@ export function Input({
           {label}
         </Text>
       ) : null}
-      <TextInput
-        testID={testID}
-        accessibilityLabel={accessibilityLabel ?? label}
-        accessibilityHint={hint}
-        placeholderTextColor={colors["muted-foreground"]}
-        className={inputClassName}
-        // 44 points tall, the same minimum every other control in the app
-        // holds: the padding alone leaves it a few points short.
-        style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
-        {...inputProps}
-      />
+      <View style={{ position: "relative", justifyContent: "center" }}>
+        {leadingIcon ? (
+          <View
+            style={{
+              position: "absolute",
+              left: 12,
+              zIndex: 1,
+              pointerEvents: "none",
+            }}
+          >
+            {leadingIcon}
+          </View>
+        ) : null}
+        <TextInput
+          testID={testID}
+          accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityHint={hint}
+          placeholderTextColor={colors["muted-foreground"]}
+          className={inputClassName}
+          // 44 points tall, the same minimum every other control in the app
+          // holds: the padding alone leaves it a few points short.
+          style={[
+            minTouchTarget,
+            { fontFamily: geistFontFamily(inputClassName) },
+            leadingIcon ? { paddingLeft: 38 } : null,
+          ]}
+          {...inputProps}
+        />
+      </View>
       {error ? (
         <Text
           testID={errorId}

@@ -347,8 +347,8 @@ export default function MyExercisesRoute() {
             accessibilityRole="button"
             accessibilityLabel={
               mayCreate
-                ? "Create an exercise"
-                : "Create an exercise — at your free limit"
+                ? "Add an exercise"
+                : "Add an exercise — at your free limit"
             }
             onPress={openCreate}
             style={[
@@ -369,7 +369,7 @@ export default function MyExercisesRoute() {
             ) : (
               <Lock size={16} color={colors["primary-foreground"]} />
             )}
-            <Text className="text-primary-foreground text-sm font-semibold">Create</Text>
+            <Text className="text-primary-foreground text-sm font-semibold">Add</Text>
           </Pressable>
         </View>
 
