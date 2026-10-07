@@ -32,9 +32,9 @@ jest.mock("@/lib/auth/useAuth", () => ({
   }),
 }));
 
-const mockOpenWebSignedIn = jest.fn(async () => "signed-in" as const);
+const mockOpenWebSignedIn = jest.fn(async (_path?: string, _deps?: unknown) => "signed-in" as const);
 jest.mock("@/lib/web/openWebSignedIn", () => ({
-  openWebSignedIn: (...args: unknown[]) => mockOpenWebSignedIn(...args),
+  openWebSignedIn: (path: string, deps?: unknown) => mockOpenWebSignedIn(path, deps),
 }));
 
 jest.mock("@become/api-client", () => {
