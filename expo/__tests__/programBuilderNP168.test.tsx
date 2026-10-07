@@ -472,8 +472,18 @@ describe("where Create and Edit go (NP-135's link, NP-171's condition)", () => {
 // (id: e015ca6c)
 // ───────────────────────────────────────────────────────────────────────────
 
+/**
+ * NP-281 put the WEB'S CHOOSER in front of the builder ("Create a program —
+ * start from a blank program, or import one you already wrote"), so every
+ * scratch build now starts with that one tap.
+ */
+function openScratchBuilder(screen: ReturnType<typeof render>) {
+  fireEvent.press(screen.getByTestId("programming-new-entry-scratch"));
+}
+
 /** Build "2 phases × 3 workouts" through the screen, as a member would. */
 async function buildTwoPhasesOfThree(screen: ReturnType<typeof render>) {
+  openScratchBuilder(screen);
   // Step 1: the program.
   fireEvent.changeText(screen.getByTestId("program-builder-name"), "My Split");
   fireEvent.changeText(
@@ -504,6 +514,11 @@ async function buildTwoPhasesOfThree(screen: ReturnType<typeof render>) {
       phase === 0 ? "Strength" : "Volume",
     );
     for (let workout = 0; workout < 3; workout += 1) {
+      // NP-281: the sessions are Day TABS now (the web's layout), so one is
+      // open at a time and the tab is how you reach the next one.
+      fireEvent.press(
+        screen.getByTestId(`program-builder-phase-${phase}-day-${workout}`),
+      );
       fireEvent.changeText(
         screen.getByTestId(
           `program-builder-phase-${phase}-workout-${workout}-title`,
@@ -718,6 +733,7 @@ describe("(id: e015ca6d) A free member at the cap sees the upgrade sheet on Crea
     );
     expect(screen.getByTestId("programming-new-allowance-lock")).toBeTruthy();
 
+    openScratchBuilder(screen);
     fireEvent.changeText(
       screen.getByTestId("program-builder-name"),
       "One more split",
@@ -787,8 +803,10 @@ describe("(id: e015ca6d) A free member at the cap sees the upgrade sheet on Crea
 
     const screen = render(<NewProgramRoute />);
     await waitFor(() =>
-      expect(screen.getByTestId("program-builder-name")).toBeTruthy(),
+      expect(screen.getByTestId("programming-new-entry-scratch")).toBeTruthy(),
     );
+    openScratchBuilder(screen);
+    expect(screen.getByTestId("program-builder-name")).toBeTruthy();
     expect(screen.queryByTestId("programming-new-allowance-lock")).toBeNull();
     expect(screen.queryByTestId("programming-new-allowance-counter")).toBeNull();
     expect(getUpgradeSheetGate()).toBeNull();
