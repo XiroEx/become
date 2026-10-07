@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import { CheckCircle2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -87,7 +88,7 @@ export function TrainingPreferencesScreen({
    * since the host screen already supplies those. */
   embedded?: boolean;
 }) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token, refresh } = useAuth();
 
   const fetchOpts = useMemo(
@@ -215,7 +216,13 @@ export function TrainingPreferencesScreen({
     await profile.refetch();
   }, [profile]);
 
-  const selectedBorder = colors.primary;
+  // NP-307: the web's selected state is green (`border-green-500
+  // bg-green-50 text-green-700` / `dark:bg-green-900/20 dark:text-green-400`),
+  // not the brand red native had and not the neutral `primary` either —
+  // `success` is the same green-600/400 token the rest of the app already
+  // uses for a positive/selected state.
+  const selectedBorder = colors.success;
+  const selectedTint = tint("success", 0.12);
   // Embedded (Settings > Training, NP-302): the host screen already supplies
   // its own SafeAreaView, so this becomes a plain View — a second
   // SafeAreaView here would double the top/bottom inset padding.
@@ -243,7 +250,17 @@ export function TrainingPreferencesScreen({
           )}
 
           {/* ── Fitness Goals ── */}
-          <View testID={`${testID}-goals-section`} style={{ gap: 8 }}>
+          <View
+            testID={`${testID}-goals-section`}
+            style={{
+              gap: 8,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 16,
+              backgroundColor: colors.card,
+              padding: 16,
+            }}
+          >
             <Text
               accessibilityRole="header"
               className="text-foreground text-lg font-semibold"
@@ -283,14 +300,19 @@ export function TrainingPreferencesScreen({
                         borderWidth: 2,
                         borderColor: selected ? selectedBorder : colors.border,
                         backgroundColor: selected
-                          ? colors.card
+                          ? selectedTint
                           : colors.card,
                       },
                     ]}
                   >
+                    <Text style={{ fontSize: 24 }}>{goal.icon}</Text>
                     <View style={{ flex: 1, gap: 2, flexShrink: 1 }}>
                       <Text
-                        className="text-foreground text-sm font-semibold"
+                        className={
+                          selected
+                            ? "text-success text-sm font-semibold"
+                            : "text-foreground text-sm font-semibold"
+                        }
                         style={WRAPPABLE_TEXT}
                       >
                         {goal.label}
@@ -307,14 +329,13 @@ export function TrainingPreferencesScreen({
                       </Text>
                     </View>
                     {selected ? (
-                      <Text
+                      <CheckCircle2
                         testID={
                           rank === 0 ? "primary-goal-badge" : undefined
                         }
-                        className="text-primary text-base font-bold"
-                      >
-                        ✓
-                      </Text>
+                        size={18}
+                        color={colors.success}
+                      />
                     ) : null}
                   </Pressable>
                 );
@@ -323,7 +344,17 @@ export function TrainingPreferencesScreen({
           </View>
 
           {/* ── Experience & Schedule ── */}
-          <View testID={`${testID}-experience-section`} style={{ gap: 12 }}>
+          <View
+            testID={`${testID}-experience-section`}
+            style={{
+              gap: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 16,
+              backgroundColor: colors.card,
+              padding: 16,
+            }}
+          >
             <Text
               accessibilityRole="header"
               className="text-foreground text-lg font-semibold"
@@ -362,7 +393,7 @@ export function TrainingPreferencesScreen({
                           borderRadius: 12,
                           borderWidth: 2,
                           borderColor: selected ? selectedBorder : colors.border,
-                          backgroundColor: colors.card,
+                          backgroundColor: selected ? selectedTint : colors.card,
                           alignItems: "center",
                           justifyContent: "center",
                         },
@@ -374,7 +405,7 @@ export function TrainingPreferencesScreen({
                           fontSize: 14,
                           fontWeight: "500",
                           color: selected
-                            ? colors.primary
+                            ? colors.success
                             : colors["muted-foreground"],
                         }}
                       >
@@ -469,7 +500,17 @@ export function TrainingPreferencesScreen({
           </View>
 
           {/* ── Equipment & Injuries ── */}
-          <View testID={`${testID}-equipment-section`} style={{ gap: 12 }}>
+          <View
+            testID={`${testID}-equipment-section`}
+            style={{
+              gap: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 16,
+              backgroundColor: colors.card,
+              padding: 16,
+            }}
+          >
             <Text
               accessibilityRole="header"
               className="text-foreground text-lg font-semibold"
@@ -502,7 +543,7 @@ export function TrainingPreferencesScreen({
                           borderRadius: 9999,
                           borderWidth: 2,
                           borderColor: selected ? selectedBorder : colors.border,
-                          backgroundColor: colors.card,
+                          backgroundColor: selected ? selectedTint : colors.card,
                           alignItems: "center",
                           justifyContent: "center",
                         },
@@ -514,7 +555,7 @@ export function TrainingPreferencesScreen({
                           fontSize: 14,
                           fontWeight: "500",
                           color: selected
-                            ? colors.primary
+                            ? colors.success
                             : colors["muted-foreground"],
                         }}
                       >
@@ -564,6 +605,10 @@ export function TrainingPreferencesScreen({
             </Text>
           ) : null}
 
+          {/* NP-307: "Save Changes", matching the web's SaveButton label and its
+              flat black / white `bg-zinc-900 dark:bg-white` — the Button's
+              default "primary" variant is that same neutral pair (NP-313),
+              not the brand red native had. */}
           <Button
             testID={`${testID}-save`}
             onPress={() => {
@@ -572,7 +617,7 @@ export function TrainingPreferencesScreen({
             disabled={saving}
             loading={saving}
           >
-            {saving ? "Saving…" : "Save training preferences"}
+            {saving ? "Saving…" : "Save Changes"}
           </Button>
         </ScrollView>
       </Wrapper>
