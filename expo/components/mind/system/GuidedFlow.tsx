@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   KeyboardAvoidingView,
   Modal as RNModal,
   Platform,
@@ -12,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ArrowRight, Check, ChevronLeft, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 import { onDarkForeground, resolveToken, tintToken } from "@/lib/theme/tokens";
 import type { GuidedStep } from "@/lib/ai/sanitize";
 
@@ -81,6 +83,7 @@ export default function GuidedFlow({
   onComplete,
   onExit,
   onReflect,
+  backHandler = BackHandler,
 }: {
   title: string;
   steps: GuidedStep[];
@@ -92,9 +95,21 @@ export default function GuidedFlow({
   onReflect?: (
     answers: { prompt: string; answer: string }[],
   ) => Promise<string | null>;
+  /** DI hook for tests — injects BackHandler for Android system back handling (NP-336). */
+  backHandler?: BackHandlerLike;
 }) {
   const insets = useSafeAreaInsetsOrZero();
   const accent = accentColor ?? SURFACE_WHITE;
+
+  // Intercept Android hardware back inside the guided flow and close the flow back to the dashboard (NP-336).
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      onExit();
+      return true;
+    },
+    backHandler,
+  });
 
   const [idx, setIdx] = useState(0);
   const [answers, setAnswers] = useState<
