@@ -86,6 +86,9 @@ export function toRecipeDetailViewModel(
       slug: `ingredient-${i}`,
       name: ing.name,
       amount: formatAmount(ing.amount, ing.unit),
+      // The row's TOTAL contribution (`amount × unit`), never divided by
+      // servings — the web's right-aligned ingredient-row figure.
+      calories: ing.nutrition?.calories ?? 0,
     })),
     instructions: recipe.instructions ?? [],
     perServing: {

@@ -1,4 +1,13 @@
-import { Modal as RNModal, View, Pressable, type StyleProp, type ViewStyle } from "react-native";
+import {
+  Modal as RNModal,
+  View,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import {
@@ -6,6 +15,21 @@ import {
   useReducedMotion,
 } from "@/lib/a11y/reducedMotion";
 import { handleSheetRequestClose } from "@/lib/keyboard/handleSheetRequestClose";
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but plenty of this
+ * sheet's own tests mount it bare (`BarcodeScanner`'s own
+ * `useSafeAreaInsetsOrZero`, NP-321). Falling back to zero insets there keeps
+ * this a no-op in tests while fixing the real device.
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -45,6 +69,17 @@ export interface BottomSheetProps {
  * keyboard avoidance inside a sheet was broken; without the latter, the
  * hardware back button closed the keyboard AND the sheet in one press — see
  * `handleSheetRequestClose`.
+ *
+ * SAFE-AREA CAP (NP-271): with no height limit, a sheet taller than the
+ * screen (e.g. the recipe editor, mid-edit, with several ingredients and
+ * steps already filled in) grew past the TOP of the window — `statusBarTranslucent`
+ * draws under the status bar, so an uncapped sheet pushed its own title under
+ * it with no way back. On Android the same lack of a bottom inset let the
+ * sheet's own footer sit under the gesture/navigation bar. The sheet is now
+ * capped to the usable height between the top inset and the screen edge, and
+ * its bottom padding grows to clear the bottom inset, so it can never cover
+ * either system bar; callers whose content is taller than that scroll inside
+ * their own `ScrollView` rather than off the top of the screen.
  */
 export function BottomSheet({
   visible,
@@ -58,6 +93,22 @@ export function BottomSheet({
   headerTrailing,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
+  const insets = useSafeAreaInsetsOrZero();
+  const { height: windowHeight } = useWindowDimensions();
+  // Leave a 24px gap at the top so the sheet never touches the status bar /
+  // notch, even translucent. `pb-8` (32px) is the floor for devices with no
+  // bottom inset; a gesture-nav Android device adds its inset on top of it.
+  const maxSheetHeight = Math.max(240, windowHeight - insets.top - 24);
+  const sheetBottomPadding = Math.max(32, insets.bottom + 16);
+  // A single flat object, not an array: a caller's `sheetStyle` (e.g. a
+  // screen that already caps its own sheet, like My Exercises' NP-276 fix)
+  // overrides these defaults key-by-key rather than sitting beside them.
+  const resolvedSheetStyle: ViewStyle = {
+    maxHeight: maxSheetHeight,
+    paddingBottom: sheetBottomPadding,
+    overflow: "hidden",
+    ...StyleSheet.flatten(sheetStyle),
+  };
   return (
     <RNModal
       visible={visible}
@@ -84,7 +135,7 @@ export function BottomSheet({
             /* swallow */
           }}
           className="bg-card border-t border-border rounded-t-2xl p-5 pb-8"
-          style={sheetStyle}
+          style={resolvedSheetStyle}
         >
           {/* The grab bar is a picture of an affordance VoiceOver cannot use —
               there is no drag gesture to offer it — so it is hidden rather than
@@ -108,7 +159,7 @@ export function BottomSheet({
               {headerTrailing}
             </View>
           ) : null}
-          {children}
+          <View style={{ flexShrink: 1, flexGrow: 1, minHeight: 0 }}>{children}</View>
         </Pressable>
       </Pressable>
     </RNModal>

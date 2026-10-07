@@ -18,9 +18,9 @@ const sample: RecipeDetailViewModel = {
   servings: 1,
   perServing: { kcal: 420, protein: 30, carbs: 55, fat: 9 },
   ingredients: [
-    { slug: "banana", name: "Banana", amount: "1 medium" },
-    { slug: "oats", name: "Rolled oats", amount: "40g" },
-    { slug: "whey", name: "Whey protein", amount: "30g" },
+    { slug: "banana", name: "Banana", amount: "1 medium", calories: 105 },
+    { slug: "oats", name: "Rolled oats", amount: "40g", calories: 150 },
+    { slug: "whey", name: "Whey protein", amount: "30g", calories: 120 },
   ],
   instructions: [
     "Blend everything for 30 seconds.",
@@ -31,8 +31,8 @@ const sample: RecipeDetailViewModel = {
 const noop = () => {};
 
 describe("RecipeDetail", () => {
-  it("renders the recipe name, description, and thumbnail", () => {
-    const { getByTestId } = render(
+  it("renders the recipe name and thumbnail — the web hides the description entirely (NP-271)", () => {
+    const { getByTestId, queryByTestId } = render(
       <RecipeDetail
         recipe={sample}
         onSaveOrLogFood={noop}
@@ -44,12 +44,67 @@ describe("RecipeDetail", () => {
     expect(getByTestId("recipe-detail-name").props.children).toBe(
       "Banana oat smoothie",
     );
-    expect(getByTestId("recipe-detail-description").props.children).toBe(
-      "Quick high-protein breakfast",
-    );
+    // `webapp/app/dashboard/recipes/[id]/page.tsx` never renders `description`
+    // at all — native used to show it, which is the gap this card closes.
+    expect(queryByTestId("recipe-detail-description")).toBeNull();
     // The photo is a bearer-token fetch: before it resolves the slot shows its
     // loading placeholder under the `-thumb` testID prefix.
     expect(getByTestId("recipe-detail-thumb-loading")).toBeTruthy();
+    // A real photo means no gradient hero placeholder.
+    expect(queryByTestId("recipe-detail-hero-placeholder")).toBeNull();
+  });
+
+  it("shows the web's gradient hero when there is no photo", () => {
+    const { getByTestId, queryByTestId } = render(
+      <RecipeDetail
+        recipe={{ ...sample, thumbnailUrl: null }}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(getByTestId("recipe-detail-hero-placeholder")).toBeTruthy();
+    expect(queryByTestId("recipe-detail-thumb")).toBeNull();
+  });
+
+  it("shows Prep/Cook/servings with icons, and hides an empty Instructions card (the web hides it too)", () => {
+    const rendered = render(
+      <RecipeDetail
+        recipe={{ ...sample, prepTime: 10, cookTime: 20, servings: 2, instructions: [] }}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    const { queryByTestId } = rendered;
+    // `.toJSON()` is the plain, serialisable render tree (unlike the fiber
+    // node a query returns), so it can safely be stringified.
+    const tree = JSON.stringify(rendered.toJSON());
+    // Each row is its own `<Text>Prep {n}m</Text>`, which RN splits into
+    // separate children ("Prep ", 10, "m") rather than one joined string.
+    expect(tree).toContain("Prep ");
+    expect(tree).toContain("Cook ");
+    expect(tree).toContain(" serving");
+    expect(tree).toContain("lucide-clock");
+    expect(tree).toContain("lucide-users");
+    expect(queryByTestId("recipe-detail-instructions")).toBeNull();
+  });
+
+  it("shows each ingredient's calories figure alongside its amount subline", () => {
+    const { getByTestId } = render(
+      <RecipeDetail
+        recipe={sample}
+        onSaveOrLogFood={noop}
+        onConvertToMeal={noop}
+        onEdit={noop}
+        onDelete={noop}
+      />,
+    );
+    expect(getByTestId("recipe-detail-ingredient-banana-calories").props.children).toBe(105);
+    expect(getByTestId("recipe-detail-ingredient-oats-calories").props.children).toBe(150);
+    expect(getByTestId("recipe-detail-ingredient-whey-calories").props.children).toBe(120);
   });
 
   it("renders per-serving nutrition kcal + macros", () => {

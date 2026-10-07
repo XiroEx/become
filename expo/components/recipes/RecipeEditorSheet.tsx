@@ -24,7 +24,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Camera, ImagePlus, Plus, Trash2, X } from "lucide-react-native";
+import { Camera, ChevronLeft, ImagePlus, Plus, Trash2 } from "lucide-react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
@@ -165,7 +165,6 @@ export function RecipeEditorSheet({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [denial, setDenial] = useState<PermissionDeniedCapture | null>(null);
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
-  const [tagPickerOpen, setTagPickerOpen] = useState(false);
   const [customTagInput, setCustomTagInput] = useState("");
   const [ingredients, setIngredients] = useState<RecipeEditorIngredient[]>(() =>
     toEditorIngredients(initial?.ingredients ?? []),
@@ -188,6 +187,28 @@ export function RecipeEditorSheet({
     }
     return out;
   }, [availableTags]);
+
+  // Chips beyond `tagOptions`: the recipe's OWN tags at open time (a legacy
+  // tag, or one from another member's defaults) plus anything typed into
+  // "Add" this session. Grows only — untoggling one doesn't make its chip
+  // vanish, it just becomes selectable again, the way every other chip does.
+  const [extraTagChips, setExtraTagChips] = useState<string[]>(
+    () => initial?.tags ?? [],
+  );
+
+  // All chips shown inline, selected or not — the web never hides any of
+  // them behind an "Edit" tap (NP-271).
+  const tagChips = useMemo(() => {
+    const seen = new Set(tagOptions);
+    const out = [...tagOptions];
+    for (const t of extraTagChips) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    return out;
+  }, [tagOptions, extraTagChips]);
 
   const servings = useMemo(() => {
     const n = Number(servingsText);
@@ -255,6 +276,7 @@ export function RecipeEditorSheet({
     const norm = normalizeRecipeTag(customTagInput);
     if (!norm) return;
     setTags((prev) => (prev.includes(norm) ? prev : [...prev, norm]));
+    setExtraTagChips((prev) => (prev.includes(norm) ? prev : [...prev, norm]));
     setCustomTagInput("");
   }, [customTagInput]);
 
@@ -371,11 +393,36 @@ export function RecipeEditorSheet({
       title={isEdit ? "Edit recipe" : "New recipe"}
       testID={testID}
       accessibilityLabel={isEdit ? "Edit recipe" : "New recipe"}
+      // The web's `← Cancel  Edit recipe` header row (NP-271) — the sheet
+      // used to have no way back except scrolling to the footer's Cancel.
+      headerLeading={
+        <Pressable
+          testID={`${testID}-header-cancel`}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          disabled={submitting}
+          onPress={handleClose}
+          hitSlop={8}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 2,
+            opacity: submitting ? 0.5 : 1,
+          }}
+        >
+          <ChevronLeft size={16} color={colors.foreground} />
+          <Text className="text-foreground text-sm font-medium">Cancel</Text>
+        </Pressable>
+      }
     >
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flexShrink: 1 }}
+      >
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
+          style={{ flexGrow: 0, flexShrink: 1 }}
         >
           {/* Photo (optional) */}
           <View style={{ gap: 6 }}>
@@ -546,111 +593,63 @@ export function RecipeEditorSheet({
             </View>
           </View>
 
-          {/* Tags */}
+          {/* Tags — every chip shown inline, like the web's toggle row. No
+              "Edit" tap required to see or pick them (NP-271). */}
           <View style={{ gap: 6 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <Text className="text-foreground text-sm font-medium">Tags</Text>
-              <Pressable
-                testID={`${testID}-tags-toggle`}
-                accessibilityRole="button"
-                accessibilityLabel={tagPickerOpen ? "Done editing tags" : "Edit tags"}
-                onPress={() => setTagPickerOpen((v) => !v)}
-                style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-              >
-                <Text className="text-muted-foreground text-xs font-medium">
-                  {tagPickerOpen ? "Done" : "Edit"}
-                </Text>
-              </Pressable>
-            </View>
-            {tags.length > 0 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                {tags.map((tag) => (
-                  <View
+            <Text className="text-foreground text-sm font-medium">Tags</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {tagChips.map((tag) => {
+                const active = tags.includes(tag);
+                return (
+                  <Pressable
                     key={tag}
                     testID={`${testID}-tag-${tag}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${active ? "Remove" : "Add"} tag ${titleCaseRecipeTag(tag)}`}
+                    onPress={() => handleToggleTag(tag)}
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                      paddingHorizontal: 10,
+                      paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 16,
-                      backgroundColor: colors.primary,
+                      backgroundColor: active ? colors.primary : colors.card,
+                      borderWidth: active ? 0 : 1,
+                      borderColor: colors.border,
                     }}
                   >
-                    <Text className="text-primary-foreground text-xs font-medium">
+                    <Text
+                      className={
+                        active
+                          ? "text-primary-foreground text-xs font-medium"
+                          : "text-foreground text-xs font-medium"
+                      }
+                    >
                       {titleCaseRecipeTag(tag)}
                     </Text>
-                    <Pressable
-                      testID={`${testID}-tag-remove-${tag}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${tag}`}
-                      onPress={() =>
-                        setTags((prev) => prev.filter((t) => t !== tag))
-                      }
-                      hitSlop={8}
-                    >
-                      <X size={12} color={colors["primary-foreground"]} />
-                    </Pressable>
-                  </View>
-                ))}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID={`${testID}-custom-tag`}
+                  placeholder="e.g. high-protein"
+                  autoCapitalize="none"
+                  value={customTagInput}
+                  onChangeText={setCustomTagInput}
+                  onSubmitEditing={handleAddCustomTag}
+                />
               </View>
-            ) : null}
-            {tagPickerOpen ? (
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  {tagOptions
-                    .filter((t) => !tags.includes(t))
-                    .map((tag) => (
-                      <Pressable
-                        key={tag}
-                        testID={`${testID}-tag-option-${tag}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Add tag ${titleCaseRecipeTag(tag)}`}
-                        onPress={() => handleToggleTag(tag)}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 16,
-                          backgroundColor: colors.card,
-                          borderWidth: 1,
-                          borderColor: colors.border,
-                        }}
-                      >
-                        <Text className="text-foreground text-xs font-medium">
-                          {titleCaseRecipeTag(tag)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Input
-                      testID={`${testID}-custom-tag`}
-                      placeholder="e.g. high-protein"
-                      autoCapitalize="none"
-                      value={customTagInput}
-                      onChangeText={setCustomTagInput}
-                      onSubmitEditing={handleAddCustomTag}
-                    />
-                  </View>
-                  <Button
-                    testID={`${testID}-custom-tag-add`}
-                    variant="secondary"
-                    disabled={!customTagInput.trim()}
-                    onPress={handleAddCustomTag}
-                  >
-                    Add
-                  </Button>
-                </View>
-              </View>
-            ) : null}
+              <Button
+                testID={`${testID}-custom-tag-add`}
+                variant="secondary"
+                disabled={!customTagInput.trim()}
+                onPress={handleAddCustomTag}
+              >
+                Add
+              </Button>
+            </View>
           </View>
 
           {/* Ingredients — the web's picker rows, with the quantity picker */}
