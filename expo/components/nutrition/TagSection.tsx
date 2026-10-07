@@ -712,6 +712,8 @@ export function TagSection({
                     }}
                   >
                     <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${isGroupOpen ? "Collapse" : "Expand"} ${group.mealName || "meal"}`}
                       onPress={() => toggleGroupExpanded(group.key)}
                       style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}
                     >
@@ -816,6 +818,8 @@ export function TagSection({
                   }}
                 >
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${isGroupOpen ? "Collapse" : "Expand"} ${v.label.toLowerCase()} group`}
                     onPress={() => toggleGroupExpanded(group.key)}
                     style={{
                       flexDirection: "row",
