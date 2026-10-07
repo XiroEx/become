@@ -1,6 +1,10 @@
 import { render, fireEvent } from "@testing-library/react-native";
-import { Keyboard, Text } from "react-native";
+import { Dimensions, Keyboard, Text } from "react-native";
 import { BottomSheet } from "@/components/BottomSheet";
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),
+}));
 
 describe("BottomSheet", () => {
   it("renders title and children when visible", () => {
@@ -61,6 +65,43 @@ describe("BottomSheet", () => {
       </BottomSheet>,
     );
     expect(getByTestId("s").props.statusBarTranslucent).toBe(true);
+  });
+
+  // NP-271: an uncapped sheet grew past the top of the screen for tall
+  // content (e.g. the recipe editor mid-edit), pushing its own title under
+  // the status bar with no way back — and on Android, its footer under the
+  // gesture/navigation bar. The sheet must cap its own height to the safe
+  // area and pad its bottom past the bottom inset, however tall its content.
+  describe("safe-area cap (NP-271)", () => {
+    it("caps the sheet's height below the top inset, and pads past the bottom inset", () => {
+      const { getByTestId } = render(
+        <BottomSheet testID="s" visible onClose={() => {}} title="Edit recipe">
+          <Text>x</Text>
+        </BottomSheet>,
+      );
+      const style = getByTestId("s-sheet").props.style as Record<string, unknown>;
+      const windowHeight = Dimensions.get("window").height;
+      // top inset 47 + the 24px gap this component leaves above it.
+      expect(style.maxHeight).toBe(windowHeight - 47 - 24);
+      // bottom inset 34 + 16px, comfortably clear of a gesture-nav bar.
+      expect(style.paddingBottom).toBe(34 + 16);
+      expect(style.overflow).toBe("hidden");
+    });
+
+    it("a caller's sheetStyle can still override the computed values", () => {
+      const { getByTestId } = render(
+        <BottomSheet
+          testID="s"
+          visible
+          onClose={() => {}}
+          sheetStyle={{ maxHeight: 999 }}
+        >
+          <Text>x</Text>
+        </BottomSheet>,
+      );
+      const style = getByTestId("s-sheet").props.style as Record<string, unknown>;
+      expect(style.maxHeight).toBe(999);
+    });
   });
 
   describe("system back while the keyboard is up (NP-319 point 8)", () => {

@@ -59,9 +59,11 @@ describe("toRecipeDetailViewModel", () => {
     // Straight from `totalsPerServing`, never divided by `servings` again.
     expect(vm.perServing).toEqual({ kcal: 210, protein: 17, carbs: 26.5, fat: 3.5 });
     expect(vm.instructions).toEqual(["Mix", "Microwave 2 min"]);
+    // `calories` is the row's TOTAL contribution (`nutrition.calories`,
+    // unchanged by `servings`) — the web's right-aligned ingredient figure.
     expect(vm.ingredients).toEqual([
-      { slug: "ingredient-0", name: "Oats", amount: "80 g" },
-      { slug: "ingredient-1", name: "Whey", amount: "1 scoop" },
+      { slug: "ingredient-0", name: "Oats", amount: "80 g", calories: 300 },
+      { slug: "ingredient-1", name: "Whey", amount: "1 scoop", calories: 120 },
     ]);
   });
 });
