@@ -62,6 +62,7 @@ export interface AndroidClientImpl {
     clientId?: string;
   }) => Promise<void>;
   writeWorkout: (workout: WorkoutWrite) => Promise<void>;
+  openSettings?: () => void;
 }
 
 export function createAndroidAdapter(impl: AndroidClientImpl): HealthClient {
@@ -79,6 +80,8 @@ export function createAndroidAdapter(impl: AndroidClientImpl): HealthClient {
     platform: "android",
     isAvailable: () => impl.isAvailable(),
     ensurePermissions: (wanted) => impl.requestPermissions(wanted),
+    getGrantedPermissions: () => impl.grantedPermissions(),
+    openSettings: impl.openSettings ? () => impl.openSettings!() : undefined,
 
     async readWeight(range): Promise<WeightSample[]> {
       await assertGranted("weight", "read");

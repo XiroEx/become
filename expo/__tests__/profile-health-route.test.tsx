@@ -329,7 +329,7 @@ describe("HealthSettingsRoute (profile, body stats & units)", () => {
     });
   });
 
-  it("allows selecting biological sex", async () => {
+  it("allows selecting biological sex with web parity success-tinted chip", async () => {
     const { getByTestId } = render(<HealthSettingsRoute />);
     await waitFor(() => {
       expect(getByTestId("sex-option-female")).toBeTruthy();
@@ -338,6 +338,18 @@ describe("HealthSettingsRoute (profile, body stats & units)", () => {
     await act(async () => {
       fireEvent.press(getByTestId("sex-option-female"));
     });
+
+    const femaleChip = getByTestId("sex-option-female");
+    expect(femaleChip.props.accessibilityState?.selected).toBe(true);
+    // Green tint border / background (not red or primary)
+    expect(femaleChip.props.style).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          borderColor: "rgb(22 163 74)", // success token
+          backgroundColor: "rgba(22, 163, 74, 0.12)",
+        }),
+      ]),
+    );
 
     await act(async () => {
       fireEvent.press(getByTestId("profile-save"));
@@ -352,5 +364,30 @@ describe("HealthSettingsRoute (profile, body stats & units)", () => {
       }
     ).body;
     expect(patchBody.profile.biologicalSex).toBe("female");
+  });
+
+  it("verifies Body Stats parity: Save Changes label, email read-only, height suffixes, side-by-side weights (NP-337)", async () => {
+    const { getByTestId, getByText } = render(<HealthSettingsRoute />);
+    await waitFor(() => {
+      expect(getByTestId("profile-save")).toBeTruthy();
+    });
+
+    // Button reads "Save Changes" (not "Save profile")
+    expect(getByText("Save Changes")).toBeTruthy();
+
+    // Email field is read-only and shows "Email cannot be changed."
+    const emailInput = getByTestId("profile-email-input");
+    expect(emailInput.props.editable).toBe(false);
+    expect(getByText("Email cannot be changed.")).toBeTruthy();
+
+    // Height inputs have ft and in suffixes
+    expect(getByText("ft")).toBeTruthy();
+    expect(getByText("in")).toBeTruthy();
+
+    // Current and Target Weight are side by side in a row
+    const curWeightInput = getByTestId("profile-current-weight-input");
+    const tgtWeightInput = getByTestId("profile-target-weight-input");
+    expect(curWeightInput).toBeTruthy();
+    expect(tgtWeightInput).toBeTruthy();
   });
 });

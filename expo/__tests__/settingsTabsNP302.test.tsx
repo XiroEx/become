@@ -129,19 +129,28 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
     );
   }
 
-  it("defaults to the Settings tab — every existing deep link and test still lands on the original content", async () => {
+  it("defaults to the Profile tab — matching web /dashboard/settings (NP-337)", async () => {
     const { getByTestId, queryByTestId } = renderScreen();
 
     await waitFor(() => {
-      expect(getByTestId("account-user-name")).toBeTruthy();
+      expect(getByTestId("settings-tab-profile")).toBeTruthy();
     });
-    expect(getByTestId("settings-tab-settings").props.accessibilityState.selected).toBe(true);
-    expect(getByTestId("settings-tab-profile").props.accessibilityState.selected).toBe(false);
+    expect(getByTestId("settings-tab-profile").props.accessibilityState.selected).toBe(true);
+    expect(getByTestId("settings-tab-settings").props.accessibilityState.selected).toBe(false);
     expect(getByTestId("settings-tab-training").props.accessibilityState.selected).toBe(false);
-    // The Profile tab's content (the editable name input) is not mounted
-    // until that tab is selected.
-    expect(queryByTestId("profile-name-input")).toBeNull();
+
+    // Profile tab's content is mounted by default
+    await waitFor(() => {
+      expect(getByTestId("profile-name-input").props.value).toBe("Alex Runner");
+    });
+    expect(getByTestId("profile-email-input").props.value).toBe("alex@example.com");
+    expect(getByTestId("settings-body-stats")).toBeTruthy();
+    expect(getByTestId("profile-save")).toBeTruthy();
+
+    // Settings and Training tab contents are not mounted
+    expect(queryByTestId("settings-account-section")).toBeNull();
     expect(queryByTestId("training-preferences-route")).toBeNull();
+    expect(queryByTestId("danger-zone")).toBeNull();
   });
 
   it("Profile tab shows the editable Account (name/email), Body Stats and Save Changes — the former unreachable profile/health.tsx content", async () => {
@@ -149,8 +158,6 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
     await waitFor(() => {
       expect(getByTestId("settings-tab-profile")).toBeTruthy();
     });
-
-    fireEvent.press(getByTestId("settings-tab-profile"));
 
     await waitFor(() => {
       expect(getByTestId("profile-name-input").props.value).toBe("Alex Runner");
@@ -185,6 +192,11 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
 
   it("Nutrition Planning lives on the Settings tab now (moved from Training) and PATCHes /api/profile", async () => {
     const { getByTestId } = renderScreen();
+    await waitFor(() => {
+      expect(getByTestId("settings-tab-settings")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("settings-tab-settings"));
+
     await waitFor(() => {
       expect(getByTestId("account-user-name")).toBeTruthy();
     });

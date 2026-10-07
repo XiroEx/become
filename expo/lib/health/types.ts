@@ -115,6 +115,10 @@ export interface HealthClient {
   ensurePermissions?: (
     wanted: readonly HealthPermission[],
   ) => Promise<HealthPermission[]>;
+  /** Check what permissions are granted right now without showing a sheet. */
+  getGrantedPermissions?: () => Promise<HealthPermission[]>;
+  /** Open Health Connect or system settings for health data permissions. */
+  openSettings?: () => void;
 }
 
 export class HealthPermissionError extends Error {

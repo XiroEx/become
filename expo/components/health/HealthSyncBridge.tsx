@@ -64,5 +64,10 @@ async function runLaunchImport(
   // session does not interrupt the member mid-log to ask for it.
   await ensureHealthPermissionsForSession(client, session);
   if (!canImportFromHealth(session)) return null;
-  return runHealthLaunchSync({ token, session, client });
+  return runHealthLaunchSync({
+    token,
+    session,
+    client,
+    permissionsAlreadyEnsured: true,
+  });
 }

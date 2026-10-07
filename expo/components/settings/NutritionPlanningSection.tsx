@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import {
@@ -45,26 +45,27 @@ export function NutritionPlanningSection({
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
     skip: !token,
-    useCache: true,
+    useCache: false,
   });
 
   const [planPromoteMode, setPlanPromoteMode] =
     useState<PlanPromoteModeValue>("manual");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const seededRef = useRef(false);
 
+  // Sync plan promote mode when fresh profile data arrives from the network.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!profile.data || seededRef.current) return;
-    seededRef.current = true;
+    if (!profile.data || profile.isCached) return;
     const raw = (profile.data as ProfileResponse | null)?.profile as
       | Record<string, unknown>
       | null
       | undefined;
-    setPlanPromoteMode(
-      isPlanPromoteModeValue(raw?.planPromoteMode) ? raw.planPromoteMode : "manual",
-    );
-  }, [profile.data]);
+    if (isPlanPromoteModeValue(raw?.planPromoteMode)) {
+      setPlanPromoteMode(raw.planPromoteMode);
+    }
+  }, [profile.data, profile.isCached]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const onSelect = useCallback(
     async (value: PlanPromoteModeValue) => {
@@ -80,7 +81,7 @@ export function NutritionPlanningSection({
           getToken: () => token ?? undefined,
           body: { profile: { planPromoteMode: value } },
         });
-        await profile.refetch();
+        void profile.refetch().catch(() => {});
       } catch {
         setPlanPromoteMode(previous);
         setSaveError("Failed to save Nutrition Planning");

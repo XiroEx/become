@@ -105,11 +105,9 @@ export default function SettingsScreen({
   const router = useRouter();
   const { token, user, logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
-  // NP-302: Profile / Training / Settings, defaulting to "settings" (the
-  // screen's original, still-reachable content) so every existing deep link
-  // and test lands exactly where it always has.
+  // Web parity (NP-337): Settings defaults to "profile" tab matching web /dashboard/settings.
   const [activeTab, setActiveTab] = useState<"profile" | "training" | "settings">(
-    "settings",
+    "profile",
   );
   // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
   // `expo-notifications` (no native module under Jest — even a dynamic

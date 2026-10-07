@@ -9,6 +9,7 @@ export interface InputProps extends Omit<TextInputProps, "style"> {
   label?: string;
   error?: string;
   testID?: string;
+  style?: TextInputProps["style"];
 }
 
 export function Input({
@@ -17,14 +18,21 @@ export function Input({
   testID,
   accessibilityLabel,
   accessibilityHint,
+  style,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
   const labelId = testID ? `${testID}-label` : undefined;
   const errorId = testID ? `${testID}-error` : undefined;
+  const isReadOnly =
+    (inputProps.readOnly || inputProps.editable === false) && !error;
   // The field itself is the one TextInput in the app, and a TextInput is not a
   // Text: `components/Text.tsx` never sees it, so it carries the family here.
-  const inputClassName = `bg-card border rounded-xl px-3 py-2.5 text-foreground ${
+  const inputClassName = `${
+    isReadOnly ? "bg-muted" : "bg-card"
+  } border rounded-xl px-3 py-2.5 ${
+    isReadOnly ? "text-muted-foreground" : "text-foreground"
+  } ${
     error ? "border-destructive" : "border-border"
   }`;
   // THE ERROR IS PART OF THE FIELD, to a screen reader. The red line underneath
@@ -54,7 +62,11 @@ export function Input({
         className={inputClassName}
         // 44 points tall, the same minimum every other control in the app
         // holds: the padding alone leaves it a few points short.
-        style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
+        style={[
+          minTouchTarget,
+          { fontFamily: geistFontFamily(inputClassName) },
+          ...(style ? [style] : []),
+        ]}
         {...inputProps}
       />
       {error ? (

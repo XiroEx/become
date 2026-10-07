@@ -72,7 +72,7 @@ export function MissedWorkoutsCard({
   onViewAll,
   testID = "missed-workouts-card",
 }: MissedWorkoutsCardProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
 
   if (missed.length === 0) return null;
 
@@ -88,7 +88,7 @@ export function MissedWorkoutsCard({
         styles.container,
         {
           backgroundColor: colors.destructive
-            ? `${colors.destructive}14`
+            ? tint("destructive", 0.08)
             : colors.card,
           borderColor: colors.destructive ?? colors.border,
         },

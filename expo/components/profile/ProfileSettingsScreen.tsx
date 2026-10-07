@@ -35,6 +35,23 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
+function UnitSuffix({ text }: { text: string }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        right: 12,
+        bottom: 0,
+        height: minTouchTarget.minHeight,
+        justifyContent: "center",
+      }}
+    >
+      <Text className="text-muted-foreground text-xs">{text}</Text>
+    </View>
+  );
+}
+
 export type BiologicalSex = "male" | "female" | "prefer_not_to_say";
 
 const BIOLOGICAL_SEX_OPTIONS: { value: BiologicalSex; label: string }[] = [
@@ -73,7 +90,7 @@ export function ProfileSettingsScreen({
    * keeps the one and only Delete account surface). */
   embedded?: boolean;
 } = {}) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token, refresh } = useAuth();
   const router = useRouter();
 
@@ -414,6 +431,10 @@ export function ProfileSettingsScreen({
                 value={email}
                 editable={false}
                 placeholder="your.email@example.com"
+                style={{
+                  backgroundColor: colors.muted,
+                  color: colors["muted-foreground"],
+                }}
               />
               <Text className="text-muted-foreground text-xs mt-1">
                 Email cannot be changed.
@@ -449,30 +470,35 @@ export function ProfileSettingsScreen({
                 </Text>
                 {bmiCm && bmiKg && (() => {
                   const bmi = bmiKg / Math.pow(bmiCm / 100, 2);
-                  const cat =
+                  const cat: {
+                    label: string;
+                    token: "info" | "success" | "accent" | "destructive";
+                  } =
                     bmi < 18.5
-                      ? { label: "Underweight" }
+                      ? { label: "Underweight", token: "info" }
                       : bmi < 25
-                        ? { label: "Normal" }
+                        ? { label: "Normal", token: "success" }
                         : bmi < 30
-                          ? { label: "Overweight" }
-                          : { label: "Obese" };
+                          ? { label: "Overweight", token: "accent" }
+                          : { label: "Obese", token: "destructive" };
                   return (
                     <View
                       style={{
                         paddingHorizontal: 10,
                         paddingVertical: 4,
                         borderRadius: 9999,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.card,
+                        backgroundColor: tint(cat.token, 0.15),
                         flexShrink: 1,
                       }}
                     >
                       <Text
                         testID="bmi-badge"
-                        className="text-foreground text-xs font-semibold"
-                        style={{ flexShrink: 1 }}
+                        style={{
+                          flexShrink: 1,
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color: colors[cat.token],
+                        }}
                       >
                         {`BMI ${bmi.toFixed(1)} · ${cat.label}`}
                       </Text>
@@ -603,9 +629,9 @@ export function ProfileSettingsScreen({
                           paddingHorizontal: 14,
                           borderRadius: 9999,
                           borderWidth: 2,
-                          borderColor: selected ? colors.primary : colors.border,
+                          borderColor: selected ? colors.success : colors.border,
                           backgroundColor: selected
-                            ? `${colors.primary}18`
+                            ? tint("success", 0.12)
                             : colors.card,
                           alignItems: "center",
                           justifyContent: "center",
@@ -618,7 +644,7 @@ export function ProfileSettingsScreen({
                           fontSize: 14,
                           fontWeight: "500",
                           color: selected
-                            ? colors.primary
+                            ? colors.success
                             : colors["muted-foreground"],
                         }}
                       >
@@ -637,7 +663,7 @@ export function ProfileSettingsScreen({
                   Height (ft / in)
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, position: "relative" }}>
                     <Input
                       testID="profile-height-ft-input"
                       keyboardType="numeric"
@@ -646,8 +672,9 @@ export function ProfileSettingsScreen({
                       placeholder="5"
                       accessibilityLabel="Height in feet"
                     />
+                    <UnitSuffix text="ft" />
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, position: "relative" }}>
                     <Input
                       testID="profile-height-in-input"
                       keyboardType="numeric"
@@ -656,6 +683,7 @@ export function ProfileSettingsScreen({
                       placeholder="10"
                       accessibilityLabel="Height in inches"
                     />
+                    <UnitSuffix text="in" />
                   </View>
                 </View>
               </View>
@@ -670,25 +698,29 @@ export function ProfileSettingsScreen({
               />
             )}
 
-            {/* Current Weight */}
-            <Input
-              testID="profile-current-weight-input"
-              label={`Current Weight (${isImperial ? "lbs" : "kg"})`}
-              keyboardType="numeric"
-              value={weightDisplay}
-              onChangeText={setWeightDisplay}
-              placeholder="—"
-            />
-
-            {/* Target Weight */}
-            <Input
-              testID="profile-target-weight-input"
-              label={`Target Weight (${isImperial ? "lbs" : "kg"})`}
-              keyboardType="numeric"
-              value={targetWeightDisplay}
-              onChangeText={setTargetWeightDisplay}
-              placeholder="—"
-            />
+            {/* Current and Target Weight — side by side matching web's 2-column layout */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="profile-current-weight-input"
+                  label={`Current Weight (${isImperial ? "lbs" : "kg"})`}
+                  keyboardType="numeric"
+                  value={weightDisplay}
+                  onChangeText={setWeightDisplay}
+                  placeholder="—"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="profile-target-weight-input"
+                  label={`Target Weight (${isImperial ? "lbs" : "kg"})`}
+                  keyboardType="numeric"
+                  value={targetWeightDisplay}
+                  onChangeText={setTargetWeightDisplay}
+                  placeholder="—"
+                />
+              </View>
+            </View>
 
             {/* Pace toward target weight */}
             {targetWeightDisplay !== "" && weightDisplay !== "" && (() => {
@@ -746,7 +778,7 @@ export function ProfileSettingsScreen({
               }}
               disabled={saving}
             >
-              {saving ? "Saving…" : "Save profile"}
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </View>
 

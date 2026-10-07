@@ -27,7 +27,7 @@
  * package. Health Connect's own `dataOriginFilter` can only ALLOW-list origins,
  * not exclude one, so the filtering is done here.
  */
-import { Platform } from "react-native";
+import { Linking, Platform } from "react-native";
 import type { AndroidClientImpl, AndroidWeightRecord } from "./android";
 import type {
   DateRange,
@@ -108,6 +108,7 @@ interface HealthConnectStepsRecord {
 export interface HealthConnectModule {
   getSdkStatus: () => Promise<number>;
   initialize: () => Promise<boolean>;
+  openHealthConnectSettings?: () => void;
   requestPermission: (
     permissions: HealthConnectPermission[],
   ) => Promise<HealthConnectPermission[]>;
@@ -244,6 +245,18 @@ export function createHealthConnectImpl(
     },
 
     grantedPermissions: () => readGranted(module),
+
+    openSettings() {
+      try {
+        if (typeof module.openHealthConnectSettings === "function") {
+          module.openHealthConnectSettings();
+        } else {
+          void Linking.openSettings();
+        }
+      } catch {
+        void Linking.openSettings();
+      }
+    },
 
     async queryWeightKg(range): Promise<AndroidWeightRecord[]> {
       const { records } = await module.readRecords(

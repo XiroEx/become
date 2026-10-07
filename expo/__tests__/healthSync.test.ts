@@ -79,6 +79,7 @@ function fakeClient(options: FakeClientOptions = {}): {
       asked.push([...wanted]);
       return granted;
     },
+    getGrantedPermissions: async () => granted,
     readWeight: async () => {
       if (options.readThrows) throw new Error("Health Connect exploded");
       return options.samples ?? [];
@@ -261,6 +262,36 @@ describe("importWeightFromHealth (Health → Become)", () => {
       now: NOW,
     });
     expect(asked).toEqual([[{ metric: "weight", direction: "read" }]]);
+  });
+
+  it("does not re-prompt if permissions were already ensured for launch session", async () => {
+    const { client, asked } = fakeClient({ samples: [sample] });
+    const { post, bodies } = recorder();
+    const result = await importWeightFromHealth({
+      client,
+      session: ALL_ON,
+      post,
+      now: NOW,
+      permissionsAlreadyEnsured: true,
+    });
+    expect(result).toMatchObject({ ran: true, read: 1, applied: 1 });
+    expect(asked).toHaveLength(0);
+    expect(bodies).toHaveLength(1);
+  });
+
+  it("reports denied without re-prompting when permissionsAlreadyEnsured is true but permission is missing", async () => {
+    const { client, asked } = fakeClient({ samples: [sample], granted: [] });
+    const { post, bodies } = recorder();
+    const result = await importWeightFromHealth({
+      client,
+      session: ALL_ON,
+      post,
+      now: NOW,
+      permissionsAlreadyEnsured: true,
+    });
+    expect(result).toMatchObject({ ran: false, reason: "denied" });
+    expect(asked).toHaveLength(0);
+    expect(bodies).toHaveLength(0);
   });
 
   it("does nothing at all when the read switch was off at launch", async () => {

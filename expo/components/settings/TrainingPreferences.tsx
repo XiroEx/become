@@ -388,6 +388,7 @@ export function TrainingPreferencesScreen({
                         minTouchTarget,
                         {
                           flex: 1,
+                          minWidth: 96,
                           paddingVertical: 8,
                           paddingHorizontal: 14,
                           borderRadius: 12,
@@ -400,6 +401,9 @@ export function TrainingPreferencesScreen({
                       ]}
                     >
                       <Text
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
                         style={{
                           flexShrink: 1,
                           fontSize: 14,

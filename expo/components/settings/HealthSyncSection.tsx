@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Platform, View } from "react-native";
+import { AppState, Linking, Platform, Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Toggle } from "@/components/Toggle";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { healthOptInSecureStore } from "@/lib/auth/secureStoreToken";
+import { getHealthClient } from "@/lib/health/client";
 import { isHealthSyncEnabled } from "@/lib/health/enabled";
 import {
   createHealthOptInStore,
@@ -15,13 +17,17 @@ import {
   type HealthSwitchStore,
   type HealthSwitches,
 } from "@/lib/health/switches";
+import {
+  hasPermission,
+  type HealthClient,
+  type HealthPermission,
+} from "@/lib/health/types";
 
 export interface HealthSyncSectionProps {
   /**
    * Where the umbrella opt-in is persisted. Omitted → `healthOptInSecureStore`
    * (`become.optin.health`). It is NOT the session key: that is the whole
-   * point — turning this on used to write "yes" over the member's JWT.
-   */
+   * point — turning this on used to write "yes" over the member's JWT.\n   */
   store?: HealthOptInStore;
   /**
    * Where the two direction switches are persisted. Omitted → the real
@@ -30,6 +36,8 @@ export interface HealthSyncSectionProps {
   switches?: HealthSwitchStore;
   /** Defaults to the device's platform; a parameter so tests can ask for both. */
   platform?: string;
+  /** Injected health client (tests only). Defaults to `getHealthClient()`. */
+  client?: HealthClient | null;
 }
 
 /**
@@ -61,7 +69,9 @@ function HealthSyncSectionBody({
   store,
   switches,
   platform = Platform.OS,
+  client: clientProp,
 }: HealthSyncSectionProps) {
+  const client = clientProp !== undefined ? clientProp : getHealthClient();
   const [optInStore] = useState<HealthOptInStore>(
     () => store ?? createHealthOptInStore(healthOptInSecureStore),
   );
@@ -73,6 +83,22 @@ function HealthSyncSectionBody({
     HEALTH_SWITCHES_OFF,
   );
   const [loading, setLoading] = useState<boolean>(true);
+  const [readDenied, setReadDenied] = useState<boolean>(false);
+  const [writeDenied, setWriteDenied] = useState<boolean>(false);
+
+  const checkPermissions = useCallback(async () => {
+    if (!client?.getGrantedPermissions) return;
+    try {
+      const granted = await client.getGrantedPermissions();
+      setReadDenied(!hasPermission(granted, { metric: "weight", direction: "read" }));
+      setWriteDenied(
+        !hasPermission(granted, { metric: "weight", direction: "write" }) &&
+        !hasPermission(granted, { metric: "workouts", direction: "write" }),
+      );
+    } catch {
+      // ignore
+    }
+  }, [client]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,28 +111,113 @@ function HealthSyncSectionBody({
         setEnabled(initial);
         setDirections(initialDirections);
         setLoading(false);
+        if (client?.getGrantedPermissions) {
+          try {
+            const granted = await client.getGrantedPermissions();
+            if (!cancelled) {
+              setReadDenied(
+                !hasPermission(granted, { metric: "weight", direction: "read" }),
+              );
+              setWriteDenied(
+                !hasPermission(granted, { metric: "weight", direction: "write" }) &&
+                !hasPermission(granted, { metric: "workouts", direction: "write" }),
+              );
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [optInStore, switchStore]);
+  }, [client, optInStore, switchStore]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void checkPermissions();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [checkPermissions]);
 
   const handleToggle = useCallback(
     async (next: boolean): Promise<void> => {
       setEnabled(next);
       await optInStore.setOptedIn(next);
+      if (next && (directions.read || directions.write) && client?.ensurePermissions) {
+        const wanted: HealthPermission[] = [];
+        if (directions.read) wanted.push({ metric: "weight", direction: "read" });
+        if (directions.write) {
+          wanted.push(
+            { metric: "weight", direction: "write" },
+            { metric: "workouts", direction: "write" },
+          );
+        }
+        try {
+          const granted = await client.ensurePermissions(wanted);
+          if (directions.read) {
+            setReadDenied(!hasPermission(granted, { metric: "weight", direction: "read" }));
+          }
+          if (directions.write) {
+            setWriteDenied(
+              !hasPermission(granted, { metric: "weight", direction: "write" }) &&
+              !hasPermission(granted, { metric: "workouts", direction: "write" }),
+            );
+          }
+        } catch {
+          // ignore
+        }
+      }
     },
-    [optInStore],
+    [client, directions, optInStore],
   );
 
   const handleDirection = useCallback(
     async (direction: "read" | "write", next: boolean): Promise<void> => {
+      if (next) {
+        const wanted: HealthPermission[] =
+          direction === "read"
+            ? [{ metric: "weight", direction: "read" }]
+            : [
+                { metric: "weight", direction: "write" },
+                { metric: "workouts", direction: "write" },
+              ];
+        let granted: HealthPermission[] = [];
+        if (client?.ensurePermissions) {
+          try {
+            granted = await client.ensurePermissions(wanted);
+          } catch {
+            granted = [];
+          }
+        }
+        const isGranted = wanted.some((w) => hasPermission(granted, w));
+        if (direction === "read") {
+          setReadDenied(!isGranted);
+        } else {
+          setWriteDenied(!isGranted);
+        }
+      } else {
+        if (direction === "read") setReadDenied(false);
+        if (direction === "write") setWriteDenied(false);
+      }
       setDirections((prev) => ({ ...prev, [direction]: next }));
       await switchStore.set(direction, next);
     },
-    [switchStore],
+    [client, switchStore],
   );
+
+  const handleOpenSettings = useCallback(() => {
+    if (client?.openSettings) {
+      client.openSettings();
+    } else {
+      void Linking.openSettings();
+    }
+  }, [client]);
 
   const name = storeName(platform);
 
@@ -169,6 +280,27 @@ function HealthSyncSectionBody({
                 Weigh-ins recorded by your scale or another app appear in
                 Become.
               </Text>
+              {directions.read && readDenied ? (
+                <View
+                  testID="health-read-denied"
+                  style={{ marginTop: 6, gap: 4 }}
+                >
+                  <Text className="text-destructive text-xs font-medium">
+                    Permission denied in {name}
+                  </Text>
+                  <Pressable
+                    testID="health-read-open-settings"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${name}`}
+                    onPress={handleOpenSettings}
+                    style={minTouchTarget}
+                  >
+                    <Text className="text-primary text-xs font-semibold underline">
+                      Open {name}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
             <Toggle
               testID="health-read-toggle"
@@ -199,6 +331,27 @@ function HealthSyncSectionBody({
               <Text className="text-muted-foreground text-xs">
                 Weigh-ins you log here and workouts you finish are written back.
               </Text>
+              {directions.write && writeDenied ? (
+                <View
+                  testID="health-write-denied"
+                  style={{ marginTop: 6, gap: 4 }}
+                >
+                  <Text className="text-destructive text-xs font-medium">
+                    Permission denied in {name}
+                  </Text>
+                  <Pressable
+                    testID="health-write-open-settings"
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${name}`}
+                    onPress={handleOpenSettings}
+                    style={minTouchTarget}
+                  >
+                    <Text className="text-primary text-xs font-semibold underline">
+                      Open {name}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
             <Toggle
               testID="health-write-toggle"

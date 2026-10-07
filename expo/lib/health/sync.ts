@@ -96,6 +96,9 @@ export function permissionsForSession(
  * Ask once, at launch, for the permissions the snapshot justifies. The Android
  * impl only shows Health Connect's sheet for what is actually missing, so this
  * is silent on every launch after the first.
+ *
+ * Marks `permissionsEnsured` on the session so launch sync does not ask a
+ * second time in the same start.
  */
 export async function ensureHealthPermissionsForSession(
   client: HealthClient,
@@ -125,6 +128,11 @@ export interface ImportWeightDeps {
   lookbackDays?: number;
   /** Minutes WEST of UTC for the device, for samples with no zone of their own. */
   deviceTzOffsetMinutes?: number;
+  /**
+   * When true, `ensureHealthPermissionsForSession` has already run for this
+   * launch start — do not prompt the member with `ensurePermissions` again.
+   */
+  permissionsAlreadyEnsured?: boolean;
 }
 
 export type ImportSkipReason =
@@ -228,7 +236,17 @@ export async function importWeightFromHealth(
     if (deps.client.isAvailable && !(await deps.client.isAvailable())) {
       return { ...result, reason: "unavailable" };
     }
-    if (deps.client.ensurePermissions) {
+    if (deps.permissionsAlreadyEnsured) {
+      // Launch already asked for permissions once — check if granted, do not prompt again.
+      let allowed = false;
+      if (deps.client.getGrantedPermissions) {
+        const granted = await deps.client.getGrantedPermissions();
+        allowed = granted.some(
+          (p) => p.metric === "weight" && p.direction === "read",
+        );
+      }
+      if (!allowed) return { ...result, reason: "denied" };
+    } else if (deps.client.ensurePermissions) {
       const granted = await deps.client.ensurePermissions([
         { metric: "weight", direction: "read" },
       ]);
@@ -366,6 +384,7 @@ export interface LaunchSyncDeps {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
   now?: Date;
+  permissionsAlreadyEnsured?: boolean;
 }
 
 /**
@@ -401,6 +420,9 @@ export async function runHealthLaunchSync(
     client,
     session,
     ...(deps.now ? { now: deps.now } : {}),
+    ...(deps.permissionsAlreadyEnsured !== undefined
+      ? { permissionsAlreadyEnsured: deps.permissionsAlreadyEnsured }
+      : {}),
     async post(body) {
       const res = await api.raw("/api/weight", { method: "POST", body });
       if (!res.ok) throw new Error(`POST /api/weight ${res.status}`);
