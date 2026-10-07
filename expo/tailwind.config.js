@@ -69,6 +69,7 @@ module.exports = {
         orange: "rgb(var(--orange) / <alpha-value>)",
         indigo: "rgb(var(--indigo) / <alpha-value>)",
         rose: "rgb(var(--rose) / <alpha-value>)",
+        amber: "rgb(var(--amber) / <alpha-value>)",
       },
     },
   },

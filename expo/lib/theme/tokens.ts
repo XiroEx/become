@@ -117,7 +117,8 @@ export type TokenName =
   | "mind-pink"
   | "orange"
   | "indigo"
-  | "rose";
+  | "rose"
+  | "amber";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -169,6 +170,10 @@ export const lightTokens: Record<TokenName, string> = {
   // (`bg-orange-500`), same in both modes like `primary`
   indigo: "99 102 241", // indigo-500 — the web's Triset group badge
   rose: "244 63 94", // rose-500 — the web's Giant Set group badge
+  amber: "251 191 36", // amber-400 — the streak card's progress bar, the
+  // flat END of the web's `from-orange-500 to-amber-400` gradient
+  // (`WorkoutSummary.tsx`), which carries no `dark:` variant either — same
+  // value in both modes like `orange`, `indigo` and `rose` above (NP-334)
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -206,6 +211,7 @@ export const darkTokens: Record<TokenName, string> = {
   orange: "249 115 22", // orange-500 — same in both modes
   indigo: "99 102 241", // indigo-500 — same in both modes
   rose: "244 63 94", // rose-500 — same in both modes
+  amber: "251 191 36", // amber-400 — same in both modes, see lightTokens.amber
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {
