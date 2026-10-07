@@ -1,5 +1,6 @@
 import { ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Award, Dumbbell, Flame, TrendingUp } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
@@ -521,7 +522,12 @@ export function WorkoutSummary({
                     backgroundColor: colors.muted,
                   }}
                 >
-                  <Text className="text-xs">
+                  {/* `text-foreground` — the web's chip is
+                      `bg-zinc-100 text-zinc-700 dark:bg-zinc-800
+                      dark:text-zinc-300`; no text colour here (before this
+                      fix) meant RN's default ink on `colors.muted`, unreadable
+                      in dark mode (NP-334). */}
+                  <Text className="text-foreground text-xs">
                     {formatSummarySet(s, exercise.trackingType, exercise.name)}
                   </Text>
                 </View>
@@ -540,27 +546,28 @@ export function WorkoutSummary({
       testID={testID}
     >
       <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }}>
-        {/* Hero header */}
+        {/* Hero header — the ring (or trophy, program-complete) comes
+            FIRST, the title under it: the web's order
+            (`motion.div` ring → `h1` → subtitle). Native used to draw the
+            title text above the ring instead. */}
         <View style={{ alignItems: "center", paddingTop: 12 }}>
-          <Text
-            testID={`${testID}-title`}
-            className="text-foreground text-3xl font-black text-center"
-          >
-            {programCompleted
-              ? "PROGRAM COMPLETE"
-              : newPRs.length > 0
-                ? "YOU CRUSHED IT"
-                : "WORKOUT DONE"}
-          </Text>
           {programCompleted ? (
-            <Text
-              testID={`${testID}-program-name`}
-              className="text-muted-foreground text-sm mt-2 text-center"
-            >
-              {completedProgramName
-                ? `You finished every workout of ${completedProgramName}. That's elite.`
-                : "You finished every single workout. That's elite."}
-            </Text>
+            <>
+              <Text
+                testID={`${testID}-title`}
+                className="text-foreground text-3xl font-black text-center"
+              >
+                PROGRAM COMPLETE
+              </Text>
+              <Text
+                testID={`${testID}-program-name`}
+                className="text-muted-foreground text-sm mt-2 text-center"
+              >
+                {completedProgramName
+                  ? `You finished every workout of ${completedProgramName}. That's elite.`
+                  : "You finished every single workout. That's elite."}
+              </Text>
+            </>
           ) : (
             <View style={{ alignItems: "center" }}>
               {/* Hero ring — the web's emerald circle behind Award (a PR
@@ -590,6 +597,12 @@ export function WorkoutSummary({
                   />
                 )}
               </View>
+              <Text
+                testID={`${testID}-title`}
+                className="text-foreground text-3xl font-black text-center"
+              >
+                {newPRs.length > 0 ? "YOU CRUSHED IT" : "WORKOUT DONE"}
+              </Text>
               <Text className="text-muted-foreground text-sm mt-2 text-center">
                 {workoutDay} — {workoutTitle}
               </Text>
@@ -658,8 +671,10 @@ export function WorkoutSummary({
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
+              {/* Orange, like the web's flat `text-orange-500` — never
+                  `primary` (brand red), which is what native drew before. */}
               <Flame
-                color={colors.primary}
+                color={colors.orange}
                 size={28}
                 strokeWidth={1.5}
               />
@@ -691,13 +706,18 @@ export function WorkoutSummary({
                     backgroundColor: colors.muted,
                   }}
                 >
-                  <View
+                  {/* The web's `bg-gradient-to-r from-orange-500
+                      to-amber-400` — a solid fill (`primary`, brand red) is
+                      what native drew before. */}
+                  <LinearGradient
                     testID={`${testID}-streak-progress`}
+                    colors={[colors.orange, colors.amber]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
                     style={{
                       height: "100%",
                       width: `${streakProgress}%`,
                       borderRadius: 999,
-                      backgroundColor: colors.primary,
                     }}
                   />
                 </View>
