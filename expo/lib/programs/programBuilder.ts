@@ -57,6 +57,40 @@ export const BUILDER_TARGET_USER_OPTIONS = [
 
 export type BuilderTargetUser = (typeof BUILDER_TARGET_USER_OPTIONS)[number];
 
+/**
+ * The sixteen implements the web builder's "Required Equipment" picker offers
+ * (`EQUIPMENT_OPTIONS` in `ProgramCreator.tsx`), in the web's own order —
+ * `__tests__/card-NP-281-program-builder.test.tsx` reads that file and fails
+ * if the two lists ever drift. Display copy, not ids: `equipment` is a free
+ * array of strings on the Program schema and the catalogue's own equipment
+ * vocabulary is a different (lower-cased, underscored) one.
+ */
+export const BUILDER_EQUIPMENT_OPTIONS = [
+  "Barbell",
+  "Dumbbells",
+  "Kettlebell",
+  "Cable Machine",
+  "Machines",
+  "Resistance Bands",
+  "Pull-up Bar",
+  "Bench",
+  "Squat Rack",
+  "Rowing Machine",
+  "Bike",
+  "Treadmill",
+  "Jump Rope",
+  "Medicine Ball",
+  "Foam Roller",
+  "Bodyweight Only",
+] as const;
+
+/**
+ * The days-a-week chips the web offers (`[2, 3, 4, 5, 6, 7]` in
+ * `ProgramCreator.tsx`). The ± stepper beside them stays: the web's chip row
+ * cannot say "one session a week" and `clampTrainingDays` allows it.
+ */
+export const BUILDER_TRAINING_DAY_OPTIONS = [2, 3, 4, 5, 6, 7] as const;
+
 /** The web builder's own defaults, so a blank program is the same program. */
 export const DEFAULT_TARGET_USER: BuilderTargetUser = "Intermediate";
 export const DEFAULT_DURATION_WEEKS = 4;
@@ -127,6 +161,87 @@ export const BUILDER_EXERCISE_ROLES = [
 ] as const;
 
 export type BuilderExerciseRole = (typeof BUILDER_EXERCISE_ROLES)[number];
+
+/**
+ * The five type chips the web row offers (`EXERCISE_TYPES` in
+ * `ExerciseEditor.tsx`). THE FIELD IS `category`, not `type`: the web form
+ * edits `type` and `dehydrateProgram` writes it back as `category`
+ * (`webapp/lib/hydrateExercises.ts` — "the form's editable field is `type`;
+ * the legacy/storage field is `category`"), and `toBuilderExercise` already
+ * reads `category ?? type`. Writing `category` is therefore what makes a
+ * native type switch survive a hydrate cycle and show up in the web editor.
+ */
+export const BUILDER_EXERCISE_TYPES = [
+  { value: "strength", label: "Strength" },
+  { value: "conditioning", label: "Conditioning" },
+  { value: "warmup", label: "Warm-up" },
+  { value: "abs", label: "Abs" },
+  { value: "cooldown", label: "Cool Down" },
+] as const;
+
+export type BuilderExerciseType =
+  (typeof BUILDER_EXERCISE_TYPES)[number]["value"];
+
+/** The label the chips show for a stored `category`, else the raw value. */
+export function builderExerciseTypeLabel(category?: string): string {
+  const key = (category ?? "").trim().toLowerCase();
+  const hit = BUILDER_EXERCISE_TYPES.find((type) => type.value === key);
+  if (hit) return hit.label;
+  return key ? key.charAt(0).toUpperCase() + key.slice(1) : "Strength";
+}
+
+/**
+ * The web's QUICK ADD row (`quickAddExercises` in `WorkoutEditor.tsx`): eight
+ * common rows with their prescription already written.
+ *
+ * ONE DELIBERATE DIFFERENCE, and it is the slug rule (NP-171): the web writes
+ * a bare typed NAME, which hydrates to nothing, resolves to no PR and plays no
+ * demo. On the phone a Quick Add chip opens the picker with that name already
+ * typed and carries the prescription over to whichever catalogue (or custom)
+ * row the member taps, so the saved row keeps its `exerciseSlug`.
+ */
+/** One Quick Add chip: the name to search for, plus what it prescribes. */
+export interface BuilderQuickAdd {
+  name: string;
+  category?: string;
+  sets?: number;
+  reps?: string;
+  rest?: string;
+  details?: string;
+}
+
+export const BUILDER_QUICK_ADD_EXERCISES = [
+  { name: "Bench Press", category: "strength", sets: 4, reps: "8-10", rest: "90s" },
+  { name: "Squat", category: "strength", sets: 4, reps: "6-8", rest: "120s" },
+  { name: "Deadlift", category: "strength", sets: 3, reps: "5", rest: "180s" },
+  { name: "Pull-ups", category: "strength", sets: 3, reps: "max", rest: "90s" },
+  {
+    name: "Warm-up",
+    category: "warmup",
+    details: "5-10 min light cardio + dynamic stretching",
+  },
+  {
+    name: "HIIT Finisher",
+    category: "conditioning",
+    details: "10 rounds: 20s work / 40s rest",
+  },
+  { name: "Ab Circuit", category: "abs", sets: 3, reps: "15 each", rest: "30s" },
+  { name: "Cool Down", category: "cooldown", details: "5 min stretching" },
+] as const satisfies readonly BuilderQuickAdd[];
+
+/** A Quick Add chip as the row it becomes once a slug has been picked. */
+export function quickAddDefaults(quick: BuilderQuickAdd): Partial<BuilderExercise> {
+  const defaults: Partial<BuilderExercise> = {};
+  if (quick.category) defaults.category = quick.category;
+  // `sets`/`reps`/`rest` are CLEARED rather than left at the blank row's
+  // 3 × 10 / 60s when the chip does not prescribe them — "Warm-up" on the web
+  // carries only `details`, and a warm-up with three sets of ten is wrong.
+  defaults.sets = quick.sets;
+  defaults.reps = quick.reps ?? "";
+  defaults.rest = quick.rest ?? "";
+  if (quick.details) defaults.details = quick.details;
+  return defaults;
+}
 
 /** A blank row for a picked catalogue/custom exercise: slug saved, name shown. */
 export function createBuilderExercise(
@@ -350,8 +465,10 @@ export interface ProgramBuilderState {
   training_days_per_week: number;
   target_user: string;
   /**
-   * Not edited natively in this card. Carried so an edit of a program built on
-   * the web cannot silently blank what the web picker set.
+   * The web's "Required Equipment" picker, which the phone now edits too
+   * (NP-281). An implement the web set that is NOT one of
+   * `BUILDER_EQUIPMENT_OPTIONS` still rides through untouched — the chips only
+   * toggle what they show.
    */
   equipment: string[];
   /** Same: carried through, never edited here. */
@@ -620,6 +737,85 @@ export function updateWorkout(
   };
 }
 
+/**
+ * Toggle one implement in "Required Equipment" — the web's `toggleEquipment`,
+ * which is a plain membership flip over the same array.
+ */
+export function toggleBuilderEquipment(
+  state: ProgramBuilderState,
+  item: string,
+): ProgramBuilderState {
+  const value = item.trim();
+  if (!value) return state;
+  return {
+    ...state,
+    equipment: state.equipment.includes(value)
+      ? state.equipment.filter((entry) => entry !== value)
+      : [...state.equipment, value],
+  };
+}
+
+/**
+ * COPY ONE SESSION OVER ANOTHER — the web's `copyWorkout` behind "Copy current
+ * to…", with one difference that is rule 2: the web stamps the target with
+ * `Day ${toIndex + 1}`, which can collide with a label the member renamed (two
+ * sessions called "Day 2" are the same session to the schedule and to every
+ * log). The TARGET KEEPS ITS OWN LABEL here; only the title and the exercises
+ * are copied, and the exercises are DEEP copied so editing one day's row does
+ * not edit the other's.
+ *
+ * Grouping rides along with new `groupId`s: a copied superset must be its own
+ * block, or the two days would share one id and `builderGroupAt` would read
+ * across them.
+ */
+export function copyWorkout(
+  state: ProgramBuilderState,
+  phaseIndex: number,
+  fromIndex: number,
+  toIndex: number,
+): ProgramBuilderState {
+  if (fromIndex === toIndex) return state;
+  const phase = state.phases[phaseIndex];
+  const source = phase?.workouts[fromIndex];
+  const target = phase?.workouts[toIndex];
+  if (!phase || !source || !target) return state;
+
+  // Every id already in this phase, so a minted one cannot collide with the
+  // source block it was copied from.
+  const taken: Pick<BuilderExercise, "groupId">[] = phase.workouts.flatMap(
+    (workout) => workout.exercises.map((exercise) => ({ groupId: exercise.groupId })),
+  );
+  const groupIds = new Map<string, string>();
+  const exercises = source.exercises.map((exercise) => {
+    const copy: BuilderExercise = { ...exercise };
+    const groupId = exercise.groupId;
+    if (typeof groupId === "string" && groupId) {
+      let minted = groupIds.get(groupId);
+      if (!minted) {
+        minted = newBuilderGroupId(taken, taken.length + 1);
+        groupIds.set(groupId, minted);
+        taken.push({ groupId: minted });
+      }
+      copy.groupId = minted;
+    }
+    return copy;
+  });
+
+  return {
+    ...state,
+    phases: state.phases.map((p, i) =>
+      i === phaseIndex
+        ? {
+            ...p,
+            workouts: p.workouts.map((w, j) =>
+              j === toIndex ? { ...w, title: source.title, exercises } : w,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
 /** A session nobody has put anything in yet. */
 export function isEmptyWorkout(workout: BuilderWorkout): boolean {
   return workout.title.trim() === "" && workout.exercises.length === 0;
@@ -677,18 +873,30 @@ export function withTrainingDays(
 // component — so the invariants (grouped rows stay consecutive, a group left
 // with one member dissolves) hold in one place rather than per button.
 
-/** Append a picked catalogue/custom exercise to a workout. Slug saved, name shown. */
+/**
+ * Append a picked catalogue/custom exercise to a workout. Slug saved, name
+ * shown.
+ *
+ * `defaults` is what a Quick Add chip (NP-281) prescribes — the web's
+ * `addQuickExercise` spreads the chip over a blank row the same way. An
+ * explicitly `undefined` value in it CLEARS the blank row's default rather
+ * than being ignored, which is how "Warm-up" lands with no sets.
+ */
 export function addBuilderExercise(
   state: ProgramBuilderState,
   phaseIndex: number,
   workoutIndex: number,
   exerciseSlug: string,
   name?: string,
+  defaults?: Partial<BuilderExercise>,
 ): ProgramBuilderState {
   const phase = state.phases[phaseIndex];
   if (!phase || !phase.workouts[workoutIndex]) return state;
   const slug = exerciseSlug.trim();
   if (!slug) return state;
+  const row = defaults
+    ? { ...createBuilderExercise(slug, name), ...defaults }
+    : createBuilderExercise(slug, name);
   return {
     ...state,
     phases: state.phases.map((p, i) =>
@@ -699,10 +907,7 @@ export function addBuilderExercise(
               j === workoutIndex
                 ? {
                     ...w,
-                    exercises: [
-                      ...w.exercises,
-                      createBuilderExercise(slug, name),
-                    ],
+                    exercises: [...w.exercises, row],
                   }
                 : w,
             ),

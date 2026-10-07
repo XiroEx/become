@@ -1,14 +1,21 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft } from "lucide-react-native";
+import { ChevronLeft, PencilLine, Upload } from "lucide-react-native";
 import type { z } from "zod";
 import { apiFetch, CustomProgramResponseSchema } from "@become/api-client";
 import { Text } from "@/components/Text";
-import { Button } from "@/components/Button";
 import { ProgramBuilder } from "@/components/programs/ProgramBuilder";
-import { PasteImportSheet, type ImportOutcome } from "@/components/workout/PasteImportSheet";
+import { ImportProgramFlow } from "@/components/programs/ImportProgramFlow";
+import type { ImportOutcome } from "@/components/workout/PasteImportSheet";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
 import { syntheticGate, useEntitlements } from "@/lib/entitlements";
@@ -33,8 +40,9 @@ import {
  * BUILD A PROGRAM, ON THE PHONE (NP-168).
  *
  * Native counterpart of `webapp/app/dashboard/programs/new` — which renders
- * the admin `ProgramCreator` in `user-create` mode — and it posts to the same
- * route: `POST /api/programs/custom`.
+ * the chooser in `NewProgramClient.tsx` and then the admin `ProgramCreator`
+ * in `user-create` mode — and it posts to the same route:
+ * `POST /api/programs/custom`.
  *
  * THE THREE THINGS THIS SCREEN OWNS, and why they are here and not in the
  * builder component:
@@ -54,19 +62,24 @@ import {
  *     (rule 2 of the program routes), so the new program's own screen is
  *     where this ends.
  *
- * IMPORT FROM TEXT 4/4 (NP-244): an entry choice above the builder —
- * "Start from scratch" (today's behaviour, unchanged) or "Import a program",
- * which reuses `PasteImportSheet` (NP-243) with `kind: "program"` and
- * `importProgramFromText` (NP-242). The custom-programs `canCreate` check
- * still happens before the import is offered — `atCap` hides the import
- * entry the same way it already gates Save, and the cap sheet itself is
- * unchanged. On a successful import the stale scratch draft is cleared
- * FIRST (`draft.clear()`) so it cannot win a race with the mapped state —
+ * THE CHOOSER (NP-281, NP-244's import behind it): the web does NOT open the
+ * builder on this URL — it asks "Create a program: start from a blank
+ * program, or import one you already wrote" and only then opens the editor
+ * (`entryMode` in `NewProgramClient.tsx`). This screen now does the same, with
+ * both of the web's doors into the import (`Paste text`, `Upload a file`) in
+ * `ImportProgramFlow`. The custom-programs `canCreate` check still happens
+ * before the import is offered — `atCap` hides the import card the same way
+ * it already gates Save, and the cap sheet itself is unchanged. On a
+ * successful import the stale scratch draft is cleared FIRST
+ * (`draft.clear()`) so it cannot win a race with the mapped state —
  * `importedToBuilderState` turns the AI's `ImportedProgram` into
- * `ProgramBuilderState` — and the builder remounts (its `key` flips) with
- * that as `initialState`, seeded before its own draft-read effect ever runs,
- * so a remounted builder never reads the (now-cleared) disk at all.
+ * `ProgramBuilderState` — and the builder opens with that as `initialState`,
+ * seeded before its own draft-read effect ever runs, so it never reads the
+ * (now-cleared) disk at all.
  */
+
+type EntryMode = "choose" | "scratch" | "import";
+
 export default function NewProgramRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
@@ -80,10 +93,10 @@ export default function NewProgramRoute() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [entryMode, setEntryMode] = useState<EntryMode>("choose");
   const [importedState, setImportedState] = useState<ProgramBuilderState | null>(
     null,
   );
-  const [showImport, setShowImport] = useState(false);
 
   const fetchOpts = useMemo(
     () => ({
@@ -161,15 +174,15 @@ export default function NewProgramRoute() {
   );
 
   /**
-   * Submits the pasted text to NP-242's AI run. On `ok` the stale scratch
-   * draft is cleared FIRST — it must never win a race with what was just
-   * imported — and the mapped state becomes the builder's `initialState`,
-   * which also flips the builder's `key` below so it mounts fresh rather
-   * than adopting the import into whatever the scratch builder already had
-   * in React state. A `gate` refusal raises the EXISTING upgrade path, same
-   * as the Sessions hub's import does; every other outcome (`consent`,
-   * `rate_limited`, `empty`, `error`) is left for `PasteImportSheet` itself
-   * to render, and the member stays right here either way.
+   * Submits pasted or uploaded text to NP-242's AI run. On `ok` the stale
+   * scratch draft is cleared FIRST — it must never win a race with what was
+   * just imported — and the mapped state becomes the builder's
+   * `initialState`, which is also what opens the builder, so the import is
+   * never adopted into whatever a scratch builder already had in React
+   * state. A `gate` refusal raises the EXISTING upgrade path, same as the
+   * Sessions hub's import does; every other outcome (`consent`,
+   * `rate_limited`, `empty`, `error`) is left for the import flow itself to
+   * render, and the member stays right here either way.
    */
   const handleImportSubmit = useCallback(
     async (text: string): Promise<ImportOutcome> => {
@@ -177,6 +190,7 @@ export default function NewProgramRoute() {
       if (outcome.status === "ok") {
         await draft.clear();
         setImportedState(importedToBuilderState(outcome.program));
+        setEntryMode("scratch");
       } else if (outcome.status === "gate") {
         showUpgradeSheet(outcome.gate);
       }
@@ -185,6 +199,30 @@ export default function NewProgramRoute() {
     [draft, fetchOpts],
   );
 
+  /**
+   * Leaving the builder by CANCEL throws the local draft away and returns to
+   * the chooser. Keeping it is what made "Picked up where you left off" show
+   * on a program the member had explicitly walked out of; the draft exists to
+   * survive the OS killing the app, not to survive Cancel.
+   */
+  const onCancelBuilder = useCallback(() => {
+    void draft.clear();
+    setImportedState(null);
+    setEntryMode("choose");
+  }, [draft]);
+
+  // The web's own two headings: the chooser is "Create a program" with the
+  // line under it, and the editor is the program itself. The import step
+  // carries its own heading ("Import your program"), so the page header stays
+  // out of its way.
+  const headerTitle = entryMode === "scratch" ? "New program" : "Create a program";
+  const headerSubtitle =
+    entryMode === "choose"
+      ? "Start from a blank program, or import one you already wrote."
+      : entryMode === "scratch"
+        ? "Your phases, your sessions, your program."
+        : "";
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -192,13 +230,20 @@ export default function NewProgramRoute() {
       testID="programming-new-route"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        {/* THE HEADER, fixed. It is also the keyboard's OUTSIDE TAP: a tap
+            that lands here rather than on a control dismisses it, so Next and
+            Save stop hiding under it. `accessible={false}` keeps this out of
+            the a11y tree — it is a gesture target, not a button. */}
+        <Pressable
+          testID="programming-new-dismiss-keyboard"
+          // Not a button: a gesture target that the a11y tree skips.
+          accessibilityRole="none"
+          accessible={false}
+          onPress={() => Keyboard.dismiss()}
+          style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Pressable
@@ -221,11 +266,13 @@ export default function NewProgramRoute() {
             </Pressable>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-2xl font-bold">
-                New program
+                {headerTitle}
               </Text>
-              <Text className="text-muted-foreground text-sm">
-                Your phases, your sessions, your program.
-              </Text>
+              {headerSubtitle ? (
+                <Text className="text-muted-foreground text-sm">
+                  {headerSubtitle}
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -244,36 +291,14 @@ export default function NewProgramRoute() {
               />
             </View>
           ) : null}
+        </Pressable>
 
-          {/* THE ENTRY CHOICE (NP-244): start from scratch — today's
-              behaviour, the builder below is already open on it — or import
-              pasted text. The import option is not offered at the cap; the
-              allowance lock/counter above already explain why, and Save
-              still raises the same sheet. */}
-          <View
-            testID="programming-new-entry-choice"
-            style={{ flexDirection: "row", gap: 8 }}
-          >
-            <Button
-              testID="programming-new-entry-scratch"
-              variant={importedState ? "secondary" : "primary"}
-              accessibilityLabel="Start from scratch"
-              onPress={() => setImportedState(null)}
-            >
-              Start from scratch
-            </Button>
-            {!atCap ? (
-              <Button
-                testID="programming-new-entry-import"
-                variant={importedState ? "primary" : "secondary"}
-                accessibilityLabel="Import a program"
-                onPress={() => setShowImport(true)}
-              >
-                Import a program
-              </Button>
-            ) : null}
-          </View>
-
+        {/* THE BUILDER SCROLLS ITSELF (its floating Save has to sit over the
+            scroll, not in it), so it is a flex child here rather than another
+            ScrollView's content — a `flex: 1` view inside a ScrollView has no
+            height at all. The chooser and the import, which are short, keep
+            their own scroll. */}
+        {entryMode === "scratch" ? (
           <ProgramBuilder
             // Flips when an import lands, forcing a fresh mount: the new
             // instance's `initialState` is non-null from its very first
@@ -287,19 +312,123 @@ export default function NewProgramRoute() {
             saving={saving}
             error={error}
             onSubmit={onSubmit}
-            onCancel={() => router.back()}
+            onCancel={onCancelBuilder}
             testID="program-builder"
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        ) : (
+          <ScrollView
+            contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+          >
+            <Pressable
+              testID="programming-new-dismiss-keyboard-body"
+              // Not a button: a gesture target that the a11y tree skips.
+              accessibilityRole="none"
+              accessible={false}
+              onPress={() => Keyboard.dismiss()}
+              style={{ gap: 16 }}
+            >
+              {/* ── The chooser, the web's own two cards ─────────────────── */}
+              {entryMode === "choose" ? (
+                <View testID="programming-new-entry-choice" style={{ gap: 12 }}>
+                  <Pressable
+                    testID="programming-new-entry-scratch"
+                    accessibilityRole="button"
+                    accessibilityLabel="Start from scratch"
+                    accessibilityHint="Build it step by step in the editor"
+                    onPress={() => {
+                      setImportedState(null);
+                      setEntryMode("scratch");
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 16,
+                      borderRadius: 16,
+                      backgroundColor: colors.card,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: colors.muted,
+                      }}
+                    >
+                      <PencilLine size={22} color={colors.foreground} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text className="text-foreground text-base font-semibold">
+                        Start from scratch
+                      </Text>
+                      <Text className="text-muted-foreground text-sm">
+                        Build it step by step in the editor
+                      </Text>
+                    </View>
+                  </Pressable>
 
-      <PasteImportSheet
-        visible={showImport}
-        kind="program"
-        onSubmit={handleImportSubmit}
-        onClose={() => setShowImport(false)}
-        testID="programming-new-import-sheet"
-      />
+                  {!atCap ? (
+                    <Pressable
+                      testID="programming-new-entry-import"
+                      accessibilityRole="button"
+                      accessibilityLabel="Import a program"
+                      accessibilityHint="Paste text, or upload a file"
+                      onPress={() => setEntryMode("import")}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: 16,
+                        borderRadius: 16,
+                        backgroundColor: colors.card,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 12,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: colors.muted,
+                        }}
+                      >
+                        <Upload size={22} color={colors.mindset} />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text className="text-foreground text-base font-semibold">
+                          Import a program
+                        </Text>
+                        <Text className="text-muted-foreground text-sm">
+                          Paste text, or upload a file
+                        </Text>
+                      </View>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {entryMode === "import" ? (
+                <ImportProgramFlow
+                  onImportText={handleImportSubmit}
+                  onCancel={() => setEntryMode("choose")}
+                  testID="programming-new-import"
+                />
+              ) : null}
+            </Pressable>
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

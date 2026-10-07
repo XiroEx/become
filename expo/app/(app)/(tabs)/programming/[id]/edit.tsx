@@ -1,6 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import {
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft } from "lucide-react-native";
 import type { z } from "zod";
@@ -124,13 +130,19 @@ export default function EditProgramRoute() {
       testID="programming-edit-route"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        {/* The header, fixed — and the keyboard's OUTSIDE TAP: a tap that
+            lands here rather than on a control dismisses it, so Save stops
+            hiding under it (NP-281). */}
+        <Pressable
+          testID="programming-edit-dismiss-keyboard"
+          // Not a button: a gesture target that the a11y tree skips.
+          accessibilityRole="none"
+          accessible={false}
+          onPress={() => Keyboard.dismiss()}
+          style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             <Pressable
@@ -160,28 +172,30 @@ export default function EditProgramRoute() {
               </Text>
             </View>
           </View>
+        </Pressable>
 
-          <ScreenState
-            loading={program.loading && !program.data}
-            error={program.error}
-            hasData={Boolean(initialState)}
-            onRetry={retry}
-            serverErrorMessage="Couldn't load this program."
-            testID="programming-edit-screen-state"
-          >
-            {initialState ? (
-              <ProgramBuilder
-                mode="edit"
-                initialState={initialState}
-                saving={saving}
-                error={error}
-                onSubmit={onSubmit}
-                onCancel={() => router.back()}
-                testID="program-builder"
-              />
-            ) : null}
-          </ScreenState>
-        </ScrollView>
+        {/* The builder owns its own scroll (its floating Save sits over it),
+            so it is a flex child rather than a ScrollView's content. */}
+        <ScreenState
+          loading={program.loading && !program.data}
+          error={program.error}
+          hasData={Boolean(initialState)}
+          onRetry={retry}
+          serverErrorMessage="Couldn't load this program."
+          testID="programming-edit-screen-state"
+        >
+          {initialState ? (
+            <ProgramBuilder
+              mode="edit"
+              initialState={initialState}
+              saving={saving}
+              error={error}
+              onSubmit={onSubmit}
+              onCancel={() => router.back()}
+              testID="program-builder"
+            />
+          ) : null}
+        </ScreenState>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
