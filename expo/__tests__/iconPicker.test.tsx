@@ -55,6 +55,18 @@ describe("<IconPicker />", () => {
     expect(getByTestId("icon-preset-flame-check")).toBeTruthy();
   });
 
+  it("the upload hint matches the web's copy exactly (NP-306)", () => {
+    const { getByText } = render(<IconPicker currentIcon="flame" />);
+
+    // Web: `webapp/components/profile/IconPicker.tsx` — "Or upload your own —
+    // position and zoom it to fit." Native previously said "choose a photo
+    // from your library", which described a different (native-only) flow —
+    // the photo picker itself stays native, only the copy changes.
+    expect(
+      getByText("Or upload your own — position and zoom it to fit."),
+    ).toBeTruthy();
+  });
+
   it("a member can change their icon natively via PATCH /api/profile (acceptance criterion e015ca53)", async () => {
     mockApiFetch.mockResolvedValueOnce({
       profileIcon: "strength",
