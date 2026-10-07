@@ -16,7 +16,8 @@ export type ButtonVariant =
   | "ghost"
   | "inverted"
   | "success"
-  | "info";
+  | "info"
+  | "mindset";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps {
@@ -67,6 +68,12 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // `bg-blue-600` — `info` is that same blue-600/400 token everywhere else in
   // the app (Calendar/History links).
   info: "bg-info",
+  // NP-295: the Generate sheet's purple CTAs (`Generate session`, `Start
+  // session`, `Save program`) are `bg-purple-600` on the web, flat in both
+  // modes there — `mindset` is the same purple-600/400 token the rest of the
+  // app already uses for this hue (`WorkoutNowSheet`'s AI toggle, the
+  // Mindset streak icon), not a new colour literal.
+  mindset: "bg-mindset",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -77,6 +84,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   inverted: "text-background",
   success: "text-primary-foreground",
   info: "text-primary-foreground",
+  mindset: "text-primary-foreground",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -157,7 +165,8 @@ export function Button({
               variant === "primary" ||
               variant === "destructive" ||
               variant === "success" ||
-              variant === "info"
+              variant === "info" ||
+              variant === "mindset"
                 ? colors["primary-foreground"]
                 : variant === "inverted"
                   ? colors.background
