@@ -14,6 +14,7 @@ const ANDROID_KAV_FILES = [
   "components/nutrition/BasketSheet.tsx", // "Name this sitting"
   "components/nutrition/EditLogItemSheet.tsx", // Custom amount
   "components/ai/CoachChat.tsx", // Mind coach chat + nutrition consultant chat
+  "components/workout/PasteImportSheet.tsx", // Import a session/program (NP-279)
   // Plain screens
   "app/(app)/(tabs)/nutrition/goals.tsx", // Water Goal
   "app/(app)/(tabs)/mind/[section].tsx", // Vision editor's Environment field

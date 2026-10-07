@@ -37,7 +37,6 @@ import { Text } from "@/components/Text";
 import { ScreenState } from "@/components/ScreenState";
 import { AllowanceCounter } from "@/components/entitlements/AllowanceCounter";
 import { AllowanceLock } from "@/components/entitlements/AllowanceLock";
-import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { PasteImportSheet, type ImportOutcome } from "@/components/workout/PasteImportSheet";
 import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
 import { correctableFromQuickSession, type CorrectableWorkout } from "@/lib/workout/correction";
@@ -90,8 +89,10 @@ import {
  *     finishing it consumes the plan rather than creating a new log.
  *   • Entry points to the session builder (NP-137, native) and import
  *     (NP-243, native — the paste sheet opens in place and hands a
- *     resolved draft to the builder); the Generate sheet (NP-133) is native
- *     and opens in place too.
+ *     resolved draft to the builder). No "Generate a session instead" row
+ *     here (NP-279): the web's Sessions tab (`HubClient.tsx`) has none —
+ *     Generate stays reachable from the Workout tab's own home
+ *     (`app/(app)/(tabs)/programming/index.tsx`, NP-133).
  */
 
 type HistoryResponse = z.infer<typeof WorkoutHistoryResponseSchema>;
@@ -137,7 +138,7 @@ function toHubPlanned(p: PlannedQuickSession): HubPlannedSession {
 }
 
 export default function SessionsHubRoute() {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const router = useRouter();
   const { token } = useAuth();
 
@@ -167,7 +168,6 @@ export default function SessionsHubRoute() {
   const [opening, setOpening] = useState<string | null>(null);
   const [togglingFavorite, setTogglingFavorite] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showGenerate, setShowGenerate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   // The log being corrected: the row plus its logged sets, fetched from the
   // session read (the hub list carries prescriptions, not logged sets).
@@ -649,7 +649,10 @@ export default function SessionsHubRoute() {
                   paddingHorizontal: 14,
                   height: 32,
                   borderRadius: 16,
-                  backgroundColor: active ? colors.primary : colors.muted,
+                  // The web's active tab is `bg-green-500` (HubClient.tsx), not
+                  // the neutral `primary` NP-313 moved the rest of the app to —
+                  // this hub keeps its own green identity.
+                  backgroundColor: active ? colors.success : colors.muted,
                   ...minTouchTarget,
                 }}
               >
@@ -720,7 +723,10 @@ export default function SessionsHubRoute() {
           {planned.length > 0 ? (
             <View style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                <CalendarClock color={colors.primary} size={16} strokeWidth={1.5} />
+                {/* The web's "Planned" heading icon is `text-emerald-600
+                    dark:text-emerald-400` (HubClient.tsx) — this app's own
+                    green family is `success`, not the neutral `primary`. */}
+                <CalendarClock color={colors.success} size={16} strokeWidth={1.5} />
                 <Text className="text-foreground text-lg font-semibold">Planned</Text>
               </View>
               {planned.map((p) => {
@@ -739,7 +745,12 @@ export default function SessionsHubRoute() {
                       padding: 12,
                       borderRadius: 16,
                       borderWidth: 1,
+                      // A 4px green LEFT accent, same pattern as the
+                      // recommended-program card (ProgramsCatalog.tsx) —
+                      // the web's planned `Card accent="success"` 3px stripe.
+                      borderLeftWidth: 4,
                       borderColor: colors.border,
+                      borderLeftColor: colors.success,
                       backgroundColor: colors.card,
                       marginBottom: 12,
                       opacity: busy ? 0.6 : 1,
@@ -752,19 +763,29 @@ export default function SessionsHubRoute() {
                         borderRadius: 12,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: colors.muted,
+                        // The web's tile is `bg-emerald-100 dark:bg-emerald-900/30`
+                        // with an emerald icon — a tinted wash of the same
+                        // green the stripe and heading use, not the neutral
+                        // `muted` every other row's tile uses.
+                        backgroundColor: tint("success", 0.15),
                       }}
                     >
-                      <CalendarClock color={colors.primary} size={20} strokeWidth={1.5} />
+                      <CalendarClock color={colors.success} size={20} strokeWidth={1.5} />
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text className="text-foreground text-sm font-semibold" numberOfLines={1}>
                         {p.title}
                       </Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 }}>
-                        <Text className="text-xs font-medium" style={{ color: colors.primary }}>
-                          {formatPlannedDate(p.date)}
-                        </Text>
+                        {/* The web puts a `Calendar` icon before the green
+                            date text (HubClient.tsx's `inline-flex` span) —
+                            native had the text alone. */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          <Calendar color={colors.success} size={12} strokeWidth={1.5} />
+                          <Text className="text-xs font-medium" style={{ color: colors.success }}>
+                            {formatPlannedDate(p.date)}
+                          </Text>
+                        </View>
                         <Text className="text-muted-foreground text-xs">
                           {p.exerciseCount} {p.exerciseCount === 1 ? "exercise" : "exercises"}
                         </Text>
@@ -816,7 +837,9 @@ export default function SessionsHubRoute() {
                   paddingHorizontal: 16,
                   height: 36,
                   borderRadius: 18,
-                  backgroundColor: colors.primary,
+                  // The web's Build button is `bg-green-600` (HubClient.tsx),
+                  // not the neutral `primary` NP-313 moved everything else to.
+                  backgroundColor: colors.success,
                 }}
               >
                 <Plus color={colors["primary-foreground"]} size={16} strokeWidth={2} />
@@ -827,27 +850,10 @@ export default function SessionsHubRoute() {
             </View>
           </View>
 
-          <Pressable
-            testID="sessions-generate"
-            accessibilityRole="button"
-            accessibilityLabel="Generate a session"
-            onPress={() => setShowGenerate(true)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 6,
-              padding: 12,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.card,
-              marginBottom: 16,
-            }}
-          >
-            <Zap color={colors.primary} size={16} strokeWidth={1.5} />
-            <Text className="text-foreground text-sm font-semibold">Generate a session instead</Text>
-          </Pressable>
+          {/* NP-279: the web's Sessions tab (HubClient.tsx) has no "Generate
+              a session" row — Generate stays reachable from the Workout tab's
+              own entry point (app/(app)/(tabs)/programming/index.tsx). This
+              row was a native-only addition this visual pass drops to match. */}
 
           {sessions.length === 0 ? (
             // Dashed empty-state card — matches the web's `EmptyState`
@@ -929,7 +935,6 @@ export default function SessionsHubRoute() {
         </View>
       </ScrollView>
 
-      <GenerateSheet visible={showGenerate} onClose={() => setShowGenerate(false)} testID="sessions-generate-sheet" />
       <PasteImportSheet
         visible={showImport}
         kind="session"

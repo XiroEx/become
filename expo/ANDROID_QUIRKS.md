@@ -72,8 +72,12 @@ either way.
   `components/nutrition/EstimateSheet.tsx` (Describe your meal), `BasketSheet.tsx`
   ("Name this sitting"), `EditLogItemSheet.tsx` (Custom amount),
   `components/ai/CoachChat.tsx` (the shared Mind coach / nutrition consultant
-  chat), `app/(app)/(tabs)/nutrition/goals.tsx` and
-  `app/(app)/(tabs)/mind/[section].tsx` (Vision's edit form).
+  chat), `app/(app)/(tabs)/nutrition/goals.tsx`,
+  `app/(app)/(tabs)/mind/[section].tsx` (Vision's edit form), and
+  `components/workout/PasteImportSheet.tsx` (Import a session/program,
+  NP-279 — missed by the original pass despite living in the same
+  `BottomSheet` `Modal`; the keyboard used to cover both the paste field and
+  the submit button with no way to reach either).
   `__tests__/androidKeyboardAvoiding.test.ts` holds the set.
 - **`useScrollFocusedFieldIntoView`** (`lib/keyboard/useScrollFocusedFieldIntoView.ts`)
   — Android's `ScrollView`, unlike iOS's, has no built-in "scroll the focused
