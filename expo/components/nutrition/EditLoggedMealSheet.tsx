@@ -170,18 +170,16 @@ export function EditLoggedMealSheet({
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
               <View
+                className="bg-orange-100 dark:bg-orange-900/30"
                 style={{
                   width: 36,
                   height: 36,
                   borderRadius: 10,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.border,
                 }}
               >
-                <ChefHat size={18} color={colors.foreground} />
+                <ChefHat size={18} color={colors.orange} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text className="text-muted-foreground text-[11px] font-medium uppercase">

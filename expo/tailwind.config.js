@@ -1,3 +1,5 @@
+const colors = require("tailwindcss/colors");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -51,7 +53,10 @@ module.exports = {
         card: "rgb(var(--card) / <alpha-value>)",
         border: "rgb(var(--border) / <alpha-value>)",
         success: "rgb(var(--success) / <alpha-value>)",
-        teal: "rgb(var(--teal) / <alpha-value>)",
+        teal: {
+          DEFAULT: "rgb(var(--teal) / <alpha-value>)",
+          ...colors.teal,
+        },
         info: "rgb(var(--info) / <alpha-value>)",
         mindset: "rgb(var(--mindset) / <alpha-value>)",
         "mood-bad": "rgb(var(--mood-bad) / <alpha-value>)",
@@ -66,10 +71,22 @@ module.exports = {
         "mind-blue": "rgb(var(--mind-blue) / <alpha-value>)",
         "mind-emerald": "rgb(var(--mind-emerald) / <alpha-value>)",
         "mind-pink": "rgb(var(--mind-pink) / <alpha-value>)",
-        orange: "rgb(var(--orange) / <alpha-value>)",
-        indigo: "rgb(var(--indigo) / <alpha-value>)",
-        rose: "rgb(var(--rose) / <alpha-value>)",
-        amber: "rgb(var(--amber) / <alpha-value>)",
+        orange: {
+          DEFAULT: "rgb(var(--orange) / <alpha-value>)",
+          ...colors.orange,
+        },
+        indigo: {
+          DEFAULT: "rgb(var(--indigo) / <alpha-value>)",
+          ...colors.indigo,
+        },
+        rose: {
+          DEFAULT: "rgb(var(--rose) / <alpha-value>)",
+          ...colors.rose,
+        },
+        amber: {
+          DEFAULT: "rgb(var(--amber) / <alpha-value>)",
+          ...colors.amber,
+        },
       },
     },
   },
