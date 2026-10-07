@@ -134,15 +134,15 @@ describe("the `Log this food` sheet replaces the inline form, and defaults to th
     await waitFor(() => {
       expect(screen.getByTestId("nutrition-food-log-open")).toBeTruthy();
     });
-    // The inline form (quantity stepper, meal tag chips) is not on the page
-    // until the sheet opens.
-    expect(screen.queryByTestId("quantity-input")).toBeNull();
+    // The inline form (amount chips, tag picker) is not on the page until
+    // the sheet opens.
+    expect(screen.queryByTestId("nutrition-food-log-sheet-amount-preset-primary")).toBeNull();
 
     fireEvent.press(screen.getByTestId("nutrition-food-log-open"));
     await waitFor(() => {
       expect(screen.getByTestId("nutrition-food-log-sheet")).toBeTruthy();
     });
-    expect(screen.getByTestId("quantity-input")).toBeTruthy();
+    expect(screen.getByTestId("nutrition-food-log-sheet-amount-preset-primary")).toBeTruthy();
   });
 
   it("preselects the variant flagged `isDefault` (Grilled, 180 kcal), not the first in the array (Raw, 120 kcal)", async () => {
@@ -154,10 +154,9 @@ describe("the `Log this food` sheet replaces the inline form, and defaults to th
     fireEvent.press(screen.getByTestId("nutrition-food-log-open"));
 
     await waitFor(() => {
-      expect(screen.getByTestId("macro-preview-calories").props.children).toEqual([
-        180,
-        " kcal",
-      ]);
+      expect(screen.getByTestId("nutrition-food-log-sheet-macro-cal").props.children).toBe(
+        "180",
+      );
     });
     // The headline above the fold already scaled off the default variant —
     // the sheet agrees with it rather than contradicting it with "Raw".
