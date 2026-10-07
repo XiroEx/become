@@ -1,5 +1,6 @@
 /* eslint-disable import/first */
 import React from "react";
+import { Platform } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockBack = jest.fn();
@@ -185,28 +186,88 @@ describe("MealScheduleRoute & MealScheduleEditor", () => {
     expect(lastPutBody.windows.some((w: { tag: string }) => w.tag === "before work")).toBe(true);
   });
 
-  it("submits the complete ordered set of windows via PUT on Save", async () => {
+  it("has no manual Save button — a row edit autosaves the complete ordered set of windows", async () => {
+    const { getByTestId, queryByTestId } = render(<MealScheduleRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("meal-schedule-row-dinner")).toBeTruthy();
+    });
+
+    // Matching web: autosave only, no extra Save button next to the status chip.
+    expect(queryByTestId("meal-schedule-save-button")).toBeNull();
+    expect(getByTestId("save-status")).toBeTruthy();
+
+    fireEvent.changeText(getByTestId("start-dinner"), "19:00");
+    fireEvent.changeText(getByTestId("end-dinner"), "20:00");
+
+    await waitFor(
+      () => {
+        const putCalls = mockApiFetch.mock.calls.filter(
+          (c) => c[0] === "/api/nutrition/meal-schedule" && c[2]?.method === "PUT",
+        );
+        expect(putCalls.length).toBeGreaterThan(0);
+        const sentWindows = putCalls[putCalls.length - 1][2].body.windows;
+        // Complete set includes all tags
+        expect(sentWindows.length).toBeGreaterThanOrEqual(5);
+        // Unscheduled tags must have null startMinutes and null endMinutes
+        const snackWin = sentWindows.find((w: { tag: string }) => w.tag === "snack");
+        expect(snackWin).toBeDefined();
+        expect(snackWin.startMinutes).toBeNull();
+        expect(snackWin.endMinutes).toBeNull();
+      },
+      { timeout: 2000 },
+    );
+  });
+
+  it("shows a decorative drag handle beside the reorder arrows, matching the web row", async () => {
     const { getByTestId } = render(<MealScheduleRoute />);
 
     await waitFor(() => {
-      expect(getByTestId("meal-schedule-save-button")).toBeTruthy();
+      expect(getByTestId("drag-handle-breakfast")).toBeTruthy();
+      expect(getByTestId("drag-handle-lunch")).toBeTruthy();
     });
+  });
 
-    fireEvent.press(getByTestId("meal-schedule-save-button"));
+  it("shows a blank placeholder (never a fake time) with no value for an unscheduled row", async () => {
+    const { getByTestId } = render(<MealScheduleRoute />);
 
     await waitFor(() => {
-      const putCalls = mockApiFetch.mock.calls.filter(
-        (c) => c[0] === "/api/nutrition/meal-schedule" && c[2]?.method === "PUT",
-      );
-      expect(putCalls.length).toBeGreaterThan(0);
-      const sentWindows = putCalls[putCalls.length - 1][2].body.windows;
-      // Complete set includes all tags
-      expect(sentWindows.length).toBeGreaterThanOrEqual(5);
-      // Unscheduled tags must have null startMinutes and null endMinutes
-      const snackWin = sentWindows.find((w: { tag: string }) => w.tag === "snack");
-      expect(snackWin).toBeDefined();
-      expect(snackWin.startMinutes).toBeNull();
-      expect(snackWin.endMinutes).toBeNull();
+      expect(getByTestId("start-snack")).toBeTruthy();
     });
+
+    expect(getByTestId("start-snack").props.value).toBe("");
+    expect(getByTestId("start-snack").props.placeholder).toBe("--:--");
+    expect(getByTestId("end-snack").props.placeholder).toBe("--:--");
+  });
+
+  it("on Android, the time field opens the system time picker instead of the keyboard", async () => {
+    const originalOS = Platform.OS;
+    Platform.OS = "android";
+    try {
+      const { getByTestId, queryByTestId } = render(<MealScheduleRoute />);
+
+      await waitFor(() => {
+        expect(getByTestId("time-field-start-breakfast")).toBeTruthy();
+      });
+
+      // Read-only on Android: typing never opens here, a dialog does.
+      expect(getByTestId("start-breakfast").props.editable).toBe(false);
+      expect(queryByTestId("time-picker-start-breakfast")).toBeNull();
+
+      fireEvent.press(getByTestId("time-field-start-breakfast"));
+
+      await waitFor(() => {
+        expect(getByTestId("time-picker-start-breakfast")).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId("time-picker-start-breakfast"));
+
+      await waitFor(() => {
+        expect(getByTestId("start-breakfast").props.value).toBe("09:45");
+        expect(queryByTestId("time-picker-start-breakfast")).toBeNull();
+      });
+    } finally {
+      Platform.OS = originalOS;
+    }
   });
 });
