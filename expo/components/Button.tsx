@@ -13,6 +13,7 @@ export type ButtonVariant =
   | "primary"
   | "secondary"
   | "destructive"
+  | "destructive-outline"
   | "ghost"
   | "inverted"
   | "success"
@@ -51,6 +52,12 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-primary",
   secondary: "bg-muted",
   destructive: "bg-destructive",
+  // NP-304: the web's Delete account button is OUTLINED — a red border and
+  // red text with no fill — not the solid destructive used for the actual
+  // "Yes, delete my account" confirm. Border colour rides the same
+  // light/dark `destructive` token (red-700 / red-400) the text already
+  // uses, so it stays legible in both modes without a new colour literal.
+  "destructive-outline": "bg-transparent border border-destructive",
   ghost: "bg-transparent border border-border",
   // The web's `bg-zinc-900 dark:bg-white` submit button on the sign-in /
   // sign-up screen (NP-251): foreground on background, which is already the
@@ -86,6 +93,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   primary: "text-primary-foreground",
   secondary: "text-foreground",
   destructive: "text-destructive-foreground",
+  "destructive-outline": "text-destructive",
   ghost: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
@@ -179,7 +187,12 @@ export function Button({
                   ? colors["primary-foreground"]
                   : variant === "inverted"
                     ? colors.background
-                    : colors.foreground
+                    // "destructive-outline" has no fill — the spinner takes the
+                    // same red the label would, not the white meant for a
+                    // filled destructive button.
+                    : variant === "destructive-outline"
+                      ? colors.destructive
+                      : colors.foreground
             }
           />
         </View>
