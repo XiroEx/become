@@ -87,7 +87,10 @@ describe("Profile reachability from headers (NP-163)", () => {
       fireEvent.press(profileButton);
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile");
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/(tabs)/profile",
+      params: { from: "mind" },
+    });
   });
 
   it("Dashboard header includes profile avatar button that opens /(tabs)/profile", async () => {
@@ -101,7 +104,10 @@ describe("Profile reachability from headers (NP-163)", () => {
       fireEvent.press(profileButton);
     });
 
-    expect(mockPush).toHaveBeenCalledWith("/(tabs)/profile");
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: "/(tabs)/profile",
+      params: { from: "dashboard" },
+    });
   });
 
   it("web path /dashboard/profile resolves to /(tabs)/profile with exact match", () => {

@@ -623,7 +623,14 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
               testID="mind-header-profile"
               accessibilityRole="button"
               accessibilityLabel="Profile"
-              onPress={() => router.push("/(tabs)/profile" as never)}
+              onPress={() =>
+                // `from` lets Profile's back arrow / Android back return here
+                // instead of the tab navigator's default (Workout) — NP-306.
+                router.push({
+                  pathname: "/(tabs)/profile",
+                  params: { from: "mind" },
+                } as never)
+              }
               style={[
                 minTouchTarget,
                 { alignItems: "center", justifyContent: "center" },
