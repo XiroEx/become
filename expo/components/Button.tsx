@@ -17,6 +17,7 @@ export type ButtonVariant =
   | "ghost"
   | "inverted"
   | "success"
+  | "success-outline"
   | "info"
   | "accent"
   | "mindset";
@@ -72,6 +73,11 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // token instead of a new colour literal. (Before NP-313 this also existed
   // to keep such CTAs off the brand red that `primary` used to be.)
   success: "bg-success",
+  // NP-333: the web's `View Summary` on a completed calendar day is OUTLINED
+  // green (`border-green-200 text-green-600`) with a chart icon, not the
+  // solid `success` fill used for an actual positive confirm — same reasoning
+  // as `destructive-outline` above.
+  "success-outline": "bg-transparent border border-success",
   // NP-303: the web's Settings "Enable" / "Turn on" / "Repair" buttons are
   // `bg-blue-600` — `info` is that same blue-600/400 token everywhere else in
   // the app (Calendar/History links).
@@ -97,6 +103,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   ghost: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
+  "success-outline": "text-success",
   info: "text-primary-foreground",
   accent: "text-accent-foreground",
   mindset: "text-primary-foreground",
@@ -192,7 +199,11 @@ export function Button({
                     // filled destructive button.
                     : variant === "destructive-outline"
                       ? colors.destructive
-                      : colors.foreground
+                      // "success-outline" has no fill either — same reasoning
+                      // as "destructive-outline" just above.
+                      : variant === "success-outline"
+                        ? colors.success
+                        : colors.foreground
             }
           />
         </View>

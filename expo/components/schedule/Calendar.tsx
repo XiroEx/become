@@ -28,7 +28,9 @@ export interface CalendarProps {
   testID?: string;
 }
 
-const WEEK_HEADERS = ["S", "M", "T", "W", "T", "F", "S"];
+// The web's `DAY_LABELS` (CalendarClient.tsx) — 3-letter abbreviations, not
+// single letters (NP-333).
+const WEEK_HEADERS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
 const MONTH_NAMES = [
   "January",
@@ -409,185 +411,211 @@ export function Calendar({
         </Text>
       </View>
 
-      {/* Weekday headers */}
-      <View style={{ flexDirection: "row", marginBottom: 6 }}>
-        {WEEK_HEADERS.map((h, i) => (
-          <View key={i} style={{ flex: 1, alignItems: "center" }}>
-            <Text className="text-muted-foreground text-xs">{h}</Text>
+      {/* Bordered grid — the web's "rounded-xl border ... overflow-hidden"
+          wrapper around the day headers and date cells (NP-333): native
+          previously drew no cell lines at all, just a strip of letters above
+          borderless rows. */}
+      <View className="border border-border rounded-xl overflow-hidden">
+        {/* Weekday headers */}
+        <View
+          style={{ flexDirection: "row", paddingVertical: 6 }}
+          className="border-b border-border"
+        >
+          {WEEK_HEADERS.map((h, i) => (
+            <View key={i} style={{ flex: 1, alignItems: "center" }}>
+              <Text className="text-muted-foreground text-[10px] font-semibold">
+                {h}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Grid rows */}
+        {rows.map((row, ri) => (
+          <View
+            key={ri}
+            testID={`${testID}-row-${ri}`}
+            style={{ flexDirection: "row" }}
+          >
+            {row.map((cell, ci) => {
+              if (!cell) {
+                return (
+                  <View
+                    key={ci}
+                    testID={`${testID}-blank-${ri}-${ci}`}
+                    className="border-r border-b border-border"
+                    style={{ flex: 1, height: 40 }}
+                  />
+                );
+              }
+              const { date, outside } = cell;
+
+              const daySlots = slots.filter((s) => s.date === date);
+              const dayQuick = quickSessions.filter((q) => {
+                const qDay = localDateKey(new Date(q.date));
+                return qDay === date;
+              });
+
+              const markers: DayMarker[] = [];
+              for (let i = 0; i < daySlots.length; i++) {
+                const w = daySlots[i];
+                if (!w || w.status === "rest") continue;
+                const isMakeup =
+                  w.status === "completed" &&
+                  !!w.completedAt &&
+                  isMakeupWorkout(w.date, w.completedAt);
+                const status: SlotStatus | "makeup" = isMakeup
+                  ? "makeup"
+                  : w.status;
+                const colorClass = STATUS_COLOR[status] ?? "bg-blue-500";
+                markers.push({
+                  key: `w-${w.programId}-${w.workoutIndex}-${i}`,
+                  status,
+                  colorClass,
+                });
+              }
+
+              for (let i = 0; i < dayQuick.length; i++) {
+                const q = dayQuick[i];
+                if (!q) continue;
+                const colorClass = STATUS_COLOR[q.status] ?? "bg-blue-500";
+                markers.push({
+                  key: `q-${q.sessionId ?? i}`,
+                  status: q.status,
+                  colorClass,
+                  isQuick: true,
+                });
+              }
+
+              const isToday = date === effectiveTodayDate;
+              const isSelected = date === selectedDate;
+              const markerLimit = activeViewMode === "week" ? 10 : 6;
+
+              // The web tints the whole CELL light blue when selected and
+              // fills only TODAY's number with a solid dark circle — it never
+              // borders or tints the number for a selected day that is not
+              // also today (CalendarClient.tsx). Native used to draw a
+              // `bg-primary/20 border-primary` chip for the selection, which
+              // (before NP-313 neutralised `primary`) read as a red/pink
+              // square or circle instead of the web's blue cell tint (NP-333).
+              const cellTintClass = isSelected
+                ? "bg-blue-50 dark:bg-blue-900/20"
+                : isToday
+                  ? "bg-zinc-50 dark:bg-zinc-800/30"
+                  : "";
+
+              return (
+                <Pressable
+                  key={date}
+                  testID={`${testID}-day-${date}`}
+                  onPress={() => onSelectDay?.(date)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${date}`}
+                  accessibilityState={{ selected: isSelected }}
+                  className={`border-r border-b border-border ${cellTintClass}`}
+                  style={{
+                    flex: 1,
+                    minHeight: activeViewMode === "week" ? 80 : 44,
+                    alignItems: "center",
+                    justifyContent: "flex-start",
+                    paddingVertical: 3,
+                    opacity: outside ? 0.4 : 1,
+                  }}
+                >
+                  <View
+                    className={`w-8 h-8 rounded-full items-center justify-center ${
+                      isToday ? "bg-primary" : ""
+                    }`}
+                  >
+                    <Text
+                      className={`text-sm ${
+                        isToday
+                          ? "text-primary-foreground font-semibold"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {Number(date.slice(8, 10))}
+                    </Text>
+                  </View>
+
+                  {markers.length > 0 ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 2,
+                        marginTop: 2,
+                        maxWidth: 36,
+                      }}
+                    >
+                      {markers.slice(0, markerLimit).map((m, mi) => (
+                        <View
+                          key={m.key}
+                          testID={
+                            mi === 0
+                              ? `${testID}-dot-${date}`
+                              : `${testID}-dot-${date}-${mi}`
+                          }
+                          accessibilityLabel={`status-${m.status}`}
+                          style={{ width: 6, height: 6, borderRadius: 3 }}
+                          className={`${m.colorClass} ${
+                            m.isQuick ? "border border-purple-400" : ""
+                          }`}
+                        />
+                      ))}
+                      {markers.length > markerLimit ? (
+                        <Text
+                          style={{ fontSize: 8, fontWeight: "bold" }}
+                          className="text-muted-foreground"
+                        >
+                          +{markers.length - markerLimit}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  {activeViewMode === "week" && daySlots.length > 0 && (
+                    <View
+                      style={{
+                        width: "100%",
+                        marginTop: 4,
+                        paddingHorizontal: 1,
+                        gap: 2,
+                      }}
+                    >
+                      {daySlots.slice(0, 3).map((slot, si) => (
+                        <View
+                          key={si}
+                          testID={`${testID}-pill-${date}-${si}`}
+                          className="bg-primary/15 rounded px-0.5 py-0.5"
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{ fontSize: 9, fontWeight: "500" }}
+                            className="text-primary text-center"
+                          >
+                            {slot.dayLabel || `Day ${slot.workoutIndex + 1}`}
+                          </Text>
+                        </View>
+                      ))}
+                      {daySlots.length > 3 && (
+                        <Text
+                          style={{ fontSize: 8, textAlign: "center" }}
+                          className="text-muted-foreground font-semibold"
+                        >
+                          +{daySlots.length - 3} more
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
           </View>
         ))}
       </View>
-
-      {/* Grid rows */}
-      {rows.map((row, ri) => (
-        <View
-          key={ri}
-          testID={`${testID}-row-${ri}`}
-          style={{ flexDirection: "row" }}
-        >
-          {row.map((cell, ci) => {
-            if (!cell) {
-              return (
-                <View
-                  key={ci}
-                  testID={`${testID}-blank-${ri}-${ci}`}
-                  style={{ flex: 1, height: 40 }}
-                />
-              );
-            }
-            const { date, outside } = cell;
-
-            const daySlots = slots.filter((s) => s.date === date);
-            const dayQuick = quickSessions.filter((q) => {
-              const qDay = localDateKey(new Date(q.date));
-              return qDay === date;
-            });
-
-            const markers: DayMarker[] = [];
-            for (let i = 0; i < daySlots.length; i++) {
-              const w = daySlots[i];
-              if (!w || w.status === "rest") continue;
-              const isMakeup =
-                w.status === "completed" &&
-                !!w.completedAt &&
-                isMakeupWorkout(w.date, w.completedAt);
-              const status: SlotStatus | "makeup" = isMakeup
-                ? "makeup"
-                : w.status;
-              const colorClass = STATUS_COLOR[status] ?? "bg-blue-500";
-              markers.push({
-                key: `w-${w.programId}-${w.workoutIndex}-${i}`,
-                status,
-                colorClass,
-              });
-            }
-
-            for (let i = 0; i < dayQuick.length; i++) {
-              const q = dayQuick[i];
-              if (!q) continue;
-              const colorClass = STATUS_COLOR[q.status] ?? "bg-blue-500";
-              markers.push({
-                key: `q-${q.sessionId ?? i}`,
-                status: q.status,
-                colorClass,
-                isQuick: true,
-              });
-            }
-
-            const isToday = date === effectiveTodayDate;
-            const isSelected = date === selectedDate;
-            const markerLimit = activeViewMode === "week" ? 10 : 6;
-
-            return (
-              <Pressable
-                key={date}
-                testID={`${testID}-day-${date}`}
-                onPress={() => onSelectDay?.(date)}
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${date}`}
-                accessibilityState={{ selected: isSelected }}
-                style={{
-                  flex: 1,
-                  minHeight: activeViewMode === "week" ? 80 : 44,
-                  alignItems: "center",
-                  justifyContent: "flex-start",
-                  paddingVertical: 3,
-                  opacity: outside ? 0.4 : 1,
-                }}
-              >
-                <View
-                  className={`w-8 h-8 rounded-full items-center justify-center ${
-                    isSelected ? "bg-primary/20 border border-primary" : ""
-                  } ${isToday && !isSelected ? "border border-foreground" : ""}`}
-                >
-                  <Text
-                    className={`text-sm ${
-                      isSelected
-                        ? "text-primary font-semibold"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {Number(date.slice(8, 10))}
-                  </Text>
-                </View>
-
-                {markers.length > 0 ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: 2,
-                      marginTop: 2,
-                      maxWidth: 36,
-                    }}
-                  >
-                    {markers.slice(0, markerLimit).map((m, mi) => (
-                      <View
-                        key={m.key}
-                        testID={
-                          mi === 0
-                            ? `${testID}-dot-${date}`
-                            : `${testID}-dot-${date}-${mi}`
-                        }
-                        accessibilityLabel={`status-${m.status}`}
-                        style={{ width: 6, height: 6, borderRadius: 3 }}
-                        className={`${m.colorClass} ${
-                          m.isQuick ? "border border-purple-400" : ""
-                        }`}
-                      />
-                    ))}
-                    {markers.length > markerLimit ? (
-                      <Text
-                        style={{ fontSize: 8, fontWeight: "bold" }}
-                        className="text-muted-foreground"
-                      >
-                        +{markers.length - markerLimit}
-                      </Text>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                {activeViewMode === "week" && daySlots.length > 0 && (
-                  <View
-                    style={{
-                      width: "100%",
-                      marginTop: 4,
-                      paddingHorizontal: 1,
-                      gap: 2,
-                    }}
-                  >
-                    {daySlots.slice(0, 3).map((slot, si) => (
-                      <View
-                        key={si}
-                        testID={`${testID}-pill-${date}-${si}`}
-                        className="bg-primary/15 rounded px-0.5 py-0.5"
-                      >
-                        <Text
-                          numberOfLines={1}
-                          style={{ fontSize: 9, fontWeight: "500" }}
-                          className="text-primary text-center"
-                        >
-                          {slot.dayLabel || `Day ${slot.workoutIndex + 1}`}
-                        </Text>
-                      </View>
-                    ))}
-                    {daySlots.length > 3 && (
-                      <Text
-                        style={{ fontSize: 8, textAlign: "center" }}
-                        className="text-muted-foreground font-semibold"
-                      >
-                        +{daySlots.length - 3} more
-                      </Text>
-                    )}
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
-        </View>
-      ))}
 
       {/* Color Legend */}
       <View

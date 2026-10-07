@@ -570,7 +570,11 @@ describe("CalendarIndexRoute — NP-292", () => {
     });
   });
 
-  it("clears the day panel when toggling month/week view", async () => {
+  // NP-333: unlike Next/Prev (which move `currentDate` and can genuinely
+  // orphan the selection), toggling Month/Week keeps `currentDate` in place —
+  // the web (CalendarClient.tsx) never clears `selectedDate` on this toggle,
+  // and native dropping the day panel here was the bug, not the fix.
+  it("keeps the day panel selected when toggling month/week view", async () => {
     mockParams = { date: "2026-05-18" };
     mockApiFetch.mockResolvedValue({
       schedules: [
@@ -595,7 +599,13 @@ describe("CalendarIndexRoute — NP-292", () => {
 
     fireEvent.press(getByTestId("calendar-view-week"));
     await waitFor(() => {
-      expect(queryByTestId("calendar-day-detail")).toBeNull();
+      expect(getByTestId("calendar-day-detail")).toBeTruthy();
+    });
+    expect(queryByTestId("calendar-day-detail")).toBeTruthy();
+
+    fireEvent.press(getByTestId("calendar-view-month"));
+    await waitFor(() => {
+      expect(getByTestId("calendar-day-detail")).toBeTruthy();
     });
   });
 });

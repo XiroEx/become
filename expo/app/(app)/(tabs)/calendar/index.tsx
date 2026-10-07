@@ -3,6 +3,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BarChart2, Check, RotateCcw, Settings } from "lucide-react-native";
+import { onDarkForeground } from "@/lib/theme/tokens";
 import {
   ScheduleApiResponseSchema,
   WorkoutHistoryResponseSchema,
@@ -567,10 +569,12 @@ export default function CalendarIndexRoute() {
     });
   }, [viewMode]);
 
-  // Switching month/week also changes the visible (and fetched) range — same
-  // staleness risk as onPrev/onNext.
+  // Unlike onPrev/onNext, switching month/week does NOT move `currentDate` —
+  // only how it is framed — so the selected day never falls out of range the
+  // way a prev/next jump can. The web (CalendarClient.tsx) keeps `selectedDate`
+  // across the Month/Week toggle for exactly that reason; native used to clear
+  // it here too, dropping the day panel on every toggle (NP-333).
   const onChangeViewMode = useCallback((mode: "month" | "week") => {
-    setSelectedDate(null);
     setViewMode(mode);
   }, []);
 
@@ -684,9 +688,13 @@ export default function CalendarIndexRoute() {
                         </View>
                         <View
                           testID={`day-detail-quick-badge-${q.sessionId ?? idx}`}
-                          className={`px-2 py-0.5 rounded-full ${
+                          className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${
                             q.status === "completed"
-                              ? "bg-accent"
+                              ? // The web's StatusBadge `Done` pill is a solid
+                                // green (`bg-green-700`), never the brand
+                                // `bg-accent` amber (NP-333, same class of bug
+                                // as NP-240's legend dots).
+                                "bg-green-700"
                               : q.status === "planned"
                                 ? "bg-primary/20"
                                 : q.status === "skipped"
@@ -694,25 +702,30 @@ export default function CalendarIndexRoute() {
                                   : "bg-destructive/20"
                           }`}
                         >
-                          <Text
-                            className={`text-[10px] font-semibold ${
-                              q.status === "completed"
-                                ? "text-accent-foreground"
-                                : q.status === "planned"
+                          {q.status === "completed" ? (
+                            <>
+                              <Check size={10} color={onDarkForeground} />
+                              <Text className="text-[10px] font-semibold text-white">
+                                Done
+                              </Text>
+                            </>
+                          ) : (
+                            <Text
+                              className={`text-[10px] font-semibold ${
+                                q.status === "planned"
                                   ? "text-primary"
                                   : q.status === "skipped"
                                     ? "text-amber-500"
                                     : "text-destructive"
-                            }`}
-                          >
-                            {q.status === "completed"
-                              ? "Done"
-                              : q.status === "planned"
+                              }`}
+                            >
+                              {q.status === "planned"
                                 ? "Scheduled"
                                 : q.status === "skipped"
                                   ? "Skipped"
                                   : "Incomplete"}
-                          </Text>
+                            </Text>
+                          )}
                         </View>
                       </View>
                     </Pressable>
@@ -729,6 +742,7 @@ export default function CalendarIndexRoute() {
                           testID={`day-detail-quick-summary-${q.sessionId ?? idx}`}
                           variant="secondary"
                           size="sm"
+                          icon={<BarChart2 size={14} color={colors.foreground} />}
                           disabled={!q.sessionId}
                           onPress={() => setSummaryQuick(q)}
                         >
@@ -751,6 +765,7 @@ export default function CalendarIndexRoute() {
                         testID={`day-detail-quick-manage-${q.sessionId ?? idx}`}
                         variant="secondary"
                         size="sm"
+                        icon={<Settings size={14} color={colors.foreground} />}
                         disabled={!q.sessionId}
                         onPress={() => {
                           setQuickMenu(q);
@@ -812,13 +827,17 @@ export default function CalendarIndexRoute() {
                         </View>
                         <View
                           testID={`day-detail-workout-badge-${slot.programId}-${slot.workoutIndex}`}
-                          className={`px-2 py-0.5 rounded-full ${
+                          className={`flex-row items-center gap-1 px-2 py-0.5 rounded-full ${
                             isPaused
                               ? "bg-amber-500/20"
                               : isMakeup
                                 ? "bg-emerald-500/20"
                                 : slot.status === "completed"
-                                  ? "bg-accent"
+                                  ? // The web's StatusBadge `Done` pill is a
+                                    // solid green (`bg-green-700`), never the
+                                    // brand `bg-accent` amber (NP-333, same
+                                    // class of bug as NP-240's legend dots).
+                                    "bg-green-700"
                                   : slot.status === "scheduled"
                                     ? "bg-primary/20"
                                     : slot.status === "skipped"
@@ -826,33 +845,38 @@ export default function CalendarIndexRoute() {
                                       : "bg-destructive/20"
                           }`}
                         >
-                          <Text
-                            className={`text-[10px] font-semibold ${
-                              isPaused
-                                ? "text-amber-500"
-                                : isMakeup
-                                  ? "text-emerald-500"
-                                  : slot.status === "completed"
-                                    ? "text-accent-foreground"
+                          {!isPaused && !isMakeup && slot.status === "completed" ? (
+                            <>
+                              <Check size={10} color={onDarkForeground} />
+                              <Text className="text-[10px] font-semibold text-white">
+                                Done
+                              </Text>
+                            </>
+                          ) : (
+                            <Text
+                              className={`text-[10px] font-semibold ${
+                                isPaused
+                                  ? "text-amber-500"
+                                  : isMakeup
+                                    ? "text-emerald-500"
                                     : slot.status === "scheduled"
                                       ? "text-primary"
                                       : slot.status === "skipped"
                                         ? "text-amber-500"
                                         : "text-destructive"
-                            }`}
-                          >
-                            {isPaused
-                              ? "Paused"
-                              : isMakeup
-                                ? "Made Up"
-                                : slot.status === "completed"
-                                  ? "Done"
+                              }`}
+                            >
+                              {isPaused
+                                ? "Paused"
+                                : isMakeup
+                                  ? "Made Up"
                                   : slot.status === "scheduled"
                                     ? "Scheduled"
                                     : slot.status === "skipped"
                                       ? "Skipped"
                                       : "Incomplete"}
-                          </Text>
+                            </Text>
+                          )}
                         </View>
                       </View>
 
@@ -867,7 +891,10 @@ export default function CalendarIndexRoute() {
                       {!isMakeup && slot.status === "completed" && slot.completedAt ? (
                         <Text
                           testID={`day-detail-completed-at-${slot.programId}-${slot.workoutIndex}`}
-                          className="text-accent-foreground text-xs mt-2"
+                          // The web's `text-green-600 dark:text-green-400` —
+                          // the same `success` token already used elsewhere,
+                          // not the brand `accent-foreground` amber (NP-333).
+                          className="text-success text-xs mt-2"
                         >
                           Completed {formatCompletedTime(slot.completedAt)}
                         </Text>
@@ -919,27 +946,36 @@ export default function CalendarIndexRoute() {
                             Skip It
                           </Button>
                         ) : null}
+                        {/* Order and style mirror the web (CalendarClient.tsx):
+                            View Summary first — outlined green with a chart
+                            icon, never the solid `success` fill — then
+                            Un-complete, then Manage, both outlined/neutral
+                            with their icon (↺ / ⚙). Native used to render
+                            Un-complete before a SOLID green View Summary and
+                            neither carried an icon (NP-333). */}
+                        {slot.status === "completed" ? (
+                          <Button
+                            testID={`day-detail-summary-${slot.programId}-${slot.workoutIndex}`}
+                            variant="success-outline"
+                            size="sm"
+                            icon={<BarChart2 size={14} color={colors.success} />}
+                            onPress={() => setSummarySlot(slot)}
+                          >
+                            View Summary
+                          </Button>
+                        ) : null}
                         {slot.status === "completed" ? (
                           <Button
                             testID={`day-detail-uncomplete-${slot.programId}-${slot.workoutIndex}`}
                             variant="secondary"
                             size="sm"
+                            icon={<RotateCcw size={14} color={colors.foreground} />}
                             onPress={() => {
                               setMenuSlot(slot);
                               setConfirmKind("uncomplete");
                             }}
                           >
                             Un-complete
-                          </Button>
-                        ) : null}
-                        {slot.status === "completed" ? (
-                          <Button
-                            testID={`day-detail-summary-${slot.programId}-${slot.workoutIndex}`}
-                            variant="success"
-                            size="sm"
-                            onPress={() => setSummarySlot(slot)}
-                          >
-                            View Summary
                           </Button>
                         ) : null}
                         {slot.status === "skipped" ? (
@@ -956,6 +992,7 @@ export default function CalendarIndexRoute() {
                           testID={`day-detail-manage-${slot.programId}-${slot.workoutIndex}`}
                           variant="secondary"
                           size="sm"
+                          icon={<Settings size={14} color={colors.foreground} />}
                           onPress={() => setMenuSlot(slot)}
                         >
                           Manage

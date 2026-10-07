@@ -264,7 +264,7 @@ describe("CalendarIndexRoute — day panel actions match the web (NP-292)", () =
     });
   }
 
-  it("a completed day shows its completion time and a green (success) View Summary, with no standalone Reschedule row", async () => {
+  it("a completed day shows its completion time and an outlined green View Summary, with no standalone Reschedule row", async () => {
     const past = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
     mockParams = { date: past };
     mockSchedule([
@@ -284,7 +284,12 @@ describe("CalendarIndexRoute — day panel actions match the web (NP-292)", () =
     expect(getByTestId("day-detail-completed-at-prog-1-0").props.children).toEqual(
       expect.arrayContaining(["Completed ", expect.stringContaining(":")]),
     );
+    // NP-333: outlined green (border-success + the icon), not the solid
+    // `bg-success` fill — matches the web's `View Summary` on a completed day.
     expect(getByTestId("day-detail-summary-prog-1-0").props.className).toContain(
+      "border-success",
+    );
+    expect(getByTestId("day-detail-summary-prog-1-0").props.className).not.toContain(
       "bg-success",
     );
     expect(queryByTestId("day-detail-reschedule-prog-1-0")).toBeNull();
