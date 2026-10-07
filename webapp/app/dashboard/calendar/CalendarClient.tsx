@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import { inferTracking } from '@/lib/workout/tracking'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
 import QuickSessionModal from '@/components/QuickSessionModal'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
@@ -252,9 +253,26 @@ export default function CalendarClient() {
       phase: number
       completed: boolean
       duration?: number
+      // A saved log carries what each set actually measured (seconds, meters,
+      // mph), what the exercise asks for (`prescription.trackingType`) and the
+      // shape it was run in (the group fields). The summary needs all three or
+      // a treadmill comes back as `0×0` with no circuit badge.
       exercises: Array<{
         name: string
-        sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }>
+        sets: Array<{
+          setNumber: number
+          reps: number
+          weight: number
+          completed: boolean
+          duration?: number | null
+          distance?: number | null
+          speed?: number | null
+        }>
+        prescription?: { trackingType?: string }
+        groupId?: string
+        groupType?: string
+        groupLabel?: string
+        groupRounds?: number
       }>
     }
     workout: { day: string; title: string }
@@ -1166,12 +1184,24 @@ export default function CalendarClient() {
             elapsedTime={logSummary.log.duration ? logSummary.log.duration * 60 : 0}
             exerciseData={logSummary.log.exercises.map((ex) =>
               (ex.sets ?? []).map((s) => ({
-                reps: String(s.reps),
-                weight: String(s.weight),
+                reps: s.reps ?? 0,
+                weight: s.weight ?? 0,
+                duration: s.duration ?? 0,
+                distance: s.distance ?? 0,
+                speed: s.speed ?? 0,
                 completed: s.completed,
               }))
             )}
-            exercises={logSummary.log.exercises.map((ex) => ({ name: ex.name }))}
+            exercises={logSummary.log.exercises.map((ex) => ({
+              name: ex.name,
+              // Logs written before the tracking type was stored with them get
+              // the same best guess every other read path uses.
+              trackingType: ex.prescription?.trackingType ?? inferTracking(ex.sets ?? []),
+              groupId: ex.groupId,
+              groupType: ex.groupType,
+              groupLabel: ex.groupLabel,
+              groupRounds: ex.groupRounds,
+            }))}
             exerciseHistory={logSummary.exerciseHistory}
             summaryStreak={null}
             summaryGoal={null}
