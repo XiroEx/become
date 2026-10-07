@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { View, Pressable, ScrollView } from "react-native";
+import { View, Pressable, ScrollView, BackHandler } from "react-native";
 import {
   Flame,
   Dumbbell,
@@ -23,6 +23,11 @@ import { announce } from "@/lib/a11y/announce";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { tintToken, type ThemeMode } from "@/lib/theme/tokens";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
 import {
   directionForGoal,
   defaultPaceKg,
@@ -109,6 +114,15 @@ export interface OnboardingFlowProps {
   enrolling?: boolean;
   /** True once the member is enrolled in the recommended program. */
   enrolled?: boolean;
+  /**
+   * DI hook for tests — injects `BackHandler` for the Android hardware-back
+   * fix (NP-310): back steps to the previous step instead of falling through
+   * to the OS default (which pops the whole screen and drops every answer).
+   * Step 1 has nowhere to step back to, so the OS default — leaving
+   * onboarding — runs there, same as the web's "back goes to the previous
+   * page, there is no previous page on step 1" behaviour.
+   */
+  backHandler?: BackHandlerLike;
 }
 
 function OptionRow({
@@ -244,6 +258,15 @@ function UnitSuffix({ text }: { text: string }) {
  * the real theme tokens. These five are brand hues, identical in both themes
  * like `primary`, so they do not belong in `lib/theme/tokens.ts`'s light/dark
  * pairs.
+ *
+ * `lose_weight`'s tile is the one exception (NP-310): `tailwind.config.js`
+ * overrides `orange` with a single flat CSS-var colour (no `-100` / `-900`
+ * shades — see its `colors.orange` entry), so `bg-orange-100
+ * dark:bg-orange-900/30` names classes that do not exist and NativeWind
+ * silently drops them, leaving the tile with no fill at all. `tileBg`
+ * resolves a translucent wash of the (correctly flat) `orange` token instead
+ * of a className — the same `tintToken` helper `StatTile.tsx` already uses
+ * for a mode-driven wash.
  */
 const GOAL_TILE_META: Record<
   FitnessGoal,
@@ -254,12 +277,16 @@ const GOAL_TILE_META: Record<
       strokeWidth?: number;
     }>;
     tileClass: string;
+    /** Inline alternative to `tileClass`, used only where the hue has no
+     * tailwind shade scale to build a className from (NP-310). */
+    tileBg?: (mode: ThemeMode) => string;
     rgb: string;
   }
 > = {
   lose_weight: {
     Icon: Flame,
-    tileClass: "bg-orange-100 dark:bg-orange-900/30",
+    tileClass: "",
+    tileBg: (mode) => tintToken("orange", mode, mode === "dark" ? 0.3 : 0.15),
     rgb: "249 115 22", // orange-500
   },
   gain_muscle: {
@@ -310,6 +337,7 @@ function GoalCard({
   label,
   Icon,
   tileClass,
+  tileBg,
   rgb,
   selected,
   rank,
@@ -319,13 +347,16 @@ function GoalCard({
   label: string;
   Icon: ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   tileClass: string;
+  /** Inline alternative to `tileClass` (NP-310) — see `GOAL_TILE_META`. */
+  tileBg?: (mode: ThemeMode) => string;
   rgb: string;
   selected: boolean;
   rank: number;
   onPress: () => void;
 }) {
-  const { colors } = useThemeTokens();
+  const { colors, mode } = useThemeTokens();
   const iconColor = selected ? colors.background : `rgb(${rgb})`;
+  const resolvedTileBg = !selected && tileBg ? tileBg(mode) : undefined;
   return (
     <Pressable
       testID={testID}
@@ -339,9 +370,11 @@ function GoalCard({
       }`}
     >
       <View
+        testID={`${testID}-tile`}
         className={`h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-          selected ? "bg-background/20" : tileClass
+          selected ? "bg-background/20" : tileBg ? "" : tileClass
         }`}
+        style={resolvedTileBg ? { backgroundColor: resolvedTileBg } : undefined}
       >
         <Icon size={24} color={iconColor} strokeWidth={1.5} />
       </View>
@@ -546,6 +579,7 @@ export function OnboardingFlow({
   enrolling = false,
   enrolled = false,
   onDraftChange,
+  backHandler = BackHandler,
 }: OnboardingFlowProps) {
   const { colors } = useThemeTokens();
   const [step, setStep] = useState<number>(1);
@@ -913,6 +947,25 @@ export function OnboardingFlow({
     }
   };
 
+  // NP-310: the Android hardware back press / gesture used to fall through
+  // to the OS default, which pops the whole screen and drops every answer
+  // (reproduced on step 3, landing on Home). Steps 2-5 intercept it and step
+  // back instead, mirroring the web's own back behaviour (back goes to the
+  // previous page of the wizard). Step 1 has no previous step, so the OS
+  // default — leaving onboarding — runs there, same as the web having no
+  // previous page to go back to.
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      if (step > 1) {
+        goToStep(step - 1);
+        return true;
+      }
+      return false;
+    },
+    backHandler,
+  });
+
   const missing = [
     !profile.age && "age",
     !profile.heightCm && "height",
@@ -978,6 +1031,7 @@ export function OnboardingFlow({
                     label={o.label}
                     Icon={meta.Icon}
                     tileClass={meta.tileClass}
+                    tileBg={meta.tileBg}
                     rgb={meta.rgb}
                     selected={selected}
                     rank={rank}
@@ -1635,10 +1689,15 @@ export function OnboardingFlow({
                       accessibilityLabel={`Explain ${label}`}
                       onPress={() => setExplaining(key)}
                       style={minTouchTarget}
-                      className={`flex-1 p-2.5 rounded-xl border items-center ${
+                      // NP-310: the web's macro tiles are a flat grey/amber
+                      // fill with no border (`bg-zinc-100 dark:bg-zinc-800`,
+                      // `bg-amber-100 dark:bg-amber-500/20`) — native drew
+                      // them outlined on a card background instead. `muted`
+                      // is the same zinc-100/zinc-800 pair as the web's fill.
+                      className={`flex-1 p-2.5 rounded-xl items-center ${
                         key === "protein" && proteinFlagged
-                          ? "border-amber-400 bg-amber-500/20"
-                          : "border-border bg-card"
+                          ? "bg-amber-500/20"
+                          : "bg-muted"
                       }`}
                     >
                       <Text
