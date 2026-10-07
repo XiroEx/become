@@ -1,4 +1,5 @@
-import { Image, View } from "react-native";
+import { Image } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Apple,
   Beef,
@@ -35,11 +36,15 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * Port of `webapp/components/nutrition/FoodThumbnail.tsx`: a full-width,
  * category-tinted hero above the title on the food detail page. Web shows
  * one; native showed none at all. Renders the food's own image when it has
- * one, otherwise a category-appropriate lucide icon on a flat tint — flat
- * rather than the web's gradient (no Tailwind `bg-gradient-to-br` on native),
- * tuned per light/dark through `useThemeTokens` rather than Tailwind's
- * `dark:` class pairs. Variant within a category is chosen by hashing the
- * food name, so the same food always shows the same thumbnail.
+ * one, otherwise a category-appropriate lucide icon on a diagonal two-stop
+ * gradient (NP-325) — native used to draw a FLAT tint, which read as a plain
+ * peach tile (brown in dark mode) next to the web's yellow-orange gradient.
+ * `expo-linear-gradient` draws the same `bg-gradient-to-br` diagonal the web
+ * uses, with a second stop shaded off the category's own tint (darker in
+ * light mode, lighter in dark) rather than a second literal per palette
+ * entry — close to the web's hue, not a pixel-exact port of its 55 Tailwind
+ * stop pairs. Variant within a category is chosen by hashing the food name,
+ * so the same food always shows the same thumbnail.
  */
 
 type Variant = {
@@ -129,6 +134,16 @@ function hashName(name: string): number {
   return Math.abs(h);
 }
 
+function clampByte(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+/** Shade an "R G B" triplet by `delta` per channel — the gradient's 2nd stop. */
+function shadeTriplet(triplet: string, delta: number): string {
+  const [r = 0, g = 0, b = 0] = triplet.split(" ").map(Number);
+  return `${clampByte(r + delta)} ${clampByte(g + delta)} ${clampByte(b + delta)}`;
+}
+
 export interface FoodThumbnailProps {
   name: string;
   category?: string | null;
@@ -167,18 +182,27 @@ export function FoodThumbnail({
   if (!picked) return null;
   const Icon = picked.Icon;
 
+  // Diagonal two-stop gradient (the web's `bg-gradient-to-br`) — light mode
+  // shades slightly darker for the 2nd stop, dark mode slightly lighter,
+  // mirroring how Tailwind's own `-200 to -300` / `-900/50 to -900/40` pairs
+  // move.
+  const stop1 = isDark ? picked.dark : picked.light;
+  const stop2 = shadeTriplet(stop1, isDark ? 14 : -18);
+
   return (
-    <View
+    <LinearGradient
       testID={testID}
       accessibilityRole="image"
       accessibilityLabel={name}
+      colors={[`rgb(${stop1})`, `rgb(${stop2})`]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={{
         width: "100%",
         height,
         borderRadius: 16,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: `rgb(${isDark ? picked.dark : picked.light})`,
       }}
     >
       <Icon
@@ -186,7 +210,7 @@ export function FoodThumbnail({
         height={iconSize}
         color={`rgb(${isDark ? picked.iconDark : picked.iconLight})`}
       />
-    </View>
+    </LinearGradient>
   );
 }
 

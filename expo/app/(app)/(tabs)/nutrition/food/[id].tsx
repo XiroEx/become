@@ -8,7 +8,7 @@ import {
   ScrollView,
   View,
 } from "react-native";
-import { BadgeCheck, Bookmark, Check, Pencil, Trash2 } from "lucide-react-native";
+import { ArrowLeft, BadgeCheck, Bookmark, Check, Pencil, Trash2 } from "lucide-react-native";
 import { z } from "zod";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,19 +17,15 @@ import {
   FoodDetailResponseSchema,
   MealLogsDayResponseSchema,
   SavedFoodsResponseSchema,
+  TagsResponseSchema,
 } from "@become/api-client";
 import type { Food, FoodVariant } from "@become/api-client";
-import {
-  QuantityPicker,
-  type QuantityPickerSelection,
-} from "@/components/nutrition/QuantityPicker";
+import { FoodLogSheet, type FoodLogSheetSubmitOptions } from "@/components/nutrition/FoodLogSheet";
 import { FoodThumbnail } from "@/components/nutrition/FoodThumbnail";
 import { BridgeFieldGroup, type BridgeValues } from "@/components/nutrition/BridgeFieldGroup";
-import { SaveAsMealButton } from "@/components/recipes/SaveAsMealButton";
 import { Button } from "@/components/Button";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
-import { BottomSheet } from "@/components/BottomSheet";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
@@ -55,11 +51,7 @@ import { invalidateEntitlements } from "@/lib/entitlements/store";
 import { useApiErrorHandler } from "@/lib/errors";
 import { useLocalDay } from "@/lib/time/localDay";
 import { withTz } from "@/lib/nutrition/localDay";
-import {
-  buildMealItemPayload,
-  logFoodItem,
-  type MealItemPayload,
-} from "@/lib/nutrition/mealLogActions";
+import { logFoodItem } from "@/lib/nutrition/mealLogActions";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /** Whatever the PATCH/DELETE routes answer — success-shaped, never read. */
@@ -78,8 +70,9 @@ const FoodWriteResponseSchema = z.object({}).passthrough();
  *     per-serving calories;
  *   • the bookmark toggle (`POST /api/me/foods`, `DELETE
  *     /api/me/foods/{id}`), seeded from `GET /api/me/foods`;
- *   • the log controls the screen already had (the quantity picker + save-as-
- *     meal), which are the native half of the web's `FoodLogSheet`;
+ *   • the sticky `Log this food` button, which opens `FoodLogSheet`
+ *     (`@/components/nutrition/FoodLogSheet`, NP-325) — the native port of
+ *     the web's own `FoodLogSheet` sheet;
  *   • the owner/admin half: bridge edits (`PATCH
  *     /api/nutrition/foods/{id}` with `variants`), an edit sheet for the
  *     allowlisted fields (`name`, `brand`, `category`, `variants`), and
@@ -227,6 +220,22 @@ export default function FoodDetailRoute() {
   );
   const existingLogs = useMemo(() => logsData?.logs ?? [], [logsData?.logs]);
 
+  // Every tag the member can file a log under (the web's `availableTags`) —
+  // the log sheet's `ADDING TO` picker offers these, not just the four
+  // meal-time defaults the old inline form was stuck with.
+  const { data: tagsData } = useFetch("/api/tags", TagsResponseSchema, {
+    baseUrl: WEBAPP_BASE_URL,
+    getToken: () => token ?? undefined,
+    skip: !token,
+  });
+  const availableTags = useMemo(
+    () => ({
+      defaults: tagsData?.defaults ?? [],
+      userTags: tagsData?.userTags ?? [],
+    }),
+    [tagsData],
+  );
+
   const defaultVariant = useMemo(() => defaultVariantOf(food), [food]);
   const variants: FoodVariant[] = useMemo(() => {
     if (food && Array.isArray(food.variants) && food.variants.length > 0) {
@@ -252,14 +261,15 @@ export default function FoodDetailRoute() {
   const canMutate =
     isFoodAdminRole(user?.role) || isOwner;
 
-  const [pickerSelection, setPickerSelection] = useState<QuantityPickerSelection | null>(null);
-
-  // The web's sticky black `Log this food` button opens a sheet (NP-269) —
-  // `ADDING TO <tag>`, amount chips, a coloured macro tile, `Log to day` —
-  // rather than rendering the amount/tag/time/date form inline on the page.
-  // Defaults to the food's own default variant (QuantityPicker now selects
-  // by `isDefault`, never index 0) and a time-of-day tag, same as the web.
+  // The web's sticky black `Log this food` button opens a sheet (NP-269,
+  // NP-325) — `ADDING TO <tag>`, AMOUNT chips, a coloured macro tile,
+  // `Log to day` — rather than rendering the amount/tag/time/date form
+  // inline on the page. Defaults to the food's own default variant
+  // (`defaultVariantOf`, never index 0) and a time-of-day tag, same as the
+  // web. There is no `Save as meal` here — the web food page has none.
   const [logSheetOpen, setLogSheetOpen] = useState(false);
+  const [logSubmitting, setLogSubmitting] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
 
   // Bridge editing (owners and admins only): the two canonical numbers per
   // variant, edited through the web's own fields (`BridgeFieldGroup` —
@@ -450,64 +460,35 @@ export default function FoodDetailRoute() {
     }
   }, [food, bookmarking, isSaved, external, token]);
 
-  // Submit via QuantityPicker log button
-  const handleQuantityPickerSubmit = useCallback(
-    async (result: {
-      item: MealItemPayload;
-      tag: string;
-      date: string;
-      timeMode: "now" | "picked" | "none";
-      pickedTime?: string | null;
-    }) => {
-      if (!food) return;
-      await logFoodItem({
-        item: result.item,
-        tag: result.tag,
-        date: result.date,
-        timeMode: result.timeMode,
-        pickedTime: result.pickedTime,
-        existingLogs,
-        apiFetch,
-        token,
-        baseUrl: WEBAPP_BASE_URL,
-      });
-      router.back();
+  // Submit via the `Log this food` sheet (NP-325) — the single
+  // `POST /api/meal-logs` call the sheet itself never makes.
+  const handleFoodLogSubmit = useCallback(
+    async (result: FoodLogSheetSubmitOptions) => {
+      if (!food || logSubmitting) return;
+      setLogSubmitting(true);
+      setLogError(null);
+      try {
+        await logFoodItem({
+          item: result.item,
+          tag: result.tag,
+          date: result.date,
+          timeMode: result.timeMode,
+          pickedTime: result.pickedTime,
+          existingLogs,
+          apiFetch,
+          token,
+          baseUrl: WEBAPP_BASE_URL,
+        });
+        setLogSheetOpen(false);
+        router.back();
+      } catch (err) {
+        const { handled, message } = handleApiError(err);
+        if (!handled) setLogError(message);
+      } finally {
+        setLogSubmitting(false);
+      }
     },
-    [food, existingLogs, token, router],
-  );
-
-  // Submit via SaveAsMealButton
-  const onSaveMeal = useCallback(
-    async (mealType: string) => {
-      if (!food) return;
-      const activeVariant = pickerSelection?.variant ?? defaultVariant;
-      if (!activeVariant) return;
-
-      const quantity = pickerSelection?.quantity ?? 1;
-      const unit = pickerSelection?.unit ?? activeVariant.servingUnit ?? "g";
-
-      const item = buildMealItemPayload({
-        food,
-        variant: activeVariant,
-        quantity,
-        unit,
-        servingChoice: pickerSelection?.servingChoice,
-      });
-
-      await logFoodItem({
-        item,
-        tag: mealType,
-        date: pickerSelection?.date ?? activeDate,
-        timeMode: pickerSelection?.timeMode ?? "now",
-        pickedTime: pickerSelection?.pickedTime,
-        existingLogs,
-        apiFetch,
-        token,
-        baseUrl: WEBAPP_BASE_URL,
-      });
-      router.back();
-    },
-    [food, pickerSelection, defaultVariant, activeDate, existingLogs, token, router],
+    [food, logSubmitting, existingLogs, token, router, handleApiError],
   );
 
   if (!id) {
@@ -557,7 +538,9 @@ export default function FoodDetailRoute() {
         style={{ flex: 1 }}
         testID="nutrition-food-route-kav"
       >
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 96, gap: 20 }}
+        >
           <View
             style={{
               flexDirection: "row",
@@ -568,13 +551,16 @@ export default function FoodDetailRoute() {
             <Pressable
               testID="nutrition-food-back"
               accessibilityRole="button"
-              accessibilityLabel="Back"
+              accessibilityLabel="Back to Favorites"
               onPress={() => router.back()}
               hitSlop={8}
-              style={{ padding: 4 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, padding: 4 }}
             >
+              <ArrowLeft size={16} color={colors["muted-foreground"]} />
+              {/* Web's back link reads `← Favorites` — native showed a bare
+                  `Back` with no arrow and no label (NP-325). */}
               <Text className="text-muted-foreground text-sm font-medium">
-                Back
+                Favorites
               </Text>
             </Pressable>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -989,47 +975,60 @@ export default function FoodDetailRoute() {
             </Text>
           ) : null}
 
-          {food ? (
-            // The web's sticky black `Log this food` button, which opens a
-            // sheet (`ADDING TO <tag>`, amount, a coloured macro tile,
-            // `Log to day`) rather than the amount/tag/time/date form this
-            // page used to render inline, always on screen, below the fold.
-            <Button
-              testID="nutrition-food-log-open"
-              variant="inverted"
-              icon={<Check size={16} />}
-              onPress={() => setLogSheetOpen(true)}
-            >
-              Log this food
-            </Button>
-          ) : importFailed || (food && !defaultVariant) ? (
+          {importFailed || (food && !defaultVariant) ? (
             <Text testID="nutrition-food-error" className="text-destructive">
               Could not load this food. Try searching for it again.
             </Text>
           ) : null}
-          {food ? <SaveAsMealButton onSave={onSaveMeal} /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <BottomSheet
+      {food ? (
+        // Sticky, above the tab bar, exactly like the web's `fixed
+        // bottom-28` CTA (NP-325) — native used to leave this at the END of
+        // the scroll, below the fold, instead of always on screen. Opens a
+        // sheet (`ADDING TO <tag>`, AMOUNT chips, a coloured macro tile,
+        // `Log to day`) rather than the amount/tag/time/date form this page
+        // used to render inline. There is no `Save as meal` underneath it —
+        // the web food page has none.
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            paddingHorizontal: 16,
+            paddingTop: 10,
+            paddingBottom: 16,
+            backgroundColor: colors.background,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+          }}
+        >
+          <Button
+            testID="nutrition-food-log-open"
+            variant="inverted"
+            icon={<Check size={16} />}
+            onPress={() => setLogSheetOpen(true)}
+          >
+            Log this food
+          </Button>
+        </View>
+      ) : null}
+
+      <FoodLogSheet
         visible={logSheetOpen}
-        onClose={() => setLogSheetOpen(false)}
-        title="Log this food"
-        testID="nutrition-food-log-sheet"
-      >
-        {food ? (
-          <QuantityPicker
-            food={food}
-            initialTag={params.tag ?? getDefaultTagForNow()}
-            initialDate={params.date ?? today}
-            onChange={setPickerSelection}
-            onSubmit={(result) => {
-              setLogSheetOpen(false);
-              return handleQuantityPickerSubmit(result);
-            }}
-          />
-        ) : null}
-      </BottomSheet>
+        food={food}
+        defaultTag={params.tag ?? getDefaultTagForNow()}
+        availableTags={availableTags}
+        date={params.date ?? today}
+        submitting={logSubmitting}
+        error={logError}
+        onClose={() => {
+          if (!logSubmitting) setLogSheetOpen(false);
+        }}
+        onSubmit={handleFoodLogSubmit}
+      />
 
       <Modal
         visible={editOpen}
