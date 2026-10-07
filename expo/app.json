@@ -88,7 +88,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#040304"
+        "backgroundColor": "#0a0a0a"
       },
       "intentFilters": [
         {
