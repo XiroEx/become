@@ -257,7 +257,7 @@ export function IconPicker({
       ) : null}
 
       <Text className="text-muted-foreground mt-3 text-xs">
-        Or upload your own — choose a photo from your library.
+        Or upload your own — position and zoom it to fit.
       </Text>
 
       {denial ? (

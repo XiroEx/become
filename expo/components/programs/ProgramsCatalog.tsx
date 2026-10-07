@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { Bookmark, ChevronRight, Filter } from "lucide-react-native";
@@ -393,9 +393,216 @@ export function ProgramsCatalog({
 
   return (
     <>
+      {/* Saved Programs Section (shown when saved programs exist and no active query/filters) —
+          renders first, matching the web order: Saved for Later > Recommended
+          for You > Browse Programs (NP-327). */}
+      {!hasFilters && savedList.length > 0 ? (
+        <View
+          testID="programming-browse-saved-section"
+          style={{ marginBottom: 20 }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 8,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Bookmark
+                size={16}
+                color={colors.accent}
+                fill={colors.accent}
+              />
+              <Text className="text-foreground text-lg font-bold">
+                Saved for Later
+              </Text>
+            </View>
+            <Text className="text-muted-foreground text-xs">
+              Drag to reorder
+            </Text>
+          </View>
+          <SavedPrograms
+            programs={savedList}
+            onItemPress={(id) => router.push(`/(tabs)/programming/${id}`)}
+            onToggleSave={handleToggleSave}
+            onReorder={handleReorderSaved}
+            scrollEnabled={false}
+            testID="saved-programs"
+          />
+        </View>
+      ) : null}
+
+      {/* Recommended Programs Section (shown when matches exist and no
+          search/filters) — a vertical stack of full-width cards, matching
+          the web's `recommendedPrograms.slice(0, 3)` list (WorkoutClient.tsx);
+          native used to show a horizontal carousel of compact cards (NP-327). */}
+      {!hasFilters && recommendedPrograms.length > 0 ? (
+        <View
+          testID="programming-browse-recommended"
+          style={{ marginBottom: 20 }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 10,
+            }}
+          >
+            <Text className="text-foreground text-lg font-bold">
+              Recommended for You
+            </Text>
+            <View className="rounded-full bg-emerald-500/10 px-2 py-0.5 border border-emerald-500/20">
+              <Text className="text-emerald-500 text-xs font-medium">
+                Based on your goal
+              </Text>
+            </View>
+          </View>
+          <View style={{ gap: 12 }}>
+            {recommendedPrograms.slice(0, 3).map((program) => {
+              const isItemSaved = savedProgramIds.has(program.id);
+              const visibleTags = program.tags?.slice(0, 4) ?? [];
+              const extraTags =
+                (program.tags?.length ?? 0) - visibleTags.length;
+              return (
+                <View
+                  key={program.id}
+                  testID={`browse-recommended-item-${program.id}`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 8,
+                    borderWidth: 1,
+                    borderLeftWidth: 4,
+                    borderColor: colors.border,
+                    borderLeftColor: colors.success,
+                    borderRadius: 16,
+                    backgroundColor: colors.card,
+                    padding: 12,
+                  }}
+                >
+                  <Pressable
+                    testID={`browse-recommended-save-${program.id}`}
+                    onPress={() => handleToggleSave(program.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isItemSaved
+                        ? `Unsave program ${program.name}`
+                        : `Save program ${program.name}`
+                    }
+                    className="p-1 shrink-0"
+                  >
+                    <Bookmark
+                      color={
+                        isItemSaved
+                          ? colors.success
+                          : colors["muted-foreground"]
+                      }
+                      fill={isItemSaved ? colors.success : "transparent"}
+                      size={18}
+                      strokeWidth={1.5}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      router.push(`/(tabs)/programming/${program.id}`)
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open program ${program.name}`}
+                    style={{ flex: 1 }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <Text
+                        className="text-foreground font-semibold text-base flex-1"
+                        numberOfLines={1}
+                      >
+                        {program.name}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        gap: 4,
+                        marginTop: 4,
+                      }}
+                    >
+                      {program.durationWeeks ? (
+                        <View className="rounded-full bg-muted px-1.5 py-0.5">
+                          <Text className="text-muted-foreground text-xs font-medium">
+                            {program.durationWeeks}w
+                          </Text>
+                        </View>
+                      ) : null}
+                      {program.trainingDaysPerWeek ? (
+                        <View className="rounded-full bg-muted px-1.5 py-0.5">
+                          <Text className="text-muted-foreground text-xs font-medium">
+                            {program.trainingDaysPerWeek}x/wk
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {program.targetUser ? (
+                      <Text className="text-muted-foreground text-xs mt-1">
+                        {program.targetUser}
+                      </Text>
+                    ) : null}
+                    {visibleTags.length > 0 ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 4,
+                          marginTop: 4,
+                        }}
+                      >
+                        {visibleTags.map((tag) => (
+                          <View
+                            key={tag}
+                            className="rounded-full bg-success/10 px-1.5 py-0.5"
+                          >
+                            <Text className="text-success text-xs">
+                              {tag}
+                            </Text>
+                          </View>
+                        ))}
+                        {extraTags > 0 ? (
+                          <Text className="text-muted-foreground text-xs">
+                            +{extraTags} more
+                          </Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </Pressable>
+                  <ChevronRight
+                    color={colors["muted-foreground"]}
+                    size={16}
+                    strokeWidth={1.5}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       {/* Browse Heading + Filters Toggle — the web puts Filters to the
-          right of the heading, not under the search bar. */}
+          right of the heading, not under the search bar. Renders after
+          Saved for Later / Recommended for You, matching the web order
+          (NP-327; native used to put this above them). */}
       <View
+        testID="programming-browse-heading-row"
         style={{
           marginBottom: 12,
           flexDirection: "row",
@@ -558,218 +765,6 @@ export function ProgramsCatalog({
           </View>
         ) : null}
       </View>
-
-      {/* Saved Programs Section (shown when saved programs exist and no active query/filters) */}
-      {!hasFilters && savedList.length > 0 ? (
-        <View
-          testID="programming-browse-saved-section"
-          style={{ marginBottom: 20 }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}
-          >
-            <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
-            >
-              <Bookmark
-                size={16}
-                color={colors.accent}
-                fill={colors.accent}
-              />
-              <Text className="text-foreground text-lg font-bold">
-                Saved for Later
-              </Text>
-            </View>
-            <Text className="text-muted-foreground text-xs">
-              Drag to reorder
-            </Text>
-          </View>
-          <SavedPrograms
-            programs={savedList}
-            onItemPress={(id) => router.push(`/(tabs)/programming/${id}`)}
-            onToggleSave={handleToggleSave}
-            onReorder={handleReorderSaved}
-            scrollEnabled={false}
-            testID="saved-programs"
-          />
-        </View>
-      ) : null}
-
-      {/* Recommended Programs Row (shown when matches exist and no search/filters) */}
-      {!hasFilters && recommendedPrograms.length > 0 ? (
-        <View
-          testID="programming-browse-recommended"
-          style={{ marginBottom: 20 }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 10,
-            }}
-          >
-            <Text className="text-foreground text-lg font-bold">
-              Recommended for You
-            </Text>
-            <View className="rounded-full bg-emerald-500/10 px-2 py-0.5 border border-emerald-500/20">
-              <Text className="text-emerald-500 text-xs font-medium">
-                Based on your goal
-              </Text>
-            </View>
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginHorizontal: -16 }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                gap: 12,
-                paddingHorizontal: 16,
-              }}
-            >
-              {recommendedPrograms.slice(0, 5).map((program) => {
-                const isItemSaved = savedProgramIds.has(program.id);
-                const visibleTags = program.tags?.slice(0, 4) ?? [];
-                const extraTags =
-                  (program.tags?.length ?? 0) - visibleTags.length;
-                return (
-                  <View
-                    key={program.id}
-                    testID={`browse-recommended-item-${program.id}`}
-                    style={{
-                      width: 260,
-                      flexDirection: "row",
-                      alignItems: "flex-start",
-                      gap: 8,
-                      borderWidth: 1,
-                      borderLeftWidth: 4,
-                      borderColor: colors.border,
-                      borderLeftColor: colors.success,
-                      borderRadius: 16,
-                      backgroundColor: colors.card,
-                      padding: 12,
-                    }}
-                  >
-                    <Pressable
-                      testID={`browse-recommended-save-${program.id}`}
-                      onPress={() => handleToggleSave(program.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        isItemSaved
-                          ? `Unsave program ${program.name}`
-                          : `Save program ${program.name}`
-                      }
-                      className="p-1 shrink-0"
-                    >
-                      <Bookmark
-                        color={
-                          isItemSaved
-                            ? colors.success
-                            : colors["muted-foreground"]
-                        }
-                        fill={isItemSaved ? colors.success : "transparent"}
-                        size={18}
-                        strokeWidth={1.5}
-                      />
-                    </Pressable>
-                    <Pressable
-                      onPress={() =>
-                        router.push(`/(tabs)/programming/${program.id}`)
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Open program ${program.name}`}
-                      style={{ flex: 1 }}
-                    >
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: 6,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <Text
-                          className="text-foreground font-semibold text-base flex-1"
-                          numberOfLines={1}
-                        >
-                          {program.name}
-                        </Text>
-                      </View>
-                      <View
-                        style={{
-                          flexDirection: "row",
-                          flexWrap: "wrap",
-                          gap: 4,
-                          marginTop: 4,
-                        }}
-                      >
-                        {program.durationWeeks ? (
-                          <View className="rounded-full bg-muted px-1.5 py-0.5">
-                            <Text className="text-muted-foreground text-xs font-medium">
-                              {program.durationWeeks}w
-                            </Text>
-                          </View>
-                        ) : null}
-                        {program.trainingDaysPerWeek ? (
-                          <View className="rounded-full bg-muted px-1.5 py-0.5">
-                            <Text className="text-muted-foreground text-xs font-medium">
-                              {program.trainingDaysPerWeek}x/wk
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      {program.targetUser ? (
-                        <Text className="text-muted-foreground text-xs mt-1">
-                          {program.targetUser}
-                        </Text>
-                      ) : null}
-                      {visibleTags.length > 0 ? (
-                        <View
-                          style={{
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            gap: 4,
-                            marginTop: 4,
-                          }}
-                        >
-                          {visibleTags.map((tag) => (
-                            <View
-                              key={tag}
-                              className="rounded-full bg-success/10 px-1.5 py-0.5"
-                            >
-                              <Text className="text-success text-xs">
-                                {tag}
-                              </Text>
-                            </View>
-                          ))}
-                          {extraTags > 0 ? (
-                            <Text className="text-muted-foreground text-xs">
-                              +{extraTags} more
-                            </Text>
-                          ) : null}
-                        </View>
-                      ) : null}
-                    </Pressable>
-                    <ChevronRight
-                      color={colors["muted-foreground"]}
-                      size={16}
-                      strokeWidth={1.5}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </ScrollView>
-        </View>
-      ) : null}
 
       {/* Error State */}
       {error && programs.length === 0 ? (

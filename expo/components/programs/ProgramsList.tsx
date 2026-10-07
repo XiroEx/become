@@ -91,6 +91,10 @@ export function ProgramsList({
         const visibleTags = item.tags?.slice(0, 4) ?? [];
         const extraTags = (item.tags?.length ?? 0) - visibleTags.length;
         return (
+          // Plain border, no left accent stripe — the web only puts the
+          // green accent on Recommended cards (Card `accent="success"` in
+          // WorkoutClient.tsx); Browse/search-result cards here use the
+          // web's un-accented `<Card>` (NP-327).
           <View
             key={item.id}
             style={{
@@ -99,9 +103,7 @@ export function ProgramsList({
               gap: 10,
               marginBottom: 12,
               borderWidth: 1,
-              borderLeftWidth: 4,
               borderColor: colors.border,
-              borderLeftColor: colors.success,
               borderRadius: 16,
               backgroundColor: colors.card,
               padding: 12,

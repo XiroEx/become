@@ -209,8 +209,12 @@ export function UpcomingWeekStrip({
     (logsData?.logs && logsData.logs.length > 0);
 
   if (loading && !scheduleData && !logsData) {
+    // `key="loading"` so this branch and the empty/loaded branches below
+    // never share a host node across renders (NP-327): without it, Android
+    // keeps the `animate-pulse` skeleton's animated styles attached to the
+    // real content after the data loads.
     return (
-      <Card testID={`${testID}-loading`}>
+      <Card key="loading" testID={`${testID}-loading`}>
         <View className="flex-row items-center justify-between mb-3">
           <View className="flex-row items-center gap-2">
             <Calendar size={18} color={colors.info} />
@@ -233,7 +237,7 @@ export function UpcomingWeekStrip({
 
   if (!hasSchedules) {
     return (
-      <Card testID={`${testID}-empty`}>
+      <Card key="empty" testID={`${testID}-empty`}>
         <View className="flex-row items-center justify-between mb-2">
           <View className="flex-row items-center gap-2">
             <Calendar size={18} color={colors.info} />
@@ -280,7 +284,7 @@ export function UpcomingWeekStrip({
   const todayWorkout = todayWorkouts?.find((w) => w.status !== "completed");
 
   return (
-    <Card testID={testID}>
+    <Card key="loaded" testID={testID}>
       {/* Header with week label, controls, and calendar link */}
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">

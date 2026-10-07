@@ -13,13 +13,14 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   Pressable,
   RefreshControl,
   ScrollView,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowLeft,
   ChevronRight,
@@ -42,21 +43,38 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import {
+  useAndroidBackHandler,
+  type BackHandlerLike,
+} from "@/lib/android/backHandler";
+
+/**
+ * Tabs that can be the ORIGIN of a push into this (hidden) profile tab —
+ * the header avatar on Home (`dashboard/index.tsx`) and on Mind
+ * (`mind/index.tsx`). Kept in sync with `TAB_ROUTES` in
+ * `app/(app)/(tabs)/_layout.tsx` minus the ones that don't currently open
+ * Profile.
+ */
+const KNOWN_ORIGIN_TABS = ["dashboard", "mind", "programming", "nutrition"];
 
 export interface ProfileScreenProps {
   onBack?: () => void;
   onOpenSettings?: () => void;
   testID?: string;
+  /** DI hook for tests — injects `BackHandler` for the Android hardware-back fix (NP-306). */
+  backHandler?: BackHandlerLike;
 }
 
 export function ProfileScreen({
   onBack,
   onOpenSettings,
   testID = "profile-screen",
+  backHandler = BackHandler,
 }: ProfileScreenProps) {
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token, user } = useAuth();
+  const { from } = useLocalSearchParams<{ from?: string }>();
 
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [mind, setMind] = useState<MindProgressResponse | null>(null);
@@ -104,15 +122,42 @@ export function ProfileScreen({
     loadData();
   }, [loadData]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (onBack) {
       onBack();
-    } else if (router.canGoBack()) {
+      return;
+    }
+    // Profile is a HIDDEN tab (`options={{ href: null }}` in `(tabs)/_layout.tsx`),
+    // so reaching it from the Home or Mind header avatar is a TAB SWITCH, not a
+    // push onto the tab the member was already on. The tab navigator's back
+    // behaviour then returns to its first declared tab (Workout) rather than the
+    // tab that was actually focused before Profile — reproduced on both the
+    // header arrow and the Android system back (NP-306). The fix is to not trust
+    // navigator history here at all: the screen that opened Profile passes its
+    // own tab name as `?from=`, and back always returns there explicitly.
+    if (from && KNOWN_ORIGIN_TABS.includes(from)) {
+      router.replace(`/(tabs)/${from}` as never);
+      return;
+    }
+    if (router.canGoBack()) {
       router.back();
     } else {
       router.replace("/(tabs)/dashboard" as never);
     }
-  };
+  }, [onBack, from, router]);
+
+  // Android hardware back / gesture goes through the same navigator history as
+  // the header arrow, so it hits the identical bug — intercept it unconditionally
+  // on this screen and reuse `handleBack` rather than letting the system default
+  // (tab-switch-back) run.
+  useAndroidBackHandler({
+    enabled: true,
+    onBack: () => {
+      handleBack();
+      return true;
+    },
+    backHandler,
+  });
 
   const handleSettings = () => {
     if (onOpenSettings) {
@@ -282,7 +327,10 @@ export function ProfileScreen({
           >
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-2">
-                <Sparkles size={16} color={colors.primary} />
+                {/* Web: `text-violet-500` (`app/dashboard/profile/page.tsx`) —
+                    the Mind chapter sparkle is the Mind home's own accent, not
+                    `primary` (NP-306, was red/orange here). */}
+                <Sparkles size={16} color={colors["mind-violet"]} />
                 <Text
                   testID="profile-mind-chapter"
                   className="text-foreground text-sm font-semibold"

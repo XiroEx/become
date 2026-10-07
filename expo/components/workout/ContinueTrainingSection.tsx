@@ -116,8 +116,14 @@ export function ContinueTrainingSection({
   };
 
   if (loading && !programs) {
+    // `key="loading"` (distinct from the empty/loaded branches below) so
+    // React unmounts this View instead of patching props onto it when the
+    // branch changes: on Android, reusing the host node left the
+    // `animate-pulse` branch's animated width/height/background styles
+    // attached to the real header row and program-card container (the "..."
+    // heading, the misplaced pill and the grey block under the card).
     return (
-      <View testID={`${testID}-loading`} className="mb-4">
+      <View key="loading" testID={`${testID}-loading`} className="mb-4">
         <View className="h-6 w-36 rounded bg-muted animate-pulse mb-3" />
         <View className="h-28 rounded-2xl bg-muted animate-pulse" />
       </View>
@@ -128,7 +134,7 @@ export function ContinueTrainingSection({
 
   if (activeList.length === 0) {
     return (
-      <View testID={`${testID}-empty`} className="mb-4">
+      <View key="empty" testID={`${testID}-empty`} className="mb-4">
         <Card>
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
@@ -156,7 +162,7 @@ export function ContinueTrainingSection({
   }
 
   return (
-    <View testID={testID} className={`mb-4 ${className}`}>
+    <View key="loaded" testID={testID} className={`mb-4 ${className}`}>
       {/* Section Header — title gets flex-1 + numberOfLines so a long heading
           (or a narrow phone) never overlaps the pill the way an un-flexed
           Text (React Native's default flexShrink: 0) used to: the pill
