@@ -314,6 +314,11 @@ export default function LiveWorkoutRoute({
       (workout?.exercises ?? []).map((ex) => ({
         name: ex.name,
         trackingType: ex.trackingType ?? null,
+        // The summary draws the circuit / superset the session was run in.
+        groupId: ex.groupId ?? null,
+        groupType: ex.groupType ?? null,
+        groupLabel: ex.groupLabel ?? null,
+        groupRounds: ex.groupRounds ?? null,
       })),
     [workout?.exercises],
   );

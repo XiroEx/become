@@ -5,9 +5,11 @@ import { Text } from "@/components/Text";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import type { TokenName } from "@/lib/theme/tokens";
 import {
   isFloorsExercise,
   normalizeTracking,
+  setUnitLabel,
   tracksTime,
 } from "@become/core";
 
@@ -25,11 +27,13 @@ import {
 //
 // Two deliberate divergences from the web, both on the record:
 //   1. Cardio shows its tracked metrics by tracking type (duration, distance,
-//      speed) instead of `0 × 0`. The web's summary computes volume as weight
-//      × reps even for timed work — Jon's open card asks the web to fix that,
-//      so volume here counts loaded work only (timed sets carry no
-//      weight/reps on the wire) and each timed set renders its duration and
-//      distance. Strength numbers match the web's exactly.
+//      speed) instead of `0 × 0`, and volume counts loaded work only. This
+//      was AHEAD of the web when NP-086 shipped it; the web caught up in
+//      `webapp/lib/workout/summaryMetrics.ts` (Jon's "other metrics … on the
+//      summary workout screen" card), which also added the circuit/superset
+//      blocks ported into the breakdown below. The web's stat row adapts its
+//      third tile (work time / distance) where this one still shows volume —
+//      a follow-up, not a disagreement about the metrics themselves.
 //   2. No animation library: the web's framer-motion entrance is plain layout
 //      here. Same sections, same order, same words.
 //   3. The web's hero swaps its icon by state (Award for a PR day, Dumbbell
@@ -111,7 +115,124 @@ export function formatDurationSec(sec: number): string {
 export interface WorkoutSummaryExercise {
   name: string;
   trackingType?: string | null;
+  /** Group membership, so the breakdown can draw the block it was run in. */
+  groupId?: string | null;
+  groupType?: string | null;
+  groupLabel?: string | null;
+  groupRounds?: number | null;
 }
+
+/** What a group of this kind goes by on screen. */
+const GROUP_KIND_LABELS: Record<string, string> = {
+  superset: "Superset",
+  circuit: "Circuit",
+  triset: "Triset",
+  giant_set: "Giant set",
+  emom: "EMOM",
+  amrap: "AMRAP",
+};
+
+/**
+ * What to call a group: the coach's own label wins, then the kind. A group
+ * with no kind reads "Superset", which is what every other surface assumes.
+ */
+export function summaryGroupLabel(
+  kind?: string | null,
+  groupLabel?: string | null,
+): string {
+  const explicit = (groupLabel ?? "").trim();
+  if (explicit) return explicit;
+  const k = (kind ?? "").trim().toLowerCase();
+  if (!k) return GROUP_KIND_LABELS.superset!;
+  const known = GROUP_KIND_LABELS[k];
+  if (known) return known;
+  const words = k.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+export interface WorkoutSummaryGroupMember {
+  exercise: WorkoutSummaryExercise;
+  /** Index into the flat `exercises` / `setsByExercise` arrays. */
+  index: number;
+}
+
+export interface WorkoutSummaryGroupBlock {
+  groupId: string | null;
+  kind: string | null;
+  /** null when the exercise ran on its own. */
+  label: string | null;
+  rounds: number | null;
+  members: WorkoutSummaryGroupMember[];
+}
+
+/**
+ * The session's shape: consecutive exercises sharing a `groupId` collapse into
+ * one block, everything else stands alone — the web's `groupExercises`
+ * adjacency rule, so the summary draws the circuit the live view ran. A group
+ * of one is not a group, so a leftover groupId cannot badge a lone exercise.
+ */
+export function summaryGroupBlocks(
+  exercises: WorkoutSummaryExercise[],
+  setsByExercise?: WorkoutSummarySet[][],
+): WorkoutSummaryGroupBlock[] {
+  const list = exercises ?? [];
+  const blocks: WorkoutSummaryGroupBlock[] = [];
+  let i = 0;
+  while (i < list.length) {
+    const head = list[i]!;
+    const groupId = (head.groupId ?? "").trim();
+    if (!groupId) {
+      blocks.push({
+        groupId: null,
+        kind: null,
+        label: null,
+        rounds: null,
+        members: [{ exercise: head, index: i }],
+      });
+      i += 1;
+      continue;
+    }
+    const members: WorkoutSummaryGroupMember[] = [];
+    while (i < list.length && (list[i]!.groupId ?? "").trim() === groupId) {
+      members.push({ exercise: list[i]!, index: i });
+      i += 1;
+    }
+    if (members.length < 2) {
+      blocks.push({ groupId: null, kind: null, label: null, rounds: null, members });
+      continue;
+    }
+    const prescribed = Number(head.groupRounds ?? 0);
+    const logged = members.reduce(
+      (n, m) => Math.max(n, (setsByExercise?.[m.index] ?? []).length),
+      0,
+    );
+    const rounds =
+      prescribed > 0 ? Math.floor(prescribed) : logged > 0 ? logged : null;
+    blocks.push({
+      groupId,
+      kind: (head.groupType ?? "").trim() || "superset",
+      label: summaryGroupLabel(head.groupType, head.groupLabel),
+      rounds,
+      members,
+    });
+  }
+  return blocks;
+}
+
+/**
+ * The token each group kind wears — the nearest native equivalent of the web
+ * Track view's `GROUP_STYLES` palette (purple superset, orange circuit,
+ * indigo triset, rose giant set, teal EMOM). AMRAP's web amber has no token,
+ * so it borrows orange.
+ */
+const GROUP_KIND_TOKENS: Record<string, TokenName> = {
+  superset: "mind-violet",
+  circuit: "orange",
+  triset: "indigo",
+  giant_set: "rose",
+  emom: "teal",
+  amrap: "orange",
+};
 
 export interface WorkoutSummarySet {
   reps: number | null;
@@ -334,6 +455,83 @@ export function WorkoutSummary({
     streak?.nextMilestone && streak.nextMilestone > 0
       ? Math.min((streak.streakDays / streak.nextMilestone) * 100, 100)
       : 0;
+  const groupBlocks = summaryGroupBlocks(exercises, setsByExercise);
+
+  // One exercise's card. Shared by the group blocks and the standalone
+  // exercises, so a circuit member reads exactly like a lone exercise — just
+  // inside the block that says it was a circuit.
+  const renderExerciseCard = (
+    exercise: WorkoutSummaryExercise,
+    exIdx: number,
+  ) => {
+    const sets = setsByExercise[exIdx] ?? [];
+    const active = sets.filter((s) =>
+      isActiveSummarySet(s, exercise.trackingType),
+    );
+    const skipped = sets.filter((s) => s?.completed).length - active.length;
+    const isPR = newPRs.some((pr) => pr.name === exercise.name);
+    const noun = setUnitLabel(exercise.trackingType, sets.length).toLowerCase();
+    return (
+      <View key={`${exercise.name}-${exIdx}`} style={{ marginBottom: 8 }}>
+        <Card testID={`${testID}-exercise-${exIdx}`}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 6,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                flex: 1,
+              }}
+            >
+              <Text className="text-foreground text-sm font-semibold">
+                {exercise.name}
+              </Text>
+              {isPR ? (
+                <Text testID={`${testID}-exercise-${exIdx}-pr`}>🏆 PR</Text>
+              ) : null}
+            </View>
+            <Text className="text-muted-foreground text-xs">
+              {active.length}/{sets.length} {noun}
+              {skipped > 0 ? ` (${skipped} skipped)` : ""}
+            </Text>
+          </View>
+          {active.length > 0 ? (
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              {active.map((s, i) => (
+                <View
+                  key={i}
+                  testID={`${testID}-exercise-${exIdx}-set-${i}`}
+                  style={{
+                    borderRadius: 999,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    backgroundColor: colors.muted,
+                  }}
+                >
+                  <Text className="text-xs">
+                    {formatSummarySet(s, exercise.trackingType, exercise.name)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView
@@ -553,78 +751,60 @@ export function WorkoutSummary({
           <Text className="text-muted-foreground text-xs font-bold uppercase mb-2">
             Exercise Breakdown
           </Text>
-          {exercises.map((exercise, exIdx) => {
-            const sets = setsByExercise[exIdx] ?? [];
-            const active = sets.filter((s) =>
-              isActiveSummarySet(s, exercise.trackingType),
+          {groupBlocks.map((block, blockIdx) => {
+            const cards = block.members.map(({ exercise, index }) =>
+              renderExerciseCard(exercise, index),
             );
-            const skipped =
-              sets.filter((s) => s?.completed).length - active.length;
-            const isPR = newPRs.some((pr) => pr.name === exercise.name);
+            if (!block.label) {
+              return <View key={`solo-${blockIdx}`}>{cards}</View>;
+            }
+            const token = GROUP_KIND_TOKENS[block.kind ?? "superset"] ?? "mind-violet";
             return (
-              <View key={`${exercise.name}-${exIdx}`} style={{ marginBottom: 8 }}>
-                <Card testID={`${testID}-exercise-${exIdx}`}>
+              <View
+                key={`group-${blockIdx}`}
+                testID={`${testID}-group-${blockIdx}`}
+                style={{
+                  borderWidth: 1,
+                  borderColor: tint(token, 0.4),
+                  backgroundColor: tint(token, isDark ? 0.12 : 0.08),
+                  borderRadius: 12,
+                  padding: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
                   <View
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: 6,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      backgroundColor: colors[token],
                     }}
+                  />
+                  <Text
+                    testID={`${testID}-group-${blockIdx}-label`}
+                    className="text-foreground text-xs font-bold uppercase"
                   >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        flex: 1,
-                      }}
-                    >
-                      <Text className="text-foreground text-sm font-semibold">
-                        {exercise.name}
-                      </Text>
-                      {isPR ? (
-                        <Text testID={`${testID}-exercise-${exIdx}-pr`}>
-                          🏆 PR
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text className="text-muted-foreground text-xs">
-                      {active.length}/{sets.length} sets
-                      {skipped > 0 ? ` (${skipped} skipped)` : ""}
-                    </Text>
-                  </View>
-                  {active.length > 0 ? (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        gap: 6,
-                      }}
-                    >
-                      {active.map((s, i) => (
-                        <View
-                          key={i}
-                          testID={`${testID}-exercise-${exIdx}-set-${i}`}
-                          style={{
-                            borderRadius: 999,
-                            paddingHorizontal: 10,
-                            paddingVertical: 4,
-                            backgroundColor: colors.muted,
-                          }}
-                        >
-                          <Text className="text-xs">
-                            {formatSummarySet(
-                              s,
-                              exercise.trackingType,
-                              exercise.name,
-                            )}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                </Card>
+                    {block.label}
+                  </Text>
+                  <Text
+                    testID={`${testID}-group-${blockIdx}-meta`}
+                    className="text-muted-foreground text-xs"
+                  >
+                    {block.rounds
+                      ? `${block.rounds} ${block.rounds === 1 ? "round" : "rounds"} · ${block.members.length} exercises`
+                      : `${block.members.length} exercises`}
+                  </Text>
+                </View>
+                {cards}
               </View>
             );
           })}
