@@ -23,7 +23,9 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
   };
 });
 
+import { Text } from "@/components/Text";
 import { DangerZone } from "@/components/settings/DangerZone";
+import { DELETION_COVERS, DELETION_EXCEPTIONS } from "@become/core";
 import {
   DELETE_CONFIRMATION,
   cancelAccountDeletion,
@@ -202,6 +204,81 @@ describe("DangerZone", () => {
 
     // And the request surface is back — the account was kept, not deleted.
     await waitFor(() => expect(getByTestId("delete-account")).toBeTruthy());
+  });
+
+  it("(NP-304) shows the web's shorter copy, the six-item covers list, and an outlined entry button", async () => {
+    const { getByTestId, getByText } = render(
+      <DangerZone token="jwt" statusImpl={async () => ({ ok: true, deletion: { pending: false } })} source="ios" />,
+    );
+
+    await waitFor(() => expect(getByTestId("delete-account")).toBeTruthy());
+
+    // Web's shorter wording — no "training, nutrition, mind" litany in the
+    // paragraph, because that is what the list below spells out instead.
+    expect(
+      getByText(
+        /This deletes your account and the data attached to it\. You have\s*7 days to change your mind — after that it cannot be undone\./,
+      ),
+    ).toBeTruthy();
+
+    const covers = getByTestId("delete-account-covers");
+    expect(covers.findAllByType(Text)).toHaveLength(DELETION_COVERS.length);
+    for (const line of DELETION_COVERS) {
+      expect(getByText(new RegExp(line.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))).toBeTruthy();
+    }
+
+    // The entry button is OUTLINED (no fill): a transparent background with a
+    // destructive border and destructive text, never the solid destructive
+    // fill the confirm step still uses.
+    const entry = getByTestId("delete-account");
+    expect(entry.props.className).toContain("bg-transparent");
+    expect(entry.props.className).toContain("border-destructive");
+  });
+
+  it("(NP-304) the exceptions disclosure starts collapsed and reveals all four items", async () => {
+    const { getByTestId, queryByTestId } = render(
+      <DangerZone token="jwt" statusImpl={async () => ({ ok: true, deletion: { pending: false } })} source="ios" />,
+    );
+
+    await waitFor(() => expect(getByTestId("delete-account")).toBeTruthy());
+    expect(queryByTestId("delete-account-exceptions")).toBeNull();
+
+    fireEvent.press(getByTestId("delete-account-exceptions-toggle"));
+
+    const exceptions = getByTestId("delete-account-exceptions");
+    expect(exceptions.findAllByType(Text)).toHaveLength(DELETION_EXCEPTIONS.length);
+
+    // Collapses back on a second tap.
+    fireEvent.press(getByTestId("delete-account-exceptions-toggle"));
+    expect(queryByTestId("delete-account-exceptions")).toBeNull();
+  });
+
+  it("(NP-304) the inline confirm uses the web's prompt and says Cancel, not Keep my account", async () => {
+    const requestImpl = jest.fn(async () => ({ ok: true }));
+    const { getByTestId, getByText, queryByTestId } = render(
+      <DangerZone
+        token="jwt"
+        requestImpl={requestImpl}
+        statusImpl={async () => ({ ok: true, deletion: { pending: false } })}
+        source="ios"
+      />,
+    );
+
+    await waitFor(() => expect(getByTestId("delete-account")).toBeTruthy());
+    fireEvent.press(getByTestId("delete-account"));
+
+    // No modal — the prompt renders inside the same card as everything else.
+    expect(queryByTestId("delete-account-modal")).toBeNull();
+    expect(
+      getByText(
+        "Delete your account? You will be signed out, and your devices stop getting notifications immediately.",
+      ),
+    ).toBeTruthy();
+    expect(getByTestId("delete-account-cancel").props.accessibilityLabel).toBe("Cancel");
+
+    fireEvent.press(getByTestId("delete-account-cancel"));
+    expect(requestImpl).not.toHaveBeenCalled();
+    expect(queryByTestId("delete-confirm-prompt")).toBeNull();
   });
 
   it("a failed status read leaves the delete surface drawn", async () => {
