@@ -10,9 +10,12 @@ import {
   View,
 } from "react-native";
 import { ArrowUp, Sparkles, X } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/components/Text";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken } from "@/lib/theme/tokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { runStore, useAiRun } from "@/lib/ai/runClient";
 import { cleanReply } from "@/lib/ai/sanitize";
@@ -64,14 +67,27 @@ export interface CoachChatProps {
   /** Label shown in the global activity pill while a reply generates. */
   runLabel?: string;
   /**
-   * Header icon, user-message bubble, and send-button colour. Defaults to
-   * `colors.primary` (the neutral zinc-900/white every other coach uses since
-   * NP-313; it was the brand red) — pass this only
-   * when a specific consultant has its own identity colour, e.g. the
-   * nutrition consultant's teal (NP-262), matching the web's
-   * `accentFrom`/`accentTo` gradient on that one sheet.
+   * Header icon tile and send-button colour. Defaults to `colors.primary`
+   * (the neutral zinc-900/white every other coach uses since NP-313) —
+   * pass this only when a specific consultant has its own FLAT identity
+   * colour with no web gradient counterpart, e.g. the nutrition
+   * consultant's teal (NP-262).
+   *
+   * Never the message bubble: the web's user bubble is always
+   * `bg-zinc-900 dark:bg-white` regardless of `accentFrom`/`accentTo`
+   * (`webapp/components/ai/CoachChat.tsx:178-182`), so this component
+   * matches that unconditionally too (NP-301).
    */
   accentColor?: string;
+  /**
+   * Two-stop gradient for the header icon tile and the send button,
+   * matching the web's `bg-gradient-to-br ${accentFrom} ${accentTo}`
+   * (NP-301) — e.g. the mindset coach's violet→green
+   * (`tokens.ts`'s `mind-violet` / `mind-green`, NP-296). Takes priority
+   * over `accentColor` when both are given. Pass this, not `accentColor`,
+   * for any consultant whose web teaser uses a real two-colour gradient.
+   */
+  accentGradient?: readonly [string, string];
   testID?: string;
 }
 
@@ -79,6 +95,30 @@ const FALLBACK_REPLY =
   "I had trouble reaching the coach just now — try that again in a moment.";
 
 const UNSET = Symbol("coach-chat-hydration-unset");
+
+/**
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but this sheet's
+ * own tests (`__tests__/coachChatNP155.test.tsx`) mount it bare. Falling
+ * back to zero insets there keeps this a no-op in tests while fixing the
+ * real device (NP-301: the composer was sitting on the gesture bar with no
+ * bottom inset on Android).
+ */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
+/** White text/icon on an identity-coloured tile, matching the web's
+ * unconditional `text-white` on the header span and the send button
+ * (`webapp/components/ai/CoachChat.tsx:155,243`) — neither flips with the
+ * scheme the way `colors["primary-foreground"]` does. Reached through
+ * `resolveToken` at a fixed "light" mode (whose `primary-foreground` IS
+ * white) rather than a hand-written literal (NP-123). */
+const ON_ACCENT_WHITE = resolveToken("primary-foreground", "light");
 
 export function CoachChat({
   visible,
@@ -94,10 +134,21 @@ export function CoachChat({
   persistKey,
   runLabel = "Coach is replying",
   accentColor,
+  accentGradient,
   testID = "coach-chat",
 }: CoachChatProps) {
   const { colors, scrim } = useThemeTokens();
-  const accent = accentColor ?? colors.primary;
+  const insets = useSafeAreaInsetsOrZero();
+  // Flat fallback for the header tile / send button when no gradient is
+  // given — rendered through the same `LinearGradient` with both stops
+  // equal, so there is exactly one code path for "tile colour" below.
+  const flatAccent = accentColor ?? colors.primary;
+  const tileGradient: readonly [string, string] =
+    accentGradient ?? [flatAccent, flatAccent];
+  const hasIdentityAccent = Boolean(accentColor) || Boolean(accentGradient);
+  const tileForeground = hasIdentityAccent
+    ? ON_ACCENT_WHITE
+    : colors["primary-foreground"];
   const { user } = useAuth();
   const memberId = typeof user?.id === "string" ? user.id : null;
 
@@ -306,19 +357,22 @@ export function CoachChat({
                     marginRight: 12,
                   }}
                 >
-                  <View
+                  <LinearGradient
+                    testID={`${testID}-header-icon`}
+                    colors={tileGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
                     style={{
                       width: 36,
                       height: 36,
                       borderRadius: 18,
-                      backgroundColor: accent,
                       alignItems: "center",
                       justifyContent: "center",
                       marginRight: 10,
                     }}
                   >
-                    <Sparkles size={16} color={colors["primary-foreground"]} />
-                  </View>
+                    <Sparkles size={16} color={tileForeground} />
+                  </LinearGradient>
                   <View style={{ flex: 1 }}>
                     <Text
                       testID={`${testID}-title`}
@@ -373,9 +427,17 @@ export function CoachChat({
                     style={{
                       maxWidth: "82%",
                       borderRadius: 18,
+                      // The web squares off the corner nearest the tail on
+                      // each bubble — `rounded-br-md` on the user's,
+                      // `rounded-bl-md` on the coach's (NP-301).
+                      borderBottomRightRadius: m.role === "user" ? 6 : 18,
+                      borderBottomLeftRadius: m.role === "user" ? 18 : 6,
                       paddingHorizontal: 14,
                       paddingVertical: 10,
-                      backgroundColor: m.role === "user" ? accent : colors.muted,
+                      // Always the web's neutral `bg-zinc-900 dark:bg-white`
+                      // on the user bubble — never the header/send accent,
+                      // which the web never applies here either (NP-301).
+                      backgroundColor: m.role === "user" ? colors.primary : colors.muted,
                     }}
                   >
                     <Text
@@ -425,12 +487,20 @@ export function CoachChat({
                         borderWidth: 1,
                         borderColor: colors.border,
                         borderRadius: 999,
+                        // Matches the web's `px-3 py-1.5` exactly (12px /
+                        // 6px at the 16px root) — NP-301, these were
+                        // rendering visibly smaller than web.
                         paddingHorizontal: 12,
-                        paddingVertical: 7,
+                        paddingVertical: 6,
                         backgroundColor: colors.background,
                       }}
                     >
-                      <Text className="text-muted-foreground text-xs">{s}</Text>
+                      <Text
+                        style={{ fontSize: 12, lineHeight: 16 }}
+                        className="text-muted-foreground"
+                      >
+                        {s}
+                      </Text>
                     </Pressable>
                   ))}
                 </View>
@@ -439,13 +509,17 @@ export function CoachChat({
 
             {/* Composer */}
             <View
+              testID={`${testID}-composer`}
               style={{
                 flexDirection: "row",
                 alignItems: "flex-end",
                 gap: 8,
                 paddingHorizontal: 12,
                 paddingTop: 10,
-                paddingBottom: 10,
+                // The web's `calc(env(safe-area-inset-bottom,0px) + 0.625rem)`
+                // — without it the composer sat flush on the gesture bar on
+                // Android (NP-301).
+                paddingBottom: insets.bottom + 10,
                 borderTopWidth: 1,
                 borderColor: colors.border,
               }}
@@ -482,14 +556,27 @@ export function CoachChat({
                   minTouchTarget,
                   {
                     borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: accent,
+                    overflow: "hidden",
                     opacity: !input.trim() || sending ? 0.4 : 1,
                   },
                 ]}
               >
-                <ArrowUp size={18} color={colors["primary-foreground"]} />
+                <LinearGradient
+                  testID={`${testID}-send-gradient`}
+                  colors={tileGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    flex: 1,
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <ArrowUp size={18} color={tileForeground} />
+                </LinearGradient>
               </Pressable>
             </View>
           </KeyboardAvoidingView>
