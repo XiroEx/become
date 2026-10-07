@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -34,6 +34,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { geistFontFamily } from "@/lib/theme/fonts";
 
 export type BiologicalSex = "male" | "female" | "prefer_not_to_say";
 
@@ -73,7 +74,7 @@ export function ProfileSettingsScreen({
    * keeps the one and only Delete account surface). */
   embedded?: boolean;
 } = {}) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token, refresh } = useAuth();
   const router = useRouter();
 
@@ -408,12 +409,27 @@ export function ProfileSettingsScreen({
               placeholder="Your name"
             />
             <View>
-              <Input
+              <Text className="text-foreground text-sm font-medium mb-1">
+                Email
+              </Text>
+              {/* NP-337: the web shows email as a visibly greyed, read-only
+                  field (`bg-zinc-50 ... cursor-not-allowed`); the shared
+                  `Input` has no disabled styling at all, so this looked
+                  exactly like the editable Name field above it. Rendered
+                  directly rather than through `Input` to keep that shared
+                  component's styling untouched for every other call site. */}
+              <TextInput
                 testID="profile-email-input"
-                label="Email"
                 value={email}
                 editable={false}
+                accessibilityLabel="Email"
                 placeholder="your.email@example.com"
+                placeholderTextColor={colors["muted-foreground"]}
+                className="bg-muted border border-border rounded-xl px-3 py-2.5 text-muted-foreground"
+                style={[
+                  minTouchTarget,
+                  { fontFamily: geistFontFamily("") },
+                ]}
               />
               <Text className="text-muted-foreground text-xs mt-1">
                 Email cannot be changed.
@@ -449,30 +465,37 @@ export function ProfileSettingsScreen({
                 </Text>
                 {bmiCm && bmiKg && (() => {
                   const bmi = bmiKg / Math.pow(bmiCm / 100, 2);
+                  // NP-337: web colours this badge per category (amber for
+                  // Overweight on the review account, etc. —
+                  // `webapp/app/dashboard/settings/page.tsx`'s `cat.cls`
+                  // map); native drew every category in the same flat grey
+                  // (black in dark mode) chip.
                   const cat =
                     bmi < 18.5
-                      ? { label: "Underweight" }
+                      ? { label: "Underweight", token: "info" as const }
                       : bmi < 25
-                        ? { label: "Normal" }
+                        ? { label: "Normal", token: "success" as const }
                         : bmi < 30
-                          ? { label: "Overweight" }
-                          : { label: "Obese" };
+                          ? { label: "Overweight", token: "accent" as const }
+                          : { label: "Obese", token: "destructive" as const };
                   return (
                     <View
                       style={{
                         paddingHorizontal: 10,
                         paddingVertical: 4,
                         borderRadius: 9999,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.card,
+                        backgroundColor: tint(cat.token, 0.15),
                         flexShrink: 1,
                       }}
                     >
                       <Text
                         testID="bmi-badge"
-                        className="text-foreground text-xs font-semibold"
-                        style={{ flexShrink: 1 }}
+                        style={{
+                          flexShrink: 1,
+                          fontSize: 12,
+                          fontWeight: "600",
+                          color: colors[cat.token],
+                        }}
                       >
                         {`BMI ${bmi.toFixed(1)} · ${cat.label}`}
                       </Text>
@@ -604,8 +627,15 @@ export function ProfileSettingsScreen({
                           borderRadius: 9999,
                           borderWidth: 2,
                           borderColor: selected ? colors.primary : colors.border,
+                          // NP-337: `colors.primary` is an `rgb(r g b)` STRING
+                          // (`lib/theme/useThemeTokens.ts`), so appending a hex
+                          // alpha suffix to it (`${colors.primary}18`) built an
+                          // invalid colour — Android painted it opaque and the
+                          // primary-coloured label vanished against it (the
+                          // same class of bug `MissedWorkoutsCard.tsx` had).
+                          // `tint()` composes the alpha correctly.
                           backgroundColor: selected
-                            ? `${colors.primary}18`
+                            ? tint("primary", 0.09)
                             : colors.card,
                           alignItems: "center",
                           justifyContent: "center",
@@ -637,7 +667,7 @@ export function ProfileSettingsScreen({
                   Height (ft / in)
                 </Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, position: "relative" }}>
                     <Input
                       testID="profile-height-ft-input"
                       keyboardType="numeric"
@@ -646,8 +676,22 @@ export function ProfileSettingsScreen({
                       placeholder="5"
                       accessibilityLabel="Height in feet"
                     />
+                    {/* NP-337: the web marks each box `ft` / `in` — native had
+                        no unit on either, so a bare number read as ambiguous. */}
+                    <Text
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        bottom: 14,
+                        fontSize: 12,
+                        color: colors["muted-foreground"],
+                      }}
+                    >
+                      ft
+                    </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, position: "relative" }}>
                     <Input
                       testID="profile-height-in-input"
                       keyboardType="numeric"
@@ -656,6 +700,18 @@ export function ProfileSettingsScreen({
                       placeholder="10"
                       accessibilityLabel="Height in inches"
                     />
+                    <Text
+                      pointerEvents="none"
+                      style={{
+                        position: "absolute",
+                        right: 12,
+                        bottom: 14,
+                        fontSize: 12,
+                        color: colors["muted-foreground"],
+                      }}
+                    >
+                      in
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -670,25 +726,30 @@ export function ProfileSettingsScreen({
               />
             )}
 
-            {/* Current Weight */}
-            <Input
-              testID="profile-current-weight-input"
-              label={`Current Weight (${isImperial ? "lbs" : "kg"})`}
-              keyboardType="numeric"
-              value={weightDisplay}
-              onChangeText={setWeightDisplay}
-              placeholder="—"
-            />
-
-            {/* Target Weight */}
-            <Input
-              testID="profile-target-weight-input"
-              label={`Target Weight (${isImperial ? "lbs" : "kg"})`}
-              keyboardType="numeric"
-              value={targetWeightDisplay}
-              onChangeText={setTargetWeightDisplay}
-              placeholder="—"
-            />
+            {/* Current + Target Weight — side by side, matching the web's
+                `grid-cols-2`. They used to stack as two full-width fields. */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="profile-current-weight-input"
+                  label={`Current Weight (${isImperial ? "lbs" : "kg"})`}
+                  keyboardType="numeric"
+                  value={weightDisplay}
+                  onChangeText={setWeightDisplay}
+                  placeholder="—"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="profile-target-weight-input"
+                  label={`Target Weight (${isImperial ? "lbs" : "kg"})`}
+                  keyboardType="numeric"
+                  value={targetWeightDisplay}
+                  onChangeText={setTargetWeightDisplay}
+                  placeholder="—"
+                />
+              </View>
+            </View>
 
             {/* Pace toward target weight */}
             {targetWeightDisplay !== "" && weightDisplay !== "" && (() => {
@@ -746,7 +807,7 @@ export function ProfileSettingsScreen({
               }}
               disabled={saving}
             >
-              {saving ? "Saving…" : "Save profile"}
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </View>
 

@@ -164,11 +164,17 @@ describe("SettingsScreen", () => {
     repairPush?: (jwt: string) => Promise<{ kind: string }>;
     openSettings?: () => Promise<void>;
   }) {
-    return render(
+    const utils = render(
       <AuthProvider fetchImpl={globalThis.fetch}>
         <SettingsScreen notifDeps={notifDeps} />
       </AuthProvider>,
     );
+    // NP-337: Settings now defaults to the Profile tab (matching the web);
+    // this whole suite exercises the Settings tab's own content, so land
+    // there first — the tab bar renders immediately regardless of which
+    // tab is active.
+    fireEvent.press(utils.getByTestId("settings-tab-settings"));
+    return utils;
   }
 
   it("(e015c7a5) Sign out returns to sign-in, and relaunching does not restore the session", async () => {

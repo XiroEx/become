@@ -18,6 +18,7 @@
  */
 import {
   HEALTH_IMPORT_BACKDATE_WINDOW_DAYS,
+  __resetHealthPermissionsAskedThisProcess,
   buildWeightImport,
   dayKeyDistance,
   ensureHealthPermissionsForSession,
@@ -48,6 +49,13 @@ const OFF: HealthSyncSession = { optedIn: false, read: true, write: true };
 /** 2026-05-27 12:00 in New York (EDT, 240 minutes west). */
 const NOW = new Date("2026-05-27T16:00:00Z");
 const NY = 240;
+
+// NP-337: the ask-once-per-start guard is module-level state; without this
+// every test after the first would see a permission as "already asked" and
+// get a stale cached answer instead of asking its own fake client.
+beforeEach(() => {
+  __resetHealthPermissionsAskedThisProcess();
+});
 
 interface FakeClientOptions {
   samples?: WeightSample[];
@@ -485,6 +493,37 @@ describe("permissionsForSession", () => {
       },
     };
     expect(await ensureHealthPermissionsForSession(client, ALL_ON)).toEqual([]);
+  });
+});
+
+describe("ask-once-per-start (NP-337)", () => {
+  it("the launch bridge's ask covers importWeightFromHealth's own — no second sheet", async () => {
+    // Denied at launch: Health Connect's sheet is shown once (the launch
+    // bridge), and the import's own ask for READ must NOT show it again —
+    // the bug this fixes was exactly two sheets in a row after a denial.
+    const { client, asked } = fakeClient({ granted: [] });
+    await ensureHealthPermissionsForSession(client, ALL_ON);
+    const result = await importWeightFromHealth({
+      client,
+      session: ALL_ON,
+      post: recorder().post,
+      now: NOW,
+    });
+    expect(asked).toHaveLength(1);
+    expect(result).toMatchObject({ ran: false, reason: "denied" });
+  });
+
+  it("a fresh process asks again — the guard is per start, not forever", async () => {
+    const { client, asked } = fakeClient({ granted: [] });
+    await ensureHealthPermissionsForSession(client, ALL_ON);
+    __resetHealthPermissionsAskedThisProcess();
+    await importWeightFromHealth({
+      client,
+      session: ALL_ON,
+      post: recorder().post,
+      now: NOW,
+    });
+    expect(asked).toHaveLength(2);
   });
 });
 

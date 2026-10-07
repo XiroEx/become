@@ -183,6 +183,9 @@ describe("Card NP-036 Acceptance Criteria", () => {
 
       // 3. Render Settings
       const { getByTestId, getByText, queryByTestId } = render(<SettingsScreen />);
+      // NP-337: Settings now defaults to the Profile tab (matching the web);
+      // this case exercises the Settings tab's own cached content.
+      fireEvent.press(getByTestId("settings-tab-settings"));
 
       await waitFor(() => {
         expect(getByText("Alex Runner")).toBeTruthy();
@@ -244,6 +247,9 @@ describe("Card NP-036 Acceptance Criteria", () => {
       mockApiFetch.mockRejectedValue(new ApiError(500, { error: "Database crashed" }, "Database crashed"));
 
       const { getByTestId, getByText, queryByTestId } = render(<SettingsScreen />);
+      // NP-337: Settings now defaults to the Profile tab (matching the web);
+      // this case exercises the Settings tab's own error state.
+      fireEvent.press(getByTestId("settings-tab-settings"));
 
       // Verify server error state is displayed, NOT blank
       await waitFor(() => {

@@ -55,7 +55,13 @@ export function NutritionPlanningSection({
   const seededRef = useRef(false);
 
   useEffect(() => {
-    if (!profile.data || seededRef.current) return;
+    // NP-337: seed from a FRESH fetch only. `useCache: true` paints the
+    // last-known value immediately (`isCached: true`) so the section is not
+    // blank while the request is in flight — but seeding from it too latched
+    // `seededRef` before the real network answer ever arrived, so reopening
+    // Settings after a save made elsewhere (the web, or a prior native
+    // session) kept showing the stale cached value forever.
+    if (!profile.data || profile.isCached || seededRef.current) return;
     seededRef.current = true;
     const raw = (profile.data as ProfileResponse | null)?.profile as
       | Record<string, unknown>
@@ -64,7 +70,7 @@ export function NutritionPlanningSection({
     setPlanPromoteMode(
       isPlanPromoteModeValue(raw?.planPromoteMode) ? raw.planPromoteMode : "manual",
     );
-  }, [profile.data]);
+  }, [profile.data, profile.isCached]);
 
   const onSelect = useCallback(
     async (value: PlanPromoteModeValue) => {
@@ -80,7 +86,12 @@ export function NutritionPlanningSection({
           getToken: () => token ?? undefined,
           body: { profile: { planPromoteMode: value } },
         });
-        await profile.refetch();
+        // NP-337: fire-and-forget. `saving` used to wait on this settling —
+        // when it didn't (or threw), both cards stayed disabled forever and
+        // the choice could never be changed back. The PATCH above is the
+        // part that must succeed; this refetch only freshens the cache for
+        // the next time the section mounts.
+        profile.refetch().catch(() => {});
       } catch {
         setPlanPromoteMode(previous);
         setSaveError("Failed to save Nutrition Planning");

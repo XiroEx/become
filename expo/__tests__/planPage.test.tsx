@@ -749,6 +749,9 @@ describe("Native plan page (NP-053)", () => {
           <SettingsScreen />
         </AuthProvider>,
       );
+      // NP-337: Settings now defaults to the Profile tab (matching the web);
+      // the Plan link lives on the Settings tab.
+      fireEvent.press(await screen.findByTestId("settings-tab-settings"));
       const planLink = await screen.findByTestId("settings-plan-link");
       expect(planLink).toBeTruthy();
 

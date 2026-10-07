@@ -129,18 +129,18 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
     );
   }
 
-  it("defaults to the Settings tab — every existing deep link and test still lands on the original content", async () => {
+  it("defaults to the Profile tab — matching the web's /dashboard/settings default (NP-337)", async () => {
     const { getByTestId, queryByTestId } = renderScreen();
 
     await waitFor(() => {
-      expect(getByTestId("account-user-name")).toBeTruthy();
+      expect(getByTestId("profile-name-input").props.value).toBe("Alex Runner");
     });
-    expect(getByTestId("settings-tab-settings").props.accessibilityState.selected).toBe(true);
-    expect(getByTestId("settings-tab-profile").props.accessibilityState.selected).toBe(false);
+    expect(getByTestId("settings-tab-profile").props.accessibilityState.selected).toBe(true);
+    expect(getByTestId("settings-tab-settings").props.accessibilityState.selected).toBe(false);
     expect(getByTestId("settings-tab-training").props.accessibilityState.selected).toBe(false);
-    // The Profile tab's content (the editable name input) is not mounted
-    // until that tab is selected.
-    expect(queryByTestId("profile-name-input")).toBeNull();
+    // The Settings tab's own content (sign out / admin / plan) is not
+    // mounted until that tab is selected.
+    expect(queryByTestId("account-user-name")).toBeNull();
     expect(queryByTestId("training-preferences-route")).toBeNull();
   });
 
@@ -185,6 +185,10 @@ describe("Settings: Profile / Training / Settings tabs (NP-302)", () => {
 
   it("Nutrition Planning lives on the Settings tab now (moved from Training) and PATCHes /api/profile", async () => {
     const { getByTestId } = renderScreen();
+    await waitFor(() => {
+      expect(getByTestId("settings-tab-settings")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("settings-tab-settings"));
     await waitFor(() => {
       expect(getByTestId("account-user-name")).toBeTruthy();
     });
