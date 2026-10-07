@@ -550,6 +550,9 @@ describe("AI Consent Parity (NP-046)", () => {
         <SettingsScreen />
       </AuthProvider>,
     );
+    // NP-337: Settings now defaults to the Profile tab (matching the web);
+    // the AI features section lives on the Settings tab.
+    fireEvent.press(getByTestId("settings-tab-settings"));
 
     // Initial state in native Settings:
     // AI switch is ON because serverAiConsent.granted === true

@@ -40,10 +40,14 @@ function fakeModule(options: FakeOptions = {}) {
   const inserted: unknown[][] = [];
   const reads: { recordType: string; options: unknown }[] = [];
   let granted = options.granted ?? [];
+  let settingsOpened = 0;
   const module: HealthConnectModule = {
     getSdkStatus: async () => options.sdkStatus ?? SDK_AVAILABLE,
     initialize: async () => options.initialized ?? true,
     getGrantedPermissions: async () => granted,
+    openHealthConnectSettings: () => {
+      settingsOpened += 1;
+    },
     requestPermission: async (permissions) => {
       requested.push(permissions);
       const answer = options.grantOnRequest ?? permissions;
@@ -59,7 +63,7 @@ function fakeModule(options: FakeOptions = {}) {
       return ["inserted-id"];
     },
   };
-  return { module, requested, inserted, reads };
+  return { module, requested, inserted, reads, settingsOpened: () => settingsOpened };
 }
 
 const RANGE = {
@@ -164,6 +168,15 @@ describe("requesting permissions", () => {
     const fake = fakeModule({ grantOnRequest: [] });
     const impl = createHealthConnectImpl(fake.module);
     expect(await impl.requestPermissions(wanted)).toEqual([]);
+  });
+});
+
+describe("opening Health Connect's own settings (NP-337)", () => {
+  it("delegates to the module", () => {
+    const fake = fakeModule();
+    const impl = createHealthConnectImpl(fake.module);
+    impl.openSettings?.();
+    expect(fake.settingsOpened()).toBe(1);
   });
 });
 

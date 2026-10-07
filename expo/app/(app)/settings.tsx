@@ -72,11 +72,12 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  *     (moved here from the Training tab to match the web), Legal & support,
  *     and Delete account at the bottom (two taps away).
  *
- * The tab bar defaults to "Settings" — the screen's original content — so
- * every existing deep link and test that opens Settings still lands on
- * exactly what it always has; Profile and Training are additions reachable
- * by tapping their tab, the fix for "native Settings has no Profile/Training
- * tab and the editor in profile/health.tsx is unreachable."
+ * NP-337: the tab bar defaults to "Profile" — matching the web's
+ * `/dashboard/settings`, which always opens on its Profile tab, whether the
+ * member got there from the Home gear or from Profile > Account &
+ * preferences. It used to default to "Settings" (this screen's original,
+ * pre-NP-302 content); every route into this screen is the same one, so
+ * there is one default to get right, not one per entry point.
  */
 export interface SettingsNotifDeps {
   /** OS permission probe. Defaults to NP-065's `defaultPushDeps` reader. */
@@ -105,11 +106,10 @@ export default function SettingsScreen({
   const router = useRouter();
   const { token, user, logout } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
-  // NP-302: Profile / Training / Settings, defaulting to "settings" (the
-  // screen's original, still-reachable content) so every existing deep link
-  // and test lands exactly where it always has.
+  // NP-302 added Profile / Training / Settings; NP-337 switched the default
+  // to "profile" to match the web's `/dashboard/settings`.
   const [activeTab, setActiveTab] = useState<"profile" | "training" | "settings">(
-    "settings",
+    "profile",
   );
   // The DI seam (PushOptInCard's `deps` pattern): unit tests never import
   // `expo-notifications` (no native module under Jest — even a dynamic
