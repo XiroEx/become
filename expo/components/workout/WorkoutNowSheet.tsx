@@ -658,7 +658,11 @@ function WorkoutNowBody({
             ) : null}
           </View>
           {loadingRecent ? (
-            <View style={{ gap: 6 }}>
+            // `key="loading"` so this branch and the empty/loaded branches
+            // below never share a host node across renders (NP-327):
+            // without it, Android keeps the `animate-pulse` skeleton's
+            // animated styles attached to the real content after it loads.
+            <View key="loading" style={{ gap: 6 }}>
               {[0, 1, 2].map((i) => (
                 <View
                   key={i}
@@ -669,6 +673,7 @@ function WorkoutNowBody({
             </View>
           ) : recentQuick.length === 0 ? (
             <Pressable
+              key="empty"
               testID={`${testID}-recent-empty`}
               accessibilityRole="button"
               accessibilityLabel="No sessions yet. Build your first session."
@@ -687,7 +692,7 @@ function WorkoutNowBody({
               <ArrowRight size={16} color={colors.success} />
             </Pressable>
           ) : (
-            <View style={{ gap: 6 }}>
+            <View key="loaded" style={{ gap: 6 }}>
               {recentQuick.map((log, i) => (
                 <Pressable
                   key={`${log.title}-${log.date}-${i}`}
