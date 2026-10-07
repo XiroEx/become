@@ -1,6 +1,12 @@
 import React from "react";
+import { StyleSheet } from "react-native";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { WeightLogSheet } from "@/components/dashboard/WeightLogSheet";
+
+function flat(style: unknown): Record<string, unknown> {
+  return (StyleSheet.flatten(style as Parameters<typeof StyleSheet.flatten>[0]) ??
+    {}) as Record<string, unknown>;
+}
 
 describe("WeightLogSheet (NP-105 parity)", () => {
   it("renders when visible and pre-fills lastWeight", () => {
@@ -74,6 +80,27 @@ describe("WeightLogSheet (NP-105 parity)", () => {
     );
     fireEvent.press(getByTestId("weight-log-sheet-close"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("keeps the close X inside the safe area — title shrinks, close doesn't (NP-323)", () => {
+    const { getByTestId } = render(
+      <WeightLogSheet
+        visible
+        onClose={() => {}}
+        targetWeight={175}
+        weightUnit="lbs"
+      />,
+    );
+    // The title column is the one thing in the header row allowed to
+    // shrink (flex: 1, minWidth: 0); the close button is fixed-size
+    // (flexShrink: 0) — the same shape as the dashboard mood sheet's
+    // NP-316 fix for the exact same bug (the X getting clipped off the
+    // right edge of the screen on Android).
+    const titleGroup = getByTestId("weight-log-sheet-title-group");
+    expect(flat(titleGroup.props.style).flex).toBe(1);
+    expect(flat(titleGroup.props.style).minWidth).toBe(0);
+    const close = getByTestId("weight-log-sheet-close");
+    expect(flat(close.props.style).flexShrink).toBe(0);
   });
 
   it("shows error if onSubmit throws", async () => {

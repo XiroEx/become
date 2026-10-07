@@ -1,6 +1,6 @@
 /* eslint-disable import/first */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 let mockParams: Record<string, string | undefined> = {};
 const mockPush = jest.fn();
@@ -482,6 +482,79 @@ describe("NutritionGoalsRoute (NP-148)", () => {
           .className ?? "",
       ),
     ).toContain("text-yellow-600");
+  });
+
+  // NP-323: the %/g readout beside each target (Protein/Carbs/Fats, just
+  // above each Input) was still flat `text-muted-foreground` grey on
+  // native — the web colours THIS label too, the same blue/green/amber as
+  // the macro bar below it.
+  it("colours the per-target %/g readout like the web, not grey (NP-323)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-protein-percent")).toBeTruthy();
+    });
+
+    expect(
+      String(
+        (getByTestId("nutrition-goals-protein-percent").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-blue-600");
+    expect(
+      String(
+        (getByTestId("nutrition-goals-carbs-percent").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-green-600");
+    expect(
+      String(
+        (getByTestId("nutrition-goals-fats-percent").props as { className?: string })
+          .className ?? "",
+      ),
+    ).toContain("text-yellow-600");
+  });
+
+  // NP-323: the web computes a per-direction description (`DIRECTION_
+  // EXPLANATION`) for the Goal cards but never renders it; native used to
+  // show it as a floating line under the Goal section (NP-266 item 4) —
+  // dropped to match.
+  it("does not show a floating direction-explanation line under Goal (NP-323)", async () => {
+    const { getByTestId, queryByText } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-direction-group")).toBeTruthy();
+    });
+
+    expect(
+      queryByText("calories at maintenance — hold your weight while you train"),
+    ).toBeNull();
+  });
+
+  // NP-323: the web's Log Weight button is a compact, left-aligned black
+  // pill (`<button>` with no width class), not a full-width one.
+  it("Log Weight is compact and left-aligned, not full width (NP-323)", async () => {
+    const { getByTestId } = render(<NutritionGoalsRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-tab-weight")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("nutrition-goals-tab-weight"));
+
+    await waitFor(() => {
+      expect(getByTestId("nutrition-goals-log-weight")).toBeTruthy();
+    });
+    // Walk up from the button to the nearest ancestor that sets
+    // alignItems — the View wrapping it, which stops it stretching to the
+    // card's full width (the default `alignItems: "stretch"` a plain
+    // column View otherwise gives its children).
+    let node: ReturnType<typeof getByTestId> | null = getByTestId(
+      "nutrition-goals-log-weight",
+    ).parent;
+    while (node && StyleSheet.flatten(node.props?.style ?? {}).alignItems !== "flex-start") {
+      node = node.parent;
+    }
+    expect(node).toBeTruthy();
   });
 
   it("Save Goals is black like the web, not the brand red (NP-266)", async () => {

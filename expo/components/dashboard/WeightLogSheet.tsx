@@ -73,43 +73,45 @@ export function WeightLogSheet({
       onClose={onClose}
     >
       <View style={{ gap: 16 }}>
-        {/* Header */}
+        {/* Header — NP-316/NP-323: a SINGLE flex row with the icon badge,
+            title column (`flex: 1`, `minWidth: 0`, `numberOfLines`) and the
+            close button (fixed size, `flexShrink: 0`) all as direct
+            siblings. The title used to sit inside its OWN non-flex wrapper
+            row alongside the badge, which had no basis to shrink against —
+            so on Android the title could grow past the sheet's padding and
+            push the close X off the right edge of the screen instead of
+            truncating. */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
+            gap: 12,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                backgroundColor: tint("muted", 0.5),
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              backgroundColor: tint("muted", 0.5),
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Scale size={20} color={colors["muted-foreground"]} />
+          </View>
+          <View testID={`${testID}-title-group`} style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              numberOfLines={1}
+              className="text-foreground text-lg font-bold"
             >
-              <Scale size={20} color={colors["muted-foreground"]} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                className="text-foreground text-lg font-bold"
-                style={{ flexShrink: 1 }}
-              >
-                Log Weight
+              Log Weight
+            </Text>
+            {targetWeight != null && targetWeight > 0 ? (
+              <Text numberOfLines={1} className="text-muted-foreground text-xs">
+                Goal: {targetWeight} {weightUnit}
               </Text>
-              {targetWeight != null && targetWeight > 0 ? (
-                <Text
-                  className="text-muted-foreground text-xs"
-                  style={{ flexShrink: 1 }}
-                >
-                  Goal: {targetWeight} {weightUnit}
-                </Text>
-              ) : null}
-            </View>
+            ) : null}
           </View>
           <Pressable
             testID={`${testID}-close`}
@@ -117,7 +119,15 @@ export function WeightLogSheet({
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Close"
-            className="p-2 rounded-full"
+            hitSlop={8}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
           >
             <X size={18} color={colors["muted-foreground"]} />
           </Pressable>
