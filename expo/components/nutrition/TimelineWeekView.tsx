@@ -10,6 +10,9 @@ import {
   ChefHat,
   Tag as TagIcon,
   Plus,
+  Clock,
+  Pencil,
+  Trash2,
 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -37,6 +40,12 @@ import {
 } from "@/lib/nutrition/calendarDays";
 import { weeklyChartBarHeightPct } from "@/lib/nutrition/weekChart";
 import { titleCaseTag } from "@/lib/nutrition/mealPlanApi";
+import {
+  tagChipColors,
+  tagAccentBorderClass,
+  primaryLogTag,
+  formatLogTime,
+} from "@/lib/nutrition/timelinePlanning";
 import { NutritionPlanCard, type MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import { CopyDaySheet } from "@/components/nutrition/CopyDaySheet";
 import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
@@ -83,6 +92,12 @@ export interface TimelineWeekViewProps {
     item: MealPlanItem,
     planItems: MealPlanItem[],
   ) => void;
+  /** Edit a logged item's quantity/unit. Falls back to opening the full Day
+   *  view (where the edit sheet already lives) when not provided. */
+  onEditItem?: (logId: string, item: MealLog["items"][number]) => void;
+  /** Delete an entire logged meal. Falls back to opening the full Day view
+   *  when not provided. */
+  onDeleteLog?: (logId: string, mealName?: string) => void;
   testID?: string;
 }
 
@@ -96,6 +111,8 @@ export function TimelineWeekView({
   onSkipPlan,
   onRemovePlan,
   onEditPlanItem,
+  onEditItem,
+  onDeleteLog,
   testID = "timeline-week-view",
 }: TimelineWeekViewProps) {
   const { colors } = useThemeTokens();
@@ -279,6 +296,25 @@ export function TimelineWeekView({
   const [expandedDate, setExpandedDate] = useState<string | null>(() => {
     return days.find((d) => d.isToday)?.date ?? days[0]?.date ?? null;
   });
+
+  // Per-log expand overrides — the web's `TimelineLogCard` defaults only the
+  // FIRST log in a day's list expanded (`page.tsx:2050`); every log after it
+  // starts collapsed until tapped. Keyed by log id so toggling one log in an
+  // expanded day doesn't disturb the others.
+  const [logOverrides, setLogOverrides] = useState<Record<string, boolean>>({});
+  const isLogExpanded = useCallback(
+    (logId: string, idx: number) => logOverrides[logId] ?? idx === 0,
+    [logOverrides],
+  );
+  const toggleLogExpanded = useCallback(
+    (logId: string, idx: number) => {
+      setLogOverrides((prev) => ({
+        ...prev,
+        [logId]: !(prev[logId] ?? idx === 0),
+      }));
+    },
+    [],
+  );
 
   const rangeTitle = `${from.toLocaleDateString("en-US", {
     month: "short",
@@ -606,12 +642,13 @@ export function TimelineWeekView({
               testID={`timeline-week-day-group-${d.date}`}
               className="rounded-2xl border border-border bg-card overflow-hidden"
             >
+              <View className="flex-row items-center gap-2 p-3.5">
               <Pressable
                 testID={`timeline-week-day-${d.date}`}
                 accessibilityRole="button"
                 accessibilityLabel={`Day ${d.date}, ${d.calories} calories`}
                 onPress={() => setExpandedDate(isExpanded ? null : d.date)}
-                className="flex-row items-center justify-between p-3.5 gap-3"
+                className="flex-1 flex-row items-center justify-between gap-3 min-w-0"
               >
                 <View className="flex-row items-center gap-3 flex-1 min-w-0">
                   <View className="h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted">
@@ -682,21 +719,21 @@ export function TimelineWeekView({
               </Pressable>
 
               {/* Add button — a solid square `+`, matching the web's
-                  `WeekDayGroup` trailing control (`page.tsx:2013-2021`)
-                  instead of the text "Open" + external-link icon this used
-                  to render on every row, including empty days. Opens the
-                  full Day view, where the add-food / schedule-meals surfaces
-                  live. */}
-              <View className="flex-row justify-end px-3.5 pb-3.5 -mt-1">
-                <Pressable
-                  testID={`timeline-week-open-${d.date}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${addLabel} for ${d.date}`}
-                  onPress={() => onOpenDay(d.date)}
-                  className="h-9 w-9 items-center justify-center rounded-lg bg-foreground"
-                >
-                  <Plus size={16} color={colors.background} />
-                </Pressable>
+                  `WeekDayGroup` trailing control (`page.tsx:2013-2021`):
+                  INSIDE the same row as the day content, not wrapped onto a
+                  second line underneath it (that wrap doubled every row's
+                  height and let the floating Day-view FAB sit directly on
+                  top of the first visible day's own `+`). Opens the full Day
+                  view, where the add-food / schedule-meals surfaces live. */}
+              <Pressable
+                testID={`timeline-week-open-${d.date}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${addLabel} for ${d.date}`}
+                onPress={() => onOpenDay(d.date)}
+                className="h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground"
+              >
+                <Plus size={16} color={colors.background} />
+              </Pressable>
               </View>
 
               {/* Expanded details */}
@@ -719,32 +756,175 @@ export function TimelineWeekView({
                     </View>
                   ) : null}
 
-                  {/* Logged meals */}
+                  {/* Logged meals — the web's `TimelineLogCard`
+                      (`page.tsx:2107-2261`): a time pill, the log's tag
+                      chips, an orange/per-tag left accent bar, an expandable
+                      item list with a pencil per row, and a P/C/F + Delete
+                      footer. Native used to render a plain card with no
+                      time, tags, item rows or actions at all. */}
                   {d.logs.length > 0 ? (
                     <View className="gap-2">
-                      {d.logs.map((log) => {
-                        const logCals = Math.round(log.totalNutrition?.calories ?? 0);
-                        const itemsCount = log.items?.length ?? 0;
+                      {d.logs.map((log, logIdx) => {
+                        const totals = {
+                          calories: Math.round(log.totalNutrition?.calories ?? 0),
+                          protein: Math.round(log.totalNutrition?.protein ?? 0),
+                          carbs: Math.round(log.totalNutrition?.carbs ?? 0),
+                          fats: Math.round(log.totalNutrition?.fats ?? 0),
+                        };
+                        const time = log.untimed ? "No time" : formatLogTime(log.loggedAt);
+                        const accentTag = primaryLogTag(log.tags);
+                        const accentBorderClass = tagAccentBorderClass(accentTag);
+                        const logExpanded = isLogExpanded(log._id, logIdx);
+
                         return (
                           <View
                             key={log._id}
                             testID={`timeline-log-${log._id}`}
-                            className="rounded-xl border border-border bg-card p-3 gap-1"
+                            className={`rounded-xl border border-border bg-card overflow-hidden border-l-4 ${accentBorderClass}`}
                           >
-                            <View className="flex-row justify-between items-center">
-                              <Text className="text-foreground text-sm font-semibold capitalize">
-                                {log.mealName ?? log.tags?.[0] ?? "Meal"}
+                            <Pressable
+                              testID={`timeline-log-toggle-${log._id}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={logExpanded ? "Collapse entry" : "Expand entry"}
+                              onPress={() => toggleLogExpanded(log._id, logIdx)}
+                              className="flex-row items-center gap-2 p-3"
+                            >
+                              <View
+                                testID={`timeline-log-time-${log._id}`}
+                                className="flex-row items-center gap-1 shrink-0 rounded-full bg-muted px-2 py-1"
+                              >
+                                <Clock size={11} color={colors["muted-foreground"]} />
+                                <Text className="text-muted-foreground text-[11px] font-semibold tabular-nums">
+                                  {time}
+                                </Text>
+                              </View>
+
+                              <View className="flex-row flex-wrap items-center gap-1 flex-1 min-w-0">
+                                {(log.tags ?? []).map((tag) => {
+                                  const chip = tagChipColors(tag);
+                                  return (
+                                    <View
+                                      key={tag}
+                                      testID={`timeline-log-tag-${log._id}-${tag}`}
+                                      className={`rounded px-1.5 py-0.5 ${chip.bg}`}
+                                    >
+                                      <Text className={`text-[10px] font-bold uppercase tracking-wider ${chip.text}`}>
+                                        {titleCaseTag(tag)}
+                                      </Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+
+                              <Text className="shrink-0 rounded-md bg-muted px-2 py-1 text-foreground text-xs font-semibold tabular-nums">
+                                {totals.calories} cal
                               </Text>
-                              <Text className="text-foreground text-xs font-bold tabular-nums">
-                                {logCals} cal
-                              </Text>
-                            </View>
-                            <Text className="text-muted-foreground text-xs">
-                              {itemsCount} {itemsCount === 1 ? "item" : "items"}
-                              {log.items && log.items.length > 0
-                                ? `: ${log.items.map((i) => i.name).join(", ")}`
-                                : ""}
-                            </Text>
+
+                              <ChevronDown
+                                size={14}
+                                color={colors["muted-foreground"]}
+                                style={{ transform: [{ rotate: logExpanded ? "0deg" : "-90deg" }] }}
+                              />
+                            </Pressable>
+
+                            {log.mealName ? (
+                              <View className="flex-row flex-wrap items-center gap-1.5 px-3 pb-2 -mt-1">
+                                <View className="flex-row items-center gap-1 rounded-md bg-orange-100 dark:bg-orange-900/30 px-1.5 py-0.5">
+                                  <ChefHat size={11} color={colors.accent} />
+                                  <Text className="text-orange-700 dark:text-orange-300 text-[9px] font-bold uppercase tracking-wider">
+                                    Recipe
+                                  </Text>
+                                  <Text className="text-orange-700 dark:text-orange-300 text-[11px]">
+                                    · {log.mealName}
+                                  </Text>
+                                </View>
+                              </View>
+                            ) : null}
+
+                            {logExpanded ? (
+                              <>
+                                <View className="border-t border-border">
+                                  {(log.items ?? []).map((item, itemIdx) => {
+                                    const itemCal = Math.round(
+                                      (item.nutrition?.calories ?? 0) * (item.servings ?? 1),
+                                    );
+                                    return (
+                                      <View
+                                        key={item._id ?? itemIdx}
+                                        testID={`timeline-log-item-${log._id}-${itemIdx}`}
+                                        className={`flex-row items-center gap-2 px-3 py-2 ${
+                                          itemIdx < (log.items?.length ?? 0) - 1
+                                            ? "border-b border-border"
+                                            : ""
+                                        }`}
+                                      >
+                                        <View className="flex-1 min-w-0">
+                                          <Text
+                                            numberOfLines={1}
+                                            className="text-foreground text-xs font-medium"
+                                          >
+                                            {item.name}
+                                          </Text>
+                                          <Text
+                                            numberOfLines={1}
+                                            className="text-muted-foreground text-[10px]"
+                                          >
+                                            {item.brand ? `${item.brand} · ` : ""}
+                                            {item.servings} × {item.servingSize}
+                                            {item.servingUnit}
+                                          </Text>
+                                        </View>
+                                        <Text className="shrink-0 text-foreground text-[11px] font-semibold tabular-nums">
+                                          {itemCal}
+                                        </Text>
+                                        <Pressable
+                                          testID={`timeline-log-item-edit-${log._id}-${itemIdx}`}
+                                          accessibilityRole="button"
+                                          accessibilityLabel="Edit item"
+                                          onPress={() =>
+                                            onEditItem
+                                              ? onEditItem(log._id, item)
+                                              : onOpenDay(d.date)
+                                          }
+                                          className="h-6 w-6 shrink-0 items-center justify-center rounded-md"
+                                        >
+                                          <Pencil size={12} color={colors["muted-foreground"]} />
+                                        </Pressable>
+                                      </View>
+                                    );
+                                  })}
+                                </View>
+                                <View className="flex-row items-center justify-between border-t border-border px-3 py-2">
+                                  <View className="flex-row gap-2.5">
+                                    <Text className="text-muted-foreground text-[11px] tabular-nums">
+                                      P: {totals.protein}g
+                                    </Text>
+                                    <Text className="text-muted-foreground text-[11px] tabular-nums">
+                                      C: {totals.carbs}g
+                                    </Text>
+                                    <Text className="text-muted-foreground text-[11px] tabular-nums">
+                                      F: {totals.fats}g
+                                    </Text>
+                                  </View>
+                                  <Pressable
+                                    testID={`timeline-log-delete-${log._id}`}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Delete entire log"
+                                    onPress={() =>
+                                      onDeleteLog
+                                        ? onDeleteLog(log._id, log.mealName)
+                                        : onOpenDay(d.date)
+                                    }
+                                    className="flex-row items-center gap-1 rounded-lg px-2 py-1"
+                                  >
+                                    <Trash2 size={12} color={colors.destructive} />
+                                    <Text className="text-destructive text-[11px] font-semibold">
+                                      Delete
+                                    </Text>
+                                  </Pressable>
+                                </View>
+                              </>
+                            ) : null}
                           </View>
                         );
                       })}
