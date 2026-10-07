@@ -10,6 +10,7 @@ import {
 import { getUnlockedSystems, SYSTEM_INFO } from "@become/core";
 import { Text } from "@/components/Text";
 import GuidedFlow from "@/components/mind/system/GuidedFlow";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { INTRO_FLOWS } from "@/lib/mind/introFlows";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
@@ -121,30 +122,13 @@ export default function ToolIntroGate({
 
   if (state === "intro") {
     const flow = INTRO_FLOWS[system]!;
-    const accentColor = colors.accent;
-
-    const accentClass =
-      system === "state-shift"
-        ? "bg-cyan-500"
-        : system === "self-image"
-          ? "bg-violet-500"
-          : system === "mission"
-            ? "bg-blue-500"
-            : system === "discipline"
-              ? "bg-red-500"
-              : system === "anti-sabotage"
-                ? "bg-orange-500"
-                : system === "social"
-                  ? "bg-pink-500"
-                  : "bg-primary";
 
     return (
       <View testID="mind-intro-gate-intro" className="flex-1">
         <GuidedFlow
           title={flow.title}
           steps={flow.steps}
-          accentColor={accentColor}
-          accentClass={accentClass}
+          accentColor={mindAccentColor(system)}
           doneText="Enter"
           onComplete={(answers) => {
             void apiFetch(

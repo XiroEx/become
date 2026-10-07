@@ -37,6 +37,7 @@ import { runAiTask } from "@/lib/ai/runClient";
 import { validateGuidedSteps } from "@/lib/ai/sanitize";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { mindAccentColor } from "@/lib/mind/accents";
 import { reflectOnAnswers } from "@/lib/mind/reflect";
 import { dailyPick } from "@/lib/mind/rotation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -542,8 +543,7 @@ export default function SelfImageDashboard() {
       <GuidedFlow
         title={flow.title}
         steps={flow.steps}
-        accentColor={colors.accent}
-        accentClass="bg-violet-500"
+        accentColor={mindAccentColor("self-image")}
         doneText={
           flow.kind === "define" ? "The line is drawn." : DONE_TEXT
         }

@@ -63,7 +63,20 @@
  *                                          button text/icon — static like
  *                                          `primary`, because that button is
  *                                          white in both light and dark mode.
+ *   mind-cyan   cyan-500   (both modes)  State Shift's own identity colour
+ *   mind-blue   blue-500   (both modes)  Mission's own identity colour
+ *   mind-emerald emerald-500 (both modes) Vision's own identity colour
+ *   mind-pink   pink-500   (both modes)  Social's own identity colour
+ *                                          (NP-298) — `webapp/components/mind/
+ *                                          ToolIntroGate.tsx`'s `ACCENTS` map,
+ *                                          read by `lib/mind/accents.ts`'s
+ *                                          `mindAccentColor()`. Self-Image,
+ *                                          Discipline and Anti-Sabotage reuse
+ *                                          `mind-violet` / `brand` / `orange`
+ *                                          rather than adding three more flat
+ *                                          tokens for the same hues.
  *
+
  * Nothing here is mode-agnostic any more: `resolveToken` REQUIRES a mode, so a
  * new call site cannot quietly resolve against dark the way 20 of them did
  * before this card. The mode comes from `useThemeTokens()`, which reads
@@ -98,6 +111,10 @@ export type TokenName =
   | "mind-violet"
   | "mind-green"
   | "mind-ink"
+  | "mind-cyan"
+  | "mind-blue"
+  | "mind-emerald"
+  | "mind-pink"
   | "orange"
   | "indigo"
   | "rose";
@@ -144,6 +161,10 @@ export const lightTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  "mind-cyan": "6 182 212", // cyan-500 — State Shift's accent (NP-298), same in both modes
+  "mind-blue": "59 130 246", // blue-500 — Mission's accent (NP-298), same in both modes
+  "mind-emerald": "16 185 129", // emerald-500 — Vision's accent (NP-298), same in both modes
+  "mind-pink": "236 72 153", // pink-500 — Social's accent (NP-298), same in both modes
   orange: "249 115 22", // orange-500 — the web's Circuit group badge
   // (`bg-orange-500`), same in both modes like `primary`
   indigo: "99 102 241", // indigo-500 — the web's Triset group badge
@@ -178,6 +199,10 @@ export const darkTokens: Record<TokenName, string> = {
   "mind-violet": "139 92 246", // violet-500 — same in both modes, like `primary`
   "mind-green": "34 197 94", // green-500 — same in both modes
   "mind-ink": "24 24 27", // zinc-900 — same in both modes
+  "mind-cyan": "6 182 212", // cyan-500 — same in both modes
+  "mind-blue": "59 130 246", // blue-500 — same in both modes
+  "mind-emerald": "16 185 129", // emerald-500 — same in both modes
+  "mind-pink": "236 72 153", // pink-500 — same in both modes
   orange: "249 115 22", // orange-500 — same in both modes
   indigo: "99 102 241", // indigo-500 — same in both modes
   rose: "244 63 94", // rose-500 — same in both modes
