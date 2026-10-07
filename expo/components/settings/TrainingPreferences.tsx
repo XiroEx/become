@@ -387,7 +387,15 @@ export function TrainingPreferencesScreen({
                       style={[
                         minTouchTarget,
                         {
-                          flex: 1,
+                          // NP-337: `flex: 1` forces three equal columns on
+                          // one row — `flexBasis: 0` with no minimum width,
+                          // so the row never actually WRAPS onto a new line;
+                          // it just shrinks each chip in place until "Intermediate"
+                          // has no room left and breaks mid-word
+                          // ("Intermed" / "iate") at font scale 1.3. Sized to
+                          // content instead (the same pattern Equipment
+                          // Access uses below) so a chip that does not fit
+                          // wraps WHOLE onto the next line.
                           paddingVertical: 8,
                           paddingHorizontal: 14,
                           borderRadius: 12,

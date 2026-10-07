@@ -112,6 +112,8 @@ export interface HealthConnectModule {
     permissions: HealthConnectPermission[],
   ) => Promise<HealthConnectPermission[]>;
   getGrantedPermissions: () => Promise<HealthConnectPermission[]>;
+  /** Opens Health Connect's own app settings (NP-337). */
+  openHealthConnectSettings: () => void;
   readRecords: (
     recordType: string,
     options: {
@@ -244,6 +246,8 @@ export function createHealthConnectImpl(
     },
 
     grantedPermissions: () => readGranted(module),
+
+    openSettings: () => module.openHealthConnectSettings(),
 
     async queryWeightKg(range): Promise<AndroidWeightRecord[]> {
       const { records } = await module.readRecords(

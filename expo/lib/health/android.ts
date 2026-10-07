@@ -52,6 +52,8 @@ export interface AndroidClientImpl {
   ) => Promise<HealthPermission[]>;
   /** What is granted right now, with no sheet. */
   grantedPermissions: () => Promise<HealthPermission[]>;
+  /** Opens Health Connect's own app settings (NP-337). */
+  openSettings?: () => void;
   queryWeightKg: (range: DateRange) => Promise<AndroidWeightRecord[]>;
   querySteps: (
     range: DateRange,
@@ -79,6 +81,7 @@ export function createAndroidAdapter(impl: AndroidClientImpl): HealthClient {
     platform: "android",
     isAvailable: () => impl.isAvailable(),
     ensurePermissions: (wanted) => impl.requestPermissions(wanted),
+    ...(impl.openSettings ? { openSettings: () => impl.openSettings?.() } : {}),
 
     async readWeight(range): Promise<WeightSample[]> {
       await assertGranted("weight", "read");

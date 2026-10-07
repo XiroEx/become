@@ -34,12 +34,13 @@ import {
   currentHealthSyncSession,
   type HealthSyncSession,
 } from "./switches";
-import type {
-  HealthClient,
-  HealthPermission,
-  WeightSample,
-  WeightWrite,
-  WorkoutWrite,
+import {
+  permissionKey,
+  type HealthClient,
+  type HealthPermission,
+  type WeightSample,
+  type WeightWrite,
+  type WorkoutWrite,
 } from "./types";
 
 /** `source` for a sample that came from Health Connect. */
@@ -93,6 +94,54 @@ export function permissionsForSession(
 }
 
 /**
+ * THE ASK-ONCE-PER-START GUARD (NP-337).
+ *
+ * The launch bridge (`ensureHealthPermissionsForSession`, called from
+ * `HealthSyncBridge`) and `importWeightFromHealth` each ask for the READ
+ * permission on their own — the launch bridge for everything the switches
+ * justify, the import because it cannot trust a caller to have asked first.
+ * Health Connect's own `requestPermissions` already skips the sheet for a
+ * permission that is GRANTED, but a permission the member just said
+ * "Don't allow" to is still MISSING — so without this, the two calls showed
+ * the sheet twice in a row on the very next cold start after a denial.
+ *
+ * One ask per permission, per process: the first caller's answer is cached
+ * and handed to every caller after it, whether or not the ask succeeded.
+ */
+let askedPermissions: Promise<HealthPermission[]> | null = null;
+const askedPermissionKeys = new Set<string>();
+
+async function ensurePermissionsOnce(
+  client: HealthClient,
+  wanted: readonly HealthPermission[],
+): Promise<HealthPermission[]> {
+  if (wanted.length === 0 || !client.ensurePermissions) return [];
+  const alreadyAsked = wanted.every((p) => askedPermissionKeys.has(permissionKey(p)));
+  if (alreadyAsked && askedPermissions) {
+    return askedPermissions;
+  }
+  const ensure = client.ensurePermissions;
+  askedPermissions = (async () => {
+    try {
+      return await ensure(wanted);
+    } catch {
+      // A refused or unavailable permission sheet is not an error worth
+      // surfacing: the sync reads its own grant and does nothing without it.
+      return [];
+    } finally {
+      for (const p of wanted) askedPermissionKeys.add(permissionKey(p));
+    }
+  })();
+  return askedPermissions;
+}
+
+/** @internal Tests only — the ask-once cache would otherwise leak between cases. */
+export function __resetHealthPermissionsAskedThisProcess(): void {
+  askedPermissions = null;
+  askedPermissionKeys.clear();
+}
+
+/**
  * Ask once, at launch, for the permissions the snapshot justifies. The Android
  * impl only shows Health Connect's sheet for what is actually missing, so this
  * is silent on every launch after the first.
@@ -103,13 +152,7 @@ export async function ensureHealthPermissionsForSession(
 ): Promise<HealthPermission[]> {
   const wanted = permissionsForSession(session);
   if (wanted.length === 0 || !client.ensurePermissions) return [];
-  try {
-    return await client.ensurePermissions(wanted);
-  } catch {
-    // A refused or unavailable permission sheet is not an error worth surfacing:
-    // the sync reads its own grant and does nothing without it.
-    return [];
-  }
+  return ensurePermissionsOnce(client, wanted);
 }
 
 export interface ImportWeightDeps {
@@ -229,7 +272,7 @@ export async function importWeightFromHealth(
       return { ...result, reason: "unavailable" };
     }
     if (deps.client.ensurePermissions) {
-      const granted = await deps.client.ensurePermissions([
+      const granted = await ensurePermissionsOnce(deps.client, [
         { metric: "weight", direction: "read" },
       ]);
       const allowed = granted.some(

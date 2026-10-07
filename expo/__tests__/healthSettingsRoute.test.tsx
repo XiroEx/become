@@ -32,6 +32,7 @@ import {
   createMemoryHealthSwitchStore,
   type HealthSwitchStore,
 } from "@/lib/health/switches";
+import type { HealthClient, HealthPermission } from "@/lib/health/types";
 
 /**
  * The Health sync section is per-platform now: Health Connect is wired
@@ -89,11 +90,32 @@ describe("HealthSyncSection — the gate", () => {
   });
 });
 
+/** A fake Health Connect client that answers exactly `granted` for any ask. */
+function fakeHealthClient(granted: HealthPermission[] = []): {
+  client: HealthClient;
+  asked: HealthPermission[][];
+} {
+  const asked: HealthPermission[][] = [];
+  return {
+    asked,
+    client: {
+      platform: "android",
+      readWeight: async () => [],
+      readSteps: async () => [],
+      ensurePermissions: async (wanted) => {
+        asked.push([...wanted]);
+        return granted;
+      },
+    },
+  };
+}
+
 describe("HealthSyncSection on Android", () => {
   function renderSection(
     options: {
       optedIn?: boolean;
       switches?: HealthSwitchStore;
+      client?: HealthClient | null;
     } = {},
   ) {
     const switches =
@@ -103,6 +125,7 @@ describe("HealthSyncSection on Android", () => {
         platform="android"
         store={createMemoryHealthOptInStore(options.optedIn ?? false)}
         switches={switches}
+        client={options.client}
       />,
     );
     return { ...utils, switches };
@@ -173,5 +196,111 @@ describe("HealthSyncSection on Android", () => {
       expect(getByTestId("health-next-launch-note")).toBeTruthy();
     });
     expect(getByText(/next time you open Become/i)).toBeTruthy();
+  });
+
+  // ─── NP-337: ask when a direction turns ON, show denial, offer a fix ────
+  it.each(["read", "write"] as const)(
+    "turning %s ON asks Health Connect right away — not next launch",
+    async (direction) => {
+      const { client, asked } = fakeHealthClient([
+        { metric: "weight", direction: "read" },
+        { metric: "weight", direction: "write" },
+        { metric: "workouts", direction: "write" },
+      ]);
+      const { getByTestId } = renderSection({ optedIn: true, client });
+      await waitFor(() => {
+        expect(getByTestId(`health-${direction}-toggle`)).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId(`health-${direction}-toggle`));
+
+      await waitFor(() => {
+        expect(asked.length).toBeGreaterThan(0);
+      });
+      const wanted =
+        direction === "read"
+          ? [{ metric: "weight", direction: "read" }]
+          : [
+              { metric: "weight", direction: "write" },
+              { metric: "workouts", direction: "write" },
+            ];
+      expect(asked[0]).toEqual(wanted);
+    },
+  );
+
+  it("shows the denied state with an Open Health Connect action when Read is refused", async () => {
+    const { client } = fakeHealthClient([]); // nothing granted
+    const { getByTestId, queryByTestId } = renderSection({ optedIn: true, client });
+    await waitFor(() => {
+      expect(getByTestId("health-read-toggle")).toBeTruthy();
+    });
+    expect(queryByTestId("health-read-denied")).toBeNull();
+
+    fireEvent.press(getByTestId("health-read-toggle"));
+
+    await waitFor(() => {
+      expect(getByTestId("health-read-denied")).toBeTruthy();
+    });
+    // The toggle itself is not forced back off — the member's intent (on)
+    // stays recorded; the denial is a separate, visible state on top of it.
+    expect(
+      getByTestId("health-read-toggle").props.accessibilityState?.checked,
+    ).toBe(true);
+  });
+
+  it("Open Health Connect calls through to the platform's own settings", async () => {
+    let opened = 0;
+    const { client } = fakeHealthClient([]);
+    client.openSettings = () => {
+      opened += 1;
+    };
+    const { getByTestId } = renderSection({ optedIn: true, client });
+    await waitFor(() => {
+      expect(getByTestId("health-read-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-read-toggle"));
+    await waitFor(() => {
+      expect(getByTestId("health-read-denied-open-settings")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-read-denied-open-settings"));
+    expect(opened).toBe(1);
+  });
+
+  it("clears the denied state once the permission is granted", async () => {
+    const { client } = fakeHealthClient([
+      { metric: "weight", direction: "read" },
+    ]);
+    const { getByTestId, queryByTestId } = renderSection({ optedIn: true, client });
+    await waitFor(() => {
+      expect(getByTestId("health-read-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-read-toggle"));
+
+    await waitFor(() => {
+      expect(queryByTestId("health-read-denied")).toBeNull();
+    });
+  });
+
+  it("turning a direction off asks nothing and clears any denied state", async () => {
+    const { client, asked } = fakeHealthClient([]);
+    const switches = createMemoryHealthSwitchStore({ read: true, write: true });
+    const { getByTestId, queryByTestId } = renderSection({
+      optedIn: true,
+      switches,
+      client,
+    });
+    await waitFor(() => {
+      expect(getByTestId("health-read-toggle")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("health-read-toggle")); // ON -> OFF
+    await waitFor(async () => {
+      expect(await switches.get("read")).toBe(false);
+    });
+    expect(asked).toHaveLength(0);
+    expect(queryByTestId("health-read-denied")).toBeNull();
   });
 });

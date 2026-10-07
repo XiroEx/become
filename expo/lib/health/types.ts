@@ -115,6 +115,13 @@ export interface HealthClient {
   ensurePermissions?: (
     wanted: readonly HealthPermission[],
   ) => Promise<HealthPermission[]>;
+  /**
+   * NP-337: hands the member to the platform's own permission management —
+   * Health Connect's app settings on Android — for a direction they denied.
+   * Present only when the platform has somewhere to send them (Android;
+   * HealthKit's own Settings path arrives with NP-185).
+   */
+  openSettings?: () => void;
 }
 
 export class HealthPermissionError extends Error {

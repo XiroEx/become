@@ -72,7 +72,7 @@ export function MissedWorkoutsCard({
   onViewAll,
   testID = "missed-workouts-card",
 }: MissedWorkoutsCardProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
 
   if (missed.length === 0) return null;
 
@@ -87,9 +87,12 @@ export function MissedWorkoutsCard({
       style={[
         styles.container,
         {
-          backgroundColor: colors.destructive
-            ? `${colors.destructive}14`
-            : colors.card,
+          // NP-337: `colors.destructive` is an `rgb(r g b)` STRING, so
+          // appending a hex alpha suffix to it built an invalid colour —
+          // Android painted it opaque (the same class of bug the Biological
+          // Sex chip had, `ProfileSettingsScreen.tsx`). `tint()` composes
+          // the alpha correctly.
+          backgroundColor: tint("destructive", 0.08),
           borderColor: colors.destructive ?? colors.border,
         },
       ]}
