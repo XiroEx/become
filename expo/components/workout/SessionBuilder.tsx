@@ -42,10 +42,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
+  CalendarClock,
   Check,
   Dumbbell,
   Layers,
   Plus,
+  Search,
   Sparkles,
   Trash2,
   Unlink,
@@ -86,7 +88,7 @@ import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePro
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { routeApiError } from "@/lib/errors";
 import { useRouter } from "expo-router";
 import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
@@ -172,7 +174,7 @@ export function SessionBuilder({
   testID = "session-builder",
   initialDraft,
 }: SessionBuilderProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const { token } = useAuth();
   const router = useRouter();
   const fetchOpts = useMemo(
@@ -576,16 +578,26 @@ export function SessionBuilder({
       ) : null}
 
       <View>
-        <Input
-          testID={`${testID}-search`}
-          label="Add an exercise"
-          placeholder="Add an exercise…"
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityHint="Type at least two characters to search the catalogue and your custom exercises"
-        />
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <Input
+              testID={`${testID}-search`}
+              label="Add an exercise"
+              placeholder="Add an exercise…"
+              value={query}
+              onChangeText={setQuery}
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityHint="Type at least two characters to search the catalogue and your custom exercises"
+            />
+          </View>
+          {/* The web's magnifier (`<Search>` inside the field) — the native
+              Input has no icon slot, so this sits beside it, matching the
+              same pattern used by AddExerciseSheet's search row. */}
+          <View style={{ height: 44, justifyContent: "center" }}>
+            <Search size={18} color={colors["muted-foreground"]} />
+          </View>
+        </View>
         {searching ? (
           <Text testID={`${testID}-searching`} className="text-muted-foreground text-xs mt-1">
             Searching…
@@ -683,31 +695,52 @@ export function SessionBuilder({
                 backgroundColor: colors.card,
               }}
             >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="text-foreground text-sm font-medium" numberOfLines={1}>
                   {ex.name}
                 </Text>
-                <Text className="text-muted-foreground text-xs">
+                {/* Which implement this row is, so a dumbbell and a barbell
+                    variant of the same lift read apart — the web's
+                    `implementLabel(ex.equipment) ·` lead-in. The group label
+                    (when grouped) is purple, matching the web's
+                    `text-purple-500 dark:text-purple-400`, not grey. */}
+                <Text className="text-muted-foreground text-xs" numberOfLines={1}>
+                  {implementLabel(ex.equipment) ? `${implementLabel(ex.equipment)} · ` : ""}
                   {ex.reps ? `${ex.reps} reps` : (ex.trackingType ?? "").replace(/_/g, " ")}
-                  {ex.groupId ? ` · ${ex.groupLabel || "Superset"}` : ""}
+                  {ex.groupId ? (
+                    <Text style={{ fontWeight: "600", color: colors.mindset }}>
+                      {" "}
+                      · {ex.groupLabel || "Superset"}
+                    </Text>
+                  ) : null}
                 </Text>
               </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                 <Pressable
                   testID={`${testID}-fewer-${ex.exerciseSlug}`}
                   accessibilityRole="button"
                   accessibilityLabel={`Fewer sets for ${ex.name}`}
                   disabled={ex.sets <= 1}
                   onPress={() => setSets(ex.exerciseSlug, ex.sets - 1)}
-                  style={{ padding: 6, opacity: ex.sets <= 1 ? 0.3 : 1, ...minTouchTarget }}
+                  hitSlop={hitSlopToMinTarget(24, 24)}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.muted,
+                    opacity: ex.sets <= 1 ? 0.3 : 1,
+                  }}
                 >
                   <Text className="text-foreground text-base font-semibold">−</Text>
                 </Pressable>
                 <Text
                   testID={`${testID}-sets-${ex.exerciseSlug}`}
                   className="text-muted-foreground text-xs font-medium"
-                  style={{ minWidth: 44, textAlign: "center" }}
+                  style={{ minWidth: 40, textAlign: "center" }}
+                  numberOfLines={1}
                 >
                   {ex.sets} {setUnitLabel(ex.trackingType, ex.sets).toLowerCase()}
                 </Text>
@@ -717,7 +750,16 @@ export function SessionBuilder({
                   accessibilityLabel={`More sets for ${ex.name}`}
                   disabled={ex.sets >= 8}
                   onPress={() => setSets(ex.exerciseSlug, ex.sets + 1)}
-                  style={{ padding: 6, opacity: ex.sets >= 8 ? 0.3 : 1, ...minTouchTarget }}
+                  hitSlop={hitSlopToMinTarget(24, 24)}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: colors.muted,
+                    opacity: ex.sets >= 8 ? 0.3 : 1,
+                  }}
                 >
                   <Text className="text-foreground text-base font-semibold">+</Text>
                 </Pressable>
@@ -731,10 +773,11 @@ export function SessionBuilder({
                     : `Superset ${ex.name} with the next exercise`
                 }
                 onPress={() => toggleGroup(ex.exerciseSlug)}
-                style={{ padding: 6, ...minTouchTarget }}
+                hitSlop={hitSlopToMinTarget(28, 28)}
+                style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
               >
                 {ex.groupId ? (
-                  <Unlink size={16} color={colors.primary} strokeWidth={2} />
+                  <Unlink size={16} color={colors.mindset} strokeWidth={2} />
                 ) : (
                   <Layers size={16} color={colors["muted-foreground"]} strokeWidth={2} />
                 )}
@@ -745,9 +788,10 @@ export function SessionBuilder({
                   accessibilityRole="button"
                   accessibilityLabel={`Add the next exercise into the ${(ex.groupLabel || "group").toLowerCase()} containing ${ex.name}`}
                   onPress={() => growGroup(ex.exerciseSlug)}
-                  style={{ padding: 6, ...minTouchTarget }}
+                  hitSlop={hitSlopToMinTarget(28, 28)}
+                  style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
                 >
-                  <Plus size={16} color={colors.primary} strokeWidth={2} />
+                  <Plus size={16} color={colors.mindset} strokeWidth={2} />
                 </Pressable>
               ) : null}
               <Pressable
@@ -755,9 +799,12 @@ export function SessionBuilder({
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${ex.name}`}
                 onPress={() => removeExercise(ex.exerciseSlug)}
-                style={{ padding: 6, ...minTouchTarget }}
+                hitSlop={hitSlopToMinTarget(28, 28)}
+                style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}
               >
-                <Trash2 size={16} color={colors.destructive} strokeWidth={2} />
+                {/* Grey, matching the web's idle `text-zinc-400` — the web only
+                    turns this red on hover, which a touch screen never triggers. */}
+                <Trash2 size={16} color={colors["muted-foreground"]} strokeWidth={2} />
               </Pressable>
             </View>
 
@@ -783,14 +830,21 @@ export function SessionBuilder({
                         paddingHorizontal: 10,
                         paddingVertical: 4,
                         borderRadius: 999,
-                        backgroundColor: active ? colors.primary : colors.muted,
+                        // Purple when selected, matching the web's
+                        // `bg-purple-600 text-white` — not the neutral/red
+                        // `primary` this used to borrow.
+                        backgroundColor: active ? colors.mindset : colors.muted,
                       }}
                     >
                       <Text
                         style={{
                           fontSize: 11,
                           fontWeight: "600",
-                          color: active ? colors["primary-foreground"] : colors["muted-foreground"],
+                          // `brand-foreground` is white in BOTH modes, unlike
+                          // `primary-foreground` (which flips to dark text in
+                          // dark mode) — the purple chip needs white text in
+                          // both schemes, same as the web's flat `text-white`.
+                          color: active ? colors["brand-foreground"] : colors["muted-foreground"],
                         }}
                       >
                         {k === "superset" ? "Superset" : "Circuit"}
@@ -821,8 +875,11 @@ export function SessionBuilder({
           style={{
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
+            // Green-tinted panel, matching the web's
+            // `border-green-200 bg-green-50/70` (dark: `border-green-900/60
+            // bg-green-950/20`) — not the neutral card surface.
+            borderColor: tint("success", 0.35),
+            backgroundColor: tint("success", 0.08),
             padding: 12,
             gap: 8,
           }}
@@ -835,12 +892,16 @@ export function SessionBuilder({
             onPress={() => void finish()}
             style={{
               flexDirection: "row",
+              // Compact, inline — the web's `flex items-center gap-1.5
+              // rounded-lg px-3 py-2`, not a full-width bar.
+              alignSelf: "flex-start",
               alignItems: "center",
               justifyContent: "center",
               gap: 6,
               borderRadius: 8,
-              paddingVertical: 10,
-              backgroundColor: colors.primary,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: colors.success,
               opacity: finishing ? 0.6 : 1,
               ...minTouchTarget,
             }}
@@ -875,7 +936,15 @@ export function SessionBuilder({
           ) : null}
           {!suggesting && visibleSuggestions.length > 0 ? (
             <View style={{ gap: 6 }}>
-              <Text className="text-muted-foreground text-[11px] font-semibold uppercase">
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                  color: colors.success,
+                }}
+              >
                 Complements for this draft
               </Text>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
@@ -906,13 +975,20 @@ export function SessionBuilder({
                     style={{
                       borderRadius: 999,
                       borderWidth: 1,
-                      borderColor: colors.primary,
+                      // Neutral-reading green outline on a plain surface —
+                      // the web's `border-green-300 bg-white text-green-800`
+                      // (dark: `border-green-800 bg-zinc-900 text-green-300`),
+                      // not the native's old red outline.
+                      borderColor: colors.success,
+                      backgroundColor: colors.card,
                       paddingHorizontal: 12,
                       paddingVertical: 6,
+                      alignItems: "center",
+                      justifyContent: "center",
                       ...minTouchTarget,
                     }}
                   >
-                    <Text style={{ fontSize: 12, fontWeight: "500", color: colors.primary }}>
+                    <Text style={{ fontSize: 12, fontWeight: "500", color: colors.success }}>
                       {suggestion.exercise.name}
                     </Text>
                   </Pressable>
@@ -943,8 +1019,25 @@ export function SessionBuilder({
       >
         <Dumbbell size={16} color={colors["primary-foreground"]} strokeWidth={2} />
         <Text style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}>
-          Start session{chosen.length > 0 ? ` (${chosen.length})` : ""}
+          Start session
         </Text>
+        {chosen.length > 0 ? (
+          // A badge, matching the web's `rounded-full bg-white/20` pill —
+          // not `(3)` appended to the label text.
+          <View
+            testID={`${testID}-start-badge`}
+            style={{
+              borderRadius: 999,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              backgroundColor: tint("primary-foreground", 0.2),
+            }}
+          >
+            <Text style={{ fontSize: 11, color: colors["primary-foreground"] }}>
+              {chosen.length}
+            </Text>
+          </View>
+        ) : null}
       </Pressable>
 
       <Pressable
@@ -967,7 +1060,7 @@ export function SessionBuilder({
           ...minTouchTarget,
         }}
       >
-        <Check size={16} color={colors.foreground} strokeWidth={2} />
+        <CalendarClock size={16} color={colors.foreground} strokeWidth={2} />
         <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
           {logOpen ? "Hide log options" : "Log it or plan it instead"}
         </Text>
