@@ -74,6 +74,10 @@ export function MindCoachTeaser({ testID = "mind-coach-teaser" }: { testID?: str
         testID="mind-coach-chat"
         visible={open}
         onClose={() => setOpen(false)}
+        // The web's `accentFrom="from-violet-500" accentTo="to-green-500"`
+        // gradient on this one sheet's header tile and send button
+        // (NP-301) — native drew a flat tile/button instead.
+        accentGradient={[colors["mind-violet"], colors["mind-green"]]}
         endpoint="/api/ai/consultant"
         domain="mindset"
         persistKey="mind-coach"
