@@ -18,6 +18,7 @@ import { AddExerciseSheet, type AddExerciseResult } from "@/components/workout/A
 import { ThinSessionModal } from "@/components/workout/ThinSessionModal";
 import { WorkoutExerciseList } from "@/components/workout/WorkoutExerciseList";
 import { ExerciseSwapModal } from "@/components/live/ExerciseSwapModal";
+import { quickSessionOverviewHref } from "@/lib/quickSession/store";
 import {
   fallbackQuickSessionName,
   quickScope,
@@ -407,6 +408,12 @@ export default function QuickLiveRoute({
       <LiveWorkoutClient
         workout={vm}
         initialView="live"
+        // The skip flow is the web's on EVERY live route (NP-288): a blank
+        // set's button reads `Skip Set →` and opens the skip modal. This
+        // route used to leave it off, so a quick session's primary button
+        // silently logged a blank set and moved on — no modal, no swap
+        // offer, nothing to undo.
+        enableSkipFlow
         activeSeconds={activeSeconds}
         positionScope={quickScope(sessionId)}
         positionStore={
@@ -422,11 +429,29 @@ export default function QuickLiveRoute({
         exerciseHistory={exerciseHistory}
         exerciseHints={quickHints}
         onDismissHint={(slug) => void dismissQuickHint(slug)}
+        // The web's `✕`: a quick session returns to its (persisted)
+        // overview rather than popping the stack, so closing live never
+        // strands the member with no way back into the session.
+        onExit={() =>
+          router.replace(
+            quickSessionOverviewHref(sessionId, {
+              saved: true,
+              started: true,
+            }) as never,
+          )
+        }
         manageExercises={
           workout
             ? {
                 onOpen: () => setShowExerciseList(true),
                 label: `Exercises (${workout.exercises.length})`,
+                // The web's `Add Exercise` pill on the live step (NP-288).
+                onAdd: () => {
+                  setAddAnchorIndex(
+                    Math.max(0, (workout.exercises.length ?? 1) - 1),
+                  );
+                  setShowAddExercise(true);
+                },
               }
             : undefined
         }

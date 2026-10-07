@@ -44,8 +44,17 @@ const SUPERSET: LiveWorkoutViewModel = {
   ],
 };
 
+/**
+ * Where the live step says it is. NP-288 made this the web's own line —
+ * `Exercise 1/12` · `Set 1/3`, its two spans — instead of native's
+ * `Step 1 of 24`, which the web has nowhere.
+ */
 function stepText(getByTestId: (id: string) => ReactTestInstance): string {
-  return getByTestId("live-workout-live-step").props.children as string;
+  const exercise = getByTestId("live-workout-live-step").props
+    .children as string;
+  const set = getByTestId("live-workout-live-set-label").props
+    .children as string;
+  return `${exercise} • ${set}`;
 }
 
 function liveExerciseOnScreen(
@@ -98,12 +107,12 @@ describe("(id: e5cece4a) Superset A+B with 3 sets runs A1, B1, A2, B2, A3, B3 by
     );
 
     const expected: [string, string][] = [
-      ["a", "Step 1 of 6"],
-      ["b", "Step 2 of 6"],
-      ["a", "Step 3 of 6"],
-      ["b", "Step 4 of 6"],
-      ["a", "Step 5 of 6"],
-      ["b", "Step 6 of 6"],
+      ["a", "Exercise 1/2 • Set 1/3"],
+      ["b", "Exercise 2/2 • Set 1/3"],
+      ["a", "Exercise 1/2 • Set 2/3"],
+      ["b", "Exercise 2/2 • Set 2/3"],
+      ["a", "Exercise 1/2 • Set 3/3"],
+      ["b", "Exercise 2/2 • Set 3/3"],
     ];
     for (let i = 0; i < expected.length; i++) {
       const [slug, step] = expected[i]!;
@@ -136,7 +145,7 @@ describe("(id: e5cece4a) Superset A+B with 3 sets runs A1, B1, A2, B2, A3, B3 by
     // Blank stayed blank — never last time's numbers, never a zero fill.
     expect(grid.a![0]!.reps).toBeNull();
     // And the step advanced to B1.
-    expect(stepText(getByTestId)).toBe("Step 2 of 6");
+    expect(stepText(getByTestId)).toBe("Exercise 2/2 • Set 1/3");
   });
 
   it("labels the button Complete Set, and shows the group label with Round r of R", () => {
@@ -187,14 +196,14 @@ describe("(id: e5cece4a) Superset A+B with 3 sets runs A1, B1, A2, B2, A3, B3 by
     const { getByTestId } = render(
       <LiveWorkoutClient workout={workout} initialView="live" />,
     );
-    expect(stepText(getByTestId)).toBe("Step 1 of 6");
+    expect(stepText(getByTestId)).toBe("Exercise 1/2 • Set 1/3");
     expect(
       getByTestId("live-workout-live-group-nav-round").props.children,
     ).toEqual(["Round ", 1, " of ", 4]);
     for (let i = 0; i < 5; i++) {
       fireEvent.press(getByTestId("live-workout-live-complete"));
     }
-    expect(stepText(getByTestId)).toBe("Step 6 of 6");
+    expect(stepText(getByTestId)).toBe("Exercise 2/2 • Set 3/3");
     expect(
       getByTestId("live-workout-live-group-nav-round").props.children,
     ).toEqual(["Round ", 3, " of ", 4]);
@@ -295,7 +304,7 @@ describe("(id: e5cece4c) No rest inside a round; the round's rest follows its la
     // A is inside the round — no rest between exercises.
     fireEvent.press(getByTestId("live-workout-live-complete"));
     expect(queryByTestId("live-workout-rest")).toBeNull();
-    expect(stepText(getByTestId)).toBe("Step 2 of 2");
+    expect(stepText(getByTestId)).toBe("Exercise 2/2 • Set 1/1");
     // B ends the round — groupRest (120s) starts the bar. B is also the
     // last step, so its Complete enters the finish flow AND starts rest —
     // exactly like the web, where `completeSet` saves, advances (to the

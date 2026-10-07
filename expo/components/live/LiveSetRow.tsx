@@ -103,6 +103,14 @@ export interface LiveSetRowProps {
    * grouped block reads as rounds, the way the web track view renders them.
    */
   roundLabel?: string;
+  /**
+   * Hide the done checkbox (NP-288). The LIVE step has no per-set checkbox
+   * on the web — `Complete Set →` is the one thing that logs a set and
+   * moves on — and natively the tick started a rest without advancing the
+   * step, which is how a set could be resting and unfinished at once.
+   * Track keeps its checkbox: that is where a set is ticked by hand.
+   */
+  hideComplete?: boolean;
   onChange: (next: LiveSetState) => void;
   testID?: string;
 }
@@ -124,6 +132,7 @@ export function LiveSetRow({
   prefill,
   trackingType,
   roundLabel,
+  hideComplete = false,
   onChange,
   testID,
 }: LiveSetRowProps) {
@@ -354,26 +363,28 @@ export function LiveSetRow({
           />
         </View>
       ) : null}
-      <Pressable
-        testID={`${tid}-complete`}
-        onPress={() => onChange({ ...state, completed: !state.completed })}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: state.completed }}
-        accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-        className={`w-10 h-10 rounded-full items-center justify-center ${
-          state.completed ? "bg-primary" : "bg-muted"
-        }`}
-      >
-        <Check
-          color={
-            state.completed
-              ? colors["primary-foreground"]
-              : colors["muted-foreground"]
-          }
-          size={20}
-          strokeWidth={1.5}
-        />
-      </Pressable>
+      {hideComplete ? null : (
+        <Pressable
+          testID={`${tid}-complete`}
+          onPress={() => onChange({ ...state, completed: !state.completed })}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: state.completed }}
+          accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
+          className={`w-10 h-10 rounded-full items-center justify-center ${
+            state.completed ? "bg-primary" : "bg-muted"
+          }`}
+        >
+          <Check
+            color={
+              state.completed
+                ? colors["primary-foreground"]
+                : colors["muted-foreground"]
+            }
+            size={20}
+            strokeWidth={1.5}
+          />
+        </Pressable>
+      )}
     </View>
   );
 }
