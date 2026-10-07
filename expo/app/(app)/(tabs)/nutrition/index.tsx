@@ -18,7 +18,10 @@ import {
   Clock,
   Copy,
   History,
+  ImagePlus,
+  Pencil,
   Plus,
+  ScanBarcode,
   Search,
   Trash2,
   Upload,
@@ -63,22 +66,13 @@ import {
   type TagWindow,
 } from "@/lib/nutrition/mealSchedule";
 import { nutritionGoalLine } from "@/lib/nutrition/goalLine";
-import { isFutureLocalDate } from "@/lib/nutrition/mealPlanDates";
-import { createMealPlan } from "@/lib/nutrition/mealPlanApi";
+import { addDaysToKey, isFutureLocalDate, todayLocalKey } from "@/lib/nutrition/mealPlanDates";
+import { createMealPlan, titleCaseTag } from "@/lib/nutrition/mealPlanApi";
+import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
+import { ApplyMealSheet } from "@/components/nutrition/ApplyMealSheet";
+import { DateOnlyPicker } from "@/components/nutrition/DateOnlyPicker";
 import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
 import { PlanFoodSheet } from "@/components/nutrition/PlanFoodSheet";
-/**
- * The web's "Planned for <weekday, Mon d>" toast
- * (`webapp/app/dashboard/nutrition/page.tsx:1509-1512`): the planned day
- * formatted `en-US` with weekday long, month short, day numeric.
- */
-function plannedForToast(date: Date): string {
-  return `Planned for ${date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-  })}`;
-}
 import {
   canCombine,
   combineLoggedItems,
@@ -123,6 +117,19 @@ import { FoodReportsSheet } from "@/components/nutrition/FoodReportsSheet";
 import { FlagFoodSheet } from "@/components/nutrition/FlagFoodSheet";
 import { applyLogCorrection } from "@/lib/nutrition/foodFlags";
 import { isObjectIdString } from "@/lib/nutrition/foodImport";
+
+/**
+ * The web's "Planned for <weekday, Mon d>" toast
+ * (`webapp/app/dashboard/nutrition/page.tsx:1509-1512`): the planned day
+ * formatted `en-US` with weekday long, month short, day numeric.
+ */
+function plannedForToast(date: Date): string {
+  return `Planned for ${date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  })}`;
+}
 
 export type NutritionViewMode = "day" | "week" | "month";
 
@@ -317,6 +324,16 @@ export default function NutritionIndexRoute() {
       void refetchMealPlans();
     }
   });
+
+  useScreenFocus(
+    useCallback(() => {
+      void refetchMealLogs();
+      void refetchSideTables();
+      if (showPlans) {
+        void refetchMealPlans();
+      }
+    }, [refetchMealLogs, refetchSideTables, refetchMealPlans, showPlans]),
+  );
 
   // ── Optimistic item and plan deletion ─────────────────────────────────────
   const [removedItemIds, setRemovedItemIds] = useState<Set<string>>(new Set());
@@ -1110,6 +1127,9 @@ export default function NutritionIndexRoute() {
   const [timelineMenuOpen, setTimelineMenuOpen] = useState(false);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const [planDatePickerTag, setPlanDatePickerTag] = useState<string | null>(null);
+  const [planDateInput, setPlanDateInput] = useState<string>(() => addDaysToKey(todayLocalKey(), 1));
+  const [applyMealTag, setApplyMealTag] = useState<string | null>(null);
   // Meal-photo / describe estimate (NP-089): which surface the sheet opens on.
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [estimatePhase, setEstimatePhase] = useState<
@@ -1299,6 +1319,29 @@ export default function NutritionIndexRoute() {
     setAddToLogId(null);
     setSearchOpen(true);
   };
+
+  const handleOpenPlan = useCallback((tag: string) => {
+    setPlanDateInput(addDaysToKey(todayLocalKey(), 1));
+    setPlanDatePickerTag(tag);
+  }, []);
+
+  const handleDeleteSectionLogs = useCallback(
+    async (tag: string) => {
+      const logs = (mealLogsData?.logs ?? []).filter((l) =>
+        (l.tags ?? []).some((t) => t.toLowerCase() === tag.toLowerCase()),
+      );
+      for (const log of logs) {
+        const logId = String(log._id ?? (log as { id?: unknown }).id ?? "");
+        for (const item of log.items ?? []) {
+          const itemId = String(item._id ?? (item as { id?: unknown }).id ?? "");
+          if (logId && itemId) {
+            void handleRemoveItem(logId, itemId);
+          }
+        }
+      }
+    },
+    [mealLogsData?.logs, handleRemoveItem],
+  );
 
   // Meal-photo / describe estimate (NP-089): Take photo and Upload capture
   // inside the sheet (NP-059's capture helper); Describe opens on the text
@@ -1895,7 +1938,7 @@ export default function NutritionIndexRoute() {
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 80 }}
+          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}
         >
           {viewMode === "day" ? (
             <>
@@ -2015,6 +2058,9 @@ export default function NutritionIndexRoute() {
             onSelectDate={(newDateKey) => setExplicitDate(newDateKey)}
           />
 
+          {/* Future-day schedule CTA — leads above the calorie card (NP-320) */}
+          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
+
           {/* Calorie Ring & Macro Bars */}
           <CalorieRing
             consumed={consumedCalories}
@@ -2040,21 +2086,24 @@ export default function NutritionIndexRoute() {
             onEditGoals={handleEditGoals}
           />
 
-          {/* Future-day schedule CTA — leads above the tag list, same spot
-              the web puts it: scheduling is the only thing you can do on a
-              day you have not lived yet (NP-262). The ScheduleMealsDrawer's
-              own "Copy day" / "From meals" tabs replace the separate
-              "Copy day…" / "Repeat a meal…" buttons this used to render
-              (NP-265) — one blue CTA, matching the web exactly. */}
-          {isFuture ? <View style={{ gap: 10 }}>{scheduleMealsButton}</View> : null}
-
           {/* Empty State when nothing logged and nothing planned — fork/knife
-              icon, a black (web: `bg-zinc-900 dark:bg-white`) Add food pill,
-              and icons on the secondary actions (NP-262). */}
+              icon inside grey circle, a black (web: `bg-zinc-900 dark:bg-white`) Add food pill,
+              and icons on the secondary actions (NP-262, NP-320). */}
           {sections.length === 0 && quickAdds.length === 0 && (
             <Card testID="nutrition-empty-state">
               <View style={{ alignItems: "center", paddingVertical: 12, gap: 12 }}>
-                <UtensilsCrossed size={24} color={colors["muted-foreground"]} />
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: colors.muted,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <UtensilsCrossed size={24} color={colors["muted-foreground"]} />
+                </View>
                 <Text className="text-foreground text-lg font-bold text-center">
                   {isFuture ? "Nothing planned yet" : "Nothing logged yet"}
                 </Text>
@@ -2078,28 +2127,20 @@ export default function NutritionIndexRoute() {
                         testID="nutrition-empty-add-food"
                         variant="inverted"
                         size="sm"
+                        icon={<Plus size={14} color={colors.background} />}
                         onPress={() => openSearch()}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Plus size={14} color={colors.background} />
-                          <Text className="text-background text-sm font-semibold">
-                            Add food
-                          </Text>
-                        </View>
+                        Add food
                       </Button>
                       <Button
                         testID="nutrition-copy-yesterday"
                         variant="secondary"
                         size="sm"
                         disabled={copyingYesterday}
+                        icon={<Copy size={14} color={colors.foreground} />}
                         onPress={copyYesterday}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Copy size={14} color={colors.foreground} />
-                          <Text className="text-foreground text-sm font-semibold">
-                            {copyingYesterday ? "Copying…" : "Copy yesterday"}
-                          </Text>
-                        </View>
+                        {copyingYesterday ? "Copying…" : "Copy yesterday"}
                       </Button>
                     </>
                   )}
@@ -2107,14 +2148,10 @@ export default function NutritionIndexRoute() {
                     testID="nutrition-empty-browse-my-stuff"
                     variant="secondary"
                     size="sm"
+                    icon={<ChefHat size={14} color={colors.foreground} />}
                     onPress={() => router.push("/(tabs)/nutrition/recipes")}
                   >
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <ChefHat size={14} color={colors.foreground} />
-                      <Text className="text-foreground text-sm font-semibold">
-                        Browse My Stuff
-                      </Text>
-                    </View>
+                    Browse My Stuff
                   </Button>
                 </View>
               </View>
@@ -2133,6 +2170,9 @@ export default function NutritionIndexRoute() {
               onEditMeal={handleEditMeal}
               onFlagItem={handleFlagItem}
               onRemoveTag={handleRemoveTag}
+              onPlan={handleOpenPlan}
+              onApplyMeal={(tag) => setApplyMealTag(tag)}
+              onDeleteSectionLogs={handleDeleteSectionLogs}
               onAddFood={openSearch}
               onAddToMeal={handleAddToMeal}
               onLogPlan={isToday ? handleLogPlan : undefined}
@@ -2404,7 +2444,7 @@ export default function NutritionIndexRoute() {
                 className="bg-orange-100 dark:bg-orange-900/30"
                 style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
               >
-                <BookOpen size={18} color={colors.foreground} />
+                <BookOpen size={18} color={colors.orange} />
               </View>
               <Text className="text-foreground text-xs font-medium">My Stuff</Text>
             </Pressable>
@@ -2608,6 +2648,7 @@ export default function NutritionIndexRoute() {
             <Button
               testID="nutrition-camera-take-photo"
               variant="secondary"
+              icon={<Camera size={16} color={colors.foreground} />}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openEstimate("chooser");
@@ -2618,6 +2659,7 @@ export default function NutritionIndexRoute() {
             <Button
               testID="nutrition-camera-scan-barcode"
               variant="secondary"
+              icon={<ScanBarcode size={16} color={colors.foreground} />}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openSearch(undefined, { barcode: true });
@@ -2669,6 +2711,7 @@ export default function NutritionIndexRoute() {
             <Button
               testID="nutrition-upload-photo"
               variant="secondary"
+              icon={<ImagePlus size={16} color={colors.foreground} />}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimateWithLibraryUpload();
@@ -2679,6 +2722,7 @@ export default function NutritionIndexRoute() {
             <Button
               testID="nutrition-upload-describe"
               variant="secondary"
+              icon={<Pencil size={16} color={colors.foreground} />}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimate("describe");
@@ -2949,6 +2993,100 @@ export default function NutritionIndexRoute() {
           onClose={() => setFlagTarget(null)}
           editableServingLabel
         />
+      ) : null}
+
+      {/* Apply Meal Sheet from TagSection kebab */}
+      <ApplyMealSheet
+        visible={applyMealTag !== null}
+        defaultTag={applyMealTag ?? "lunch"}
+        defaultFromDate={activeDate}
+        availableTags={availableTags}
+        onClose={() => setApplyMealTag(null)}
+        onApplied={(toast) => {
+          setApplyMealTag(null);
+          setPlanToolsNotice(toast);
+          void refetchMealPlans();
+          void refetchMealLogs();
+        }}
+      />
+
+      {/* Plan-date picker dialog — opens when the user taps "Plan for a future day…" */}
+      {planDatePickerTag ? (
+        <Modal
+          visible={planDatePickerTag !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPlanDatePickerTag(null)}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close plan date picker backdrop"
+            style={{
+              flex: 1,
+              backgroundColor: scrim,
+              justifyContent: "center",
+              alignItems: "center",
+              padding: 24,
+            }}
+            onPress={() => setPlanDatePickerTag(null)}
+          >
+            <Pressable
+              accessibilityRole="none"
+              style={{
+                width: "100%",
+                maxWidth: 320,
+                backgroundColor: colors.card,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 20,
+                gap: 12,
+              }}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <Text className="text-foreground text-base font-bold">
+                Plan {titleCaseTag(planDatePickerTag)}
+              </Text>
+              <Text className="text-muted-foreground text-xs">
+                Pick a future date to plan a meal for.
+              </Text>
+              <DateOnlyPicker
+                value={planDateInput}
+                minDate={addDaysToKey(todayLocalKey(), 1)}
+                onChange={(next) => {
+                  if (next) setPlanDateInput(next);
+                }}
+              />
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => setPlanDatePickerTag(null)}
+                  >
+                    Cancel
+                  </Button>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Button
+                    variant="inverted"
+                    size="sm"
+                    disabled={!planDateInput}
+                    onPress={() => {
+                      const tag = planDatePickerTag;
+                      const date = planDateInput;
+                      setPlanDatePickerTag(null);
+                      setExplicitDate(date);
+                      openSearch(tag);
+                    }}
+                  >
+                    Continue
+                  </Button>
+                </View>
+              </View>
+            </Pressable>
+          </Pressable>
+        </Modal>
       ) : null}
 
       {/* Floating Add Food Button (FAB) — Day view only (NP-318). Week view
