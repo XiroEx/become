@@ -181,12 +181,15 @@ describe("(id: e5cecfe7) Quick-session history is keyed by name and resolves slu
     );
 
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
     // The hook asked for both slugs — including the slugified name.
     // (Asserted on the unit level above; the fetch mock answers both.)
 
-    // Flip to the Live step: the Last reference reads from exerciseHistory.
+    // Already on Live (NP-291's default); the press below is a no-op on an
+    // already-selected tab, kept so this test still documents the toggle.
     await act(async () => {
       fireEvent.press(getByTestId("live-workout-view-live"));
     });
@@ -264,24 +267,26 @@ describe("(id: e5cecfe8) The quick summary counts PRs against last performance",
     );
 
     await waitFor(() => {
-      expect(getByTestId("live-workout-exercise-bench-press")).toBeTruthy();
+      expect(
+        getByTestId("live-workout-live-exercise-bench-press"),
+      ).toBeTruthy();
     });
 
     // Log 140 x 8 — beats last time's 135 x 8 — and finish.
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-weight"),
+        getByTestId("live-workout-live-bench-press-set-0-weight"),
         "140",
       );
     });
     await act(async () => {
       fireEvent.changeText(
-        getByTestId("live-workout-bench-press-set-0-reps"),
+        getByTestId("live-workout-live-bench-press-set-0-reps"),
         "8",
       );
     });
     await act(async () => {
-      fireEvent.press(getByTestId("live-workout-finish"));
+      fireEvent.press(getByTestId("live-workout-live-complete"));
     });
     // NP-138: a self-built session this thin asks once on the way out.
     await act(async () => {

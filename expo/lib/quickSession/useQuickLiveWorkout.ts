@@ -17,11 +17,12 @@
  * progress, and shows `WorkoutSummary`.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ExerciseHydrateResponseSchema,
   LastPerformanceResponseSchema,
   WorkoutSaveResponseSchema,
+  type AlternativeCandidate,
   type ExerciseHistoryEntry,
   type ExerciseHydrateVideoFields,
   type WorkoutSaveResponse,
@@ -57,6 +58,7 @@ import {
   clearQuickSession,
   readQuickSession,
   updateQuickSession,
+  swapQuickSessionExercise,
   type StoredQuickSession,
 } from "@/lib/quickSession/store";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
@@ -154,10 +156,29 @@ export interface UseQuickLiveWorkoutResult {
    */
   finishedTitle: string | null;
   finishedElapsedSeconds: number;
+  /**
+   * Ticks every second on the wall clock (the web's `elapsedTime`), so the
+   * route can hand it to `LiveWorkoutClient`'s `activeSeconds` prop and the
+   * Live view shows a running timer — the quick session used to omit it.
+   */
   activeSeconds: number;
   originKey: string;
   onGridChange: (grid: LiveGrid) => void;
   onFinish: (grid: LiveGrid) => void;
+  /**
+   * Exercise Swap (NP-291 follow-up): `onRequestSwap` opens the picker for a
+   * slug, `swapSourceName` is the exercise being replaced, and
+   * `onSelectAlternative` commits the pick — updating the exercise list, the
+   * grid (the swapped slug restarts blank), the stash (`swapQuickSessionExercise`,
+   * so Track/Overview rebuilds show it too) and the server, immediately.
+   * Session-scoped only: a quick session has no program to persist a
+   * permanent swap against.
+   */
+  swapSlug: string | null;
+  swapSourceName: string | undefined;
+  onRequestSwap: (slug: string) => void;
+  onSelectAlternative: (candidate: AlternativeCandidate) => void;
+  setSwapSlug: (slug: string | null) => void;
   /** Finish under this title with `needsName: false` (prompt Confirm/Skip). */
   finishWithTitle: (title: string) => Promise<boolean>;
   reload: () => void;
@@ -326,6 +347,17 @@ export function useQuickLiveWorkout(
       Math.max(0, Math.floor((Date.now() - start) / 1000))
     );
   }, []);
+
+  // Tick `activeSeconds` on the wall clock (the web's elapsed-time header,
+  // ~line 2039-2042) so the route can hand it to `LiveWorkoutClient` and the
+  // Live view shows a running timer — this screen used to compute the value
+  // only at save checkpoints, which never painted between them.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveSeconds(activeSecondsNow());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [activeSecondsNow]);
 
   const postSave = useCallback(
     async (
@@ -581,6 +613,129 @@ export function useQuickLiveWorkout(
     [activeSecondsNow, autoSaveDelayMs, postSave, sessionId, store],
   );
 
+  // Exercise Swap (the Android full-pass follow-up on NP-291): `quick/live`
+  // never passed `onRequestSwap` through to `LiveWorkoutClient`, so the
+  // button's handler was undefined. `ExerciseSwapModal` fetches its own
+  // alternatives from `exerciseSlug` — the hook only has to say WHICH slug
+  // is being swapped and commit the pick.
+  const [swapSlug, setSwapSlug] = useState<string | null>(null);
+
+  const swapSourceName = useMemo(
+    () => workout?.exercises.find((e) => e.slug === swapSlug)?.name,
+    [workout, swapSlug],
+  );
+
+  const onRequestSwap = useCallback((slug: string) => {
+    setSwapSlug(slug);
+  }, []);
+
+  const onSelectAlternative = useCallback(
+    (candidate: AlternativeCandidate) => {
+      const current = workout;
+      if (!swapSlug || !current || !sessionId) return;
+      const exIdx = current.exercises.findIndex((e) => e.slug === swapSlug);
+      if (exIdx === -1) return;
+      const oldEx = current.exercises[exIdx];
+      if (!oldEx) return;
+
+      const origSlug = oldEx.originalExerciseSlug || oldEx.slug;
+      const origName = oldEx.swappedFromName || oldEx.name;
+
+      const newExercises = [...current.exercises];
+      newExercises[exIdx] = {
+        ...oldEx,
+        name: candidate.name,
+        slug: candidate.slug,
+        sets: oldEx.sets,
+        trackingType: candidate.trackingType,
+        equipment: candidate.equipment,
+        laterality: candidate.laterality,
+        movementPatterns: candidate.movementPatterns,
+        category: candidate.category,
+        type: candidate.category,
+        originalExerciseSlug: origSlug,
+        swappedFromName: origName,
+        videoUrl: candidate.videoUrl ?? undefined,
+        thumbnailUrl: undefined,
+        videoWidth: null,
+        videoHeight: null,
+        videoFraming: null,
+        videoTrim: null,
+      };
+      // `exercisesRef`/`setWorkout` together: the ref is what the next save
+      // reads, and the new object identity is what `LiveWorkoutClient` seeds
+      // its grid off (the hook keeps no `grid` state of its own).
+      exercisesRef.current = newExercises;
+      setWorkout({ ...current, exercises: newExercises });
+
+      // The swapped exercise restarts blank — the web's rule too.
+      const blankSets: LiveSetState[] = Array.from(
+        { length: oldEx.sets || 1 },
+        () => ({
+          reps: null,
+          weight: null,
+          durationSec: null,
+          distance: null,
+          speed: null,
+          completed: false,
+        }),
+      );
+      const nextGrid: LiveGrid = {
+        ...gridRef.current,
+        [candidate.slug]: blankSets,
+      };
+      if (oldEx.slug !== candidate.slug) delete nextGrid[oldEx.slug];
+      gridRef.current = nextGrid;
+      setRestoredGrid(nextGrid);
+      void writeQuickProgress(sessionId, liveGridToProgress(nextGrid), store);
+
+      // Persist into the stash with the dedicated helper (not the generic
+      // `updateQuickSession`): it is the one that writes
+      // `originalExerciseSlug`/`swappedFromName`, so a reload's Track/Overview
+      // (which rebuild their exercise list from this stash) show the same
+      // swapped exercise rather than the one it replaced.
+      void swapQuickSessionExercise(
+        sessionId,
+        exIdx,
+        {
+          name: candidate.name,
+          exerciseSlug: candidate.slug,
+          trackingType: candidate.trackingType,
+          primaryMuscles: candidate.primaryMuscles ?? [],
+          equipment: candidate.equipment ?? [],
+          laterality: candidate.laterality,
+          movementPatterns: candidate.movementPatterns,
+        },
+        store,
+      );
+
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      void (async () => {
+        try {
+          await postSave(nextGrid, false);
+          if (mountedRef.current) {
+            openedSaveSentRef.current = true;
+            setSaveError(null);
+          }
+        } catch (cause) {
+          if (mountedRef.current) {
+            setSaveError(
+              cause instanceof Error
+                ? cause
+                : new Error("Could not save the workout"),
+            );
+          }
+        }
+      })();
+
+      setSwapSlug(null);
+    },
+    [swapSlug, workout, sessionId, store, postSave],
+  );
+
   const finishWithTitle = useCallback(
     async (title: string): Promise<boolean> => {
       const grid = gridRef.current;
@@ -772,6 +927,11 @@ export function useQuickLiveWorkout(
     originKey,
     onGridChange,
     onFinish,
+    swapSlug,
+    swapSourceName,
+    onRequestSwap,
+    onSelectAlternative,
+    setSwapSlug,
     finishWithTitle,
     reload,
     applyExerciseChange,

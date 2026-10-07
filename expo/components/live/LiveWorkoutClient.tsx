@@ -233,6 +233,16 @@ export interface LiveWorkoutClientProps {
     label?: string;
   };
   /**
+   * A jump requested by the route's OWN manage panel (`WorkoutExerciseList`,
+   * which says "Tap to jump · hold to move" but has no access to this
+   * component's internal step index to make good on it). Bump `token` on
+   * every tap — even a repeat of the same `exerciseIndex` — so the effect
+   * that reads this always re-runs: switches to Live and lands on
+   * `exerciseIndex`'s first incomplete set, the same rule
+   * `handleJumpToExercise` already applies for the INTERNAL exercise sheet.
+   */
+  jumpRequest?: { exerciseIndex: number; token: number } | null;
+  /**
    * Apply a structural change made from INSIDE the Track accordion card —
    * Move up / Move down / Remove on a single exercise, Ungroup on a
    * superset/circuit block (NP-287: the web offers all four from the card
@@ -497,6 +507,7 @@ export function LiveWorkoutClient({
   headerAction,
   activeSeconds,
   manageExercises,
+  jumpRequest,
   onExerciseChange,
   day,
   onViewPRs,
@@ -981,6 +992,18 @@ export function LiveWorkoutClient({
     },
     [workoutFlow, workout.exercises, rememberPosition],
   );
+
+  // Service the route's jump request (see `jumpRequest`'s doc): switch to
+  // Live and land on the exercise, exactly what tapping the row promises.
+  // `token` is read only to notice a NEW request — Date.now()/an incrementing
+  // ref both work, so the route is free to pick either.
+  const lastJumpToken = useRef<number | null>(null);
+  useEffect(() => {
+    if (!jumpRequest || jumpRequest.token === lastJumpToken.current) return;
+    lastJumpToken.current = jumpRequest.token;
+    setView("live");
+    handleJumpToExercise(jumpRequest.exerciseIndex);
+  }, [jumpRequest, handleJumpToExercise]);
 
   /** The edit-confirm modal's Save Changes: overwrite the finished set. */
   const handleConfirmEdit = useCallback(() => {

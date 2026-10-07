@@ -17,6 +17,7 @@ import { QuickSessionNamePrompt } from "@/components/workout/QuickSessionNamePro
 import { AddExerciseSheet, type AddExerciseResult } from "@/components/workout/AddExerciseSheet";
 import { ThinSessionModal } from "@/components/workout/ThinSessionModal";
 import { WorkoutExerciseList } from "@/components/workout/WorkoutExerciseList";
+import { ExerciseSwapModal } from "@/components/live/ExerciseSwapModal";
 import {
   fallbackQuickSessionName,
   quickScope,
@@ -73,6 +74,12 @@ export interface QuickLiveRouteProps {
  * `kind: 'quick'` with `started: true` from the moment it opens. Finishing an
  * unnamed session asks for a name first (`QuickSessionNamePrompt`), then
  * shows `WorkoutSummary`.
+ *
+ * Opens on LIVE (NP-291 follow-up), with a running elapsed timer — the web's
+ * "Start workout" lands on its dedicated live page, never the toggle's Track
+ * default, and this route used to open on Track with no timer at all.
+ * Swap exercise (`onRequestSwap`) and the manage sheet's "Tap to jump" both
+ * work here too: the sheet used to only close itself.
  */
 export default function QuickLiveRoute({
   store,
@@ -103,8 +110,14 @@ export default function QuickLiveRoute({
     finishedGrid,
     finishedTitle,
     finishedElapsedSeconds,
+    activeSeconds,
     onGridChange,
     onFinish,
+    swapSlug,
+    swapSourceName,
+    onRequestSwap,
+    onSelectAlternative,
+    setSwapSlug,
     finishWithTitle,
     applyExerciseChange,
     addExercise,
@@ -133,6 +146,12 @@ export default function QuickLiveRoute({
   const [showExerciseList, setShowExerciseList] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [addAnchorIndex, setAddAnchorIndex] = useState(0);
+  // A tap on a `WorkoutExerciseList` row says "Tap to jump" — bumping this
+  // token is what actually makes it happen (see `LiveWorkoutClient`'s
+  // `jumpRequest` prop); the sheet still closes either way.
+  const [jumpRequest, setJumpRequest] = useState<
+    { exerciseIndex: number; token: number } | null
+  >(null);
 
   const dayKey = initialOriginKey ?? localDateKey(getNow?.() ?? new Date());
   const fallbackName = useMemo(
@@ -382,6 +401,8 @@ export default function QuickLiveRoute({
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <LiveWorkoutClient
         workout={vm}
+        initialView="live"
+        activeSeconds={activeSeconds}
         positionScope={quickScope(sessionId)}
         positionStore={
           positionStore !== undefined ? positionStore : resolvedStore
@@ -389,6 +410,8 @@ export default function QuickLiveRoute({
         restoredGrid={restoredGrid}
         onGridChange={onGridChange}
         onFinish={handleFinish}
+        onRequestSwap={onRequestSwap}
+        jumpRequest={jumpRequest}
         finishing={finishing || promptFinishing}
         saveError={saveError}
         exerciseHistory={exerciseHistory}
@@ -408,7 +431,10 @@ export default function QuickLiveRoute({
         onClose={() => setShowExerciseList(false)}
         exercises={workout?.exercises ?? []}
         grid={restoredGrid ?? {}}
-        onJump={() => setShowExerciseList(false)}
+        onJump={(exerciseIndex) => {
+          setJumpRequest({ exerciseIndex, token: Date.now() });
+          setShowExerciseList(false);
+        }}
         onChange={(change) => applyExerciseChange(change)}
         onAddExercise={() => {
           setAddAnchorIndex(
@@ -432,6 +458,18 @@ export default function QuickLiveRoute({
           .map((e) => e.slug)
           .filter(Boolean)}
         testID="quick-live-add"
+      />
+      <ExerciseSwapModal
+        visible={swapSlug !== null}
+        sourceName={swapSourceName}
+        exerciseSlug={swapSlug ?? undefined}
+        workoutExerciseSlugs={(workout?.exercises ?? [])
+          .map((e) => e.slug)
+          .filter(Boolean)}
+        sessionScopeOnly
+        onSwap={(candidate) => onSelectAlternative(candidate)}
+        onClose={() => setSwapSlug(null)}
+        testID="quick-live-swap"
       />
       <ThinSessionModal
         visible={pendingThinFinish !== null}
