@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   apiFetch,
@@ -8,6 +8,7 @@ import {
   MindProgressResponseSchema,
 } from "@become/api-client";
 import { getUnlockedSystems, SYSTEM_INFO } from "@become/core";
+import { AlertCircle } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import GuidedFlow from "@/components/mind/system/GuidedFlow";
 import { mindAccentColor } from "@/lib/mind/accents";
@@ -22,7 +23,9 @@ import { tzOffsetMinutes } from "@/lib/time/localDay";
 // just `router.replace('/dashboard/mind')`s and never renders. Native used to
 // show a dedicated "<Tool> is Locked / Unlocks in Chapter N / Back to Mind"
 // screen instead of bouncing back like every other locked-tool deep link.
-type GateState = "loading" | "intro" | "ready";
+// NP-336: on progress fetch failure, show an error with retry rather than
+// failing open, which allowed locked tools to open and expose actions.
+type GateState = "loading" | "intro" | "ready" | "error";
 
 export default function ToolIntroGate({
   system,
@@ -37,9 +40,11 @@ export default function ToolIntroGate({
   const { token } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<GateState>("loading");
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setState("loading");
     (async () => {
       try {
         const p = await apiFetch(
@@ -73,7 +78,7 @@ export default function ToolIntroGate({
           setState("intro");
         }
       } catch {
-        if (!cancelled) setState("ready"); // fail open, never brick
+        if (!cancelled) setState("error"); // NP-336: error + retry instead of failing open
       }
     })();
 
@@ -86,7 +91,7 @@ export default function ToolIntroGate({
     // would re-run this fetch — and jump a mid-intro user back to "loading"
     // — on every render instead of once per `system`/`token` change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [system, token]);
+  }, [system, token, retryCount]);
 
   if (state === "loading") {
     return (
@@ -96,6 +101,34 @@ export default function ToolIntroGate({
       >
         <ActivityIndicator size="large" color={colors.primary} />
         <Text className="text-sm text-muted-foreground">Loading…</Text>
+      </View>
+    );
+  }
+
+  if (state === "error") {
+    return (
+      <View
+        testID="mind-intro-gate-error"
+        className="flex-1 items-center justify-center p-8 gap-4"
+      >
+        <AlertCircle size={32} color={colors.destructive} />
+        <Text className="text-base font-bold text-foreground text-center">
+          Could not load progress
+        </Text>
+        <Text className="text-sm text-muted-foreground text-center">
+          Check your connection and try again.
+        </Text>
+        <Pressable
+          testID="mind-intro-gate-retry"
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          onPress={() => setRetryCount((c) => c + 1)}
+          className="mt-2 rounded-xl bg-primary px-5 py-2.5 items-center justify-center"
+        >
+          <Text className="text-sm font-bold text-primary-foreground">
+            Try again
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -148,7 +181,7 @@ export default function ToolIntroGate({
 
             setState("ready");
           }}
-          onExit={onExit ?? (() => setState("ready"))}
+          onExit={() => setState("ready")}
         />
       </View>
     );

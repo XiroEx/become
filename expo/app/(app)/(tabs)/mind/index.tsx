@@ -106,20 +106,20 @@ export const MOVE_CHIP: Record<string, string> = {
   breath: "Breathe",
   identity: "Affirm",
   win: "Win",
-  challenge: "Challenge",
-  mission: "Mission",
+  challenge: "Discipline",
+  mission: "Lock in",
   vision: "Vision",
-  antisabotage: "Anti-sabotage",
-  social: "Social",
+  antisabotage: "Pattern",
+  social: "Connect",
   mirror: "Mirror",
-  choice: "Choice",
+  choice: "Reflect",
   type: "Type it",
-  speak: "Speak",
-  assemble: "Assemble",
-  compose: "Compose",
-  acknowledge: "Acknowledge",
-  interrogative: "Ask",
-  contrast: "Contrast",
+  speak: "Say it",
+  assemble: "Build it",
+  compose: "Fill it in",
+  acknowledge: "Check in",
+  interrogative: "Reflect",
+  contrast: "Plan it",
 };
 
 /**
@@ -611,10 +611,10 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             {streak > 0 ? (
               <View
                 testID="mind-streak-badge"
-                className="flex-row items-center gap-1 rounded-full bg-primary/10 px-3 py-1"
+                className="flex-row items-center gap-1 rounded-full bg-accent/10 px-3 py-1"
               >
-                <Flame size={16} color={colors.primary} />
-                <Text className="text-sm font-bold text-primary">
+                <Flame size={16} color={colors.accent} />
+                <Text className="text-sm font-bold text-accent">
                   {streak}
                 </Text>
               </View>

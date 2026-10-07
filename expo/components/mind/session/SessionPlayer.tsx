@@ -624,7 +624,7 @@ export function SessionPlayer({
             accessibilityRole="button"
             accessibilityLabel="Exit session"
             onPress={() =>
-              stage === "payoff" || stage === "levelup"
+              stage === "intro" || stage === "payoff" || stage === "levelup"
                 ? onExit()
                 : setConfirmingExit(true)
             }
@@ -1156,24 +1156,22 @@ export function SessionPlayer({
           ) : null}
         </View>
 
-        {/* Leaving mid-session confirmation dialog — themed (not forced dark):
-            a native-only safeguard the web doesn't have, so it keeps following
-            the system scheme like every other dialog in the app. */}
+        {/* Leaving mid-session confirmation dialog: dark player styled */}
         {confirmingExit ? (
           <View
             testID={`${testID}-exit-dialog`}
             accessibilityViewIsModal
             onAccessibilityEscape={() => setConfirmingExit(false)}
-            className="absolute inset-0 items-center justify-center bg-background/95 px-6"
+            className="absolute inset-0 items-center justify-center bg-black/80 px-6"
           >
-            <View className="w-full max-w-xs rounded-2xl border border-border bg-card p-5">
+            <View className="w-full max-w-xs rounded-2xl border border-white/15 bg-zinc-900 p-5">
               <Text
                 accessibilityRole="header"
-                className="text-lg font-bold text-foreground"
+                className="text-lg font-bold text-white"
               >
                 Leave the session?
               </Text>
-              <Text className="mt-2 text-sm text-muted-foreground">
+              <Text className="mt-2 text-sm text-white/70">
                 {stage === "move"
                   ? `You are ${index + 1} of ${total} moves in. Leaving now drops what you have not finished.`
                   : "The session is composed and waiting. Leaving now drops it."}
@@ -1184,9 +1182,9 @@ export function SessionPlayer({
                 accessibilityLabel="Leave the session"
                 onPress={onExit}
                 style={minTouchTarget}
-                className="mt-5 items-center justify-center rounded-2xl bg-destructive py-3.5"
+                className="mt-5 items-center justify-center rounded-2xl bg-white py-3.5"
               >
-                <Text className="text-base font-bold text-destructive-foreground">
+                <Text className="text-base font-bold text-black">
                   Leave
                 </Text>
               </Pressable>
@@ -1198,7 +1196,7 @@ export function SessionPlayer({
                 style={minTouchTarget}
                 className="mt-2.5 items-center justify-center py-2"
               >
-                <Text className="text-sm font-medium text-muted-foreground">
+                <Text className="text-sm font-medium text-white/60">
                   Stay
                 </Text>
               </Pressable>
