@@ -236,17 +236,17 @@ export function ContinueTrainingSection({
                       testID={`continue-program-paused-${program.programId}`}
                       className="flex-row items-center gap-1 mt-1"
                     >
-                      <Pause size={12} color={colors.accent} />
-                      <Text className="text-amber-600 dark:text-amber-400 text-xs font-semibold">
+                      <Pause size={14} color={colors.accent} />
+                      <Text className="text-amber-600 dark:text-amber-400 text-sm font-semibold">
                         Paused
                       </Text>
                     </View>
                   ) : isFuture ? (
-                    <Text className="text-blue-500 text-xs font-semibold mt-1">
+                    <Text className="text-blue-500 text-sm font-semibold mt-1">
                       {startLabel}
                     </Text>
                   ) : (
-                    <Text className="text-muted-foreground text-xs mt-1">
+                    <Text className="text-muted-foreground text-sm mt-1">
                       Phase {program.currentPhase ?? 1} •{" "}
                       {program.currentDay ?? "Day 1"}
                     </Text>
@@ -258,7 +258,7 @@ export function ContinueTrainingSection({
                   <View className="items-end">
                     <Text
                       testID={`continue-program-progress-${program.programId}`}
-                      className={`text-sm font-bold ${
+                      className={`text-sm font-semibold ${
                         isPaused
                           ? "text-amber-600 dark:text-amber-400"
                           : "text-emerald-600 dark:text-emerald-400"
@@ -266,21 +266,21 @@ export function ContinueTrainingSection({
                     >
                       {progress}%
                     </Text>
-                    <Text className="text-muted-foreground text-[10px]">
+                    <Text className="text-muted-foreground text-xs">
                       {program.completedWorkouts ?? 0}/
                       {program.totalWorkouts ?? 0} sessions
                     </Text>
                   </View>
 
                   <View
-                    className={`h-9 w-9 rounded-full items-center justify-center ${
+                    className={`h-10 w-10 rounded-full items-center justify-center ${
                       isPaused ? "bg-amber-500" : "bg-emerald-600"
                     }`}
                   >
                     {isPaused ? (
-                      <Pause size={16} color={colors["primary-foreground"]} />
+                      <Pause size={18} color={colors["primary-foreground"]} />
                     ) : (
-                      <Play size={16} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
+                      <Play size={18} color={colors["primary-foreground"]} fill={colors["primary-foreground"]} />
                     )}
                   </View>
                 </View>
