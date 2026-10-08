@@ -23,6 +23,19 @@ import type { Fact, WeekSnapshot, CardPillar, Highlight, WeekSignals, Suggestion
 import { rankSuggestions, MAX_CARD_STEPS } from '@/lib/becoming/weekSummary'
 import { SUN_FADE_AT, SUN_RADIUS, WASH_FADE_AT, cardRing, cardSky, gradientLine, sunCentre } from '@/lib/becoming/cardSky'
 import {
+  HORIZON_IDENTITY_GAP,
+  HORIZON_IDENTITY_LINES,
+  HORIZON_KICKER_ALPHA,
+  HORIZON_KICKER_FONT_SIZE,
+  HORIZON_KICKER_GAP,
+  HORIZON_KICKER_TRACKING,
+  HORIZON_RADIUS,
+  HORIZON_WASH_ANGLE_DEG,
+  horizonBorder,
+  horizonIdentityType,
+  horizonWash,
+} from '@/lib/becoming/horizonCard'
+import {
   EXIT_EDGE_RADIUS,
   EXIT_PULSE_EASING,
   EXIT_PULSE_LOW,
@@ -231,6 +244,21 @@ function ExitEdgeLight({ edge, subject, score }: { edge: ExitEdge; subject: Pill
 }
 
 /**
+ * The box a card's gradients are drawn on: the stage's `cardSize` when the
+ * card is given one (both or neither), otherwise the size the card measures
+ * itself at — there is nothing to draw an angled line on until then.
+ */
+function useCardBox(width?: number, height?: number): { boxW?: number; boxH?: number; onLayout?: (e: LayoutChangeEvent) => void } {
+  const sized = width != null && height != null
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: lw, height: lh } = e.nativeEvent.layout
+    setMeasured((prev) => (prev && prev.w === lw && prev.h === lh ? prev : { w: lw, h: lh }))
+  }, [])
+  return { boxW: sized ? width : measured?.w, boxH: sized ? height : measured?.h, onLayout: sized ? undefined : onLayout }
+}
+
+/**
  * The sky behind a week (NP-342): the web's two gradients, tinted by the
  * subject — a radial "sun" high on a climb and low on a dip, over a 160° wash
  * from the top-left — drawn with react-native-svg, since React Native has no
@@ -249,20 +277,13 @@ function CardSky({
   width?: number
   height?: number
 }) {
-  const sized = width != null && height != null
-  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width: lw, height: lh } = e.nativeEvent.layout
-    setMeasured((prev) => (prev && prev.w === lw && prev.h === lh ? prev : { w: lw, h: lh }))
-  }, [])
-  const boxW = sized ? width : measured?.w
-  const boxH = sized ? height : measured?.h
+  const { boxW, boxH, onLayout } = useCardBox(width, height)
   const sky = cardSky(week.subject, week.score)
   const sun = sunCentre(week.step)
   const washId = `week-card-wash-${week.weekKey}`
   const sunId = `week-card-sun-${week.weekKey}`
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={sized ? undefined : onLayout} testID="week-card-sky">
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout} testID="week-card-sky">
       {boxW && boxH ? (
         <Svg width={boxW} height={boxH}>
           <Defs>
@@ -278,6 +299,35 @@ function CardSky({
           {/* The web lists the sun first, which in CSS is on top: wash, then sun. */}
           <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${washId})`} testID="week-card-sky-wash" />
           <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${sunId})`} testID="week-card-sky-sun" />
+        </Svg>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * The Horizon's wash (NP-344): the web's
+ * `linear-gradient(160deg, rgba(124,58,237,.22), rgba(14,12,23,.97) 55%)` —
+ * violet-600 at the top-left fading into the card ground by 55% along the
+ * 160° line, and that ground on to the far corner — drawn with
+ * react-native-svg like a week card's sky. The numbers are
+ * `lib/becoming/horizonCard.ts`'s, where the test holds them to the web's.
+ */
+function HorizonWash({ width, height }: { width?: number; height?: number }) {
+  const { boxW, boxH, onLayout } = useCardBox(width, height)
+  const stops = horizonWash()
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout} testID="horizon-card-wash">
+      {boxW && boxH ? (
+        <Svg width={boxW} height={boxH}>
+          <Defs>
+            <LinearGradient id="horizon-card-wash" gradientUnits="userSpaceOnUse" {...gradientLine(boxW, boxH, HORIZON_WASH_ANGLE_DEG)}>
+              {stops.map((s) => (
+                <Stop key={s.offset} offset={s.offset} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width={boxW} height={boxH} fill="url(#horizon-card-wash)" testID="horizon-card-wash-rect" />
         </Svg>
       ) : null}
     </View>
@@ -569,6 +619,11 @@ export interface HorizonCardProps {
   next?: { nutrition?: Suggestion | null; training?: Suggestion | null; fuel?: Suggestion | null } | NextStep[] | null
   active?: CardPillar[]
   onNavigate?: (url: string) => void
+  /**
+   * The stage's focused card (NP-344): the web's dashed border is violet-300
+   * at 60% on the Horizon while it is the focus, white at 25% otherwise.
+   */
+  focused?: boolean
   /** The stage's card box, like `WeekCard`'s: every card on the stage is one height (NP-342). */
   width?: number
   height?: number
@@ -580,12 +635,22 @@ export function HorizonCard({
   next,
   active = ['training', 'fuel', 'mind'],
   onNavigate,
+  focused = false,
   width,
   height,
 }: HorizonCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
   const sized = width != null && height != null
   const trendText = trend === 'up' ? 'Horizon lifting' : trend === 'down' ? 'Horizon eased' : 'Horizon holding'
+  // The web's box (NP-344): a violet wash under a 2px dashed border, the
+  // words in white serif. On the stage — dark in both schemes — the shell is
+  // clear and the wash IS the ground, as on the web; a card mounted elsewhere
+  // keeps the system's card colour and ink under it, like `WeekCard`.
+  const border = horizonBorder(focused)
+  const ground = isDark ? 'transparent' : colors.card
+  const borderColor = isDark ? border.color : 'hsla(258, 80%, 50%, 0.3)'
+  const kicker = isDark ? rgbOf(becomingStageTokens.ink, HORIZON_KICKER_ALPHA) : colors['muted-foreground']
+  const words = isDark ? rgbOf(becomingStageTokens.ink) : colors.foreground
   const steps = React.useMemo(() => {
     if (!next) return []
     if (Array.isArray(next)) return next
@@ -602,13 +667,16 @@ export function HorizonCard({
         styles.horizonShell,
         sized ? { width, height } : null,
         {
-          backgroundColor: colors.card,
-          borderColor: isDark ? 'hsla(258, 80%, 70%, 0.4)' : 'hsla(258, 80%, 50%, 0.3)',
+          backgroundColor: ground,
+          borderWidth: border.width,
+          borderStyle: border.style,
+          borderColor,
         },
       ]}
       testID="horizon-card"
       accessibilityLabel="Horizon card. Next week's story is unwritten."
     >
+      {isDark && <HorizonWash width={width} height={height} />}
       <View style={[styles.cardPadding, sized && styles.fill]} testID="horizon-card-body">
         <View style={styles.eyebrowRow}>
           <View>
@@ -620,11 +688,14 @@ export function HorizonCard({
           </View>
         </View>
 
-        <Text style={[styles.stepsKicker, { color: colors['muted-foreground'], marginTop: 16 }]}>Who am I becoming?</Text>
-        {/* The web's `line-clamp-6`: the words never push "what writes it" off the card. */}
-        <Text style={[styles.horizonIdentity, { color: colors.foreground }]} numberOfLines={6}>
-          {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
-        </Text>
+        <View style={styles.horizonWords}>
+          <Text style={[styles.horizonKicker, { color: kicker }]}>Who am I becoming?</Text>
+          {/* Serif italic at 24px — 19px past 140 characters — and the web's
+              `line-clamp-6`: the words never push "what writes it" off the card. */}
+          <Text style={[horizonIdentityType(identity), { color: words }]} numberOfLines={HORIZON_IDENTITY_LINES} testID="horizon-card-identity">
+            {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
+          </Text>
+        </View>
 
         {/* The web's `flex-1`: what follows sits on the card's bottom edge. */}
         {sized && <View style={styles.spacer} testID="horizon-card-spacer" />}
@@ -666,6 +737,9 @@ export function HorizonCard({
   )
 }
 
+/** The card column's gap between blocks. */
+const CARD_GAP = 12
+
 const styles = StyleSheet.create({
   cardShell: {
     borderRadius: 24,
@@ -676,14 +750,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   horizonShell: {
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderRadius: HORIZON_RADIUS,
     overflow: 'hidden',
   },
   cardPadding: {
     padding: 20,
-    gap: 12,
+    gap: CARD_GAP,
   },
   /** A sized card's column fills the box, so the spacer has room to take. */
   fill: {
@@ -929,10 +1001,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  horizonIdentity: {
-    fontSize: 20,
-    fontStyle: 'italic',
-    lineHeight: 26,
+  /** The web's `mt-6` under the eyebrow (the column's own gap makes up the rest) and `mt-2` between the kicker and the words. */
+  horizonWords: {
+    marginTop: HORIZON_KICKER_GAP - CARD_GAP,
+    gap: HORIZON_IDENTITY_GAP,
+  },
+  horizonKicker: {
+    fontSize: HORIZON_KICKER_FONT_SIZE,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: HORIZON_KICKER_TRACKING,
   },
   horizonFooter: {
     fontSize: 11,
