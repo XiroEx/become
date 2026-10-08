@@ -236,6 +236,18 @@ hold it together:
   pan/pinch/tap callbacks in a test — a drag that goes far enough lands on the
   next card, a pinch out opens the overview — instead of a re-statement of
   them.
+- **Every card is the web's card box, under its own sky (NP-342).** The slot
+  is exactly `cardSize` and `WeekCard` / `HorizonCard` take `width` / `height`
+  and fill it: a column with a flex spacer puts "what to work on" and the
+  identity row on the bottom edge, and what will not fit is clipped, like the
+  web's `overflow-hidden`. No stage card is content-sized, so the focused card
+  is centred on the line through it and every card is one height. The ground
+  is `becomingStageTokens.card` (the web's `#0e0c17`) under two
+  react-native-svg gradients — `lib/becoming/cardSky.ts` has the web's
+  numbers: the subject-tinted radial "sun" (high on a climb, low on a dip)
+  over a 160° wash, and the inset ring in the week's hue. The web's content
+  rule travels with it: the live card ends on the steps, a finished week keeps
+  two wins, never both. `__tests__/card-NP-342-acceptance.test.tsx`.
 
 Two things to know before you touch it:
 

@@ -176,6 +176,9 @@ describe("a week sits where the web puts it", () => {
       expect(style.left).toBeCloseTo(p.x - size.w / 2, 6);
       expect(style.top).toBeCloseTo(p.y - size.h / 2, 6);
       expect(style.width).toBe(size.w);
+      // The slot IS the web's card box, focused or not (NP-342): a card's
+      // height is never left to its content.
+      expect(style.height).toBe(size.h);
     }
     expect(positions[HORIZON]!.horizon).toBe(true);
   });

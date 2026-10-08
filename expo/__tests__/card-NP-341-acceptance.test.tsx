@@ -20,10 +20,10 @@
 // with the dark palette beneath it. So this suite asserts:
 //
 //   1. under the LIGHT system scheme, every full card on the stage — a past
-//      week, the live week, the Horizon — is the dark palette's `card`, with
-//      the dark `foreground` as ink, the dark `muted` tint on the live badge,
-//      the step chip, the Details button and the "what writes it" block; the
-//      tiles and the stage itself are `becomingStageTokens`;
+//      week, the live week, the Horizon — is dark, with the dark `foreground`
+//      as ink, the dark `muted` tint on the live badge, the step chip, the
+//      Details button and the "what writes it" block; the tiles and the stage
+//      itself are `becomingStageTokens`;
 //   2. the dark-scheme render is byte-for-byte the same as the light one;
 //   3. a LIVE flip of the system scheme while the stage is open leaves the
 //      cards dark (the iOS video);
@@ -31,6 +31,13 @@
 //      still follows the system, a sibling outside the provider is unaffected,
 //      and the stage's source has no colour class (a class resolves against
 //      NativeWind's global scheme and would bypass the override).
+//
+// NP-342 then gave a week card the web's own ground — `becomingStageTokens.card`,
+// the web's `#0e0c17`, under a subject-tinted sky, with the web's ring in the
+// week's hue — in the dark palette. So the surface and ring read below are the
+// stage's card and the week's hue rather than the palette's `card` / `border`;
+// everything this suite guards is unchanged: dark in both schemes, identical
+// in both, and a card outside the stage still follows the system.
 
 jest.mock("@become/api-client", () => {
   const actual = jest.requireActual("@become/api-client");
@@ -48,6 +55,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colorScheme } from "nativewind";
 import { JourneyStage, type JourneyStageHandle } from "@/components/becoming/journey/JourneyStage";
 import { WeekCard } from "@/components/becoming/WeekCard";
+import { pillarColor } from "@/lib/becoming/pillarColors";
 import { journeySignals } from "@/lib/becoming/signals";
 import { resetIntroSession } from "@/lib/becoming/storage";
 import { ForcedThemeMode, useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -90,6 +98,10 @@ const DARK = {
   block: tintToken("muted", "dark", 0.2),
 };
 const LIGHT_CARD = resolveToken("card", "light");
+/** A week card's ground in the dark palette: the stage's card, the web's `#0e0c17` (NP-342). */
+const STAGE_CARD = rgbOf(becomingStageTokens.card);
+/** A finished week's ring: a hairline in the week's hue (NP-342). */
+const PAST_RING = pillarColor(WEEKS[PAST]!.subject, WEEKS[PAST]!.score, 60, 0.18);
 
 function renderStage(ref?: React.Ref<JourneyStageHandle>): RenderResult {
   return render(
@@ -157,13 +169,13 @@ afterEach(() => {
 // ─── 1. light mode: the cards are the dark palette's ─────────────────────────
 
 describe("under the light scheme the stage's cards are the dark palette's", () => {
-  it("a past week's card surface is the dark `card`, its ink the dark `foreground`", () => {
+  it("a past week's card ground is the stage's card (the web's #0e0c17), its ring the week's hue, its ink the dark `foreground`", () => {
     setSystemScheme("light");
     const u = renderStage();
     const c = stageColours(u);
-    expect(c.pastCard).toBe(DARK.card);
+    expect(c.pastCard).toBe(STAGE_CARD);
     expect(c.pastCard).not.toBe(LIGHT_CARD);
-    expect(c.pastBorder).toBe(DARK.border);
+    expect(c.pastBorder).toBe(PAST_RING);
     expect(c.pastHeadline).toBe(DARK.foreground);
     expect(c.pastSub).toBe(DARK.mutedForeground);
   });
@@ -196,15 +208,16 @@ describe("under the light scheme the stage's cards are the dark palette's", () =
     expect(c.tile).toBe(rgbOf(becomingStageTokens.background, 0.92));
   });
 
-  it("the live week's own wash is the dark one in light mode, not the light wash", () => {
-    // The current week's card is a violet wash rather than `card` in both
-    // palettes; under the override it is the dark palette's wash. Pinned by
-    // comparison with the dark render below, and here by what it is NOT.
+  it("the live week's own ground is the dark one in light mode, not the light card", () => {
+    // The live week sits on the same ground as every week (NP-342), under its
+    // own sky; under the override it is the stage's card in both schemes.
+    // Pinned by comparison with the dark render below, and here by what it is NOT.
     setSystemScheme("light");
     const light = stageColours(renderStage()).liveCard;
     setSystemScheme("dark");
     const dark = stageColours(renderStage()).liveCard;
     expect(light).toBe(dark);
+    expect(light).toBe(STAGE_CARD);
     expect(light).not.toBe(LIGHT_CARD);
   });
 });
@@ -227,17 +240,17 @@ describe("a live appearance flip leaves an open stage dark", () => {
   it("dark → light → dark: the cards on screen do not repaint", () => {
     setSystemScheme("dark");
     const u = renderStage();
-    expect(stageColours(u).pastCard).toBe(DARK.card);
+    expect(stageColours(u).pastCard).toBe(STAGE_CARD);
 
     setSystemScheme("light");
     const flipped = stageColours(u);
-    expect(flipped.pastCard).toBe(DARK.card);
+    expect(flipped.pastCard).toBe(STAGE_CARD);
     expect(flipped.horizonCard).toBe(DARK.card);
     expect(flipped.detailsBtn).toBe(DARK.chip);
     expect(flipped.pastHeadline).toBe(DARK.foreground);
 
     setSystemScheme("dark");
-    expect(stageColours(u).pastCard).toBe(DARK.card);
+    expect(stageColours(u).pastCard).toBe(STAGE_CARD);
   });
 
   it("opening on the light scheme and flying to another week keeps the new focus dark", () => {
@@ -246,7 +259,7 @@ describe("a live appearance flip leaves an open stage dark", () => {
     const u = renderStage(ref);
     act(() => ref.current!.focusOn(7));
     const card = u.getByTestId(`week-card-${WEEKS[7]!.weekKey}`);
-    expect(flat(card).backgroundColor).toBe(DARK.card);
+    expect(flat(card).backgroundColor).toBe(STAGE_CARD);
     expect(flat(within(card).getByTestId("week-card-headline")).color).toBe(DARK.foreground);
   });
 });
@@ -283,7 +296,7 @@ describe("the override is a scoped provider, not a per-component literal", () =>
     expect(flat(u.getByTestId("outside")).backgroundColor).toBe(LIGHT_CARD);
     expect(u.getByTestId("inside").props.accessibilityLabel).toBe("dark");
     expect(flat(u.getByTestId("inside")).backgroundColor).toBe(DARK.card);
-    expect(flat(u.getByTestId(`week-card-${WEEKS[PAST]!.weekKey}`)).backgroundColor).toBe(DARK.card);
+    expect(flat(u.getByTestId(`week-card-${WEEKS[PAST]!.weekKey}`)).backgroundColor).toBe(STAGE_CARD);
   });
 
   it("ForcedThemeMode can pin light as well — it is a mode, not a dark switch", () => {

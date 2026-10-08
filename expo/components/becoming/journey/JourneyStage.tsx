@@ -1009,9 +1009,12 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           left: p.x - size.w / 2,
                           top: p.y - size.h / 2,
                           width: size.w,
-                          height: em.focused ? undefined : size.h,
-                          minHeight: size.h,
-                          overflow: em.focused ? "visible" : "hidden",
+                          // Every card is exactly `cardSize`, the web's box
+                          // (NP-342): the slot IS the box, the card fills it
+                          // and lays its content out inside it (clipping what
+                          // will not fit), so a focused card never ends short
+                          // of the line through it, and no card grows past it.
+                          height: size.h,
                           opacity: em.opacity,
                           transform: [{ scale: breathing ? 1.03 : em.scale }],
                         },
@@ -1027,6 +1030,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                             next={data.next}
                             active={liveActive}
                             onNavigate={onNavigate}
+                            width={size.w}
+                            height={size.h}
                           />
                         )
                       ) : !week ? null : em.compact ? (
@@ -1041,6 +1046,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           isPeak={peaks.has(i)}
                           onDetails={() => onDetails(i)}
                           onNavigate={onNavigate}
+                          width={size.w}
+                          height={size.h}
                         />
                       )}
                     </View>

@@ -1,7 +1,7 @@
-import React, { memo } from 'react'
-import { View, StyleSheet, Pressable } from 'react-native'
+import React, { memo, useCallback, useState } from 'react'
+import { View, StyleSheet, Pressable, type LayoutChangeEvent } from 'react-native'
 import { Text } from '@/components/Text'
-import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg'
+import Svg, { Defs, LinearGradient, Polyline, RadialGradient, Rect, Stop, Circle as SvgCircle } from 'react-native-svg'
 import {
   ArrowUpRight,
   ArrowRight,
@@ -20,8 +20,9 @@ import {
 } from 'lucide-react-native'
 import type { Fact, WeekSnapshot, CardPillar, Highlight, WeekSignals, Suggestion, NextStep } from '@/lib/becoming/types'
 import { rankSuggestions, MAX_CARD_STEPS } from '@/lib/becoming/weekSummary'
-import { pillarColor } from '@/lib/becoming/pillarColors'
+import { SUN_FADE_AT, SUN_RADIUS, WASH_FADE_AT, cardRing, cardSky, gradientLine, sunCentre } from '@/lib/becoming/cardSky'
 import { minTouchTarget } from '@/lib/a11y/touchTarget'
+import { becomingStageTokens, rgbOf } from '@/lib/theme/tokens'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
 const PILLAR_ICON: Record<CardPillar, typeof Brain> = {
@@ -49,6 +50,9 @@ const FACT_ICON: Record<Fact, typeof Brain> = {
   chapter: BookOpen,
   active: CalendarCheck,
 }
+
+/** The web keeps two of the member's own words on a finished week, never more. */
+const MAX_CARD_WINS = 2
 
 function Delta({ n }: { n: number | null }) {
   const { colors, tint } = useThemeTokens()
@@ -155,6 +159,60 @@ function Sparkline({ scores }: { scores: number[] }) {
   )
 }
 
+/**
+ * The sky behind a week (NP-342): the web's two gradients, tinted by the
+ * subject — a radial "sun" high on a climb and low on a dip, over a 160° wash
+ * from the top-left — drawn with react-native-svg, since React Native has no
+ * CSS gradient. Every number is `lib/becoming/cardSky.ts`'s, where the test
+ * holds them to the web's.
+ *
+ * The 160° line depends on the box's shape, so the sky needs the card's
+ * size: the stage passes `cardSize`; a card mounted bare measures itself.
+ */
+function CardSky({
+  week,
+  width,
+  height,
+}: {
+  week: Pick<WeekSnapshot, 'weekKey' | 'subject' | 'score' | 'step'>
+  width?: number
+  height?: number
+}) {
+  const sized = width != null && height != null
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: lw, height: lh } = e.nativeEvent.layout
+    setMeasured((prev) => (prev && prev.w === lw && prev.h === lh ? prev : { w: lw, h: lh }))
+  }, [])
+  const boxW = sized ? width : measured?.w
+  const boxH = sized ? height : measured?.h
+  const sky = cardSky(week.subject, week.score)
+  const sun = sunCentre(week.step)
+  const washId = `week-card-wash-${week.weekKey}`
+  const sunId = `week-card-sun-${week.weekKey}`
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={sized ? undefined : onLayout} testID="week-card-sky">
+      {boxW && boxH ? (
+        <Svg width={boxW} height={boxH}>
+          <Defs>
+            <LinearGradient id={washId} gradientUnits="userSpaceOnUse" {...gradientLine(boxW, boxH)}>
+              <Stop offset={0} stopColor={sky.wash} stopOpacity={sky.washAlpha} />
+              <Stop offset={WASH_FADE_AT} stopColor={sky.wash} stopOpacity={0} />
+            </LinearGradient>
+            <RadialGradient id={sunId} gradientUnits="objectBoundingBox" cx={sun.cx} cy={sun.cy} rx={SUN_RADIUS.rx} ry={SUN_RADIUS.ry}>
+              <Stop offset={0} stopColor={sky.sun} stopOpacity={sky.sunAlpha} />
+              <Stop offset={SUN_FADE_AT} stopColor={sky.sun} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          {/* The web lists the sun first, which in CSS is on top: wash, then sun. */}
+          <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${washId})`} testID="week-card-sky-wash" />
+          <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${sunId})`} testID="week-card-sky-sun" />
+        </Svg>
+      ) : null}
+    </View>
+  )
+}
+
 export interface WeekCardProps {
   week: WeekSnapshot
   signals: WeekSignals
@@ -164,6 +222,14 @@ export interface WeekCardProps {
   onDetails?: () => void
   onNavigate?: (url: string) => void
   isPeak?: boolean
+  /**
+   * The stage's card box (`cardSize`), both or neither. Given, the card IS
+   * that size — content is laid out inside it, the "what to work on" block
+   * and the identity row sit on its bottom edge, and anything that will not
+   * fit is clipped, as on the web (NP-342). Without, the card fits its content.
+   */
+  width?: number
+  height?: number
 }
 
 export const WeekCard = memo(function WeekCard({
@@ -175,16 +241,26 @@ export const WeekCard = memo(function WeekCard({
   onDetails,
   onNavigate,
   isPeak,
+  width,
+  height,
 }: WeekCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
   const leadHl = signals.highlights[0] ?? null
   const extraHls = signals.highlights.slice(1)
   const currentWeek = !!w.isCurrent
+  const sized = width != null && height != null
   const stepText = w.gap ? 'held' : isPeak ? 'new high' : w.step === 'up' ? 'climbed' : w.step === 'flat' ? 'held' : w.step === 'down' ? 'a dip' : 'start'
 
   // Step badge
   const isUp = w.step === 'up'
   const StepIcon = w.step === 'up' ? ArrowUpRight : w.step === 'down' ? ArrowDownRight : ArrowRight
+
+  // The web's card ground and ring (NP-342): `#0e0c17` under the sky, a
+  // hairline in the week's hue — two px and nearly solid on the live week.
+  // The ground is the stage's own token in the dark palette; a card mounted
+  // outside the stage keeps following the system's `card`.
+  const ground = isDark ? rgbOf(becomingStageTokens.card) : colors.card
+  const ring = cardRing(w.subject, w.score, currentWeek)
 
   // Suggestions for What to work on next
   const steps: { pillar: CardPillar; suggestion: Suggestion }[] = React.useMemo(() => {
@@ -197,26 +273,27 @@ export const WeekCard = memo(function WeekCard({
     return rankSuggestions(signals.active, map, MAX_CARD_STEPS)
   }, [currentWeek, next, signals.active])
 
+  // The web's rule: the live card ends on WHAT TO WORK ON and a finished week
+  // keeps the member's own words (two at most) — never both. It is also what
+  // keeps a card of one fixed height from running off its bottom edge.
+  const wins = steps.length ? [] : (w.mind?.wins ?? []).slice(0, MAX_CARD_WINS)
+
   return (
     <View
       style={[
         styles.cardShell,
+        sized ? { width, height } : null,
         {
-          backgroundColor: currentWeek
-            ? isDark
-              ? 'hsl(258, 40%, 14%)'
-              : 'hsl(258, 80%, 97%)'
-            : colors.card,
-          borderWidth: currentWeek ? 2 : 1,
-          borderColor: currentWeek
-            ? pillarColor(w.subject, w.score, 65)
-            : colors.border,
+          backgroundColor: ground,
+          borderWidth: ring.width,
+          borderColor: ring.color,
         },
       ]}
       testID={`week-card-${w.weekKey}`}
       accessibilityLabel={`Week card for ${w.label}. ${w.headline}.`}
     >
-      <View style={styles.cardPadding}>
+      <CardSky week={w} width={width} height={height} />
+      <View style={[styles.cardPadding, sized && styles.fill]} testID="week-card-body">
         {/* Eyebrow */}
         <View style={styles.eyebrowRow}>
           <View>
@@ -320,9 +397,9 @@ export const WeekCard = memo(function WeekCard({
         )}
 
         {/* Banked wins */}
-        {w.mind?.wins && w.mind.wins.length > 0 && (
+        {wins.length > 0 && (
           <View style={styles.winsWrap} testID="week-card-wins">
-            {w.mind.wins.map((win: string, idx: number) => (
+            {wins.map((win: string, idx: number) => (
               <View key={`win-${idx}`} style={styles.winRow}>
                 <Sparkles size={14} color={colors.accent} style={{ marginTop: 2 }} />
                 <Text style={[styles.winText, { color: colors.foreground }]}>{win}</Text>
@@ -330,6 +407,9 @@ export const WeekCard = memo(function WeekCard({
             ))}
           </View>
         )}
+
+        {/* The web's `flex-1`: what follows sits on the card's bottom edge. */}
+        {sized && <View style={styles.spacer} testID="week-card-spacer" />}
 
         {/* What writes it (Steps) */}
         {steps.length > 0 && (
@@ -394,6 +474,9 @@ export interface HorizonCardProps {
   next?: { nutrition?: Suggestion | null; training?: Suggestion | null; fuel?: Suggestion | null } | NextStep[] | null
   active?: CardPillar[]
   onNavigate?: (url: string) => void
+  /** The stage's card box, like `WeekCard`'s: every card on the stage is one height (NP-342). */
+  width?: number
+  height?: number
 }
 
 export function HorizonCard({
@@ -402,8 +485,11 @@ export function HorizonCard({
   next,
   active = ['training', 'fuel', 'mind'],
   onNavigate,
+  width,
+  height,
 }: HorizonCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
+  const sized = width != null && height != null
   const trendText = trend === 'up' ? 'Horizon lifting' : trend === 'down' ? 'Horizon eased' : 'Horizon holding'
   const steps = React.useMemo(() => {
     if (!next) return []
@@ -419,6 +505,7 @@ export function HorizonCard({
     <View
       style={[
         styles.horizonShell,
+        sized ? { width, height } : null,
         {
           backgroundColor: colors.card,
           borderColor: isDark ? 'hsla(258, 80%, 70%, 0.4)' : 'hsla(258, 80%, 50%, 0.3)',
@@ -427,7 +514,7 @@ export function HorizonCard({
       testID="horizon-card"
       accessibilityLabel="Horizon card. Next week's story is unwritten."
     >
-      <View style={styles.cardPadding}>
+      <View style={[styles.cardPadding, sized && styles.fill]} testID="horizon-card-body">
         <View style={styles.eyebrowRow}>
           <View>
             <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>Next Sunday</Text>
@@ -439,9 +526,13 @@ export function HorizonCard({
         </View>
 
         <Text style={[styles.stepsKicker, { color: colors['muted-foreground'], marginTop: 16 }]}>Who am I becoming?</Text>
-        <Text style={[styles.horizonIdentity, { color: colors.foreground }]}>
+        {/* The web's `line-clamp-6`: the words never push "what writes it" off the card. */}
+        <Text style={[styles.horizonIdentity, { color: colors.foreground }]} numberOfLines={6}>
           {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
         </Text>
+
+        {/* The web's `flex-1`: what follows sits on the card's bottom edge. */}
+        {sized && <View style={styles.spacer} testID="horizon-card-spacer" />}
 
         {steps.length > 0 ? (
           <View style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]} testID="horizon-writes">
@@ -484,7 +575,6 @@ const styles = StyleSheet.create({
   cardShell: {
     borderRadius: 24,
     overflow: 'hidden',
-    marginBottom: 16,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -495,11 +585,17 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     overflow: 'hidden',
-    marginBottom: 24,
   },
   cardPadding: {
     padding: 20,
     gap: 12,
+  },
+  /** A sized card's column fills the box, so the spacer has room to take. */
+  fill: {
+    flex: 1,
+  },
+  spacer: {
+    flex: 1,
   },
   eyebrowRow: {
     flexDirection: 'row',
