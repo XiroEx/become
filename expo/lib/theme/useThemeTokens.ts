@@ -11,7 +11,9 @@ import { useColorScheme } from "nativewind";
 import * as SystemUI from "expo-system-ui";
 import {
   getTokens,
+  quickAddColorByMode,
   scrimByMode,
+  secondaryButtonTextColor,
   tintToken,
   type ThemeMode,
   type TokenName,
@@ -57,6 +59,10 @@ export interface ThemeTokens {
    * content on a light one. (`style` names the content, not the background.)
    */
   statusBarStyle: "light" | "dark";
+  /** Secondary button text / icon color (NP-351) — the web's `text-zinc-700 dark:text-zinc-300`. */
+  secondaryButtonTextColor: string;
+  /** Quick Add button text / icon color (NP-351) — the web's `text-zinc-700 dark:text-zinc-300`. */
+  quickAddColor: string;
 }
 
 /**
@@ -132,6 +138,8 @@ export function useThemeTokens(): ThemeTokens {
     tint,
     scrim: scrimByMode[mode],
     statusBarStyle: mode === "dark" ? "light" : "dark",
+    secondaryButtonTextColor: secondaryButtonTextColor[mode],
+    quickAddColor: quickAddColorByMode[mode],
   };
 }
 

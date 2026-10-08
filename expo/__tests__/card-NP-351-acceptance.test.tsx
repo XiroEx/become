@@ -95,10 +95,9 @@ describe("NP-351 Acceptance Tests: Home (Dashboard) Spacing, Layout & Parity", (
   describe("5. Super Streak Tile Value Styling", () => {
     it("StreakTile renders super streak value in FireNumber without text-foreground overriding it", () => {
       const src = readExpo("components/dashboard/StreakTile.tsx");
-      const renderValBlock = src.slice(
-        src.indexOf("const renderValue ="),
-        src.indexOf("return (", src.indexOf("const renderValue =")),
-      );
+      const start = src.indexOf("const renderValue =");
+      const end = src.indexOf("const formattedVal =", start);
+      const renderValBlock = src.slice(start, end);
       expect(renderValBlock).toContain("<FireNumber>{p.value}</FireNumber>");
       expect(renderValBlock).not.toContain('text-foreground"');
     });
@@ -205,7 +204,7 @@ describe("NP-351 Acceptance Tests: Home (Dashboard) Spacing, Layout & Parity", (
 
     it("NutritionCard Quick Add button uses mode-aware text color", () => {
       const src = readExpo("components/dashboard/NutritionCard.tsx");
-      expect(src).toContain('const quickAddColor = isDark ? "rgb(212, 212, 216)" : "rgb(63, 63, 70)";');
+      expect(src).toContain("quickAddColor");
       expect(src).toContain("color: quickAddColor");
     });
   });

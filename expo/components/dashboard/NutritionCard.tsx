@@ -57,8 +57,7 @@ export function NutritionCard({
   onQuickAdd,
   testID = "dashboard-nutrition-card",
 }: NutritionCardProps) {
-  const { colors, isDark } = useThemeTokens();
-  const quickAddColor = isDark ? "rgb(212, 212, 216)" : "rgb(63, 63, 70)";
+  const { colors, quickAddColor } = useThemeTokens();
 
   const safeGoal = Math.round(
     Number.isFinite(calories.goal) && calories.goal > 0 ? calories.goal : 2000,

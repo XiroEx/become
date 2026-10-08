@@ -49,7 +49,7 @@ export function SuggestionTile({
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
 
   // Filter server suggestions scoped for dashboard and not yet dismissed
-  const availableSuggestions = (tilesData?.suggestions ?? []).filter((s) => {
+  const availableSuggestions = (tilesData?.suggestions ?? []).filter((s: DashboardSuggestion) => {
     if (s.placement === "exercise") return false;
     const surface = (s as any).context?.surface;
     if (surface && surface !== "dashboard") return false;
@@ -117,7 +117,7 @@ export function SuggestionTile({
 
   // If there's an active suggestion, render the suggestion card
   if (activeSuggestion) {
-    const sev = activeSuggestion.severity ?? "info";
+    const sev = (activeSuggestion.severity ?? "info") as keyof typeof SEVERITY_CONFIG;
     const sevConfig = SEVERITY_CONFIG[sev] ?? SEVERITY_CONFIG.info;
     const isNudge = sev === "nudge";
     const isWarn = sev === "warning";
@@ -189,12 +189,8 @@ export function SuggestionTile({
               style={[
                 styles.dismissBtn,
                 {
-                  backgroundColor: isDark
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "rgba(24, 24, 27, 0.05)",
-                  borderColor: isDark
-                    ? "rgba(255, 255, 255, 0.2)"
-                    : "rgba(24, 24, 27, 0.1)",
+                  backgroundColor: tint("foreground", isDark ? 0.1 : 0.05),
+                  borderColor: tint("foreground", isDark ? 0.2 : 0.1),
                 },
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

@@ -340,3 +340,13 @@ export const scrimByMode: Record<ThemeMode, string> = {
   light: "rgba(0, 0, 0, 0.35)",
   dark: "rgba(0, 0, 0, 0.5)",
 };
+
+/**
+ * Secondary button text / icon color (NP-351) — the web's `text-zinc-700 dark:text-zinc-300`.
+ */
+export const secondaryButtonTextColor: Record<ThemeMode, string> = {
+  light: "rgb(63, 63, 70)",
+  dark: "rgb(212, 212, 216)",
+};
+
+export const quickAddColorByMode = secondaryButtonTextColor;
