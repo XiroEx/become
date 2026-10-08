@@ -95,6 +95,19 @@ import { WeekTile } from "@/components/becoming/journey/WeekTile";
 import type { JourneyPayload, WeekSnapshot } from "@/lib/becoming/types";
 import { journeySignals } from "@/lib/becoming/signals";
 import { pillarColor } from "@/lib/becoming/pillarColors";
+import { HORIZON_RADIUS } from "@/lib/becoming/horizonCard";
+import { usePulse } from "@/lib/becoming/pulse";
+import {
+  BREATHING_SCALE,
+  CARD_RADIUS,
+  EMPHASIS_EASING,
+  EMPHASIS_MS,
+  INTRO_GLOW_ALPHA,
+  INTRO_GLOW_INSET,
+  INTRO_GLOW_RADIUS,
+  introGlowShadow,
+  neighbourDim,
+} from "@/lib/becoming/stageMotion";
 import { markIntroShown } from "@/lib/becoming/storage";
 import {
   AGAINST_PATH_NUDGE,
@@ -150,6 +163,7 @@ const TICK_FONT_SIZE = 12;
 
 const INK = becomingStageTokens.ink;
 const VIOLET = becomingStageTokens.violet;
+const SHADE = becomingStageTokens.shade;
 const GOLD = becomingStageTokens.gold;
 const STAGE_BG = becomingStageTokens.background;
 const SKY_VIOLET = becomingStageTokens.skyViolet;
@@ -430,6 +444,91 @@ function StageCanvas({
         </Group>
       </Group>
     </Canvas>
+  );
+}
+
+// ── A card's slot: its emphasis, eased; its dimming; the opening's glow ───
+
+/** CSS's `ease`, which the web's slot transitions run on. */
+const EMPHASIS_EASE = Easing.bezier(EMPHASIS_EASING[0], EMPHASIS_EASING[1], EMPHASIS_EASING[2], EMPHASIS_EASING[3]);
+
+/**
+ * The intro's breathing glow (NP-346): the web's
+ * `absolute -inset-4 animate-pulse rounded-[40px] bg-violet-400/25 blur-2xl`
+ * under the start card while the opening plays — violet-400 at 25%, a
+ * rem past the card on every side, its blur carried by a `boxShadow` of the
+ * same colour, pulsing like Tailwind's `animate-pulse` (`usePulse`). Drawn
+ * BEFORE the card in the slot, so the card sits on it, as on the web.
+ */
+function IntroGlow() {
+  const pulse = usePulse();
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  const color = rgbOf(VIOLET, INTRO_GLOW_ALPHA);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="journey-intro-glow"
+      style={[styles.introGlow, { backgroundColor: color, boxShadow: introGlowShadow(color) }, pulseStyle]}
+    />
+  );
+}
+
+interface StageSlotProps {
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  emphasis: ReturnType<typeof cardEmphasis>;
+  /** The dimming overlay's alpha — `neighbourDim(...)`, the web's `brightness()` as black over the card. */
+  dim: number;
+  /** The start card while the opening plays: scaled 1.03 under its glow. */
+  breathing: boolean;
+  reduced: boolean;
+  /** The overlay follows the card's corners: 28 on the Horizon card, 24 on a week card and a tile. */
+  radius: number;
+  pointerEvents: "box-none" | "none";
+  children: React.ReactNode;
+}
+
+/**
+ * One card's slot in the world layer (NP-346). Its opacity, its scale and
+ * its dimming are shared values that EASE to each new emphasis — the web's
+ * `transition: opacity 500ms ease, transform 500ms ease, filter 500ms ease`
+ * — rather than snapping with the render; under Reduce Motion the duration
+ * is zero and they cut, as the web's `transition: undefined` does. The
+ * dimming is a black overlay over the card: black at α multiplies every
+ * channel by 1 − α, which is `brightness(1 − α)` (the web's blur is not
+ * ported — React Native has no cross-platform filter). It is drawn after
+ * the card, so it covers it; the glow before, so the card covers the glow.
+ */
+function StageSlot({ index, left, top, width, height, emphasis, dim, breathing, reduced, radius, pointerEvents, children }: StageSlotProps) {
+  const targetScale = breathing ? BREATHING_SCALE : emphasis.scale;
+  const opacity = useSharedValue(emphasis.opacity);
+  const scale = useSharedValue(targetScale);
+  const shade = useSharedValue(dim);
+  useEffect(() => {
+    const cfg = { duration: motionDuration(EMPHASIS_MS, reduced), easing: EMPHASIS_EASE };
+    opacity.set(withTiming(emphasis.opacity, cfg));
+    scale.set(withTiming(targetScale, cfg));
+    shade.set(withTiming(dim, cfg));
+  }, [emphasis.opacity, targetScale, dim, reduced, opacity, scale, shade]);
+  const slotStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }] }));
+  const dimStyle = useAnimatedStyle(() => ({ opacity: shade.value }));
+  return (
+    <Animated.View
+      testID={`journey-card-${index}`}
+      pointerEvents={pointerEvents}
+      style={[styles.slot, { left, top, width, height }, slotStyle]}
+    >
+      {breathing && !reduced ? <IntroGlow /> : null}
+      {children}
+      <Animated.View
+        pointerEvents="none"
+        testID="journey-card-dim"
+        style={[styles.dim, { borderRadius: radius, backgroundColor: rgbOf(SHADE) }, dimStyle]}
+      />
+    </Animated.View>
   );
 }
 
@@ -1006,28 +1105,28 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                   const week = weeks[i];
                   const breathing = mode === "intro" && i === startIndex;
                   return (
-                    <View
+                    <StageSlot
                       key={p.horizon ? "horizon" : (week?.weekKey ?? i)}
-                      testID={`journey-card-${i}`}
+                      index={i}
                       // The focused card's buttons are live; a neighbour's are not
                       // (tapping it brings it forward); in the opening nothing is.
                       pointerEvents={mode !== "intro" && (em.focused || em.compact) ? "box-none" : "none"}
-                      style={[
-                        styles.slot,
-                        {
-                          left: p.x - size.w / 2,
-                          top: p.y - size.h / 2,
-                          width: size.w,
-                          // Every card is exactly `cardSize`, the web's box
-                          // (NP-342): the slot IS the box, the card fills it
-                          // and lays its content out inside it (clipping what
-                          // will not fit), so a focused card never ends short
-                          // of the line through it, and no card grows past it.
-                          height: size.h,
-                          opacity: em.opacity,
-                          transform: [{ scale: breathing ? 1.03 : em.scale }],
-                        },
-                      ]}
+                      left={p.x - size.w / 2}
+                      top={p.y - size.h / 2}
+                      width={size.w}
+                      // Every card is exactly `cardSize`, the web's box
+                      // (NP-342): the slot IS the box, the card fills it
+                      // and lays its content out inside it (clipping what
+                      // will not fit), so a focused card never ends short
+                      // of the line through it, and no card grows past it.
+                      height={size.h}
+                      emphasis={em}
+                      // The web's brightness(.55) / brightness(.4) on the
+                      // cards either side of the focus (NP-346).
+                      dim={neighbourDim(i, focus, mode)}
+                      breathing={breathing}
+                      reduced={reduced}
+                      radius={p.horizon && !em.compact ? HORIZON_RADIUS : CARD_RADIUS}
                     >
                       {p.horizon ? (
                         em.compact ? (
@@ -1041,6 +1140,9 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                             onNavigate={onNavigate}
                             // The web's `border-violet-300/60` while it is the focus (NP-344).
                             focused={em.focused}
+                            // The landing beat (NP-346): the words assemble once the camera settles here.
+                            landed={landed === i}
+                            reduced={reduced}
                             width={size.w}
                             height={size.h}
                           />
@@ -1062,13 +1164,20 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           exitEdge={em.focused ? edge : null}
                           spark={sparks[i] ?? null}
                           onSparkline={enterOverview}
+                          // The landing beat (NP-346): the content fades and
+                          // slides in, row by row, once the camera settles
+                          // here — and down again when it moves on. The
+                          // stage's Reduce Motion answer travels with it, so
+                          // a card mounting mid-session knows at first paint.
+                          landed={landed === i}
+                          reduced={reduced}
                           onDetails={() => onDetails(i)}
                           onNavigate={onNavigate}
                           width={size.w}
                           height={size.h}
                         />
                       )}
-                    </View>
+                    </StageSlot>
                   );
                 })}
               </Animated.View>
@@ -1208,8 +1317,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
               : `${focusedWeek.label}: ${focusedWeek.headline}`
             : ""}
         </Text>
-        {/* `landed` is the beat the card has clicked into place; the web passes it
-            to the card for its own flourish, the native card has none yet. */}
+        {/* `landed` is the beat the card has clicked into place: the cards above
+            take it for their landing stagger (NP-346), and a test reads it here. */}
         <View style={styles.srOnly} testID={landed != null ? `journey-landed-${landed}` : "journey-landing"} />
       </ForcedThemeMode>
     </View>
@@ -1228,6 +1337,23 @@ const styles = StyleSheet.create({
   },
   slot: {
     position: "absolute",
+  },
+  /** The web's `-inset-4 rounded-[40px]`. */
+  introGlow: {
+    position: "absolute",
+    top: INTRO_GLOW_INSET,
+    left: INTRO_GLOW_INSET,
+    right: INTRO_GLOW_INSET,
+    bottom: INTRO_GLOW_INSET,
+    borderRadius: INTRO_GLOW_RADIUS,
+  },
+  /** The neighbour-dimming overlay: the whole card, under its own corners. */
+  dim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   title: {
     position: "absolute",

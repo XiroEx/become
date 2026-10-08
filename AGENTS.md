@@ -1882,6 +1882,23 @@ the details sheet above it. Four rules travel with it (the long form is
   goes through it or `pillarColor`'s `hsl()` — never `rgbOf`. Test:
   `expo/__tests__/card-NP-344-acceptance.test.tsx`, which also walks the
   rendered canvas for any colour in a form Skia would not read.
+- **The stage moves as the web's does (NP-346).** Review on 10/8 found four
+  of the web's movements missing: the LANDING STAGGER (`WeekCard` /
+  `HorizonCard` take the stage's `landed` and bring their content up and in
+  row by row — opacity 0 → 1, y 12 → 0, 60 ms apart, 420 ms on
+  `[0.16, 1, 0.3, 1]`, the web's row numbers — so a card is an empty frame
+  until the camera settles on it, and a card the stage has left takes its
+  content down again); NEIGHBOUR DIMMING (the web's `brightness(.55)` /
+  `.4` as a BLACK OVERLAY on the slot at `1 − b`, under the card's corners,
+  focus mode only; the blur is not ported); EMPHASIS TRANSITIONS (each
+  `StageSlot` eases its opacity, scale and dimming over 500 ms on CSS's
+  `ease`, `[0.25, 0.1, 0.25, 1]`); and the INTRO's breathing GLOW under the
+  start card (violet-400/25, `-inset-4`, radius 40, the blur as a
+  `boxShadow`). Tailwind's `animate-pulse` is one hook,
+  `expo/lib/becoming/pulse.ts`'s `usePulse`, worn by the exit-edge light and
+  the glow. Every one is skipped under Reduce Motion, read at mount or
+  flipped live. Numbers: `expo/lib/becoming/stageMotion.ts`; test:
+  `expo/__tests__/card-NP-346-acceptance.test.tsx`.
 
 #### The Mind session player, natively (NP-098)
 
