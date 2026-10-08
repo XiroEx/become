@@ -25,9 +25,23 @@
 // What it cannot prove is the frame rate: that is the device pass.
 
 const mockBack = jest.fn();
+// The screen asks its navigator when the push has ended (NP-347), and the
+// stage's opening waits for that answer; a test here says so itself.
+const mockNavListeners: ((e: { data?: { closing?: boolean } }) => void)[] = [];
+// One object, like the real navigator (its identity is what the hook subscribes against).
+const mockNavigation = {
+  addListener: (event: string, handler: (e: { data?: { closing?: boolean } }) => void) => {
+    if (event === "transitionEnd") mockNavListeners.push(handler);
+    return () => {
+      const i = mockNavListeners.indexOf(handler);
+      if (i >= 0) mockNavListeners.splice(i, 1);
+    };
+  },
+};
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: mockBack, canGoBack: () => true }),
   useLocalSearchParams: () => ({}),
+  useNavigation: () => mockNavigation,
 }));
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({ user: { id: "member-1" }, token: "test-jwt", loading: false, isAuthed: true }),
@@ -149,6 +163,21 @@ function tapAt(x: number, y: number) {
       { state: State.ACTIVE, x, y },
       { state: State.END, x, y },
     ]);
+  });
+}
+
+// The opening starts when the stage is ON SCREEN (NP-347): the screen's push
+// has ended (`shown`, the stage's default when rendered bare) and its canvas
+// has laid out. RNTL lays nothing out, so a test says so the way the native
+// view would; the screen tests also emit the navigator's `transitionEnd`.
+function showStage(u: ReturnType<typeof render>) {
+  act(() => {
+    u.getByTestId("skia-Canvas").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
+  });
+}
+function endTransition() {
+  act(() => {
+    mockNavListeners.forEach((h) => h({ data: { closing: false } }));
   });
 }
 
@@ -372,6 +401,7 @@ describe("the intro", () => {
     jest.useFakeTimers();
     const u = renderStage({ introKind: "full" });
     expect(mode(u)).toBe("intro");
+    showStage(u);
     const title = u.getByTestId("journey-title");
     expect(within(title).getByText("Who am I becoming?")).toBeTruthy();
     expect(within(title).getByText(`“${JOURNEY.identity}”`)).toBeTruthy();
@@ -392,6 +422,8 @@ describe("the intro", () => {
   it("any touch skips it", () => {
     jest.useFakeTimers();
     const u = renderStage({ introKind: "full" });
+    showStage(u);
+    expect(u.getByTestId("journey-title")).toBeTruthy();
     tapAt(300, 600);
     expect(mode(u)).toBe("focus");
     expect(u.queryByTestId("journey-title")).toBeNull();
@@ -401,6 +433,7 @@ describe("the intro", () => {
   it("the short opening has no title and hands over sooner", () => {
     jest.useFakeTimers();
     const u = renderStage({ introKind: "short" });
+    showStage(u);
     expect(mode(u)).toBe("intro");
     expect(u.queryByTestId("journey-title")).toBeNull();
     act(() => {
@@ -503,9 +536,13 @@ describe("the screen", () => {
       </GestureHandlerRootView>,
     );
     await waitFor(() => expect(u.getByTestId("journey-stage")).toBeTruthy());
-    // A fresh session, nothing seen this week: the full opening. While it
+    // A fresh session, nothing seen this week: the full opening — once the
+    // screen's push has ended and the canvas has laid out (NP-347). While it
     // plays the cards take no touches — any touch is "skip".
     expect(mode(u)).toBe("intro");
+    expect(u.queryByTestId("journey-title")).toBeNull();
+    showStage(u);
+    endTransition();
     expect(u.getByTestId("journey-title")).toBeTruthy();
     tapAt(300, 600);
     expect(mode(u)).toBe("focus");
