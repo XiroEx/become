@@ -451,7 +451,7 @@ export function LiveSetRow({
             compact
               ? `w-9 h-9 rounded-lg items-center justify-center border ${
                   state.completed
-                    ? "bg-green-500 border-green-500"
+                    ? "bg-success border-success"
                     : "bg-card border-border"
                 }`
               : `w-10 h-10 rounded-full items-center justify-center ${
@@ -462,9 +462,7 @@ export function LiveSetRow({
           <Check
             color={
               state.completed
-                ? compact
-                  ? "#ffffff"
-                  : colors["primary-foreground"]
+                ? colors["primary-foreground"]
                 : colors["muted-foreground"]
             }
             size={compact ? 18 : 20}

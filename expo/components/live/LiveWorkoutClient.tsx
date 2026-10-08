@@ -1396,7 +1396,8 @@ export function LiveWorkoutClient({
                   height: "100%",
                   borderRadius: 999,
                   width: `${overallProgressPercent(grid)}%`,
-                  backgroundColor: "#10b981",
+                  // emerald-500 in both modes, the web bar's colour (NP-123: no hex).
+                  backgroundColor: colors["mind-emerald"],
                 }}
               />
             </View>
