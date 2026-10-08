@@ -248,6 +248,22 @@ hold it together:
   over a 160° wash, and the inset ring in the week's hue. The web's content
   rule travels with it: the live card ends on the steps, a finished week keeps
   two wins, never both. `__tests__/card-NP-342-acceptance.test.tsx`.
+- **A far week is the web's coloured tile (NP-345).** `WeekTile` — the
+  overview, and any card more than two steps from the focus — is the web's
+  compact `WeekCard`: the WEEK'S COLOUR, `pillarColor(subject, score, 48)`
+  into `pillarColor(subject, score, 30)` along CSS's 160° line (one
+  expo-linear-gradient, the sky's own `gradientLine`, the dark stop doubling
+  as the view's colour) under a 1px white/15 ring, with a big `W<n>` (`…` for
+  a gap), the label, the headline and a step chip (`now` / climbed / held /
+  a dip / new high). That is what makes the overview read as grey → green →
+  amber blocks behind the markers; it used to be a near-black box with a
+  colour stripe. Every size is a CARD UNIT (`lib/becoming/weekTile.ts`): the
+  web's px at the card of a 390 × 844 phone, as a fraction of this card's
+  width, so a tile keeps the web's proportions at any card size and scales
+  with the camera. The web's Horizon has no compact mode, so the Horizon tile
+  wears the `HorizonCard` ground (the violet wash into the card colour at
+  55%) and dashed ring, with the identity and the live week's trend.
+  `__tests__/card-NP-345-acceptance.test.tsx`.
 
 Two things to know before you touch it:
 

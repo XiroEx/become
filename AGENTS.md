@@ -1836,6 +1836,19 @@ the details sheet above it. Four rules travel with it (the long form is
   in the week's hue. The web's content rule travels with it: the live card ends
   on the steps, a finished week keeps two wins, never both. Test:
   `expo/__tests__/card-NP-342-acceptance.test.tsx`.
+- **A far week is the web's coloured tile (NP-345).** Review on 10/8 found
+  the overview's tiles near-black boxes with a colour stripe, all but gone at
+  overview scale, where the web's compact `WeekCard` is the week's own
+  colour. `expo/components/becoming/journey/WeekTile.tsx` now draws the
+  web's: `pillarColor(subject, score, 48)` into `pillarColor(subject, score,
+  30)` along CSS's 160° line (expo-linear-gradient on the sky's
+  `gradientLine`) under a 1px white/15 ring, a big `W<n>` (`…` for a gap),
+  the label, the headline and a step chip (`now` / climbed / held / a dip /
+  new high). Sizes are card units (`expo/lib/becoming/weekTile.ts`: the web's
+  px at a 390 × 844 phone's card, as a fraction of the card's width) so they
+  scale with the camera. The Horizon tile wears the web's `HorizonCard`
+  ground and dashed ring with the identity and the trend. Test:
+  `expo/__tests__/card-NP-345-acceptance.test.tsx`.
 
 #### The Mind session player, natively (NP-098)
 

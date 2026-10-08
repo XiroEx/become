@@ -335,7 +335,8 @@ describe("overview: pinch out for the line", () => {
     const agg = u.getByTestId("journey-aggregate");
     expect(agg.props.children.join("")).toBe(aggregate(WEEKS, "lbs") + sinceLabel(JOURNEY.firstActivity));
     expect(u.getByText("your line · tap a week to open it")).toBeTruthy();
-    expect(u.getByText(`“${JOURNEY.identity}”`)).toBeTruthy();
+    // The HUD quotes the identity; so does the Horizon tile below it (NP-345), as the web's does.
+    expect(within(u.getByTestId("journey-hud")).getByText(`“${JOURNEY.identity}”`)).toBeTruthy();
     // Everything is a tile in the overview — every week and the Horizon.
     expect(u.getAllByTestId(/^journey-tile-/).length).toBe(WEEKS.length + 1);
     expect(u.getByTestId("journey-tile-horizon")).toBeTruthy();
