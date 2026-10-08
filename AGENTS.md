@@ -1850,6 +1850,25 @@ the details sheet above it. Four rules travel with it (the long form is
   the only bundled face) at 12 px, 45% white, or the subject's name. Every
   number is `expo/lib/becoming/focusedCard.ts`'s; test:
   `expo/__tests__/card-NP-343-acceptance.test.tsx`.
+- **The Horizon card and the line to it are the web's (NP-344).** Review on
+  10/8: the native Horizon was a flat dark card in sans italic, and the
+  dashed segment from the live week to it and its ring in the overview drew
+  BLACK on the S23 and the iOS simulator. The card now wears the web's box —
+  `expo/lib/becoming/horizonCard.ts` has the numbers: the 160° wash from
+  violet-600 at .22 into the card ground at .97 by 55% (react-native-svg,
+  like the week card's sky; the shell is clear so the wash IS the ground), a
+  2 px dashed border on a 28 px radius in violet-300/60 while it is the
+  focus (the stage passes `focused`) and white/25 otherwise, the identity in
+  the platform serif italic at 24 px (19 px past 140 characters), snug,
+  white, six lines. The black line was a COLOUR-STRING bug, not a drawing
+  one: `@shopify/react-native-skia` parses a colour string itself and reads
+  the comma form only, so `rgbOf`'s solid `rgb(r g b)` — fine for a React
+  Native view — is painted black on a canvas, while an alpha'd `rgba(…)`
+  from the same helper is fine. `skiaRgbOf` (`expo/lib/theme/tokens.ts`) is
+  always `rgba(r, g, b, a)`, and EVERY colour the stage's canvas is handed
+  goes through it or `pillarColor`'s `hsl()` — never `rgbOf`. Test:
+  `expo/__tests__/card-NP-344-acceptance.test.tsx`, which also walks the
+  rendered canvas for any colour in a form Skia would not read.
 
 #### The Mind session player, natively (NP-098)
 
