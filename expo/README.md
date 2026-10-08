@@ -248,6 +248,21 @@ hold it together:
   over a 160° wash, and the inset ring in the week's hue. The web's content
   rule travels with it: the live card ends on the steps, a finished week keeps
   two wins, never both. `__tests__/card-NP-342-acceptance.test.tsx`.
+- **The focused card carries the web's three extras, and only it (NP-343).**
+  The stage hands `WeekCard` `focused`, `exitEdge` (its own `exitEdge(...)`
+  answer), `spark` (every week's altitude, plus this card's index on it) and
+  `onSparkline={enterOverview}`. The sparkline top-right of the eyebrow is a
+  pressable — "See your whole line" — that zooms out to the overview; the
+  exit-edge light is a 3 px bar in the week's colour on the edge that faces
+  the next card (top on a climb, bottom on a dip, right on a hold), inset 40,
+  with the web's `0 0 18px 4px` glow as React Native's `boxShadow` and a
+  Reanimated pulse (Tailwind's `animate-pulse`: 1 → ½ → 1 over 2 s) that
+  `useReducedMotion` holds still at full; the identity row whispers
+  `Becoming: <identity>` in serif italic at 12 px and 45% white (the
+  platform's serif — Georgia / the system serif — since Geist is the only
+  bundled face), or the subject's name. `lib/becoming/focusedCard.ts` has the
+  web's numbers; `__tests__/card-NP-343-acceptance.test.tsx` holds the
+  rendered card to them and drives the tap into `enterOverview`.
 
 Two things to know before you touch it:
 
