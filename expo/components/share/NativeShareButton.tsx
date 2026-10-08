@@ -28,7 +28,7 @@ export interface NativeShareButtonProps {
   onError?: (message: string) => void;
   /** Fires with the absolute public URL after the sheet opens. */
   onShared?: (url: string) => void;
-  /** Render as a round icon-only button (e.g. in headers). */
+  /** Render as a round icon button with no text label (web header parity). */
   iconOnly?: boolean;
   testID?: string;
 }
@@ -85,9 +85,7 @@ export function NativeShareButton({
                 borderRadius: 18,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
+                backgroundColor: colors.muted,
                 opacity: sharing ? 0.6 : 1,
               }
             : {

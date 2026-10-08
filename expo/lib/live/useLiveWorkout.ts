@@ -790,7 +790,7 @@ export function useLiveWorkout(
 
       // Reset that exercise's sets in the grid
       const blankSets: LiveSetState[] = Array.from(
-        { length: oldEx.sets || 3 },
+        { length: oldEx.sets || 1 },
         () => ({
           reps: null,
           weight: null,
@@ -1190,7 +1190,7 @@ export function useLiveWorkout(
                 completed: Boolean(s.completed),
               }));
             } else {
-              restored[ex.slug] = Array.from({ length: ex.sets || 3 }, () => ({
+              restored[ex.slug] = Array.from({ length: ex.sets || 1 }, () => ({
                 reps: null,
                 weight: null,
                 durationSec: null,
@@ -1297,7 +1297,7 @@ export function useLiveWorkout(
         if (hist) {
           return {
             ...ex,
-            prefill: Array.from({ length: ex.sets || 3 }, () => ({
+            prefill: Array.from({ length: ex.sets }, () => ({
               weight: hist.weight ?? null,
               reps: hist.reps ?? null,
               durationSec: hist.duration ?? null,
@@ -1437,7 +1437,7 @@ export function useLiveWorkout(
         if (!next) continue;
         if (oldIdx === -1) {
           nextGrid[next.slug] = Array.from(
-            { length: Math.max(1, next.sets || 3) },
+            { length: Math.max(1, next.sets || 1) },
             (): LiveSetState => ({
               reps: null,
               weight: null,
@@ -1451,7 +1451,7 @@ export function useLiveWorkout(
         }
         const prev = workout.exercises[oldIdx];
         const rows = prev ? (gridRef.current[prev.slug] ?? []) : [];
-        const want = Math.max(1, next.sets || 3);
+        const want = Math.max(1, next.sets || 1);
         const kept: LiveSetState[] = rows.slice(0, want);
         while (kept.length < want) {
           kept.push({
@@ -1532,7 +1532,7 @@ export function useLiveWorkout(
         (newIdx) => {
           const next = res.exercises[newIdx];
           return Array.from(
-            { length: Math.max(1, next?.sets || 3) },
+            { length: Math.max(1, next?.sets || 1) },
             (): LiveSetState => ({
               reps: null,
               weight: null,

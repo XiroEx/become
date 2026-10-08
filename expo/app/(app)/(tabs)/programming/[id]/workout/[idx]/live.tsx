@@ -223,7 +223,7 @@ export default function LiveWorkoutRoute({
   // programId, day }` — no phase NAME travels (the route matches `ph.phase`
   // verbatim and skips the filter when absent, so day alone resolves the
   // workout). The day prefers the resolved server day, then the param.
-  const shareDay = resolvedDay || day || "Day 1";
+  const shareDay = resolvedDay || day;
   const workoutShareBody =
     valid && shareDay ? { kind: "workout" as const, programId: id, day: shareDay } : null;
 
@@ -494,6 +494,9 @@ export default function LiveWorkoutRoute({
             />
           ) : undefined
         }
+        day={resolvedDay || (workout as any)?.day || day || "Day 1"}
+        onViewPRs={() => router.push("/progress" as never)}
+        onExerciseChange={applyExerciseChange}
         positionScope={programScope(id, resolvedDay)}
         positionStore={
           positionStore !== undefined
@@ -516,9 +519,6 @@ export default function LiveWorkoutRoute({
         exerciseHints={exerciseHints}
         onDismissHint={(slug) => void dismissHint(slug)}
         onExit={() => router.back()}
-        day={shareDay}
-        onViewPRs={() => router.push("/progress" as never)}
-        onExerciseChange={applyExerciseChange}
         manageExercises={
           workout
             ? {

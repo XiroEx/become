@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
-import { ChevronLeft } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
+import { ChevronLeft } from "lucide-react-native";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import type { ExerciseGroupType } from "@/components/live/ExerciseGroupNav";
 import {
@@ -49,7 +49,7 @@ export type LiveGrid = Record<string, LiveSetState[]>;
 export interface LiveWorkoutExercise {
   slug: string;
   name: string;
-  sets: number;
+  sets?: number;
   repsLabel?: string;
   notes?: string;
   /** Coaching tip / cue (the web's `tip`, green). Nothing fills it yet (NP-235). */
@@ -361,7 +361,7 @@ export function totalRoundsForStep(
   const members = exercises.filter((m) => m.groupId === step.groupId);
   const maxSets = Math.max(
     exercise.groupRounds ?? 0,
-    ...members.map((m) => m.sets || 0),
+    ...members.map((m) => m.sets || 3),
   );
   return maxSets > 0 ? maxSets : 1;
 }
@@ -383,8 +383,7 @@ function initialGrid(
   const grid: LiveGrid = {};
   for (const ex of exercises) {
     const saved = restored?.[ex.slug];
-    const numSets = ex.sets || 3;
-    grid[ex.slug] = Array.from({ length: numSets }, (_, i) => {
+    grid[ex.slug] = Array.from({ length: ex.sets || 3 }, (_, i) => {
       // Prefer a restored in-flight set, falling back to prefill defaults. The
       // workout structure (set count) always wins, so a stale cache can't add
       // phantom sets.
@@ -598,7 +597,7 @@ export function LiveWorkoutClient({
         workout.exercises.map((ex) => ({
           name: ex.name,
           exerciseSlug: ex.slug,
-          sets: ex.sets,
+          sets: ex.sets || 3,
           ...(ex.groupId ? { groupId: ex.groupId } : {}),
           ...(ex.groupType ? { groupType: ex.groupType } : {}),
           ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
@@ -999,7 +998,7 @@ export function LiveWorkoutClient({
     if (!ex) return;
     setSkipOpen(false);
     let updated = gridRef.current;
-    const count = updated[ex.slug]?.length ?? ex.sets;
+    const count = updated[ex.slug]?.length ?? (ex.sets || 3);
     for (let i = 0; i < count; i++) {
       updated = applySetUpdate(updated, ex.slug, i, skippedSetState());
       completedSnapshot.current.set(ex.slug + ":" + i, skippedSetState());
@@ -1275,7 +1274,7 @@ export function LiveWorkoutClient({
   );
 
   const liveSets = liveExercise ? (grid[liveExercise.slug] ?? []) : [];
-  const liveTotalSets = liveSets.length || liveExercise?.sets || 1;
+  const liveTotalSets = liveSets.length || liveExercise?.sets || 3;
   // ONE exercises entry (NP-288): the route's manage panel when there is
   // one — it lists, jumps, adds, reorders and removes, which is the whole
   // of the web's `EXERCISES` popover — else the built-in jump sheet. Live
@@ -1285,6 +1284,8 @@ export function LiveWorkoutClient({
     ? manageExercises.onOpen
     : () => setSheetOpen(true);
 
+  const activeDay = day ?? (workout as any)?.day;
+
   return (
     <SafeAreaView
       edges={["top", "bottom"]}
@@ -1293,40 +1294,39 @@ export function LiveWorkoutClient({
     >
       {view === "track" ? (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {/* Top bar: Back (left) · Track|Live toggle (centered) · Share (right) */}
+          {/* Top row: Back (left), small Track/Live pill (centered), Share (right) */}
           <View
             style={{
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               position: "relative",
-              minHeight: 44,
+              minHeight: 36,
             }}
           >
             {onExit ? (
               <Pressable
                 testID={`${testID}-back`}
-                onPress={onExit}
                 accessibilityRole="button"
                 accessibilityLabel="Back"
+                onPress={onExit}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 4,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
                   borderRadius: 999,
                   backgroundColor: colors.muted,
-                  zIndex: 1,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
                 }}
               >
                 <ChevronLeft size={16} color={colors.foreground} />
-                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.foreground }}>
+                <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
                   Back
                 </Text>
               </Pressable>
             ) : (
-              <View style={{ width: 44 }} />
+              <View style={{ width: 60 }} />
             )}
 
             <View
@@ -1335,7 +1335,6 @@ export function LiveWorkoutClient({
                 left: 0,
                 right: 0,
                 alignItems: "center",
-                justifyContent: "center",
                 pointerEvents: "box-none",
               }}
             >
@@ -1346,61 +1345,35 @@ export function LiveWorkoutClient({
               />
             </View>
 
-            <View style={{ zIndex: 1 }}>
-              {headerAction ? (
-                <View testID={`${testID}-header-action`}>{headerAction}</View>
-              ) : (
-                <View style={{ width: 44 }} />
-              )}
+            <View testID={`${testID}-header-action`} style={{ minWidth: 60, alignItems: "flex-end" }}>
+              {headerAction ?? null}
             </View>
           </View>
 
-          {/* Centered title with Day line underneath */}
+          {/* Centered Title and Day */}
           <View style={{ alignItems: "center", marginTop: 4 }}>
-            <Text
-              testID={`${testID}-title`}
-              className="text-foreground text-xl font-bold text-center"
-            >
+            <Text testID={`${testID}-title`} className="text-foreground text-xl font-bold text-center">
               {workout.workoutTitle}
             </Text>
-            {day ? (
-              <Text
-                testID={`${testID}-day`}
-                className="text-muted-foreground text-xs text-center mt-0.5"
-              >
-                {day}
+            {activeDay ? (
+              <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center mt-0.5">
+                {activeDay}
               </Text>
             ) : null}
           </View>
 
-          {/* Hidden/accessible sets count & timer for test assertions */}
-          <Text
-            testID={`${testID}-progress`}
-            style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
-          >
-            {`${completedSets} of ${totalSets} sets done`}
-          </Text>
-          {typeof activeSeconds === "number" ? (
-            <Text
-              testID={`${testID}-elapsed`}
-              style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
-            >
-              {formatElapsed(activeSeconds)}
-            </Text>
-          ) : null}
-
-          {/* Workout Progress bar with % and View PRs */}
-          <View testID={`${testID}-overall-progress`} style={{ marginTop: 4, gap: 6 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          {/* Workout Progress */}
+          <View style={{ marginTop: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text className="text-muted-foreground text-xs">Workout Progress</Text>
+                <Text className="text-muted-foreground text-xs font-medium">Workout Progress</Text>
                 {showResumed ? (
-                  <View className="rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5">
+                  <View className="rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5">
                     <Text
                       testID={`${testID}-resume-indicator`}
-                      className="text-amber-700 dark:text-amber-400 text-[10px] font-medium"
+                      className="text-yellow-700 dark:text-yellow-400 text-xs font-medium"
                     >
-                      Resumed
+                      Resuming
                     </Text>
                   </View>
                 ) : null}
@@ -1410,8 +1383,9 @@ export function LiveWorkoutClient({
               </Text>
             </View>
             <View
+              testID={`${testID}-overall-progress`}
               style={{
-                height: 6,
+                height: 8,
                 overflow: "hidden",
                 borderRadius: 999,
                 backgroundColor: colors.muted,
@@ -1422,12 +1396,26 @@ export function LiveWorkoutClient({
                   height: "100%",
                   borderRadius: 999,
                   width: `${overallProgressPercent(grid)}%`,
-                  backgroundColor: colors.primary,
+                  backgroundColor: "#10b981",
                 }}
               />
             </View>
+            <Text
+              testID={`${testID}-progress`}
+              style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
+            >
+              {`${completedSets} of ${totalSets} sets done`}
+            </Text>
+            {typeof activeSeconds === "number" ? (
+              <Text
+                testID={`${testID}-elapsed`}
+                style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
+              >
+                {formatElapsed(activeSeconds)}
+              </Text>
+            ) : null}
             {onViewPRs ? (
-              <View style={{ alignItems: "flex-end", marginTop: 2 }}>
+              <View style={{ marginTop: 6, alignItems: "flex-end" }}>
                 <Pressable
                   testID={`${testID}-view-prs`}
                   onPress={onViewPRs}

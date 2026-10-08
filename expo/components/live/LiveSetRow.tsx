@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Pressable, ScrollView, TextInput } from "react-native";
+import { View, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
 import { Check, ChevronsRight } from "lucide-react-native";
 import { Input } from "@/components/Input";
@@ -15,6 +15,7 @@ import {
   tracksTime,
   unitDisplayToSeconds,
   weightQuickPicks,
+  type BellStyle,
   type BellWeightInfo,
   type DurationUnit,
 } from "@become/core";
@@ -111,9 +112,13 @@ export interface LiveSetRowProps {
    * Track keeps its checkbox: that is where a set is ticked by hand.
    */
   hideComplete?: boolean;
-  targetReps?: number | null;
-  targetDurationSec?: number | null;
+  /** Compact single-row layout for superset/circuit rounds (NP-332). */
   compact?: boolean;
+  /** Target reps prescription string (e.g. "10-12" or "10") for placeholder prefill. */
+  targetReps?: string | number | null;
+  /** Target duration prescription string (e.g. "30s" or "30") for placeholder prefill. */
+  targetDuration?: string | number | null;
+  onSkip?: () => void;
   onChange: (next: LiveSetState) => void;
   testID?: string;
 }
@@ -123,6 +128,15 @@ function parseNum(text: string): number | null {
   if (text === "") return null;
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getWeightLabel(style: BellStyle | null, compact?: boolean): string {
+  if (compact) {
+    if (style === "dumbbell") return "lbs/DB";
+    if (style === "kettlebell") return "lbs/KB";
+    return "lbs";
+  }
+  return bellWeightLabel(style);
 }
 
 export function LiveSetRow({
@@ -136,9 +150,10 @@ export function LiveSetRow({
   trackingType,
   roundLabel,
   hideComplete = false,
-  targetReps,
-  targetDurationSec,
   compact = false,
+  targetReps,
+  targetDuration,
+  onSkip,
   onChange,
   testID,
 }: LiveSetRowProps) {
@@ -183,262 +198,6 @@ export function LiveSetRow({
   // tap fills the per-implement number, exactly as if it had been typed.
   const quickPicks = showQuickPicks ? weightQuickPicks(bell.style) : [];
 
-  if (compact) {
-    const bellUnit =
-      bell.style === "dumbbell"
-        ? "lbs/DB"
-        : bell.style === "kettlebell"
-          ? "lbs/KB"
-          : "lbs";
-    const repsPlh =
-      prefill?.reps !== null && prefill?.reps !== undefined
-        ? String(prefill.reps)
-        : targetReps !== null && targetReps !== undefined
-          ? String(targetReps)
-          : "0";
-    const durPlh =
-      prefill?.durationSec != null
-        ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
-        : targetDurationSec != null
-          ? secondsToUnitDisplay(targetDurationSec, durationUnit)
-          : "30";
-
-    return (
-      <View testID={tid} style={{ gap: 4 }}>
-        {roundLabel ? (
-          <Text
-            testID={`${tid}-round`}
-            style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
-          >
-            {roundLabel}
-          </Text>
-        ) : null}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          {inputs.weight ? (
-            <View style={{ flex: 1, minWidth: 60 }}>
-              <TextInput
-                testID={`${tid}-weight`}
-                accessibilityLabel={bellWeightLabel(bell.style)}
-                keyboardType="decimal-pad"
-                value={state.weight !== null ? String(state.weight) : ""}
-                onChangeText={(text) =>
-                  onChange({ ...state, weight: parseNum(text) })
-                }
-                placeholder={
-                  prefill?.weight !== null && prefill?.weight !== undefined
-                    ? String(prefill.weight)
-                    : "0"
-                }
-                placeholderTextColor={colors["muted-foreground"]}
-                className="bg-card border border-border rounded-lg px-2 py-1.5 text-foreground text-center text-sm font-medium"
-                style={{ minHeight: 38 }}
-              />
-              <Text
-                testID={`${tid}-weight-label`}
-                style={{
-                  fontSize: 10,
-                  color: colors.mutedForeground,
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                {bellUnit}
-              </Text>
-            </View>
-          ) : null}
-
-          {inputs.reps ? (
-            <View style={{ flex: 1, minWidth: 60 }}>
-              <TextInput
-                testID={`${tid}-reps`}
-                accessibilityLabel="Reps"
-                keyboardType="number-pad"
-                value={state.reps !== null ? String(state.reps) : ""}
-                onChangeText={(text) =>
-                  onChange({ ...state, reps: parseNum(text) })
-                }
-                placeholder={repsPlh}
-                placeholderTextColor={colors["muted-foreground"]}
-                className="bg-card border border-border rounded-lg px-2 py-1.5 text-foreground text-center text-sm font-medium"
-                style={{ minHeight: 38 }}
-              />
-              <Text
-                testID={`${tid}-reps-label`}
-                style={{
-                  fontSize: 10,
-                  color: colors.mutedForeground,
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                reps
-              </Text>
-            </View>
-          ) : null}
-
-          {inputs.duration ? (
-            <View style={{ flex: 1, minWidth: 60 }}>
-              <TextInput
-                testID={`${tid}-duration`}
-                accessibilityLabel={`Time (${durationUnit})`}
-                keyboardType="decimal-pad"
-                value={secondsToUnitDisplay(state.durationSec, durationUnit)}
-                onChangeText={(text) => {
-                  const seconds = unitDisplayToSeconds(text, durationUnit);
-                  onChange({
-                    ...state,
-                    durationSec: seconds === "" ? null : Number(seconds),
-                  });
-                }}
-                placeholder={durPlh}
-                placeholderTextColor={colors["muted-foreground"]}
-                className="bg-card border border-border rounded-lg px-2 py-1.5 text-foreground text-center text-sm font-medium"
-                style={{ minHeight: 38 }}
-              />
-              <Text
-                testID={`${tid}-duration-label`}
-                style={{
-                  fontSize: 10,
-                  color: colors.mutedForeground,
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                {durationUnit}
-              </Text>
-            </View>
-          ) : null}
-
-          {inputs.distance ? (
-            <View style={{ flex: 1, minWidth: 60 }}>
-              <TextInput
-                testID={`${tid}-distance`}
-                accessibilityLabel={isFloorsExercise(exerciseName) ? "Floors" : "Dist (m)"}
-                keyboardType="decimal-pad"
-                value={state.distance !== null && state.distance !== undefined ? String(state.distance) : ""}
-                onChangeText={(text) =>
-                  onChange({ ...state, distance: parseNum(text) })
-                }
-                placeholder={prefill?.distance != null ? String(prefill.distance) : "0"}
-                placeholderTextColor={colors["muted-foreground"]}
-                className="bg-card border border-border rounded-lg px-2 py-1.5 text-foreground text-center text-sm font-medium"
-                style={{ minHeight: 38 }}
-              />
-              <Text
-                style={{
-                  fontSize: 10,
-                  color: colors.mutedForeground,
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                {isFloorsExercise(exerciseName) ? "fl" : "m"}
-              </Text>
-            </View>
-          ) : null}
-
-          {inputs.speed ? (
-            <View style={{ flex: 1, minWidth: 60 }}>
-              <TextInput
-                testID={`${tid}-speed`}
-                accessibilityLabel="Speed (mph)"
-                keyboardType="decimal-pad"
-                value={state.speed !== null && state.speed !== undefined ? String(state.speed) : ""}
-                onChangeText={(text) =>
-                  onChange({ ...state, speed: parseNum(text) })
-                }
-                placeholder={prefill?.speed != null ? String(prefill.speed) : "0.0"}
-                placeholderTextColor={colors["muted-foreground"]}
-                className="bg-card border border-border rounded-lg px-2 py-1.5 text-foreground text-center text-sm font-medium"
-                style={{ minHeight: 38 }}
-              />
-              <Text
-                style={{
-                  fontSize: 10,
-                  color: colors.mutedForeground,
-                  textAlign: "center",
-                  marginTop: 2,
-                }}
-              >
-                mph
-              </Text>
-            </View>
-          ) : null}
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            {!state.completed && !state.weight && !state.reps && !state.durationSec && !state.distance && !state.speed ? (
-              <Pressable
-                testID={`${tid}-skip`}
-                accessibilityRole="button"
-                accessibilityLabel="Skip set"
-                onPress={() => onChange({ ...state, completed: true, reps: 0, weight: 0 })}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  borderWidth: 1.5,
-                  borderColor: colors.border,
-                  backgroundColor: colors.card,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <ChevronsRight size={16} color={colors.mutedForeground} />
-              </Pressable>
-            ) : null}
-            {!hideComplete ? (
-              <Pressable
-                testID={`${tid}-complete`}
-                onPress={() => onChange({ ...state, completed: !state.completed })}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: state.completed }}
-                accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  borderWidth: 2,
-                  borderColor: state.completed ? colors.primary : colors.border,
-                  backgroundColor: state.completed ? colors.primary : colors.card,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {state.completed ? (
-                  <Check color={colors["primary-foreground"]} size={18} strokeWidth={2.5} />
-                ) : null}
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-
-        {quickPicks.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            testID={`${tid}-quick-picks`}
-            contentContainerStyle={{ flexDirection: "row", gap: 6, paddingTop: 2 }}
-          >
-            {quickPicks.map((pick) => (
-              <Pressable
-                key={pick}
-                testID={`${tid}-quick-pick-${pick}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Log ${pick} pounds`}
-                onPress={() => onChange({ ...state, weight: pick })}
-                className="rounded-full bg-muted px-2.5 py-1"
-              >
-                <Text className="text-muted-foreground text-[11px] font-semibold">
-                  {String(pick)}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
-      </View>
-    );
-  }
-
   return (
     <View
       testID={tid}
@@ -462,7 +221,7 @@ export function LiveSetRow({
         <View style={{ flex: 1 }}>
           <Input
             testID={`${tid}-weight`}
-            label={bellWeightLabel(bell.style)}
+            label={getWeightLabel(bell.style, compact)}
             keyboardType="decimal-pad"
             value={state.weight !== null ? String(state.weight) : ""}
             onChangeText={(text) =>
@@ -474,7 +233,7 @@ export function LiveSetRow({
                 : "0"
             }
           />
-          {helper ? (
+          {!compact && helper ? (
             <Text
               testID={`${tid}-helper`}
               className="text-muted-foreground text-xs mt-1"
@@ -482,7 +241,7 @@ export function LiveSetRow({
               {helper}
             </Text>
           ) : null}
-          {assumptionLabel ? (
+          {!compact && assumptionLabel ? (
             <Text
               testID={`${tid}-assumption`}
               className="text-muted-foreground text-xs mt-1"
@@ -493,25 +252,52 @@ export function LiveSetRow({
           {quickPicks.length > 0 ? (
             <View
               testID={`${tid}-quick-picks`}
-              style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}
+              style={
+                compact
+                  ? { marginTop: 4 }
+                  : { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }
+              }
             >
-              {quickPicks.map((pick) => (
-                <Pressable
-                  key={pick}
-                  testID={`${tid}-quick-pick-${pick}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Log ${pick} pounds`}
-                  onPress={() => onChange({ ...state, weight: pick })}
-                  className="rounded-full bg-muted px-3 py-1.5"
+              {compact ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ flexDirection: "row", gap: 4 }}
                 >
-                  <Text className="text-muted-foreground text-xs font-semibold">
-                    {String(pick)}
-                  </Text>
-                </Pressable>
-              ))}
+                  {quickPicks.map((pick) => (
+                    <Pressable
+                      key={pick}
+                      testID={`${tid}-quick-pick-${pick}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Log ${pick} pounds`}
+                      onPress={() => onChange({ ...state, weight: pick })}
+                      className="rounded-full bg-muted px-2.5 py-1"
+                    >
+                      <Text className="text-muted-foreground text-xs font-semibold">
+                        {String(pick)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                quickPicks.map((pick) => (
+                  <Pressable
+                    key={pick}
+                    testID={`${tid}-quick-pick-${pick}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Log ${pick} pounds`}
+                    onPress={() => onChange({ ...state, weight: pick })}
+                    className="rounded-full bg-muted px-3 py-1.5"
+                  >
+                    <Text className="text-muted-foreground text-xs font-semibold">
+                      {String(pick)}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
             </View>
           ) : null}
-          {prefill ? (
+          {!compact && prefill ? (
             <Text
               testID={`${tid}-prefill`}
               className="text-muted-foreground text-xs mt-1"
@@ -532,8 +318,8 @@ export function LiveSetRow({
             placeholder={
               prefill?.reps !== null && prefill?.reps !== undefined
                 ? String(prefill.reps)
-                : targetReps !== null && targetReps !== undefined
-                  ? String(targetReps)
+                : targetReps != null
+                  ? String(targetReps).split("-")[0]?.replace(/[^0-9]/g, "") || "0"
                   : "0"
             }
           />
@@ -582,8 +368,8 @@ export function LiveSetRow({
             placeholder={
               prefill?.durationSec != null
                 ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
-                : targetDurationSec != null
-                  ? secondsToUnitDisplay(targetDurationSec, durationUnit)
+                : targetDuration != null
+                  ? String(targetDuration).replace(/[^0-9]/g, "") || "30"
                   : "0"
             }
           />
@@ -629,6 +415,31 @@ export function LiveSetRow({
           />
         </View>
       ) : null}
+      {compact && !state.completed && !state.weight && !state.reps && !state.durationSec && !state.distance && !state.speed ? (
+        <Pressable
+          testID={`${tid}-skip`}
+          accessibilityRole="button"
+          accessibilityLabel={`Skip set ${setIndex + 1}`}
+          onPress={() => {
+            if (onSkip) {
+              onSkip();
+            } else {
+              onChange({
+                ...state,
+                reps: null,
+                weight: null,
+                durationSec: null,
+                distance: null,
+                speed: null,
+                completed: true,
+              });
+            }
+          }}
+          className="w-9 h-9 rounded-lg border border-border items-center justify-center bg-card"
+        >
+          <ChevronsRight size={16} color={colors["muted-foreground"]} />
+        </Pressable>
+      ) : null}
       {hideComplete ? null : (
         <Pressable
           testID={`${tid}-complete`}
@@ -636,18 +447,28 @@ export function LiveSetRow({
           accessibilityRole="checkbox"
           accessibilityState={{ checked: state.completed }}
           accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-          className={`w-10 h-10 rounded-full items-center justify-center ${
-            state.completed ? "bg-primary" : "bg-muted"
-          }`}
+          className={
+            compact
+              ? `w-9 h-9 rounded-lg items-center justify-center border ${
+                  state.completed
+                    ? "bg-green-500 border-green-500"
+                    : "bg-card border-border"
+                }`
+              : `w-10 h-10 rounded-full items-center justify-center ${
+                  state.completed ? "bg-primary" : "bg-muted"
+                }`
+          }
         >
           <Check
             color={
               state.completed
-                ? colors["primary-foreground"]
+                ? compact
+                  ? "#ffffff"
+                  : colors["primary-foreground"]
                 : colors["muted-foreground"]
             }
-            size={20}
-            strokeWidth={1.5}
+            size={compact ? 18 : 20}
+            strokeWidth={compact ? 2 : 1.5}
           />
         </Pressable>
       )}

@@ -47,14 +47,14 @@ export function WorkoutViewToggle({
             justifyContent: "center",
             borderRadius: 999,
             paddingHorizontal: 14,
-            paddingVertical: 4,
-            backgroundColor: selected ? colors.foreground : "transparent",
+            paddingVertical: 5,
+            backgroundColor: selected ? colors.primary : "transparent",
           },
         ]}
       >
         <Text
           className={`text-xs font-semibold ${
-            selected ? "text-background" : "text-muted-foreground"
+            selected ? "text-primary-foreground" : "text-muted-foreground"
           }`}
         >
           {label}
@@ -71,6 +71,7 @@ export function WorkoutViewToggle({
       style={{
         flexDirection: "row",
         alignItems: "center",
+        alignSelf: "center",
         gap: 2,
         padding: 2,
         borderRadius: 999,
