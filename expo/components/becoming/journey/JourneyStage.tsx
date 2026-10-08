@@ -25,7 +25,11 @@
 //   intro     a spread of cards under a fog, the current one breathing; the
 //             line draws itself; the camera flies in as the fog lifts and the
 //             card clicks into place (full once per week, short after; any
-//             touch skips it). Reduce Motion: no intro at all.
+//             touch skips it). Reduce Motion: no intro at all. It starts when
+//             the stage is ON SCREEN — the screen's push has ended (`shown`)
+//             and the canvas has laid out — not at mount, which on iOS is
+//             before the slide (NP-347); until then it waits in its first
+//             frame.
 //   focus     one week centred. Drag and the next (or previous) card follows
 //             your intent along the path; let go and it snaps. Buttons do the
 //             same in one step.
@@ -119,6 +123,7 @@ import {
   HINT_MS,
   INTRO_FLY_MS,
   INTRO_HOLD_MS,
+  INTRO_SPREAD_SCALE,
   OVERVIEW_HIT_TOLERANCE,
   SCRUB_FLY_MS,
   SHORT_INTRO_MS,
@@ -136,6 +141,7 @@ import {
   liveTrend,
   markerOpacity,
   markerRadius,
+  openingPose,
   pinchCamera,
   projectScrub,
   ringRadius,
@@ -187,6 +193,15 @@ export interface JourneyStageProps {
   initialWeekKey?: string | null;
   /** True while a sheet is open over the stage: gestures are ignored. */
   inert?: boolean;
+  /**
+   * The screen holding the stage is in view — its push transition has ended
+   * (`useScreenShown`, the navigator's `transitionEnd`). The opening's first
+   * beat waits for this AND for the stage's own canvas to lay out, so the
+   * hold and the fly play on screen rather than behind the slide (NP-347).
+   * Goes false → true once; a host that cannot tell leaves it `true`, and
+   * the canvas alone gates the opening.
+   */
+  shown?: boolean;
   testID?: string;
 }
 
@@ -253,6 +268,8 @@ interface StageCanvasProps {
   tilt: SharedValue<number>;
   drawProgress: SharedValue<number>;
   font: SkFont | null;
+  /** The canvas has laid out — Skia has its size, its first frame follows natively; the opening waits for this (NP-347). */
+  onLayout: (e: LayoutChangeEvent) => void;
 }
 
 function SolidSegment({
@@ -297,6 +314,7 @@ function StageCanvas({
   tilt,
   drawProgress,
   font,
+  onLayout,
 }: StageCanvasProps) {
   // Camera → world transform, about the origin (the same formula as the web's
   // `translate3d(vw/2 - x*s, vh/2 - y*s) scale(s)` with transform-origin 0 0).
@@ -334,7 +352,7 @@ function StageCanvas({
     // Every colour on this canvas is `skiaRgbOf` (or `pillarColor`'s `hsl()`),
     // never `rgbOf`: Skia parses the string itself, reads the comma form only,
     // and paints what it cannot read black (NP-344).
-    <Canvas style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }} pointerEvents="none">
+    <Canvas style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }} pointerEvents="none" onLayout={onLayout}>
       {/* Ambient sky: the web's two radial washes */}
       <Rect x={0} y={0} width={vw} height={vh}>
         <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[skiaRgbOf(SKY_VIOLET, 0.32), skiaRgbOf(SKY_VIOLET, 0)]} />
@@ -534,11 +552,13 @@ function StageSlot({ index, left, top, width, height, emphasis, dim, breathing, 
 
 // ── The stage ──────────────────────────────────────────────────────────────
 
-/** The opening's beats: the title holds, the camera flies, the stage is yours. */
-type IntroPhase = "hold" | "fly" | "done";
+/** The opening's beats, as played: the title holds, the camera flies, the stage is yours. */
+type IntroBeat = "hold" | "fly" | "done";
+/** …and what the stage is doing right now: the first beat WAITS until the stage is on screen (NP-347). */
+type IntroPhase = "waiting" | IntroBeat;
 
 export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(function JourneyStage(
-  { data, introKind, onClose, onDetails, onNavigate, initialWeekKey = null, inert = false, testID = "journey-stage" },
+  { data, introKind, onClose, onDetails, onNavigate, initialWeekKey = null, inert = false, shown = true, testID = "journey-stage" },
   ref,
 ) {
   const reduced = useReducedMotion();
@@ -561,7 +581,20 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
 
   const plays = introKind !== "none" && weeks.length > 0;
   const [mode, setMode] = useState<StageMode>(plays ? "intro" : "focus");
-  const [introPhase, setIntroPhase] = useState<IntroPhase>(!plays ? "done" : introKind === "full" ? "hold" : "fly");
+  const [introBeat, setIntroBeat] = useState<IntroBeat>(!plays ? "done" : introKind === "full" ? "hold" : "fly");
+  // ON SCREEN (NP-347): the screen holding the stage has finished arriving
+  // (`shown` — the navigator's `transitionEnd`, asked by the screen) AND the
+  // stage's own native tree is laid out — the Skia canvas has its size, so
+  // its first frame follows natively (the gesture surface, laid out in the
+  // same commit, reports the same beat). A native-stack push mounts this
+  // component BEFORE the slide, and on iOS the main thread can stay busy for
+  // seconds after that, so an opening clocked from mount plays out behind
+  // the transition and the stage arrives already landed. Until both signals
+  // the opening WAITS, in its first frame; the phase is derived from the
+  // stored beat, never set in an effect.
+  const [laidOut, setLaidOut] = useState(false);
+  const onScreen = shown && laidOut;
+  const introPhase: IntroPhase = introBeat !== "done" && !onScreen ? "waiting" : introBeat;
   const [focus, setFocus] = useState(startIndex);
   const [landed, setLanded] = useState<number | null>(plays ? null : startIndex);
   // A fly in progress: which card lands, and when (the beat the card clicks into place).
@@ -571,13 +604,18 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
   const showTitle = introKind === "full" && mode === "intro" && introPhase === "hold";
 
   // ── Camera: the world point at the viewport centre, the scale, the intro's tilt and fog ──
+  // The stage mounts in the opening's FIRST FRAME (the spread under the fog,
+  // tilted, the line undrawn; the short opening's 0.7 zoom), so what slides
+  // in with the screen while the opening waits IS the opening, not a snap
+  // into it. The beat that then plays starts from this same pose.
   const startPos = positions[startIndex];
-  const camX = useSharedValue(startPos?.x ?? 0);
-  const camY = useSharedValue(startPos?.y ?? 0);
-  const camS = useSharedValue(1);
-  const tilt = useSharedValue(0);
-  const fog = useSharedValue(plays ? 1 : 0);
-  const drawProgress = useSharedValue(plays && introKind === "full" ? 0 : 1);
+  const pose = openingPose(plays ? introKind : "none", startPos, vw, vh);
+  const camX = useSharedValue(pose.x);
+  const camY = useSharedValue(pose.y);
+  const camS = useSharedValue(pose.s);
+  const tilt = useSharedValue(pose.tilt);
+  const fog = useSharedValue(pose.fog);
+  const drawProgress = useSharedValue(pose.draw);
 
   // Mirrors of React state for the UI thread — and for the release handlers,
   // which read them instead of stale closures. Shared values are the stage's
@@ -689,7 +727,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
   // when the phase moves on.
   const finishIntro = useCallback(() => {
     if (modeSV.value !== "intro") return;
-    setIntroPhase("done");
+    setIntroBeat("done");
     const p = positions[startIndex] ?? positions[0];
     const dur = motionDuration(250, reducedSV.value);
     cancelAnimation(camX);
@@ -712,23 +750,27 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
 
   // HOLD (full only): a spread of cards under the fog, tilted 2.5°, the
   // current one breathing, the title up; the line draws itself under the haze.
+  // Runs once the stage is ON SCREEN — `introPhase` is `waiting` until then
+  // (NP-347) — so the flag it writes ("the opening started this week") is
+  // true of an opening the member actually saw start.
   useEffect(() => {
     if (introPhase !== "hold") return;
     const cur = positions[startIndex] ?? positions[0];
     if (!cur) return;
     void markIntroShown(data.todayKey);
-    const s0 = 0.3;
-    camX.value = cur.x - (vw * 0.12) / s0;
-    camY.value = cur.y - (vh * 0.06) / s0;
-    camS.value = s0;
-    tilt.value = 2.5;
-    fog.value = 1;
+    const s0 = INTRO_SPREAD_SCALE;
+    const from = openingPose("full", cur, vw, vh);
+    camX.value = from.x;
+    camY.value = from.y;
+    camS.value = from.s;
+    tilt.value = from.tilt;
+    fog.value = from.fog;
     const drift = { duration: INTRO_HOLD_MS, easing: Easing.inOut(Easing.ease) };
     camX.value = withTiming(cur.x - (vw * 0.04) / s0, drift);
     camS.value = withTiming(s0 * 1.08, drift);
     tilt.value = withTiming(1, drift);
     drawProgress.value = withDelay(250, withTiming(1, { duration: 1550, easing: Easing.out(Easing.ease) }));
-    const t = setTimeout(() => setIntroPhase("fly"), INTRO_HOLD_MS);
+    const t = setTimeout(() => setIntroBeat("fly"), INTRO_HOLD_MS);
     return () => clearTimeout(t);
     // The opening is staged once, for the layout it mounted with (the web's
     // intro effect runs once too); a resize mid-opening is re-centred after.
@@ -743,12 +785,14 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
     if (!cur) return;
     let ms: number;
     if (introKind === "short") {
+      // The short opening's only beat, so this is where IT starts on screen.
       void markIntroShown(data.todayKey);
-      camX.value = cur.x;
-      camY.value = cur.y;
-      camS.value = 0.7;
-      fog.value = 0.7;
-      tilt.value = 0;
+      const from = openingPose("short", cur, vw, vh);
+      camX.value = from.x;
+      camY.value = from.y;
+      camS.value = from.s;
+      fog.value = from.fog;
+      tilt.value = from.tilt;
       camS.value = withTiming(1, { duration: 900, easing: easeOut });
       fog.value = withTiming(0, { duration: 800, easing: easeOut });
       ms = SHORT_INTRO_MS;
@@ -764,7 +808,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
       ms = INTRO_FLY_MS + 80;
     }
     const t = setTimeout(() => {
-      setIntroPhase("done");
+      setIntroBeat("done");
       setMode("focus");
       setLanded(startIndex);
       if (introKind === "full") setHint("swipe to move through your weeks · pinch out for the line");
@@ -986,9 +1030,20 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
   const fogStyle = useAnimatedStyle(() => ({ opacity: fog.value }));
   const hudStyle = useAnimatedStyle(() => ({ opacity: hudOpacity(camS.value) }));
 
+  // LAID OUT (NP-347): the stage's native tree has its frames. The canvas
+  // reports it — Skia has its size, and its first frame follows on the
+  // native side — and so does the gesture surface, laid out in the same
+  // commit, so a dropped prop can never leave the opening waiting. Latched:
+  // `setLaidOut(true)` is idempotent, and a later layout is a resize.
+  const onCanvasLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (!width || !height) return;
+    setLaidOut(true);
+  }, []);
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
     if (!width || !height) return;
+    setLaidOut(true);
     setVp((prev) => (prev && prev.w === width && prev.h === height ? prev : { w: width, h: height }));
   }, []);
 
@@ -1090,11 +1145,12 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
           tilt={tilt}
           drawProgress={drawProgress}
           font={font}
+          onLayout={onCanvasLayout}
         />
 
         <GestureDetector gesture={gesture}>
           <View style={StyleSheet.absoluteFill} onLayout={onLayout} testID="journey-gesture-surface">
-            <Animated.View style={[StyleSheet.absoluteFill, tiltStyle]} pointerEvents="box-none">
+            <Animated.View style={[StyleSheet.absoluteFill, tiltStyle]} pointerEvents="box-none" testID="journey-tilt">
               <Animated.View
                 style={[styles.world, { width: vw, height: vh }, worldStyle]}
                 pointerEvents="box-none"
@@ -1187,7 +1243,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
 
         {/* The intro's fog: the web's blur has a plain-fog fallback for low-memory
             devices, and that is what the phone gets — same beat, no filter. */}
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: fogColor }, fogStyle]} pointerEvents="none" />
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: fogColor }, fogStyle]} pointerEvents="none" testID="journey-fog" />
 
         {showTitle && (
           <Animated.View
@@ -1320,6 +1376,9 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
         {/* `landed` is the beat the card has clicked into place: the cards above
             take it for their landing stagger (NP-346), and a test reads it here. */}
         <View style={styles.srOnly} testID={landed != null ? `journey-landed-${landed}` : "journey-landing"} />
+        {/* …and what the opening is doing — `waiting` until the stage is on
+            screen (NP-347), then its beat — for the same reader. */}
+        <View style={styles.srOnly} testID={`journey-intro-${introPhase}`} />
       </ForcedThemeMode>
     </View>
   );

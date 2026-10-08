@@ -1899,6 +1899,31 @@ the details sheet above it. Four rules travel with it (the long form is
   the glow. Every one is skipped under Reduce Motion, read at mount or
   flipped live. Numbers: `expo/lib/becoming/stageMotion.ts`; test:
   `expo/__tests__/card-NP-346-acceptance.test.tsx`.
+- **The opening starts when the stage is ON SCREEN, not at mount (NP-347).**
+  Review on 10/8: on the iOS simulator the first open of the week showed no
+  opening at all — the stage slid in already landed, and half a second later
+  the bottom line read "swipe to move through your weeks", the hint set only
+  when the FULL opening finishes. A native-stack push mounts the route
+  BEFORE the slide, and on iOS the main thread then stays busy mounting
+  fifty card views and the Skia surface (which holds the push as well); the
+  opening was clocked by `setTimeout`s from mount, so the hold and the fly
+  elapsed behind the transition. Now the stage mounts in the opening's FIRST
+  FRAME (`openingPose`, `expo/lib/becoming/stage.ts`: the 0.3× spread, the
+  2.5° tilt, the fog, the line undrawn) and its first beat WAITS for two
+  signals: the screen's `shown` prop — `expo/lib/navigation/useScreenShown.ts`,
+  the navigator's `transitionEnd` with `closing: false` (react-native-screens'
+  `onAppear`, `viewDidAppear` on iOS), asked at the SCREEN's mount so it is
+  heard even when the journey arrives after it, with a bounded fallback for a
+  host that never emits it — and the stage's own canvas laying out (the Skia
+  `Canvas`'s `onLayout`; the gesture surface is laid out in the same commit
+  and reports the same beat, so a dropped prop can never leave the opening
+  waiting). The phase is DERIVED — `waiting` until both, then the stored
+  beat — not set in an effect. The weekly `becoming.intro.v2.<sunday>` flag
+  is written by the beat effects, so it lands only once the opening actually
+  started on screen: a touch during the slide cuts an opening that never
+  started and writes nothing, and the member gets it next time. Test:
+  `expo/__tests__/card-NP-347-acceptance.test.tsx`; the hold and the fly
+  being SEEN on the simulator and a real iPhone is the device pass.
 
 #### The Mind session player, natively (NP-098)
 

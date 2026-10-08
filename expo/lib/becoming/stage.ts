@@ -70,10 +70,48 @@ export const HINT_MS = 3200;
 export type IntroKind = "full" | "short" | "none";
 export type StageMode = "intro" | "focus" | "overview";
 
+/** The full opening's spread: the camera at 0.3× over the start card, tilted 2.5° (the web's `s0` and `tilt.set(2.5)`). */
+export const INTRO_SPREAD_SCALE = 0.3;
+export const INTRO_TILT_DEG = 2.5;
+/** The short opening: a 0.7 → 1 zoom under a lighter fog (the web's `camS.set(0.7); blur.set(0.7)`). */
+export const SHORT_INTRO_SCALE = 0.7;
+export const SHORT_INTRO_FOG = 0.7;
+
 export interface Camera {
   x: number;
   y: number;
   s: number;
+}
+
+/** The camera plus the opening's own values: the tilt, the fog, how much of the line is drawn. */
+export interface CameraPose extends Camera {
+  tilt: number;
+  fog: number;
+  draw: number;
+}
+
+/**
+ * The opening's FIRST FRAME (NP-347): where the camera, the tilt, the fog and
+ * the line's draw progress sit before the first beat plays. The stage mounts
+ * in this pose and holds it until it is on screen — the screen's push has
+ * ended and the canvas has laid out — so what slides in with the screen is
+ * the opening itself and not a snap into it; the beat that then plays starts
+ * from the same pose. `none` is the landed stage.
+ */
+export function openingPose(
+  kind: IntroKind,
+  start: { x: number; y: number } | undefined,
+  vw: number,
+  vh: number,
+): CameraPose {
+  const x = start?.x ?? 0;
+  const y = start?.y ?? 0;
+  if (kind === "full") {
+    const s0 = INTRO_SPREAD_SCALE;
+    return { x: x - (vw * 0.12) / s0, y: y - (vh * 0.06) / s0, s: s0, tilt: INTRO_TILT_DEG, fog: 1, draw: 0 };
+  }
+  if (kind === "short") return { x, y, s: SHORT_INTRO_SCALE, tilt: 0, fog: SHORT_INTRO_FOG, draw: 1 };
+  return { x, y, s: 1, tilt: 0, fog: 0, draw: 1 };
 }
 
 // ── Worklets: what runs on the UI thread, per frame ─────────────────────────

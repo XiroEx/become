@@ -133,6 +133,17 @@ function renderStage(props: Partial<JourneyStageProps> = {}, ref?: React.Ref<Jou
 }
 
 /**
+ * The opening starts when the stage is ON SCREEN (NP-347): the screen's push
+ * has ended (`shown`, the default here) and the canvas has laid out. RNTL lays
+ * nothing out, so a test that plays the opening says so itself.
+ */
+function showStage(u: RenderResult) {
+  act(() => {
+    u.getByTestId("skia-Canvas").props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: WINDOW.width, height: WINDOW.height } } });
+  });
+}
+
+/**
  * A bare card, plus the same `settle()`. `WeekCard` is memoised, so the
  * factory is handed a fresh callback each time — the stage's inline
  * `onDetails` does the same there — or the re-render would be skipped.
@@ -596,6 +607,7 @@ describe("the intro's breathing glow on the start card", () => {
     const timing = jest.spyOn(Reanimated, "withTiming");
     const u = renderStage({ introKind: "full" });
     expect(mode(u)).toBe("intro");
+    showStage(u);
     const glows = u.getAllByTestId("journey-intro-glow");
     expect(glows).toHaveLength(1);
     const s = slot(u, LIVE);

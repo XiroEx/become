@@ -320,6 +320,36 @@ hold it together:
   cut — read at mount or flipped live. `lib/becoming/stageMotion.ts` has the
   numbers; `__tests__/card-NP-346-acceptance.test.tsx` holds the rendered
   stage to them.
+- **The opening starts when the stage is ON SCREEN, not at mount (NP-347).**
+  On the iOS simulator the first open of the week showed no opening: the
+  stage slid in already landed, and the "swipe to move through your weeks"
+  hint — set only when the FULL opening finishes — read half a second later.
+  A native-stack push mounts the route BEFORE the slide, and on iOS the main
+  thread then stays busy mounting fifty card views and the Skia surface
+  (which holds the push too); the opening was clocked by `setTimeout`s from
+  mount, so the hold and the fly elapsed behind the transition. The stage now
+  mounts in the opening's FIRST FRAME (`openingPose` in `lib/becoming/stage.ts`:
+  the 0.3× spread, the 2.5° tilt, the fog, the line undrawn — or the short
+  opening's 0.7 zoom) and its first beat waits for two signals. The SCREEN's
+  `shown` prop: `lib/navigation/useScreenShown.ts` listens for the
+  navigator's `transitionEnd` with `closing: false` (react-native-screens'
+  `onAppear` — `viewDidAppear` on iOS, the end of the enter transition on
+  Android, the first screen of a stack included), at the screen's mount so
+  it is heard even when the journey arrives after it, latched, with a
+  bounded fallback (`SCREEN_SHOWN_FALLBACK_MS`) for a host that never emits
+  it (jest; a screen outside a native stack). And the stage's own native
+  tree laying out: the Skia `Canvas`'s `onLayout` — the beat it has a size
+  and its first frame follows natively; the gesture surface is laid out in
+  the same commit and reports the same beat, so a dropped prop can never
+  leave the opening waiting. The phase is DERIVED (`waiting` until both,
+  then the stored beat), not set in an effect. `markIntroShown` stays inside
+  the beat effects, so the weekly `becoming.intro.v2.<sunday>` flag is
+  written only once the opening actually started on screen; a touch during
+  the slide cuts an opening that never started and writes nothing, and the
+  member gets it next time. `__tests__/card-NP-347-acceptance.test.tsx`
+  drives both signals, in both orders, and the hook through the event, the
+  fallback and a missing navigator; the hold and the fly being SEEN is the
+  device pass (the simulator and a real iPhone).
 
 Two things to know before you touch it:
 
@@ -330,8 +360,10 @@ Two things to know before you touch it:
   `ref.current` is written during render (React state is mirrored into shared
   values in effects, and the release handlers and gestures are rebuilt with
   each render, which is how Gesture Handler is meant to be used), and the
-  intro is a `hold → fly → done` phase machine whose effects only start
-  animations and timers.
+  intro is a `hold → fly → done` beat machine whose effects only start
+  animations and timers — with the phase on screen DERIVED from it
+  (`waiting` until the stage is shown and laid out, NP-347), never set in
+  an effect.
 - **What jest cannot prove is the frame rate.** "Dragging and pinching on a
   real phone stays at 60 fps with a year of weeks" is a device fact: nothing
   per-frame crosses to the JS thread, the canvas is screen-sized and the far
