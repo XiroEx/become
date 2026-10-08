@@ -1,6 +1,10 @@
 import type { ComponentProps } from "react";
 import { Stack } from "expo-router";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import {
+  PUSH_ANIMATION,
+  useStackAnimation,
+} from "@/lib/navigation/screenAnimation";
 
 /**
  * THE STACK EVERY TAB OWNS.
@@ -23,6 +27,15 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
   // The iOS back swipe. On by default in a native stack — pinned here so a
   // future screenOptions edit has to say out loud that it is turning it off.
   gestureEnabled: true,
+  // ONE EXPLICIT PUSH (NP-340). Unset, this is `presentation: "card"`'s
+  // default, which react-native-screens documents as varying with the Android
+  // OS version and theme — on Android 15 that is the Material predictive-back
+  // transition, which jitters against our JS-drawn headers and uncovers the
+  // native stack container at the left edge. See
+  // `lib/navigation/screenAnimation.ts` for why `ios_from_right` is the value.
+  // `TabStack()` below replaces it with `"none"` when the OS asks for reduced
+  // motion; this constant is the app's choice when it does not.
+  animation: PUSH_ANIMATION,
 };
 
 /**
@@ -33,15 +46,24 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
  * comes from the theme (NP-123), so it is a hook call and cannot live in a
  * module-level object. The navigator paints it during a push, which is the one
  * frame a screen's own SafeAreaView does not cover.
+ *
+ * `animation` is overridden here for the same reason — "Reduce Motion" /
+ * "Remove animations" is a live system setting, so it is a hook too (NP-340).
+ * The native stack container BEHIND these screens is painted from React
+ * Navigation's theme, which `app/_layout.tsx` now provides
+ * (`lib/theme/navigationTheme.ts`); `contentStyle` alone never reached it,
+ * which is why a push flashed white at the left edge whatever this file said.
  */
 export function TabStack() {
   const { colors } = useThemeTokens();
+  const animation = useStackAnimation();
 
   return (
     <Stack
       screenOptions={{
         ...TAB_STACK_SCREEN_OPTIONS,
         contentStyle: { backgroundColor: colors.background },
+        animation,
       }}
     />
   );

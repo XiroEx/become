@@ -98,6 +98,20 @@ export default function TabsLayout() {
           backgroundColor: colors.background,
           borderTopColor: colors.border,
         },
+        // THE SCENE CONTAINER, which is not the screen and not the tab bar
+        // (NP-340). bottom-tabs renders every tab into its own
+        // `elements/Background`, whose colour comes from React Navigation's
+        // theme — the LIGHT default until this card provided one — and then
+        // into this `sceneStyle`. A tab switch therefore flashed near-white in
+        // the frames between detaching one scene and attaching the next. The
+        // theme is ours now (`lib/theme/navigationTheme.ts`); this says it a
+        // second time, on the view the navigator hands us, so a tab switch
+        // cannot show anything but the page colour.
+        sceneStyle: { backgroundColor: colors.background },
+        // A tab switch is a CUT, not a travel: bottom-tabs' default, named here
+        // so a future edit has to say out loud that it is adding motion to the
+        // one transition that should be instant.
+        animation: "none",
       }}
     >
       {TAB_ROUTES.map(({ name, title }) => {
