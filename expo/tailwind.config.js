@@ -87,6 +87,10 @@ module.exports = {
           DEFAULT: "rgb(var(--amber) / <alpha-value>)",
           ...colors.amber,
         },
+        purple: {
+          DEFAULT: "rgb(var(--purple) / <alpha-value>)",
+          ...colors.purple,
+        },
       },
     },
   },
