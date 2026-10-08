@@ -36,7 +36,8 @@ export default function WorkoutOverviewRoute() {
   const onStartLive = useCallback(() => {
     const q: string[] = [];
     if (Number.isFinite(phase)) q.push(`phase=${phase}`);
-    if (params.day) q.push(`day=${encodeURIComponent(params.day)}`);
+    const resolvedDay = params.day || `Day ${idx + 1}`;
+    q.push(`day=${encodeURIComponent(resolvedDay)}`);
     if (params.sd) q.push(`sd=${encodeURIComponent(params.sd)}`);
     router.push(
       `/(tabs)/programming/${id}/workout/${idx}/live${q.length ? `?${q.join("&")}` : ""}`,

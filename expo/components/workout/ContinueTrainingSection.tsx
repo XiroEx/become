@@ -106,9 +106,8 @@ export function ContinueTrainingSection({
       const workoutIndex = workoutIndexFromDayLabel(
         program.currentDay ?? undefined,
       );
-      const dayParam = program.currentDay
-        ? `&day=${encodeURIComponent(program.currentDay)}`
-        : "";
+      const resolvedDay = program.currentDay || `Day ${workoutIndex + 1}`;
+      const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
       router.push(
         `/(tabs)/programming/${program.programId}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
       );

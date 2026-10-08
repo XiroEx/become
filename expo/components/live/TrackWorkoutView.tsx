@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
+import { ChevronDown } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
@@ -14,6 +15,8 @@ import {
   getBellWeightInfo,
   moveExercise,
   removeExercise,
+  setUnitLabel,
+  tracksTime,
   ungroupAt,
   type WorkoutStep,
 } from "@become/core";
@@ -21,6 +24,27 @@ import type {
   LiveGrid,
   LiveWorkoutExercise,
 } from "@/components/live/LiveWorkoutClient";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+
+export function parseTargetReps(repsLabel?: string | null): number | null {
+  if (!repsLabel) return null;
+  const match = repsLabel.match(/(\d+)/);
+  if (!match) return null;
+  const n = parseInt(match[1]!, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export function parseTargetDuration(durationLabel?: string | null): number | null {
+  if (!durationLabel) return null;
+  const match = durationLabel.match(/(\d+)/);
+  if (!match) return null;
+  const n = parseInt(match[1]!, 10);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (durationLabel.toLowerCase().includes("min")) {
+    return n * 60;
+  }
+  return n;
+}
 
 export interface TrackWorkoutViewProps {
   exercises: LiveWorkoutExercise[];
@@ -168,6 +192,7 @@ export function TrackWorkoutView({
   onExerciseChange,
   testID,
 }: TrackWorkoutViewProps) {
+  const { colors } = useThemeTokens();
   // Collapsed state is opt-IN per slug: absent (the common case) means open,
   // so every existing caller that never taps a header still sees every set —
   // only NP-287's new chevron can close one.
@@ -221,8 +246,15 @@ export function TrackWorkoutView({
     const allDone = totalCount > 0 && doneCount === totalCount;
     const pct = completionPercent(doneCount, totalCount);
     const isCollapsed = !!collapsed[ex.slug];
+    const numSets = ex.sets || 3;
+    const isTimed = tracksTime(ex.trackingType);
+    const unitNoun = isTimed
+      ? setUnitLabel(ex.trackingType ?? null, numSets).toLowerCase()
+      : "sets";
     const metaParts = [
-      ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`,
+      ex.repsLabel
+        ? `${numSets}×${ex.repsLabel}`
+        : `${numSets} ${unitNoun}`,
       ex.difficulty ? capitalize(ex.difficulty) : null,
     ].filter(Boolean);
 
@@ -244,10 +276,18 @@ export function TrackWorkoutView({
           <View
             testID={`${testID}-exercise-${ex.slug}-badge`}
             className={`h-9 w-9 rounded-xl items-center justify-center ${
-              allDone ? "bg-green-500" : "bg-foreground"
+              allDone
+                ? "bg-green-500"
+                : "bg-zinc-100 dark:bg-zinc-800"
             }`}
           >
-            <Text className="text-background text-sm font-bold">
+            <Text
+              className={`text-sm font-bold ${
+                allDone
+                  ? "text-white"
+                  : "text-zinc-700 dark:text-zinc-300"
+              }`}
+            >
               {allDone ? "✓" : exIdx + 1}
             </Text>
           </View>
@@ -285,9 +325,13 @@ export function TrackWorkoutView({
                 className="h-full rounded-full bg-green-500"
               />
             </View>
-            <Text className="text-muted-foreground text-xs">
-              {isCollapsed ? "▸" : "▾"}
-            </Text>
+            <ChevronDown
+              size={18}
+              color={colors["muted-foreground"]}
+              style={{
+                transform: [{ rotate: isCollapsed ? "0deg" : "180deg" }],
+              }}
+            />
           </View>
         </Pressable>
 
@@ -304,12 +348,12 @@ export function TrackWorkoutView({
               testID={`${testID}-${ex.slug}-video`}
               className="mb-3"
             />
-            {ex.notes ? (
+            {ex.notes || ex.tip ? (
               <Text
                 testID={`${testID}-${ex.slug}-notes`}
-                className="text-muted-foreground text-xs mb-2"
+                className="text-blue-600 dark:text-blue-400 text-xs mb-2 leading-snug"
               >
-                {ex.notes}
+                {ex.notes || ex.tip}
               </Text>
             ) : null}
             {renderHint(ex.slug)}
@@ -323,6 +367,8 @@ export function TrackWorkoutView({
                 showQuickPicks
                 state={s}
                 prefill={ex.prefill?.[i] ?? null}
+                targetReps={parseTargetReps(ex.repsLabel)}
+                targetDurationSec={parseTargetDuration(ex.durationLabel)}
                 trackingType={ex.trackingType}
                 testID={`${testID}-${ex.slug}-set-${i}`}
                 onChange={(next) => onSetChange(exIdx, i, next)}
@@ -396,9 +442,9 @@ export function TrackWorkoutView({
     const style = GROUP_BLOCK_STYLES[head.groupType ?? "superset"] ?? GROUP_BLOCK_STYLES.superset!;
     const maxRounds = Math.max(
       head.groupRounds ?? 0,
-      ...members.map(({ ex }) => ex.sets || 0),
+      ...members.map(({ ex }) => ex.sets || 3),
     );
-    const rounds = maxRounds > 0 ? maxRounds : 1;
+    const rounds = maxRounds > 0 ? maxRounds : 3;
 
     let completed = 0;
     let total = 0;
@@ -422,10 +468,16 @@ export function TrackWorkoutView({
           >
             {head.groupLabel ?? groupId}
           </Text>
+          <Text
+            testID={`${testID}-group-${groupId}-subtitle`}
+            className="text-muted-foreground text-xs"
+          >
+            {`— ${members.length} exercises${head.groupRest ? `, ${head.groupRest} rest between rounds` : ", minimal rest between exercises"}`}
+          </Text>
           {rounds > 1 ? (
             <Text
               testID={`${testID}-group-${groupId}-rounds`}
-              className="text-muted-foreground text-xs"
+              style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
             >
               {`Runs as ${rounds} interleaved rounds`}
             </Text>
@@ -455,34 +507,6 @@ export function TrackWorkoutView({
           </Text>
         </View>
 
-        {/* Each member's video/notes/hint, once — before the round rows. */}
-        <View style={{ marginTop: 10, gap: 10 }}>
-          {members.map(({ ex }) => (
-            <View key={ex.slug} testID={`${testID}-exercise-${ex.slug}`} style={{ gap: 4 }}>
-              <Text className="text-foreground text-sm font-semibold">{ex.name}</Text>
-              <FramedVideo
-                src={ex.videoUrl}
-                surface="live"
-                exerciseName={ex.name}
-                videoWidth={ex.videoWidth}
-                videoHeight={ex.videoHeight}
-                videoFraming={ex.videoFraming}
-                videoTrim={ex.videoTrim}
-                testID={`${testID}-${ex.slug}-video`}
-              />
-              {ex.notes ? (
-                <Text
-                  testID={`${testID}-${ex.slug}-notes`}
-                  className="text-muted-foreground text-xs"
-                >
-                  {ex.notes}
-                </Text>
-              ) : null}
-              {renderHint(ex.slug)}
-            </View>
-          ))}
-        </View>
-
         {/* ROUND 1, ROUND 2, … — every member's set for that round, together. */}
         <View style={{ marginTop: 10, gap: 8 }}>
           {Array.from({ length: rounds }, (_, r) => (
@@ -501,28 +525,61 @@ export function TrackWorkoutView({
                   if (!s) return null;
                   const bell = getBellWeightInfo(ex);
                   return (
-                    <View key={ex.slug} className="rounded-lg border border-border bg-card p-2">
+                    <View
+                      key={ex.slug}
+                      testID={r === 0 ? `${testID}-exercise-${ex.slug}` : undefined}
+                      className="rounded-lg border border-border bg-card p-2"
+                    >
                       <View
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
                           justifyContent: "space-between",
+                          marginBottom: 4,
                         }}
                       >
-                        <Text className="text-foreground text-xs font-semibold">{ex.name}</Text>
-                        {r === 0 && onExerciseChange ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1 }}>
+                          <Text className="text-foreground text-xs font-semibold">{ex.name}</Text>
+                          {ex.repsLabel ? (
+                            <Text className="text-muted-foreground text-xs">{ex.repsLabel}</Text>
+                          ) : null}
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          {r === 0 && onExerciseChange ? (
+                            <Pressable
+                              testID={`${testID}-exercise-${ex.slug}-remove`}
+                              disabled={!canRemove}
+                              onPress={() => handleRemove(exIdx)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Remove ${ex.name}`}
+                              style={{ opacity: canRemove ? 1 : 0.3 }}
+                            >
+                              <Text className="text-destructive text-xs font-semibold">Remove</Text>
+                            </Pressable>
+                          ) : null}
                           <Pressable
-                            testID={`${testID}-exercise-${ex.slug}-remove`}
-                            disabled={!canRemove}
-                            onPress={() => handleRemove(exIdx)}
+                            testID={
+                              r === 0
+                                ? `${testID}-${ex.slug}-swap`
+                                : `${testID}-${ex.slug}-set-${r}-swap`
+                            }
+                            onPress={() => onRequestSwap?.(ex.slug)}
                             accessibilityRole="button"
-                            accessibilityLabel={`Remove ${ex.name}`}
-                            style={{ opacity: canRemove ? 1 : 0.3 }}
+                            accessibilityLabel={`Swap ${ex.name}`}
                           >
-                            <Text className="text-destructive text-xs font-semibold">Remove</Text>
+                            <Text className="text-primary text-xs">Swap</Text>
                           </Pressable>
-                        ) : null}
+                        </View>
                       </View>
+                      {ex.notes && r === 0 ? (
+                        <Text
+                          testID={`${testID}-${ex.slug}-notes`}
+                          className="text-blue-600 dark:text-blue-400 text-xs mb-1"
+                        >
+                          {ex.notes}
+                        </Text>
+                      ) : null}
+                      {r === 0 ? renderHint(ex.slug) : null}
                       <LiveSetRow
                         setIndex={r}
                         bell={bell}
@@ -535,20 +592,10 @@ export function TrackWorkoutView({
                         testID={`${testID}-${ex.slug}-set-${r}`}
                         roundLabel={roundLabelFor(exIdx, r)}
                         onChange={(next) => onSetChange(exIdx, r, next)}
+                        compact
+                        targetReps={parseTargetReps(ex.repsLabel)}
+                        targetDurationSec={parseTargetDuration(ex.durationLabel)}
                       />
-                      <Pressable
-                        testID={
-                          r === 0
-                            ? `${testID}-${ex.slug}-swap`
-                            : `${testID}-${ex.slug}-set-${r}-swap`
-                        }
-                        onPress={() => onRequestSwap?.(ex.slug)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Swap ${ex.name}`}
-                        className="mt-1"
-                      >
-                        <Text className="text-primary text-xs">Swap exercise</Text>
-                      </Pressable>
                     </View>
                   );
                 })}

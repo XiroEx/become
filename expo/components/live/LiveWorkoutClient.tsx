@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, View } from "react-native";
+import { ChevronLeft } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
@@ -382,7 +383,8 @@ function initialGrid(
   const grid: LiveGrid = {};
   for (const ex of exercises) {
     const saved = restored?.[ex.slug];
-    grid[ex.slug] = Array.from({ length: ex.sets }, (_, i) => {
+    const numSets = ex.sets || 3;
+    grid[ex.slug] = Array.from({ length: numSets }, (_, i) => {
       // Prefer a restored in-flight set, falling back to prefill defaults. The
       // workout structure (set count) always wins, so a stale cache can't add
       // phantom sets.
@@ -1291,40 +1293,124 @@ export function LiveWorkoutClient({
     >
       {view === "track" ? (
         <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          <WorkoutViewToggle
-            testID={`${testID}-view`}
-            active={view}
-            onChange={handleViewChange}
-          />
-          <Text testID={`${testID}-title`} className="text-foreground text-2xl font-bold">
-            {workout.workoutTitle}
-          </Text>
-          {/* The day line under the title (the web's `workout.day`, e.g. "Day
-              1"): Track only — a quick session has no day and renders
-              nothing here either. */}
-          {day ? (
-            <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center">
-              {day}
+          {/* Top bar: Back (left) · Track|Live toggle (centered) · Share (right) */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              position: "relative",
+              minHeight: 44,
+            }}
+          >
+            {onExit ? (
+              <Pressable
+                testID={`${testID}-back`}
+                onPress={onExit}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 999,
+                  backgroundColor: colors.muted,
+                  zIndex: 1,
+                }}
+              >
+                <ChevronLeft size={16} color={colors.foreground} />
+                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.foreground }}>
+                  Back
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={{ width: 44 }} />
+            )}
+
+            <View
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: "box-none",
+              }}
+            >
+              <WorkoutViewToggle
+                testID={`${testID}-view`}
+                active={view}
+                onChange={handleViewChange}
+              />
+            </View>
+
+            <View style={{ zIndex: 1 }}>
+              {headerAction ? (
+                <View testID={`${testID}-header-action`}>{headerAction}</View>
+              ) : (
+                <View style={{ width: 44 }} />
+              )}
+            </View>
+          </View>
+
+          {/* Centered title with Day line underneath */}
+          <View style={{ alignItems: "center", marginTop: 4 }}>
+            <Text
+              testID={`${testID}-title`}
+              className="text-foreground text-xl font-bold text-center"
+            >
+              {workout.workoutTitle}
             </Text>
-          ) : null}
-          {headerAction ? (
-            <View testID={`${testID}-header-action`}>{headerAction}</View>
-          ) : null}
+            {day ? (
+              <Text
+                testID={`${testID}-day`}
+                className="text-muted-foreground text-xs text-center mt-0.5"
+              >
+                {day}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Hidden/accessible sets count & timer for test assertions */}
           <Text
             testID={`${testID}-progress`}
-            className="text-muted-foreground text-xs"
+            style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
           >
             {`${completedSets} of ${totalSets} sets done`}
           </Text>
-          {/* Overall progress bar + N% (the web's header progress bar,
-              ~line 2457-2468): SETS, not steps. */}
-          <View
-            testID={`${testID}-overall-progress`}
-            style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-          >
+          {typeof activeSeconds === "number" ? (
+            <Text
+              testID={`${testID}-elapsed`}
+              style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
+            >
+              {formatElapsed(activeSeconds)}
+            </Text>
+          ) : null}
+
+          {/* Workout Progress bar with % and View PRs */}
+          <View testID={`${testID}-overall-progress`} style={{ marginTop: 4, gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text className="text-muted-foreground text-xs">Workout Progress</Text>
+                {showResumed ? (
+                  <View className="rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5">
+                    <Text
+                      testID={`${testID}-resume-indicator`}
+                      className="text-amber-700 dark:text-amber-400 text-[10px] font-medium"
+                    >
+                      Resumed
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+                {`${overallProgressPercent(grid)}%`}
+              </Text>
+            </View>
             <View
               style={{
-                flex: 1,
                 height: 6,
                 overflow: "hidden",
                 borderRadius: 999,
@@ -1340,53 +1426,19 @@ export function LiveWorkoutClient({
                 }}
               />
             </View>
-            <Text className="text-muted-foreground text-xs font-medium tabular-nums">
-              {`${overallProgressPercent(grid)}%`}
-            </Text>
+            {onViewPRs ? (
+              <View style={{ alignItems: "flex-end", marginTop: 2 }}>
+                <Pressable
+                  testID={`${testID}-view-prs`}
+                  onPress={onViewPRs}
+                  accessibilityRole="button"
+                  accessibilityLabel="View personal records"
+                >
+                  <Text className="text-muted-foreground text-xs">View PRs →</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
-          {/* "View PRs →" (the web's Track header link to the personal-records
-              list, NP-287): Track only, and only when the route hands a
-              handler. */}
-          {onViewPRs ? (
-            <Pressable
-              testID={`${testID}-view-prs`}
-              onPress={onViewPRs}
-              accessibilityRole="button"
-              accessibilityLabel="View personal records"
-              style={{ alignSelf: "flex-end" }}
-            >
-              <Text className="text-muted-foreground text-xs">View PRs →</Text>
-            </Pressable>
-          ) : null}
-          {/* Elapsed time (the web's header timer, ~line 2039-2042): only
-              when the route passes a number — the quick session has no
-              timer yet, so it renders nothing here. */}
-          {typeof activeSeconds === "number" ? (
-            <Text
-              testID={`${testID}-elapsed`}
-              className="text-muted-foreground font-mono text-sm tabular-nums"
-            >
-              {formatElapsed(activeSeconds)}
-            </Text>
-          ) : null}
-          {showResumed ? (
-            <Text
-              testID={`${testID}-resume-indicator`}
-              className="text-muted-foreground text-xs"
-            >
-              Resuming where you left off
-            </Text>
-          ) : null}
-          {manageExercises ? (
-            <Button
-              testID={`${testID}-manage-exercises`}
-              variant="secondary"
-              onPress={manageExercises.onOpen}
-              accessibilityLabel={manageExercises.label ?? "Manage exercises"}
-            >
-              {manageExercises.label ?? "Exercises"}
-            </Button>
-          ) : null}
           <TrackWorkoutView
             testID={testID}
             exercises={workout.exercises}

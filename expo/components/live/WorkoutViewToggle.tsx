@@ -43,18 +43,18 @@ export function WorkoutViewToggle({
         style={[
           minTouchTarget,
           {
-            flex: 1,
             alignItems: "center",
             justifyContent: "center",
             borderRadius: 999,
-            paddingHorizontal: 12,
-            backgroundColor: selected ? colors.primary : "transparent",
+            paddingHorizontal: 14,
+            paddingVertical: 4,
+            backgroundColor: selected ? colors.foreground : "transparent",
           },
         ]}
       >
         <Text
           className={`text-xs font-semibold ${
-            selected ? "text-primary-foreground" : "text-muted-foreground"
+            selected ? "text-background" : "text-muted-foreground"
           }`}
         >
           {label}

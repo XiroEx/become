@@ -790,7 +790,7 @@ export function useLiveWorkout(
 
       // Reset that exercise's sets in the grid
       const blankSets: LiveSetState[] = Array.from(
-        { length: oldEx.sets || 1 },
+        { length: oldEx.sets || 3 },
         () => ({
           reps: null,
           weight: null,
@@ -957,7 +957,7 @@ export function useLiveWorkout(
           return {
             slug,
             name: ex.name ?? ex.exerciseSlug ?? "Exercise",
-            sets: ex.sets ?? 1,
+            sets: ex.sets || 3,
             repsLabel: ex.reps,
             notes: ex.details,
             trackingType: ex.trackingType ?? undefined,
@@ -1086,7 +1086,7 @@ export function useLiveWorkout(
             return {
               slug: exSlug,
               name: m.name,
-              sets: m.sets ?? 1,
+              sets: m.sets || 3,
               repsLabel: m.reps ?? existing?.repsLabel,
               notes: m.details ?? existing?.notes,
               trackingType: m.trackingType ?? existing?.trackingType,
@@ -1190,7 +1190,7 @@ export function useLiveWorkout(
                 completed: Boolean(s.completed),
               }));
             } else {
-              restored[ex.slug] = Array.from({ length: ex.sets || 1 }, () => ({
+              restored[ex.slug] = Array.from({ length: ex.sets || 3 }, () => ({
                 reps: null,
                 weight: null,
                 durationSec: null,
@@ -1276,7 +1276,7 @@ export function useLiveWorkout(
           // Fresh workout: start blank sets (last performance is reference only)
           const blankGrid: LiveGrid = {};
           currentExercises.forEach((ex) => {
-            blankGrid[ex.slug] = Array.from({ length: ex.sets || 1 }, () => ({
+            blankGrid[ex.slug] = Array.from({ length: ex.sets || 3 }, () => ({
               reps: null,
               weight: null,
               durationSec: null,
@@ -1297,7 +1297,7 @@ export function useLiveWorkout(
         if (hist) {
           return {
             ...ex,
-            prefill: Array.from({ length: ex.sets }, () => ({
+            prefill: Array.from({ length: ex.sets || 3 }, () => ({
               weight: hist.weight ?? null,
               reps: hist.reps ?? null,
               durationSec: hist.duration ?? null,
@@ -1437,7 +1437,7 @@ export function useLiveWorkout(
         if (!next) continue;
         if (oldIdx === -1) {
           nextGrid[next.slug] = Array.from(
-            { length: Math.max(1, next.sets || 1) },
+            { length: Math.max(1, next.sets || 3) },
             (): LiveSetState => ({
               reps: null,
               weight: null,
@@ -1451,7 +1451,7 @@ export function useLiveWorkout(
         }
         const prev = workout.exercises[oldIdx];
         const rows = prev ? (gridRef.current[prev.slug] ?? []) : [];
-        const want = Math.max(1, next.sets || 1);
+        const want = Math.max(1, next.sets || 3);
         const kept: LiveSetState[] = rows.slice(0, want);
         while (kept.length < want) {
           kept.push({
@@ -1532,7 +1532,7 @@ export function useLiveWorkout(
         (newIdx) => {
           const next = res.exercises[newIdx];
           return Array.from(
-            { length: Math.max(1, next?.sets || 1) },
+            { length: Math.max(1, next?.sets || 3) },
             (): LiveSetState => ({
               reps: null,
               weight: null,
