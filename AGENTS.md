@@ -1850,6 +1850,19 @@ the details sheet above it. Four rules travel with it (the long form is
   the only bundled face) at 12 px, 45% white, or the subject's name. Every
   number is `expo/lib/becoming/focusedCard.ts`'s; test:
   `expo/__tests__/card-NP-343-acceptance.test.tsx`.
+- **A far week is the web's coloured tile (NP-345).** Review on 10/8 found
+  the overview's tiles near-black boxes with a colour stripe, all but gone at
+  overview scale, where the web's compact `WeekCard` is the week's own
+  colour. `expo/components/becoming/journey/WeekTile.tsx` now draws the
+  web's: `pillarColor(subject, score, 48)` into `pillarColor(subject, score,
+  30)` along CSS's 160° line (expo-linear-gradient on the sky's
+  `gradientLine`) under a 1px white/15 ring, a big `W<n>` (`…` for a gap),
+  the label, the headline and a step chip (`now` / climbed / held / a dip /
+  new high). Sizes are card units (`expo/lib/becoming/weekTile.ts`: the web's
+  px at a 390 × 844 phone's card, as a fraction of the card's width) so they
+  scale with the camera. The Horizon tile wears the web's `HorizonCard`
+  ground and dashed ring with the identity and the trend. Test:
+  `expo/__tests__/card-NP-345-acceptance.test.tsx`.
 - **The Horizon card and the line to it are the web's (NP-344).** Review on
   10/8: the native Horizon was a flat dark card in sans italic, and the
   dashed segment from the live week to it and its ring in the overview drew

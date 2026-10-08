@@ -213,12 +213,15 @@ describe("under the light scheme the stage's cards are the dark palette's", () =
     expect(c.horizonWritesBorder).toBe(DARK.border);
   });
 
-  it("the stage and its tiles stay on the stage tokens", () => {
+  it("the stage stays on the stage tokens and a tile on its week's colour (NP-345), whatever the scheme", () => {
     setSystemScheme("light");
     const u = renderStage();
     const c = stageColours(u);
     expect(c.stage).toBe(rgbOf(becomingStageTokens.background));
-    expect(c.tile).toBe(rgbOf(becomingStageTokens.background, 0.92));
+    // The web's compact tile is the week's own colour, dark stop `pillarColor(subject, score, 30)`.
+    const far = WEEKS[LIVE - 3]!;
+    expect(c.tile).toBe(pillarColor(far.subject, far.score, 30));
+    expect(c.tile).not.toBe(LIGHT_CARD);
   });
 
   it("the live week's own ground is the dark one in light mode, not the light card", () => {

@@ -299,6 +299,8 @@ export const becomingStageTokens = {
   skyEmerald: "16 185 129",
   /** white ink, the dark palette's foreground */
   ink: darkTokens.foreground,
+  /** black — the web's `bg-black/25` chip on a compact week tile (NP-345) */
+  shade: "0 0 0",
 } as const;
 
 /** `rgb(r g b)` for a triplet, or `rgba(r, g, b, a)` when an alpha is given. */

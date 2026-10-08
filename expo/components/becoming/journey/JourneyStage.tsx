@@ -1031,7 +1031,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                     >
                       {p.horizon ? (
                         em.compact ? (
-                          <WeekTile horizon width={size.w} height={size.h} />
+                          <WeekTile horizon width={size.w} height={size.h} identity={data.identity} trend={trend} />
                         ) : (
                           <HorizonCard
                             identity={data.identity}
@@ -1046,7 +1046,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           />
                         )
                       ) : !week ? null : em.compact ? (
-                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} />
+                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} isPeak={peaks.has(i)} />
                       ) : (
                         <WeekCard
                           week={week}
