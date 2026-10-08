@@ -1002,6 +1002,9 @@ export default function DashboardRoute() {
       onOpenStreaks={() => {
         router.push("/(tabs)/dashboard/streaks" as never);
       }}
+      onOpenChat={() => {
+        router.push("/(tabs)/chat" as never);
+      }}
       nutritionData={nutritionData}
       nutritionTrend={nutritionTrend}
       onQuickAdd={onQuickAdd}

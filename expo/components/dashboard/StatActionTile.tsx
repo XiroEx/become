@@ -125,13 +125,13 @@ export function StatActionTile({
         <View style={styles.wideRow}>
           <View style={styles.wideLeft}>
             <View style={[styles.badge, { backgroundColor: bg }]}>
-              <IconComponent size={22} color={color} />
+              <IconComponent size={20} color={color} />
             </View>
             <View style={styles.wideMeta}>
               <Text className="text-muted-foreground text-xs font-medium" numberOfLines={1}>
                 {label}
               </Text>
-              <Text className="text-foreground text-2xl font-bold">
+              <Text className="text-foreground text-3xl font-extrabold tracking-tight leading-none">
                 {actionValue}
               </Text>
             </View>
@@ -145,21 +145,23 @@ export function StatActionTile({
         </View>
       ) : (
         <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
-            <View style={[styles.badgeSmall, { backgroundColor: bg }]}>
-              <IconComponent size={16} color={color} />
+          <View style={styles.squareTopRow}>
+            <View style={[styles.badge1x1, { backgroundColor: bg }]}>
+              <IconComponent size={18} color={color} />
             </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
+            <View style={styles.squareMeta}>
+              <Text
+                className="text-muted-foreground text-xs font-medium flex-1 ml-2"
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+              <Text className="text-foreground text-2xl font-extrabold tracking-tight leading-none">
+                {actionValue}
+              </Text>
+            </View>
           </View>
-          <Text className="text-foreground text-2xl font-bold mt-2">
-            {actionValue}
-          </Text>
-          <Text className="text-muted-foreground text-[10px] mt-1" numberOfLines={1}>
+          <Text className="text-muted-foreground text-[10px] mt-2" numberOfLines={1}>
             {subtitle}
           </Text>
         </View>
@@ -174,25 +176,31 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     minHeight: 96,
+    height: "100%",
     justifyContent: "center",
   },
   wideRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
   wideLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   wideMeta: {
     justifyContent: "center",
+    gap: 2,
   },
   wideRight: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+    justifyContent: "flex-end",
   },
   badge: {
     width: 44,
@@ -201,10 +209,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  badge1x1: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -212,9 +227,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
   },
+  squareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   squareHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
 });
 

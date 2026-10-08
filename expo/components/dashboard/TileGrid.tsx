@@ -463,10 +463,15 @@ const styles = StyleSheet.create({
     rowGap: 8,
   },
   cell: {
+    height: 96,
     marginBottom: 8,
   },
-  cell1x1: {},
-  cell2x1: {},
+  cell1x1: {
+    height: 96,
+  },
+  cell2x1: {
+    height: 96,
+  },
   suggestionsContainer: {
     marginTop: 4,
     gap: 8,

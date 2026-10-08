@@ -57,7 +57,8 @@ export function NutritionCard({
   onQuickAdd,
   testID = "dashboard-nutrition-card",
 }: NutritionCardProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
+  const quickAddColor = isDark ? "rgb(212, 212, 216)" : "rgb(63, 63, 70)";
 
   const safeGoal = Math.round(
     Number.isFinite(calories.goal) && calories.goal > 0 ? calories.goal : 2000,
@@ -269,9 +270,9 @@ export function NutritionCard({
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Zap size={14} color={colors.foreground} />
+          <Zap size={14} color={quickAddColor} />
           <Text
-            style={[styles.secondaryButtonText, { color: colors.foreground }]}
+            style={[styles.secondaryButtonText, { color: quickAddColor }]}
           >
             Quick Add
           </Text>
@@ -333,7 +334,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     minHeight: 44,
@@ -348,7 +349,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    paddingVertical: 9,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
