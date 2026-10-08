@@ -1724,6 +1724,53 @@ carries a COPY of all 22 of those modules (`shared/core/src/mind*`,
   index reads. They erase at compile time and change no behaviour; keep them
   when you edit those files or the `expo` job fails.
 
+#### The Becoming stage, natively (NP-204)
+
+`expo/components/becoming/journey/JourneyStage.tsx` is the web's
+`webapp/components/becoming/journey/JourneyCanvas.tsx` on Reanimated, Gesture
+Handler and Skia: the intro fly-in, drag steering between cards along the
+path, the snap, and the pinch-out overview with month ticks and the aggregate
+line. `expo/app/(app)/becoming.tsx` mounts it over the fetched journey with
+the details sheet above it. Four rules travel with it (the long form is
+`expo/README.md`, "The Becoming stage"):
+
+- **The layout maths is the web's, copied, and a week sits in the same place
+  on both.** `shared/core/src/becoming/layout.ts` is a COPY of
+  `webapp/lib/becoming/layout.ts` (never edited there; same header and
+  re-copy procedure as the training modules), exported from `@become/core`,
+  and `webapp/tests/unit/nativeParity/becomingLayout.test.ts` — in `verify`,
+  which always runs — drives every export of both over one fixture table and
+  fails the moment an answer differs. The two pieces a drag needs on every
+  frame (the scrub projection, the nearest card) are repeated as worklets in
+  `expo/lib/becoming/stage.ts`, because a worklet cannot call a plain imported
+  function on the UI thread, and `expo/__tests__/becomingStageMath.test.ts`
+  holds those to the copy the same way.
+- **Nothing per-frame goes through React.** One camera as shared values drives
+  a screen-sized Skia canvas (the line, in world coordinates, with derived
+  stroke widths so they read as constant screen px) and a world layer of cards
+  (`useAnimatedStyle`); the finger steers it on the UI thread and only a
+  release reaches JS. Five full `WeekCard`s and the rest of the year as tiles.
+  The 60 fps claim is a DEVICE fact — jest cannot measure it — and belongs to
+  the device QA round.
+- **Reduce Motion skips the intro and animations.** `resolveIntroKind`
+  (`expo/lib/becoming/storage.ts`) asks `AccessibilityInfo` itself before the
+  stage mounts (the hook's first paint is always "full motion"), every camera
+  move is `withTiming` with `motionDuration(ms, reduced)`, the click spring and
+  the landing haptic are skipped, and a setting that lands mid-opening cuts it.
+- **In jest the gestures are real.** `expo/__mocks__/@shopify/react-native-skia.js`
+  is a props-keeping View per drawing component (the package's own `Mock`
+  needs CanvasKit's wasm); `expo/__mocks__/react-native-reanimated.js` keeps
+  one mutable per `useSharedValue` across renders and gives `GestureDetector`
+  the hooks it probes for (`useEvent` unwraps RNTL's `{ nativeEvent }`);
+  `package.json` adds Gesture Handler's `jestSetup.js` to `setupFiles`. With
+  those, `fireGestureHandler` drives the stage's own pan/pinch/tap callbacks
+  (wrap each in `act`, and remember RNGH swaps rebuilt callbacks in a
+  microtask — the release handlers read the shared-value mirrors for that
+  reason). This is the app's first shared-value code: the React Compiler lint
+  reads every `sv.value = …` as a mutation, so `JourneyStage.tsx` disables
+  `react-hooks/immutability` for itself, with the reason at the top, and
+  nothing else — no `ref.current` is written during render.
+
 #### The Mind session player, natively (NP-098)
 
 `expo/components/mind/session/` plays a composed plan the way the web does: a

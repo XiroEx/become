@@ -133,6 +133,7 @@ Everything under `shared/core/src/training/` is a **copy of a file under
 | `webapp/lib/dashboard/goalTile.ts` | `shared/core/src/training/dashboard/goalTile.ts` |
 | `webapp/lib/dashboardLayout/{types,defaults}.ts` | `shared/core/src/training/dashboardLayout/` |
 | `webapp/lib/video{Trim,Framing}.ts` | `shared/core/src/training/` |
+| `webapp/lib/becoming/layout.ts` (NP-204) | `shared/core/src/becoming/layout.ts` — its lockstep is `webapp/tests/unit/nativeParity/becomingLayout.test.ts` |
 
 The webapp still imports its OWN copy of these, because RedRun builds
 `webapp/` alone and webapp code may never import `../shared/*` — that broke
@@ -180,6 +181,79 @@ over the same `KeyValueStore` the live draft cache uses — NP-087) and
 token out of `localStorage` and POSTs a relative URL — native saves through
 `@become/api-client`). The parity test names each omission with its reason and
 fails if anything else goes missing.
+
+## The Becoming stage (NP-204)
+
+`components/becoming/journey/JourneyStage.tsx` is the web's
+`webapp/components/becoming/journey/JourneyCanvas.tsx`, natively: the intro
+fly-in, drag steering between cards along the path, the snap, and the
+pinch-out overview with month ticks and the aggregate line. `app/(app)/becoming.tsx`
+mounts it over the fetched journey, with the details sheet above it. Four facts
+hold it together:
+
+- **One camera, nothing per-frame through React.** `camX`/`camY`/`camS` (and the
+  intro's `tilt` and `fog`) are Reanimated shared values. The LINE — segments,
+  area fill, gridlines, month ticks, markers — is one **Skia** canvas the size
+  of the screen, drawing in world coordinates inside a `Group` whose transform
+  is a derived value of the camera (stroke widths and marker radii are derived
+  too, so they read as constant screen pixels at any zoom). The CARDS are React
+  Native views in a world layer whose `useAnimatedStyle` is the same camera.
+  The FINGER steers the camera on the UI thread: Gesture Handler's Pan, Pinch
+  and Tap, with the per-frame maths as worklets. Only a release reaches JS, to
+  decide where to land. Five full `WeekCard`s and the rest of the year as
+  `WeekTile`s (`cardEmphasis`), so a year of weeks is not fifty-three cards'
+  worth of text on one screen.
+- **The layout maths is the web's, and a week sits in the same place on both.**
+  `cardSize`, `layoutWeeks`, `overviewCamera`, `scrubTarget`, `neighbourFor`,
+  `exitEdge`, `monthTicks`, `aggregate`… come from `@become/core`'s COPY of
+  `webapp/lib/becoming/layout.ts` (`shared/core/src/becoming/`), held in
+  lockstep by `webapp/tests/unit/nativeParity/becomingLayout.test.ts` exactly
+  as the training modules are. A worklet cannot call a plain imported function
+  on the UI thread, so the two pieces a drag needs every frame — the scrub
+  projection and the nearest card — are repeated as worklets in
+  `lib/becoming/stage.ts`, and `__tests__/becomingStageMath.test.ts` drives
+  them against the copy over a fixture table so that file cannot drift either.
+  `__tests__/becomingStage.test.tsx` then reads every card slot's position out
+  of the rendered tree and compares it with `layoutWeeks` for the same viewport.
+- **Reduce Motion skips the intro and the animations.** Which opening plays is
+  decided ONCE, before the stage mounts, by `lib/becoming/storage.ts`'s
+  `resolveIntroKind` — it asks `AccessibilityInfo.isReduceMotionEnabled`
+  itself rather than trusting the hook's first paint (which is always "full
+  motion" for a tick), then the weekly `becoming.intro.v2.<sunday>` flag and
+  the app-session flag, the web's three. Inside the stage every camera move is
+  a `withTiming` whose duration is `motionDuration(ms, reduced)` (zero under
+  the setting, so the end state still arrives), the "click into place" spring
+  and the landing haptic are skipped, and a setting that lands or flips
+  mid-opening cuts the opening to its end state.
+- **In jest, the three native libraries are mocked, and the gestures are
+  REAL.** `__mocks__/@shopify/react-native-skia.js` renders every drawing
+  component as a View that keeps its props (the package's own `Mock` needs
+  CanvasKit's wasm). `__mocks__/react-native-reanimated.js` gained the hooks
+  `GestureDetector` probes for (`useEvent`, which unwraps RNTL's
+  `{ nativeEvent }`, `useHandler`, `useDerivedValue`, `cancelAnimation`,
+  `Easing`…), and `package.json` adds Gesture Handler's `jestSetup.js` to
+  `setupFiles`. Together they let `fireGestureHandler` drive the stage's own
+  pan/pinch/tap callbacks in a test — a drag that goes far enough lands on the
+  next card, a pinch out opens the overview — instead of a re-statement of
+  them.
+
+Two things to know before you touch it:
+
+- **This is the app's first Reanimated shared-value code.** The React Compiler
+  lint (`react-hooks/immutability`) reads every `sv.value = …` as mutating a
+  hook's result; the stage disables that one rule for its own file, with the
+  reason at the top. Everything else is lint-clean by construction: no
+  `ref.current` is written during render (React state is mirrored into shared
+  values in effects, and the release handlers and gestures are rebuilt with
+  each render, which is how Gesture Handler is meant to be used), and the
+  intro is a `hold → fly → done` phase machine whose effects only start
+  animations and timers.
+- **What jest cannot prove is the frame rate.** "Dragging and pinching on a
+  real phone stays at 60 fps with a year of weeks" is a device fact: nothing
+  per-frame crosses to the JS thread, the canvas is screen-sized and the far
+  cards are tiles, but the measurement belongs to the device QA round
+  (`ACCESSIBILITY.md`'s pass, plus Xcode Instruments / Android GPU rendering
+  profile on a mid-range phone).
 
 ## Scripts
 
@@ -473,13 +547,18 @@ expo/
 │       ├── tokens.ts         # Typed RGB-triplet map (light + dark) + tint/scrim
 │       └── useThemeTokens.ts # THE hook: colours for everything Tailwind can't reach
 ├── components/
-│   └── Text.tsx          # THE app's Text — React Native's, with Geist on it
+│   ├── Text.tsx          # THE app's Text — React Native's, with Geist on it
+│   └── becoming/journey/ # The Becoming stage (NP-204): JourneyStage.tsx on
+│                         #   Reanimated + Gesture Handler + Skia, WeekTile.tsx
+├── lib/becoming/stage.ts # The stage's per-frame maths as worklets (held to
+│                         #   @become/core's layout copy by a test) + its rules
 ├── __tests__/            # Jest + RTL tests
 ├── __mocks__/            # cssStub.js (the `global.css` side-effect import),
 │                         # expo-font.js + expo-splash-screen.js (fonts are
 │                         # already loaded for every suite but geistFont's),
-│                         # plus node-module mocks for NetInfo and AsyncStorage,
-│                         #   applied automatically (no jest.mock call)
+│                         # plus node-module mocks for NetInfo, AsyncStorage
+│                         #   and @shopify/react-native-skia, applied
+│                         #   automatically (no jest.mock call)
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
 │   │                     # (Android foreground), splash-icon.png —
 │   │                     # all three written by scripts/generate-app-assets.mjs
