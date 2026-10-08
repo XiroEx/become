@@ -295,6 +295,31 @@ hold it together:
   through it (or is `pillarColor`'s `hsl()`), never `rgbOf`.
   `__tests__/card-NP-344-acceptance.test.tsx` holds the card to the web's
   numbers and walks the rendered canvas for any colour Skia would not read.
+- **The stage moves as the web's does (NP-346).** Review on 10/8 found four
+  of the web's movements missing. The LANDING STAGGER: `WeekCard` and
+  `HorizonCard` take the stage's `landed` (and its `reduced`, as the web's
+  cards do, so a card mounting mid-session knows at its first paint) and
+  bring their content up and in
+  row by row — opacity 0 → 1, y 12 → 0, 60 ms apart, 420 ms each on
+  `[0.16, 1, 0.3, 1]`, the web's row numbers (`WEEK_CARD_ROW` /
+  `HORIZON_CARD_ROW`) — so a card is an empty frame (sky, ring, light) until
+  the camera settles on it, and a card the stage has left takes its content
+  down again; a card mounted bare simply draws it. NEIGHBOUR DIMMING: the
+  web's `brightness(.55)` one step from the focus and `.4` further is a
+  BLACK OVERLAY on the slot at `1 − b` (black at α over an opaque card IS
+  `brightness(1 − α)`; the web's 1–2 px blur is not ported — no
+  cross-platform filter), under the card's own corners, in focus mode only.
+  EMPHASIS TRANSITIONS: each slot (`StageSlot`) holds its opacity, scale and
+  dimming as shared values that `withTiming` to each new emphasis over 500 ms
+  on CSS's `ease` (`[0.25, 0.1, 0.25, 1]` — not Reanimated's `Easing.ease`,
+  which is `ease-in`). The INTRO's GLOW: `-inset-4 rounded-[40px]
+  bg-violet-400/25 blur-2xl` under the start card, the blur as a `boxShadow`,
+  pulsing. Tailwind's `animate-pulse` is now ONE hook, `lib/becoming/pulse.ts`'s
+  `usePulse`, worn by the exit-edge light and the glow. Every one is skipped
+  under Reduce Motion — the stagger and the glow do not run, the transitions
+  cut — read at mount or flipped live. `lib/becoming/stageMotion.ts` has the
+  numbers; `__tests__/card-NP-346-acceptance.test.tsx` holds the rendered
+  stage to them.
 
 Two things to know before you touch it:
 
