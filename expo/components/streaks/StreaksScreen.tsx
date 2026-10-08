@@ -129,15 +129,16 @@ function BuildBar({
 function TodayDot({ done, label }: { done: boolean; label: string }) {
   const { colors } = useThemeTokens();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
       {done ? (
-        <Check size={14} color={colors.success} />
+        <Check size={13} color={colors.success} />
       ) : (
-        <Circle size={12} color={colors["muted-foreground"]} />
+        <Circle size={11} color={colors["muted-foreground"]} />
       )}
       <Text
         style={{
-          fontSize: 12,
+          fontSize: 11.5,
+          letterSpacing: -0.25,
           color: done ? colors.success : colors["muted-foreground"],
         }}
       >
@@ -402,16 +403,20 @@ export function StreaksScreen({
         <Card testID="streak-nutrition">
           <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
             <View
+              className="bg-red-100 dark:bg-red-900/30"
               style={{
                 width: 44,
                 height: 44,
                 borderRadius: 12,
-                backgroundColor: tint("primary", 0.15),
+                // Red/coral tint on the web (`bg-red-100 text-red-600` /
+                // `dark:bg-red-900/30 dark:text-red-400`) — neutral dark grey
+                // (`primary`) on native was the bug (NP-354).
+                backgroundColor: tint("brand", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <UtensilsCrossed size={22} color={colors.primary} />
+              <UtensilsCrossed size={22} color={colors.brand} />
             </View>
             <View style={{ flex: 1 }}>
               <Text className="text-foreground text-sm font-semibold">
@@ -421,7 +426,7 @@ export function StreaksScreen({
                 <>
                   <View className="mt-1">
                     <StreakValue current={p.nutrition.current} unit="days" />
-                    <BuildBar current={p.nutrition.current} barColor={colors.primary} />
+                    <BuildBar current={p.nutrition.current} barColor={colors.brand} />
                   </View>
                   <Text className="text-muted-foreground text-xs mt-2 leading-relaxed">
                     Days in a row you logged food.
@@ -512,8 +517,8 @@ export function StreaksScreen({
         </Card>
 
         {/* ── Super Streak ─────────────────────────────────────────────── */}
-        <Card testID="streak-super">
-          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+        <Card testID="streak-super" style={{ paddingHorizontal: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
             <View
               style={{
                 width: 44,
@@ -526,7 +531,7 @@ export function StreaksScreen({
             >
               <Flame size={22} color={colors.accent} />
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text className="text-foreground text-sm font-semibold">
                 Super streak
               </Text>
@@ -554,11 +559,13 @@ export function StreaksScreen({
                     ) : null}
                   </Text>
                   <View
+                    testID="super-streak-indicators"
                     style={{
                       marginTop: 8,
                       flexDirection: "row",
-                      flexWrap: "wrap",
-                      gap: 12,
+                      flexWrap: "nowrap",
+                      alignItems: "center",
+                      gap: 6,
                     }}
                   >
                     <TodayDot done={p.super.today.nutrition} label="Food" />

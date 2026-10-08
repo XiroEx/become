@@ -442,6 +442,17 @@ describe("NP-108: Streaks Tile and Streaks Screen Parity", () => {
       expect(brain.props.color).toBe(rgb(lightTokens.mindset));
     });
 
+    it("(NP-354) colours the Nutrition pillar icon and badge red/coral (brand), not neutral grey (primary)", () => {
+      const { getByTestId } = render(<StreaksScreen data={SAMPLE_PAYLOAD} />);
+
+      const utensils = within(getByTestId("streak-nutrition")).UNSAFE_getByType(
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("lucide-react-native").UtensilsCrossed,
+      );
+      expect(utensils.props.color).not.toBe(rgb(lightTokens.primary));
+      expect(utensils.props.color).toBe(rgb(lightTokens.brand));
+    });
+
     it("colours the super-streak freeze snowflake blue when a freeze is in hand", () => {
       const { getByTestId } = render(<StreaksScreen data={SAMPLE_PAYLOAD} />);
 
