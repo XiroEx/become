@@ -151,7 +151,7 @@ describe("NP-211: Home Dashboard Parity", () => {
           leanMassData={mockProgressData.leanMassData}
           moodData={mockProgressData.moodData}
           fitnessGoal="lose_weight"
-          targetWeight={170}
+          targetWeight={176}
         />,
       );
 

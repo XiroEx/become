@@ -99,7 +99,7 @@ export function CurrentProgramCard({
             disabled={!onPressProgress}
             hitSlop={8}
           >
-            <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+            <Text className="text-xs text-muted-foreground font-medium">
               Progress
             </Text>
           </Pressable>

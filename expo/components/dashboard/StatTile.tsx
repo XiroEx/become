@@ -104,35 +104,36 @@ export function StatTile({
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <View
               style={[
-                styles.badgeSmall,
+                styles.badge1x1,
                 { backgroundColor: colors.muted },
               ]}
             />
-            <View
-              style={{
-                height: 12,
-                width: "50%",
-                borderRadius: 4,
-                backgroundColor: colors.muted,
-              }}
-            />
+            <View style={{ flex: 1, gap: 4 }}>
+              <View
+                style={{
+                  height: 12,
+                  width: "50%",
+                  borderRadius: 4,
+                  backgroundColor: colors.muted,
+                }}
+              />
+              <View
+                style={{
+                  height: 20,
+                  width: "70%",
+                  borderRadius: 4,
+                  backgroundColor: colors.muted,
+                }}
+              />
+            </View>
           </View>
-          <View
-            style={{
-              height: 24,
-              width: "70%",
-              borderRadius: 4,
-              backgroundColor: colors.muted,
-              marginTop: 10,
-            }}
-          />
           <View
             style={{
               height: 6,
               width: "100%",
               borderRadius: 3,
               backgroundColor: colors.muted,
-              marginTop: 8,
+              marginTop: 6,
             }}
           />
         </View>
@@ -351,7 +352,7 @@ export function StatTile({
     footer = total === 0 ? "Keep going" : "Lifetime";
   } else {
     label = tile.id
-      ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+      ? tile.id.replace(/[-_]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
       : "Stat";
     value = "—";
     footer = "";
@@ -398,26 +399,16 @@ export function StatTile({
                 </Text>
                 <Text
                   testID={`${rootTestId}-value`}
-                  className="text-foreground text-2xl font-bold"
+                  className="text-foreground text-3xl font-extrabold tracking-tight leading-none"
                   style={valueColor ? { color: valueColor } : undefined}
                   numberOfLines={1}
                 >
                   {value}
                 </Text>
-                {footer ? (
-                  <Text
-                    testID={`${rootTestId}-footer`}
-                    className="text-muted-foreground text-[11px] mt-0.5"
-                    numberOfLines={1}
-                  >
-                    {footer}
-                  </Text>
-                ) : null}
               </View>
             </View>
-            {/* Web's wide `StatTile` never draws a chevron or a trailing dot
-                — just the bar, and it stretches (`flex-1`) to fill the space
-                beside the value column rather than a short fixed width. */}
+            {/* Web's wide `StatTile`: right column has the progress bar and
+                caption stretched across `flex-1` and vertically centered. */}
             <View style={styles.wideRight}>
               <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
                 <View
@@ -430,29 +421,40 @@ export function StatTile({
                   ]}
                 />
               </View>
+              {footer ? (
+                <Text
+                  testID={`${rootTestId}-footer`}
+                  className="text-muted-foreground text-[11px] mt-1"
+                  numberOfLines={1}
+                >
+                  {footer}
+                </Text>
+              ) : null}
             </View>
           </View>
         ) : (
           <View style={styles.squareContent}>
-            <View style={styles.squareHeader}>
-              <View style={[styles.badgeSmall, { backgroundColor: badgeBg }]}>
-                <IconComponent size={16} color={iconColor} />
+            <View style={styles.squareTopRow}>
+              <View style={[styles.badge1x1, { backgroundColor: badgeBg }]}>
+                <IconComponent size={18} color={iconColor} />
               </View>
-              <Text
-                className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-                numberOfLines={1}
-              >
-                {label}
-              </Text>
+              <View style={styles.squareMeta}>
+                <Text
+                  className="text-muted-foreground text-xs font-medium flex-1 ml-2"
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+                <Text
+                  testID={`${rootTestId}-value`}
+                  className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
+                  style={valueColor ? { color: valueColor } : undefined}
+                  numberOfLines={1}
+                >
+                  {value}
+                </Text>
+              </View>
             </View>
-            <Text
-              testID={`${rootTestId}-value`}
-              className="text-foreground text-2xl font-bold mt-2"
-              style={valueColor ? { color: valueColor } : undefined}
-              numberOfLines={1}
-            >
-              {value}
-            </Text>
             {/* Progress bar */}
             <View style={[styles.barTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
               <View
@@ -497,6 +499,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     minHeight: 96,
+    height: "100%",
     minWidth: 44,
     justifyContent: "center",
   },
@@ -504,20 +507,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
   wideLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   wideMeta: {
     justifyContent: "center",
-    flexShrink: 1,
+    gap: 2,
   },
   wideRight: {
     flex: 1,
     minWidth: 0,
+    justifyContent: "center",
   },
   badge: {
     width: 44,
@@ -526,10 +531,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  badge1x1: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -537,9 +549,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
   },
+  squareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   squareHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
   barTrack: {
     height: 6,

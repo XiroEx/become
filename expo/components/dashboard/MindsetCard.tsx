@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   weekText: {
     fontSize: 12,
@@ -389,9 +389,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 8,
     minHeight: 44,
     minWidth: 44,
   },

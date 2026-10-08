@@ -44,7 +44,7 @@ export function SuggestionTile({
   onOpenCheckIn,
   testID,
 }: SuggestionTileProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const router = useRouter();
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
 
@@ -188,7 +188,14 @@ export function SuggestionTile({
               onPress={handleDismiss}
               style={[
                 styles.dismissBtn,
-                { backgroundColor: tint("muted", 0.5) },
+                {
+                  backgroundColor: isDark
+                    ? "rgba(255, 255, 255, 0.1)"
+                    : "rgba(24, 24, 27, 0.05)",
+                  borderColor: isDark
+                    ? "rgba(255, 255, 255, 0.2)"
+                    : "rgba(24, 24, 27, 0.1)",
+                },
               ]}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -264,10 +271,11 @@ export function SuggestionTile({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
     minHeight: 96,
+    height: "100%",
     justifyContent: "space-between",
   },
   topRow: {
@@ -286,9 +294,10 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   dismissBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -298,12 +307,12 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 999,
   },
   actionText: {
-    fontSize: 11,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "500",
   },
 });
 

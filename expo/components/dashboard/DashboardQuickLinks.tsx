@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ClipboardList,
   Dumbbell,
+  MessageCircle,
   TrendingUp,
   UtensilsCrossed,
 } from "lucide-react-native";
@@ -34,6 +35,8 @@ export interface DashboardQuickLinksProps {
   onOpenProgress?: () => void;
   /** @deprecated use `onOpenProgress` — kept as a fallback. */
   onOpenHistory?: () => void;
+  /** Opens the Chat screen (NP-351). */
+  onOpenChat?: () => void;
   nutritionDescription?: string | null;
   testID?: string;
 }
@@ -45,6 +48,7 @@ export function DashboardQuickLinks({
   onOpenNutrition,
   onOpenProgress,
   onOpenHistory,
+  onOpenChat,
   nutritionDescription,
   testID = "dashboard-quick-links",
 }: DashboardQuickLinksProps) {
@@ -168,6 +172,32 @@ export function DashboardQuickLinks({
             </Text>
             <Text className="text-muted-foreground text-xs">
               Weight &amp; PRs
+            </Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          testID="dashboard-quick-link-connect"
+          accessibilityRole="button"
+          accessibilityLabel="Connect. Chat with trainers"
+          onPress={onOpenChat}
+          style={[
+            minTouchTarget,
+            styles.link,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[styles.linkIcon, { backgroundColor: colors.muted }]}
+          >
+            <MessageCircle size={20} color={colors["muted-foreground"]} />
+          </View>
+          <View style={[styles.linkMeta, WRAPPABLE_TEXT]}>
+            <Text className="text-foreground text-sm font-semibold">
+              Connect
+            </Text>
+            <Text className="text-muted-foreground text-xs">
+              Chat with trainers
             </Text>
           </View>
         </Pressable>

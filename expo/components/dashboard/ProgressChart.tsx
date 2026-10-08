@@ -27,6 +27,7 @@ import Svg, {
 } from "react-native-svg";
 import { ArrowUp, ArrowDown } from "lucide-react-native";
 import type { WeightUnit } from "@become/core";
+import { weightChartXTickIndices } from "@/components/nutrition/GoalsWeightChart";
 
 export type ChartType = "weight" | "bmi" | "body_fat" | "lean_mass" | "mood";
 
@@ -399,17 +400,10 @@ export function ProgressChart({
             /* Line / Area Chart */
             (() => {
               const values = data.map((d) => d.value);
-              let minVal = Math.min(...values);
-              let maxVal = Math.max(...values);
-              if (
-                activeChart === "weight" &&
-                targetWeight != null &&
-                targetWeight > 0
-              ) {
-                minVal = Math.min(minVal, targetWeight);
-                maxVal = Math.max(maxVal, targetWeight);
-              }
-              // The web's YAxis domain is `['dataMin - 2', 'dataMax + 2']`.
+              const minVal = Math.min(...values);
+              const maxVal = Math.max(...values);
+              // NP-351: Strictly data-driven domain ['dataMin - 2', 'dataMax + 2']
+              // without inflating with targetWeight.
               let yMin = minVal - 2;
               let yMax = maxVal + 2;
               if (yMax <= yMin) {
@@ -454,15 +448,19 @@ export function ProgressChart({
                 }
               }
 
-              // Target weight reference line
+              // Target weight reference line (omit if outside data-driven domain)
               let targetY: number | null = null;
               if (
                 activeChart === "weight" &&
                 targetWeight != null &&
-                targetWeight > 0
+                targetWeight >= yMin &&
+                targetWeight <= yMax
               ) {
                 targetY = getY(targetWeight);
               }
+
+              // 5 evenly spaced X ticks for vertical gridlines & date labels
+              const xTickIndices = weightChartXTickIndices(pts.length, 5);
 
               return (
                 <Svg width={chartWidth} height={height}>
@@ -473,12 +471,30 @@ export function ProgressChart({
                     </LinearGradient>
                   </Defs>
 
-                  {/* Horizontal grid lines */}
-                  {[0, 0.5, 1].map((ratio) => {
+                  {/* Vertical grid lines (5 vertical gridlines at evenly spaced tick positions) */}
+                  {xTickIndices.map((idx) => {
+                    const pt = pts[idx];
+                    if (!pt) return null;
+                    return (
+                      <Line
+                        key={`grid-v-${idx}`}
+                        x1={pt.x}
+                        y1={paddingTop}
+                        x2={pt.x}
+                        y2={paddingTop + plotHeight}
+                        stroke={colors.border}
+                        strokeWidth={1}
+                        strokeDasharray="3,3"
+                      />
+                    );
+                  })}
+
+                  {/* Horizontal grid lines (4 horizontal gridlines & numeric ticks) */}
+                  {[0, 1 / 3, 2 / 3, 1].map((ratio, idx) => {
                     const y = paddingTop + plotHeight * ratio;
                     const val = yMax - ratio * yRange;
                     return (
-                      <React.Fragment key={`grid-${ratio}`}>
+                      <React.Fragment key={`grid-h-${idx}`}>
                         <Line
                           x1={paddingLeft}
                           y1={y}
@@ -543,30 +559,21 @@ export function ProgressChart({
                     />
                   ) : null}
 
-                  {/* Date labels only — the web's Area chart has no resting-state
-                      dot (`dot` is unset, which Recharts defaults to hidden
-                      until hover), so none is drawn here either. */}
-                  {pts.map((pt, i) => {
-                    const showDate =
-                      pts.length <= 6 ||
-                      i === 0 ||
-                      i === pts.length - 1 ||
-                      i === Math.floor(pts.length / 2);
-
+                  {/* 5 evenly spaced date labels */}
+                  {xTickIndices.map((idx) => {
+                    const pt = pts[idx];
+                    if (!pt) return null;
                     return (
-                      <React.Fragment key={`point-${i}`}>
-                        {showDate ? (
-                          <SvgText
-                            x={pt.x}
-                            y={paddingTop + plotHeight + 16}
-                            fontSize={9}
-                            fill={colors["muted-foreground"]}
-                            textAnchor="middle"
-                          >
-                            {pt.date}
-                          </SvgText>
-                        ) : null}
-                      </React.Fragment>
+                      <SvgText
+                        key={`date-${idx}`}
+                        x={pt.x}
+                        y={paddingTop + plotHeight + 16}
+                        fontSize={9}
+                        fill={colors["muted-foreground"]}
+                        textAnchor="middle"
+                      >
+                        {pt.date}
+                      </SvgText>
                     );
                   })}
                 </Svg>

@@ -251,6 +251,8 @@ export interface DashboardScreenProps {
   pushCardDeps?: React.ComponentProps<typeof PushOptInCard>["deps"];
   /** Test seam: force the push card visible regardless of stored dismissal. */
   showPushCard?: boolean;
+  /** Opens the chat / connect screen (NP-351). */
+  onOpenChat?: () => void;
 }
 
 export function DashboardScreen({
@@ -306,6 +308,7 @@ export function DashboardScreen({
   quickLinksNutritionDescription,
   onOpenMind,
   onOpenBecoming,
+  onOpenChat,
   onOpenNutrition,
   onOpenNutritionGoals,
   onOpenWorkoutNow,
@@ -486,7 +489,7 @@ export function DashboardScreen({
     >
       <ScrollView
         testID="dashboard-scroll"
-        contentContainerStyle={{ padding: 16, gap: 16 }}
+        contentContainerStyle={{ padding: 16, gap: 12 }}
         refreshControl={
           onRefresh ? (
             <RefreshControl
@@ -610,8 +613,8 @@ export function DashboardScreen({
         <View
           style={{
             alignItems: "flex-end",
-            marginTop: -6,
-            marginBottom: 4,
+            marginTop: 8,
+            marginBottom: 0,
           }}
         >
           <Pressable
@@ -747,14 +750,14 @@ export function DashboardScreen({
 
         {/* First-time empty state + quick links (NP-106, web
             DashboardClient parity): All Programs, Nutrition, Progress
-            (→ the Training Log, NP-130/NP-256). No Connect link — chat is
-            on hold for the store release. */}
+            (→ the Training Log, NP-130/NP-256), Connect (→ Chat, NP-351). */}
         <DashboardQuickLinks
           showEmptyState={showEmptyState}
           onBrowsePrograms={onBrowsePrograms}
           onOpenPrograms={onOpenPrograms ?? onBrowsePrograms}
           onOpenNutrition={onOpenNutrition}
           onOpenProgress={onOpenProgress ?? onOpenHistory}
+          onOpenChat={onOpenChat}
           nutritionDescription={quickLinksNutritionDescription}
         />
 

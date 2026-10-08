@@ -199,37 +199,39 @@ export function StreakTile({
           style,
         ]}
       >
-        <View style={styles.squareHeader}>
+        <View style={styles.squareContent}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View
+              style={[styles.badge1x1, { backgroundColor: colors.muted, opacity: 0.6 }]}
+            />
+            <View style={{ flex: 1, gap: 4 }}>
+              <View
+                style={{
+                  height: 12,
+                  width: "50%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                }}
+              />
+              <View
+                style={{
+                  height: 20,
+                  width: "60%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                }}
+              />
+            </View>
+          </View>
           <View
-            style={[styles.badgeSmall, { backgroundColor: colors.muted, opacity: 0.6 }]}
-          />
-          <View
-            style={{
-              height: 12,
-              width: "50%",
-              backgroundColor: colors.muted,
-              opacity: 0.6,
-              borderRadius: 4,
-              marginLeft: 8,
-            }}
+            style={[
+              styles.barTrack,
+              { backgroundColor: colors.muted, opacity: 0.6, marginTop: 6 },
+            ]}
           />
         </View>
-        <View
-          style={{
-            height: 24,
-            width: "40%",
-            backgroundColor: colors.muted,
-            opacity: 0.6,
-            borderRadius: 4,
-            marginTop: 8,
-          }}
-        />
-        <View
-          style={[
-            styles.barTrack,
-            { backgroundColor: colors.muted, opacity: 0.6, marginTop: 8 },
-          ]}
-        />
       </View>
     );
   }
@@ -240,12 +242,15 @@ export function StreakTile({
 
   const accessibilityLabel = `${p.fullLabel}: ${p.value} ${p.unit ?? ""}. ${p.footer}`;
 
-  const renderValue = () => {
+  const renderValue = (isWide = false) => {
+    const valClass = isWide
+      ? "text-3xl font-extrabold tracking-tight leading-none"
+      : "text-2xl font-extrabold tracking-tight leading-none";
     if (p.emphasis) {
       return (
         <Text
           testID="streak-super-value"
-          className="text-foreground text-2xl font-bold"
+          className={valClass}
           numberOfLines={1}
         >
           <FireNumber>{p.value}</FireNumber>
@@ -262,7 +267,7 @@ export function StreakTile({
     return (
       <Text
         testID="tile-streak-value"
-        className="text-foreground text-2xl font-bold"
+        className={`text-foreground ${valClass}`}
         numberOfLines={1}
       >
         {formattedVal}
@@ -300,23 +305,14 @@ export function StreakTile({
               >
                 {p.label}
               </Text>
-              {renderValue()}
-              {p.footer ? (
-                <Text
-                  testID="tile-streak-footer"
-                  className="text-muted-foreground text-[11px] mt-0.5"
-                  numberOfLines={1}
-                >
-                  {p.footer}
-                </Text>
-              ) : null}
+              {renderValue(true)}
             </View>
           </View>
           <View style={styles.wideRight}>
             <View
               style={[
                 styles.barTrack,
-                { backgroundColor: colors.muted, width: 80 },
+                { backgroundColor: colors.muted },
               ]}
             >
               <View
@@ -329,56 +325,72 @@ export function StreakTile({
                 ]}
               />
             </View>
-            {pages.length > 1 ? (
-              <View
-                testID="streak-tile-dots"
-                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-              >
-                {pages.map((pg, idx) => (
-                  <Pressable
-                    key={pg.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={pg.fullLabel}
-                    accessibilityState={{ selected: idx === i }}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      goTo(idx);
-                    }}
-                    hitSlop={6}
-                    style={{
-                      height: 4,
-                      width: idx === i ? 10 : 4,
-                      borderRadius: 2,
-                      backgroundColor:
-                        idx === i
-                          ? pg.id === "super"
-                            ? colors.accent
-                            : colors["muted-foreground"]
-                          : colors.border,
-                    }}
-                  />
-                ))}
-              </View>
-            ) : (
-              <ChevronRight size={16} color={colors["muted-foreground"]} />
-            )}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 4,
+              }}
+            >
+              {p.footer ? (
+                <Text
+                  testID="tile-streak-footer"
+                  className="text-muted-foreground text-[11px] flex-1 mr-2"
+                  numberOfLines={1}
+                >
+                  {p.footer}
+                </Text>
+              ) : null}
+              {pages.length > 1 ? (
+                <View
+                  testID="streak-tile-dots"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                >
+                  {pages.map((pg, idx) => (
+                    <Pressable
+                      key={pg.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={pg.fullLabel}
+                      accessibilityState={{ selected: idx === i }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        goTo(idx);
+                      }}
+                      hitSlop={6}
+                      style={{
+                        height: 4,
+                        width: idx === i ? 10 : 4,
+                        borderRadius: 2,
+                        backgroundColor:
+                          idx === i
+                            ? pg.id === "super"
+                              ? colors.accent
+                              : colors["muted-foreground"]
+                            : colors.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       ) : (
         <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
-            <View style={[styles.badgeSmall, { backgroundColor: ink.badge }]}>
-              <IconComponent size={16} color={ink.icon} />
+          <View style={styles.squareTopRow}>
+            <View style={[styles.badge1x1, { backgroundColor: ink.badge }]}>
+              <IconComponent size={18} color={ink.icon} />
             </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {p.label}
-            </Text>
-          </View>
-          <View style={{ marginTop: 8 }}>
-            {renderValue()}
+            <View style={styles.squareMeta}>
+              <Text
+                className="text-muted-foreground text-xs font-medium flex-1 ml-2"
+                numberOfLines={1}
+              >
+                {p.label}
+              </Text>
+              {renderValue(false)}
+            </View>
           </View>
           {/* Progress bar */}
           <View
@@ -458,6 +470,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     minHeight: 96,
+    height: "100%",
     minWidth: 44,
     justifyContent: "center",
   },
@@ -465,21 +478,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
   },
   wideLeft: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   wideMeta: {
     justifyContent: "center",
-    flexShrink: 1,
+    gap: 2,
   },
   wideRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
   badge: {
     width: 44,
@@ -488,10 +502,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  badge1x1: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -499,9 +520,20 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
   },
+  squareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   squareHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
   },
   barTrack: {
     height: 6,
