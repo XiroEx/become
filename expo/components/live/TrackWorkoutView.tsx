@@ -445,14 +445,6 @@ export function TrackWorkoutView({
           >
             {`— ${members.length} exercises${head.groupRest ? `, ${head.groupRest} rest between rounds` : ", minimal rest between exercises"}`}
           </Text>
-          {rounds > 1 ? (
-            <Text
-              testID={`${testID}-group-${groupId}-rounds`}
-              style={{ display: "none" }}
-            >
-              {`Runs as ${rounds} interleaved rounds`}
-            </Text>
-          ) : null}
           <View style={{ flex: 1 }} />
           {onExerciseChange ? (
             <Pressable
@@ -478,15 +470,6 @@ export function TrackWorkoutView({
           </Text>
         </View>
 
-        {/* Anchors for group member exercises so test IDs resolve without rendering media boxes */}
-        {members.map(({ ex }) => (
-          <View
-            key={`anchor-${ex.slug}`}
-            testID={`${testID}-exercise-${ex.slug}`}
-            style={{ display: "none" }}
-          />
-        ))}
-
         {/* ROUND 1, ROUND 2, … — every member's set for that round, together. */}
         <View style={{ marginTop: 10, gap: 8 }}>
           {Array.from({ length: rounds }, (_, r) => (
@@ -505,7 +488,13 @@ export function TrackWorkoutView({
                   if (!s) return null;
                   const bell = getBellWeightInfo(ex);
                   return (
-                    <View key={ex.slug} className="rounded-lg border border-border bg-card p-2">
+                    <View
+                      key={ex.slug}
+                      // Each member is named by its slug once: on its round-1 card
+                      // (the web's grouped Track has no separate per-member block).
+                      testID={r === 0 ? `${testID}-exercise-${ex.slug}` : undefined}
+                      className="rounded-lg border border-border bg-card p-2"
+                    >
                       <View
                         style={{
                           flexDirection: "row",
