@@ -40,7 +40,24 @@ import { LEGAL_CONTACT_EMAIL } from "@become/core";
  * phone that requested the deletion, before the app has re-checked it), so
  * the exit goes to Home when this device is signed in and to sign-in when it
  * is not — never a dead end either way.
+ *
+ * NP-311: dead-link failure copy parity with web, including the support email
+ * mailto link so a member with an expired or invalid link can reach support.
  */
+function SupportEmailLink({ onPress }: { onPress: () => void }) {
+  return (
+    <Text
+      testID="restore-support-email"
+      accessibilityRole="link"
+      accessibilityLabel={`Email support at ${LEGAL_CONTACT_EMAIL}`}
+      onPress={onPress}
+      className="text-foreground text-sm font-medium underline"
+    >
+      {LEGAL_CONTACT_EMAIL}
+    </Text>
+  );
+}
+
 export default function RestoreAccountRoute() {
   const { colors } = useThemeTokens();
   const params = useLocalSearchParams<{ u?: string | string[]; t?: string | string[] }>();
@@ -55,8 +72,12 @@ export default function RestoreAccountRoute() {
 
   const onRestore = async (): Promise<void> => {
     setState("working");
-    const result = await restoreAccount({ userId, token });
-    setState(result.ok ? "done" : "failed");
+    try {
+      const result = await restoreAccount({ userId, token });
+      setState(result.ok ? "done" : "failed");
+    } catch {
+      setState("failed");
+    }
   };
 
   const onBackToBecome = useCallback((): void => {
@@ -94,15 +115,7 @@ export default function RestoreAccountRoute() {
           <Text testID="restore-missing" className="text-muted-foreground text-sm">
             This link is incomplete. Open the one in the email we sent when the deletion was
             requested, or email{" "}
-            <Text
-              testID="restore-support-email"
-              accessibilityRole="link"
-              accessibilityLabel={`Email support at ${LEGAL_CONTACT_EMAIL}`}
-              onPress={onEmailSupport}
-              className="text-foreground text-sm font-medium underline"
-            >
-              {LEGAL_CONTACT_EMAIL}
-            </Text>{" "}
+            <SupportEmailLink onPress={onEmailSupport} />{" "}
             from the address on the account.
           </Text>
         ) : state === "done" ? (
@@ -122,10 +135,18 @@ export default function RestoreAccountRoute() {
             </Button>
           </View>
         ) : state === "failed" ? (
-          <Text testID="restore-failed" className="text-muted-foreground text-sm">
-            This link no longer works. The deletion may already have been cancelled, replaced by a
-            newer request, or gone past the window to change your mind.
-          </Text>
+          <View testID="restore-failed" style={{ gap: 12 }}>
+            <Text className="text-muted-foreground text-sm">
+              This link no longer works. That happens when the deletion was already cancelled, when a
+              newer request replaced it, or when the window to change your mind has closed and the
+              data is gone.
+            </Text>
+            <Text className="text-muted-foreground text-sm">
+              If you think that is wrong, email{" "}
+              <SupportEmailLink onPress={onEmailSupport} />{" "}
+              from the address on the account.
+            </Text>
+          </View>
         ) : (
           <View style={{ gap: 12 }}>
             <Text className="text-muted-foreground text-sm">
