@@ -5,7 +5,9 @@
 // it from the same-week cache first, and hands it to the STAGE: the web's
 // `JourneyCanvas`, natively (`components/becoming/journey/JourneyStage.tsx`).
 // The details sheet opens over the stage from a card's Details button and can
-// fly the stage to a week from its Story screen.
+// fly the stage to a week from its Story screen. The screen also tells the
+// stage when its push has actually ended (`useScreenShown`), so the opening
+// plays on screen and not behind the slide (NP-347).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
@@ -33,6 +35,7 @@ import type { IntroKind } from "@/lib/becoming/stage";
 import { JourneyStage, type JourneyStageHandle } from "@/components/becoming/journey/JourneyStage";
 import { BecomingDetails } from "@/components/becoming/BecomingDetails";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useScreenShown } from "@/lib/navigation/useScreenShown";
 
 export default function BecomingScreen() {
   const router = useRouter();
@@ -48,6 +51,13 @@ export default function BecomingScreen() {
         : null;
 
   const { colors, isDark } = useThemeTokens();
+  // Is this screen actually in view yet? A native-stack push mounts it before
+  // the slide, and on iOS the main thread can stay busy for seconds after
+  // that; the stage's opening waits for this (and its own canvas) so the hold
+  // and the fly are seen, not elapsed behind the transition (NP-347). Asked
+  // here, at the screen's mount, so the navigator's `transitionEnd` is heard
+  // even when the journey arrives after it.
+  const shown = useScreenShown();
 
   const [data, setData] = useState<JourneyPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +254,7 @@ export default function BecomingScreen() {
         onNavigate={handleNavigate}
         initialWeekKey={initialWeekKey}
         inert={detailsOpen}
+        shown={shown}
       />
 
       {/* Details Sheet */}
