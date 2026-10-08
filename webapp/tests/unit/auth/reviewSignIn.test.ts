@@ -47,11 +47,31 @@ import {
 import {
   REVIEW_ACCOUNT_NAME,
   SEED_ACTIVITY_DAYS,
+  SEED_STREAK_DAYS,
+  REVIEW_TIMEZONE,
+  reviewActivityDays,
   reviewMealLogs,
   reviewMoodHistory,
   reviewUserFields,
   reviewWeightHistory,
+  reviewWorkoutLogs,
+  reviewSchedule,
+  reviewTrainingDayKeys,
+  reviewNutritionGoal,
+  reviewIdentityProfile,
+  localInstant,
+  dayMarker,
 } from '../../../lib/reviewSeed'
+import {
+  dayStreak,
+  workoutOrRestDays,
+  dayRange,
+  intersectDays,
+  shiftDay,
+  lostWeeks,
+  withoutLostWeeks,
+} from '../../../lib/streaks/pillars'
+import { localDateKey } from '../../../lib/dayWindow'
 
 const ROOT = path.join(__dirname, '..', '..', '..')
 const REPO = path.join(ROOT, '..')
@@ -360,7 +380,7 @@ test('the seeded activity is believable, and none of it is in the future', () =>
   }
 
   const moods = reviewMoodHistory(now)
-  assert.equal(moods.length, SEED_ACTIVITY_DAYS, 'the mood history has a hole in it')
+  assert.equal(moods.length, reviewActivityDays(now), 'the mood history has a hole in it')
   // Consecutive days ending today — a streak is a fact about consecutive days.
   const dayKeys = moods.map((m) => m.date.toISOString().slice(0, 10))
   assert.equal(new Set(dayKeys).size, moods.length, 'two moods on one day')
@@ -384,7 +404,12 @@ test('the seed refuses to write to anything but the flagged demo row', () => {
       + 'overwrite a real member\'s program, meals and Mind progress',
   )
   // Every destructive write is filtered by the demo userId.
-  for (const call of [/MealLog\.deleteMany\(\{ user: uid \}\)/, /Schedule\.deleteMany\(\{ userId: uid \}\)/]) {
+  for (const call of [
+    /MealLog\.deleteMany\(\{ user: uid \}\)/,
+    /Schedule\.deleteMany\(\{ userId: uid \}\)/,
+    /NutritionGoal\.deleteMany\(\{ userId: uid \}\)/,
+    /IdentityProfile\.deleteMany\(\{ userId: uid \}\)/,
+  ]) {
     assert.match(seed, call, 'a delete in the seed is not scoped to the demo account')
   }
 
@@ -394,6 +419,258 @@ test('the seed refuses to write to anything but the flagged demo row', () => {
     /existing\.isReviewAccount !== true/,
     'ensureReviewAccount no longer refuses an address that belongs to a member',
   )
+})
+
+// ─── 5b. Demo Account Consistency Invariants (NP-339) ────────────────────────
+
+test('all review workout dates land strictly on Mon/Wed/Fri with zero weekend workouts', () => {
+  const dates = [
+    new Date('2026-09-30T12:00:00.000Z'), // Wednesday
+    new Date('2026-10-06T12:00:00.000Z'), // Tuesday
+    new Date('2026-10-08T12:00:00.000Z'), // Thursday
+    new Date('2026-10-10T12:00:00.000Z'), // Saturday
+    new Date('2026-10-11T12:00:00.000Z'), // Sunday
+  ]
+
+  const mockProgram = {
+    programId: 'prog-1',
+    programName: 'Foundation Strength',
+    dayLabels: [
+      { day: 'Day 1', title: 'Full Body A' },
+      { day: 'Day 2', title: 'Full Body B' },
+      { day: 'Day 3', title: 'Full Body C' },
+    ],
+    totalWorkouts: 13,
+  }
+  const userId = { toString: () => 'u1' } as never
+
+  for (const now of dates) {
+    const { past, future } = reviewTrainingDayKeys(now)
+    assert.equal(past.length, 9, 'must have exactly 9 past training days')
+    assert.equal(future.length, 4, 'must have exactly 4 future training days')
+
+    const allKeys = [...past, ...future]
+    for (const key of allKeys) {
+      const [y, m, d] = key.split('-').map(Number)
+      const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+      assert.ok(
+        dow === 1 || dow === 3 || dow === 5,
+        `workout date ${key} landed on weekday ${dow} (expected 1=Mon, 3=Wed, 5=Fri)`,
+      )
+      assert.notEqual(dow, 0, `workout date ${key} landed on Sunday`)
+      assert.notEqual(dow, 6, `workout date ${key} landed on Saturday`)
+    }
+
+    const schedule = reviewSchedule(userId, mockProgram, now)
+    assert.equal(schedule.scheduledWorkouts.length, 13)
+    const logs = reviewWorkoutLogs(mockProgram, now)
+    assert.equal(logs.length, 9)
+  }
+})
+
+test('program workout total is 13, matching 13 schedule sessions (9 completed, 4 scheduled)', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z')
+  const userId = { toString: () => 'u1' } as never
+  const mockProgram = {
+    programId: 'prog-1',
+    programName: 'Foundation Strength',
+    dayLabels: [
+      { day: 'Day 1', title: 'Full Body A' },
+      { day: 'Day 2', title: 'Full Body B' },
+      { day: 'Day 3', title: 'Full Body C' },
+    ],
+    totalWorkouts: 13,
+  }
+
+  const schedule = reviewSchedule(userId, mockProgram, now)
+  const scheduledWorkouts = schedule.scheduledWorkouts as Array<{ status: string }>
+  assert.equal(scheduledWorkouts.length, 13, 'schedule must have exactly 13 total sessions')
+
+  const completed = scheduledWorkouts.filter((w) => w.status === 'completed')
+  const upcoming = scheduledWorkouts.filter((w) => w.status === 'scheduled')
+  assert.equal(completed.length, 9, 'schedule must have 9 completed sessions')
+  assert.equal(upcoming.length, 4, 'schedule must have 4 upcoming scheduled sessions')
+
+  const seed = read('lib/reviewSeed.ts')
+  assert.match(
+    seed,
+    /totalWorkouts:\s*13/,
+    'UserProgress.activePrograms must store totalWorkouts as 13',
+  )
+  assert.match(
+    seed,
+    /completedWorkouts:\s*9/,
+    'UserProgress.activePrograms must store completedWorkouts as 9',
+  )
+})
+
+test('local meal times are ~8:00 breakfast, ~12:30 lunch, ~19:00 dinner in America/New_York', () => {
+  const now = new Date('2026-10-08T23:59:59.000Z')
+  const userId = { toString: () => 'u1' } as never
+  const meals = reviewMealLogs(userId, now)
+
+  const breakfastMeals = meals.filter((m) => (m.tags as string[]).includes('breakfast'))
+  const lunchMeals = meals.filter((m) => (m.tags as string[]).includes('lunch'))
+  const dinnerMeals = meals.filter((m) => (m.tags as string[]).includes('dinner'))
+
+  assert.ok(breakfastMeals.length > 0)
+  assert.ok(lunchMeals.length > 0)
+  assert.ok(dinnerMeals.length > 0)
+
+  for (const b of breakfastMeals) {
+    const dt = b.loggedAt as Date
+    const nyTime = dt.toLocaleTimeString('en-US', {
+      timeZone: REVIEW_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    assert.equal(nyTime, '08:00', `breakfast logged at ${nyTime} in NY, expected 08:00`)
+  }
+
+  for (const l of lunchMeals) {
+    const dt = l.loggedAt as Date
+    const nyTime = dt.toLocaleTimeString('en-US', {
+      timeZone: REVIEW_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    assert.equal(nyTime, '12:30', `lunch logged at ${nyTime} in NY, expected 12:30`)
+  }
+
+  for (const d of dinnerMeals) {
+    const dt = d.loggedAt as Date
+    const nyTime = dt.toLocaleTimeString('en-US', {
+      timeZone: REVIEW_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+    assert.equal(nyTime, '19:00', `dinner logged at ${nyTime} in NY, expected 19:00`)
+  }
+})
+
+test('no makeup workouts: completed workouts are completed on scheduled date and match logs chronologically', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z')
+  const userId = { toString: () => 'u1' } as never
+  const mockProgram = {
+    programId: 'prog-1',
+    programName: 'Foundation Strength',
+    dayLabels: [
+      { day: 'Day 1', title: 'Full Body A' },
+      { day: 'Day 2', title: 'Full Body B' },
+      { day: 'Day 3', title: 'Full Body C' },
+    ],
+    totalWorkouts: 13,
+  }
+
+  const schedule = reviewSchedule(userId, mockProgram, now)
+  const logs = reviewWorkoutLogs(mockProgram, now)
+  const completedSlots = (schedule.scheduledWorkouts as Array<{
+    date: Date
+    dayLabel: string
+    workoutTitle: string
+    status: string
+    completedAt?: Date
+  }>).filter((s) => s.status === 'completed')
+
+  assert.equal(completedSlots.length, logs.length)
+
+  // Verify chronological dayLabels match between schedule and logs
+  for (let i = 0; i < completedSlots.length; i++) {
+    const slot = completedSlots[i]
+    const log = logs[i] as { date: Date; day: string }
+
+    assert.equal(slot.dayLabel, log.day, `dayLabel mismatch at index ${i}`)
+
+    // Calendar isMakeupWorkout logic:
+    // Only a makeup if completed AFTER the scheduled date.
+    const slotDateStr = slot.date.toISOString().split('T')[0]
+    const [sy, sm, sd] = slotDateStr.split('-').map(Number)
+    const scheduledLocal = new Date(sy, sm - 1, sd)
+
+    const c = new Date(slot.completedAt!)
+    const completedLocal = new Date(c.getFullYear(), c.getMonth(), c.getDate())
+
+    // Completed on or before scheduled date -> isMakeup is FALSE
+    const isMakeup = completedLocal.getTime() > scheduledLocal.getTime()
+    assert.equal(isMakeup, false, `slot ${slotDateStr} was marked as makeup workout`)
+  }
+})
+
+test('nutrition goal matches gain-muscle / gain profile with surplus calories and high protein', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z')
+  const userId = { toString: () => 'u1' } as never
+  const goal = reviewNutritionGoal(userId, now)
+
+  assert.equal(goal.goalType, 'gain')
+  assert.equal(goal.activityLevel, 'moderate')
+  assert.equal(goal.macroPreset, 'recommended')
+  assert.ok(goal.calories > 2500, `calories ${goal.calories} should be a surplus (>2500)`)
+  assert.equal(goal.calories, 2871, 'expected 2871 kcal surplus')
+  assert.ok(goal.protein > 170, `protein ${goal.protein}g should be high (>170g)`)
+  assert.equal(goal.protein, 179, 'expected 179g protein')
+  assert.equal(goal.carbs, 345)
+  assert.equal(goal.fats, 86)
+})
+
+test('identity profile is seeded with a believable future self and no placeholder text', () => {
+  const now = new Date('2026-10-08T12:00:00.000Z')
+  const userId = { toString: () => 'u1' } as never
+  const identity = reviewIdentityProfile(userId, now)
+
+  assert.ok(identity.futureSelf.length > 20, 'futureSelf is too short')
+  assert.ok(identity.currentSelf.length > 20, 'currentSelf is too short')
+  assert.equal(identity.primaryObstacle, 'discipline')
+  assert.equal(identity.startingPoint, 'building')
+  assert.equal(identity.onboardingCompleted, true)
+  assert.equal(identity.affirmStreak, 12)
+  assert.equal(identity.longestAffirmStreak, 12)
+  assert.match(identity.lastAffirmedKey, /^\d{4}-\d{2}-\d{2}$/)
+
+  // Assert absence of test fixture placeholders
+  assert.ok(!identity.futureSelf.toLowerCase().includes('teal boy'), 'contains "teal boy"')
+  assert.ok(!identity.currentSelf.toLowerCase().includes('teal boy'), 'contains "teal boy"')
+})
+
+test('super streak and day streak both equal 12 across weekdays and rest days', () => {
+  const dates = [
+    new Date('2026-10-06T12:00:00.000Z'), // Tuesday (rest day)
+    new Date('2026-10-07T12:00:00.000Z'), // Wednesday (training day)
+    new Date('2026-10-08T12:00:00.000Z'), // Thursday (rest day)
+    new Date('2026-10-09T12:00:00.000Z'), // Friday (training day)
+    new Date('2026-10-10T12:00:00.000Z'), // Saturday (rest day)
+  ]
+
+  for (const now of dates) {
+    const tzOffset = 240
+    const todayKey = localDateKey(null, tzOffset, now)
+    const activityDays = reviewActivityDays(now, tzOffset)
+    const { past: pastWorkouts } = reviewTrainingDayKeys(now, tzOffset)
+
+    const workoutDays = new Set(pastWorkouts)
+    const nutritionDays = new Set<string>()
+    const mindDays = new Set<string>()
+    for (let i = 0; i < activityDays; i++) {
+      const k = shiftDay(todayKey, -i)
+      nutritionDays.add(k)
+      mindDays.add(k)
+    }
+
+    const trainingWeekdays = [1, 3, 5]
+    const weeklyTarget = 3
+    const fromKey = shiftDay(todayKey, -365)
+    const allDays = dayRange(fromKey, todayKey)
+    const trainedOrRest = workoutOrRestDays(workoutDays, allDays, trainingWeekdays, weeklyTarget)
+    const lost = lostWeeks(workoutDays, weeklyTarget, todayKey, trainingWeekdays)
+    const workoutHalf = withoutLostWeeks(trainedOrRest, lost)
+    const superDays = intersectDays(nutritionDays, mindDays, workoutHalf)
+    const superStreak = dayStreak(superDays, todayKey)
+
+    assert.equal(superStreak.current, 12, `super streak should be 12 on ${todayKey}`)
+    assert.equal(SEED_STREAK_DAYS, 12, 'stored day streak is 12')
+  }
 })
 
 // ─── 6. The rate-limit keys ──────────────────────────────────────────────────

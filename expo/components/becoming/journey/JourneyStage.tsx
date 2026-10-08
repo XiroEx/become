@@ -141,6 +141,7 @@ import { motionDuration, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic } from "@/lib/feedback/haptics";
 import { becomingStageTokens, rgbOf } from "@/lib/theme/tokens";
+import { ForcedThemeMode } from "@/lib/theme/useThemeTokens";
 
 // The tick labels and "started" read 12px at any zoom; the face is the app's
 // semibold Geist, registered from the bundle like every other face (NP-160).
@@ -955,230 +956,237 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
       // The web exposes `data-mode`; a test reads it the same way here.
       accessibilityValue={{ text: mode }}
     >
-      <StageCanvas
-        vw={vw}
-        vh={vh}
-        size={size}
-        positions={positions}
-        weeks={weeks}
-        segments={line.segments}
-        ticks={line.ticks}
-        grid={line.grid}
-        areaPath={line.areaPath}
-        areaTop={line.areaTop}
-        baseY={line.baseY}
-        stars={stars}
-        peaks={peaks}
-        camX={camX}
-        camY={camY}
-        camS={camS}
-        tilt={tilt}
-        drawProgress={drawProgress}
-        font={font}
-      />
+      {/* A night sky in BOTH schemes, like the web's (NP-341): the stage's own
+          chrome and tiles draw from `becomingStageTokens`, and everything that
+          reads `useThemeTokens()` under here — the week cards, the Horizon
+          card, their chips and the Details button — gets the dark palette
+          whatever the system says, with no per-component literal. */}
+      <ForcedThemeMode mode="dark">
+        <StageCanvas
+          vw={vw}
+          vh={vh}
+          size={size}
+          positions={positions}
+          weeks={weeks}
+          segments={line.segments}
+          ticks={line.ticks}
+          grid={line.grid}
+          areaPath={line.areaPath}
+          areaTop={line.areaTop}
+          baseY={line.baseY}
+          stars={stars}
+          peaks={peaks}
+          camX={camX}
+          camY={camY}
+          camS={camS}
+          tilt={tilt}
+          drawProgress={drawProgress}
+          font={font}
+        />
 
-      <GestureDetector gesture={gesture}>
-        <View style={StyleSheet.absoluteFill} onLayout={onLayout} testID="journey-gesture-surface">
-          <Animated.View style={[StyleSheet.absoluteFill, tiltStyle]} pointerEvents="box-none">
-            <Animated.View
-              style={[styles.world, { width: vw, height: vh }, worldStyle]}
-              pointerEvents="box-none"
-              testID="journey-world"
-            >
-              {positions.map((p, i) => {
-                const em = cardEmphasis(i, focus, mode);
-                const week = weeks[i];
-                const breathing = mode === "intro" && i === startIndex;
-                return (
-                  <View
-                    key={p.horizon ? "horizon" : (week?.weekKey ?? i)}
-                    testID={`journey-card-${i}`}
-                    // The focused card's buttons are live; a neighbour's are not
-                    // (tapping it brings it forward); in the opening nothing is.
-                    pointerEvents={mode !== "intro" && (em.focused || em.compact) ? "box-none" : "none"}
-                    style={[
-                      styles.slot,
-                      {
-                        left: p.x - size.w / 2,
-                        top: p.y - size.h / 2,
-                        width: size.w,
-                        height: em.focused ? undefined : size.h,
-                        minHeight: size.h,
-                        overflow: em.focused ? "visible" : "hidden",
-                        opacity: em.opacity,
-                        transform: [{ scale: breathing ? 1.03 : em.scale }],
-                      },
-                    ]}
-                  >
-                    {p.horizon ? (
-                      em.compact ? (
-                        <WeekTile horizon width={size.w} height={size.h} />
+        <GestureDetector gesture={gesture}>
+          <View style={StyleSheet.absoluteFill} onLayout={onLayout} testID="journey-gesture-surface">
+            <Animated.View style={[StyleSheet.absoluteFill, tiltStyle]} pointerEvents="box-none">
+              <Animated.View
+                style={[styles.world, { width: vw, height: vh }, worldStyle]}
+                pointerEvents="box-none"
+                testID="journey-world"
+              >
+                {positions.map((p, i) => {
+                  const em = cardEmphasis(i, focus, mode);
+                  const week = weeks[i];
+                  const breathing = mode === "intro" && i === startIndex;
+                  return (
+                    <View
+                      key={p.horizon ? "horizon" : (week?.weekKey ?? i)}
+                      testID={`journey-card-${i}`}
+                      // The focused card's buttons are live; a neighbour's are not
+                      // (tapping it brings it forward); in the opening nothing is.
+                      pointerEvents={mode !== "intro" && (em.focused || em.compact) ? "box-none" : "none"}
+                      style={[
+                        styles.slot,
+                        {
+                          left: p.x - size.w / 2,
+                          top: p.y - size.h / 2,
+                          width: size.w,
+                          height: em.focused ? undefined : size.h,
+                          minHeight: size.h,
+                          overflow: em.focused ? "visible" : "hidden",
+                          opacity: em.opacity,
+                          transform: [{ scale: breathing ? 1.03 : em.scale }],
+                        },
+                      ]}
+                    >
+                      {p.horizon ? (
+                        em.compact ? (
+                          <WeekTile horizon width={size.w} height={size.h} />
+                        ) : (
+                          <HorizonCard
+                            identity={data.identity}
+                            trend={trend}
+                            next={data.next}
+                            active={liveActive}
+                            onNavigate={onNavigate}
+                          />
+                        )
+                      ) : !week ? null : em.compact ? (
+                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} />
                       ) : (
-                        <HorizonCard
+                        <WeekCard
+                          week={week}
+                          signals={signals[i] ?? { active: [], highlights: [], nudge: null, hasDeltas: false }}
+                          totalWeeks={weeks.length}
                           identity={data.identity}
-                          trend={trend}
-                          next={data.next}
-                          active={liveActive}
+                          next={week.isCurrent ? data.next : null}
+                          isPeak={peaks.has(i)}
+                          onDetails={() => onDetails(i)}
                           onNavigate={onNavigate}
                         />
-                      )
-                    ) : !week ? null : em.compact ? (
-                      <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} />
-                    ) : (
-                      <WeekCard
-                        week={week}
-                        signals={signals[i] ?? { active: [], highlights: [], nudge: null, hasDeltas: false }}
-                        totalWeeks={weeks.length}
-                        identity={data.identity}
-                        next={week.isCurrent ? data.next : null}
-                        isPeak={peaks.has(i)}
-                        onDetails={() => onDetails(i)}
-                        onNavigate={onNavigate}
-                      />
-                    )}
-                  </View>
-                );
-              })}
+                      )}
+                    </View>
+                  );
+                })}
+              </Animated.View>
             </Animated.View>
-          </Animated.View>
-        </View>
-      </GestureDetector>
-
-      {/* The intro's fog: the web's blur has a plain-fog fallback for low-memory
-          devices, and that is what the phone gets — same beat, no filter. */}
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: fogColor }, fogStyle]} pointerEvents="none" />
-
-      {showTitle && (
-        <Animated.View
-          entering={reduced ? undefined : FadeIn.duration(700)}
-          exiting={reduced ? undefined : FadeOut.duration(500)}
-          style={styles.title}
-          pointerEvents="none"
-          testID="journey-title"
-        >
-          <Text style={[styles.kicker, { color: rgbOf(INK, 0.6) }]}>The Becoming</Text>
-          <Text style={[styles.titleText, { color: ink }]}>Who am I becoming?</Text>
-          {data.identity ? (
-            <Text style={[styles.identity, { color: rgbOf(INK, 0.75) }]} numberOfLines={3}>
-              “{data.identity}”
-            </Text>
-          ) : null}
-        </Animated.View>
-      )}
-
-      {mode === "overview" && (
-        <Animated.View style={[styles.hud, { top: insets.top + 62 }, hudStyle]} pointerEvents="none" testID="journey-hud">
-          {data.identity ? (
-            <Text style={[styles.hudIdentity, { color: rgbOf(INK, 0.85) }]} numberOfLines={2}>
-              “{data.identity}”
-            </Text>
-          ) : null}
-          <Text style={[styles.hudAggregate, { color: rgbOf(INK, 0.55) }]} testID="journey-aggregate">
-            {aggregate(weeks, data.unit)}
-            {sinceLabel(data.firstActivity)}
-          </Text>
-        </Animated.View>
-      )}
-
-      {/* Chrome */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
-        <Pressable
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          testID="journey-close"
-          style={[minTouchTarget, styles.roundButton, { backgroundColor: chromeFill }]}
-        >
-          <X size={20} color={ink} strokeWidth={1.5} />
-        </Pressable>
-        <View style={styles.topCenter} pointerEvents="none">
-          <Text style={[styles.kickerSmall, { color: rgbOf(INK, 0.55) }]}>The Becoming</Text>
-          {mode !== "intro" ? (
-            <Text style={[styles.counter, { color: rgbOf(INK, 0.8) }]} testID="journey-counter">
-              {counter}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          onPress={() => (mode === "overview" ? focusOn(focus) : enterOverview())}
-          accessibilityRole="button"
-          accessibilityLabel={mode === "overview" ? "Zoom in" : "Zoom out"}
-          testID="journey-zoom"
-          style={[minTouchTarget, styles.roundButton, { backgroundColor: chromeFill }]}
-        >
-          {mode === "overview" ? (
-            <Minimize2 size={16} color={ink} strokeWidth={1.5} />
-          ) : (
-            <Maximize2 size={16} color={ink} strokeWidth={1.5} />
-          )}
-        </Pressable>
-      </View>
-
-      {mode === "focus" && (
-        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 14 }]} pointerEvents="box-none">
-          <Pressable
-            onPress={() => {
-              if (prevIndex != null) flyTo(prevIndex, { click: true });
-            }}
-            disabled={prevDisabled}
-            accessibilityRole="button"
-            accessibilityLabel="Previous week"
-            accessibilityState={{ disabled: prevDisabled }}
-            testID="journey-prev"
-            style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill, opacity: prevDisabled ? 0.3 : 1 }]}
-          >
-            <ChevronLeft size={20} color={ink} strokeWidth={1.5} />
-          </Pressable>
-          <View style={styles.hintWrap} pointerEvents="none">
-            <Text style={[styles.hint, { color: rgbOf(INK, 0.55) }]} testID="journey-hint">
-              {hint ?? defaultHint(edge, onHorizon)}
-            </Text>
           </View>
-          <View style={styles.bottomRight}>
-            {focus !== liveIndex ? (
-              <Pressable
-                onPress={() => flyTo(liveIndex, { click: true })}
-                accessibilityRole="button"
-                accessibilityLabel="Jump to this week"
-                testID="journey-today"
-                style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill }]}
-              >
-                <LocateFixed size={20} color={ink} strokeWidth={1.5} />
-              </Pressable>
+        </GestureDetector>
+
+        {/* The intro's fog: the web's blur has a plain-fog fallback for low-memory
+            devices, and that is what the phone gets — same beat, no filter. */}
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: fogColor }, fogStyle]} pointerEvents="none" />
+
+        {showTitle && (
+          <Animated.View
+            entering={reduced ? undefined : FadeIn.duration(700)}
+            exiting={reduced ? undefined : FadeOut.duration(500)}
+            style={styles.title}
+            pointerEvents="none"
+            testID="journey-title"
+          >
+            <Text style={[styles.kicker, { color: rgbOf(INK, 0.6) }]}>The Becoming</Text>
+            <Text style={[styles.titleText, { color: ink }]}>Who am I becoming?</Text>
+            {data.identity ? (
+              <Text style={[styles.identity, { color: rgbOf(INK, 0.75) }]} numberOfLines={3}>
+                “{data.identity}”
+              </Text>
             ) : null}
+          </Animated.View>
+        )}
+
+        {mode === "overview" && (
+          <Animated.View style={[styles.hud, { top: insets.top + 62 }, hudStyle]} pointerEvents="none" testID="journey-hud">
+            {data.identity ? (
+              <Text style={[styles.hudIdentity, { color: rgbOf(INK, 0.85) }]} numberOfLines={2}>
+                “{data.identity}”
+              </Text>
+            ) : null}
+            <Text style={[styles.hudAggregate, { color: rgbOf(INK, 0.55) }]} testID="journey-aggregate">
+              {aggregate(weeks, data.unit)}
+              {sinceLabel(data.firstActivity)}
+            </Text>
+          </Animated.View>
+        )}
+
+        {/* Chrome */}
+        <View style={[styles.topBar, { paddingTop: insets.top + 10 }]} pointerEvents="box-none">
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            testID="journey-close"
+            style={[minTouchTarget, styles.roundButton, { backgroundColor: chromeFill }]}
+          >
+            <X size={20} color={ink} strokeWidth={1.5} />
+          </Pressable>
+          <View style={styles.topCenter} pointerEvents="none">
+            <Text style={[styles.kickerSmall, { color: rgbOf(INK, 0.55) }]}>The Becoming</Text>
+            {mode !== "intro" ? (
+              <Text style={[styles.counter, { color: rgbOf(INK, 0.8) }]} testID="journey-counter">
+                {counter}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={() => (mode === "overview" ? focusOn(focus) : enterOverview())}
+            accessibilityRole="button"
+            accessibilityLabel={mode === "overview" ? "Zoom in" : "Zoom out"}
+            testID="journey-zoom"
+            style={[minTouchTarget, styles.roundButton, { backgroundColor: chromeFill }]}
+          >
+            {mode === "overview" ? (
+              <Minimize2 size={16} color={ink} strokeWidth={1.5} />
+            ) : (
+              <Maximize2 size={16} color={ink} strokeWidth={1.5} />
+            )}
+          </Pressable>
+        </View>
+
+        {mode === "focus" && (
+          <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 14 }]} pointerEvents="box-none">
             <Pressable
               onPress={() => {
-                if (nextIndex != null) flyTo(nextIndex, { click: true });
+                if (prevIndex != null) flyTo(prevIndex, { click: true });
               }}
-              disabled={nextDisabled}
+              disabled={prevDisabled}
               accessibilityRole="button"
-              accessibilityLabel="Next week"
-              accessibilityState={{ disabled: nextDisabled }}
-              testID="journey-next"
-              style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill, opacity: nextDisabled ? 0.3 : 1 }]}
+              accessibilityLabel="Previous week"
+              accessibilityState={{ disabled: prevDisabled }}
+              testID="journey-prev"
+              style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill, opacity: prevDisabled ? 0.3 : 1 }]}
             >
-              <ChevronRight size={20} color={ink} strokeWidth={1.5} />
+              <ChevronLeft size={20} color={ink} strokeWidth={1.5} />
             </Pressable>
+            <View style={styles.hintWrap} pointerEvents="none">
+              <Text style={[styles.hint, { color: rgbOf(INK, 0.55) }]} testID="journey-hint">
+                {hint ?? defaultHint(edge, onHorizon)}
+              </Text>
+            </View>
+            <View style={styles.bottomRight}>
+              {focus !== liveIndex ? (
+                <Pressable
+                  onPress={() => flyTo(liveIndex, { click: true })}
+                  accessibilityRole="button"
+                  accessibilityLabel="Jump to this week"
+                  testID="journey-today"
+                  style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill }]}
+                >
+                  <LocateFixed size={20} color={ink} strokeWidth={1.5} />
+                </Pressable>
+              ) : null}
+              <Pressable
+                onPress={() => {
+                  if (nextIndex != null) flyTo(nextIndex, { click: true });
+                }}
+                disabled={nextDisabled}
+                accessibilityRole="button"
+                accessibilityLabel="Next week"
+                accessibilityState={{ disabled: nextDisabled }}
+                testID="journey-next"
+                style={[minTouchTarget, styles.roundButtonLg, { backgroundColor: chromeFill, opacity: nextDisabled ? 0.3 : 1 }]}
+              >
+                <ChevronRight size={20} color={ink} strokeWidth={1.5} />
+              </Pressable>
+            </View>
           </View>
-        </View>
-      )}
-      {mode === "overview" && (
-        <View style={[styles.overviewFoot, { paddingBottom: insets.bottom + 16 }]} pointerEvents="none">
-          <Text style={[styles.hint, { color: rgbOf(INK, 0.55) }]}>your line · tap a week to open it</Text>
-        </View>
-      )}
+        )}
+        {mode === "overview" && (
+          <View style={[styles.overviewFoot, { paddingBottom: insets.bottom + 16 }]} pointerEvents="none">
+            <Text style={[styles.hint, { color: rgbOf(INK, 0.55) }]}>your line · tap a week to open it</Text>
+          </View>
+        )}
 
-      {/* The live region: what the focused card says, for assistive tech. */}
-      <Text style={styles.srOnly} accessibilityLiveRegion="polite" testID="journey-live">
-        {mode === "focus" && focusedWeek
-          ? onHorizon
-            ? "Horizon: who you are becoming"
-            : `${focusedWeek.label}: ${focusedWeek.headline}`
-          : ""}
-      </Text>
-      {/* `landed` is the beat the card has clicked into place; the web passes it
-          to the card for its own flourish, the native card has none yet. */}
-      <View style={styles.srOnly} testID={landed != null ? `journey-landed-${landed}` : "journey-landing"} />
+        {/* The live region: what the focused card says, for assistive tech. */}
+        <Text style={styles.srOnly} accessibilityLiveRegion="polite" testID="journey-live">
+          {mode === "focus" && focusedWeek
+            ? onHorizon
+              ? "Horizon: who you are becoming"
+              : `${focusedWeek.label}: ${focusedWeek.headline}`
+            : ""}
+        </Text>
+        {/* `landed` is the beat the card has clicked into place; the web passes it
+            to the card for its own flourish, the native card has none yet. */}
+        <View style={styles.srOnly} testID={landed != null ? `journey-landed-${landed}` : "journey-landing"} />
+      </ForcedThemeMode>
     </View>
   );
 });

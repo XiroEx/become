@@ -370,6 +370,17 @@ backdrop, and `statusBarStyle`. `useThemedWindowBackground()` (root layout only)
 repaints the window itself through `expo-system-ui`, because `app.json` can only
 hold one colour for it.
 
+**A subtree that is one scheme whatever the system says** wraps itself in
+`ForcedThemeMode` (same file): inside it `useThemeTokens()` answers with that
+palette and ignores the system; outside, nothing changes. The Becoming stage
+(NP-341) is the case — a night sky in both schemes on the web, so
+`JourneyStage` pins `mode="dark"` around everything under it and the week
+cards, the Horizon card, their chips and the Details button keep reading tokens
+rather than literals. Only the HOOK sees the override: a `bg-*` / `text-*`
+class resolves against NativeWind's global scheme, so a forced subtree takes
+every colour from `useThemeTokens()` (`__tests__/card-NP-341-acceptance.test.tsx`
+checks the stage's files for colour classes).
+
 This replaced NP-013's dark pin, which existed only because 43 `#0a0a0a`
 literals sat in plain RN styles while the classes beside them followed the
 system: a phone in light mode drew light-mode text (`--foreground: 24 24 27`,

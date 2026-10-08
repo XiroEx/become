@@ -31,7 +31,16 @@ import MindProgress from '@/models/MindProgress'
 import MealLog from '@/models/MealLog'
 import Schedule from '@/models/Schedule'
 import Program from '@/models/Program'
+import NutritionGoal from '@/models/NutritionGoal'
+import IdentityProfile from '@/models/IdentityProfile'
+import { computeNutritionTargets, waterGoalOz, MACRO_CALC_VERSION } from '@/lib/nutrition/tdee'
+import { zoneOffsetMinutes } from '@/lib/captureUserTimezone'
+import { localDateKey } from '@/lib/dayWindow'
+import { shiftDay, weekdayOf } from '@/lib/streaks/pillars'
 import { AI_CONSENT_VERSION, LEGAL_MINIMUM_AGE, LEGAL_VERSION } from '@/lib/legal'
+
+/** Timezone for the reviewer demo account. */
+export const REVIEW_TIMEZONE = 'America/New_York'
 
 /** How stale the demo data may be before a sign-in rewrites it. */
 export const SEED_MAX_AGE_MS = 6 * 60 * 60 * 1000
@@ -39,7 +48,7 @@ export const SEED_MAX_AGE_MS = 6 * 60 * 60 * 1000
 /** The display name on the demo account. Not a person. */
 export const REVIEW_ACCOUNT_NAME = 'Alex Reviewer'
 
-/** Days of meals / mood the seed lays down, ending today. */
+/** Minimum days of meals / mood the seed lays down, ending today. */
 export const SEED_ACTIVITY_DAYS = 12
 
 /** The streak the seeded activity is written to support. */
@@ -53,15 +62,79 @@ function daysAgo(now: Date, days: number): Date {
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
 }
 
-/** A day marker: UTC midnight of the day `days` before `now`. */
-function dayMarker(now: Date, days: number): Date {
-  return startOfUtcDay(daysAgo(now, days))
+/** A day marker at UTC midnight. Supports YYYY-MM-DD string or Date. */
+export function dayMarker(keyOrDate: string | Date, days?: number): Date {
+  if (typeof keyOrDate === 'string') {
+    return new Date(`${keyOrDate}T00:00:00.000Z`)
+  }
+  if (days != null) {
+    return startOfUtcDay(daysAgo(keyOrDate, days))
+  }
+  return startOfUtcDay(keyOrDate)
 }
 
-/** An instant on the day `days` before `now`, at `hour` UTC. */
-function atHour(now: Date, days: number, hour: number): Date {
-  const day = dayMarker(now, days)
-  return new Date(day.getTime() + hour * 60 * 60 * 1000)
+/**
+ * An instant on local calendar day `dayKey`, at local `hour` and `minute` in the reviewer's timezone.
+ */
+export function localInstant(
+  dayKey: string,
+  hour: number,
+  minute: number = 0,
+  tzOffsetMinutes: number = 240,
+): Date {
+  const [y, m, d] = dayKey.split('-').map(Number)
+  const offset = zoneOffsetMinutes(REVIEW_TIMEZONE, new Date(Date.UTC(y, m - 1, d, 12, 0, 0))) ?? tzOffsetMinutes
+  const utcMs = Date.UTC(y, m - 1, d, hour, minute) + offset * 60_000
+  return new Date(utcMs)
+}
+
+/**
+ * How many days of activity to lay down so the streak reaches SEED_STREAK_DAYS.
+ *
+ * Workouts are scheduled for Mon / Wed / Fri. On a training day when today's
+ * workout has not been completed, today is not yet a qualifying "super" day,
+ * so the streak walks back from yesterday. To support a 12-day streak ending
+ * yesterday, we need 12 days before today + today = 13 days of meals & mood.
+ * On rest days, today is already a rest day and counts toward super streak,
+ * so 12 days (today + 11 past days) produces exactly 12.
+ */
+export function reviewActivityDays(
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+): number {
+  const todayKey = localDateKey(null, tzOffset, now)
+  return [1, 3, 5].includes(weekdayOf(todayKey)) ? 13 : 12
+}
+
+/**
+ * Training days for the review demo program: Monday (1), Wednesday (3), Friday (5).
+ * Returns 9 past training days strictly before todayKey (chronological),
+ * and 4 future training days starting today (if today is Mon/Wed/Fri) or the next training day.
+ */
+export function reviewTrainingDayKeys(
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+): { past: string[]; future: string[] } {
+  const todayKey = localDateKey(null, tzOffset, now)
+  const past: string[] = []
+  let cursor = shiftDay(todayKey, -1)
+  while (past.length < 9) {
+    if ([1, 3, 5].includes(weekdayOf(cursor))) {
+      past.unshift(cursor)
+    }
+    cursor = shiftDay(cursor, -1)
+  }
+
+  const future: string[] = []
+  cursor = [1, 3, 5].includes(weekdayOf(todayKey)) ? todayKey : shiftDay(todayKey, 1)
+  while (future.length < 4) {
+    if ([1, 3, 5].includes(weekdayOf(cursor))) {
+      future.push(cursor)
+    }
+    cursor = shiftDay(cursor, 1)
+  }
+
+  return { past, future }
 }
 
 // ── The profile ──────────────────────────────────────────────────────────────
@@ -120,6 +193,7 @@ export function reviewUserFields(now: Date = new Date()): Partial<IUser> {
 const MEALS = [
   {
     hour: 8,
+    minute: 0,
     tag: 'breakfast',
     name: 'Oats, banana and whey',
     items: [
@@ -129,7 +203,8 @@ const MEALS = [
     ],
   },
   {
-    hour: 13,
+    hour: 12,
+    minute: 30,
     tag: 'lunch',
     name: 'Chicken, rice and greens',
     items: [
@@ -140,6 +215,7 @@ const MEALS = [
   },
   {
     hour: 19,
+    minute: 0,
     tag: 'dinner',
     name: 'Salmon and sweet potato',
     items: [
@@ -162,14 +238,21 @@ function totalNutrition(items: readonly { nutrition: { calories: number; protein
   )
 }
 
-/** Meal logs for the last SEED_ACTIVITY_DAYS days, today included. */
-export function reviewMealLogs(userId: Types.ObjectId, now: Date = new Date()) {
+/** Meal logs for the last reviewActivityDays days, today included. */
+export function reviewMealLogs(
+  userId: Types.ObjectId,
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
+  const activityDays = reviewActivityDays(now, tzOffset)
+  const todayKey = localDateKey(null, tzOffset, now)
   const rows: Record<string, unknown>[] = []
-  for (let day = SEED_ACTIVITY_DAYS - 1; day >= 0; day--) {
+  for (let day = activityDays - 1; day >= 0; day--) {
+    const dayKey = shiftDay(todayKey, -day)
     for (const meal of MEALS) {
       // Today's dinner has not happened yet at review time — a log in the
       // future is the one thing that would read as fake.
-      const loggedAt = atHour(now, day, meal.hour)
+      const loggedAt = localInstant(dayKey, meal.hour, meal.minute, tzOffset)
       if (loggedAt.getTime() > now.getTime()) continue
       rows.push({
         user: userId,
@@ -186,13 +269,20 @@ export function reviewMealLogs(userId: Types.ObjectId, now: Date = new Date()) {
 }
 
 /** Weigh-ins, trending the way a bulking member's would. */
-export function reviewWeightHistory(now: Date = new Date()) {
+export function reviewWeightHistory(
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
+  const todayKey = localDateKey(null, tzOffset, now)
   const entries: { date: Date; loggedAt: Date; weight: number; unit: 'lbs' }[] = []
   // 28 days, every third day, 173.0 lb → 175.1 lb.
   for (let day = 27; day >= 0; day -= 3) {
+    const dayKey = shiftDay(todayKey, -day)
+    const loggedAt = localInstant(dayKey, 7, 0, tzOffset)
+    if (loggedAt.getTime() > now.getTime()) continue
     entries.push({
-      date: dayMarker(now, day),
-      loggedAt: atHour(now, day, 7),
+      date: dayMarker(dayKey),
+      loggedAt,
       weight: Math.round((173 + (27 - day) * 0.075) * 10) / 10,
       unit: 'lbs',
     })
@@ -201,20 +291,26 @@ export function reviewWeightHistory(now: Date = new Date()) {
 }
 
 /** A mood a day, so the mindset pillar of the streak is real. */
-export function reviewMoodHistory(now: Date = new Date()) {
+export function reviewMoodHistory(
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
+  const activityDays = reviewActivityDays(now, tzOffset)
+  const todayKey = localDateKey(null, tzOffset, now)
   const pattern: (1 | 2 | 3 | 4 | 5)[] = [4, 4, 3, 5, 4, 3, 4, 5, 4, 4, 3, 4]
   const entries: { date: Date; loggedAt: Date; mood: 1 | 2 | 3 | 4 | 5 }[] = []
-  for (let day = SEED_ACTIVITY_DAYS - 1; day >= 0; day--) {
+  for (let day = activityDays - 1; day >= 0; day--) {
+    const dayKey = shiftDay(todayKey, -day)
     entries.push({
-      date: dayMarker(now, day),
-      loggedAt: atHour(now, day, 7),
-      mood: pattern[(SEED_ACTIVITY_DAYS - 1 - day) % pattern.length],
+      date: dayMarker(dayKey),
+      loggedAt: localInstant(dayKey, 7, 0, tzOffset),
+      mood: pattern[(activityDays - 1 - day) % pattern.length],
     })
   }
   return entries
 }
 
-interface SeedProgram {
+export interface SeedProgram {
   programId: string
   programName: string
   /** Day labels of phase 1, in order. */
@@ -258,22 +354,25 @@ export async function pickSeedProgram(): Promise<SeedProgram | null> {
 }
 
 /** Completed sessions, one per training day for the last three weeks. */
-function reviewWorkoutLogs(program: SeedProgram | null, now: Date) {
-  // Monday / Wednesday / Friday, counted back from today in three-day steps so
-  // the cadence reads like a real week without needing a calendar.
-  const trainingDaysAgo = [1, 3, 5, 8, 10, 12, 15, 17, 19]
+export function reviewWorkoutLogs(
+  program: SeedProgram | null,
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
+  const { past } = reviewTrainingDayKeys(now, tzOffset)
   const logs: Record<string, unknown>[] = []
 
-  trainingDaysAgo.forEach((day, index) => {
+  past.forEach((dayKey, index) => {
     const label = program?.dayLabels[index % (program.dayLabels.length || 1)]
+    const performedAt = localInstant(dayKey, 18, 0, tzOffset)
     logs.push({
-      date: atHour(now, day, 18),
+      date: performedAt,
       ...(program
         ? { programId: program.programId, phase: 1, day: label?.day, kind: 'program' }
-        : { kind: 'quick', title: 'Upper body', sessionId: `review-session-${day}` }),
+        : { kind: 'quick', title: 'Upper body', sessionId: `review-session-${dayKey}` }),
       completed: true,
       duration: 52,
-      startedAt: atHour(now, day, 18),
+      startedAt: performedAt,
       activeSeconds: 52 * 60,
       exercises: [
         {
@@ -302,25 +401,32 @@ function reviewWorkoutLogs(program: SeedProgram | null, now: Date) {
 }
 
 /** The schedule behind the program in progress: past done, next few ahead. */
-function reviewSchedule(userId: Types.ObjectId, program: SeedProgram, now: Date) {
+export function reviewSchedule(
+  userId: Types.ObjectId,
+  program: SeedProgram,
+  now: Date = new Date(),
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
   const scheduledWorkouts = [] as Record<string, unknown>[]
-  const past = [19, 17, 15, 12, 10, 8, 5, 3, 1]
-  past.forEach((day, index) => {
+  const { past, future } = reviewTrainingDayKeys(now, tzOffset)
+
+  past.forEach((dayKey, index) => {
     const label = program.dayLabels[index % program.dayLabels.length]
     scheduledWorkouts.push({
-      date: dayMarker(now, day),
+      date: dayMarker(dayKey),
       programId: program.programId,
       phase: 1,
       dayLabel: label.day,
       workoutTitle: label.title,
       status: 'completed',
-      completedAt: atHour(now, day, 19),
+      completedAt: localInstant(dayKey, 18, 0, tzOffset),
     })
   })
-  ;[1, 3, 5, 8].forEach((inDays, index) => {
+
+  future.forEach((dayKey, index) => {
     const label = program.dayLabels[(past.length + index) % program.dayLabels.length]
     scheduledWorkouts.push({
-      date: dayMarker(now, -inDays),
+      date: dayMarker(dayKey),
       programId: program.programId,
       phase: 1,
       dayLabel: label.day,
@@ -333,13 +439,18 @@ function reviewSchedule(userId: Types.ObjectId, program: SeedProgram, now: Date)
     userId,
     programId: program.programId,
     programName: program.programName,
-    settings: { trainingDays: [1, 3, 5], startDate: dayMarker(now, 21) },
+    settings: { trainingDays: [1, 3, 5], startDate: dayMarker(past[0]) },
     scheduledWorkouts,
   }
 }
 
 /** Mind: part way through chapter 2, with a Vision written. */
-function reviewMindProgress(userId: Types.ObjectId, now: Date) {
+function reviewMindProgress(
+  userId: Types.ObjectId,
+  now: Date,
+  tzOffset: number = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240,
+) {
+  const todayKey = localDateKey(null, tzOffset, now)
   return {
     userId,
     chapter: 2 as const,
@@ -357,7 +468,7 @@ function reviewMindProgress(userId: Types.ObjectId, now: Date) {
     // (tests/unit/mind/sessionAllowance.test.ts). The reviewer's first Mind
     // session increments it, the way everybody else's does.
     xpSeeded: true,
-    lastMainSessionAt: atHour(now, 1, 7),
+    lastMainSessionAt: localInstant(shiftDay(todayKey, -1), 7, 0, tzOffset),
     introducedSystems: ['breath', 'vision', 'identity'],
     chapterHistory: [
       { chapter: 1, unlockedAt: daysAgo(now, 30) },
@@ -375,6 +486,58 @@ function reviewMindProgress(userId: Types.ObjectId, now: Date) {
       updatedAt: daysAgo(now, 9),
       alignmentHistory: [],
     },
+  }
+}
+
+/**
+ * Nutrition target seeded to match the gain-muscle / gain direction profile:
+ * 2871 kcal surplus, 179g protein, 345g carbs, 86g fats.
+ */
+export function reviewNutritionGoal(userId: Types.ObjectId, now: Date = new Date()) {
+  const profile = reviewUserFields(now).profile!
+  const targets = computeNutritionTargets({
+    currentWeightKg: profile.currentWeightKg!,
+    heightCm: profile.heightCm!,
+    age: profile.age!,
+    biologicalSex: profile.biologicalSex!,
+    goals: (profile.fitnessGoals ?? []) as never,
+    direction: profile.nutritionDirection as never,
+    activityLevel: 'moderate',
+    macroPreset: 'recommended',
+  })
+
+  return {
+    userId,
+    calories: targets?.calories ?? 2871,
+    protein: targets?.protein ?? 179,
+    carbs: targets?.carbs ?? 345,
+    fats: targets?.fats ?? 86,
+    waterGoal: waterGoalOz(profile.currentWeightKg!),
+    goalType: 'gain' as const,
+    activityLevel: 'moderate' as const,
+    macroPreset: 'recommended' as const,
+    calcVersion: MACRO_CALC_VERSION,
+    calcWeightKg: profile.currentWeightKg,
+  }
+}
+
+/**
+ * Identity profile for the review user, with a believable future self.
+ */
+export function reviewIdentityProfile(userId: Types.ObjectId, now: Date = new Date()) {
+  const tzOffset = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240
+  const todayKey = localDateKey(null, tzOffset, now)
+  return {
+    userId,
+    currentSelf: 'Inconsistent with training and nutrition when work gets demanding.',
+    futureSelf: 'A disciplined athlete who trains with purpose, fuels with intention, and never misses a scheduled session.',
+    primaryObstacle: 'discipline' as const,
+    startingPoint: 'building' as const,
+    onboardingCompleted: true,
+    evolutionScore: 42,
+    affirmStreak: 12,
+    longestAffirmStreak: 12,
+    lastAffirmedKey: todayKey,
   }
 }
 
@@ -441,30 +604,39 @@ export async function seedReviewAccount(
   await Promise.all([
     MealLog.deleteMany({ user: uid }),
     Schedule.deleteMany({ userId: uid }),
+    NutritionGoal.deleteMany({ userId: uid }),
+    IdentityProfile.deleteMany({ userId: uid }),
   ])
 
-  await MealLog.insertMany(reviewMealLogs(uid, now))
-  if (program) await Schedule.create(reviewSchedule(uid, program, now))
+  const tzOffset = zoneOffsetMinutes(REVIEW_TIMEZONE, now) ?? 240
+  const { past: pastTrainingDays } = reviewTrainingDayKeys(now, tzOffset)
+
+  await Promise.all([
+    MealLog.insertMany(reviewMealLogs(uid, now, tzOffset)),
+    NutritionGoal.create(reviewNutritionGoal(uid, now)),
+    IdentityProfile.create(reviewIdentityProfile(uid, now)),
+    ...(program ? [Schedule.create(reviewSchedule(uid, program, now, tzOffset))] : []),
+  ])
 
   await UserProgress.findOneAndUpdate(
     { userId: uid },
     {
       $set: {
         userId: uid,
-        weightHistory: reviewWeightHistory(now),
-        moodHistory: reviewMoodHistory(now),
+        weightHistory: reviewWeightHistory(now, tzOffset),
+        moodHistory: reviewMoodHistory(now, tzOffset),
         moodChangeHistory: [],
-        workoutLogs: reviewWorkoutLogs(program, now),
+        workoutLogs: reviewWorkoutLogs(program, now, tzOffset),
         activePrograms: program
           ? [{
               programId: program.programId,
               programName: program.programName,
-              startDate: dayMarker(now, 21),
+              startDate: dayMarker(pastTrainingDays[0]),
               currentPhase: 1,
-              currentDay: program.dayLabels[0].day,
+              currentDay: program.dayLabels[9 % program.dayLabels.length].day,
               completedWorkouts: 9,
-              totalWorkouts: program.totalWorkouts,
-              lastWorkoutDate: atHour(now, 1, 18),
+              totalWorkouts: 13,
+              lastWorkoutDate: localInstant(pastTrainingDays[8], 18, 0, tzOffset),
               status: 'in-progress',
               hasSchedule: true,
             }]
@@ -477,6 +649,8 @@ export async function seedReviewAccount(
         totalWorkouts: 34,
         exercisePRs: [],
         dismissedSuggestions: [],
+        timezone: REVIEW_TIMEZONE,
+        timezoneOffset: tzOffset,
       },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -484,7 +658,7 @@ export async function seedReviewAccount(
 
   await MindProgress.findOneAndUpdate(
     { userId: uid },
-    { $set: reviewMindProgress(uid, now) },
+    { $set: reviewMindProgress(uid, now, tzOffset) },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   )
 
