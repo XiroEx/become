@@ -131,6 +131,7 @@ export default function MyStuffRoute() {
   });
   const {
     data: entitlements,
+    enforced: entitlementsEnforced,
     canCreate,
     refresh: refreshEntitlements,
   } = useEntitlements();
@@ -250,7 +251,7 @@ export default function MyStuffRoute() {
       } else if (tab === "meals") {
         void refetchMeals();
       }
-      void refreshEntitlements().catch(() => {});
+      void Promise.resolve(refreshEntitlements?.()).catch(() => {});
     }, [refetchFoods, refetchMeals, refetchRecipes, refreshEntitlements, tab]),
   );
 
@@ -316,7 +317,7 @@ export default function MyStuffRoute() {
               : r,
           ),
         );
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         if (wasSaved && food) {
           setFoodLogError(null);
           setFoodToLog(food);
@@ -414,7 +415,7 @@ export default function MyStuffRoute() {
         });
         if (ok) {
           await refetchFoods();
-          await refreshEntitlements().catch(() => {});
+          await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         } else {
           setBanner("Could not remove food.");
         }
@@ -431,8 +432,9 @@ export default function MyStuffRoute() {
   const mayCreateFoods = canCreate("custom-foods");
   const isAtCap = useCallback(
     (feature: "custom-meals" | "custom-foods") =>
-      !canCreate(feature) && Boolean(entitlements) && entitlements?.enforced !== false,
-    [canCreate, entitlements],
+      !canCreate(feature) &&
+      (entitlementsEnforced || (Boolean(entitlements) && entitlements?.enforced !== false)),
+    [canCreate, entitlements, entitlementsEnforced],
   );
 
   const raiseCapSheet = useCallback(
@@ -484,7 +486,7 @@ export default function MyStuffRoute() {
         }
         // A create spends a custom-meals slot — re-read the snapshot so
         // the cap the create just spent shows at once.
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         await refetchMeals();
         setMealEditorOpen(false);
         if (mealId) {
@@ -502,7 +504,7 @@ export default function MyStuffRoute() {
         });
         // A refusal means the snapshot disagrees with the server; re-read
         // it so the lock matches what just happened.
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         if (!routed.handled) setMealEditorError(routed.message);
         else setMealEditorOpen(false);
       } finally {

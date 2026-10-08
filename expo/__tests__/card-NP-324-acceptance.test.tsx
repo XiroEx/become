@@ -115,6 +115,7 @@ beforeEach(() => {
   mockApiFetch.mockReset();
   mockShowUpgradeSheet.mockReset();
   mockRefreshEntitlements.mockReset();
+  mockRefreshEntitlements.mockResolvedValue(undefined);
   mockAtCap = false;
   focusEffectCb = null;
 });
