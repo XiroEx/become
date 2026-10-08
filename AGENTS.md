@@ -1780,6 +1780,20 @@ the details sheet above it. Four rules travel with it (the long form is
   reads every `sv.value = …` as a mutation, so `JourneyStage.tsx` disables
   `react-hooks/immutability` for itself, with the reason at the top, and
   nothing else — no `ref.current` is written during render.
+- **Every card is the web's card box, under its own sky (NP-342).** Review
+  on 10/8 found the focused card ~100 px shorter than the web's and off the
+  line through it: the slot was `minHeight` + content-sized. The slot is now
+  exactly `cardSize` and `WeekCard` / `HorizonCard` take `width` / `height`
+  and fill it — a column with a flex spacer so "what to work on" and the
+  identity row sit on the bottom edge, and anything that will not fit is
+  clipped, like the web's `overflow-hidden`. No stage card is ever
+  content-sized; George: all one height, ~60% of the screen. The ground is
+  `becomingStageTokens.card` (the web's `#0e0c17`) under two react-native-svg
+  gradients (`expo/lib/becoming/cardSky.ts`: the subject-tinted radial "sun",
+  high on a climb and low on a dip, over a 160° wash) with the web's inset ring
+  in the week's hue. The web's content rule travels with it: the live card ends
+  on the steps, a finished week keeps two wins, never both. Test:
+  `expo/__tests__/card-NP-342-acceptance.test.tsx`.
 
 #### The Mind session player, natively (NP-098)
 

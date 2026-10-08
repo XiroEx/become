@@ -209,7 +209,7 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       const onDetails = jest.fn()
       const onNavigate = jest.fn()
 
-      const { getByTestId, getByText } = render(
+      const { getByTestId, getByText, queryByTestId } = render(
         <WeekCard
           week={MOCK_WEEK}
           signals={signals}
@@ -226,13 +226,31 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(getByTestId('week-card-sub')).toBeTruthy()
       expect(getByText('live')).toBeTruthy()
       expect(getByText('What to work on')).toBeTruthy()
-      expect(getByTestId('week-card-wins')).toBeTruthy()
-      expect(getByText('Kept focus under pressure')).toBeTruthy()
+      // The web's rule (NP-342): the live card ends on WHAT TO WORK ON and a
+      // finished week keeps the banked wins — never both on one card.
+      expect(queryByTestId('week-card-wins')).toBeNull()
 
       // Press details button
       const detailsBtn = getByTestId('week-card-details-btn')
       fireEvent.press(detailsBtn)
       expect(onDetails).toHaveBeenCalledTimes(1)
+    })
+
+    it('a finished week keeps the banked wins, two at most, in place of the steps', () => {
+      const week: WeekSnapshot = {
+        ...MOCK_WEEK,
+        isCurrent: false,
+        mind: { ...MOCK_WEEK.mind, wins: ['Kept focus under pressure', 'Hit target sets early', 'A third, which the web never shows'] },
+      }
+      const signals = weekSignals([week], 0)
+      const { getByTestId, getByText, queryByText, queryByTestId } = render(
+        <WeekCard week={week} signals={signals} next={MOCK_JOURNEY.next} />,
+      )
+      expect(getByTestId('week-card-wins')).toBeTruthy()
+      expect(getByText('Kept focus under pressure')).toBeTruthy()
+      expect(getByText('Hit target sets early')).toBeTruthy()
+      expect(queryByText('A third, which the web never shows')).toBeNull()
+      expect(queryByTestId('week-card-steps')).toBeNull()
     })
 
     it('renders peak chip as new high and deltas label', () => {
