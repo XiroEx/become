@@ -123,6 +123,8 @@ export interface BillingDeps {
   openUrl?: (url: string) => Promise<unknown>;
   /** Which plan to buy. Defaults to CHECKOUT_PLAN ('monthly'). */
   plan?: BillingPlan;
+  /** NP-129: Request a 10-day trial session in Stripe Checkout. */
+  trial?: boolean;
 }
 
 function baseUrlOf(deps: BillingDeps): string {
@@ -321,7 +323,11 @@ export async function startCheckout(
   try {
     const body = await apiFetch(CHECKOUT_PATH, CheckoutResponseSchema, {
       method: "POST",
-      body: { plan, returnTo: NATIVE_RETURN_TO },
+      body: {
+        plan,
+        returnTo: NATIVE_RETURN_TO,
+        ...(deps.trial ? { trial: true } : {}),
+      },
       ...requestOptions(deps),
     });
     return { kind: "url", url: body.url };

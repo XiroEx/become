@@ -11,6 +11,7 @@ import {
   apiFetch,
 } from "@become/api-client";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import TrialOfferModal from "@/components/onboarding/TrialOfferModal";
 import { useOnboardingRecommendation } from "@/lib/onboarding/useOnboardingRecommendation";
 import { enrollProgram } from "@/lib/programs/enrollment";
 import { notifyProgramUpdated } from "@/lib/programs/programEvents";
@@ -89,10 +90,15 @@ export default function OnboardingRoute() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [showTrialOffer, setShowTrialOffer] = useState(false);
   const [lastPayload, setLastPayload] = useState<{
     name: string;
     profile: OnboardingProfile;
   } | null>(null);
+
+  const finishOnboarding = useCallback(() => {
+    router.replace("/(tabs)/dashboard");
+  }, [router]);
 
   // NP-057: the review step's server-driven program recommendation, ranked on
   // the answers given in THIS session (profile=0). The wizard collects the
@@ -295,15 +301,10 @@ export default function OnboardingRoute() {
           // ignore — permission is optional
         }
 
-        // Hook for the post-onboarding trial prompt (NP-129). No-op until
-        // the web ships the trial and NP-129 fills it.
-        try {
-          await maybeShowTrialPromptAfterOnboarding();
-        } catch {
-          // ignore — the trial prompt is optional
-        }
-
-        router.replace("/(tabs)/dashboard");
+        // Hook for the post-onboarding trial prompt (NP-129). The trial offer
+        // is presented after onboarding seeds and notification prompt, routing
+        // to /(tabs)/dashboard strictly through finishOnboarding on dismissal.
+        setShowTrialOffer(true);
       } catch (err) {
         setSubmitError(err);
       } finally {
@@ -321,6 +322,7 @@ export default function OnboardingRoute() {
       testID="onboarding-guard"
     >
       <ConsentGate>
+        {showTrialOffer && <TrialOfferModal onDismiss={finishOnboarding} />}
         <ScreenState
           error={submitError}
           hasData={!submitError}
