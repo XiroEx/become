@@ -17,9 +17,10 @@ test('NP-328: workout hub and library are in HANDOFF_ALLOWED_PATHS', () => {
 })
 
 test('NP-328: workout hub and library pages exist under app/', () => {
-  const root = process.cwd()
-  const hubPage = path.join(root, 'webapp', 'app', 'dashboard', 'workout', 'hub', 'page.tsx')
-  const libPage = path.join(root, 'webapp', 'app', 'dashboard', 'workout', 'library', 'page.tsx')
+  // Resolve from this file, not process.cwd(): CI runs the suite from webapp/.
+  const webappRoot = path.join(__dirname, '../../..')
+  const hubPage = path.join(webappRoot, 'app', 'dashboard', 'workout', 'hub', 'page.tsx')
+  const libPage = path.join(webappRoot, 'app', 'dashboard', 'workout', 'library', 'page.tsx')
   assert.ok(existsSync(hubPage), 'hub page.tsx must exist')
   assert.ok(existsSync(libPage), 'library page.tsx must exist')
 })
