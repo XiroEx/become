@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  type ReactNode,
+} from "react";
 import { useColorScheme } from "nativewind";
 import * as SystemUI from "expo-system-ui";
 import {
@@ -29,6 +37,10 @@ import {
  * Use `colors` for a plain RN style or a `color` prop, `tint` for the
  * translucent banner surfaces, `scrim` for a modal backdrop, `statusBarStyle`
  * for `<StatusBar>`. Use a CLASS whenever one will do — that path needs no hook.
+ *
+ * A surface that is ONE scheme whatever the system says (the Becoming stage,
+ * NP-341) wraps its subtree in `ForcedThemeMode` below; inside it the hook
+ * answers with that palette.
  */
 export interface ThemeTokens {
   /** The resolved scheme: what NativeWind is painting right now. */
@@ -59,9 +71,45 @@ export function themeModeFrom(
   return scheme === "light" ? "light" : "dark";
 }
 
+/**
+ * A SUBTREE THAT IS ONE SCHEME WHATEVER THE SYSTEM SAYS (NP-341).
+ *
+ * The Becoming stage is a night sky in both schemes on the web
+ * (`JourneyCanvas.tsx` is `bg-[#07060d] text-white`, with no `dark:` variant
+ * anywhere under it), and so are its cards. Natively the stage itself drew from
+ * `becomingStageTokens`, but every `WeekCard` / `HorizonCard` inside it read
+ * `useThemeTokens()` — the SYSTEM scheme — so a phone in light mode put white
+ * cards with dark ink on the purple sky, and an appearance flip while the stage
+ * was open repainted them live.
+ *
+ * `ForcedThemeMode` pins the mode for everything beneath it: inside,
+ * `useThemeTokens()` answers with that palette and ignores the system; outside,
+ * nothing changes. It is a context and not a literal, so the components keep
+ * reading tokens and still follow the system wherever else they are mounted.
+ *
+ * ONLY THE HOOK SEES IT. A Tailwind class (`bg-card`, `text-foreground`)
+ * resolves against NativeWind's global scheme, which has no per-subtree
+ * override, so a forced subtree must take every colour from `useThemeTokens()`.
+ * `__tests__/card-NP-341-acceptance.test.tsx` checks the stage's files for
+ * colour classes for that reason.
+ */
+const ThemeModeOverride = createContext<ThemeMode | null>(null);
+
+export interface ForcedThemeModeProps {
+  mode: ThemeMode;
+  children?: ReactNode;
+}
+
+export function ForcedThemeMode({ mode, children }: ForcedThemeModeProps) {
+  return createElement(ThemeModeOverride.Provider, { value: mode }, children);
+}
+
 export function useThemeTokens(): ThemeTokens {
   const { colorScheme } = useColorScheme();
-  const mode = themeModeFrom(colorScheme);
+  // Subscribed to the system either way (hooks are unconditional); the forced
+  // mode, when there is one above, is what resolves.
+  const forced = useContext(ThemeModeOverride);
+  const mode = forced ?? themeModeFrom(colorScheme);
 
   const colors = useMemo(() => {
     const triplets = getTokens(mode);

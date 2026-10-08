@@ -1465,6 +1465,16 @@ Two store-readiness facts that landed with the tab bar:
   `expo/eslint.config.mjs`) and a test failure
   (`expo/__tests__/noHexColorLiterals.test.ts`).
 
+  A surface that is ONE scheme whatever the system says — the Becoming stage, a
+  night sky in both schemes on the web — wraps its subtree in
+  **`ForcedThemeMode`** (same file, NP-341): inside it `useThemeTokens()`
+  answers with that palette, outside nothing changes, and the components keep
+  reading tokens rather than literals. Only the hook sees it — a `bg-*` /
+  `text-*` class resolves against NativeWind's GLOBAL scheme — so a forced
+  subtree takes every colour from the hook
+  (`expo/__tests__/card-NP-341-acceptance.test.tsx` checks the stage's files
+  for colour classes).
+
   Three things the hook cannot do with a class, and where they live instead: the
   window background is `useThemedWindowBackground()` via `expo-system-ui`
   (`app.json`'s `backgroundColor` is applied before JS and can only be one
