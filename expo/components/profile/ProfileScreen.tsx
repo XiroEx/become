@@ -42,6 +42,7 @@ import { GOAL_LABELS } from "@/lib/profile/icons";
 import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   useAndroidBackHandler,
@@ -207,7 +208,12 @@ export function ProfileScreen({
     >
       <ScrollView
         testID="profile-scroll"
-        contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 40 }}
+        contentContainerStyle={{
+          padding: 16,
+          gap: 20,
+          // Clear the floating glass tab bar (NP-351).
+          paddingBottom: TAB_BAR_CONTENT_INSET,
+        }}
         refreshControl={
           <RefreshControl
             testID="profile-refresh"

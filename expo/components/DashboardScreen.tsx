@@ -15,6 +15,7 @@ import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { MissedWorkoutsCard } from "@/components/dashboard/MissedWorkoutsCard";
 import { DashboardQuickLinks } from "@/components/dashboard/DashboardQuickLinks";
 import type { MissedWorkoutSummary } from "@/lib/dashboard/trainingCards";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { ProgressChart } from "@/components/dashboard/ProgressChart";
 import { NutritionCard } from "@/components/dashboard/NutritionCard";
 import { PlanCard } from "@/components/dashboard/PlanCard";
@@ -486,7 +487,14 @@ export function DashboardScreen({
     >
       <ScrollView
         testID="dashboard-scroll"
-        contentContainerStyle={{ padding: 16, gap: 16 }}
+        contentContainerStyle={{
+          padding: 16,
+          gap: 16,
+          // Clear the floating glass tab bar (NP-351): it is absolutely
+          // positioned, so content scrolls UNDER it and nothing reserves the
+          // space but this.
+          paddingBottom: TAB_BAR_CONTENT_INSET,
+        }}
         refreshControl={
           onRefresh ? (
             <RefreshControl

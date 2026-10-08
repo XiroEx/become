@@ -109,6 +109,7 @@ import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
 import type { MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
@@ -1982,7 +1983,12 @@ export default function NutritionIndexRoute() {
         onTouchEnd={viewMode === "day" ? onTouchEnd : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 100 }}
+          contentContainerStyle={{
+            padding: 16,
+            gap: 16,
+            // Clear the floating glass tab bar (NP-351).
+            paddingBottom: TAB_BAR_CONTENT_INSET,
+          }}
         >
           {viewMode === "day" ? (
             <>

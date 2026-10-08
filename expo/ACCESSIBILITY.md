@@ -75,12 +75,17 @@ gets `flex: 1` wrappers so each one owns a share of the width and its label wrap
 inside it. Also banned on the v1 screens: `numberOfLines`, `ellipsizeMode`, and a
 fixed `height` on anything containing text.
 
-One thing that is NOT a bug: **the tab bar labels do not scale.**
-react-navigation sets `allowFontScaling: false` on them on iOS 13+ by design and
-relies on the system Large Content Viewer (long-press a tab and iOS shows the
-label at full size) — see `BottomTabItem`'s
-`allowFontScaling = SUPPORTS_LARGE_CONTENT_VIEWER ? false : undefined`. Their
-VoiceOver name is composed by the navigator ("Home, tab, 3 of 7").
+One thing that is NOT a bug: **the tab bar has no text to scale.** Since NP-351
+the bar is `components/navigation/GlassTabBar.tsx` — the web's icon-only pill,
+matching `webapp/components/BottomNav.tsx`, which labels its buttons with
+`aria-label`/`title` and shows no text either. (Before that, react-navigation
+drew labels with `allowFontScaling: false` on iOS 13+ by design and leaned on
+the system Large Content Viewer.) Each button therefore carries the label as its
+**accessible name**, in the exact shape the navigator used to compose — "Home,
+tab, 3 of 7" — and now does so on Android as well, where react-navigation left
+it undefined and relied on the visible label there is no longer any of. The
+total counts the navigator's screens, hidden routes (`chat`, `calendar`)
+included.
 
 ### 4. Reduce Motion is honoured
 
@@ -167,8 +172,9 @@ maximum AND Display size at maximum.
       row pushes a control off the edge.
 - [ ] Every button is still tappable — nothing has grown off the bottom of a
       scroll view (scroll to the end of each screen).
-- [ ] Tab bar: labels stay one line by design; long-press a tab and the Large
-      Content Viewer shows the full label.
+- [ ] Tab bar: icon-only, so nothing to clip — but VoiceOver/TalkBack still
+      reads each button as "Home, tab, 3 of 7", and no screen's last row hides
+      behind the floating pill (scroll each tab to the end).
 
 ### 44-point targets
 
