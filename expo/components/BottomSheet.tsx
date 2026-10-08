@@ -39,6 +39,7 @@ export interface BottomSheetProps {
   testID?: string;
   accessibilityLabel?: string;
   sheetStyle?: StyleProp<ViewStyle>;
+  animationType?: "none" | "slide" | "fade";
   /**
    * Decoration beside the title — e.g. a sheet's own avatar/icon badge
    * (NP-294's gradient sparkle avatar on Workout Now). Rendered to the left
@@ -91,6 +92,7 @@ export function BottomSheet({
   sheetStyle,
   headerLeading,
   headerTrailing,
+  animationType,
 }: BottomSheetProps) {
   const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsetsOrZero();
@@ -115,7 +117,7 @@ export function BottomSheet({
       onRequestClose={() => handleSheetRequestClose(onClose)}
       transparent
       statusBarTranslucent
-      animationType={modalAnimation("slide", reduceMotion)}
+      animationType={animationType ?? modalAnimation("slide", reduceMotion)}
       testID={testID}
     >
       <Pressable

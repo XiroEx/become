@@ -449,6 +449,15 @@ export function FoodSearchSheet({
         return;
       }
 
+      // NP-326: A pick handler (e.g. meal planner) takes the food immediately
+      // without blocking on external import — the plan sheet handles import
+      // during the submit phase (showing Planning…), matching the web.
+      if (onPickFood) {
+        onClose();
+        onPickFood(food);
+        return;
+      }
+
       const id = String(food._id ?? food.id ?? "");
       let targetFood: Food = food;
 
@@ -482,14 +491,6 @@ export function FoodSearchSheet({
         const willCollapse = expandedRowId === id;
         setExpandedRowId(willCollapse ? null : id);
         setExpandedFood(willCollapse ? null : targetFood);
-        return;
-      }
-
-      // A pick handler takes the food even when the basket is hidden (plan
-      // mode on a future day routes through `PlanFoodSheet`, NP-232).
-      if (onPickFood) {
-        onClose();
-        onPickFood(targetFood);
         return;
       }
 
