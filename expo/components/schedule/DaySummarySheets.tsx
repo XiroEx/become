@@ -11,6 +11,7 @@ import {
   type WorkoutSummaryHistoryEntry,
   type WorkoutSummarySet,
 } from "@/components/live/WorkoutSummary";
+import { inferTracking } from "@become/core";
 import type { ScheduledSlot, QuickCalItem } from "@/lib/schedule/slotStatus";
 import type {
   ExerciseHistoryEntry,
@@ -46,13 +47,33 @@ function setLabel(s: {
   return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
-function storedLogToSummary(log: StoredWorkoutLog): {
+/**
+ * One stored log → what the summary reads.
+ *
+ * The tracking type and the grouping come with it, and they have to: without
+ * them the summary judges a treadmill on reps it was never asked for (so a
+ * 12-minute, 2000 m walk rendered as `Done`) and draws a circuit as a flat
+ * list of unrelated exercises. A log written before the type was stored gets
+ * the same best guess every other read path uses (`inferTracking`), which is
+ * exactly what the web's calendar does for the same screen.
+ *
+ * Exported for the tests: this mapping IS the bug surface, and it is cheaper
+ * to drive it directly than through two fetches and a bottom sheet.
+ */
+export function storedLogToSummary(log: StoredWorkoutLog): {
   exercises: WorkoutSummaryExercise[];
   setsByExercise: WorkoutSummarySet[][];
   elapsedSeconds: number;
 } {
   const exercises: WorkoutSummaryExercise[] = (log.exercises ?? []).map(
-    (ex: StoredWorkoutExercise) => ({ name: ex.name }),
+    (ex: StoredWorkoutExercise) => ({
+      name: ex.name,
+      trackingType: ex.prescription?.trackingType ?? inferTracking(ex.sets ?? []),
+      groupId: ex.groupId ?? null,
+      groupType: ex.groupType ?? null,
+      groupLabel: ex.groupLabel ?? null,
+      groupRounds: ex.groupRounds ?? null,
+    }),
   );
   const setsByExercise: WorkoutSummarySet[][] = (log.exercises ?? []).map(
     (ex: StoredWorkoutExercise) =>
@@ -83,7 +104,8 @@ function storedLogToSummary(log: StoredWorkoutLog): {
  * `GET /api/workouts/session?id=`.
  *
  * Both summaries use the web's math verbatim (`summaryTotals`): sets counts
- * every completed set, volume is weight × reps over completed sets.
+ * every completed set, volume is weight × reps over LOADED work only — a
+ * past cardio day is not worth thousands of pounds of volume.
  */
 export function DaySummarySheets({
   programSlot,
@@ -173,7 +195,7 @@ export function DaySummarySheets({
 
   const programSummary = log ? storedLogToSummary(log) : null;
   const programTotals = programSummary
-    ? summaryTotals(programSummary.setsByExercise)
+    ? summaryTotals(programSummary.exercises, programSummary.setsByExercise)
     : null;
   // Touch the PR helper so the sheet shares the summary's record rule (best
   // set vs the previous session, keyed by exercise name).
