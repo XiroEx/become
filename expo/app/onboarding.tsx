@@ -38,6 +38,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useMutation } from "@/lib/hooks/useMutation";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { ScreenState } from "@/components/ScreenState";
+import TrialOfferModal from "@/components/onboarding/TrialOfferModal";
 
 export interface ProfilePatchInput {
   name?: string;
@@ -89,10 +90,19 @@ export default function OnboardingRoute() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
+  const [showTrialOffer, setShowTrialOffer] = useState(false);
   const [lastPayload, setLastPayload] = useState<{
     name: string;
     profile: OnboardingProfile;
   } | null>(null);
+
+  /**
+   * Either answer to the trial offer, or the offer deciding it had nothing
+   * honest to show: all land here, moving the member on to the dashboard.
+   */
+  const finishOnboarding = useCallback(() => {
+    router.replace("/(tabs)/dashboard");
+  }, [router]);
 
   // NP-057: the review step's server-driven program recommendation, ranked on
   // the answers given in THIS session (profile=0). The wizard collects the
@@ -295,22 +305,24 @@ export default function OnboardingRoute() {
           // ignore — permission is optional
         }
 
-        // Hook for the post-onboarding trial prompt (NP-129). No-op until
-        // the web ships the trial and NP-129 fills it.
+        // Hook for the post-onboarding trial prompt (NP-129).
         try {
           await maybeShowTrialPromptAfterOnboarding();
         } catch {
           // ignore — the trial prompt is optional
         }
 
-        router.replace("/(tabs)/dashboard");
+        // The trial offer decides for itself whether it has anything honest to
+        // show (TrialOfferModal bails to onDismiss when it does not), so this
+        // always opens it rather than branching here.
+        setShowTrialOffer(true);
       } catch (err) {
         setSubmitError(err);
       } finally {
         setSubmitting(false);
       }
     },
-    [patch, refresh, router, token],
+    [patch, refresh, token],
   );
 
   return (
@@ -321,6 +333,9 @@ export default function OnboardingRoute() {
       testID="onboarding-guard"
     >
       <ConsentGate>
+        {showTrialOffer ? (
+          <TrialOfferModal onDismiss={finishOnboarding} />
+        ) : null}
         <ScreenState
           error={submitError}
           hasData={!submitError}
