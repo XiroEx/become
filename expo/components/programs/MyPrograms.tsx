@@ -107,9 +107,8 @@ export function MyPrograms({
     // (`webapp/lib/tutorials/sections/programs.ts`'s `programs-new` segment).
     // "Walk me through it" steps through that 8-step tour's copy (dots +
     // Next, see `PROGRAM_TOUR_STEPS`) before landing on the same creator
-    // `onCreate` opens (NP-330) — the interactive spotlight overlay ITSELF
-    // stays a later decision for native (NP-164, PARITY_GAP_ANALYSIS.md
-    // §"Guided tour"), since there is no DOM to anchor it to.
+    // `onCreate` opens (NP-330) — decided in NP-164: choice (b) short native
+    // hub tour with decline (NP-207) rather than DOM spotlights.
     return (
       <View testID={`${testID}-empty`} style={{ padding: 16, gap: 16 }}>
         <View style={{ alignItems: "center", gap: 10 }}>
@@ -219,8 +218,8 @@ export function MyPrograms({
           "Walk me through it" on step 1) that starts automatically on
           `/dashboard/programs/new` — "Walk me through it" on native used to
           skip straight to the builder, which is the bug this closes. The
-          interactive spotlight overlay itself stays NP-164 (no DOM to anchor
-          to); this is the same copy, stepped through with dots, ending in
+          interactive spotlight overlay was decided in NP-164 (no DOM to anchor
+          to, carded in NP-207 as native hub coach-marks); this is the same copy, stepped through with dots, ending in
           the same creator `onCreate` opens either way.
         */}
         <Modal
