@@ -227,7 +227,7 @@ export function UpcomingWeekStrip({
           {Array.from({ length: 7 }).map((_, i) => (
             <View
               key={i}
-              className="flex-1 h-16 rounded-xl bg-muted animate-pulse"
+              className="flex-1 h-16 rounded-lg bg-muted animate-pulse"
             />
           ))}
         </View>
@@ -359,7 +359,7 @@ export function UpcomingWeekStrip({
               accessibilityRole="button"
               accessibilityLabel={`${DAY_LABELS[day.getDay()]}, ${day.getDate()}, status: ${status}`}
               onPress={() => router.push(`/(tabs)/calendar?date=${key}`)}
-              className={`flex-1 items-center py-2 px-1 rounded-xl ${
+              className={`flex-1 items-center py-2 px-1 rounded-lg ${
                 isToday
                   ? "bg-foreground"
                   : "bg-muted/50"
