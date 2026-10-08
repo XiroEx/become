@@ -226,7 +226,8 @@ describe("the content is laid out inside the box, like the web's flex column", (
     const body = within(u.getByTestId("horizon-card")).getByTestId("horizon-card-body");
     expect(flat(body).flex).toBe(1);
     const kids = hostKids(body);
-    const words = kids.findIndex((k) => k.props.numberOfLines === 6);
+    // The words sit in their own block since NP-344 (the web's `mt-6` / `mt-2`), like the headline in its.
+    const words = kids.findIndex((k) => within(k).queryByTestId("horizon-card-identity") != null);
     const spacer = kids.findIndex((k) => k.props.testID === "horizon-card-spacer");
     const writes = kids.findIndex((k) => k.props.testID === "horizon-writes");
     expect(words).toBeGreaterThanOrEqual(0);

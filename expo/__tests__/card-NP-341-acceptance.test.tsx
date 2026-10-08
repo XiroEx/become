@@ -38,6 +38,11 @@
 // stage's card and the week's hue rather than the palette's `card` / `border`;
 // everything this suite guards is unchanged: dark in both schemes, identical
 // in both, and a card outside the stage still follows the system.
+//
+// NP-344 then gave the Horizon the web's wash: its shell is CLEAR (the wash
+// is the ground, as on the web) and the wash's far stop is the stage's card.
+// So the Horizon's ground is read off that stop; the guard is the same —
+// clear in both schemes, the stage's card under it in both, no repaint.
 
 jest.mock("@become/api-client", () => {
   const actual = jest.requireActual("@become/api-client");
@@ -53,6 +58,7 @@ import { act, render, within, type RenderResult } from "@testing-library/react-n
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { colorScheme } from "nativewind";
+import { LinearGradient } from "react-native-svg";
 import { JourneyStage, type JourneyStageHandle } from "@/components/becoming/journey/JourneyStage";
 import { WeekCard } from "@/components/becoming/WeekCard";
 import { pillarColor } from "@/lib/becoming/pillarColors";
@@ -132,6 +138,9 @@ function stageColours(u: RenderResult) {
   const pastHeadline = within(past).getByTestId("week-card-headline");
   const pastSub = within(past).getByTestId("week-card-sub");
   const horizonWrites = within(horizon).getByTestId("horizon-writes");
+  // The Horizon's ground since NP-344 is its wash, not a solid: the far stop of the web's gradient.
+  const horizonWashStops = React.Children.toArray(within(horizon).UNSAFE_getByType(LinearGradient).props.children as React.ReactNode);
+  const horizonGroundStop = horizonWashStops[horizonWashStops.length - 1] as React.ReactElement<{ stopColor: string }>;
   return {
     pastCard: flat(past).backgroundColor,
     pastBorder: flat(past).borderColor,
@@ -144,6 +153,7 @@ function stageColours(u: RenderResult) {
     detailsBtn: flat(detailsBtn).backgroundColor,
     detailsLabel: flat(detailsLabel).color,
     horizonCard: flat(horizon).backgroundColor,
+    horizonGround: horizonGroundStop.props.stopColor,
     horizonWrites: flat(horizonWrites).backgroundColor,
     horizonWritesBorder: flat(horizonWrites).borderColor,
     tile: flat(u.getByTestId(`journey-tile-${WEEKS[LIVE - 3]!.weekKey}`)).backgroundColor,
@@ -195,17 +205,23 @@ describe("under the light scheme the stage's cards are the dark palette's", () =
     setSystemScheme("light");
     const u = renderStage();
     const c = stageColours(u);
-    expect(c.horizonCard).toBe(DARK.card);
+    // A clear shell under the web's wash (NP-344), whose ground is the stage's card — never the light palette's.
+    expect(c.horizonCard).toBe("transparent");
+    expect(c.horizonGround).toBe(STAGE_CARD);
+    expect(c.horizonGround).not.toBe(LIGHT_CARD);
     expect(c.horizonWrites).toBe(DARK.block);
     expect(c.horizonWritesBorder).toBe(DARK.border);
   });
 
-  it("the stage and its tiles stay on the stage tokens", () => {
+  it("the stage stays on the stage tokens and a tile on its week's colour (NP-345), whatever the scheme", () => {
     setSystemScheme("light");
     const u = renderStage();
     const c = stageColours(u);
     expect(c.stage).toBe(rgbOf(becomingStageTokens.background));
-    expect(c.tile).toBe(rgbOf(becomingStageTokens.background, 0.92));
+    // The web's compact tile is the week's own colour, dark stop `pillarColor(subject, score, 30)`.
+    const far = WEEKS[LIVE - 3]!;
+    expect(c.tile).toBe(pillarColor(far.subject, far.score, 30));
+    expect(c.tile).not.toBe(LIGHT_CARD);
   });
 
   it("the live week's own ground is the dark one in light mode, not the light card", () => {
@@ -245,7 +261,8 @@ describe("a live appearance flip leaves an open stage dark", () => {
     setSystemScheme("light");
     const flipped = stageColours(u);
     expect(flipped.pastCard).toBe(STAGE_CARD);
-    expect(flipped.horizonCard).toBe(DARK.card);
+    expect(flipped.horizonCard).toBe("transparent");
+    expect(flipped.horizonGround).toBe(STAGE_CARD);
     expect(flipped.detailsBtn).toBe(DARK.chip);
     expect(flipped.pastHeadline).toBe(DARK.foreground);
 

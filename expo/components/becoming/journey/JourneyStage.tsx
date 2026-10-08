@@ -140,7 +140,7 @@ import {
 import { motionDuration, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic } from "@/lib/feedback/haptics";
-import { becomingStageTokens, rgbOf } from "@/lib/theme/tokens";
+import { becomingStageTokens, rgbOf, skiaRgbOf } from "@/lib/theme/tokens";
 import { ForcedThemeMode } from "@/lib/theme/useThemeTokens";
 
 // The tick labels and "started" read 12px at any zoom; the face is the app's
@@ -317,17 +317,20 @@ function StageCanvas({
   const labelX = (x: number, text: string) => x - (font ? font.getTextWidth(text) / 2 : 0);
 
   return (
+    // Every colour on this canvas is `skiaRgbOf` (or `pillarColor`'s `hsl()`),
+    // never `rgbOf`: Skia parses the string itself, reads the comma form only,
+    // and paints what it cannot read black (NP-344).
     <Canvas style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }} pointerEvents="none">
       {/* Ambient sky: the web's two radial washes */}
       <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[rgbOf(SKY_VIOLET, 0.32), rgbOf(SKY_VIOLET, 0)]} />
+        <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[skiaRgbOf(SKY_VIOLET, 0.32), skiaRgbOf(SKY_VIOLET, 0)]} />
       </Rect>
       <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[rgbOf(SKY_EMERALD, 0.16), rgbOf(SKY_EMERALD, 0)]} />
+        <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[skiaRgbOf(SKY_EMERALD, 0.16), skiaRgbOf(SKY_EMERALD, 0)]} />
       </Rect>
       <Group transform={bgTransform}>
         {stars.map((s, i) => (
-          <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={rgbOf(INK)} opacity={s.o * 0.5} />
+          <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={skiaRgbOf(INK)} opacity={s.o * 0.5} />
         ))}
       </Group>
       <Group transform={tiltTransform} origin={vec(vw / 2, vh / 2)}>
@@ -340,12 +343,12 @@ function StageCanvas({
                 p1={vec(first ? first.x - size.w : 0, y)}
                 p2={vec(horizonPos ? horizonPos.x + size.w : 0, y)}
                 strokeWidth={hairW}
-                color={rgbOf(INK, 0.07)}
+                color={skiaRgbOf(INK, 0.07)}
               />
             ))}
             {areaPath && (
               <Path path={areaPath} style="fill">
-                <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[rgbOf(VIOLET, 0.22), rgbOf(VIOLET, 0)]} />
+                <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[skiaRgbOf(VIOLET, 0.22), skiaRgbOf(VIOLET, 0)]} />
               </Path>
             )}
             {ticks.map((t) => (
@@ -355,7 +358,7 @@ function StageCanvas({
                   y={baseY + 34}
                   text={t.label}
                   font={font}
-                  color={rgbOf(INK, 0.45)}
+                  color={skiaRgbOf(INK, 0.45)}
                 />
               </Group>
             ))}
@@ -366,7 +369,7 @@ function StageCanvas({
                   y={baseY + 34 - 1.6 * TICK_FONT_SIZE}
                   text="started"
                   font={font}
-                  color={rgbOf(INK, 0.6)}
+                  color={skiaRgbOf(INK, 0.6)}
                 />
               </Group>
             )}
@@ -400,8 +403,9 @@ function StageCanvas({
           <Group opacity={markersOpacity}>
             {positions.map((p) => {
               if (p.horizon) {
+                // The web's Horizon marker: a violet-400 ring, dashed `3 3`.
                 return (
-                  <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={rgbOf(VIOLET)}>
+                  <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(VIOLET)}>
                     <DashPathEffect intervals={[3, 3]} />
                   </Circle>
                 );
@@ -415,10 +419,10 @@ function StageCanvas({
                     <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={color} opacity={0.6} />
                   )}
                   {peaks.has(p.index) && (
-                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={rgbOf(GOLD)} opacity={0.9} />
+                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={skiaRgbOf(GOLD)} opacity={0.9} />
                   )}
                   <Circle cx={p.x} cy={p.y} r={markerR} color={color} />
-                  <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={rgbOf(STAGE_BG)} />
+                  <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(STAGE_BG)} />
                 </Group>
               );
             })}
@@ -909,7 +913,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
         x2: b.x,
         y2: b.y,
         dashed,
-        color: b.horizon || !wk ? rgbOf(VIOLET) : pillarColor(wk.subject, wk.score, 62),
+        // The web's `#a78bfa` on the way to the Horizon — in the form Skia reads (NP-344).
+        color: b.horizon || !wk ? skiaRgbOf(VIOLET) : pillarColor(wk.subject, wk.score, 62),
       });
     }
     const baseY = positions.length ? Math.max(...positions.map((p) => p.y)) + size.h / 2 + 40 : 0;
@@ -1026,7 +1031,7 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                     >
                       {p.horizon ? (
                         em.compact ? (
-                          <WeekTile horizon width={size.w} height={size.h} />
+                          <WeekTile horizon width={size.w} height={size.h} identity={data.identity} trend={trend} />
                         ) : (
                           <HorizonCard
                             identity={data.identity}
@@ -1034,12 +1039,14 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                             next={data.next}
                             active={liveActive}
                             onNavigate={onNavigate}
+                            // The web's `border-violet-300/60` while it is the focus (NP-344).
+                            focused={em.focused}
                             width={size.w}
                             height={size.h}
                           />
                         )
                       ) : !week ? null : em.compact ? (
-                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} />
+                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} isPeak={peaks.has(i)} />
                       ) : (
                         <WeekCard
                           week={week}
