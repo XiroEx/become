@@ -96,7 +96,7 @@ export function TrialOfferCard({
   deps,
   testID = "trial-offer",
 }: TrialOfferCardProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const live = checkout === "ready" || checkout === "starting";
 
   return (
@@ -108,12 +108,12 @@ export function TrialOfferCard({
             width: 40,
             height: 40,
             borderRadius: 12,
-            backgroundColor: "rgba(147, 51, 234, 0.12)",
+            backgroundColor: tint("mindset", 0.12),
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Gift size={20} color="#9333ea" />
+          <Gift size={20} color={colors.mindset} />
         </View>
         <Text
           accessibilityRole="header"
@@ -143,7 +143,7 @@ export function TrialOfferCard({
               padding: 10,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: colors.border ?? "rgba(255,255,255,0.1)",
+              borderColor: colors.border,
             }}
           >
             <View
@@ -151,12 +151,12 @@ export function TrialOfferCard({
                 width: 22,
                 height: 22,
                 borderRadius: 11,
-                backgroundColor: "rgba(147, 51, 234, 0.15)",
+                backgroundColor: tint("mindset", 0.15),
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Check size={13} color="#9333ea" />
+              <Check size={13} color={colors.mindset} />
             </View>
             <Text className="text-foreground text-sm font-medium flex-1">
               {benefit}
@@ -185,11 +185,11 @@ export function TrialOfferCard({
                 borderWidth: plan === "monthly" ? 2 : 1,
                 borderColor:
                   plan === "monthly"
-                    ? "#9333ea"
-                    : colors.border ?? "rgba(255,255,255,0.1)",
+                    ? colors.mindset
+                    : colors.border,
                 backgroundColor:
                   plan === "monthly"
-                    ? "rgba(147, 51, 234, 0.08)"
+                    ? tint("mindset", 0.08)
                     : "transparent",
               }}
             >
@@ -217,11 +217,11 @@ export function TrialOfferCard({
                 borderWidth: plan === "annual" ? 2 : 1,
                 borderColor:
                   plan === "annual"
-                    ? "#9333ea"
-                    : colors.border ?? "rgba(255,255,255,0.1)",
+                    ? colors.mindset
+                    : colors.border,
                 backgroundColor:
                   plan === "annual"
-                    ? "rgba(147, 51, 234, 0.08)"
+                    ? tint("mindset", 0.08)
                     : "transparent",
               }}
             >
@@ -232,7 +232,7 @@ export function TrialOfferCard({
                   / {PLAN_PRICING.annual.per}
                 </Text>
               </Text>
-              <Text style={{ color: "#9333ea" }} className="text-xs font-medium mt-1">
+              <Text style={{ color: colors.mindset }} className="text-xs font-medium mt-1">
                 Save {PLAN_PRICING.annual.savesPercentDisplay}
               </Text>
             </Pressable>
@@ -271,19 +271,19 @@ export function TrialOfferCard({
                 height: 18,
                 borderRadius: 4,
                 borderWidth: 1.5,
-                borderColor: agreed ? "#9333ea" : colors.border ?? "#888",
-                backgroundColor: agreed ? "#9333ea" : "transparent",
+                borderColor: agreed ? colors.mindset : colors.border,
+                backgroundColor: agreed ? colors.mindset : "transparent",
                 alignItems: "center",
                 justifyContent: "center",
                 marginTop: 2,
               }}
             >
-              {agreed && <Check size={12} color="#ffffff" />}
+              {agreed && <Check size={12} color={colors["primary-foreground"]} />}
             </View>
             <Text className="text-muted-foreground text-xs leading-5 flex-1">
               {TRIAL_AGREEMENT_TEXT}{" "}
               <Text
-                style={{ color: "#9333ea", textDecorationLine: "underline" }}
+                style={{ color: colors.mindset, textDecorationLine: "underline" }}
                 onPress={() => void openExternally(TERMS_REFUND_HREF, deps)}
               >
                 Full terms
@@ -300,7 +300,7 @@ export function TrialOfferCard({
             disabled={!agreed || checkout === "starting"}
             loading={checkout === "starting"}
             onPress={onStart}
-            icon={checkout === "starting" ? undefined : <Sparkles size={16} color="#ffffff" />}
+            icon={checkout === "starting" ? undefined : <Sparkles size={16} color={colors["primary-foreground"]} />}
             accessibilityLabel={TRIAL_CTA_LABEL}
           >
             {TRIAL_CTA_LABEL}
