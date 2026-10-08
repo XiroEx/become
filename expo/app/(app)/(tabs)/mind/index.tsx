@@ -61,6 +61,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { tzOffsetMinutes, useLocalDay } from "@/lib/time/localDay";
 import {
   invalidateMindSession,
@@ -598,7 +599,14 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
       style={{ flex: 1, backgroundColor: colors.background }}
       testID={testID}
     >
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
+      <ScrollView
+        contentContainerStyle={{
+          padding: 16,
+          gap: 20,
+          // Clear the floating glass tab bar (NP-351).
+          paddingBottom: TAB_BAR_CONTENT_INSET,
+        }}
+      >
         {/* Header: Title, Mind streak, and Profile avatar button */}
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">

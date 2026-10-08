@@ -5,6 +5,7 @@ import {
   PUSH_ANIMATION,
   useStackAnimation,
 } from "@/lib/navigation/screenAnimation";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 
 /**
  * THE STACK EVERY TAB OWNS.
@@ -57,14 +58,41 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
 export function TabStack() {
   const { colors } = useThemeTokens();
   const animation = useStackAnimation();
+  // NP-351: the tab bar is a floating capsule now, absolutely positioned over
+  // the scene, so the navigator reserves NOTHING for it. This is the long
+  // tail's share of that — see the `<Stack.Screen name="index">` below.
+  const tabBarInset = useTabBarScreenInset();
 
   return (
     <Stack
       screenOptions={{
         ...TAB_STACK_SCREEN_OPTIONS,
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: {
+          backgroundColor: colors.background,
+          paddingBottom: tabBarInset,
+        },
         animation,
       }}
-    />
+    >
+      {/*
+       * THE TAB'S ROOT SCREEN KEEPS THE FULL HEIGHT (NP-351).
+       *
+       * Every PUSHED screen inside a tab — a program's detail, Nutrition
+       * Goals, the recipe editor, two dozen of them — gets the padding above,
+       * because none of them is going to carry a hand-typed number and a
+       * button under the glass bar is a button nobody can press.
+       *
+       * The five tab ROOTS are the screens the bar actually lives on, and they
+       * are the reason it is glass at all: their content has to pass UNDER it.
+       * So they opt out here and pad their own scroll content with
+       * `TAB_BAR_CONTENT_INSET` instead (`DashboardScreen`,
+       * `programming/index`, `mind/index`, `nutrition/index`, `ProfileScreen`).
+       * Padding them twice would leave a dead band under the last card.
+       */}
+      <Stack.Screen
+        name="index"
+        options={{ contentStyle: { backgroundColor: colors.background } }}
+      />
+    </Stack>
   );
 }

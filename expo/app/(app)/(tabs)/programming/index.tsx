@@ -19,6 +19,7 @@ import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
 
 /**
@@ -84,7 +85,11 @@ export default function ProgrammingIndexRoute() {
       testID="programming-index-route"
     >
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        contentContainerStyle={{
+          padding: 16,
+          // Clear the floating glass tab bar (NP-351).
+          paddingBottom: TAB_BAR_CONTENT_INSET,
+        }}
         showsVerticalScrollIndicator={false}
       >
         {/* Top Header */}
