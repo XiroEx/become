@@ -156,6 +156,20 @@ import {
   type IntroKind,
   type StageMode,
 } from "@/lib/becoming/stage";
+import {
+  HUD_IDENTITY_ALPHA,
+  HUD_IDENTITY_LINES,
+  HUD_IDENTITY_MAX_WIDTH,
+  INTRO_QUOTE_ALPHA,
+  INTRO_QUOTE_GAP,
+  INTRO_QUOTE_LINES,
+  INTRO_QUOTE_MAX_WIDTH,
+  TITLE_BLOCK_PADDING,
+  TITLE_GAP,
+  hudIdentityType,
+  introQuoteType,
+  introTitleType,
+} from "@/lib/becoming/stageWords";
 import { motionDuration, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic } from "@/lib/feedback/haptics";
@@ -1254,9 +1268,15 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
             testID="journey-title"
           >
             <Text style={[styles.kicker, { color: rgbOf(INK, 0.6) }]}>The Becoming</Text>
-            <Text style={[styles.titleText, { color: ink }]}>Who am I becoming?</Text>
+            {/* The web's `text-4xl font-black tracking-tight` (NP-349): 36 on 40,
+                −0.9, in the heaviest Geist bundled, inside the block's `px-8` —
+                the web's measure, so it wraps where the web's does. */}
+            <Text style={[styles.titleText, { color: ink }]} testID="journey-title-headline">
+              Who am I becoming?
+            </Text>
+            {/* The identity in the web's serif italic (NP-349): 16 on 24, 75% white, three lines. */}
             {data.identity ? (
-              <Text style={[styles.identity, { color: rgbOf(INK, 0.75) }]} numberOfLines={3}>
+              <Text style={[styles.identity, { color: rgbOf(INK, INTRO_QUOTE_ALPHA) }]} numberOfLines={INTRO_QUOTE_LINES} testID="journey-title-quote">
                 “{data.identity}”
               </Text>
             ) : null}
@@ -1265,8 +1285,9 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
 
         {mode === "overview" && (
           <Animated.View style={[styles.hud, { top: insets.top + 62 }, hudStyle]} pointerEvents="none" testID="journey-hud">
+            {/* The identity in the web's serif italic (NP-349): 15, snug, 85% white, two lines. */}
             {data.identity ? (
-              <Text style={[styles.hudIdentity, { color: rgbOf(INK, 0.85) }]} numberOfLines={2}>
+              <Text style={[styles.hudIdentity, { color: rgbOf(INK, HUD_IDENTITY_ALPHA) }]} numberOfLines={HUD_IDENTITY_LINES} testID="journey-hud-identity">
                 “{data.identity}”
               </Text>
             ) : null}
@@ -1414,12 +1435,13 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
+  /** The web's title block, `absolute inset-x-0 top-[36%] px-8 text-center`: the `px-8` is the measure the title wraps in (NP-349). */
   title: {
     position: "absolute",
     left: 0,
     right: 0,
     top: "36%",
-    paddingHorizontal: 32,
+    paddingHorizontal: TITLE_BLOCK_PADDING,
     alignItems: "center",
   },
   kicker: {
@@ -1428,18 +1450,17 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 3.5,
   },
+  /** `mt-2 text-4xl font-black tracking-tight`: 36 on 40, −0.9, 900 → the heaviest Geist bundled (`lib/becoming/stageWords.ts`). */
   titleText: {
-    marginTop: 8,
-    fontSize: 36,
-    fontWeight: "900",
-    letterSpacing: -0.8,
+    marginTop: TITLE_GAP,
+    ...introTitleType(),
     textAlign: "center",
   },
+  /** `mx-auto mt-4 max-w-sm font-serif text-base italic`: the platform serif, 16 on 24 (NP-349). */
   identity: {
-    marginTop: 16,
-    maxWidth: 384,
-    fontSize: 16,
-    fontStyle: "italic",
+    marginTop: INTRO_QUOTE_GAP,
+    maxWidth: INTRO_QUOTE_MAX_WIDTH,
+    ...introQuoteType(),
     textAlign: "center",
   },
   hud: {
@@ -1449,11 +1470,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     alignItems: "center",
   },
+  /** `mx-auto max-w-md font-serif text-[15px] italic leading-snug`: the platform serif, 15 on 20.625 (NP-349). */
   hudIdentity: {
-    maxWidth: 448,
-    fontSize: 15,
-    fontStyle: "italic",
-    lineHeight: 20,
+    maxWidth: HUD_IDENTITY_MAX_WIDTH,
+    ...hudIdentityType(),
     textAlign: "center",
   },
   hudAggregate: {
