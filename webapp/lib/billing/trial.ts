@@ -36,3 +36,54 @@ export function isTrialEligible(subscription: TrialSubscriptionRef | null | unde
   const status = subscription?.status
   return !status || status === 'none'
 }
+
+/** The slice of the entitlements snapshot the offer decision needs. Structural
+ *  on purpose — @become/core's EntitlementsSnapshot satisfies it, and keeping
+ *  this file import-free is what lets the checkout route and the client bundle
+ *  share one copy of the rule. */
+export interface TrialOfferSnapshot {
+  tier?: string | null
+  checkoutAvailable?: boolean | null
+  subscription?: TrialSubscriptionRef | null
+}
+
+/**
+ * Is there an honest trial to offer this member right now?
+ *
+ * ONE definition, read by the modal's effect AND its render — those were two
+ * hand-written copies of the same boolean, which is how a surface ends up
+ * dismissing itself and rendering at the same time.
+ *
+ * DELIBERATELY NOT GATED ON `enforced`. This is the mistake the first cut of
+ * this card shipped with, and the repo has already paid for it once: AGENTS.md,
+ * "Manage billing" — "BILLING IS NOT A TIER SURFACE, so it does NOT bail on
+ * `enforced === false`. The kill-switch governs whether TIER is enforced, not
+ * whether money is real". `ENTITLEMENTS_ENFORCED` defaults to off and is off in
+ * production (tests/unit/billing/manageBilling.test.tsx says so in as many
+ * words), so an offer that bails on it is an offer that is on NO screen on a
+ * real deploy — exactly what happened to the portal button when it sat behind
+ * the plan page's kill-switch return. The card asks for a member to ACTIVATE
+ * their membership; an activation CTA nobody can see activates nothing.
+ *
+ * What it IS gated on is whether there is a subscription to sell:
+ *   • `checkoutAvailable` — a Stripe secret key AND a price. False on an
+ *     install with no billing block configured, which is still today, so this
+ *     stays a zero-change deploy until the prices exist. No button that cannot
+ *     work: the same rule UpgradeSheet and the plan page follow.
+ *   • not already Plus — grandfathered members and admins derive to `plus`, and
+ *     charging them for access they already hold is the `already_plus` refusal
+ *     the checkout route exists to make impossible.
+ *   • `isTrialEligible` — the trial is once per account, ever, and the SERVER
+ *     decides (`trialApplied` on the checkout response). Asking the same
+ *     question here keeps the surface from promising 10 free days that the
+ *     route would then quietly decline to grant.
+ *
+ * Fails CLOSED on a missing snapshot: a failed entitlements read must cost a
+ * missed upsell, never a stuck onboarding flow.
+ */
+export function trialOfferDue(snapshot: TrialOfferSnapshot | null | undefined): boolean {
+  if (!snapshot) return false
+  if (snapshot.checkoutAvailable !== true) return false
+  if (snapshot.tier === 'plus') return false
+  return isTrialEligible(snapshot.subscription)
+}
