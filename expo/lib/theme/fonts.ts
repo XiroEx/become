@@ -1,4 +1,4 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import type { StyleProp, TextStyle } from "react-native";
 
 /**
@@ -153,3 +153,38 @@ export function geistFontFamily(
 
   return GEIST_FACES[family][nearestGeistWeight(weight)];
 }
+
+// ── The web's third family: `font-serif` ───────────────────────────────────
+
+/**
+ * THE WEB'S `font-serif`, ON THE PHONE (NP-349).
+ *
+ * The web sets the member's own words — the Becoming stage's identity lines
+ * — in Tailwind's serif stack, `ui-serif, Georgia, Cambria, "Times New
+ * Roman", Times, serif`. Review of NP-204 on 10/8 found native setting every
+ * one of them in Geist italic, which reads as a different product. Nothing
+ * serif is bundled (the eight faces above are the lot), so this is the
+ * PLATFORM's serif — which is also what the web's stack resolves to in each
+ * phone's browser:
+ *
+ *   iOS      `Georgia`: the stack's first NAMED face, shipped with iOS.
+ *            Safari's `ui-serif` is New York, but UIKit exposes New York
+ *            only through a font descriptor's design, never under a name
+ *            React Native's `fontFamily` can ask for (its PostScript names
+ *            are private API — not for a store build).
+ *   Android  `serif`: React Native's name for the system serif (Noto Serif),
+ *            where Chrome on Android lands too, having none of the named
+ *            faces.
+ *
+ * `components/Text.tsx` lets a caller's own `fontFamily` win over the Geist
+ * face it resolves, which is how a line opts into this. Every identity line
+ * on the stage takes it from here — the intro title's quote and the overview
+ * HUD (`lib/becoming/stageWords.ts`), the Horizon card
+ * (`lib/becoming/horizonCard.ts`) and the focused card's whisper
+ * (`lib/becoming/focusedCard.ts`) — so there is ONE serif, not four.
+ */
+export function serifFontFamilyFor(os: string): string {
+  return os === "ios" ? "Georgia" : "serif";
+}
+
+export const SERIF_FONT_FAMILY: string = serifFontFamilyFor(Platform.OS);
