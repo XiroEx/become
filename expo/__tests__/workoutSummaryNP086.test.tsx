@@ -25,7 +25,12 @@ describe("WorkoutSummary math (web parity)", () => {
         { reps: 5, weight: 135, completed: false }, // untouched: nothing
       ],
     ];
-    expect(summaryTotals(sets)).toEqual({ totalSets: 3, totalVolume: 1350 });
+    expect(summaryTotals(STRENGTH_EX, sets)).toMatchObject({
+      totalSets: 3,
+      totalVolume: 1350,
+      // Counted work, so the tile keeps saying Sets.
+      countLabel: "Sets",
+    });
     expect(formatSummaryTime(3661)).toBe("61:01");
     expect(formatSummaryTime(90)).toBe("1:30");
 
@@ -48,7 +53,9 @@ describe("WorkoutSummary math (web parity)", () => {
       />,
     );
     expect(getByTestId("workout-summary-time").props.children).toBe("61:01");
-    expect(getByTestId("workout-summary-sets").props.children).toBe(3);
+    // The count tile renders the number the tile carries, which is a string
+    // now that the stat row is built from `summaryMetricTiles`.
+    expect(getByTestId("workout-summary-sets").props.children).toBe("3");
     expect(getByTestId("workout-summary-volume").props.children).toBe(
       "1,350",
     );
@@ -170,7 +177,12 @@ describe("WorkoutSummary math (web parity)", () => {
       [{ reps: null, weight: null, completed: true, durationSec: 600, distance: 2000 }],
     ];
     // Timed work counts the set but adds no weight×reps volume.
-    expect(summaryTotals(sets)).toEqual({ totalSets: 1, totalVolume: 0 });
+    expect(summaryTotals(cardio, sets)).toMatchObject({
+      totalSets: 1,
+      totalVolume: 0,
+      totalWorkSeconds: 600,
+      totalMeters: 2000,
+    });
     expect(
       formatSummarySet(sets[0]![0]!, "time_distance", "Treadmill Run"),
     ).toBe("10:00 · 2000 m");

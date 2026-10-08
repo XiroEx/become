@@ -26,15 +26,16 @@ import {
 // (`GET /api/profile`); and the program-complete state on the last workout of
 // a program, with a link to the journey recap. Done returns to the Workout tab.
 //
-// Two deliberate divergences from the web, both on the record:
-//   1. Cardio shows its tracked metrics by tracking type (duration, distance,
-//      speed) instead of `0 × 0`, and volume counts loaded work only. This
-//      was AHEAD of the web when NP-086 shipped it; the web caught up in
-//      `webapp/lib/workout/summaryMetrics.ts` (Jon's "other metrics … on the
-//      summary workout screen" card), which also added the circuit/superset
-//      blocks ported into the breakdown below. The web's stat row adapts its
-//      third tile (work time / distance) where this one still shows volume —
-//      a follow-up, not a disagreement about the metrics themselves.
+// Where this screen stands relative to the web, on the record:
+//   1. No divergence left on the metrics: everything this screen says about a
+//      set is a function of the exercise's TRACKING TYPE, the same way
+//      `webapp/lib/workout/summaryMetrics.ts` says it (Jon's "other metrics …
+//      on the summary workout screen" card). Cardio reads its duration,
+//      distance and speed instead of `0 × 0`; volume counts LOADED work only;
+//      the stat row drops a tile that would read `0` and shows work time and
+//      distance in its place; the count tile says Rounds when every exercise
+//      worked was timed; and the breakdown draws the circuit / superset
+//      blocks the session was actually run in.
 //   2. No animation library: the web's framer-motion entrance is plain layout
 //      here. Same sections, same order, same words.
 //   3. The web's hero swaps its icon by state (Award for a PR day, Dumbbell
@@ -111,6 +112,11 @@ export function formatDurationSec(sec: number): string {
   const s = Math.max(0, Math.round(sec));
   if (s < 60) return `${s}s`;
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Round to 2dp and drop a trailing `.00` — `2000`, `1.5`, never `1.50`. */
+function trimNumber(n: number): string {
+  return Number(n.toFixed(2)).toString();
 }
 
 export interface WorkoutSummaryExercise {
@@ -271,16 +277,20 @@ function measures(s: WorkoutSummarySet): {
 /**
  * Whether a completed set counts as work. The web drops sets logged `0 × 0`
  * (its skip marker); timed sets carry their work in duration/distance instead
- * of reps/weight, so they are judged on those. An intervals set tapped Done
- * with nothing typed is a completed round, not a skip — the web never asks an
- * intervals exercise for input either.
+ * of reps/weight, so they are judged on those. An intervals round — or a
+ * `none` exercise, which is never given an input at all — is finished by
+ * tapping Done, so for those "completed" is the whole answer. The web says
+ * the same (`summaryMetrics.ts#isActiveSummarySet`); native used to judge a
+ * `none` exercise on numbers it is never asked for and called every one of
+ * them a skip.
  */
 export function isActiveSummarySet(
   s: WorkoutSummarySet | null | undefined,
   trackingType?: string | null,
 ): boolean {
   if (!s?.completed) return false;
-  if (normalizeTracking(trackingType) === "intervals") return true;
+  const t = normalizeTracking(trackingType);
+  if (t === "intervals" || t === "none") return true;
   const m = measures(s);
   return m.w > 0 || m.r > 0 || m.dur > 0 || m.dist > 0;
 }
@@ -300,12 +310,19 @@ export function formatSummarySet(
   if (tracksTime(t)) {
     const parts: string[] = [];
     if (m.dur > 0) parts.push(formatDurationSec(m.dur));
-    if (t === "time_distance" && m.dist > 0) {
+    // Any distance that was logged, whatever the type says it should be: a
+    // metre the member covered is not the summary's to withhold because the
+    // exercise is filed as `time` rather than `time_distance` (web parity).
+    if (m.dist > 0) {
       parts.push(
-        isFloorsExercise(exerciseName) ? `${m.dist} floors` : `${m.dist} m`,
+        isFloorsExercise(exerciseName)
+          ? `${trimNumber(m.dist)} floors`
+          : `${trimNumber(m.dist)} m`,
       );
     }
-    if (s.speed != null && s.speed > 0) parts.push(`${s.speed} mph`);
+    if (s.speed != null && s.speed > 0) {
+      parts.push(`${trimNumber(s.speed)} mph`);
+    }
     return parts.length > 0 ? parts.join(" · ") : "Done";
   }
   if (m.w > 0) return `${m.w}×${m.r}`;
@@ -313,28 +330,178 @@ export function formatSummarySet(
   return "Done";
 }
 
-/**
- * Time, sets and volume — the web's summary math, verbatim: sets counts every
- * completed set (skips included), volume is weight × reps over completed sets.
- * Timed sets carry no weight/reps on the wire, so they count sets but add no
- * volume — the web's duration-×-distance volume for cardio is the bug Jon's
- * card has open, not the behaviour to copy.
- */
-export function summaryTotals(setsByExercise: WorkoutSummarySet[][]): {
+export interface WorkoutSummaryTotals {
+  /** Every completed set, skips included — what the count tile shows. */
   totalSets: number;
+  /** weight × reps over LOADED work only. Cardio adds nothing. */
   totalVolume: number;
-} {
+  /** Seconds of logged timed work (not wall-clock session time). */
+  totalWorkSeconds: number;
+  /** Meters logged by distance-tracked work. */
+  totalMeters: number;
+  /** Floors logged by stair machines, which do not measure meters. */
+  totalFloors: number;
+  /** Was any load moved? Decides whether a volume tile means anything. */
+  hasLoadedWork: boolean;
+  /** Was any time logged against an exercise? */
+  hasTimedWork: boolean;
+  /** "Sets" or "Rounds" — the word for what this session counted. */
+  countLabel: string;
+}
+
+/**
+ * The session's numbers, read PER EXERCISE so each one is measured on what it
+ * tracks — `webapp/lib/workout/summaryMetrics.ts#summaryTotals`, verbatim.
+ *
+ * Sets counts every completed set (skips included). Volume is weight × reps
+ * over LOADED work only: a 12-minute walk is not 2160 lbs, and a timed set
+ * that happens to carry a stray weight is still not a lift. Time, distance
+ * and floors are totalled alongside it so the stat row has something true to
+ * say about a session with no barbell in it.
+ */
+export function summaryTotals(
+  exercises: WorkoutSummaryExercise[],
+  setsByExercise: WorkoutSummarySet[][],
+): WorkoutSummaryTotals {
   let totalSets = 0;
   let totalVolume = 0;
-  for (const sets of setsByExercise ?? []) {
-    for (const s of sets ?? []) {
+  let totalWorkSeconds = 0;
+  let totalMeters = 0;
+  let totalFloors = 0;
+  let hasLoadedWork = false;
+  let hasTimedWork = false;
+  let workedExercises = 0;
+  let timedWorkedExercises = 0;
+
+  (exercises ?? []).forEach((exercise, exIdx) => {
+    const timed = tracksTime(exercise?.trackingType);
+    const sets = setsByExercise?.[exIdx] ?? [];
+    let didWork = false;
+    for (const s of sets) {
       if (!s?.completed) continue;
       totalSets += 1;
-      totalVolume += (s.weight ?? 0) * (s.reps ?? 0);
+      didWork = true;
+      const m = measures(s);
+      if (!timed && m.w > 0 && m.r > 0) {
+        totalVolume += m.w * m.r;
+        hasLoadedWork = true;
+      }
+      if (m.dur > 0) {
+        totalWorkSeconds += m.dur;
+        hasTimedWork = true;
+      }
+      if (m.dist > 0) {
+        if (isFloorsExercise(exercise?.name)) totalFloors += m.dist;
+        else totalMeters += m.dist;
+      }
     }
-  }
-  return { totalSets, totalVolume: Math.round(totalVolume) };
+    if (didWork) {
+      workedExercises += 1;
+      if (timed) timedWorkedExercises += 1;
+    }
+  });
+
+  // "Rounds" only when EVERY exercise that was worked is timed — a session
+  // with one plank in it still counted sets.
+  const allTimed =
+    workedExercises > 0 && timedWorkedExercises === workedExercises;
+  return {
+    totalSets,
+    totalVolume: Math.round(totalVolume),
+    totalWorkSeconds,
+    totalMeters,
+    totalFloors,
+    hasLoadedWork,
+    hasTimedWork,
+    countLabel: allTimed ? "Rounds" : "Sets",
+  };
 }
+
+export type SummaryTileKey = "count" | "volume" | "time" | "distance";
+
+export interface SummaryTile {
+  key: SummaryTileKey;
+  value: string;
+  label: string;
+}
+
+/** How many metric tiles sit beside the count tile. */
+const MAX_METRIC_TILES = 2;
+
+/**
+ * The stat tiles this session earned: always the count, then up to two of the
+ * metrics it actually produced, in order of how much they say about the work
+ * (the web's `summaryMetricTiles`). A cardio-only session gets work time and
+ * distance where a lifting session gets volume — before this, every session
+ * got a volume tile, so finishing a treadmill walk celebrated `0`.
+ */
+export function summaryMetricTiles(
+  exercises: WorkoutSummaryExercise[],
+  setsByExercise: WorkoutSummarySet[][],
+): SummaryTile[] {
+  const t = summaryTotals(exercises, setsByExercise);
+  const metrics: SummaryTile[] = [];
+  if (t.hasLoadedWork) {
+    metrics.push({
+      key: "volume",
+      value: t.totalVolume.toLocaleString(),
+      label: "Volume lbs",
+    });
+  }
+  if (t.hasTimedWork) {
+    metrics.push({
+      key: "time",
+      value: formatDurationSec(t.totalWorkSeconds),
+      label: "Work time",
+    });
+  }
+  if (t.totalMeters > 0) {
+    metrics.push({
+      key: "distance",
+      value: trimNumber(t.totalMeters),
+      label: "Distance m",
+    });
+  } else if (t.totalFloors > 0) {
+    metrics.push({
+      key: "distance",
+      value: trimNumber(t.totalFloors),
+      label: "Floors",
+    });
+  }
+  // Nothing measurable at all (an all-`none` session, or everything skipped):
+  // keep the volume tile so the row does not collapse to two cards.
+  if (metrics.length === 0) {
+    metrics.push({
+      key: "volume",
+      value: t.totalVolume.toLocaleString(),
+      label: "Volume lbs",
+    });
+  }
+  return [
+    { key: "count", value: String(t.totalSets), label: t.countLabel },
+    ...metrics.slice(0, MAX_METRIC_TILES),
+  ];
+}
+
+/** The colour each stat tile wears — the web's `TILE_TONES`, verbatim. */
+const TILE_TONES: Record<SummaryTileKey, string> = {
+  count: "text-blue-600 dark:text-blue-400",
+  volume: "text-violet-600 dark:text-violet-400",
+  time: "text-amber-600 dark:text-amber-400",
+  distance: "text-cyan-600 dark:text-cyan-400",
+};
+
+/**
+ * The testID suffix each tile keeps. `count` stays `sets` and `volume` stays
+ * `volume` because screens and tests have addressed them by those names since
+ * NP-086; the work-time tile cannot be `time`, which the Duration tile owns.
+ */
+const TILE_TEST_IDS: Record<SummaryTileKey, string> = {
+  count: "sets",
+  volume: "volume",
+  time: "work-time",
+  distance: "distance",
+};
 
 export interface SummaryPR {
   name: string;
@@ -448,8 +615,26 @@ export function WorkoutSummary({
 }: WorkoutSummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length];
   const { colors, tint, isDark } = useThemeTokens();
-  const { totalSets, totalVolume } = summaryTotals(setsByExercise);
   const newPRs = computeSummaryPRs(exercises, setsByExercise, exerciseHistory);
+  // Duration is always first (wall-clock, nothing to do with tracking type);
+  // the rest are whatever this session measured. The count tile keeps the
+  // `-sets` testID whether it reads Sets or Rounds — it is the same tile.
+  const statTiles = [
+    {
+      key: "duration",
+      testId: "time",
+      tone: "text-emerald-600 dark:text-emerald-400",
+      value: formatSummaryTime(elapsedSeconds),
+      label: "Duration",
+    },
+    ...summaryMetricTiles(exercises, setsByExercise).map((t) => ({
+      key: t.key,
+      testId: TILE_TEST_IDS[t.key],
+      tone: TILE_TONES[t.key],
+      value: t.value,
+      label: t.label,
+    })),
+  ];
   const closing =
     (goal && GOAL_CLOSINGS[goal]) || GOAL_CLOSINGS.general_health!;
   const streakProgress =
@@ -622,47 +807,34 @@ export function WorkoutSummary({
           </Text>
         </View>
 
-        {/* Stats row */}
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <View style={{ flex: 1 }}>
-            <Card testID={`${testID}-stat-time`} style={{ alignItems: "center" }}>
-              <Text
-                testID={`${testID}-time`}
-                className="text-emerald-600 dark:text-emerald-400 text-2xl font-bold"
+        {/* Stats row — Duration, then the metrics this session actually
+            produced (summaryMetricTiles). Four tiles wrap two-up, which is
+            what the web's `grid-cols-2` does at the same count. */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {statTiles.map((tile) => (
+            <View
+              key={tile.key}
+              style={{
+                flexGrow: 1,
+                flexBasis: statTiles.length > 3 ? "45%" : 0,
+              }}
+            >
+              <Card
+                testID={`${testID}-stat-${tile.testId}`}
+                style={{ alignItems: "center" }}
               >
-                {formatSummaryTime(elapsedSeconds)}
-              </Text>
-              <Text className="text-muted-foreground text-xs uppercase mt-1">
-                Duration
-              </Text>
-            </Card>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Card testID={`${testID}-stat-sets`} style={{ alignItems: "center" }}>
-              <Text
-                testID={`${testID}-sets`}
-                className="text-blue-600 dark:text-blue-400 text-2xl font-bold"
-              >
-                {totalSets}
-              </Text>
-              <Text className="text-muted-foreground text-xs uppercase mt-1">
-                Sets
-              </Text>
-            </Card>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Card testID={`${testID}-stat-volume`} style={{ alignItems: "center" }}>
-              <Text
-                testID={`${testID}-volume`}
-                className="text-violet-600 dark:text-violet-400 text-2xl font-bold"
-              >
-                {totalVolume.toLocaleString()}
-              </Text>
-              <Text className="text-muted-foreground text-xs uppercase mt-1">
-                Volume lbs
-              </Text>
-            </Card>
-          </View>
+                <Text
+                  testID={`${testID}-${tile.testId}`}
+                  className={`${tile.tone} text-2xl font-bold`}
+                >
+                  {tile.value}
+                </Text>
+                <Text className="text-muted-foreground text-xs uppercase mt-1">
+                  {tile.label}
+                </Text>
+              </Card>
+            </View>
+          ))}
         </View>
 
         {/* Streak card */}
