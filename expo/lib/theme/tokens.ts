@@ -287,6 +287,11 @@ export const becomingStageTokens = {
   card: "14 12 23",
   /** violet-400 — the web's `#a78bfa` */
   violet: "167 139 250",
+  /**
+   * violet-300 — the web's `border-violet-300/60`, the Horizon card's dashed
+   * border while it is the focused card (NP-344)
+   */
+  horizonRing: "196 181 253",
   /** the web's `#ffd37a` — the "new high" ring */
   gold: "255 211 122",
   /** violet-600 and emerald-500 — the two radial washes of the web's ambient sky */
@@ -301,6 +306,26 @@ export const becomingStageTokens = {
 /** `rgb(r g b)` for a triplet, or `rgba(r, g, b, a)` when an alpha is given. */
 export function rgbOf(triplet: string, alpha = 1): string {
   if (alpha >= 1) return `rgb(${triplet})`;
+  const [r, g, b] = triplet.split(" ");
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * A TOKEN FOR A SKIA CANVAS: always `rgba(r, g, b, a)`, commas and all.
+ *
+ * `@shopify/react-native-skia` does not hand a colour string to React Native's
+ * parser; it parses it itself, with a CSS colour parser that reads the comma
+ * form (`rgb(r, g, b)`, `rgba(…)`, `hsl(…)`, hex, names) and NOT the CSS Color
+ * 4 space form `rgb(r g b)` that `rgbOf` writes for a solid colour. A string
+ * it cannot parse is painted BLACK — which is exactly what the Becoming
+ * stage's Horizon segment and ring were on the S23 and the iOS simulator
+ * (NP-344): asked for violet-400, drawn in black, while the alpha'd area fill
+ * beside them (already `rgba(…, 0.22)`) came out right.
+ *
+ * Every colour the stage's canvas is given goes through this, so the whole
+ * canvas speaks a form Skia reads. React Native's own views keep `rgbOf`.
+ */
+export function skiaRgbOf(triplet: string, alpha = 1): string {
   const [r, g, b] = triplet.split(" ");
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

@@ -279,6 +279,22 @@ hold it together:
   wears the `HorizonCard` ground (the violet wash into the card colour at
   55%) and dashed ring, with the identity and the live week's trend.
   `__tests__/card-NP-345-acceptance.test.tsx`.
+- **The Horizon card and the line to it are the web's (NP-344).** The
+  Horizon wears the web's box: a 160° wash from violet-600 at .22 into the
+  card ground at .97 by 55% (react-native-svg, like the week card's sky — the
+  shell is clear, the wash is the ground), a 2 px dashed border on a 28 px
+  radius in violet-300/60 while it is the focus (the stage passes `focused`)
+  and white/25 otherwise, and the identity in the platform serif italic at
+  24 px (19 px past 140 characters), snug, white, six lines.
+  `lib/becoming/horizonCard.ts` has the numbers. The dashed segment to the
+  Horizon and its ring in the overview drew BLACK on both phones because of
+  the colour STRING, not the drawing: Skia parses a colour itself and reads
+  the comma form only, so `rgbOf`'s solid `rgb(r g b)` — which React Native
+  reads — is black on a canvas. `skiaRgbOf` (`lib/theme/tokens.ts`) is
+  always `rgba(r, g, b, a)`; every colour the stage's canvas is handed goes
+  through it (or is `pillarColor`'s `hsl()`), never `rgbOf`.
+  `__tests__/card-NP-344-acceptance.test.tsx` holds the card to the web's
+  numbers and walks the rendered canvas for any colour Skia would not read.
 
 Two things to know before you touch it:
 
