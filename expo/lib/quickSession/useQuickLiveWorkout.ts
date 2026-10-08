@@ -804,7 +804,7 @@ export function useQuickLiveWorkout(
         exerciseSlug: ex.slug,
         name: ex.name,
         trackingType: ex.trackingType ?? "reps_weight",
-        sets: ex.sets,
+        sets: ex.sets ?? 1,
         reps: ex.repsLabel ?? "",
         ...(ex.restSec != null ? { rest: `${ex.restSec}s` } : {}),
         ...(ex.durationLabel ? { duration: ex.durationLabel } : {}),

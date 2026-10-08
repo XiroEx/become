@@ -1297,7 +1297,7 @@ export function useLiveWorkout(
         if (hist) {
           return {
             ...ex,
-            prefill: Array.from({ length: ex.sets }, () => ({
+            prefill: Array.from({ length: ex.sets || 3 }, () => ({
               weight: hist.weight ?? null,
               reps: hist.reps ?? null,
               durationSec: hist.duration ?? null,

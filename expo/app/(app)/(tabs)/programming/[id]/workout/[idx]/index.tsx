@@ -30,6 +30,15 @@ export default function WorkoutOverviewRoute() {
   const valid = !!id && Number.isFinite(idx) && idx >= 0;
   const phase = Number.isFinite(phaseIndex) && phaseIndex >= 0 ? phaseIndex : 0;
 
+  const { data } = useFetch(
+    valid ? `/api/programs/${encodeURIComponent(id)}` : null,
+    ProgramDetailResponseSchema,
+    {
+      baseUrl: WEBAPP_BASE_URL,
+      getToken: () => token ?? undefined,
+    },
+  );
+
   // Start live workout — the same program, phase and index this overview is
   // showing, forwarding day and sd so the live workout has its day label and
   // exact schedule slot date.
@@ -44,15 +53,6 @@ export default function WorkoutOverviewRoute() {
       `/(tabs)/programming/${id}/workout/${idx}/live${q.length ? `?${q.join("&")}` : ""}`,
     );
   }, [router, id, idx, phase, params.day, params.sd, data]);
-
-  const { data } = useFetch(
-    valid ? `/api/programs/${encodeURIComponent(id)}` : null,
-    ProgramDetailResponseSchema,
-    {
-      baseUrl: WEBAPP_BASE_URL,
-      getToken: () => token ?? undefined,
-    },
-  );
 
   if (!valid) {
     return (
