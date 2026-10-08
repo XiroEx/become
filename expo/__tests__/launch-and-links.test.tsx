@@ -233,3 +233,84 @@ describe("the guarded group", () => {
     ).toBeNull();
   });
 });
+
+describe("Android-style deep links through the launch path (NP-308)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { redirectSystemPath, setPendingRedirect } = require("../app/+native-intent");
+
+  beforeEach(() => {
+    setPendingRedirect(null);
+  });
+
+  it("lands on /plan with billing=success and session_id from Stripe checkout return intent", async () => {
+    await SecureStore.setItemAsync("become.session", savedJwt());
+    meUser = { _id: "u1", email: "jon@example.com", onboardingCompleted: true };
+
+    const intentUrl = "become://?billing=success&session_id=cs_test_stripe123";
+    const redirected = redirectSystemPath({ path: intentUrl, initial: true });
+    expect(redirected).toBe(
+      "/plan?billing=success&session_id=cs_test_stripe123",
+    );
+
+    const rendered = renderRouter(appRouteMap({ real: REAL_ROUTES }) as never, {
+      initialUrl: "/",
+    });
+
+    expect(await screen.findByTestId(screenId("(app)/plan"))).toBeTruthy();
+    expect(rendered.getPathname()).toBe("/plan");
+  });
+
+  it("lands on /plan when query parameters arrive directly on /", async () => {
+    await SecureStore.setItemAsync("become.session", savedJwt());
+    meUser = { _id: "u1", email: "jon@example.com", onboardingCompleted: true };
+
+    const rendered = renderRouter(appRouteMap({ real: REAL_ROUTES }) as never, {
+      initialUrl: "/?billing=success&session_id=cs_test_stripe456",
+    });
+
+    expect(await screen.findByTestId(screenId("(app)/plan"))).toBeTruthy();
+    expect(rendered.getPathname()).toBe("/plan");
+  });
+
+  it("lands on /plan when returning cancelled from checkout", async () => {
+    await SecureStore.setItemAsync("become.session", savedJwt());
+    meUser = { _id: "u1", email: "jon@example.com", onboardingCompleted: true };
+
+    const intentUrl = "become://?billing=cancelled";
+    redirectSystemPath({ path: intentUrl, initial: true });
+
+    const rendered = renderRouter(appRouteMap({ real: REAL_ROUTES }) as never, {
+      initialUrl: "/",
+    });
+
+    expect(await screen.findByTestId(screenId("(app)/plan"))).toBeTruthy();
+    expect(rendered.getPathname()).toBe("/plan");
+  });
+
+  it.each([
+    ["become://plan", "(app)/plan", "/plan"],
+    ["become://settings", "(app)/settings", "/settings"],
+    ["become://progress", "(app)/progress", "/progress"],
+    ["become://becoming", "(app)/becoming", "/becoming"],
+    ["https://become.redbtn.io/dashboard/plan", "(app)/plan", "/plan"],
+  ])(
+    "lands on %s instead of Dashboard when launched via %s",
+    async (intentUrl, targetScreen, targetPath) => {
+      await SecureStore.setItemAsync("become.session", savedJwt());
+      meUser = { _id: "u1", email: "jon@example.com", onboardingCompleted: true };
+
+      redirectSystemPath({ path: intentUrl, initial: true });
+
+      const rendered = renderRouter(
+        appRouteMap({ real: REAL_ROUTES }) as never,
+        {
+          initialUrl: "/",
+        },
+      );
+
+      expect(await screen.findByTestId(screenId(targetScreen))).toBeTruthy();
+      expect(rendered.getPathname()).toBe(targetPath);
+    },
+  );
+});
+
