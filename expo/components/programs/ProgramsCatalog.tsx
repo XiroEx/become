@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 import { Text } from "@/components/Text";
-import { Input } from "@/components/Input";
-import { Bookmark, ChevronRight, Filter } from "lucide-react-native";
+import { Bookmark, ChevronRight, Filter, Search, X } from "lucide-react-native";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { geistFontFamily } from "@/lib/theme/fonts";
 import {
   ActiveProgramsApiResponseSchema,
   ProgramCatalogItemSchema,
@@ -474,15 +475,15 @@ export function ProgramsCatalog({
                   testID={`browse-recommended-item-${program.id}`}
                   style={{
                     flexDirection: "row",
-                    alignItems: "flex-start",
-                    gap: 8,
+                    alignItems: "center",
+                    gap: 12,
                     borderWidth: 1,
                     borderLeftWidth: 4,
                     borderColor: colors.border,
                     borderLeftColor: colors.success,
                     borderRadius: 16,
                     backgroundColor: colors.card,
-                    padding: 12,
+                    padding: 16,
                   }}
                 >
                   <Pressable
@@ -503,7 +504,7 @@ export function ProgramsCatalog({
                           : colors["muted-foreground"]
                       }
                       fill={isItemSaved ? colors.success : "transparent"}
-                      size={18}
+                      size={20}
                       strokeWidth={1.5}
                     />
                   </Pressable>
@@ -515,46 +516,40 @@ export function ProgramsCatalog({
                     accessibilityLabel={`Open program ${program.name}`}
                     style={{ flex: 1 }}
                   >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        flexWrap: "wrap",
-                      }}
+                    <Text
+                      testID={`browse-recommended-title-${program.id}`}
+                      className="text-foreground font-semibold text-base leading-snug"
+                      numberOfLines={2}
                     >
-                      <Text
-                        className="text-foreground font-semibold text-base flex-1"
-                        numberOfLines={1}
+                      {program.name}
+                    </Text>
+                    {program.durationWeeks || program.trainingDaysPerWeek ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          marginTop: 4,
+                        }}
                       >
-                        {program.name}
-                      </Text>
-                    </View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        flexWrap: "wrap",
-                        gap: 4,
-                        marginTop: 4,
-                      }}
-                    >
-                      {program.durationWeeks ? (
-                        <View className="rounded-full bg-muted px-1.5 py-0.5">
-                          <Text className="text-muted-foreground text-xs font-medium">
-                            {program.durationWeeks}w
-                          </Text>
-                        </View>
-                      ) : null}
-                      {program.trainingDaysPerWeek ? (
-                        <View className="rounded-full bg-muted px-1.5 py-0.5">
-                          <Text className="text-muted-foreground text-xs font-medium">
-                            {program.trainingDaysPerWeek}x/wk
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
+                        {program.durationWeeks ? (
+                          <View className="rounded-full bg-muted px-2 py-0.5">
+                            <Text className="text-muted-foreground text-xs font-medium">
+                              {program.durationWeeks}w
+                            </Text>
+                          </View>
+                        ) : null}
+                        {program.trainingDaysPerWeek ? (
+                          <View className="rounded-full bg-muted px-2 py-0.5">
+                            <Text className="text-muted-foreground text-xs font-medium">
+                              {program.trainingDaysPerWeek}x/wk
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : null}
                     {program.targetUser ? (
-                      <Text className="text-muted-foreground text-xs mt-1">
+                      <Text className="text-muted-foreground text-sm mt-1">
                         {program.targetUser}
                       </Text>
                     ) : null}
@@ -564,15 +559,15 @@ export function ProgramsCatalog({
                           flexDirection: "row",
                           flexWrap: "wrap",
                           gap: 4,
-                          marginTop: 4,
+                          marginTop: 6,
                         }}
                       >
                         {visibleTags.map((tag) => (
                           <View
                             key={tag}
-                            className="rounded-full bg-success/10 px-1.5 py-0.5"
+                            className="rounded-full bg-success/10 px-2 py-0.5"
                           >
-                            <Text className="text-success text-xs">
+                            <Text className="text-success text-xs font-medium">
                               {tag}
                             </Text>
                           </View>
@@ -587,7 +582,7 @@ export function ProgramsCatalog({
                   </Pressable>
                   <ChevronRight
                     color={colors["muted-foreground"]}
-                    size={16}
+                    size={20}
                     strokeWidth={1.5}
                   />
                 </View>
@@ -610,15 +605,16 @@ export function ProgramsCatalog({
           justifyContent: "space-between",
         }}
       >
-        <Text className="text-foreground text-lg font-bold">
-          {hasFilters ? "Search Results" : catalogTitle}
+        <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+          <Text className="text-foreground text-lg font-bold">
+            {hasFilters ? "Search Results" : catalogTitle}
+          </Text>
           {displayTotal > 0 ? (
-            <Text className="text-muted-foreground text-sm font-normal">
-              {" "}
+            <Text className="text-muted-foreground text-sm font-normal ml-2">
               ({displayTotal})
             </Text>
           ) : null}
-        </Text>
+        </View>
 
         <Pressable
           testID="programming-browse-filter-toggle"
@@ -630,11 +626,11 @@ export function ProgramsCatalog({
           }`}
         >
           <Filter
-            size={14}
+            size={16}
             color={showFilters || hasFilters ? colors.success : colors["muted-foreground"]}
           />
           <Text
-            className={`text-xs font-semibold ${
+            className={`text-sm font-medium ${
               showFilters || hasFilters ? "text-success" : "text-muted-foreground"
             }`}
           >
@@ -646,15 +642,40 @@ export function ProgramsCatalog({
         </Pressable>
       </View>
 
-      {/* Search Input */}
+      {/* Search Input — inset search magnifier icon, no label above (NP-356) */}
       <View style={{ marginBottom: 12 }}>
-        <Input
-          testID="programming-browse-search-input"
-          label="Search programs"
-          placeholder="Search by name, tags, or description…"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
+        <View
+          className="flex-row items-center bg-card border border-border rounded-xl px-3 py-2.5"
+          style={minTouchTarget}
+        >
+          <Search size={20} color={colors["muted-foreground"]} />
+          <TextInput
+            testID="programming-browse-search-input"
+            placeholder="Search by name, tags, or description…"
+            placeholderTextColor={colors["muted-foreground"]}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            className="flex-1 ml-2 text-foreground text-sm py-0"
+            style={{
+              color: colors.foreground,
+              fontFamily: geistFontFamily("text-foreground text-sm"),
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel="Search programs"
+          />
+          {searchQuery.length > 0 ? (
+            <Pressable
+              testID="programming-browse-search-clear"
+              onPress={() => setSearchQuery("")}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <X size={16} color={colors["muted-foreground"]} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       {/* Expanded Filter Panel — TAGS first, then EXPERIENCE LEVEL, matching
@@ -663,13 +684,13 @@ export function ProgramsCatalog({
       <View style={{ marginBottom: 16 }}>
         {showFilters ? (
           <View
-            className="p-3 rounded-xl border border-border bg-card mb-2"
+            className="p-4 rounded-xl border border-border bg-card mb-4"
             style={{ gap: 12 }}
           >
             {/* Tag Filters */}
             {availableTags.length > 0 ? (
               <View>
-                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
+                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2 tracking-wide">
                   Tags
                 </Text>
                 <View
@@ -693,7 +714,7 @@ export function ProgramsCatalog({
                         }`}
                       >
                         <Text
-                          className={`text-xs ${
+                          className={`text-sm font-medium ${
                             isSelected
                               ? "text-primary-foreground font-semibold"
                               : "text-foreground"
@@ -710,7 +731,7 @@ export function ProgramsCatalog({
 
             {/* Level Filter */}
             <View>
-              <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
+              <Text className="text-muted-foreground text-xs uppercase font-medium mb-2 tracking-wide">
                 Experience Level
               </Text>
               <View
@@ -736,7 +757,7 @@ export function ProgramsCatalog({
                       }`}
                     >
                       <Text
-                        className={`text-xs ${
+                        className={`text-sm font-medium ${
                           isSelected
                             ? "text-primary-foreground font-semibold"
                             : "text-foreground"
@@ -757,7 +778,7 @@ export function ProgramsCatalog({
                 accessibilityLabel="Clear all filters"
                 onPress={handleClearFilters}
               >
-                <Text className="text-destructive text-xs font-medium">
+                <Text className="text-destructive text-sm font-medium">
                   Clear all filters
                 </Text>
               </Pressable>
