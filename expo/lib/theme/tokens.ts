@@ -280,6 +280,11 @@ export const onDarkForeground = `rgb(${darkTokens.foreground})`;
 export const becomingStageTokens = {
   /** the web's `#07060d` */
   background: "7 6 13",
+  /**
+   * the web's `#0e0c17` — a week card's own ground, under its subject-tinted
+   * sky (NP-342). Dark in both schemes like the stage it sits on.
+   */
+  card: "14 12 23",
   /** violet-400 — the web's `#a78bfa` */
   violet: "167 139 250",
   /** the web's `#ffd37a` — the "new high" ring */
