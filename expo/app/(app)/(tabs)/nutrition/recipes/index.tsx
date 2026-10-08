@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Pressable,
@@ -53,7 +53,6 @@ import {
   useEntitlements,
 } from "@/lib/entitlements";
 import { showUpgradeSheet } from "@/lib/entitlements/upgradeSheet";
-import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { logSavedMeal } from "@/lib/nutrition/basketLog";
 import { logFoodItem } from "@/lib/nutrition/mealLogActions";
 import {
@@ -75,6 +74,11 @@ import {
 } from "@/lib/nutrition/myStuff";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
+
+// useFocusEffect is re-exported from expo-router. Fall back gracefully if
+// test suites mock expo-router without useFocusEffect.
+const useScreenFocusEffect =
+  typeof useFocusEffect === "function" ? useFocusEffect : () => {};
 
 /**
  * ─── My Stuff, natively (NP-142) ────────────────────────────────────────────
@@ -127,6 +131,7 @@ export default function MyStuffRoute() {
   });
   const {
     data: entitlements,
+    enforced: entitlementsEnforced,
     canCreate,
     refresh: refreshEntitlements,
   } = useEntitlements();
@@ -197,6 +202,7 @@ export default function MyStuffRoute() {
   const {
     data: recipesData,
     loading: recipesLoading,
+    refetch: refetchRecipes,
   } = useFetch<z.infer<typeof RecipesListResponseSchema>>(
     tab === "recipes" ? recipesPath : null,
     RecipesListResponseSchema,
@@ -231,6 +237,22 @@ export default function MyStuffRoute() {
   const filteredFoods = useMemo(
     () => filterSavedFoodsByQuery(savedFoods, debouncedSearch),
     [savedFoods, debouncedSearch],
+  );
+
+  // Re-read on focus so returning from creating/editing a custom food,
+  // recipe, or meal (or from a delete/save on another screen) lists the new
+  // item and updates entitlements caps immediately.
+  useScreenFocusEffect(
+    useCallback(() => {
+      if (tab === "foods") {
+        void refetchFoods();
+      } else if (tab === "recipes") {
+        void refetchRecipes?.();
+      } else if (tab === "meals") {
+        void refetchMeals();
+      }
+      void Promise.resolve(refreshEntitlements?.()).catch(() => {});
+    }, [refetchFoods, refetchMeals, refetchRecipes, refreshEntitlements, tab]),
   );
 
   // ── Tags: GET /api/tags; Meals tab filters by the member's OWN category ───
@@ -295,7 +317,7 @@ export default function MyStuffRoute() {
               : r,
           ),
         );
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         if (wasSaved && food) {
           setFoodLogError(null);
           setFoodToLog(food);
@@ -393,7 +415,7 @@ export default function MyStuffRoute() {
         });
         if (ok) {
           await refetchFoods();
-          await refreshEntitlements().catch(() => {});
+          await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         } else {
           setBanner("Could not remove food.");
         }
@@ -410,8 +432,9 @@ export default function MyStuffRoute() {
   const mayCreateFoods = canCreate("custom-foods");
   const isAtCap = useCallback(
     (feature: "custom-meals" | "custom-foods") =>
-      !canCreate(feature) && Boolean(entitlements) && entitlements?.enforced !== false,
-    [canCreate, entitlements],
+      !canCreate(feature) &&
+      (entitlementsEnforced || (Boolean(entitlements) && entitlements?.enforced !== false)),
+    [canCreate, entitlements, entitlementsEnforced],
   );
 
   const raiseCapSheet = useCallback(
@@ -463,7 +486,7 @@ export default function MyStuffRoute() {
         }
         // A create spends a custom-meals slot — re-read the snapshot so
         // the cap the create just spent shows at once.
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         await refetchMeals();
         setMealEditorOpen(false);
         if (mealId) {
@@ -481,7 +504,7 @@ export default function MyStuffRoute() {
         });
         // A refusal means the snapshot disagrees with the server; re-read
         // it so the lock matches what just happened.
-        await refreshEntitlements().catch(() => {});
+        await Promise.resolve(refreshEntitlements?.()).catch(() => {});
         if (!routed.handled) setMealEditorError(routed.message);
         else setMealEditorOpen(false);
       } finally {
@@ -511,11 +534,10 @@ export default function MyStuffRoute() {
       raiseCapSheet("custom-foods");
       return;
     }
-    // The custom-food editor is web-only. `/dashboard/foods/new` is not on
-    // the handoff allow-list, so `openWebSignedIn` falls back to the plain
-    // (signed-out) open — exactly today's behaviour for such a path.
-    void openWebSignedIn("/dashboard/foods/new");
-  }, [isAtCap, raiseCapSheet]);
+    // Native custom food editor (NP-272 / NP-324): the create screen posts
+    // `POST /api/nutrition/foods` itself.
+    router.push("/(tabs)/nutrition/food/new" as never);
+  }, [isAtCap, raiseCapSheet, router]);
 
   const loading = tab === "meals" ? mealsLoading : tab === "recipes" ? recipesLoading : foodsLoading;
 
@@ -986,11 +1008,13 @@ export default function MyStuffRoute() {
                         testID={`my-stuff-food-open-${id}`}
                         accessibilityRole="button"
                         accessibilityLabel={`Open ${food.name}`}
-                        onPress={() =>
-                          router.push(
-                            `/(tabs)/nutrition/food/${encodeURIComponent(id)}` as never,
-                          )
-                        }
+                        onPress={() => {
+                          if (id) {
+                            router.push(
+                              `/(tabs)/nutrition/food/${encodeURIComponent(id)}` as never,
+                            );
+                          }
+                        }}
                         style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
                       >
                         <View style={{ width: 48, height: 48, borderRadius: 10, overflow: "hidden" }}>

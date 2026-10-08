@@ -226,4 +226,15 @@ describe("My Stuff card chrome (NP-270)", () => {
     expect(getByTestId("my-stuff-tab-meals")).toBeTruthy();
     expect(getByTestId("my-stuff-tab-foods")).toBeTruthy();
   });
+
+  it("'New custom food' pushes /(tabs)/nutrition/food/new natively", async () => {
+    mockPush.mockClear();
+    const { getByTestId } = render(<MyStuffRoute />);
+    fireEvent.press(getByTestId("my-stuff-tab-foods"));
+    await waitFor(() => {
+      expect(getByTestId("my-stuff-create-food")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("my-stuff-create-food"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/nutrition/food/new" as never);
+  });
 });
