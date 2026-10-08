@@ -29,8 +29,9 @@ import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
  * - Resume pill for in-progress workout or planned session
  * - Upcoming week strip with status icons and calendar link
  * - Continue Training cards showing active programs with progress % and paused state
- * - Quick links to History, Workouts (hub Exercises), Programs (hub Programs) and Generate (NP-133),
- *   matching the web's Workout page header chips (NP-277)
+ * - History pill on the right of the Workout title row, matching the web's header (NP-355)
+ * - Quick links to Workouts (hub Exercises), Programs (hub Programs) and Generate (NP-133),
+ *   fitting 3 chips on a single horizontal row, matching web (NP-277, NP-355)
  * - Saved for Later, Recommended for You and Browse Programs below Continue Training —
  *   the same sections/components the Browse screen uses, so the web's single
  *   Workout page and the native Workout tab show the same content (NP-277)
@@ -95,7 +96,19 @@ export default function ProgrammingIndexRoute() {
         {/* Top Header */}
         <View className="flex-row items-center justify-between mb-2">
           <Text className="text-foreground text-2xl font-bold">Workout</Text>
-          <View className="flex-row gap-2">
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              testID="workout-open-history"
+              accessibilityRole="button"
+              accessibilityLabel="Training History"
+              onPress={handleOpenHistory}
+              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
+            >
+              <History size={14} color={colors.info} />
+              <Text className="text-foreground text-xs font-semibold">
+                History
+              </Text>
+            </Pressable>
             <Pressable
               testID="programming-open-search"
               accessibilityRole="button"
@@ -142,26 +155,11 @@ export default function ProgrammingIndexRoute() {
           Choose your training path and start building.
         </Text>
 
-        {/* Quick Links Hub — History, Workouts (hub Exercises) and Programs
-            (hub Programs) chips, matching the web's icons/colours exactly
-            (History blue, Workouts green dumbbell, Programs amber sparkles);
-            Browse and Workout Now dropped from this row — Browse's content
-            now lives inline below Continue Training, and Workout Now already
-            has its own button on the Continue Training header (NP-277). */}
+        {/* Quick Links Hub — Workouts (hub Exercises), Programs
+            (hub Programs) and Generate chips, matching the web's icons/colours exactly
+            (Workouts green dumbbell, Programs amber sparkles, Generate purple Wand2)
+            on a single horizontal row (NP-355). */}
         <View className="flex-row flex-wrap items-center gap-2 mb-5">
-          <Pressable
-            testID="workout-open-history"
-            accessibilityRole="button"
-            accessibilityLabel="Training History"
-            onPress={handleOpenHistory}
-            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-card"
-          >
-            <History size={14} color={colors.info} />
-            <Text className="text-foreground text-xs font-semibold">
-              History
-            </Text>
-          </Pressable>
-
           <Pressable
             testID="workout-open-exercises"
             accessibilityRole="button"
