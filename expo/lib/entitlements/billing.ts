@@ -123,6 +123,8 @@ export interface BillingDeps {
   openUrl?: (url: string) => Promise<unknown>;
   /** Which plan to buy. Defaults to CHECKOUT_PLAN ('monthly'). */
   plan?: BillingPlan;
+  /** Whether to request a trial (NP-129). Advisory; server enforces eligibility. */
+  trial?: boolean;
 }
 
 function baseUrlOf(deps: BillingDeps): string {
@@ -319,9 +321,16 @@ export async function startCheckout(
     typeof planOrDeps === "string" ? maybeDeps ?? {} : planOrDeps ?? {};
 
   try {
+    const requestBody: { plan: BillingPlan; returnTo: BillingReturnTarget; trial?: boolean } = {
+      plan,
+      returnTo: NATIVE_RETURN_TO,
+    };
+    if (deps.trial !== undefined) {
+      requestBody.trial = deps.trial;
+    }
     const body = await apiFetch(CHECKOUT_PATH, CheckoutResponseSchema, {
       method: "POST",
-      body: { plan, returnTo: NATIVE_RETURN_TO },
+      body: requestBody,
       ...requestOptions(deps),
     });
     return { kind: "url", url: body.url };
