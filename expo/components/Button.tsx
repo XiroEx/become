@@ -1,4 +1,4 @@
-import { Pressable, ActivityIndicator, View } from "react-native";
+import { Pressable, ActivityIndicator, View, type StyleProp, type ViewStyle } from "react-native";
 import { Text } from "@/components/Text";
 import type { ReactNode } from "react";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -47,6 +47,16 @@ export interface ButtonProps {
   /** Spoken after the name, for a button whose effect the name cannot carry. */
   accessibilityHint?: string;
   testID?: string;
+  /**
+   * Extra styling applied to the button Pressable.
+   */
+  style?: StyleProp<ViewStyle>;
+  /**
+   * When true (default), the button label shrinks under narrow bounds (`WRAPPABLE_TEXT`).
+   * Pass false for wrapped rows (e.g. empty-state action pills) where flexShrink would
+   * cause the label to clip on Android Yoga layout (NP-320).
+   */
+  shrinkText?: boolean;
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
@@ -153,6 +163,8 @@ export function Button({
   accessibilityLabel,
   accessibilityHint,
   testID,
+  style,
+  shrinkText = true,
 }: ButtonProps) {
   const { colors } = useThemeTokens();
   const isInactive = disabled || loading;
@@ -176,7 +188,7 @@ export function Button({
       accessibilityLabel={accessibleName(children, accessibilityLabel)}
       accessibilityHint={accessibilityHint}
       hitSlop={isSmall ? hitSlopToMinTarget(MIN_TOUCH_TARGET, 32) : undefined}
-      style={isSmall ? undefined : minTouchTarget}
+      style={isSmall ? style : (style ? [minTouchTarget, style] : minTouchTarget)}
       className={`rounded-xl items-center justify-center flex-row ${variantClass} ${sizeClass} ${isInactive ? "opacity-50" : ""}`}
     >
       {loading ? (
@@ -218,7 +230,7 @@ export function Button({
         >
           {icon}
           <Text
-            style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+            style={shrinkText ? [WRAPPABLE_TEXT, { textAlign: "center" }] : { textAlign: "center" }}
             className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
           >
             {children}
@@ -229,7 +241,7 @@ export function Button({
         // largest Dynamic Type size: this is a flex ROW, and a Text in a row
         // does not shrink unless it is told to.
         <Text
-          style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+          style={shrinkText ? [WRAPPABLE_TEXT, { textAlign: "center" }] : { textAlign: "center" }}
           className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
         >
           {children}

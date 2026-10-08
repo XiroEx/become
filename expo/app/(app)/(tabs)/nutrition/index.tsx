@@ -5,6 +5,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -1127,6 +1128,49 @@ export default function NutritionIndexRoute() {
   const [timelineMenuOpen, setTimelineMenuOpen] = useState(false);
   const [cameraMenuOpen, setCameraMenuOpen] = useState(false);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const { width: windowWidth } = useWindowDimensions();
+  const cameraButtonRef = useRef<View>(null);
+  const uploadButtonRef = useRef<View>(null);
+  const [cameraAnchor, setCameraAnchor] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [uploadAnchor, setUploadAnchor] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+
+  const handleToggleCameraMenu = useCallback(() => {
+    if (!cameraMenuOpen) {
+      cameraButtonRef.current?.measureInWindow?.((x, y, width, height) => {
+        if (typeof y === "number" && !isNaN(y)) {
+          setCameraAnchor({ x, y, width, height });
+        }
+      });
+      setUploadMenuOpen(false);
+      setCameraMenuOpen(true);
+    } else {
+      setCameraMenuOpen(false);
+    }
+  }, [cameraMenuOpen]);
+
+  const handleToggleUploadMenu = useCallback(() => {
+    if (!uploadMenuOpen) {
+      uploadButtonRef.current?.measureInWindow?.((x, y, width, height) => {
+        if (typeof y === "number" && !isNaN(y)) {
+          setUploadAnchor({ x, y, width, height });
+        }
+      });
+      setCameraMenuOpen(false);
+      setUploadMenuOpen(true);
+    } else {
+      setUploadMenuOpen(false);
+    }
+  }, [uploadMenuOpen]);
   const [planDatePickerTag, setPlanDatePickerTag] = useState<string | null>(null);
   const [planDateInput, setPlanDateInput] = useState<string>(() => addDaysToKey(todayLocalKey(), 1));
   const [applyMealTag, setApplyMealTag] = useState<string | null>(null);
@@ -2009,10 +2053,11 @@ export default function NutritionIndexRoute() {
 
             {/* Camera button (photo log) */}
             <Pressable
+              ref={cameraButtonRef}
               testID="nutrition-camera-button"
               accessibilityRole="button"
               accessibilityLabel="Camera options"
-              onPress={() => setCameraMenuOpen((o) => !o)}
+              onPress={handleToggleCameraMenu}
               style={{
                 width: 42,
                 height: 42,
@@ -2029,10 +2074,11 @@ export default function NutritionIndexRoute() {
 
             {/* Upload button */}
             <Pressable
+              ref={uploadButtonRef}
               testID="nutrition-upload-button"
               accessibilityRole="button"
               accessibilityLabel="Upload options"
-              onPress={() => setUploadMenuOpen((o) => !o)}
+              onPress={handleToggleUploadMenu}
               style={{
                 width: 42,
                 height: 42,
@@ -2127,6 +2173,7 @@ export default function NutritionIndexRoute() {
                         testID="nutrition-empty-add-food"
                         variant="inverted"
                         size="sm"
+                        shrinkText={false}
                         icon={<Plus size={14} color={colors.background} />}
                         onPress={() => openSearch()}
                       >
@@ -2136,6 +2183,7 @@ export default function NutritionIndexRoute() {
                         testID="nutrition-copy-yesterday"
                         variant="secondary"
                         size="sm"
+                        shrinkText={false}
                         disabled={copyingYesterday}
                         icon={<Copy size={14} color={colors.foreground} />}
                         onPress={copyYesterday}
@@ -2148,6 +2196,7 @@ export default function NutritionIndexRoute() {
                     testID="nutrition-empty-browse-my-stuff"
                     variant="secondary"
                     size="sm"
+                    shrinkText={false}
                     icon={<ChefHat size={14} color={colors.foreground} />}
                     onPress={() => router.push("/(tabs)/nutrition/recipes")}
                   >
@@ -2608,7 +2657,7 @@ export default function NutritionIndexRoute() {
         </Pressable>
       </Modal>
 
-      {/* Camera Options Modal */}
+      {/* Camera Dropdown Menu (NP-320: anchored dropdown matching web) */}
       <Modal
         visible={cameraMenuOpen}
         transparent
@@ -2621,9 +2670,10 @@ export default function NutritionIndexRoute() {
           style={{
             flex: 1,
             backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
+            justifyContent: "flex-start",
+            alignItems: "flex-end",
+            paddingTop: cameraAnchor ? cameraAnchor.y + cameraAnchor.height + 4 : 112,
+            paddingRight: cameraAnchor ? Math.max(16, windowWidth - (cameraAnchor.x + cameraAnchor.width)) : 66,
           }}
           onPress={() => setCameraMenuOpen(false)}
         >
@@ -2632,46 +2682,64 @@ export default function NutritionIndexRoute() {
             accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
-              borderRadius: 16,
+              borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.border,
-              padding: 20,
-              width: "100%",
-              maxWidth: 300,
-              gap: 10,
+              minWidth: 176,
+              overflow: "hidden",
+              shadowColor: colors.foreground,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 8,
             }}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text className="text-foreground text-base font-bold mb-1">
-              Camera options
-            </Text>
-            <Button
+            <Pressable
               testID="nutrition-camera-take-photo"
-              variant="secondary"
-              icon={<Camera size={16} color={colors.foreground} />}
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openEstimate("chooser");
               }}
             >
-              Take photo
-            </Button>
-            <Button
+              <Camera size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Take photo</Text>
+            </Pressable>
+            <Pressable
               testID="nutrition-camera-scan-barcode"
-              variant="secondary"
-              icon={<ScanBarcode size={16} color={colors.foreground} />}
+              accessibilityRole="button"
+              accessibilityLabel="Scan barcode"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
               onPress={() => {
                 setCameraMenuOpen(false);
                 openSearch(undefined, { barcode: true });
               }}
             >
-              Scan barcode
-            </Button>
+              <ScanBarcode size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Scan barcode</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
 
-      {/* Upload Options Modal */}
+      {/* Upload Dropdown Menu (NP-320: anchored dropdown matching web) */}
       <Modal
         visible={uploadMenuOpen}
         transparent
@@ -2684,9 +2752,10 @@ export default function NutritionIndexRoute() {
           style={{
             flex: 1,
             backgroundColor: scrim,
-            justifyContent: "center",
-            alignItems: "center",
-            padding: 24,
+            justifyContent: "flex-start",
+            alignItems: "flex-end",
+            paddingTop: uploadAnchor ? uploadAnchor.y + uploadAnchor.height + 4 : 112,
+            paddingRight: uploadAnchor ? Math.max(16, windowWidth - (uploadAnchor.x + uploadAnchor.width)) : 16,
           }}
           onPress={() => setUploadMenuOpen(false)}
         >
@@ -2695,41 +2764,59 @@ export default function NutritionIndexRoute() {
             accessibilityRole="none"
             style={{
               backgroundColor: colors.card,
-              borderRadius: 16,
+              borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.border,
-              padding: 20,
-              width: "100%",
-              maxWidth: 300,
-              gap: 10,
+              minWidth: 176,
+              overflow: "hidden",
+              shadowColor: colors.foreground,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.15,
+              shadowRadius: 8,
+              elevation: 8,
             }}
             onPress={(e) => e.stopPropagation()}
           >
-            <Text className="text-foreground text-base font-bold mb-1">
-              Upload options
-            </Text>
-            <Button
+            <Pressable
               testID="nutrition-upload-photo"
-              variant="secondary"
-              icon={<ImagePlus size={16} color={colors.foreground} />}
+              accessibilityRole="button"
+              accessibilityLabel="Upload photo"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+              }}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimateWithLibraryUpload();
               }}
             >
-              Upload photo
-            </Button>
-            <Button
+              <ImagePlus size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Upload photo</Text>
+            </Pressable>
+            <Pressable
               testID="nutrition-upload-describe"
-              variant="secondary"
-              icon={<Pencil size={16} color={colors.foreground} />}
+              accessibilityRole="button"
+              accessibilityLabel="Describe estimate"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderTopWidth: 1,
+                borderTopColor: colors.border,
+              }}
               onPress={() => {
                 setUploadMenuOpen(false);
                 openEstimate("describe");
               }}
             >
-              Describe
-            </Button>
+              <Pencil size={16} color={colors.foreground} />
+              <Text className="text-sm font-medium text-foreground">Describe</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
