@@ -211,13 +211,18 @@ export function CurrentPlan({
     >
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
         <View
+          testID="current-plan-sparkle-tile"
+          className={
+            isPlus
+              ? "h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30"
+              : "h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted"
+          }
           style={{
             width: 36,
             height: 36,
             borderRadius: 8,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: colors.muted,
           }}
         >
           <Sparkles

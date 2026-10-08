@@ -330,6 +330,31 @@ describe("Native plan page (NP-053)", () => {
       expect(screen.getByText(/Ends/)).toBeTruthy();
     });
 
+    it("gives the sparkle tile violet tint on Plus and neutral grey on Free (NP-308)", () => {
+      const onOpen = jest.fn();
+      const screenPlus = render(
+        <CurrentPlan
+          snapshot={sampleSnapshot({ tier: "plus" })}
+          portalState="idle"
+          onOpenPortal={onOpen}
+        />,
+      );
+      const tilePlus = screenPlus.getByTestId("current-plan-sparkle-tile");
+      expect(tilePlus.props.className).toContain(
+        "bg-purple-100 dark:bg-purple-900/30",
+      );
+
+      const screenFree = render(
+        <CurrentPlan
+          snapshot={sampleSnapshot({ tier: "free" })}
+          portalState="idle"
+          onOpenPortal={onOpen}
+        />,
+      );
+      const tileFree = screenFree.getByTestId("current-plan-sparkle-tile");
+      expect(tileFree.props.className).toContain("bg-muted");
+    });
+
     it("shows Manage billing on the UnenforcedPlan card when enforced === false", () => {
       const onOpen = jest.fn();
       const screen = render(

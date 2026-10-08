@@ -16,13 +16,29 @@ jest.mock("@/lib/web/openWebSignedIn", () => ({
   openWebSignedIn: (path: string) => mockOpenWebSignedIn(path),
 }));
 
+const mockRouterPush = jest.fn();
+jest.mock("expo-router", () => ({
+  router: {
+    push: (...args: unknown[]) => mockRouterPush(...args),
+  },
+}));
+
 import * as fs from "fs";
 import * as path from "path";
-import { redirectSystemPath } from "../app/+native-intent";
+import {
+  DIRECT_NATIVE_ROUTES,
+  consumePendingRedirect,
+  getPendingRedirect,
+  redirectSystemPath,
+  resolveDirectNativeRoute,
+  setPendingRedirect,
+} from "../app/+native-intent";
 /* eslint-enable import/first */
 
 beforeEach(() => {
   mockOpenWebSignedIn.mockClear();
+  mockRouterPush.mockClear();
+  setPendingRedirect(null);
 });
 
 describe("+native-intent", () => {
@@ -72,5 +88,72 @@ describe("+native-intent", () => {
     });
     expect(mockOpenWebSignedIn).toHaveBeenCalledWith("/dashboard/admin/users");
     expect(landed).toBe("/(tabs)/dashboard");
+  });
+
+  describe("direct native route resolution and pending redirects (NP-308)", () => {
+    it("exports DIRECT_NATIVE_ROUTES including expected routes", () => {
+      expect(DIRECT_NATIVE_ROUTES.has("/plan")).toBe(true);
+      expect(DIRECT_NATIVE_ROUTES.has("/settings")).toBe(true);
+      expect(DIRECT_NATIVE_ROUTES.has("/progress")).toBe(true);
+      expect(DIRECT_NATIVE_ROUTES.has("/becoming")).toBe(true);
+      expect(DIRECT_NATIVE_ROUTES.has("/onboarding")).toBe(true);
+    });
+
+    it.each([
+      ["become://plan", "/plan"],
+      ["become://settings", "/settings"],
+      ["become://progress", "/progress"],
+      ["become://becoming", "/becoming"],
+      ["become://onboarding", "/onboarding"],
+      ["/plan", "/plan"],
+      ["/settings", "/settings"],
+      ["/progress", "/progress"],
+      ["/becoming", "/becoming"],
+      ["https://become.redbtn.io/plan", "/plan"],
+      ["https://become.redbtn.io/settings", "/settings"],
+    ])("resolves direct native route %s to %s", (input, expected) => {
+      expect(resolveDirectNativeRoute(input)).toBe(expected);
+    });
+
+    it("resolves become:// scheme with query params intact", () => {
+      expect(
+        resolveDirectNativeRoute("become://plan?billing=success&session_id=cs_123"),
+      ).toBe("/plan?billing=success&session_id=cs_123");
+    });
+
+    it("resolves Stripe checkout return link to /plan with session_id", () => {
+      const target = redirectSystemPath({
+        path: "become://?billing=success&session_id=cs_test_abc123",
+        initial: true,
+      });
+      expect(target).toBe("/plan?billing=success&session_id=cs_test_abc123");
+      expect(getPendingRedirect()).toBe("/plan?billing=success&session_id=cs_test_abc123");
+    });
+
+    it("resolves https dashboard/plan link to /plan", () => {
+      const target = redirectSystemPath({
+        path: "https://become.redbtn.io/dashboard/plan",
+        initial: true,
+      });
+      expect(target).toBe("/plan");
+      expect(getPendingRedirect()).toBe("/plan");
+    });
+
+    it("calls router.push on warm starts and records pending redirect", () => {
+      const target = redirectSystemPath({
+        path: "become://plan",
+        initial: false,
+      });
+      expect(target).toBe("/plan");
+      expect(mockRouterPush).toHaveBeenCalledWith("/plan");
+      expect(getPendingRedirect()).toBe("/plan");
+    });
+
+    it("consumes and clears pending redirect", () => {
+      setPendingRedirect("/settings");
+      expect(getPendingRedirect()).toBe("/settings");
+      expect(consumePendingRedirect()).toBe("/settings");
+      expect(getPendingRedirect()).toBeNull();
+    });
   });
 });

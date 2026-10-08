@@ -1,5 +1,7 @@
+import { router } from "expo-router";
 import {
   NATIVE_ROUTES,
+  isBecomeWebHost,
   resolveWebPath,
 } from "@/lib/navigation/webPathToRoute";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
@@ -9,6 +11,95 @@ export interface NativeIntentInput {
   path: string;
   /** True when this link is what STARTED the process (a cold start). */
   initial: boolean;
+}
+
+/**
+ * Direct native routes hosted under `app/(app)/`, `app/(auth)/`, or root `app/`.
+ * These routes don't start with `/(tabs)/` or `/(app)/`, so `resolveWebPath`
+ * doesn't recognise them by default without this resolver.
+ */
+export const DIRECT_NATIVE_ROUTES = new Set([
+  "/plan",
+  "/settings",
+  "/progress",
+  "/becoming",
+  "/onboarding",
+  "/login",
+  "/verify",
+  "/account/restore",
+]);
+
+/**
+ * Holds the target href of a redirected system path until consumed by the
+ * launch gate in `app/index.tsx`. This ensures deep links survive on Android
+ * where the initial route / launch screen might mount during warm or cold starts.
+ */
+let pendingRedirect: string | null = null;
+
+export function getPendingRedirect(): string | null {
+  return pendingRedirect;
+}
+
+export function setPendingRedirect(target: string | null): void {
+  pendingRedirect = target;
+}
+
+export function consumePendingRedirect(): string | null {
+  const target = pendingRedirect;
+  pendingRedirect = null;
+  return target;
+}
+
+/**
+ * Normalise a direct native route from a bare path or `become://` / Web URL.
+ * Preserves query parameters intact.
+ */
+export function resolveDirectNativeRoute(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  let pathname = "";
+  let search = "";
+
+  try {
+    if (trimmed.startsWith("/")) {
+      if (trimmed.startsWith("//")) return null;
+      const url = new URL(trimmed, "http://localhost");
+      pathname = url.pathname;
+      search = url.search;
+    } else {
+      const url = new URL(trimmed);
+      const scheme = url.protocol.replace(":", "").toLowerCase();
+      if (scheme === "become") {
+        const joined = `/${url.hostname}${url.pathname}`.replace(/\/{2,}/g, "/");
+        pathname = joined;
+        search = url.search;
+      } else if (scheme === "https" || scheme === "http") {
+        if (!isBecomeWebHost(url.hostname)) return null;
+        pathname = url.pathname;
+        search = url.search;
+      } else {
+        return null;
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  if (pathname.startsWith("/(") || pathname.startsWith("/_")) {
+    return `${pathname}${search}`;
+  }
+
+  const normalized =
+    pathname.length > 1 && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname;
+
+  if (DIRECT_NATIVE_ROUTES.has(normalized)) {
+    return `${normalized}${search}`;
+  }
+
+  return null;
 }
 
 /**
@@ -39,17 +130,40 @@ export interface NativeIntentInput {
  *     through NP-121's hand-off — and the app still lands somewhere real while
  *     the browser opens, because this function has to return a route.
  */
-export function redirectSystemPath({ path }: NativeIntentInput): string {
-  const target = resolveWebPath(path);
+export function redirectSystemPath({ path, initial }: NativeIntentInput): string {
+  const direct = resolveDirectNativeRoute(path);
+  let targetHref: string;
 
-  if (target.kind === "web") {
-    // Fire and forget: `redirectSystemPath` is synchronous and the browser
-    // open is not something a link resolution may wait on. A failure here is
-    // already handled inside the helper (it falls back to a plain open); the
-    // catch is for the module itself never taking the app down.
-    void openWebSignedIn(target.path).catch(() => {});
-    return NATIVE_ROUTES.home;
+  if (direct) {
+    targetHref = direct;
+  } else {
+    const target = resolveWebPath(path);
+
+    if (target.kind === "web") {
+      // Fire and forget: `redirectSystemPath` is synchronous and the browser
+      // open is not something a link resolution may wait on. A failure here is
+      // already handled inside the helper (it falls back to a plain open); the
+      // catch is for the module itself never taking the app down.
+      void openWebSignedIn(target.path).catch(() => {});
+      return NATIVE_ROUTES.home;
+    }
+
+    targetHref = target.href;
   }
 
-  return target.href;
+  if (targetHref && targetHref !== "/" && targetHref !== NATIVE_ROUTES.launch) {
+    setPendingRedirect(targetHref);
+  }
+
+  // On warm starts, actively navigate via router.push so existing activities
+  // that don't remount root index still transition to the intended screen.
+  if (!initial && targetHref && targetHref !== "/" && targetHref !== NATIVE_ROUTES.launch) {
+    try {
+      router.push(targetHref as any);
+    } catch {
+      // router might not be ready or active yet
+    }
+  }
+
+  return targetHref;
 }
