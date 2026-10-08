@@ -1,7 +1,7 @@
 import React, { memo, useCallback, useEffect, useState } from 'react'
-import { View, StyleSheet, Pressable, type LayoutChangeEvent } from 'react-native'
-import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated'
-import { Text } from '@/components/Text'
+import { View, StyleSheet, Pressable, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native'
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
+import { Text, type TextProps } from '@/components/Text'
 import Svg, { Defs, LinearGradient, Polyline, RadialGradient, Rect, Stop, Circle as SvgCircle } from 'react-native-svg'
 import {
   ArrowUpRight,
@@ -23,10 +23,20 @@ import type { Fact, WeekSnapshot, CardPillar, Highlight, WeekSignals, Suggestion
 import { rankSuggestions, MAX_CARD_STEPS } from '@/lib/becoming/weekSummary'
 import { SUN_FADE_AT, SUN_RADIUS, WASH_FADE_AT, cardRing, cardSky, gradientLine, sunCentre } from '@/lib/becoming/cardSky'
 import {
+  HORIZON_IDENTITY_GAP,
+  HORIZON_IDENTITY_LINES,
+  HORIZON_KICKER_ALPHA,
+  HORIZON_KICKER_FONT_SIZE,
+  HORIZON_KICKER_GAP,
+  HORIZON_KICKER_TRACKING,
+  HORIZON_RADIUS,
+  HORIZON_WASH_ANGLE_DEG,
+  horizonBorder,
+  horizonIdentityType,
+  horizonWash,
+} from '@/lib/becoming/horizonCard'
+import {
   EXIT_EDGE_RADIUS,
-  EXIT_PULSE_EASING,
-  EXIT_PULSE_LOW,
-  EXIT_PULSE_MS,
   SPARK_DOT_R,
   SPARK_H,
   SPARK_LINE_ALPHA,
@@ -44,6 +54,18 @@ import {
   type ExitEdge,
 } from '@/lib/becoming/focusedCard'
 import type { Pillar } from '@/lib/becoming/pillarColors'
+import { usePulse } from '@/lib/becoming/pulse'
+import {
+  CARD_RADIUS,
+  HORIZON_CARD_ROW,
+  LANDING_EASING,
+  LANDING_MS,
+  LANDING_RISE,
+  WEEK_CARD_ROW,
+  landingAnimates,
+  landingDelay,
+  landingProgress,
+} from '@/lib/becoming/stageMotion'
 import { useReducedMotion } from '@/lib/a11y/reducedMotion'
 import { hitSlopToMinTarget, minTouchTarget } from '@/lib/a11y/touchTarget'
 import { becomingStageTokens, rgbOf } from '@/lib/theme/tokens'
@@ -197,24 +219,12 @@ function Sparkline({
 /**
  * The exit-edge light (NP-343): a 3 px bar in the week's colour on the edge
  * that faces the next card — top on a climb, bottom on a dip, right on a
- * hold — with the web's glow, pulsing like Tailwind's `animate-pulse`.
- * Reduce Motion holds it lit and still: the bar is the hint, the pulse is
- * decoration. The shared value is written through `set()`, Reanimated's own
- * setter, so nothing here mutates a hook's result.
+ * hold — with the web's glow, pulsing like Tailwind's `animate-pulse`
+ * (`usePulse`, shared with the intro's glow). Reduce Motion holds it lit and
+ * still: the bar is the hint, the pulse is decoration.
  */
 function ExitEdgeLight({ edge, subject, score }: { edge: ExitEdge; subject: Pillar; score: number }) {
-  const reduced = useReducedMotion()
-  const pulse = useSharedValue(1)
-  useEffect(() => {
-    if (reduced) {
-      cancelAnimation(pulse)
-      pulse.set(1)
-      return
-    }
-    const half = { duration: EXIT_PULSE_MS / 2, easing: Easing.bezier(...EXIT_PULSE_EASING) }
-    pulse.set(withRepeat(withSequence(withTiming(EXIT_PULSE_LOW, half), withTiming(1, half)), -1, false))
-    return () => cancelAnimation(pulse)
-  }, [reduced, pulse])
+  const pulse = usePulse()
   const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }))
   return (
     <Animated.View
@@ -228,6 +238,80 @@ function ExitEdgeLight({ edge, subject, score }: { edge: ExitEdge; subject: Pill
       ]}
     />
   )
+}
+
+/**
+ * The landing stagger (NP-346): where one row of a card's content sits — 1
+ * in place, 0 down twelve points and clear. The stage's `landed` card brings
+ * its rows up and in over 420 ms, `landingDelay(row)` after the row before
+ * (the web's `anim(i)`); a card the stage has left takes them down the same
+ * way; a card mounted bare, and every card under Reduce Motion, simply draws
+ * them (`lib/becoming/stageMotion.ts`). Like the web's `initial`, a row that
+ * will animate starts down, so a card landed on at mount assembles too. The
+ * shared value is written through `set()`, Reanimated's own setter.
+ */
+function useLanding(row: number, landed: boolean | null | undefined, reduced: boolean) {
+  const t = useSharedValue<number>(landingAnimates(landed, reduced) ? 0 : landingProgress(landed, reduced))
+  useEffect(() => {
+    const to = landingProgress(landed, reduced)
+    if (!landingAnimates(landed, reduced)) {
+      cancelAnimation(t)
+      t.set(to)
+      return
+    }
+    t.set(withDelay(landingDelay(row), withTiming(to, { duration: LANDING_MS, easing: Easing.bezier(...LANDING_EASING) })))
+  }, [row, landed, reduced, t])
+  return useAnimatedStyle(() => ({ opacity: t.value, transform: [{ translateY: LANDING_RISE * (1 - t.value) }] }))
+}
+
+interface LandingProps {
+  /** The web's row number — `WEEK_CARD_ROW` / `HORIZON_CARD_ROW`. */
+  row: number
+  landed: boolean | null | undefined
+  reduced: boolean
+}
+
+/** A block of the card's column that lands as one row. */
+function LandingRow({
+  row,
+  landed,
+  reduced,
+  style,
+  testID,
+  children,
+}: LandingProps & { style?: StyleProp<ViewStyle>; testID?: string; children: React.ReactNode }) {
+  const landing = useLanding(row, landed, reduced)
+  return (
+    <Animated.View style={[style, landing]} testID={testID}>
+      {children}
+    </Animated.View>
+  )
+}
+
+// The app's Text, animatable: the headline, the sub and the Horizon's words
+// are rows of their own on the web (`motion.h2`, `motion.p`), and stay the
+// direct children of their blocks here.
+const AnimatedText = Animated.createAnimatedComponent(Text)
+
+/** A line of the card's type that lands as one row. */
+function LandingText({ row, landed, reduced, style, ...rest }: LandingProps & TextProps) {
+  const landing = useLanding(row, landed, reduced)
+  return <AnimatedText {...rest} style={[style, landing]} />
+}
+
+/**
+ * The box a card's gradients are drawn on: the stage's `cardSize` when the
+ * card is given one (both or neither), otherwise the size the card measures
+ * itself at — there is nothing to draw an angled line on until then.
+ */
+function useCardBox(width?: number, height?: number): { boxW?: number; boxH?: number; onLayout?: (e: LayoutChangeEvent) => void } {
+  const sized = width != null && height != null
+  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width: lw, height: lh } = e.nativeEvent.layout
+    setMeasured((prev) => (prev && prev.w === lw && prev.h === lh ? prev : { w: lw, h: lh }))
+  }, [])
+  return { boxW: sized ? width : measured?.w, boxH: sized ? height : measured?.h, onLayout: sized ? undefined : onLayout }
 }
 
 /**
@@ -249,20 +333,13 @@ function CardSky({
   width?: number
   height?: number
 }) {
-  const sized = width != null && height != null
-  const [measured, setMeasured] = useState<{ w: number; h: number } | null>(null)
-  const onLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width: lw, height: lh } = e.nativeEvent.layout
-    setMeasured((prev) => (prev && prev.w === lw && prev.h === lh ? prev : { w: lw, h: lh }))
-  }, [])
-  const boxW = sized ? width : measured?.w
-  const boxH = sized ? height : measured?.h
+  const { boxW, boxH, onLayout } = useCardBox(width, height)
   const sky = cardSky(week.subject, week.score)
   const sun = sunCentre(week.step)
   const washId = `week-card-wash-${week.weekKey}`
   const sunId = `week-card-sun-${week.weekKey}`
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={sized ? undefined : onLayout} testID="week-card-sky">
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout} testID="week-card-sky">
       {boxW && boxH ? (
         <Svg width={boxW} height={boxH}>
           <Defs>
@@ -278,6 +355,35 @@ function CardSky({
           {/* The web lists the sun first, which in CSS is on top: wash, then sun. */}
           <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${washId})`} testID="week-card-sky-wash" />
           <Rect x={0} y={0} width={boxW} height={boxH} fill={`url(#${sunId})`} testID="week-card-sky-sun" />
+        </Svg>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * The Horizon's wash (NP-344): the web's
+ * `linear-gradient(160deg, rgba(124,58,237,.22), rgba(14,12,23,.97) 55%)` —
+ * violet-600 at the top-left fading into the card ground by 55% along the
+ * 160° line, and that ground on to the far corner — drawn with
+ * react-native-svg like a week card's sky. The numbers are
+ * `lib/becoming/horizonCard.ts`'s, where the test holds them to the web's.
+ */
+function HorizonWash({ width, height }: { width?: number; height?: number }) {
+  const { boxW, boxH, onLayout } = useCardBox(width, height)
+  const stops = horizonWash()
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none" onLayout={onLayout} testID="horizon-card-wash">
+      {boxW && boxH ? (
+        <Svg width={boxW} height={boxH}>
+          <Defs>
+            <LinearGradient id="horizon-card-wash" gradientUnits="userSpaceOnUse" {...gradientLine(boxW, boxH, HORIZON_WASH_ANGLE_DEG)}>
+              {stops.map((s) => (
+                <Stop key={s.offset} offset={s.offset} stopColor={s.color} stopOpacity={s.opacity} />
+              ))}
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width={boxW} height={boxH} fill="url(#horizon-card-wash)" testID="horizon-card-wash-rect" />
         </Svg>
       ) : null}
     </View>
@@ -306,6 +412,21 @@ export interface WeekCardProps {
   /** Tapping the sparkline: the stage's `enterOverview`. */
   onSparkline?: () => void
   /**
+   * The stage's landing beat (NP-346): true once the camera has settled on
+   * this card, false on every other card the stage draws in full. The
+   * content fades and slides in row by row when it turns true, and down
+   * again when it turns false, as on the web. Leave it out on a card mounted
+   * outside the stage and the content is simply drawn. Reduce Motion draws
+   * it on every card.
+   */
+  landed?: boolean | null
+  /**
+   * The stage's Reduce Motion answer, as the web's `reduced` prop: a card
+   * the stage mounts mid-session then knows at its first paint, where its
+   * own hook would run a tick of motion first. A card mounted bare asks.
+   */
+  reduced?: boolean
+  /**
    * The stage's card box (`cardSize`), both or neither. Given, the card IS
    * that size — content is laid out inside it, the "what to work on" block
    * and the identity row sit on its bottom edge, and anything that will not
@@ -328,10 +449,18 @@ export const WeekCard = memo(function WeekCard({
   exitEdge = null,
   spark = null,
   onSparkline,
+  landed,
+  reduced: stageReduced,
   width,
   height,
 }: WeekCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
+  // The stage's answer when it gives one, the card's own read otherwise —
+  // once for the card: the landing rows below take it as a prop rather than
+  // each subscribing to the setting.
+  const ownReduced = useReducedMotion()
+  const reduced = stageReduced ?? ownReduced
+  const land = (row: number) => ({ row, landed, reduced })
   const leadHl = signals.highlights[0] ?? null
   const extraHls = signals.highlights.slice(1)
   const currentWeek = !!w.isCurrent
@@ -389,7 +518,7 @@ export const WeekCard = memo(function WeekCard({
       {focused && exitEdge ? <ExitEdgeLight edge={exitEdge} subject={w.subject} score={w.score} /> : null}
       <View style={[styles.cardPadding, sized && styles.fill]} testID="week-card-body">
         {/* Eyebrow */}
-        <View style={styles.eyebrowRow}>
+        <LandingRow {...land(WEEK_CARD_ROW.eyebrow)} style={styles.eyebrowRow}>
           <View>
             <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>
               {w.gap
@@ -438,23 +567,23 @@ export const WeekCard = memo(function WeekCard({
               </View>
             ) : null}
           </View>
-        </View>
+        </LandingRow>
 
         {/* Headline & Sub */}
         <View style={{ gap: 4 }}>
-          <Text style={[styles.headlineText, { color: colors.foreground }]} testID="week-card-headline">
+          <LandingText {...land(WEEK_CARD_ROW.headline)} style={[styles.headlineText, { color: colors.foreground }]} testID="week-card-headline">
             {w.headline}
-          </Text>
+          </LandingText>
           {w.sub ? (
-            <Text style={[styles.subText, { color: colors['muted-foreground'] }]} testID="week-card-sub">
+            <LandingText {...land(WEEK_CARD_ROW.sub)} style={[styles.subText, { color: colors['muted-foreground'] }]} testID="week-card-sub">
               {w.sub}
-            </Text>
+            </LandingText>
           ) : null}
         </View>
 
         {/* Highlights */}
         {signals.highlights.length > 0 && (
-          <View style={[styles.highlightsContainer, { backgroundColor: tint('muted', 0.3) }]}>
+          <LandingRow {...land(WEEK_CARD_ROW.highlights)} style={[styles.highlightsContainer, { backgroundColor: tint('muted', 0.3) }]} testID="week-card-highlights">
             {leadHl && <LeadHighlight h={leadHl} />}
 
             {extraHls.length > 0 && (
@@ -468,38 +597,40 @@ export const WeekCard = memo(function WeekCard({
             {signals.hasDeltas && (
               <Text style={[styles.deltasNote, { color: colors['muted-foreground'] }]}>Changes vs the week before</Text>
             )}
-          </View>
+          </LandingRow>
         )}
 
         {/* Nudge button */}
         {signals.nudge && (
-          <Pressable
-            testID="week-card-nudge"
-            style={[minTouchTarget, styles.nudgeBtn, { backgroundColor: tint('muted', 0.5) }]}
-            onPress={() => onNavigate?.(signals.nudge!.href)}
-            accessibilityRole="button"
-            accessibilityLabel={signals.nudge.label}
-          >
-            {(() => {
-              const p = signals.nudge.pillar
-              const Icon = PILLAR_ICON[p] ?? Brain
-              return <Icon size={14} color={TINT[p]} />
-            })()}
-            <Text style={[styles.nudgeText, { color: colors.foreground }]}>{signals.nudge.label}</Text>
-            <ChevronRight size={12} color={colors['muted-foreground']} />
-          </Pressable>
+          <LandingRow {...land(WEEK_CARD_ROW.nudge)}>
+            <Pressable
+              testID="week-card-nudge"
+              style={[minTouchTarget, styles.nudgeBtn, { backgroundColor: tint('muted', 0.5) }]}
+              onPress={() => onNavigate?.(signals.nudge!.href)}
+              accessibilityRole="button"
+              accessibilityLabel={signals.nudge.label}
+            >
+              {(() => {
+                const p = signals.nudge.pillar
+                const Icon = PILLAR_ICON[p] ?? Brain
+                return <Icon size={14} color={TINT[p]} />
+              })()}
+              <Text style={[styles.nudgeText, { color: colors.foreground }]}>{signals.nudge.label}</Text>
+              <ChevronRight size={12} color={colors['muted-foreground']} />
+            </Pressable>
+          </LandingRow>
         )}
 
         {/* Banked wins */}
         {wins.length > 0 && (
-          <View style={styles.winsWrap} testID="week-card-wins">
+          <LandingRow {...land(WEEK_CARD_ROW.wins)} style={styles.winsWrap} testID="week-card-wins">
             {wins.map((win: string, idx: number) => (
               <View key={`win-${idx}`} style={styles.winRow}>
                 <Sparkles size={14} color={colors.accent} style={{ marginTop: 2 }} />
                 <Text style={[styles.winText, { color: colors.foreground }]}>{win}</Text>
               </View>
             ))}
-          </View>
+          </LandingRow>
         )}
 
         {/* The web's `flex-1`: what follows sits on the card's bottom edge. */}
@@ -507,7 +638,11 @@ export const WeekCard = memo(function WeekCard({
 
         {/* What writes it (Steps) */}
         {steps.length > 0 && (
-          <View style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]} testID="week-card-steps">
+          <LandingRow
+            {...land(WEEK_CARD_ROW.steps)}
+            style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}
+            testID="week-card-steps"
+          >
             <Text style={[styles.stepsKicker, { color: colors['muted-foreground'] }]}>What to work on</Text>
             <View style={styles.stepsList}>
               {steps.map((st) => {
@@ -535,11 +670,11 @@ export const WeekCard = memo(function WeekCard({
                 )
               })}
             </View>
-          </View>
+          </LandingRow>
         )}
 
         {/* Identity & Details Footer */}
-        <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
+        <LandingRow {...land(WEEK_CARD_ROW.footer)} style={[styles.footerRow, { borderTopColor: colors.border }]}>
           {/* The identity whisper: the web's `Becoming: <identity>`, serif italic at 45% white. */}
           <Text style={[styles.identityText, { color: whisper }]} numberOfLines={1} testID="week-card-identity">
             {identityWhisper(w.identity ?? identity, w.subject)}
@@ -557,7 +692,7 @@ export const WeekCard = memo(function WeekCard({
               <ChevronRight size={14} color={colors.foreground} />
             </Pressable>
           )}
-        </View>
+        </LandingRow>
       </View>
     </View>
   )
@@ -569,6 +704,15 @@ export interface HorizonCardProps {
   next?: { nutrition?: Suggestion | null; training?: Suggestion | null; fuel?: Suggestion | null } | NextStep[] | null
   active?: CardPillar[]
   onNavigate?: (url: string) => void
+  /**
+   * The stage's focused card (NP-344): the web's dashed border is violet-300
+   * at 60% on the Horizon while it is the focus, white at 25% otherwise.
+   */
+  focused?: boolean
+  /** The stage's landing beat, like `WeekCard`'s (NP-346): the words assemble row by row once the camera settles here. */
+  landed?: boolean | null
+  /** The stage's Reduce Motion answer, like `WeekCard`'s; a card mounted bare asks. */
+  reduced?: boolean
   /** The stage's card box, like `WeekCard`'s: every card on the stage is one height (NP-342). */
   width?: number
   height?: number
@@ -580,12 +724,27 @@ export function HorizonCard({
   next,
   active = ['training', 'fuel', 'mind'],
   onNavigate,
+  focused = false,
+  landed,
+  reduced: stageReduced,
   width,
   height,
 }: HorizonCardProps) {
   const { colors, tint, isDark } = useThemeTokens()
+  const ownReduced = useReducedMotion()
+  const reduced = stageReduced ?? ownReduced
+  const land = (row: number) => ({ row, landed, reduced })
   const sized = width != null && height != null
   const trendText = trend === 'up' ? 'Horizon lifting' : trend === 'down' ? 'Horizon eased' : 'Horizon holding'
+  // The web's box (NP-344): a violet wash under a 2px dashed border, the
+  // words in white serif. On the stage — dark in both schemes — the shell is
+  // clear and the wash IS the ground, as on the web; a card mounted elsewhere
+  // keeps the system's card colour and ink under it, like `WeekCard`.
+  const border = horizonBorder(focused)
+  const ground = isDark ? 'transparent' : colors.card
+  const borderColor = isDark ? border.color : 'hsla(258, 80%, 50%, 0.3)'
+  const kicker = isDark ? rgbOf(becomingStageTokens.ink, HORIZON_KICKER_ALPHA) : colors['muted-foreground']
+  const words = isDark ? rgbOf(becomingStageTokens.ink) : colors.foreground
   const steps = React.useMemo(() => {
     if (!next) return []
     if (Array.isArray(next)) return next
@@ -602,15 +761,18 @@ export function HorizonCard({
         styles.horizonShell,
         sized ? { width, height } : null,
         {
-          backgroundColor: colors.card,
-          borderColor: isDark ? 'hsla(258, 80%, 70%, 0.4)' : 'hsla(258, 80%, 50%, 0.3)',
+          backgroundColor: ground,
+          borderWidth: border.width,
+          borderStyle: border.style,
+          borderColor,
         },
       ]}
       testID="horizon-card"
       accessibilityLabel="Horizon card. Next week's story is unwritten."
     >
+      {isDark && <HorizonWash width={width} height={height} />}
       <View style={[styles.cardPadding, sized && styles.fill]} testID="horizon-card-body">
-        <View style={styles.eyebrowRow}>
+        <LandingRow {...land(HORIZON_CARD_ROW.eyebrow)} style={styles.eyebrowRow}>
           <View>
             <Text style={[styles.eyebrowTop, { color: colors['muted-foreground'] }]}>Next Sunday</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
@@ -618,19 +780,33 @@ export function HorizonCard({
               <Text style={[styles.eyebrowLabel, { color: colors.foreground, marginTop: 0 }]}>{trendText}</Text>
             </View>
           </View>
-        </View>
+        </LandingRow>
 
-        <Text style={[styles.stepsKicker, { color: colors['muted-foreground'], marginTop: 16 }]}>Who am I becoming?</Text>
-        {/* The web's `line-clamp-6`: the words never push "what writes it" off the card. */}
-        <Text style={[styles.horizonIdentity, { color: colors.foreground }]} numberOfLines={6}>
-          {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
-        </Text>
+        <View style={styles.horizonWords}>
+          <LandingText {...land(HORIZON_CARD_ROW.kicker)} style={[styles.horizonKicker, { color: kicker }]}>
+            Who am I becoming?
+          </LandingText>
+          {/* Serif italic at 24px — 19px past 140 characters — and the web's
+              `line-clamp-6`: the words never push "what writes it" off the card. */}
+          <LandingText
+            {...land(HORIZON_CARD_ROW.identity)}
+            style={[horizonIdentityType(identity), { color: words }]}
+            numberOfLines={HORIZON_IDENTITY_LINES}
+            testID="horizon-card-identity"
+          >
+            {identity ? `“${identity}”` : 'You have not written it yet. Your Mind sessions will ask.'}
+          </LandingText>
+        </View>
 
         {/* The web's `flex-1`: what follows sits on the card's bottom edge. */}
         {sized && <View style={styles.spacer} testID="horizon-card-spacer" />}
 
         {steps.length > 0 ? (
-          <View style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]} testID="horizon-writes">
+          <LandingRow
+            {...land(HORIZON_CARD_ROW.writes)}
+            style={[styles.stepsCard, { backgroundColor: tint('muted', 0.2), borderColor: colors.border }]}
+            testID="horizon-writes"
+          >
             <Text style={[styles.stepsKicker, { color: colors['muted-foreground'] }]}>What writes it</Text>
             <View style={styles.stepsList}>
               {steps.map((st) => {
@@ -657,18 +833,23 @@ export function HorizonCard({
                 )
               })}
             </View>
-          </View>
+          </LandingRow>
         ) : null}
 
-        <Text style={[styles.horizonFooter, { color: colors['muted-foreground'] }]}>Written next Sunday from what you do this week.</Text>
+        <LandingText {...land(HORIZON_CARD_ROW.footer)} style={[styles.horizonFooter, { color: colors['muted-foreground'] }]}>
+          Written next Sunday from what you do this week.
+        </LandingText>
       </View>
     </View>
   )
 }
 
+/** The card column's gap between blocks. */
+const CARD_GAP = 12
+
 const styles = StyleSheet.create({
   cardShell: {
-    borderRadius: 24,
+    borderRadius: CARD_RADIUS,
     overflow: 'hidden',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
@@ -676,14 +857,12 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   horizonShell: {
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
+    borderRadius: HORIZON_RADIUS,
     overflow: 'hidden',
   },
   cardPadding: {
     padding: 20,
-    gap: 12,
+    gap: CARD_GAP,
   },
   /** A sized card's column fills the box, so the spacer has room to take. */
   fill: {
@@ -929,10 +1108,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-  horizonIdentity: {
-    fontSize: 20,
-    fontStyle: 'italic',
-    lineHeight: 26,
+  /** The web's `mt-6` under the eyebrow (the column's own gap makes up the rest) and `mt-2` between the kicker and the words. */
+  horizonWords: {
+    marginTop: HORIZON_KICKER_GAP - CARD_GAP,
+    gap: HORIZON_IDENTITY_GAP,
+  },
+  horizonKicker: {
+    fontSize: HORIZON_KICKER_FONT_SIZE,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: HORIZON_KICKER_TRACKING,
   },
   horizonFooter: {
     fontSize: 11,

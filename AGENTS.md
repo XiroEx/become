@@ -1850,6 +1850,55 @@ the details sheet above it. Four rules travel with it (the long form is
   the only bundled face) at 12 px, 45% white, or the subject's name. Every
   number is `expo/lib/becoming/focusedCard.ts`'s; test:
   `expo/__tests__/card-NP-343-acceptance.test.tsx`.
+- **A far week is the web's coloured tile (NP-345).** Review on 10/8 found
+  the overview's tiles near-black boxes with a colour stripe, all but gone at
+  overview scale, where the web's compact `WeekCard` is the week's own
+  colour. `expo/components/becoming/journey/WeekTile.tsx` now draws the
+  web's: `pillarColor(subject, score, 48)` into `pillarColor(subject, score,
+  30)` along CSS's 160° line (expo-linear-gradient on the sky's
+  `gradientLine`) under a 1px white/15 ring, a big `W<n>` (`…` for a gap),
+  the label, the headline and a step chip (`now` / climbed / held / a dip /
+  new high). Sizes are card units (`expo/lib/becoming/weekTile.ts`: the web's
+  px at a 390 × 844 phone's card, as a fraction of the card's width) so they
+  scale with the camera. The Horizon tile wears the web's `HorizonCard`
+  ground and dashed ring with the identity and the trend. Test:
+  `expo/__tests__/card-NP-345-acceptance.test.tsx`.
+- **The Horizon card and the line to it are the web's (NP-344).** Review on
+  10/8: the native Horizon was a flat dark card in sans italic, and the
+  dashed segment from the live week to it and its ring in the overview drew
+  BLACK on the S23 and the iOS simulator. The card now wears the web's box —
+  `expo/lib/becoming/horizonCard.ts` has the numbers: the 160° wash from
+  violet-600 at .22 into the card ground at .97 by 55% (react-native-svg,
+  like the week card's sky; the shell is clear so the wash IS the ground), a
+  2 px dashed border on a 28 px radius in violet-300/60 while it is the
+  focus (the stage passes `focused`) and white/25 otherwise, the identity in
+  the platform serif italic at 24 px (19 px past 140 characters), snug,
+  white, six lines. The black line was a COLOUR-STRING bug, not a drawing
+  one: `@shopify/react-native-skia` parses a colour string itself and reads
+  the comma form only, so `rgbOf`'s solid `rgb(r g b)` — fine for a React
+  Native view — is painted black on a canvas, while an alpha'd `rgba(…)`
+  from the same helper is fine. `skiaRgbOf` (`expo/lib/theme/tokens.ts`) is
+  always `rgba(r, g, b, a)`, and EVERY colour the stage's canvas is handed
+  goes through it or `pillarColor`'s `hsl()` — never `rgbOf`. Test:
+  `expo/__tests__/card-NP-344-acceptance.test.tsx`, which also walks the
+  rendered canvas for any colour in a form Skia would not read.
+- **The stage moves as the web's does (NP-346).** Review on 10/8 found four
+  of the web's movements missing: the LANDING STAGGER (`WeekCard` /
+  `HorizonCard` take the stage's `landed` and bring their content up and in
+  row by row — opacity 0 → 1, y 12 → 0, 60 ms apart, 420 ms on
+  `[0.16, 1, 0.3, 1]`, the web's row numbers — so a card is an empty frame
+  until the camera settles on it, and a card the stage has left takes its
+  content down again); NEIGHBOUR DIMMING (the web's `brightness(.55)` /
+  `.4` as a BLACK OVERLAY on the slot at `1 − b`, under the card's corners,
+  focus mode only; the blur is not ported); EMPHASIS TRANSITIONS (each
+  `StageSlot` eases its opacity, scale and dimming over 500 ms on CSS's
+  `ease`, `[0.25, 0.1, 0.25, 1]`); and the INTRO's breathing GLOW under the
+  start card (violet-400/25, `-inset-4`, radius 40, the blur as a
+  `boxShadow`). Tailwind's `animate-pulse` is one hook,
+  `expo/lib/becoming/pulse.ts`'s `usePulse`, worn by the exit-edge light and
+  the glow. Every one is skipped under Reduce Motion, read at mount or
+  flipped live. Numbers: `expo/lib/becoming/stageMotion.ts`; test:
+  `expo/__tests__/card-NP-346-acceptance.test.tsx`.
 
 #### The Mind session player, natively (NP-098)
 

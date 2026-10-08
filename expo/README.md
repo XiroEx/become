@@ -263,6 +263,63 @@ hold it together:
   bundled face), or the subject's name. `lib/becoming/focusedCard.ts` has the
   web's numbers; `__tests__/card-NP-343-acceptance.test.tsx` holds the
   rendered card to them and drives the tap into `enterOverview`.
+- **A far week is the web's coloured tile (NP-345).** `WeekTile` — the
+  overview, and any card more than two steps from the focus — is the web's
+  compact `WeekCard`: the WEEK'S COLOUR, `pillarColor(subject, score, 48)`
+  into `pillarColor(subject, score, 30)` along CSS's 160° line (one
+  expo-linear-gradient, the sky's own `gradientLine`, the dark stop doubling
+  as the view's colour) under a 1px white/15 ring, with a big `W<n>` (`…` for
+  a gap), the label, the headline and a step chip (`now` / climbed / held /
+  a dip / new high). That is what makes the overview read as grey → green →
+  amber blocks behind the markers; it used to be a near-black box with a
+  colour stripe. Every size is a CARD UNIT (`lib/becoming/weekTile.ts`): the
+  web's px at the card of a 390 × 844 phone, as a fraction of this card's
+  width, so a tile keeps the web's proportions at any card size and scales
+  with the camera. The web's Horizon has no compact mode, so the Horizon tile
+  wears the `HorizonCard` ground (the violet wash into the card colour at
+  55%) and dashed ring, with the identity and the live week's trend.
+  `__tests__/card-NP-345-acceptance.test.tsx`.
+- **The Horizon card and the line to it are the web's (NP-344).** The
+  Horizon wears the web's box: a 160° wash from violet-600 at .22 into the
+  card ground at .97 by 55% (react-native-svg, like the week card's sky — the
+  shell is clear, the wash is the ground), a 2 px dashed border on a 28 px
+  radius in violet-300/60 while it is the focus (the stage passes `focused`)
+  and white/25 otherwise, and the identity in the platform serif italic at
+  24 px (19 px past 140 characters), snug, white, six lines.
+  `lib/becoming/horizonCard.ts` has the numbers. The dashed segment to the
+  Horizon and its ring in the overview drew BLACK on both phones because of
+  the colour STRING, not the drawing: Skia parses a colour itself and reads
+  the comma form only, so `rgbOf`'s solid `rgb(r g b)` — which React Native
+  reads — is black on a canvas. `skiaRgbOf` (`lib/theme/tokens.ts`) is
+  always `rgba(r, g, b, a)`; every colour the stage's canvas is handed goes
+  through it (or is `pillarColor`'s `hsl()`), never `rgbOf`.
+  `__tests__/card-NP-344-acceptance.test.tsx` holds the card to the web's
+  numbers and walks the rendered canvas for any colour Skia would not read.
+- **The stage moves as the web's does (NP-346).** Review on 10/8 found four
+  of the web's movements missing. The LANDING STAGGER: `WeekCard` and
+  `HorizonCard` take the stage's `landed` (and its `reduced`, as the web's
+  cards do, so a card mounting mid-session knows at its first paint) and
+  bring their content up and in
+  row by row — opacity 0 → 1, y 12 → 0, 60 ms apart, 420 ms each on
+  `[0.16, 1, 0.3, 1]`, the web's row numbers (`WEEK_CARD_ROW` /
+  `HORIZON_CARD_ROW`) — so a card is an empty frame (sky, ring, light) until
+  the camera settles on it, and a card the stage has left takes its content
+  down again; a card mounted bare simply draws it. NEIGHBOUR DIMMING: the
+  web's `brightness(.55)` one step from the focus and `.4` further is a
+  BLACK OVERLAY on the slot at `1 − b` (black at α over an opaque card IS
+  `brightness(1 − α)`; the web's 1–2 px blur is not ported — no
+  cross-platform filter), under the card's own corners, in focus mode only.
+  EMPHASIS TRANSITIONS: each slot (`StageSlot`) holds its opacity, scale and
+  dimming as shared values that `withTiming` to each new emphasis over 500 ms
+  on CSS's `ease` (`[0.25, 0.1, 0.25, 1]` — not Reanimated's `Easing.ease`,
+  which is `ease-in`). The INTRO's GLOW: `-inset-4 rounded-[40px]
+  bg-violet-400/25 blur-2xl` under the start card, the blur as a `boxShadow`,
+  pulsing. Tailwind's `animate-pulse` is now ONE hook, `lib/becoming/pulse.ts`'s
+  `usePulse`, worn by the exit-edge light and the glow. Every one is skipped
+  under Reduce Motion — the stagger and the glow do not run, the transitions
+  cut — read at mount or flipped live. `lib/becoming/stageMotion.ts` has the
+  numbers; `__tests__/card-NP-346-acceptance.test.tsx` holds the rendered
+  stage to them.
 
 Two things to know before you touch it:
 

@@ -95,6 +95,19 @@ import { WeekTile } from "@/components/becoming/journey/WeekTile";
 import type { JourneyPayload, WeekSnapshot } from "@/lib/becoming/types";
 import { journeySignals } from "@/lib/becoming/signals";
 import { pillarColor } from "@/lib/becoming/pillarColors";
+import { HORIZON_RADIUS } from "@/lib/becoming/horizonCard";
+import { usePulse } from "@/lib/becoming/pulse";
+import {
+  BREATHING_SCALE,
+  CARD_RADIUS,
+  EMPHASIS_EASING,
+  EMPHASIS_MS,
+  INTRO_GLOW_ALPHA,
+  INTRO_GLOW_INSET,
+  INTRO_GLOW_RADIUS,
+  introGlowShadow,
+  neighbourDim,
+} from "@/lib/becoming/stageMotion";
 import { markIntroShown } from "@/lib/becoming/storage";
 import {
   AGAINST_PATH_NUDGE,
@@ -140,7 +153,7 @@ import {
 import { motionDuration, useReducedMotion } from "@/lib/a11y/reducedMotion";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { lightHaptic } from "@/lib/feedback/haptics";
-import { becomingStageTokens, rgbOf } from "@/lib/theme/tokens";
+import { becomingStageTokens, rgbOf, skiaRgbOf } from "@/lib/theme/tokens";
 import { ForcedThemeMode } from "@/lib/theme/useThemeTokens";
 
 // The tick labels and "started" read 12px at any zoom; the face is the app's
@@ -150,6 +163,7 @@ const TICK_FONT_SIZE = 12;
 
 const INK = becomingStageTokens.ink;
 const VIOLET = becomingStageTokens.violet;
+const SHADE = becomingStageTokens.shade;
 const GOLD = becomingStageTokens.gold;
 const STAGE_BG = becomingStageTokens.background;
 const SKY_VIOLET = becomingStageTokens.skyViolet;
@@ -317,17 +331,20 @@ function StageCanvas({
   const labelX = (x: number, text: string) => x - (font ? font.getTextWidth(text) / 2 : 0);
 
   return (
+    // Every colour on this canvas is `skiaRgbOf` (or `pillarColor`'s `hsl()`),
+    // never `rgbOf`: Skia parses the string itself, reads the comma form only,
+    // and paints what it cannot read black (NP-344).
     <Canvas style={{ position: "absolute", left: 0, top: 0, width: vw, height: vh }} pointerEvents="none">
       {/* Ambient sky: the web's two radial washes */}
       <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[rgbOf(SKY_VIOLET, 0.32), rgbOf(SKY_VIOLET, 0)]} />
+        <RadialGradient c={vec(vw / 2, 0)} r={vh * 0.8} colors={[skiaRgbOf(SKY_VIOLET, 0.32), skiaRgbOf(SKY_VIOLET, 0)]} />
       </Rect>
       <Rect x={0} y={0} width={vw} height={vh}>
-        <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[rgbOf(SKY_EMERALD, 0.16), rgbOf(SKY_EMERALD, 0)]} />
+        <RadialGradient c={vec(vw * 0.8, vh)} r={vh * 0.6} colors={[skiaRgbOf(SKY_EMERALD, 0.16), skiaRgbOf(SKY_EMERALD, 0)]} />
       </Rect>
       <Group transform={bgTransform}>
         {stars.map((s, i) => (
-          <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={rgbOf(INK)} opacity={s.o * 0.5} />
+          <Circle key={i} cx={s.x * 0.25} cy={s.y * 0.25} r={s.r} color={skiaRgbOf(INK)} opacity={s.o * 0.5} />
         ))}
       </Group>
       <Group transform={tiltTransform} origin={vec(vw / 2, vh / 2)}>
@@ -340,12 +357,12 @@ function StageCanvas({
                 p1={vec(first ? first.x - size.w : 0, y)}
                 p2={vec(horizonPos ? horizonPos.x + size.w : 0, y)}
                 strokeWidth={hairW}
-                color={rgbOf(INK, 0.07)}
+                color={skiaRgbOf(INK, 0.07)}
               />
             ))}
             {areaPath && (
               <Path path={areaPath} style="fill">
-                <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[rgbOf(VIOLET, 0.22), rgbOf(VIOLET, 0)]} />
+                <LinearGradient start={vec(0, areaTop)} end={vec(0, baseY)} colors={[skiaRgbOf(VIOLET, 0.22), skiaRgbOf(VIOLET, 0)]} />
               </Path>
             )}
             {ticks.map((t) => (
@@ -355,7 +372,7 @@ function StageCanvas({
                   y={baseY + 34}
                   text={t.label}
                   font={font}
-                  color={rgbOf(INK, 0.45)}
+                  color={skiaRgbOf(INK, 0.45)}
                 />
               </Group>
             ))}
@@ -366,7 +383,7 @@ function StageCanvas({
                   y={baseY + 34 - 1.6 * TICK_FONT_SIZE}
                   text="started"
                   font={font}
-                  color={rgbOf(INK, 0.6)}
+                  color={skiaRgbOf(INK, 0.6)}
                 />
               </Group>
             )}
@@ -400,8 +417,9 @@ function StageCanvas({
           <Group opacity={markersOpacity}>
             {positions.map((p) => {
               if (p.horizon) {
+                // The web's Horizon marker: a violet-400 ring, dashed `3 3`.
                 return (
-                  <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={rgbOf(VIOLET)}>
+                  <Circle key="horizon" cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(VIOLET)}>
                     <DashPathEffect intervals={[3, 3]} />
                   </Circle>
                 );
@@ -415,10 +433,10 @@ function StageCanvas({
                     <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={color} opacity={0.6} />
                   )}
                   {peaks.has(p.index) && (
-                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={rgbOf(GOLD)} opacity={0.9} />
+                    <Circle cx={p.x} cy={p.y} r={markerRing} style="stroke" strokeWidth={ringW} color={skiaRgbOf(GOLD)} opacity={0.9} />
                   )}
                   <Circle cx={p.x} cy={p.y} r={markerR} color={color} />
-                  <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={rgbOf(STAGE_BG)} />
+                  <Circle cx={p.x} cy={p.y} r={markerR} style="stroke" strokeWidth={ringW} color={skiaRgbOf(STAGE_BG)} />
                 </Group>
               );
             })}
@@ -426,6 +444,91 @@ function StageCanvas({
         </Group>
       </Group>
     </Canvas>
+  );
+}
+
+// ── A card's slot: its emphasis, eased; its dimming; the opening's glow ───
+
+/** CSS's `ease`, which the web's slot transitions run on. */
+const EMPHASIS_EASE = Easing.bezier(EMPHASIS_EASING[0], EMPHASIS_EASING[1], EMPHASIS_EASING[2], EMPHASIS_EASING[3]);
+
+/**
+ * The intro's breathing glow (NP-346): the web's
+ * `absolute -inset-4 animate-pulse rounded-[40px] bg-violet-400/25 blur-2xl`
+ * under the start card while the opening plays — violet-400 at 25%, a
+ * rem past the card on every side, its blur carried by a `boxShadow` of the
+ * same colour, pulsing like Tailwind's `animate-pulse` (`usePulse`). Drawn
+ * BEFORE the card in the slot, so the card sits on it, as on the web.
+ */
+function IntroGlow() {
+  const pulse = usePulse();
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  const color = rgbOf(VIOLET, INTRO_GLOW_ALPHA);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="journey-intro-glow"
+      style={[styles.introGlow, { backgroundColor: color, boxShadow: introGlowShadow(color) }, pulseStyle]}
+    />
+  );
+}
+
+interface StageSlotProps {
+  index: number;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  emphasis: ReturnType<typeof cardEmphasis>;
+  /** The dimming overlay's alpha — `neighbourDim(...)`, the web's `brightness()` as black over the card. */
+  dim: number;
+  /** The start card while the opening plays: scaled 1.03 under its glow. */
+  breathing: boolean;
+  reduced: boolean;
+  /** The overlay follows the card's corners: 28 on the Horizon card, 24 on a week card and a tile. */
+  radius: number;
+  pointerEvents: "box-none" | "none";
+  children: React.ReactNode;
+}
+
+/**
+ * One card's slot in the world layer (NP-346). Its opacity, its scale and
+ * its dimming are shared values that EASE to each new emphasis — the web's
+ * `transition: opacity 500ms ease, transform 500ms ease, filter 500ms ease`
+ * — rather than snapping with the render; under Reduce Motion the duration
+ * is zero and they cut, as the web's `transition: undefined` does. The
+ * dimming is a black overlay over the card: black at α multiplies every
+ * channel by 1 − α, which is `brightness(1 − α)` (the web's blur is not
+ * ported — React Native has no cross-platform filter). It is drawn after
+ * the card, so it covers it; the glow before, so the card covers the glow.
+ */
+function StageSlot({ index, left, top, width, height, emphasis, dim, breathing, reduced, radius, pointerEvents, children }: StageSlotProps) {
+  const targetScale = breathing ? BREATHING_SCALE : emphasis.scale;
+  const opacity = useSharedValue(emphasis.opacity);
+  const scale = useSharedValue(targetScale);
+  const shade = useSharedValue(dim);
+  useEffect(() => {
+    const cfg = { duration: motionDuration(EMPHASIS_MS, reduced), easing: EMPHASIS_EASE };
+    opacity.set(withTiming(emphasis.opacity, cfg));
+    scale.set(withTiming(targetScale, cfg));
+    shade.set(withTiming(dim, cfg));
+  }, [emphasis.opacity, targetScale, dim, reduced, opacity, scale, shade]);
+  const slotStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }] }));
+  const dimStyle = useAnimatedStyle(() => ({ opacity: shade.value }));
+  return (
+    <Animated.View
+      testID={`journey-card-${index}`}
+      pointerEvents={pointerEvents}
+      style={[styles.slot, { left, top, width, height }, slotStyle]}
+    >
+      {breathing && !reduced ? <IntroGlow /> : null}
+      {children}
+      <Animated.View
+        pointerEvents="none"
+        testID="journey-card-dim"
+        style={[styles.dim, { borderRadius: radius, backgroundColor: rgbOf(SHADE) }, dimStyle]}
+      />
+    </Animated.View>
   );
 }
 
@@ -909,7 +1012,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
         x2: b.x,
         y2: b.y,
         dashed,
-        color: b.horizon || !wk ? rgbOf(VIOLET) : pillarColor(wk.subject, wk.score, 62),
+        // The web's `#a78bfa` on the way to the Horizon — in the form Skia reads (NP-344).
+        color: b.horizon || !wk ? skiaRgbOf(VIOLET) : pillarColor(wk.subject, wk.score, 62),
       });
     }
     const baseY = positions.length ? Math.max(...positions.map((p) => p.y)) + size.h / 2 + 40 : 0;
@@ -1001,32 +1105,32 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                   const week = weeks[i];
                   const breathing = mode === "intro" && i === startIndex;
                   return (
-                    <View
+                    <StageSlot
                       key={p.horizon ? "horizon" : (week?.weekKey ?? i)}
-                      testID={`journey-card-${i}`}
+                      index={i}
                       // The focused card's buttons are live; a neighbour's are not
                       // (tapping it brings it forward); in the opening nothing is.
                       pointerEvents={mode !== "intro" && (em.focused || em.compact) ? "box-none" : "none"}
-                      style={[
-                        styles.slot,
-                        {
-                          left: p.x - size.w / 2,
-                          top: p.y - size.h / 2,
-                          width: size.w,
-                          // Every card is exactly `cardSize`, the web's box
-                          // (NP-342): the slot IS the box, the card fills it
-                          // and lays its content out inside it (clipping what
-                          // will not fit), so a focused card never ends short
-                          // of the line through it, and no card grows past it.
-                          height: size.h,
-                          opacity: em.opacity,
-                          transform: [{ scale: breathing ? 1.03 : em.scale }],
-                        },
-                      ]}
+                      left={p.x - size.w / 2}
+                      top={p.y - size.h / 2}
+                      width={size.w}
+                      // Every card is exactly `cardSize`, the web's box
+                      // (NP-342): the slot IS the box, the card fills it
+                      // and lays its content out inside it (clipping what
+                      // will not fit), so a focused card never ends short
+                      // of the line through it, and no card grows past it.
+                      height={size.h}
+                      emphasis={em}
+                      // The web's brightness(.55) / brightness(.4) on the
+                      // cards either side of the focus (NP-346).
+                      dim={neighbourDim(i, focus, mode)}
+                      breathing={breathing}
+                      reduced={reduced}
+                      radius={p.horizon && !em.compact ? HORIZON_RADIUS : CARD_RADIUS}
                     >
                       {p.horizon ? (
                         em.compact ? (
-                          <WeekTile horizon width={size.w} height={size.h} />
+                          <WeekTile horizon width={size.w} height={size.h} identity={data.identity} trend={trend} />
                         ) : (
                           <HorizonCard
                             identity={data.identity}
@@ -1034,12 +1138,17 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                             next={data.next}
                             active={liveActive}
                             onNavigate={onNavigate}
+                            // The web's `border-violet-300/60` while it is the focus (NP-344).
+                            focused={em.focused}
+                            // The landing beat (NP-346): the words assemble once the camera settles here.
+                            landed={landed === i}
+                            reduced={reduced}
                             width={size.w}
                             height={size.h}
                           />
                         )
                       ) : !week ? null : em.compact ? (
-                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} />
+                        <WeekTile week={week} width={size.w} height={size.h} totalWeeks={weeks.length} isPeak={peaks.has(i)} />
                       ) : (
                         <WeekCard
                           week={week}
@@ -1055,13 +1164,20 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           exitEdge={em.focused ? edge : null}
                           spark={sparks[i] ?? null}
                           onSparkline={enterOverview}
+                          // The landing beat (NP-346): the content fades and
+                          // slides in, row by row, once the camera settles
+                          // here — and down again when it moves on. The
+                          // stage's Reduce Motion answer travels with it, so
+                          // a card mounting mid-session knows at first paint.
+                          landed={landed === i}
+                          reduced={reduced}
                           onDetails={() => onDetails(i)}
                           onNavigate={onNavigate}
                           width={size.w}
                           height={size.h}
                         />
                       )}
-                    </View>
+                    </StageSlot>
                   );
                 })}
               </Animated.View>
@@ -1201,8 +1317,8 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
               : `${focusedWeek.label}: ${focusedWeek.headline}`
             : ""}
         </Text>
-        {/* `landed` is the beat the card has clicked into place; the web passes it
-            to the card for its own flourish, the native card has none yet. */}
+        {/* `landed` is the beat the card has clicked into place: the cards above
+            take it for their landing stagger (NP-346), and a test reads it here. */}
         <View style={styles.srOnly} testID={landed != null ? `journey-landed-${landed}` : "journey-landing"} />
       </ForcedThemeMode>
     </View>
@@ -1221,6 +1337,23 @@ const styles = StyleSheet.create({
   },
   slot: {
     position: "absolute",
+  },
+  /** The web's `-inset-4 rounded-[40px]`. */
+  introGlow: {
+    position: "absolute",
+    top: INTRO_GLOW_INSET,
+    left: INTRO_GLOW_INSET,
+    right: INTRO_GLOW_INSET,
+    bottom: INTRO_GLOW_INSET,
+    borderRadius: INTRO_GLOW_RADIUS,
+  },
+  /** The neighbour-dimming overlay: the whole card, under its own corners. */
+  dim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   title: {
     position: "absolute",
