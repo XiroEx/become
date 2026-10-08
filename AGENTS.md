@@ -1924,6 +1924,23 @@ the details sheet above it. Four rules travel with it (the long form is
   started and writes nothing, and the member gets it next time. Test:
   `expo/__tests__/card-NP-347-acceptance.test.tsx`; the hold and the fly
   being SEEN on the simulator and a real iPhone is the device pass.
+- **The stage mounts ONCE, on the settled journey (NP-348).** Review on
+  10/8: `becoming.tsx` painted the same-WEEK cache first and the stage
+  mounted — and started its opening — on it; the cache was from an earlier
+  day, so the S23's live card read "day 3 of 7" with Tuesday's highlights on
+  Wednesday until the fresh payload landed and the focused card changed in
+  place. A same-week cache is not a same-day cache: `sameDay` (today's LOCAL
+  day) and `sameJourney` (deep equality) in `expo/lib/becoming/storage.ts`;
+  `readBecomingCache` still answers the same-week one, which is the OFFLINE
+  FALLBACK only. The screen holds the journey and its opening as ONE state
+  and mounts the stage in one commit on exactly what it will show: a cache
+  from an earlier day is never painted (loading state, await the fetch, the
+  cache only if the fetch fails); today's cache is painted before the fetch
+  only when no opening will play on it (second open this session, Reduce
+  Motion), refreshed in place if the fresh payload differs; otherwise the
+  stage waits and mounts once on the fresh payload, with the opening decided
+  on it. Test: `expo/__tests__/card-NP-348-acceptance.test.tsx` (the real
+  stage, mounts counted, under a pinned clock).
 
 #### The Mind session player, natively (NP-098)
 
