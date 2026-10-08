@@ -188,7 +188,7 @@ export function Button({
       accessibilityLabel={accessibleName(children, accessibilityLabel)}
       accessibilityHint={accessibilityHint}
       hitSlop={isSmall ? hitSlopToMinTarget(MIN_TOUCH_TARGET, 32) : undefined}
-      style={isSmall ? style : [minTouchTarget, style]}
+      style={isSmall ? style : (style ? [minTouchTarget, style] : minTouchTarget)}
       className={`rounded-xl items-center justify-center flex-row ${variantClass} ${sizeClass} ${isInactive ? "opacity-50" : ""}`}
     >
       {loading ? (
@@ -230,7 +230,7 @@ export function Button({
         >
           {icon}
           <Text
-            style={[shrinkText ? WRAPPABLE_TEXT : null, { textAlign: "center" }]}
+            style={shrinkText ? [WRAPPABLE_TEXT, { textAlign: "center" }] : { textAlign: "center" }}
             className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
           >
             {children}
@@ -241,7 +241,7 @@ export function Button({
         // largest Dynamic Type size: this is a flex ROW, and a Text in a row
         // does not shrink unless it is told to.
         <Text
-          style={[shrinkText ? WRAPPABLE_TEXT : null, { textAlign: "center" }]}
+          style={shrinkText ? [WRAPPABLE_TEXT, { textAlign: "center" }] : { textAlign: "center" }}
           className={`font-semibold ${variantTextClass} ${sizeTextClass}`}
         >
           {children}
