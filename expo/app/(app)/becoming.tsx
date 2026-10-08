@@ -1,13 +1,17 @@
 // The Becoming — the page (NP-192, NP-204).
 //
 // Loads the journey (every week, scored and placed, from `/api/becoming/journey`
-// through the same authenticated client as every other screen — NP-254), paints
-// it from the same-week cache first, and hands it to the STAGE: the web's
-// `JourneyCanvas`, natively (`components/becoming/journey/JourneyStage.tsx`).
-// The details sheet opens over the stage from a card's Details button and can
-// fly the stage to a week from its Story screen. The screen also tells the
-// stage when its push has actually ended (`useScreenShown`), so the opening
-// plays on screen and not behind the slide (NP-347).
+// through the same authenticated client as every other screen — NP-254) and
+// hands it to the STAGE: the web's `JourneyCanvas`, natively
+// (`components/becoming/journey/JourneyStage.tsx`). The stage mounts ONCE, on
+// the settled journey — the fresh payload, or the same-week cache when the
+// fetch fails — with its opening decided on that same journey; a cache from
+// an earlier day of the week is never painted first, because its live card
+// is a day behind and the fresh payload would change it under the opening
+// (NP-348). The details sheet opens over the stage from a card's Details
+// button and can fly the stage to a week from its Story screen. The screen
+// also tells the stage when its push has actually ended (`useScreenShown`),
+// so the opening plays on screen and not behind the slide (NP-347).
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
@@ -27,7 +31,8 @@ import {
   readBecomingCache,
   writeBecomingCache,
   markBecomingSeen,
-  sameWeek,
+  sameDay,
+  sameJourney,
   resolveIntroKind,
 } from "@/lib/becoming/storage";
 import type { WeekSnapshot, JourneyPayload } from "@/lib/becoming/types";
@@ -59,30 +64,73 @@ export default function BecomingScreen() {
   // even when the journey arrives after it.
   const shown = useScreenShown();
 
-  const [data, setData] = useState<JourneyPayload | null>(null);
+  // The journey the stage is mounted on, WITH the opening decided for it —
+  // one state, so the two land in one commit and the stage mounts exactly
+  // once, on exactly what it will show (NP-348). The opening is decided from
+  // Reduce Motion, the deep link and what this member has seen
+  // (`lib/becoming/storage.ts#resolveIntroKind`); the stage is never mounted
+  // with a guess that the real answer would then cut short.
+  const [journey, setJourney] = useState<{ data: JourneyPayload; introKind: IntroKind } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // Which opening the stage plays. Decided ONCE, when the journey is first on
-  // hand, from Reduce Motion, the deep link and what this member has seen —
-  // `lib/becoming/storage.ts#resolveIntroKind`. Null until then: the stage is
-  // not mounted with a guess that the real answer would then cut short.
-  const [introKind, setIntroKind] = useState<IntroKind | null>(null);
   const stageRef = useRef<JourneyStageHandle>(null);
 
-  // 1. Instant paint from same-week cache (<2s on mid-range phone for 1 year of history)
+  // THE CACHE IS NOT THE JOURNEY (NP-348). The same-week cache
+  // (`readBecomingCache`) was written on an earlier open — possibly an
+  // earlier DAY — so the live card it holds can be a day behind ("day 3 of
+  // 7" with Tuesday's highlights, on Wednesday), and painting it first meant
+  // the stage mounted and started its opening on it, then the fresh payload
+  // changed the focused card in place. So:
+  //
+  //   • a cache from an earlier day is never painted. It is the OFFLINE
+  //     FALLBACK: the loading state shows, the fetch is awaited, and the
+  //     cache is what the stage mounts on only if the fetch fails;
+  //   • a cache from TODAY is painted before the fetch only when no opening
+  //     will play on it — a second open this session, Reduce Motion — so
+  //     there is nothing the fresh payload could run under; a payload that
+  //     differs then refreshes the landed stage in place, as the web's does;
+  //   • otherwise the stage waits and mounts once, on the settled journey,
+  //     with its opening decided on that journey.
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       const cached = await readBecomingCache(memberId);
-      if (!cancelled && cached && cached.weeks?.length && sameWeek(cached.todayKey)) {
-        setData(cached);
-        setLoading(false);
+      if (cancelled) return;
+
+      // Today's cache, and the opening it would get. Decided here because
+      // whether it may be painted depends on the answer.
+      let decided: { todayKey: string; kind: IntroKind } | null = null;
+      let painted: JourneyPayload | null = null;
+      if (cached && sameDay(cached.todayKey)) {
+        const kind = await resolveIntroKind({ todayKey: cached.todayKey, initialWeekKey });
+        if (cancelled) return;
+        decided = { todayKey: cached.todayKey, kind };
+        if (kind === "none") {
+          painted = cached;
+          setJourney({ data: cached, introKind: kind });
+        }
       }
 
+      // Mount the stage on the settled journey — or, when today's cache is
+      // already up, refresh it in place if the journey differs.
+      const settle = async (next: JourneyPayload) => {
+        if (painted) {
+          if (!sameJourney(painted, next)) setJourney((j) => (j ? { ...j, data: next } : j));
+          return;
+        }
+        const kind =
+          decided && decided.todayKey === next.todayKey
+            ? decided.kind
+            : await resolveIntroKind({ todayKey: next.todayKey, initialWeekKey });
+        if (cancelled) return;
+        setJourney({ data: next, introKind: kind });
+      };
+
+      let fresh: JourneyPayload | null = null;
+      let failure: unknown = null;
       try {
-        const fresh = await apiFetch<BecomingJourneyResponse>(
+        const res = await apiFetch<BecomingJourneyResponse>(
           "/api/becoming/journey",
           BecomingJourneyResponseSchema,
           {
@@ -90,22 +138,23 @@ export default function BecomingScreen() {
             getToken: () => token ?? undefined,
           },
         );
-        if (!cancelled) {
-          const journey = fresh as unknown as JourneyPayload;
-          setData(journey);
-          setError(null);
-          setLoading(false);
-          await writeBecomingCache(memberId, journey);
-          await markBecomingSeen();
-        }
+        fresh = res as unknown as JourneyPayload;
       } catch (e) {
-        if (!cancelled) {
-          // If we had no cache, display the error
-          if (!cached || !cached.weeks?.length) {
-            setError(e instanceof Error ? e.message : "Failed to load journey");
-          }
-          setLoading(false);
-        }
+        failure = e;
+      }
+      if (cancelled) return;
+
+      if (fresh) {
+        await settle(fresh);
+        if (cancelled) return;
+        setError(null);
+        await writeBecomingCache(memberId, fresh);
+        await markBecomingSeen();
+      } else if (cached) {
+        // Offline, or the API is down: the same-week cache, a day behind at worst.
+        await settle(cached);
+      } else {
+        setError(failure instanceof Error ? failure.message : "Failed to load journey");
       }
     }
 
@@ -114,21 +163,9 @@ export default function BecomingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [memberId, token]);
+  }, [memberId, token, initialWeekKey]);
 
-  const todayKey = data?.todayKey ?? null;
-  useEffect(() => {
-    if (!todayKey || introKind) return;
-    let cancelled = false;
-    void resolveIntroKind({ todayKey, initialWeekKey }).then((kind) => {
-      if (!cancelled) setIntroKind(kind);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [todayKey, initialWeekKey, introKind]);
-
-  const weeks: WeekSnapshot[] = useMemo(() => data?.weeks ?? [], [data?.weeks]);
+  const weeks: WeekSnapshot[] = useMemo(() => journey?.data.weeks ?? [], [journey]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -179,9 +216,11 @@ export default function BecomingScreen() {
     </View>
   );
 
-  if (loading && !data) return loadingView;
+  // Nothing settled yet: the fetch is out (a cache from an earlier day waits
+  // with it as the fallback), or it failed with nothing to fall back on.
+  if (!journey && !error) return loadingView;
 
-  if (error && !data) {
+  if (!journey) {
     return (
       <View
         style={[
@@ -207,7 +246,9 @@ export default function BecomingScreen() {
     );
   }
 
-  if (!data || weeks.length === 0) {
+  const { data, introKind } = journey;
+
+  if (weeks.length === 0) {
     return (
       <View
         style={[
@@ -236,10 +277,6 @@ export default function BecomingScreen() {
       </View>
     );
   }
-
-  // The opening is still being decided (a storage read and the Reduce Motion
-  // answer — a tick, in practice).
-  if (!introKind) return loadingView;
 
   return (
     <View style={styles.root} testID="becoming-screen">
