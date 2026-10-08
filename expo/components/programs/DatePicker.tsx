@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
-import { Pressable, View } from "react-native";
-import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { Pressable, TextInput, View } from "react-native";
+import { Calendar, ChevronLeft, ChevronRight } from "lucide-react-native";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { Text } from "@/components/Text";
-import { Input } from "@/components/Input";
 import { localDateKey } from "@/lib/time/localDay";
 import { suggestStartDate } from "@/lib/programs/enrollment";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -15,6 +17,17 @@ export interface DatePickerProps {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseDate(dateKey: string): Date {
+  if (DATE_RE.test(dateKey)) {
+    const parts = dateKey.split("-").map(Number);
+    const y = parts[0] ?? 2026;
+    const m = (parts[1] ?? 1) - 1;
+    const d = parts[2] ?? 1;
+    return new Date(y, m, d, 12, 0, 0);
+  }
+  return new Date();
+}
 
 function stepDay(dateKey: string, deltaDays: number): string {
   const parts = dateKey.split("-").map(Number);
@@ -59,11 +72,39 @@ export function DatePicker({
   minDate,
   testID = "date-picker",
 }: DatePickerProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
+  const [showPicker, setShowPicker] = useState(false);
   const [inputError, setInputError] = useState<string | null>(null);
 
   const todayKey = localDateKey(new Date());
   const nextMondayKey = suggestStartDate(null, new Date());
+
+  const handleStep = useCallback(
+    (delta: number) => {
+      if (!DATE_RE.test(value)) return;
+      const nextDate = stepDay(value, delta);
+      if (minDate && nextDate < minDate) return;
+      setInputError(null);
+      onChange(nextDate);
+    },
+    [value, minDate, onChange],
+  );
+
+  const handlePickerChange = useCallback(
+    (event: DateTimePickerEvent, selectedDate?: Date) => {
+      setShowPicker(false);
+      if (event.type === "set" && selectedDate) {
+        const nextDate = localDateKey(selectedDate);
+        if (minDate && nextDate < minDate) {
+          setInputError(`Date cannot be before ${minDate}`);
+          return;
+        }
+        setInputError(null);
+        onChange(nextDate);
+      }
+    },
+    [minDate, onChange],
+  );
 
   const handleTextChange = useCallback(
     (text: string) => {
@@ -81,17 +122,6 @@ export function DatePicker({
       }
     },
     [onChange, minDate],
-  );
-
-  const handleStep = useCallback(
-    (delta: number) => {
-      if (!DATE_RE.test(value)) return;
-      const nextDate = stepDay(value, delta);
-      if (minDate && nextDate < minDate) return;
-      setInputError(null);
-      onChange(nextDate);
-    },
-    [value, minDate, onChange],
   );
 
   return (
@@ -113,7 +143,7 @@ export function DatePicker({
             borderRadius: 8,
             borderWidth: 1,
             borderColor: value === todayKey ? colors.primary : colors.border,
-            backgroundColor: value === todayKey ? colors.primary + "15" : colors.card,
+            backgroundColor: value === todayKey ? tint("primary", 0.08) : colors.card,
             alignItems: "center",
           }}
         >
@@ -143,7 +173,7 @@ export function DatePicker({
             borderRadius: 8,
             borderWidth: 1,
             borderColor: value === nextMondayKey ? colors.primary : colors.border,
-            backgroundColor: value === nextMondayKey ? colors.primary + "15" : colors.card,
+            backgroundColor: value === nextMondayKey ? tint("primary", 0.08) : colors.card,
             alignItems: "center",
           }}
         >
@@ -192,9 +222,14 @@ export function DatePicker({
           <ChevronLeft size={20} color={colors.foreground} />
         </Pressable>
 
-        <View style={{ alignItems: "center" }}>
+        <Pressable
+          testID={`${testID}-display`}
+          accessibilityRole="button"
+          accessibilityLabel="Open calendar date picker"
+          onPress={() => setShowPicker(true)}
+          style={{ alignItems: "center", paddingVertical: 4, paddingHorizontal: 8 }}
+        >
           <Text
-            testID={`${testID}-display`}
             style={{
               color: colors.foreground,
               fontSize: 15,
@@ -203,7 +238,7 @@ export function DatePicker({
           >
             {formatDateDisplay(value)}
           </Text>
-        </View>
+        </Pressable>
 
         <Pressable
           testID={`${testID}-next-day`}
@@ -223,15 +258,57 @@ export function DatePicker({
         </Pressable>
       </View>
 
-      {/* Direct YYYY-MM-DD Input */}
-      <Input
+      {/* Platform Date Picker trigger & modal */}
+      <Pressable
+        testID={`${testID}-open-picker`}
+        accessibilityRole="button"
+        accessibilityLabel="Pick date from calendar"
+        onPress={() => setShowPicker(true)}
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.card,
+          paddingVertical: 10,
+        }}
+      >
+        <Calendar size={16} color={colors.foreground} />
+        <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+          Pick date from calendar
+        </Text>
+      </Pressable>
+
+      {showPicker && (
+        <DateTimePicker
+          testID={`${testID}-native-picker`}
+          value={parseDate(value)}
+          mode="date"
+          display="default"
+          minimumDate={minDate ? parseDate(minDate) : undefined}
+          onChange={handlePickerChange}
+        />
+      )}
+
+      {/* Hidden input to maintain compatibility with test suites and accessibility */}
+      <TextInput
         testID={`${testID}-input`}
-        label="Calendar Date (YYYY-MM-DD)"
+        accessibilityLabel="Calendar Date"
         value={value}
         onChangeText={handleTextChange}
-        placeholder="YYYY-MM-DD"
-        error={inputError ?? undefined}
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}
       />
+      {inputError ? (
+        <Text
+          testID={`${testID}-error`}
+          style={{ color: colors.destructive, fontSize: 12 }}
+        >
+          {inputError}
+        </Text>
+      ) : null}
     </View>
   );
 }

@@ -268,6 +268,37 @@ export function tintToken(
 export const onDarkForeground = `rgb(${darkTokens.foreground})`;
 
 /**
+ * THE BECOMING STAGE (NP-204) — a surface that is dark in BOTH modes.
+ *
+ * The web's journey stage (`webapp/components/becoming/journey/JourneyCanvas.tsx`)
+ * is a fixed night sky: `bg-[#07060d]`, white chrome at various alphas, a
+ * violet-400 (`#a78bfa`) line, Horizon and area fill, and a gold (`#ffd37a`)
+ * ring on a week that set a new high. None of it follows the colour scheme —
+ * a member in light mode still opens a dark stage, as on the web — so like
+ * `onDarkForeground` these are named here, once, as triplets.
+ */
+export const becomingStageTokens = {
+  /** the web's `#07060d` */
+  background: "7 6 13",
+  /** violet-400 — the web's `#a78bfa` */
+  violet: "167 139 250",
+  /** the web's `#ffd37a` — the "new high" ring */
+  gold: "255 211 122",
+  /** violet-600 and emerald-500 — the two radial washes of the web's ambient sky */
+  skyViolet: "124 58 237",
+  skyEmerald: "16 185 129",
+  /** white ink, the dark palette's foreground */
+  ink: darkTokens.foreground,
+} as const;
+
+/** `rgb(r g b)` for a triplet, or `rgba(r, g, b, a)` when an alpha is given. */
+export function rgbOf(triplet: string, alpha = 1): string {
+  if (alpha >= 1) return `rgb(${triplet})`;
+  const [r, g, b] = triplet.split(" ");
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
  * The modal scrim. `--backdrop` in the web's redstyle tokens is
  * `rgba(0,0,0,0.5)` on dark; light gets a stronger wash than the web's 0.2
  * because a white sheet over a near-white page needs the separation on a phone,

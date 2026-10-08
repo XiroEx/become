@@ -106,20 +106,20 @@ export const MOVE_CHIP: Record<string, string> = {
   breath: "Breathe",
   identity: "Affirm",
   win: "Win",
-  challenge: "Challenge",
-  mission: "Mission",
+  challenge: "Discipline",
+  mission: "Lock in",
   vision: "Vision",
-  antisabotage: "Anti-sabotage",
-  social: "Social",
+  antisabotage: "Pattern",
+  social: "Connect",
   mirror: "Mirror",
-  choice: "Choice",
+  choice: "Reflect",
   type: "Type it",
-  speak: "Speak",
-  assemble: "Assemble",
-  compose: "Compose",
-  acknowledge: "Acknowledge",
-  interrogative: "Ask",
-  contrast: "Contrast",
+  speak: "Say it",
+  assemble: "Build it",
+  compose: "Fill it in",
+  acknowledge: "Check in",
+  interrogative: "Reflect",
+  contrast: "Plan it",
 };
 
 /**
@@ -611,10 +611,10 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             {streak > 0 ? (
               <View
                 testID="mind-streak-badge"
-                className="flex-row items-center gap-1 rounded-full bg-primary/10 px-3 py-1"
+                className="flex-row items-center gap-1 rounded-full bg-accent/15 px-3 py-1"
               >
-                <Flame size={16} color={colors.primary} />
-                <Text className="text-sm font-bold text-primary">
+                <Flame size={16} color={colors.accent} />
+                <Text className="text-sm font-bold text-accent">
                   {streak}
                 </Text>
               </View>
@@ -876,9 +876,8 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
         {/* The Becoming — where you started, where you are, what's next, for
             all three pillars. Present in both the available and cooldown
             states (web parity: `webapp/components/mind/MindJourney.tsx:574-589`).
-            Native has no Becoming stage yet (NP-203/NP-204 decide that); this
-            opens the same screen `BecomingDoor` on the dashboard already
-            routes to. */}
+            Opens the same screen `BecomingDoor` on the dashboard routes to —
+            the journey stage (NP-204), with the details sheet over it. */}
         <Pressable
           testID="mind-becoming-link"
           accessibilityRole="button"

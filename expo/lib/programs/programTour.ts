@@ -6,7 +6,7 @@
  * `/dashboard/programs/new` auto-starts an 8-step onboarding tour (a centered
  * modal with dots, "Walk me through it" on step 1) that walks the three-step
  * builder before the member ever touches it. Native has no DOM to anchor a
- * spotlight overlay to (the interactive tour itself stays NP-164), but the
+ * spotlight overlay to (the interactive tour was decided in NP-164 and carded in NP-207), but the
  * COPY is not web-only content — reusing it here keeps the one button
  * native's empty state offers ("Walk me through it") doing what its name
  * says instead of skipping straight to the builder.

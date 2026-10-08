@@ -23,6 +23,7 @@ import {
 import { getToken } from '@/lib/clientAuth'
 import { isFallbackName } from '@/lib/displayName'
 import ConsentGate from '@/components/ConsentGate'
+import TrialOfferModal from '@/components/onboarding/TrialOfferModal'
 import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@become/core'
 import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
 import PacePicker from '@/components/goals/PacePicker'
@@ -253,6 +254,10 @@ export default function OnboardingPage() {
    *  "george8794" is how you get a member called george8794. */
   const [name, setName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Shown after the profile save lands, before the push to /dashboard — the
+  // one moment between onboarding and the dashboard's first-run tour the card
+  // asks for. See components/onboarding/TrialOfferModal.tsx.
+  const [showTrialOffer, setShowTrialOffer] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
   /** Once the member picks a calorie direction themselves we stop re-deriving
    *  it from the primary goal — their explicit choice wins. */
@@ -548,8 +553,21 @@ export default function OnboardingPage() {
     } catch {
       // Still navigate on error — don't block the user
     } finally {
-      router.push('/dashboard')
+      // The trial offer decides for itself whether it has anything honest to
+      // show (TrialOfferModal bails to onDismiss when it does not), so this
+      // always opens it rather than branching here — a second, divergent
+      // "should we ask" check here could disagree with the one the modal
+      // itself makes.
+      setIsSubmitting(false)
+      setShowTrialOffer(true)
     }
+  }
+
+  /** Either answer to the trial offer, or the offer deciding it had nothing
+   *  honest to show: all three land here, and the page has nothing left to do
+   *  but move on. */
+  function finishOnboarding() {
+    router.push('/dashboard')
   }
 
   // ── Loading / auth gate ──────────────────────────────────────────────────
@@ -568,6 +586,10 @@ export default function OnboardingPage() {
       {/* A member created by Google or a passkey has no agreement on record
           yet. Ask here, before a single health field is typed, not after. */}
       <ConsentGate />
+      {/* The trial offer, after the profile save and before /dashboard — see
+          components/onboarding/TrialOfferModal.tsx for why it is a separate
+          surface from the upgrade sheet and the plan page. */}
+      {showTrialOffer && <TrialOfferModal onDismiss={finishOnboarding} />}
       {/* Progress bar */}
       <div className="fixed top-0 left-0 right-0 z-20 h-1 bg-zinc-200 dark:bg-zinc-800">
         <motion.div
