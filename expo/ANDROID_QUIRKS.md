@@ -330,6 +330,73 @@ Files: `lib/widgets/androidWidgets.ts` (the table), `token.ts` (the hand-off),
 `components/widgets/WidgetsBridge.tsx` (mounted in `app/_layout.tsx`),
 `index.js` (the registration).
 
+## Screen transitions (NP-340)
+
+George, on his Pixel: "The screen sliding/changing is pretty weird in terms of
+animation. Just kinda jitters and shows a flash of white on the left edge of the
+screen." Two separate causes, and neither of them was a screen.
+
+**The white was React Navigation's DEFAULT theme.** expo-router's `ExpoRoot`
+renders a `NavigationContainer` whose `theme` defaults to `DefaultTheme` — the
+LIGHT one, `background: rgb(242, 242, 242)`, in BOTH colour schemes — and
+nothing in this app ever provided another. Two navigator surfaces are painted
+from that theme and from nothing else, so no amount of `contentStyle` reached
+them:
+
+- **native-stack's `ScreenStack` `nativeContainerStyle`** — the NATIVE view
+  behind the two sliding screens of a push or a back. That is the left-edge
+  flash, frame for frame.
+- **bottom-tabs' `elements/Background`** — the wrapper every tab scene renders
+  into, so a tab switch flashed the same near-white.
+
+`contentStyle` styles the screen's CONTENT view, one level inside the native
+container, which is why the app looked right standing still and wrong the moment
+anything moved. The fix is `lib/theme/navigationTheme.ts` +
+`<ThemeProvider value={navigationTheme}>` in `app/_layout.tsx`, above every
+navigator: one theme, built from the same tokens as every class and every
+`useThemeTokens()` style (NP-123), re-derived on a live flip of the system
+setting. `colors.card` is our `background` on purpose — React Navigation's
+`card` is the colour of the surfaces IT draws, and in this app those are either
+hidden (`headerShown: false` everywhere) or already overridden to the page
+colour (`tabBarStyle`). The tab navigator also sets
+`sceneStyle: { backgroundColor: colors.background }`, which is the view the
+navigator hands us, so the scene says it a second time.
+
+**The jitter was `presentation: "card"`'s default animation.** Every Stack left
+`animation` unset, and react-native-screens documents that default as varying
+"depending on the OS version and theme" on Android — on Android 15 it is the
+Material predictive-back transition, whose outgoing screen travels further than
+the incoming one covers (so it uncovers the container colour above) with a curve
+that matches nothing else in the app. `lib/navigation/screenAnimation.ts` names
+**one** value, `ios_from_right`, for every Stack:
+
+- on **Android** it is react-native-screens' own iOS-style push — the incoming
+  screen comes in from the right while the outgoing one parallaxes to -30%, so
+  the pair covers the whole frame for the entire transition;
+- on **iOS** it resolves to the platform default, which IS that push, so the
+  native feel and the native edge-swipe back are unchanged.
+
+`slide_from_right` was the other candidate: it leaves no gap either, but it is
+Android-only (it resolves to the default on iOS), so the two platforms would be
+animating differently for no stated reason.
+
+A tab switch stays a **cut** (`animation: "none"`, bottom-tabs' default, named
+out loud), and "Remove animations" / Reduce Motion turns the push into a cut too
+— `stackAnimation(reduced)` returns `"none"`, because React Native applies none
+of that setting for us (see below).
+
+The two plain containers above the router (`GestureHandlerRootView` and the
+banner `View`) were `{ flex: 1 }`, i.e. transparent onto the native window
+colour. The window IS themed (`useThemedWindowBackground()`), but asynchronously
+via `SystemUI.setBackgroundColorAsync`, so they carry the theme background
+themselves rather than depending on the order of two unrelated effects.
+
+Verified by `__tests__/card-NP-340-acceptance.test.tsx`, which renders the REAL
+route tree, pushes a detail screen inside the Workout tab, and reads
+`nativeContainerStyle`, the tab scene's style and every `RNSScreen`'s
+`stackAnimation` — in both modes, across a live flip, and with
+`AccessibilityInfo.isReduceMotionEnabled` mocked on.
+
 ## Accessibility (TalkBack, font size, Remove animations)
 
 The baseline and the device checklist live in `ACCESSIBILITY.md` (NP-124). The

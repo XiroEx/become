@@ -457,6 +457,7 @@ expo/
 │   │                         #   widgets-token hand-off, the feed read, the
 │   │                         #   cached day, the surfaces and the OS refresh
 │   ├── navigation/
+│   │   ├── screenAnimation.ts# THE push animation (NP-340) + Reduce Motion
 │   │   └── webPathToRoute.ts # THE web-path → native-route table (one per app)
 │   ├── offline/
 │   │   ├── connectivity.ts   # THE NetInfo state → "online" mapping (one per app)
@@ -467,6 +468,8 @@ expo/
 │       ├── colorScheme.ts    # followSystemColorScheme() — the system decides
 │       ├── fonts.ts          # The Geist faces + family × weight → one face
 │       ├── loadFonts.ts      # useGeistFonts() / holdSplashForFonts()
+│       ├── navigationTheme.ts# THE navigators' own theme (NP-340): the native
+│       │                     #   stack container + the tab scene background
 │       ├── tokens.ts         # Typed RGB-triplet map (light + dark) + tint/scrim
 │       └── useThemeTokens.ts # THE hook: colours for everything Tailwind can't reach
 ├── components/
@@ -525,7 +528,20 @@ See the plan doc for full sequencing.
   of the screen rather than wrap.
 - **Anything that animates asks `useReducedMotion()` first** — moti and
   Reanimated do not consult the system setting, and the suite fails the build on
-  a file that imports either without it.
+  a file that imports either without it. A navigator transition is motion too:
+  `lib/navigation/screenAnimation.ts` returns `"none"` when the setting is on.
+- **The navigators have a theme of their own, and it is not `contentStyle`** —
+  expo-router's `NavigationContainer` defaults to React Navigation's LIGHT
+  `DefaultTheme` in both colour schemes, and two surfaces are painted from it
+  alone: native-stack's `nativeContainerStyle` (the view behind a sliding push,
+  which is the white flash NP-340 fixed) and bottom-tabs' scene `Background`.
+  `app/_layout.tsx` provides `lib/theme/navigationTheme.ts` above every
+  navigator; a new navigator inherits it and needs nothing. See
+  [`ANDROID_QUIRKS.md`](./ANDROID_QUIRKS.md) → Screen transitions.
+- **Every Stack names ONE push animation** — `presentation: "card"`'s default
+  "varies depending on the OS version and theme" on Android, which is what
+  jittered on Android 15. `PUSH_ANIMATION` (`ios_from_right`) is the app's
+  answer for both platforms; a tab switch stays a cut.
 - **No black-translucent statusBarStyle** — per [[feedback_black_translucent]] memory.
 - **Tailwind v3, not v4** — NativeWind 4 doesn't support v4 yet.
 - **`lucide-react-native` is mapped to its CJS build in the Jest config** — the

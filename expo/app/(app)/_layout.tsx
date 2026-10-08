@@ -8,6 +8,7 @@ import { PushSyncBridge } from "@/components/push/PushSyncBridge";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useStackAnimation } from "@/lib/navigation/screenAnimation";
 
 /**
  * THE GUARDED GROUP. Everything a signed-in member sees is below this file.
@@ -37,6 +38,10 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  */
 export default function AppGroupLayout() {
   const { colors } = useThemeTokens();
+  // The same explicit push as every other Stack in the app, and a cut under
+  // reduced motion (NP-340, `lib/navigation/screenAnimation.ts`). Settings,
+  // Plan, Becoming and Progress push over the tabs from here.
+  const animation = useStackAnimation();
   const router = useRouter();
   const { isAuthed, loading, user } = useAuth();
 
@@ -78,6 +83,7 @@ export default function AppGroupLayout() {
             screenOptions={{
               headerShown: false,
               contentStyle: { backgroundColor: colors.background },
+              animation,
             }}
           >
             <Stack.Screen name="(tabs)" />
