@@ -162,16 +162,19 @@ describe("The Becoming opens from Home (NP-254)", () => {
     );
   });
 
-  it("renders the story (header, week card) instead of the invalid-URL error", async () => {
+  it("renders the stage (chrome, week card) instead of the invalid-URL error", async () => {
     mockApiFetch.mockResolvedValue(MOCK_JOURNEY);
 
-    const { getByText, queryByText, getByTestId } = renderScreen();
+    const { getAllByText, queryByText, getByTestId } = renderScreen();
 
     await waitFor(() => {
       expect(getByTestId("week-card-2026-09-27")).toBeTruthy();
     });
 
-    expect(getByText("The Becoming")).toBeTruthy();
+    // The stage's top chrome says it, and so does the opening's title while
+    // it plays (NP-204) — at least one, never none.
+    expect(getAllByText("The Becoming").length).toBeGreaterThan(0);
+    expect(getByTestId("journey-stage")).toBeTruthy();
     expect(queryByText("Couldn't load your Becoming")).toBeNull();
     expect(queryByText(/Invalid URL/)).toBeNull();
   });

@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  View,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+// The Becoming — the page (NP-192, NP-204).
+//
+// Loads the journey (every week, scored and placed, from `/api/becoming/journey`
+// through the same authenticated client as every other screen — NP-254), paints
+// it from the same-week cache first, and hands it to the STAGE: the web's
+// `JourneyCanvas`, natively (`components/becoming/journey/JourneyStage.tsx`).
+// The details sheet opens over the stage from a card's Details button and can
+// fly the stage to a week from its Story screen.
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { View, StyleSheet, Pressable, ActivityIndicator } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import { Text } from "@/components/Text";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChevronLeft, BookOpen } from "lucide-react-native";
 import {
   apiFetch,
   BecomingJourneyResponseSchema,
@@ -23,13 +26,12 @@ import {
   writeBecomingCache,
   markBecomingSeen,
   sameWeek,
+  resolveIntroKind,
 } from "@/lib/becoming/storage";
-import { journeySignals } from "@/lib/becoming/signals";
-import { peakIndexes } from "@/lib/becoming/weekSummary";
 import type { WeekSnapshot, JourneyPayload } from "@/lib/becoming/types";
-import { WeekCard, HorizonCard } from "@/components/becoming/WeekCard";
+import type { IntroKind } from "@/lib/becoming/stage";
+import { JourneyStage, type JourneyStageHandle } from "@/components/becoming/journey/JourneyStage";
 import { BecomingDetails } from "@/components/becoming/BecomingDetails";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export default function BecomingScreen() {
@@ -45,14 +47,18 @@ export default function BecomingScreen() {
         ? (user as { _id?: string })._id!
         : null;
 
-  const { colors, tint, isDark } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
 
   const [data, setData] = useState<JourneyPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState(false);
-
-  const flatListRef = useRef<FlatList<WeekSnapshot>>(null);
+  // Which opening the stage plays. Decided ONCE, when the journey is first on
+  // hand, from Reduce Motion, the deep link and what this member has seen —
+  // `lib/becoming/storage.ts#resolveIntroKind`. Null until then: the stage is
+  // not mounted with a guess that the real answer would then cut short.
+  const [introKind, setIntroKind] = useState<IntroKind | null>(null);
+  const stageRef = useRef<JourneyStageHandle>(null);
 
   // 1. Instant paint from same-week cache (<2s on mid-range phone for 1 year of history)
   useEffect(() => {
@@ -100,95 +106,70 @@ export default function BecomingScreen() {
     };
   }, [memberId, token]);
 
+  const todayKey = data?.todayKey ?? null;
+  useEffect(() => {
+    if (!todayKey || introKind) return;
+    let cancelled = false;
+    void resolveIntroKind({ todayKey, initialWeekKey }).then((kind) => {
+      if (!cancelled) setIntroKind(kind);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [todayKey, initialWeekKey, introKind]);
+
   const weeks: WeekSnapshot[] = useMemo(() => data?.weeks ?? [], [data?.weeks]);
 
-  // Compute signals
-  const signals = useMemo(
-    () =>
-      journeySignals(weeks, {
-        unit: data?.unit,
-        direction: data?.target?.direction,
-      }),
-    [weeks, data?.unit, data?.target?.direction],
-  );
-
-  const peaks = useMemo(() => peakIndexes(weeks), [weeks]);
-
-  // Determine which week to focus / open on
-  const thisWeekIndex = useMemo(() => {
-    if (weeks.length === 0) return 0;
-    if (initialWeekKey) {
-      const idx = weeks.findIndex((w: WeekSnapshot) => w.weekKey === initialWeekKey);
-      if (idx >= 0) return idx;
-    }
-    const currentIdx = weeks.findIndex((w: WeekSnapshot) => w.isCurrent);
-    if (currentIdx >= 0) return currentIdx;
-    return weeks.length - 1;
-  }, [weeks, initialWeekKey]);
-
-  useEffect(() => {
-    if (weeks.length > 0 && thisWeekIndex >= 0) {
-      const timer = setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: thisWeekIndex,
-          animated: false,
-        });
-      }, 50);
-      return () => clearTimeout(timer);
-    }
-  }, [weeks.length, thisWeekIndex]);
-
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
     } else {
       router.push("/(tabs)/mind" as never);
     }
-  };
+  }, [router]);
 
-  const handleNavigate = (url: string) => {
-    const target = resolveWebPath(url);
-    if (target.kind === "native") {
-      router.push(target.href as never);
-    }
-  };
+  const handleNavigate = useCallback(
+    (url: string) => {
+      const target = resolveWebPath(url);
+      if (target.kind === "native") {
+        router.push(target.href as never);
+      }
+    },
+    [router],
+  );
 
+  const openDetails = useCallback(() => setDetailsOpen(true), []);
+
+  // The details Story screen asks for a week: close the sheet, fly the stage.
   const jumpToWeek = (weekKey: string) => {
     const idx = weeks.findIndex((w) => w.weekKey === weekKey);
-    if (idx >= 0) {
-      setDetailsOpen(false);
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: idx,
-          animated: true,
-          viewPosition: 0.1,
-        });
-      }, 100);
-    }
+    if (idx < 0) return;
+    setDetailsOpen(false);
+    setTimeout(() => stageRef.current?.focusOn(idx), 100);
   };
 
-  if (loading && !data) {
-    return (
-      <View
-        style={[
-          styles.centerContainer,
-          {
-            backgroundColor: colors.background,
-            paddingTop: insets.top,
-            paddingBottom: insets.bottom,
-          },
-        ]}
-        testID="journey-loading"
-      >
-        <Text style={[styles.kicker, { color: colors["muted-foreground"] }]}>The Becoming</Text>
-        <ActivityIndicator
-          size="large"
-          color={isDark ? "hsl(258, 90%, 75%)" : "hsl(258, 90%, 55%)"}
-          style={{ marginTop: 24 }}
-        />
-      </View>
-    );
-  }
+  const loadingView = (
+    <View
+      style={[
+        styles.centerContainer,
+        {
+          backgroundColor: colors.background,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        },
+      ]}
+      testID="journey-loading"
+    >
+      <Text style={[styles.kicker, { color: colors["muted-foreground"] }]}>The Becoming</Text>
+      <ActivityIndicator
+        size="large"
+        color={isDark ? "hsl(258, 90%, 75%)" : "hsl(258, 90%, 55%)"}
+        style={{ marginTop: 24 }}
+      />
+    </View>
+  );
+
+  if (loading && !data) return loadingView;
 
   if (error && !data) {
     return (
@@ -216,7 +197,7 @@ export default function BecomingScreen() {
     );
   }
 
-  if (weeks.length === 0) {
+  if (!data || weeks.length === 0) {
     return (
       <View
         style={[
@@ -246,109 +227,23 @@ export default function BecomingScreen() {
     );
   }
 
-  return (
-    <View
-      style={[
-        styles.root,
-        {
-          backgroundColor: colors.background,
-          paddingTop: Math.max(insets.top, 8),
-        },
-      ]}
-    >
-      {/* Top Header */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable
-          style={[minTouchTarget, styles.backBtn, { backgroundColor: tint("muted", 0.5) }]}
-          onPress={handleBack}
-          accessibilityLabel="Back to dashboard"
-          accessibilityRole="button"
-        >
-          <ChevronLeft size={24} color={colors.foreground} />
-        </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={[styles.headerKicker, { color: colors.foreground }]}>The Becoming</Text>
-          <Text style={[styles.headerSub, { color: colors["muted-foreground"] }]}>Then → now → next</Text>
-        </View>
-        <Pressable
-          style={[
-            minTouchTarget,
-            styles.headerDetailsBtn,
-            {
-              backgroundColor: isDark
-                ? "hsla(258, 80%, 70%, 0.18)"
-                : "hsla(258, 80%, 50%, 0.1)",
-            },
-          ]}
-          onPress={() => setDetailsOpen(true)}
-          accessibilityLabel="Open details"
-          accessibilityRole="button"
-          testID="header-details-btn"
-        >
-          <BookOpen
-            size={16}
-            color={isDark ? "hsl(258, 90%, 80%)" : "hsl(258, 90%, 45%)"}
-          />
-          <Text
-            style={[
-              styles.headerDetailsText,
-              { color: isDark ? "hsl(258, 90%, 80%)" : "hsl(258, 90%, 45%)" },
-            ]}
-          >
-            Details
-          </Text>
-        </Pressable>
-      </View>
+  // The opening is still being decided (a storage read and the Reduce Motion
+  // answer — a tick, in practice).
+  if (!introKind) return loadingView;
 
-      {/* Windowed vertical list of week cards opening on this week */}
-      <FlatList
-        ref={flatListRef}
-        data={weeks}
-        keyExtractor={(item) => item.weekKey}
-        renderItem={({ item, index }) => (
-          <WeekCard
-            week={item}
-            signals={signals[index] ?? { active: [], highlights: [], nudge: null, hasDeltas: false }}
-            totalWeeks={weeks.length}
-            identity={data?.identity ?? null}
-            next={item.isCurrent ? (data?.next ?? null) : null}
-            isPeak={peaks.has(index)}
-            onDetails={() => setDetailsOpen(true)}
-            onNavigate={handleNavigate}
-          />
-        )}
-        ListFooterComponent={
-          <HorizonCard
-            identity={data?.identity ?? null}
-            trend={
-              weeks[weeks.length - 1]?.step === "up"
-                ? "up"
-                : weeks[weeks.length - 1]?.step === "down"
-                  ? "down"
-                  : "flat"
-            }
-            next={data?.next ?? null}
-            active={signals[signals.length - 1]?.active ?? ["training", "fuel", "mind"]}
-            onNavigate={handleNavigate}
-          />
-        }
-        initialScrollIndex={thisWeekIndex}
-        onScrollToIndexFailed={(info) => {
-          setTimeout(() => {
-            flatListRef.current?.scrollToIndex({
-              index: info.index,
-              animated: false,
-            });
-          }, 100);
-        }}
-        windowSize={5}
-        maxToRenderPerBatch={3}
-        initialNumToRender={Math.max(weeks.length + 1, 10)}
-        removeClippedSubviews={false}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: Math.max(insets.bottom, 24) + 16 },
-        ]}
+  return (
+    <View style={styles.root} testID="becoming-screen">
+      {/* The stage is a night sky in both colour schemes, like the web's. */}
+      <StatusBar style="light" />
+      <JourneyStage
+        ref={stageRef}
+        data={data}
+        introKind={introKind}
+        onClose={handleBack}
+        onDetails={openDetails}
+        onNavigate={handleNavigate}
+        initialWeekKey={initialWeekKey}
+        inert={detailsOpen}
       />
 
       {/* Details Sheet */}
@@ -356,12 +251,12 @@ export default function BecomingScreen() {
         open={detailsOpen}
         onClose={() => setDetailsOpen(false)}
         weeks={weeks}
-        weighIns={data?.weights}
-        todayKey={data?.todayKey}
-        unit={data?.unit}
-        identity={data?.identity}
-        chapter={data?.chapter}
-        becomingScore={data?.becomingScore}
+        weighIns={data.weights}
+        todayKey={data.todayKey}
+        unit={data.unit}
+        identity={data.identity}
+        chapter={data.chapter}
+        becomingScore={data.becomingScore}
         token={token}
         onJumpToWeek={jumpToWeek}
         onNavigate={handleNavigate}
@@ -373,48 +268,6 @@ export default function BecomingScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitleWrap: {
-    alignItems: "center",
-  },
-  headerKicker: {
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-  headerSub: {
-    fontSize: 10,
-  },
-  headerDetailsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  headerDetailsText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
   },
   centerContainer: {
     flex: 1,

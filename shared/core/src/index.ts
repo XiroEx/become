@@ -14,6 +14,9 @@
  *     module-for-module from webapp/lib (NP-058). See ./training/index.ts —
  *     the copies are never edited here, and a web-side drift test fails until
  *     a web change is re-copied.
+ *   - becoming/layout: the web's spatial layout of The Becoming stage, a copy
+ *     of webapp/lib/becoming/layout.ts held in lockstep the same way (NP-204)
+ *     so a week sits in the same place on both clients.
  *   - units: food units, conversion, bridges, formatting
  *   - foodMath: variant-aware nutrition scaling
  *   - mealPlanTimes: default tag times and clock helpers
@@ -50,6 +53,7 @@ export * from './legal/deleteAccount'
 export * from './planCopy'
 export * from './accountDeletion'
 export * from './training/index'
+export * from './becoming/layout'
 export * from './units'
 export * from './foodMath'
 export * from './mealPlanTimes'
