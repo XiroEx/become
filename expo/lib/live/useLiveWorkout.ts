@@ -957,7 +957,7 @@ export function useLiveWorkout(
           return {
             slug,
             name: ex.name ?? ex.exerciseSlug ?? "Exercise",
-            sets: ex.sets ?? 1,
+            sets: ex.sets || 3,
             repsLabel: ex.reps,
             notes: ex.details,
             trackingType: ex.trackingType ?? undefined,
@@ -1086,7 +1086,7 @@ export function useLiveWorkout(
             return {
               slug: exSlug,
               name: m.name,
-              sets: m.sets ?? 1,
+              sets: m.sets || 3,
               repsLabel: m.reps ?? existing?.repsLabel,
               notes: m.details ?? existing?.notes,
               trackingType: m.trackingType ?? existing?.trackingType,
@@ -1276,7 +1276,7 @@ export function useLiveWorkout(
           // Fresh workout: start blank sets (last performance is reference only)
           const blankGrid: LiveGrid = {};
           currentExercises.forEach((ex) => {
-            blankGrid[ex.slug] = Array.from({ length: ex.sets || 1 }, () => ({
+            blankGrid[ex.slug] = Array.from({ length: ex.sets || 3 }, () => ({
               reps: null,
               weight: null,
               durationSec: null,
@@ -1297,7 +1297,7 @@ export function useLiveWorkout(
         if (hist) {
           return {
             ...ex,
-            prefill: Array.from({ length: ex.sets }, () => ({
+            prefill: Array.from({ length: ex.sets || 3 }, () => ({
               weight: hist.weight ?? null,
               reps: hist.reps ?? null,
               durationSec: hist.duration ?? null,

@@ -430,7 +430,7 @@ describe("DashboardRoute navigation", () => {
     // `/live` segment is what lands on Track/Live rather than the read-only
     // overview (NP-256).
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/p1/workout/2/live?phase=1",
+      "/(tabs)/programming/p1/workout/2/live?phase=1&day=Day%203",
     );
   });
 

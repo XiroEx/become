@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { View, Pressable } from "react-native";
+import { View, Pressable, ScrollView } from "react-native";
 import { Text } from "@/components/Text";
-import { Check } from "lucide-react-native";
+import { Check, ChevronsRight } from "lucide-react-native";
 import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
@@ -15,6 +15,7 @@ import {
   tracksTime,
   unitDisplayToSeconds,
   weightQuickPicks,
+  type BellStyle,
   type BellWeightInfo,
   type DurationUnit,
 } from "@become/core";
@@ -111,6 +112,13 @@ export interface LiveSetRowProps {
    * Track keeps its checkbox: that is where a set is ticked by hand.
    */
   hideComplete?: boolean;
+  /** Compact single-row layout for superset/circuit rounds (NP-332). */
+  compact?: boolean;
+  /** Target reps prescription string (e.g. "10-12" or "10") for placeholder prefill. */
+  targetReps?: string | number | null;
+  /** Target duration prescription string (e.g. "30s" or "30") for placeholder prefill. */
+  targetDuration?: string | number | null;
+  onSkip?: () => void;
   onChange: (next: LiveSetState) => void;
   testID?: string;
 }
@@ -120,6 +128,15 @@ function parseNum(text: string): number | null {
   if (text === "") return null;
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getWeightLabel(style: BellStyle | null, compact?: boolean): string {
+  if (compact) {
+    if (style === "dumbbell") return "lbs/DB";
+    if (style === "kettlebell") return "lbs/KB";
+    return "lbs";
+  }
+  return bellWeightLabel(style);
 }
 
 export function LiveSetRow({
@@ -133,6 +150,10 @@ export function LiveSetRow({
   trackingType,
   roundLabel,
   hideComplete = false,
+  compact = false,
+  targetReps,
+  targetDuration,
+  onSkip,
   onChange,
   testID,
 }: LiveSetRowProps) {
@@ -200,7 +221,7 @@ export function LiveSetRow({
         <View style={{ flex: 1 }}>
           <Input
             testID={`${tid}-weight`}
-            label={bellWeightLabel(bell.style)}
+            label={getWeightLabel(bell.style, compact)}
             keyboardType="decimal-pad"
             value={state.weight !== null ? String(state.weight) : ""}
             onChangeText={(text) =>
@@ -212,7 +233,7 @@ export function LiveSetRow({
                 : "0"
             }
           />
-          {helper ? (
+          {!compact && helper ? (
             <Text
               testID={`${tid}-helper`}
               className="text-muted-foreground text-xs mt-1"
@@ -220,7 +241,7 @@ export function LiveSetRow({
               {helper}
             </Text>
           ) : null}
-          {assumptionLabel ? (
+          {!compact && assumptionLabel ? (
             <Text
               testID={`${tid}-assumption`}
               className="text-muted-foreground text-xs mt-1"
@@ -231,25 +252,52 @@ export function LiveSetRow({
           {quickPicks.length > 0 ? (
             <View
               testID={`${tid}-quick-picks`}
-              style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }}
+              style={
+                compact
+                  ? { marginTop: 4 }
+                  : { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }
+              }
             >
-              {quickPicks.map((pick) => (
-                <Pressable
-                  key={pick}
-                  testID={`${tid}-quick-pick-${pick}`}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Log ${pick} pounds`}
-                  onPress={() => onChange({ ...state, weight: pick })}
-                  className="rounded-full bg-muted px-3 py-1.5"
+              {compact ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ flexDirection: "row", gap: 4 }}
                 >
-                  <Text className="text-muted-foreground text-xs font-semibold">
-                    {String(pick)}
-                  </Text>
-                </Pressable>
-              ))}
+                  {quickPicks.map((pick) => (
+                    <Pressable
+                      key={pick}
+                      testID={`${tid}-quick-pick-${pick}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Log ${pick} pounds`}
+                      onPress={() => onChange({ ...state, weight: pick })}
+                      className="rounded-full bg-muted px-2.5 py-1"
+                    >
+                      <Text className="text-muted-foreground text-xs font-semibold">
+                        {String(pick)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : (
+                quickPicks.map((pick) => (
+                  <Pressable
+                    key={pick}
+                    testID={`${tid}-quick-pick-${pick}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Log ${pick} pounds`}
+                    onPress={() => onChange({ ...state, weight: pick })}
+                    className="rounded-full bg-muted px-3 py-1.5"
+                  >
+                    <Text className="text-muted-foreground text-xs font-semibold">
+                      {String(pick)}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
             </View>
           ) : null}
-          {prefill ? (
+          {!compact && prefill ? (
             <Text
               testID={`${tid}-prefill`}
               className="text-muted-foreground text-xs mt-1"
@@ -270,7 +318,9 @@ export function LiveSetRow({
             placeholder={
               prefill?.reps !== null && prefill?.reps !== undefined
                 ? String(prefill.reps)
-                : "0"
+                : targetReps != null
+                  ? String(targetReps).split("-")[0]?.replace(/[^0-9]/g, "") || "0"
+                  : "0"
             }
           />
         </View>
@@ -318,7 +368,9 @@ export function LiveSetRow({
             placeholder={
               prefill?.durationSec != null
                 ? secondsToUnitDisplay(prefill.durationSec, durationUnit)
-                : "0"
+                : targetDuration != null
+                  ? String(targetDuration).replace(/[^0-9]/g, "") || "30"
+                  : "0"
             }
           />
         </View>
@@ -363,6 +415,31 @@ export function LiveSetRow({
           />
         </View>
       ) : null}
+      {compact && !state.completed && !state.weight && !state.reps && !state.durationSec && !state.distance && !state.speed ? (
+        <Pressable
+          testID={`${tid}-skip`}
+          accessibilityRole="button"
+          accessibilityLabel={`Skip set ${setIndex + 1}`}
+          onPress={() => {
+            if (onSkip) {
+              onSkip();
+            } else {
+              onChange({
+                ...state,
+                reps: null,
+                weight: null,
+                durationSec: null,
+                distance: null,
+                speed: null,
+                completed: true,
+              });
+            }
+          }}
+          className="w-9 h-9 rounded-lg border border-border items-center justify-center bg-card"
+        >
+          <ChevronsRight size={16} color={colors["muted-foreground"]} />
+        </Pressable>
+      ) : null}
       {hideComplete ? null : (
         <Pressable
           testID={`${tid}-complete`}
@@ -370,9 +447,17 @@ export function LiveSetRow({
           accessibilityRole="checkbox"
           accessibilityState={{ checked: state.completed }}
           accessibilityLabel={`Mark set ${setIndex + 1} ${state.completed ? "incomplete" : "complete"}`}
-          className={`w-10 h-10 rounded-full items-center justify-center ${
-            state.completed ? "bg-primary" : "bg-muted"
-          }`}
+          className={
+            compact
+              ? `w-9 h-9 rounded-lg items-center justify-center border ${
+                  state.completed
+                    ? "bg-success border-success"
+                    : "bg-card border-border"
+                }`
+              : `w-10 h-10 rounded-full items-center justify-center ${
+                  state.completed ? "bg-primary" : "bg-muted"
+                }`
+          }
         >
           <Check
             color={
@@ -380,8 +465,8 @@ export function LiveSetRow({
                 ? colors["primary-foreground"]
                 : colors["muted-foreground"]
             }
-            size={20}
-            strokeWidth={1.5}
+            size={compact ? 18 : 20}
+            strokeWidth={compact ? 2 : 1.5}
           />
         </Pressable>
       )}

@@ -280,9 +280,11 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
     programId: "p",
     workoutTitle: "Circuit Day",
     exercises: [
-      { slug: "a", name: "A", sets: 1, groupId: "g1", groupLabel: "Superset 1", notes: "go slow" },
+      { slug: "a", name: "A", sets: 1, groupId: "g1", groupLabel: "Superset 1" },
       { slug: "b", name: "B", sets: 1, groupId: "g1", groupLabel: "Superset 1" },
-      { slug: "c", name: "C", sets: 1 },
+      // Notes show on a solo exercise; a grouped block draws rounds only, like
+      // the web's grouped Track (NP-332).
+      { slug: "c", name: "C", sets: 1, notes: "go slow" },
     ],
   };
 
@@ -301,7 +303,7 @@ describe("LiveWorkoutClient — swap / notes / groups / rest", () => {
 
   it("renders per-exercise notes", () => {
     const { getByTestId } = render(<LiveWorkoutClient workout={grouped} />);
-    expect(getByTestId("live-workout-a-notes").props.children).toBe("go slow");
+    expect(getByTestId("live-workout-c-notes").props.children).toBe("go slow");
   });
 
   it("fires onRequestSwap with the slug when Swap is tapped", () => {

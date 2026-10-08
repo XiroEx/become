@@ -28,6 +28,8 @@ export interface NativeShareButtonProps {
   onError?: (message: string) => void;
   /** Fires with the absolute public URL after the sheet opens. */
   onShared?: (url: string) => void;
+  /** Render as a round icon button with no text label (web header parity). */
+  iconOnly?: boolean;
   testID?: string;
 }
 
@@ -37,6 +39,7 @@ export function NativeShareButton({
   visible = true,
   onError,
   onShared,
+  iconOnly = false,
   testID = "share-button",
 }: NativeShareButtonProps) {
   const { colors } = useThemeTokens();
@@ -74,27 +77,41 @@ export function NativeShareButton({
         accessibilityState={{ busy: sharing }}
         onPress={() => void onPress()}
         disabled={sharing}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 6,
-          borderRadius: 999,
-          paddingHorizontal: 12,
-          paddingVertical: 6,
-          backgroundColor: colors.card,
-          borderWidth: 1,
-          borderColor: colors.border,
-          opacity: sharing ? 0.6 : 1,
-        }}
+        style={
+          iconOnly
+            ? {
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: colors.muted,
+                opacity: sharing ? 0.6 : 1,
+              }
+            : {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: sharing ? 0.6 : 1,
+              }
+        }
       >
         {sharing ? (
           <ActivityIndicator size="small" color={colors.foreground} />
         ) : (
           <Share2 size={16} color={colors.foreground} />
         )}
-        <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
-          {sharing ? "Sharing…" : "Share"}
-        </Text>
+        {!iconOnly ? (
+          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+            {sharing ? "Sharing…" : "Share"}
+          </Text>
+        ) : null}
       </Pressable>
       {error ? (
         <Text
