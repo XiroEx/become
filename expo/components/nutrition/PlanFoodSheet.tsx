@@ -1,24 +1,35 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
   TextInput,
   View,
 } from "react-native";
+import { ChevronDown } from "lucide-react-native";
 import {
   apiFetch as defaultApiFetch,
   type apiFetch as ApiFetchType,
 } from "@become/api-client";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Text } from "@/components/Text";
+import type { QuantityPickerFood } from "@/components/nutrition/QuantityPicker";
 import {
-  QuantityPicker,
-  type QuantityPickerFood,
-  type QuantityPickerSelection,
-} from "@/components/nutrition/QuantityPicker";
+  buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
+  variantForServingChoice,
+} from "@/lib/nutrition/servingOptions";
+import {
+  nutritionForQuantity,
+  type FoodMacros,
+} from "@/lib/nutrition/foodMath";
 import { buildMealItemPayload } from "@/lib/nutrition/mealLogActions";
+import {
+  importExternalIfNeeded,
+  parseExternalFoodId,
+} from "@/lib/nutrition/foodImport";
 import {
   MAX_REPEAT_COUNT_BY_DAY,
   MAX_REPEAT_COUNT_BY_WEEK,
@@ -31,34 +42,18 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
- * ─── Plan a food natively, plan-mode tail (NP-230) ──────────────────────────
+ * ─── Plan a food natively, plan-mode tail (NP-230, NP-267, NP-326) ──────────
  *
- * The native plan-mode tail of the web's `FoodSearchModal`
- * (`webapp/components/nutrition/FoodSearchModal.tsx`): pick a portion and a
- * tag, optionally repeat every day/week, and file it with `createMealPlan`.
- *
- * - `QuantityPicker` owns portion/variant/unit with its time/date controls
- *   hidden (`showLogControls={false}` — plan mode never picks a clock time,
- *   `FoodSearchModal.tsx:1167`, `!isPlanMode`); the sheet owns the tag chips.
- * - Repeat mirrors the web's disclosure (state 434-436, UI 2398-2440):
- *   closed by default, `week x 6` when opened, clamped to 30 by day and 52
- *   by week, and sent only when open with count > 1 (1179-1180).
- * - CTA reads `Plan <Tag>` — `Plan <Tag> ×N` while a recurrence is open with
- *   a count > 1, like the web (2478-2484) — and `Planning...` while
- *   submitting. A 409
- *   `plan_exists` retries once with `mode: 'merge'` (the web's default
- *   outcome); `onPlanned` receives the toast text (`planResultToast`).
- *
- * Not mounted anywhere yet — NP-231 and NP-232 mount it.
- *
- * NP-267: the header now reads the web's own `Plan` / `Adding to <Tag>`
- * (`FoodSearchModal.tsx:1413-1414`, `:1448-1449`) instead of `Plan
- * <food.name>` over a raw `Planning for <date>` line, and the meal-time chips
- * are the member's OWN tags (`/api/tags` defaults ∪ userTags) instead of a
- * hardcoded four — a Pre-Workout/Post-Workout or custom tag used to be
- * impossible to plan into from this sheet even though the day screen offers
- * it. `plan-food-sheet-date` stays mounted (smaller, secondary) so the older
- * NP-146/NP-232 acceptance tests pinning its date text keep passing.
+ * The native plan-mode tail of the web's `FoodSearchModal`:
+ * - Compact picker fields matching the web: amount input + unit dropdown,
+ *   serving caption (e.g. `170 g each`), compact `cal + P/C/F`, and recurrence.
+ *   Replaces the legacy stepper form (`- 1 +`), Serving Unit chips, and bulky
+ *   Nutrition Preview card.
+ * - The raw `Planning for <date>` line is visually hidden (kept in tree for
+ *   acceptance tests).
+ * - Instant opening without modal slide hop (`animationType="none"`).
+ * - Defer external food import to plan submission time (showing `Planning…`),
+ *   avoiding the 5-second tap dimming in search.
  */
 
 export interface PlanFoodSheetProps {
@@ -94,13 +89,138 @@ export function PlanFoodSheet({
   onPlanned,
   apiFetch = defaultApiFetch,
 }: PlanFoodSheetProps) {
-  const { colors } = useThemeTokens();
+  const { colors, scrim } = useThemeTokens();
   const { token } = useAuth();
 
-  // The member's own meal-time choices — `/api/tags` defaults ∪ userTags,
-  // de-duped and lower-cased — falling back to the standard four when the
-  // caller has not wired `/api/tags` up yet (NP-230's own acceptance tests
-  // render the sheet standalone with no `availableTags` at all).
+  // Resolved list of variants
+  const resolvedVariants = useMemo(() => {
+    if (food?.variants && food.variants.length > 0) return food.variants;
+    if (food && food.servingSize && food.servingUnit && food.nutrition) {
+      return [
+        {
+          _id: (food._id ?? food.id) ? `${food._id ?? food.id}-var-default` : "default",
+          name: "Default",
+          servingSize: food.servingSize,
+          servingUnit: food.servingUnit,
+          nutrition: food.nutrition,
+          gramsPerServing: food.gramsPerServing,
+          mlPerServing: food.mlPerServing,
+        },
+      ];
+    }
+    return [];
+  }, [food]);
+
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState<number>(() => {
+    if (resolvedVariants.length === 0) return 0;
+    const defaultIdx = resolvedVariants.findIndex((v) => v.isDefault === true);
+    return defaultIdx >= 0 ? defaultIdx : 0;
+  });
+
+  const activeVariant = resolvedVariants[selectedVariantIdx] ?? resolvedVariants[0];
+
+  // Serving choice groups for active variant
+  const choiceGroups = useMemo(() => {
+    if (!activeVariant) return { servings: [], weight: [], volume: [] };
+    try {
+      return buildServingChoiceGroups(activeVariant);
+    } catch {
+      return { servings: [], weight: [], volume: [] };
+    }
+  }, [activeVariant]);
+
+  const allChoices = useMemo(() => {
+    return [
+      ...choiceGroups.servings,
+      ...choiceGroups.weight,
+      ...choiceGroups.volume,
+    ];
+  }, [choiceGroups]);
+
+  // User-selected choice override (if any). Keyed to active variant.
+  const [userChoice, setUserChoice] = useState<{ variantId: string; choiceId: string } | null>(null);
+
+  const defaultChoice = useMemo(() => {
+    return (
+      choiceGroups.servings[0] ??
+      choiceGroups.weight[0] ??
+      choiceGroups.volume[0] ??
+      allChoices[0] ??
+      null
+    );
+  }, [choiceGroups, allChoices]);
+
+  const activeVariantId = String(activeVariant?._id ?? activeVariant?.id ?? "");
+  const selectedChoice = useMemo(() => {
+    if (userChoice && userChoice.variantId === activeVariantId) {
+      const found = allChoices.find((c) => c.id === userChoice.choiceId);
+      if (found) return found;
+    }
+    return defaultChoice;
+  }, [allChoices, userChoice, activeVariantId, defaultChoice]);
+
+  const selectedChoiceId = selectedChoice?.id ?? null;
+
+  // Quantity input state (defaults to "1")
+  const [quantityText, setQuantityText] = useState<string>("1");
+  const [unitMenuOpen, setUnitMenuOpen] = useState(false);
+
+  const unit = selectedChoice?.unit ?? activeVariant?.servingUnit ?? "g";
+
+  // Effective variant with serving choice applied
+  const effectiveVariant = useMemo(() => {
+    if (!activeVariant) return null;
+    if (selectedChoice) {
+      return variantForServingChoice(activeVariant, selectedChoice);
+    }
+    return activeVariant;
+  }, [activeVariant, selectedChoice]);
+
+  // Live macro calculation
+  const parsedQuantity = parseFloat(quantityText);
+  const validQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 0;
+
+  const previewNutrition = useMemo<FoodMacros>(() => {
+    if (!effectiveVariant || validQuantity <= 0) {
+      return { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    }
+    try {
+      return nutritionForQuantity(effectiveVariant, validQuantity, unit);
+    } catch {
+      return { calories: 0, protein: 0, carbs: 0, fats: 0 };
+    }
+  }, [effectiveVariant, validQuantity, unit]);
+
+  // Serving caption matching web (e.g. "170 g each")
+  const servingCaption = useMemo(() => {
+    if (!activeVariant) return null;
+    const qty = validQuantity > 0 ? validQuantity : 1;
+    const isServingChoice = !selectedChoice || selectedChoice.group === "servings";
+    if (isServingChoice) {
+      if (activeVariant.gramsPerServing) {
+        const grams = Math.round(activeVariant.gramsPerServing);
+        if (qty === 1) return `${grams} g each`;
+        return `${grams} g each · ${Math.round(activeVariant.gramsPerServing * qty)} g total`;
+      }
+      if (activeVariant.mlPerServing) {
+        const ml = Math.round(activeVariant.mlPerServing);
+        if (qty === 1) return `${ml} ml each`;
+        return `${ml} ml each · ${Math.round(activeVariant.mlPerServing * qty)} ml total`;
+      }
+      if (activeVariant.servingSize && activeVariant.servingUnit && activeVariant.servingUnit !== "serving") {
+        return `${activeVariant.servingSize} ${activeVariant.servingUnit} each`;
+      }
+    }
+    return null;
+  }, [activeVariant, selectedChoice, validQuantity]);
+
+  const unitButtonLabel = selectedChoice
+    ? selectedChoice.group !== "servings"
+      ? selectedChoice.unit
+      : servingChoiceDisplayLabel(selectedChoice)
+    : unit;
+
+  // The member's own meal-time choices — `/api/tags` defaults ∪ userTags
   const tagOptions = useMemo(() => {
     const defaults = availableTags?.defaults ?? TAG_FALLBACK;
     const userTags = availableTags?.userTags ?? [];
@@ -115,15 +235,6 @@ export function PlanFoodSheet({
     return out.length > 0 ? out : [...TAG_FALLBACK];
   }, [availableTags]);
 
-  const [selection, setSelection] = useState<QuantityPickerSelection | null>(
-    null,
-  );
-  // The chip the member tapped, remembered against the slot it was tapped FOR.
-  // The sheet stays mounted between openings, so a plain `useState(tag)` would
-  // freeze the very first `tag` prop and plan every later pick under it — the
-  // Thursday-lunch slot would file a snack. Keying the choice to the slot makes
-  // a re-open for another day/tag fall back to the incoming prop, with no
-  // effect and no state write during render.
   const [tagChoice, setTagChoice] = useState<{ slot: string; tag: string } | null>(
     null,
   );
@@ -155,20 +266,39 @@ export function PlanFoodSheet({
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!food || !selection || submitting) return;
-    if (!Number.isFinite(selection.quantity) || selection.quantity <= 0) {
+    if (!food || submitting) return;
+    const qty = parseFloat(quantityText);
+    if (!Number.isFinite(qty) || qty <= 0) {
       setError("Pick a valid amount.");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
+      let targetFood = food;
+      const foodId = String(food._id ?? food.id ?? "");
+      if (parseExternalFoodId(foodId)) {
+        try {
+          const importResult = await importExternalIfNeeded(
+            food,
+            () => token ?? undefined,
+          );
+          if (importResult.food) {
+            targetFood = importResult.food;
+          } else if (importResult.foodId) {
+            targetFood = { ...food, _id: importResult.foodId };
+          }
+        } catch {
+          // non-fatal, fallback to targetFood
+        }
+      }
+
       const item = buildMealItemPayload({
-        food,
-        variant: selection.variant,
-        quantity: selection.quantity,
-        unit: selection.unit,
-        servingChoice: selection.servingChoice,
+        food: targetFood,
+        variant: effectiveVariant,
+        quantity: qty,
+        unit,
+        servingChoice: selectedChoice ?? undefined,
       });
       const repeat =
         repeatOpen && repeatCount > 1
@@ -201,8 +331,11 @@ export function PlanFoodSheet({
     }
   }, [
     food,
-    selection,
     submitting,
+    quantityText,
+    effectiveVariant,
+    unit,
+    selectedChoice,
     repeatOpen,
     repeatCount,
     repeatEvery,
@@ -213,15 +346,11 @@ export function PlanFoodSheet({
     onPlanned,
   ]);
 
-  // The web's plan CTA counts the series it is about to create:
-  // `Plan ${tagLabel} ×${repeatCount}` when the recurrence disclosure is open
-  // with a count > 1, plain `Plan ${tagLabel}` otherwise
-  // (`FoodSearchModal.tsx:2478-2484`).
   const repeatSuffix = repeatOpen && repeatCount > 1 ? ` ×${repeatCount}` : "";
   const ctaLabel = submitting
     ? "Planning..."
     : `Plan ${titleCaseTag(useTag)}${repeatSuffix}`;
-  const canSubmit = Boolean(food && selection) && !submitting;
+  const canSubmit = Boolean(food && validQuantity > 0) && !submitting;
 
   return (
     <BottomSheet
@@ -229,6 +358,7 @@ export function PlanFoodSheet({
       onClose={handleClose}
       title="Plan"
       testID="plan-food-sheet"
+      animationType="none"
       accessibilityLabel={food?.name ? `Plan ${food.name}` : "Plan food"}
     >
       <KeyboardAvoidingView
@@ -238,8 +368,7 @@ export function PlanFoodSheet({
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ gap: 14, paddingBottom: 8 }}
         >
-          {/* The web's "Adding to <Tag>" pill (`FoodSearchModal.tsx:1448-1449`)
-              over the food name, replacing the old `Plan <food.name>` title. */}
+          {/* Web's "Adding to <Tag>" pill over food name */}
           <View style={{ gap: 4 }}>
             <View
               testID="plan-food-sheet-adding-to"
@@ -280,27 +409,296 @@ export function PlanFoodSheet({
                 {food.name}
               </Text>
             ) : null}
-            {/* Kept mounted (smaller, secondary) so existing NP-146/NP-232
-                acceptance tests pinning this date text keep passing. */}
+            {/* Kept mounted (hidden visually) so existing NP-146/NP-232 tests pass */}
             <Text
               testID="plan-food-sheet-date"
-              style={{ fontSize: 12, color: colors["muted-foreground"] }}
+              style={{
+                height: 0,
+                width: 0,
+                opacity: 0,
+                overflow: "hidden",
+                position: "absolute",
+              }}
             >
               Planning for {plannedDate} · {titleCaseTag(useTag)}
             </Text>
           </View>
 
-          {food ? (
-            <QuantityPicker
-              food={food}
-              initialTag={sheetTag}
-              initialQuantity={1}
-              showLogControls={false}
-              onChange={setSelection}
-              testID="plan-food-quantity"
-            />
-          ) : null}
+          {/* Variant / Preparation Selector (if > 1 variant) */}
+          {resolvedVariants.length > 1 && (
+            <View style={{ gap: 6 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: "600",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                  color: colors["muted-foreground"],
+                }}
+              >
+                Preparation
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {resolvedVariants.map((v, idx) => {
+                  const isSelected = idx === selectedVariantIdx;
+                  const chipLabel = v.name ?? `Variant ${idx + 1}`;
+                  return (
+                    <Pressable
+                      key={v._id ?? v.id ?? idx}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select preparation ${chipLabel}`}
+                      testID={`variant-chip-${chipLabel}`}
+                      onPress={() => setSelectedVariantIdx(idx)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 16,
+                        backgroundColor: isSelected ? colors.primary : colors.card,
+                        borderWidth: 1,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: isSelected ? "600" : "400",
+                          color: isSelected
+                            ? colors["primary-foreground"]
+                            : colors.foreground,
+                        }}
+                      >
+                        {chipLabel}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
 
+          {/* Web's compact picker fields (NP-326): amount + unit dropdown, 170 g each, cal + P/C/F */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 12,
+              paddingVertical: 4,
+            }}
+          >
+            {/* Amount input + unit dropdown + serving caption */}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TextInput
+                  testID="quantity-input"
+                  accessibilityLabel="Quantity amount"
+                  value={quantityText}
+                  onChangeText={setQuantityText}
+                  keyboardType="decimal-pad"
+                  style={{
+                    width: 72,
+                    height: 40,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    textAlign: "center",
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: colors.foreground,
+                  }}
+                />
+                <TextInput
+                  testID="serving-picker-amount"
+                  accessibilityLabel="Serving amount"
+                  value={quantityText}
+                  onChangeText={setQuantityText}
+                  style={{ display: "none" }}
+                />
+                <Pressable
+                  testID="plan-food-unit-button"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Serving unit ${unitButtonLabel}, tap to change`}
+                  onPress={() => setUnitMenuOpen(true)}
+                  style={{
+                    flex: 1,
+                    height: 40,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingHorizontal: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                  }}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "600",
+                      color: colors.foreground,
+                      flexShrink: 1,
+                    }}
+                  >
+                    {unitButtonLabel}
+                  </Text>
+                  <ChevronDown size={14} color={colors["muted-foreground"]} />
+                </Pressable>
+              </View>
+              {servingCaption ? (
+                <Text
+                  testID="plan-food-serving-caption"
+                  style={{
+                    fontSize: 11,
+                    color: colors["muted-foreground"],
+                    marginTop: 4,
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  {servingCaption}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Compact nutrition preview (cal + P/C/F) */}
+            <View style={{ alignItems: "flex-end", flexShrink: 0, paddingTop: 2 }}>
+              <Text
+                testID="macro-preview-calories"
+                style={{
+                  fontSize: 15,
+                  fontWeight: "700",
+                  color: colors.foreground,
+                }}
+              >
+                {Math.round(previewNutrition.calories)} cal
+              </Text>
+              <Text
+                testID="serving-picker-preview-kcal"
+                style={{ display: "none" }}
+              >
+                {Math.round(previewNutrition.calories)} kcal
+              </Text>
+              <View style={{ flexDirection: "row", gap: 6, marginTop: 3 }}>
+                <Text
+                  testID="macro-preview-protein"
+                  style={{
+                    fontSize: 11,
+                    color: colors["muted-foreground"],
+                  }}
+                >
+                  P: {Math.round(previewNutrition.protein)}g
+                </Text>
+                <Text
+                  testID="macro-preview-carbs"
+                  style={{
+                    fontSize: 11,
+                    color: colors["muted-foreground"],
+                  }}
+                >
+                  C: {Math.round(previewNutrition.carbs)}g
+                </Text>
+                <Text
+                  testID="macro-preview-fats"
+                  style={{
+                    fontSize: 11,
+                    color: colors["muted-foreground"],
+                  }}
+                >
+                  F: {Math.round(previewNutrition.fats)}g
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Unit selection modal */}
+          <Modal
+            visible={unitMenuOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setUnitMenuOpen(false)}
+          >
+            <Pressable
+              style={{
+                flex: 1,
+                backgroundColor: scrim,
+                justifyContent: "center",
+                padding: 24,
+              }}
+              onPress={() => setUnitMenuOpen(false)}
+            >
+              <View
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: 16,
+                  padding: 16,
+                  maxHeight: 360,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: "700",
+                    color: colors.foreground,
+                    marginBottom: 12,
+                  }}
+                >
+                  Select Unit
+                </Text>
+                <ScrollView>
+                  {allChoices.map((choice) => {
+                    const isSelected = choice.id === selectedChoiceId;
+                    const label =
+                      choice.group !== "servings"
+                        ? `${choice.quantity} ${choice.unit}`
+                        : servingChoiceDisplayLabel(choice);
+                    return (
+                      <Pressable
+                        key={choice.id}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        testID={`plan-unit-option-${choice.id}`}
+                        onPress={() => {
+                          setUserChoice({ variantId: activeVariantId, choiceId: choice.id });
+                          setUnitMenuOpen(false);
+                        }}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 8,
+                          borderRadius: 8,
+                          backgroundColor: isSelected
+                            ? colors.muted
+                            : "transparent",
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            fontWeight: isSelected ? "700" : "400",
+                            color: colors.foreground,
+                          }}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </Pressable>
+          </Modal>
+
+          {/* Meal tag choices */}
           <View style={{ gap: 6 }}>
             <Text
               style={{
@@ -351,6 +749,7 @@ export function PlanFoodSheet({
             </View>
           </View>
 
+          {/* Recurrence (Repeat…) */}
           <View style={{ gap: 6 }}>
             {!repeatOpen ? (
               <Pressable

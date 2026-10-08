@@ -146,12 +146,16 @@ export default function MealPlanRoute() {
     error: plansError,
     refetch: refetchPlans,
   } = useFetch(plansPath, PlansResponseSchema, fetchOpts);
-  const { data: goalsData } = useFetch(
+  const { data: goalsData } = useFetch<{ calories?: number }>(
     "/api/nutrition/goals",
-    NutritionGoalsResponseSchema,
+    NutritionGoalsResponseSchema as any,
     fetchOpts,
   );
-  const { data: tagsData } = useFetch("/api/tags", TagsResponseSchema, fetchOpts);
+  const { data: tagsData } = useFetch<{ defaults?: string[]; userTags?: string[] }>(
+    "/api/tags",
+    TagsResponseSchema as any,
+    fetchOpts,
+  );
 
   const goalCal = Number(goalsData?.calories) || 0;
   const tagDefaults: string[] = tagsData?.defaults ?? [];
@@ -447,19 +451,51 @@ export default function MealPlanRoute() {
                 >
                   <View
                     testID={`${TINT_TEST_IDS[tint]}-${dayKey}`}
-                    className={`flex-row items-center justify-between px-3 py-2 ${tintClass}`}
+                    className={`px-3 py-2 ${tintClass}`}
                   >
-                    <Text className="text-foreground text-sm font-semibold">
-                      {day.toLocaleDateString("en-US", { weekday: "short" })}{" "}
-                      <Text className="text-muted-foreground">
-                        {day.toLocaleDateString("en-US", {
-                          month: "numeric",
-                          day: "numeric",
-                        })}
-                      </Text>
-                      {isToday ? " · Today" : ""}
-                    </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 8,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <Text className="text-foreground text-sm font-semibold">
+                          {day.toLocaleDateString("en-US", { weekday: "short" })}{" "}
+                          <Text className="text-muted-foreground">
+                            {day.toLocaleDateString("en-US", {
+                              month: "numeric",
+                              day: "numeric",
+                            })}
+                          </Text>
+                        </Text>
+                        {isToday ? (
+                          <View
+                            testID="meal-plan-today-pill"
+                            style={{
+                              marginLeft: 6,
+                              borderRadius: 4,
+                              backgroundColor: colors.foreground,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "700",
+                                textTransform: "uppercase",
+                                color: colors.background,
+                              }}
+                            >
+                              Today
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                       {cals > 0 ? (
                         <Text
                           testID={`meal-plan-day-cals-${dayKey}`}
@@ -469,6 +505,17 @@ export default function MealPlanRoute() {
                           {goalCal > 0 ? ` / ${goalCal}` : ""} cal
                         </Text>
                       ) : null}
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        flexWrap: "wrap",
+                        gap: 4,
+                        marginTop: 4,
+                      }}
+                    >
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Copy ${dayKey} to other days`}
@@ -523,8 +570,11 @@ export default function MealPlanRoute() {
                           }}
                         >
                           <Text
+                            testID={`meal-plan-slot-label-${dayKey}-${slot}`}
                             className="text-muted-foreground text-[11px] font-semibold uppercase"
-                            style={{ width: 64, marginTop: 4 }}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                            style={{ minWidth: 80, marginTop: 4 }}
                           >
                             {titleCaseSlot(slot)}
                           </Text>
@@ -818,6 +868,7 @@ export default function MealPlanRoute() {
         onClose={() => setSearchOpen(false)}
         currentTag={picker?.tag}
         basketMode={false}
+        deferImport
         onPickFood={handlePickFood}
         onPickMeal={handlePickMeal}
         testID="meal-plan-food-search"

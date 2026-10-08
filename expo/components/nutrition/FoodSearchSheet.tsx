@@ -133,6 +133,12 @@ export interface FoodSearchSheetProps {
   /** The green describe-send button beside the search box when typing. */
   onDescribe?: (text: string) => void;
   testID?: string;
+  /**
+   * NP-326: When true (e.g. meal planner), bypasses blocking external import
+   * during pick — the caller or follow-on sheet (PlanFoodSheet) handles import
+   * at submission time, eliminating the multi-second delay on row tap.
+   */
+  deferImport?: boolean;
 }
 
 export function FoodSearchSheet({
@@ -155,6 +161,7 @@ export function FoodSearchSheet({
   onUpload,
   onDescribe,
   testID = "food-search-sheet",
+  deferImport = false,
 }: FoodSearchSheetProps) {
   const { colors, tint } = useThemeTokens();
   const { token } = useAuth();
@@ -449,6 +456,15 @@ export function FoodSearchSheet({
         return;
       }
 
+      // NP-326: A pick handler with deferImport (e.g. meal planner) takes the food
+      // immediately without blocking on external import — the plan sheet handles import
+      // during the submit phase (showing Planning…), matching the web.
+      if (deferImport && onPickFood) {
+        onClose();
+        onPickFood(food);
+        return;
+      }
+
       const id = String(food._id ?? food.id ?? "");
       let targetFood: Food = food;
 
@@ -496,7 +512,7 @@ export function FoodSearchSheet({
       onClose();
       router.push(foodDetailHref(targetFood._id, targetFood));
     },
-    [basketMode, expandedRowId, onClose, onPickFood, router, token],
+    [basketMode, deferImport, expandedRowId, onClose, onPickFood, router, token],
   );
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
