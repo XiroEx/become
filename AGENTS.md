@@ -1941,6 +1941,23 @@ the details sheet above it. Four rules travel with it (the long form is
   stage waits and mounts once on the fresh payload, with the opening decided
   on it. Test: `expo/__tests__/card-NP-348-acceptance.test.tsx` (the real
   stage, mounts counted, under a pinned clock).
+- **Every identity line is the web's serif (NP-349).** Review on 10/8: the
+  web's stage sets the member's own words in `font-serif italic` in four
+  places — the intro title's quote (16 on 24, 75% white, three lines), the
+  overview HUD (15, snug, 85%, two lines), the Horizon card (24 / 19) and
+  the focused card's whisper (12, 45%) — and native set all four in Geist
+  italic. Nothing serif is bundled, so the serif is the PLATFORM's, named
+  ONCE: `SERIF_FONT_FAMILY` in `expo/lib/theme/fonts.ts` — Georgia on iOS
+  (New York, Safari's `ui-serif`, has no name React Native can ask for;
+  its PostScript names are private API), `serif` (Noto Serif) on Android —
+  and every one of the four lines reads that constant
+  (`WHISPER_FONT_FAMILY` / `HORIZON_FONT_FAMILY` alias it;
+  `expo/lib/becoming/stageWords.ts` has the title block's and the HUD's
+  numbers). A new identity line takes `SERIF_FONT_FAMILY`, never its own
+  `Platform.select`. The title over the quote is the web's `text-4xl
+  font-black tracking-tight` (36 on 40, −0.9) in a full-width `px-8` block,
+  so it wraps in the web's measure; 900 draws Geist Bold, the heaviest face
+  bundled (NP-160). Test: `expo/__tests__/card-NP-349-acceptance.test.tsx`.
 
 #### The Mind session player, natively (NP-098)
 

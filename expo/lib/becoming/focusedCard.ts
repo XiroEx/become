@@ -22,8 +22,8 @@
  * the next card, and what tapping the sparkline does.
  */
 
-import { Platform } from 'react-native'
 import type { BoxShadowValue } from 'react-native'
+import { SERIF_FONT_FAMILY } from '@/lib/theme/fonts'
 import { PILLAR, pillarColor, type Pillar } from './pillarColors'
 
 /** Which edge of the focused card faces the next one (`exitEdge` in `@become/core`). */
@@ -140,13 +140,14 @@ export const WHISPER_FONT_SIZE = 12
 export const WHISPER_ALPHA = 0.45
 
 /**
- * The web's `font-serif` is Tailwind's stack — `ui-serif, Georgia, …` — so
- * on the phone it is the platform's serif: Georgia on iOS, the system serif
- * (Noto Serif) on Android. NP-160 bundles Geist only; there is no serif face
- * to register, and `components/Text.tsx` lets a caller's own `fontFamily`
- * win, which is what this is.
+ * The web's `font-serif`: the app's ONE serif, `SERIF_FONT_FAMILY` in
+ * `lib/theme/fonts.ts` (NP-349) — Georgia on iOS, the system serif (Noto
+ * Serif) on Android, with the reasons there. NP-160 bundles Geist only, so
+ * there is no serif face to register; `components/Text.tsx` lets a caller's
+ * own `fontFamily` win, which is what this is. The Horizon card, the intro
+ * title's quote and the overview HUD read the same constant.
  */
-export const WHISPER_FONT_FAMILY: string = Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' })
+export const WHISPER_FONT_FAMILY: string = SERIF_FONT_FAMILY
 
 /** `identity ? \`Becoming: ${identity}\` : subj.name`. */
 export function identityWhisper(identity: string | null | undefined, subject: Pillar): string {

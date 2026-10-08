@@ -370,6 +370,27 @@ hold it together:
   opening decided on it. `__tests__/card-NP-348-acceptance.test.tsx` counts
   the real stage's mounts under a pinned clock: yesterday's cache + a fresh
   fetch → one mount, on the fresh data.
+- **Every identity line is the web's serif (NP-349).** Review on 10/8: the
+  web's stage sets the member's own words in `font-serif italic` in four
+  places — the intro title's quote (16 on 24, 75% white, three lines,
+  `max-w-sm`), the overview HUD (15, snug, 85%, two lines, `max-w-md`), the
+  Horizon card (24 / 19) and the focused card's whisper (12, 45%) — and
+  native set all four in Geist italic, which reads as a different product.
+  Nothing serif is bundled, so the serif is the PLATFORM's, named once:
+  `SERIF_FONT_FAMILY` in `lib/theme/fonts.ts` — Georgia on iOS (Safari's
+  `ui-serif` is New York, which UIKit exposes only through a font
+  descriptor's design, never under a name React Native can ask for), `serif`
+  (Noto Serif) on Android — which is also where the web's stack lands in
+  each phone's browser. All four lines read that constant (`focusedCard.ts`'s
+  `WHISPER_FONT_FAMILY` and `horizonCard.ts`'s `HORIZON_FONT_FAMILY` are
+  aliases of it; `lib/becoming/stageWords.ts` has the title block's and the
+  HUD's numbers), so there is one serif, not four. The title over the quote
+  is the web's `text-4xl font-black tracking-tight` — 36 on 40, −0.9, in a
+  full-width `px-8` block — so it wraps in the web's measure; 900 draws the
+  heaviest Geist bundled, Bold (NP-160 snaps it; "Who am I becoming?" runs
+  ~351 px in it, the web's Black ~363, both past a 390 phone's 326).
+  `__tests__/card-NP-349-acceptance.test.tsx` reads the four lines off the
+  rendered stage and checks the web still sets them that way.
 
 Two things to know before you touch it:
 
@@ -602,6 +623,15 @@ the layout without awaiting a font. Test: `__tests__/geistFont.test.tsx` — it
 parses the `.ttf` headers, walks `app/` and `components/` for a stray
 `react-native` Text import, drives the splash gate through both states, and
 reads `webapp/` to check the web still uses Geist.
+
+The web's THIRD family, `font-serif`, is `SERIF_FONT_FAMILY` in the same
+module (NP-349): nothing serif is bundled, so it is the PLATFORM's serif —
+Georgia on iOS, `serif` (Noto Serif) on Android — which is also what
+Tailwind's stack (`ui-serif, Georgia, …, serif`) resolves to in each phone's
+browser. A line opts into it with `style={{ fontFamily: SERIF_FONT_FAMILY }}`,
+which `Text` lets win over the Geist face it resolves. Today that is the
+Becoming stage's identity lines, all four of them, and nothing else; a new
+serif line reads the constant rather than writing its own `Platform.select`.
 
 ## Accessibility baseline (NP-124)
 
