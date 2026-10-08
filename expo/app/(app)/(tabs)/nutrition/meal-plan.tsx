@@ -868,6 +868,7 @@ export default function MealPlanRoute() {
         onClose={() => setSearchOpen(false)}
         currentTag={picker?.tag}
         basketMode={false}
+        deferImport
         onPickFood={handlePickFood}
         onPickMeal={handlePickMeal}
         testID="meal-plan-food-search"

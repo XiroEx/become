@@ -231,6 +231,7 @@ describe("Card NP-326 acceptance", () => {
         visible
         onClose={() => {}}
         onPickFood={onPickFood}
+        deferImport
         testID="food-search-test"
       />,
     );
