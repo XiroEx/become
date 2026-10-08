@@ -1836,6 +1836,20 @@ the details sheet above it. Four rules travel with it (the long form is
   in the week's hue. The web's content rule travels with it: the live card ends
   on the steps, a finished week keeps two wins, never both. Test:
   `expo/__tests__/card-NP-342-acceptance.test.tsx`.
+- **The focused card carries the web's three extras, and only it (NP-343).**
+  The stage hands `WeekCard` `focused`, `exitEdge` (its own `exitEdge(...)`),
+  `spark` (every week's altitude plus this card's index) and
+  `onSparkline={enterOverview}`. The sparkline is a pressable, "See your
+  whole line", that zooms out; the exit-edge light is a 3 px bar in the
+  week's colour on the edge that faces the next card (top on a climb, bottom
+  on a dip, right on a hold) with the web's `0 0 18px 4px` glow as RN's
+  `boxShadow` (New Architecture, which Reanimated 4 already requires), pulsing
+  like Tailwind's `animate-pulse` through a Reanimated shared value written
+  with `set()` — `useReducedMotion` holds it still at full. The identity row
+  reads `Becoming: <identity>` in serif italic (the platform serif — Geist is
+  the only bundled face) at 12 px, 45% white, or the subject's name. Every
+  number is `expo/lib/becoming/focusedCard.ts`'s; test:
+  `expo/__tests__/card-NP-343-acceptance.test.tsx`.
 - **A far week is the web's coloured tile (NP-345).** Review on 10/8 found
   the overview's tiles near-black boxes with a colour stripe, all but gone at
   overview scale, where the web's compact `WeekCard` is the week's own

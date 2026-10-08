@@ -891,6 +891,10 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
 
   // ── The line's geometry (world space, recomputed only when the layout does) ──
   const peaks = useMemo(() => peakIndexes(weeks), [weeks]);
+  // The focused card's sparkline (NP-343): the whole path in miniature — one
+  // array of altitudes for every card, with each card's own index on it.
+  const altitudes = useMemo(() => weeks.map((w) => w.altitude), [weeks]);
+  const sparks = useMemo(() => altitudes.map((_, i) => ({ altitudes, at: i })), [altitudes]);
   const line = useMemo(() => {
     const weeksPos = positions.filter((p) => !p.horizon);
     const segments: Segment[] = [];
@@ -1044,6 +1048,13 @@ export const JourneyStage = forwardRef<JourneyStageHandle, JourneyStageProps>(fu
                           identity={data.identity}
                           next={week.isCurrent ? data.next : null}
                           isPeak={peaks.has(i)}
+                          // The focused card only (NP-343): the sparkline, a
+                          // tap on which zooms out, and the light on the edge
+                          // that faces the next card — as on the web.
+                          focused={em.focused}
+                          exitEdge={em.focused ? edge : null}
+                          spark={sparks[i] ?? null}
+                          onSparkline={enterOverview}
                           onDetails={() => onDetails(i)}
                           onNavigate={onNavigate}
                           width={size.w}
