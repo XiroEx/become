@@ -565,10 +565,14 @@ export default function OnboardingPage() {
 
   /** Either answer to the trial offer, or the offer deciding it had nothing
    *  honest to show: all three land here, and the page has nothing left to do
-   *  but move on. */
-  function finishOnboarding() {
+   *  but move on.
+   *
+   *  MEMOISED. TrialOfferModal's bail runs in an effect keyed on this prop, so
+   *  a fresh closure per render re-ran it and pushed /dashboard again for the
+   *  same decision. */
+  const finishOnboarding = useCallback(() => {
     router.push('/dashboard')
-  }
+  }, [router])
 
   // ── Loading / auth gate ──────────────────────────────────────────────────
   if (!authChecked) {

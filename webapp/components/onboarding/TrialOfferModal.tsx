@@ -17,14 +17,19 @@
 // grant. "Continue free" is exactly as easy to press as the trial button, and
 // nothing about the free path is worse than it is today.
 //
-// BAILS SILENTLY, exactly like every other tier surface in this app, in any
-// state where there is nothing honest to offer: ENTITLEMENTS_ENFORCED off (the
-// launch-day contract), a member who is already Plus, checkout not known to
-// work, or the entitlements read failing outright. "Bail" means render
-// nothing AND call onDismiss — this surface has no route of its own, so
-// skipping it is what lets the onboarding page move on to /dashboard.
+// BAILS SILENTLY in any state where there is nothing honest to offer: a member
+// who is already Plus, a trial already spent, checkout not known to work, or
+// the entitlements read failing outright. "Bail" means render nothing AND call
+// onDismiss — this surface has no route of its own, so skipping it is what lets
+// the onboarding page move on to /dashboard.
+//
+// It does NOT bail on `enforced === false`. That is the one rule a BILLING
+// control in this app breaks on purpose, and the reasoning (plus the bug the
+// first cut of this card shipped) lives with the predicate in
+// lib/billing/trial.ts#trialOfferDue. Both the effect and the render read that
+// one function rather than restating the condition.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Check, Gift, Loader2, Sparkles } from 'lucide-react'
 import { useEntitlements } from '@/hooks/useEntitlements'
@@ -40,6 +45,7 @@ import {
   type CheckoutState,
 } from '@/components/UpgradeSheet'
 import type { BillingPlan } from '@/lib/billing/mode'
+import { trialOfferDue } from '@/lib/billing/trial'
 import {
   CONTINUE_FREE_LABEL,
   TERMS_REFUND_HREF,
@@ -267,28 +273,31 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
   const [portalPath, setPortalPath] = useState<string>('/api/billing/portal')
   useLockScroll(true)
 
-  // Nothing honest to offer, in any of these: the kill-switch is off, the
-  // member is somehow already Plus, or checkout is not known to work. Same
-  // "no button that cannot work" rule as UpgradeSheet / the plan page — this
-  // surface just has nowhere else to send the member, so it moves them on
-  // instead of showing a dead end during onboarding. Fails OPEN on a read
-  // failure too: a network blip must cost a missed upsell, never a stuck
-  // onboarding flow.
+  /** The offer is answered at most once. `onDismiss` navigates, and it is a
+   *  plain prop — a parent that hands over a fresh closure on every render
+   *  re-runs the effect below, which would then fire a second router.push for
+   *  the same decision. Latched in a ref rather than state so the guard is in
+   *  place the instant the first call is made. */
+  const answered = useRef(false)
+  const answer = useCallback(() => {
+    if (answered.current) return
+    answered.current = true
+    onDismiss()
+  }, [onDismiss])
+
+  // Nothing honest to offer — see trialOfferDue(). This surface has nowhere
+  // else to send the member, so it moves them on instead of showing a dead end
+  // in the middle of onboarding.
   //
-  // This is an external-system read (the entitlements snapshot), so the
-  // decision cannot be derived during render — same shape as UpgradeSheet's
-  // own checkout probe.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // An EFFECT because dismissing is a side effect on the parent (it navigates),
+  // keyed on an external-system read — the entitlements snapshot. It sets no
+  // state of its own, so it needs no react-hooks/set-state-in-effect
+  // suppression; the render below reaches the same verdict through the same
+  // function, so the two cannot disagree.
   useEffect(() => {
     if (loading) return
-    const ok =
-      data !== null &&
-      data.enforced !== false &&
-      data.tier !== 'plus' &&
-      data.checkoutAvailable === true
-    if (!ok) onDismiss()
-  }, [loading, data, onDismiss])
-  /* eslint-enable react-hooks/set-state-in-effect */
+    if (!trialOfferDue(data)) answer()
+  }, [loading, data, answer])
 
   const startCheckout = useCallback(async () => {
     if (checkout !== 'ready' && checkout !== 'error') return
@@ -337,12 +346,10 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
   }, [portalPath])
 
   if (loading) return null
-  const ok =
-    data !== null &&
-    data.enforced !== false &&
-    data.tier !== 'plus' &&
-    data.checkoutAvailable === true
-  if (!ok) return null
+  // The SAME predicate the effect above reads. It used to be a second,
+  // hand-written copy of the condition — the shape that lets a surface dismiss
+  // itself and paint at the same time.
+  if (!trialOfferDue(data)) return null
 
   return (
     <div className="fixed inset-0 z-[300] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
@@ -361,7 +368,7 @@ export default function TrialOfferModal({ onDismiss }: TrialOfferModalProps) {
           portalState={portalState}
           onStart={startCheckout}
           onOpenPortal={openPortal}
-          onContinueFree={onDismiss}
+          onContinueFree={answer}
         />
       </div>
     </div>

@@ -1100,6 +1100,48 @@ Rules that are easy to get wrong:
   that makes a new outcome ride the previous charge, the same leak reversed.
   `tests/unit/allowance/followUpTicket.test.ts` drives the whole chain.
 
+#### The 10-day Plus trial, and the one surface that offers it
+
+Membership is **activated by the member**, never granted. The only place in the
+app that starts a Stripe *trial* rather than a paid period on day one is
+`components/onboarding/TrialOfferModal.tsx`, mounted by `app/onboarding/page.tsx`
+after the profile save and before its single `router.push('/dashboard')` — the
+one moment between onboarding and the dashboard's first-run tour. It explains
+what Plus gets them, makes them pick monthly or annual BEFORE anything starts,
+requires an explicit tick covering the 10 days, the automatic charge after them
+and the refund window, and offers "Continue free" just as prominently.
+
+Three files, and the split matters:
+- `lib/billing/trial.ts` — zero imports (it is read by the client bundle AND the
+  checkout route): `TRIAL_DAYS`, `isTrialEligible` (has this account EVER held a
+  subscription? `subscription.status` is the durable memory, and nothing ever
+  moves it back to `'none'` — so a cancel-and-rejoin cannot mint a second free
+  trial, which Stripe will not stop on its own) and `trialOfferDue` (should this
+  member be asked at all).
+- `lib/trialOfferCopy.ts` — the agreement sentence, built from `TRIAL_DAYS` and
+  `LEGAL_REFUND_WINDOW_DAYS`. In the webapp, not `lib/legal`, for the same
+  reason `lib/billingCopy.ts` is: `lib/legal` re-exports the published
+  `@become/core` and nothing here quotes it.
+- `app/api/billing/checkout/route.ts` — `trial: true` on the body is **advisory**.
+  The route applies `trial_period_days` only when `isTrialEligible` agrees, and
+  reports `trialApplied` so the caller reads what happened rather than assuming.
+
+**THIS SURFACE DOES NOT BAIL ON `enforced === false`,** and that is deliberate:
+it is a BILLING control, like "Manage billing" above, and the kill-switch governs
+whether TIER is enforced, not whether money is real. Its first cut did bail on
+it; `ENTITLEMENTS_ENFORCED` defaults to off and is off in production, so the
+activation CTA was on **no screen at all** on a real deploy — the identical bug
+the portal button shipped with when it sat behind the plan page's kill-switch
+return. What it is gated on instead is whether there is anything to sell:
+`checkoutAvailable` (a secret key AND a price — still false until the billing
+block is in `BECOME_RUNTIME_CONFIG`, which is what keeps this a zero-change
+deploy for now), not already Plus, and `isTrialEligible`. It fails closed, and
+"bail" means render nothing AND call `onDismiss`, because the surface has no
+route of its own and skipping it is what lets onboarding reach `/dashboard`.
+`tests/unit/billing/trialOfferGate.test.ts` pins all of that, including a source
+scan that the modal does not read `enforced` again and that `/dashboard` is
+reached only through the offer's dismiss handler.
+
 ### Consent, age and email opt-out (go-live items 1, 12, 14, 15 — shipped 2026-09-13)
 
 **`User.consent`** is the record that a member agreed to the Terms and Privacy
