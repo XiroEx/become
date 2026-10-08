@@ -33,7 +33,7 @@ import { render, within } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import { FireNumber } from "@/components/streaks/FireNumber";
 import { StreaksScreen } from "@/components/streaks/StreaksScreen";
-import { lightTokens, darkTokens } from "@/lib/theme/tokens";
+import { lightTokens } from "@/lib/theme/tokens";
 import type { StreaksPayload } from "@become/api-client";
 
 function flat(style: unknown): Record<string, unknown> {
@@ -47,41 +47,46 @@ const readExpo = (rel: string): string =>
 const rgb = (triplet: string) => `rgb(${triplet})`;
 
 const MOCK_DATA: StreaksPayload = {
+  todayKey: "2026-10-08",
+  minVisible: 3,
   overall: {
     current: 5,
     best: 10,
+    freezes: 1,
+    milestonesReached: [3],
     nextMilestone: 7,
     activeToday: true,
-    freezes: 1,
-    freezeUsedToday: false,
+    lastActivityDate: "2026-10-08",
   },
   pillars: {
     workout: {
+      unit: "days",
       current: 4,
       best: 8,
-      target: 3,
       thisWeek: 2,
-      remainingThisWeek: 1,
+      target: 3,
       metThisWeek: false,
       weekLost: false,
       weeksOnTarget: 2,
-      history: [],
+      remainingThisWeek: 1,
     },
     nutrition: {
+      unit: "days",
       current: 6,
       best: 12,
       activeToday: true,
-      history: [],
     },
     mindset: {
+      unit: "days",
       current: 3,
       best: 7,
       activeToday: true,
-      history: [],
     },
     super: {
+      unit: "days",
       current: 4,
       best: 9,
+      activeToday: true,
       today: {
         nutrition: true,
         mindset: true,
@@ -91,9 +96,16 @@ const MOCK_DATA: StreaksPayload = {
       },
       freeze: {
         available: true,
+        returnsOn: null,
+        usedDays: [],
         frozenToday: false,
       },
     },
+  },
+  credits: {
+    workout: [],
+    nutrition: [],
+    mindset: [],
   },
 };
 
@@ -111,8 +123,8 @@ describe("NP-354: Streaks native parity pass", () => {
     it("Nutrition pillar source code uses brand tint and coral/red classes", () => {
       const src = readExpo("components/streaks/StreaksScreen.tsx");
       const nutritionSection = src.slice(
-        src.indexOf("testID=\"streak-nutrition\""),
-        src.indexOf("testID=\"streak-mindset\""),
+        src.indexOf('testID="streak-nutrition"'),
+        src.indexOf('testID="streak-mindset"'),
       );
       expect(nutritionSection).toContain("bg-red-100 dark:bg-red-900/30");
       expect(nutritionSection).toContain('tint("brand", 0.15)');

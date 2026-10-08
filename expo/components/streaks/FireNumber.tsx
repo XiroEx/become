@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo } from "react";
 import {
   Animated,
   View,
@@ -10,11 +10,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import { resolveToken, tintToken } from "@/lib/theme/tokens";
 
+interface FlameSpec {
+  left: `${number}%`;
+  w: number;
+  h: number;
+}
+
 /**
  * Flame tongue specs matching web's FLAMES (webapp/components/streaks/FireNumber.tsx).
  * Where each tongue sits across the number, and how it burns.
  */
-const FLAMES = [
+const FLAMES: readonly FlameSpec[] = [
   { left: "2%", w: 6, h: 10 },
   { left: "22%", w: 8, h: 13 },
   { left: "44%", w: 7, h: 11 },
@@ -58,7 +64,7 @@ export function FireNumber({
   style,
   className = "",
 }: FireNumberProps) {
-  const flameAnim = useRef(new Animated.Value(0.75)).current;
+  const flameAnim = useMemo(() => new Animated.Value(0.75), []);
 
   useEffect(() => {
     const anim = Animated.loop(
@@ -117,7 +123,7 @@ export function FireNumber({
             end={{ x: 0.5, y: 1 }}
             style={{
               position: "absolute",
-              left: f.left as never,
+              left: f.left,
               bottom: 0,
               width: f.w,
               height: f.h,
