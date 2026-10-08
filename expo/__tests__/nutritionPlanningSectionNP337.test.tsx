@@ -38,7 +38,7 @@ jest.mock("@/lib/auth/secureStoreToken", () => {
 
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { NutritionPlanningSection } from "@/components/settings/NutritionPlanningSection";
-import { setCacheMemberId, writeCache } from "@/lib/cache/lastKnown";
+import { clearAll, setCacheMemberId, writeCache } from "@/lib/cache/lastKnown";
 /* eslint-enable import/first */
 
 function jsonResponse(status: number, body?: unknown): Response {
@@ -68,14 +68,27 @@ function disabled(el: { props: { accessibilityState?: { disabled?: boolean } } }
   return el.props.accessibilityState?.disabled === true;
 }
 
-describe("NutritionPlanningSection: saving releases without the refetch settling (NP-337)", () => {
-  beforeEach(() => {
-    mockStoredJwt = makeJwt(Date.now() + 86400000);
-  });
+const originalFetch = globalThis.fetch;
 
+beforeEach(async () => {
+  await clearAll();
+  setCacheMemberId(null);
+  mockStoredJwt = makeJwt(Date.now() + 86400000);
+});
+
+afterEach(async () => {
+  await clearAll();
+  setCacheMemberId(null);
+  mockStoredJwt = null;
+  globalThis.fetch = originalFetch;
+});
+
+describe("NutritionPlanningSection: saving releases without the refetch settling (NP-337)", () => {
   it("clears `saving` in finally even when the post-save refetch never resolves, so the choice can be changed back", async () => {
     let profileGets = 0;
+    let initialProfileLoaded = false;
     let serverPlanPromoteMode = "manual";
+
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.includes("/api/auth/me")) {
@@ -93,11 +106,17 @@ describe("NutritionPlanningSection: saving releases without the refetch settling
       if (url.includes("/api/profile")) {
         profileGets += 1;
         if (profileGets === 1) {
-          return jsonResponse(200, {
+          const res = jsonResponse(200, {
             name: "Alex",
             email: "alex@example.com",
             profile: { planPromoteMode: serverPlanPromoteMode },
           });
+          const origText = res.text.bind(res);
+          res.text = async () => {
+            initialProfileLoaded = true;
+            return origText();
+          };
+          return res;
         }
         // Every GET after the first is the post-save refetch — and it never
         // settles. That used to leave both cards disabled forever.
@@ -110,7 +129,10 @@ describe("NutritionPlanningSection: saving releases without the refetch settling
 
     const { getByTestId } = renderSection();
 
+    // Wait until the initial profile fetch is in flight, answered, and seeded
     await waitFor(() => {
+      expect(profileGets).toBe(1);
+      expect(initialProfileLoaded).toBe(true);
       expect(selected(getByTestId("settings-nutrition-planning-manual"))).toBe(true);
     });
 
@@ -120,14 +142,10 @@ describe("NutritionPlanningSection: saving releases without the refetch settling
 
     await waitFor(() => {
       expect(selected(getByTestId("settings-nutrition-planning-auto"))).toBe(true);
-    });
-
-    // The actual bug: both cards re-enable even though the refetch this
-    // save triggered is still hanging.
-    await waitFor(() => {
+      expect(serverPlanPromoteMode).toBe("auto");
       expect(disabled(getByTestId("settings-nutrition-planning-manual"))).toBe(false);
+      expect(disabled(getByTestId("settings-nutrition-planning-auto"))).toBe(false);
     });
-    expect(disabled(getByTestId("settings-nutrition-planning-auto"))).toBe(false);
 
     // And because it released, the choice CAN be changed back.
     await act(async () => {
@@ -135,8 +153,10 @@ describe("NutritionPlanningSection: saving releases without the refetch settling
     });
     await waitFor(() => {
       expect(selected(getByTestId("settings-nutrition-planning-manual"))).toBe(true);
+      expect(serverPlanPromoteMode).toBe("manual");
+      expect(disabled(getByTestId("settings-nutrition-planning-manual"))).toBe(false);
+      expect(disabled(getByTestId("settings-nutrition-planning-auto"))).toBe(false);
     });
-    expect(serverPlanPromoteMode).toBe("manual");
   });
 });
 
@@ -171,8 +191,8 @@ describe("NutritionPlanningSection: seeds from fresh data, not the cache (NP-337
     // "auto" — the fetch has not answered yet.
     await waitFor(() => {
       expect(getByTestId("settings-nutrition-planning-manual")).toBeTruthy();
+      expect(selected(getByTestId("settings-nutrition-planning-manual"))).toBe(true);
     });
-    expect(selected(getByTestId("settings-nutrition-planning-manual"))).toBe(true);
 
     // The profile fetch only fires once the session resolves and `skip`
     // flips — wait for it to actually be in flight before answering it.
