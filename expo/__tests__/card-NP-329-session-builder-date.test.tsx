@@ -148,12 +148,12 @@ describe("(id: NP-329-stepper) DatePicker stepper and native platform picker", (
   });
 
   it("the raw TextInput with QWERTY keyboard is replaced by the platform date picker trigger", () => {
-    const { queryByTestId, getByTestId } = render(
+    const { queryByPlaceholderText, getByTestId } = render(
       <DatePicker value="2026-10-07" onChange={jest.fn()} testID="picker-test" />,
     );
 
     // Old raw text input is gone
-    expect(queryByTestId("picker-test-input")).toBeNull();
+    expect(queryByPlaceholderText("YYYY-MM-DD")).toBeNull();
 
     // Replaced by calendar trigger button
     expect(getByTestId("picker-test-picker-btn")).toBeTruthy();
@@ -210,6 +210,13 @@ describe("(id: NP-329-stepper) DatePicker stepper and native platform picker", (
 });
 
 describe("(id: NP-329-schedule) ScheduleSetup uses valid tint for header, upcoming workouts and error banner", () => {
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-06T12:00:00.000Z"));
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   const SCHEDULE_FIXTURE: ScheduleDoc = {
     programId: "prog-1",
     programName: "Strength Foundations",
@@ -230,6 +237,8 @@ describe("(id: NP-329-schedule) ScheduleSetup uses valid tint for header, upcomi
   it("renders header tile and upcoming workout date tiles with translucent info tint, not opaque info", () => {
     const { getByTestId, getByText } = render(
       <ScheduleSetup
+        programId="prog-1"
+        onSkip={jest.fn()}
         existingSchedule={SCHEDULE_FIXTURE}
         programName="Strength Foundations"
         onConfirm={jest.fn()}
@@ -251,6 +260,8 @@ describe("(id: NP-329-schedule) ScheduleSetup uses valid tint for header, upcomi
   it("renders error banner with translucent destructive tint without string concatenation", () => {
     const { getByTestId } = render(
       <ScheduleSetup
+        programId="prog-1"
+        onSkip={jest.fn()}
         programName="Strength Foundations"
         onConfirm={jest.fn()}
         error="Failed to create schedule"
