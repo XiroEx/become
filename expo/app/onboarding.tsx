@@ -11,6 +11,7 @@ import {
   apiFetch,
 } from "@become/api-client";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
+import { TrialOfferModal } from "@/components/onboarding/TrialOfferModal";
 import { useOnboardingRecommendation } from "@/lib/onboarding/useOnboardingRecommendation";
 import { enrollProgram } from "@/lib/programs/enrollment";
 import { notifyProgramUpdated } from "@/lib/programs/programEvents";
@@ -89,6 +90,23 @@ export default function OnboardingRoute() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<unknown>(null);
+  // Shown after the profile save lands, before the push to /(tabs)/dashboard — the
+  // one moment between onboarding and the dashboard's first-run tour the card
+  // asks for. See components/onboarding/TrialOfferModal.tsx.
+  const [showTrialOffer, setShowTrialOffer] = useState(false);
+
+  /**
+   * Either answer to the trial offer, or the offer deciding it had nothing
+   * honest to show: all land here, and the page has nothing left to do but
+   * move on.
+   *
+   * MEMOISED. TrialOfferModal's bail runs in an effect keyed on this prop, so
+   * a fresh closure per render re-ran it and pushed /(tabs)/dashboard again.
+   */
+  const finishOnboarding = useCallback(() => {
+    router.replace("/(tabs)/dashboard");
+  }, [router]);
+
   const [lastPayload, setLastPayload] = useState<{
     name: string;
     profile: OnboardingProfile;
@@ -295,22 +313,26 @@ export default function OnboardingRoute() {
           // ignore — permission is optional
         }
 
-        // Hook for the post-onboarding trial prompt (NP-129). No-op until
-        // the web ships the trial and NP-129 fills it.
+        // Hook for the post-onboarding trial prompt (NP-129).
         try {
           await maybeShowTrialPromptAfterOnboarding();
         } catch {
           // ignore — the trial prompt is optional
         }
 
-        router.replace("/(tabs)/dashboard");
+        // The trial offer decides for itself whether it has anything honest to
+        // show (TrialOfferModal bails to onDismiss when it does not), so this
+        // always opens it rather than branching here — a second, divergent
+        // "should we ask" check here could disagree with the one the modal
+        // itself makes.
+        setShowTrialOffer(true);
       } catch (err) {
         setSubmitError(err);
       } finally {
         setSubmitting(false);
       }
     },
-    [patch, refresh, router, token],
+    [patch, refresh, token],
   );
 
   return (
@@ -321,6 +343,10 @@ export default function OnboardingRoute() {
       testID="onboarding-guard"
     >
       <ConsentGate>
+        {/* The trial offer, after the profile save and before /(tabs)/dashboard — see
+            components/onboarding/TrialOfferModal.tsx for why it is a separate
+            surface from the upgrade sheet and the plan page. */}
+        {showTrialOffer && <TrialOfferModal onDismiss={finishOnboarding} />}
         <ScreenState
           error={submitError}
           hasData={!submitError}
