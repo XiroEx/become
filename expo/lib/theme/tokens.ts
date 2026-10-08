@@ -118,7 +118,8 @@ export type TokenName =
   | "orange"
   | "indigo"
   | "rose"
-  | "amber";
+  | "amber"
+  | "purple";
 
 export const lightTokens: Record<TokenName, string> = {
   background: "250 250 250", // zinc-50
@@ -174,6 +175,7 @@ export const lightTokens: Record<TokenName, string> = {
   // flat END of the web's `from-orange-500 to-amber-400` gradient
   // (`WorkoutSummary.tsx`), which carries no `dark:` variant either — same
   // value in both modes like `orange`, `indigo` and `rose` above (NP-334)
+  purple: "147 51 234", // purple-600 — the web's `text-purple-600` / `bg-purple-100` (NP-353)
 };
 
 export const darkTokens: Record<TokenName, string> = {
@@ -212,6 +214,7 @@ export const darkTokens: Record<TokenName, string> = {
   indigo: "99 102 241", // indigo-500 — same in both modes
   rose: "244 63 94", // rose-500 — same in both modes
   amber: "251 191 36", // amber-400 — same in both modes, see lightTokens.amber
+  purple: "192 132 252", // purple-400 — the web's `dark:text-purple-400 dark:bg-purple-900/30` (NP-353)
 };
 
 export function getTokens(mode: ThemeMode): Record<TokenName, string> {

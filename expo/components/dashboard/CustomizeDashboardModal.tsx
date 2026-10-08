@@ -11,6 +11,7 @@ import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget, hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import { modalAnimation, useReducedMotion } from "@/lib/a11y/reducedMotion";
+import { usePressed } from "@/lib/a11y/usePressed";
 import DraggableFlatList, {
   ScaleDecorator,
   RenderItemParams,
@@ -220,12 +221,12 @@ export function TileBadge({
           width: 36,
           height: 36,
           borderRadius: 18,
-          backgroundColor: tint("primary", 0.15),
+          backgroundColor: tint("indigo", 0.15),
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Sparkles size={18} color={colors.primary} />
+        <Sparkles size={18} color={colors.indigo} />
       </View>
     );
   }
@@ -253,13 +254,13 @@ export function TileBadge({
       bg: string;
     }
   > = {
-    streak: { Icon: Flame, color: colors.accent, bg: tint("accent", 0.15) },
+    streak: { Icon: Flame, color: colors.amber, bg: tint("amber", 0.15) },
     weekly: {
       Icon: TrendingUp,
       color: colors.success,
       bg: tint("success", 0.15),
     },
-    goal: { Icon: Target, color: colors.accent, bg: tint("accent", 0.15) },
+    goal: { Icon: Target, color: colors.purple, bg: tint("purple", 0.15) },
     calories: {
       Icon: Utensils,
       color: colors.destructive,
@@ -276,7 +277,7 @@ export function TileBadge({
       color: colors["muted-foreground"],
       bg: colors.muted,
     },
-    mindset: { Icon: Brain, color: colors.accent, bg: tint("accent", 0.15) },
+    mindset: { Icon: Brain, color: colors.purple, bg: tint("purple", 0.15) },
     nutrition: {
       Icon: UtensilsCrossed,
       color: colors.destructive,
@@ -393,6 +394,56 @@ function SizeControl({
         />
       </Pressable>
     </View>
+  );
+}
+
+function DeleteRowButton({
+  rowId,
+  label,
+  disabled,
+  onDelete,
+}: {
+  rowId: string;
+  label: string;
+  disabled: boolean;
+  onDelete: () => void;
+}) {
+  const { colors, tint } = useThemeTokens();
+  const { pressed, onPressIn, onPressOut } = usePressed();
+
+  return (
+    <Pressable
+      testID={`customizer-delete-${rowId}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Remove ${label}`}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onDelete}
+      onPressIn={onPressIn}
+      onPressOut={onPressOut}
+      hitSlop={hitSlopToMinTarget(32, 32)}
+      style={[
+        {
+          width: 32,
+          height: 32,
+          borderRadius: 8,
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: disabled ? 0.3 : 1,
+        },
+        pressed && !disabled ? { backgroundColor: tint("destructive", 0.15) } : null,
+      ]}
+    >
+      {({ pressed: rnPressed }) => {
+        const isDestructive = (pressed || rnPressed) && !disabled;
+        return (
+          <Trash2
+            size={16}
+            color={isDestructive ? colors.destructive : colors["muted-foreground"]}
+          />
+        );
+      }}
+    </Pressable>
   );
 }
 
@@ -1060,25 +1111,12 @@ function CustomizerBody({
           ) : null}
 
           {/* Delete button */}
-          <Pressable
-            testID={`customizer-delete-${row.rowId}`}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${meta.label}`}
-            accessibilityState={{ disabled: rows.length <= 1 }}
+          <DeleteRowButton
+            rowId={row.rowId}
+            label={meta.label}
             disabled={rows.length <= 1}
-            onPress={() => deleteRow(row.rowId)}
-            hitSlop={hitSlopToMinTarget(32, 32)}
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: rows.length <= 1 ? 0.3 : 1,
-            }}
-          >
-            <Trash2 size={16} color={colors.destructive} />
-          </Pressable>
+            onDelete={() => deleteRow(row.rowId)}
+          />
         </View>
       </ScaleDecorator>
     );
@@ -1278,7 +1316,8 @@ function CustomizerBody({
                     flexShrink: 1,
                     alignItems: "center",
                     justifyContent: "center",
-                    paddingVertical: 12,
+                    minHeight: 44,
+                    paddingVertical: 10,
                     borderRadius: 12,
                     borderWidth: 1,
                     borderColor: colors.border,
@@ -1311,7 +1350,8 @@ function CustomizerBody({
                     flexShrink: 1,
                     alignItems: "center",
                     justifyContent: "center",
-                    paddingVertical: 12,
+                    minHeight: 44,
+                    paddingVertical: 10,
                     borderRadius: 12,
                     backgroundColor: canSave
                       ? colors.foreground
