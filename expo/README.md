@@ -350,6 +350,26 @@ hold it together:
   drives both signals, in both orders, and the hook through the event, the
   fallback and a missing navigator; the hold and the fly being SEEN is the
   device pass (the simulator and a real iPhone).
+- **The stage mounts ONCE, on the settled journey (NP-348).** Review on 10/8:
+  `becoming.tsx` painted the same-WEEK cache first and the stage mounted —
+  and started its opening — on it; the cache had been written on an earlier
+  day, so the S23's live card read "day 3 of 7" with Tuesday's highlights on
+  Wednesday until the fresh payload landed and the focused card changed in
+  place (a visible jump during the push on iOS). A same-week cache is not a
+  same-day cache. `lib/becoming/storage.ts` gained `sameDay` (today's LOCAL
+  day) and `sameJourney` (deep equality); `readBecomingCache` still returns
+  the same-week one, which is the OFFLINE FALLBACK and nothing more. The
+  screen keeps the journey and its opening as ONE state, so the stage
+  mounts in one commit on exactly what it will show: a cache from an
+  earlier day is never painted — the loading state shows, the fetch is
+  awaited, and the cache is mounted only if the fetch fails; today's cache
+  is painted before the fetch only when no opening will play on it (a
+  second open this session, Reduce Motion), and a fresh payload that
+  differs then refreshes the landed stage in place as the web's does;
+  otherwise the stage waits and mounts once, on the fresh payload, with the
+  opening decided on it. `__tests__/card-NP-348-acceptance.test.tsx` counts
+  the real stage's mounts under a pinned clock: yesterday's cache + a fresh
+  fetch → one mount, on the fresh data.
 
 Two things to know before you touch it:
 

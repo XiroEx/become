@@ -19,10 +19,48 @@ export function sameWeek(todayKey: string, now = new Date()): boolean {
   return keyFromToday === localWeekKey(now)
 }
 
+/** Today's local day as `YYYY-MM-DD` — the shape of the journey's `todayKey`. */
+export function localDayKey(now = new Date()): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Is `todayKey` today's local day? (NP-348)
+ *
+ * A cached journey is only ever reused inside its week (`sameWeek`), but a
+ * week has seven days: a cache written on Tuesday still says "day 3 of 7"
+ * with Tuesday's highlights on Wednesday, and the fresh payload then
+ * replaces it under the member. So the screen paints a cache before the
+ * fetch only when it is TODAY's — any other same-week cache is the offline
+ * fallback and nothing more.
+ */
+export function sameDay(todayKey: string, now = new Date()): boolean {
+  return !!todayKey && todayKey === localDayKey(now)
+}
+
+/**
+ * Two journeys that would paint the same stage. The fresh payload for a day
+ * whose cache is already on screen is, more often than not, that cache
+ * again; replacing it would re-render fifty card views for nothing.
+ */
+export function sameJourney(a: JourneyPayload, b: JourneyPayload): boolean {
+  if (a === b) return true
+  try {
+    return JSON.stringify(a) === JSON.stringify(b)
+  } catch {
+    return false
+  }
+}
+
 export function cacheKey(userId?: string | null): string {
   return `becoming.journey.${userId || 'anon'}`
 }
 
+/**
+ * The same-week cache, or null. A SAME-WEEK cache is not a same-DAY cache:
+ * the screen asks `sameDay` before painting it (NP-348); what this returns
+ * is the offline fallback.
+ */
 export async function readBecomingCache(userId?: string | null): Promise<JourneyPayload | null> {
   try {
     const raw = await AsyncStorage.getItem(cacheKey(userId))
