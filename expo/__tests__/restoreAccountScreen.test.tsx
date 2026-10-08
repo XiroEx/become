@@ -4,6 +4,9 @@
 // email, and the valid-link copy/button colour disagreed with the web page.
 // This pins all three against the web's actual copy and the exit's two
 // destinations.
+//
+// NP-311: dead-link failure parity with web — pins updated failure copy and
+// support email mailto link on the failed-restore state.
 
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
@@ -124,5 +127,61 @@ describe("RestoreAccountRoute (NP-253)", () => {
       });
     });
     expect(await waitFor(() => getByTestId("restore-done"))).toBeTruthy();
+  });
+
+  it("matches the web's dead-link failure copy and provides a working support mailto link (NP-311)", async () => {
+    mockParams = { u: "user-1", t: "dead-token" };
+    mockRestoreAccount.mockResolvedValue({ ok: false });
+    const { getByTestId, getByText } = render(<RestoreAccountRoute />);
+
+    fireEvent.press(getByTestId("restore-confirm"));
+
+    await waitFor(() => {
+      expect(getByTestId("restore-failed")).toBeTruthy();
+    });
+
+    expect(
+      getByText(
+        "This link no longer works. That happens when the deletion was already cancelled, when a newer request replaced it, or when the window to change your mind has closed and the data is gone.",
+      ),
+    ).toBeTruthy();
+
+    expect(
+      getByText(
+        /If you think that is wrong, email/,
+      ),
+    ).toBeTruthy();
+
+    const emailLink = getByTestId("restore-support-email");
+    expect(emailLink.props.children).toBe("info@becomeurbest.com");
+
+    fireEvent.press(emailLink);
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      "mailto:info@becomeurbest.com",
+    );
+  });
+
+  it("shows the dead-link failure copy and support mailto link when restoreAccount rejects (NP-311)", async () => {
+    mockParams = { u: "user-1", t: "error-token" };
+    mockRestoreAccount.mockRejectedValue(new Error("Network failure"));
+    const { getByTestId, getByText } = render(<RestoreAccountRoute />);
+
+    fireEvent.press(getByTestId("restore-confirm"));
+
+    await waitFor(() => {
+      expect(getByTestId("restore-failed")).toBeTruthy();
+    });
+
+    expect(
+      getByText(
+        "This link no longer works. That happens when the deletion was already cancelled, when a newer request replaced it, or when the window to change your mind has closed and the data is gone.",
+      ),
+    ).toBeTruthy();
+
+    const emailLink = getByTestId("restore-support-email");
+    fireEvent.press(emailLink);
+    expect(Linking.openURL).toHaveBeenCalledWith(
+      "mailto:info@becomeurbest.com",
+    );
   });
 });

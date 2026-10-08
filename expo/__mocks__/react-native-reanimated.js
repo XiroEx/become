@@ -44,8 +44,44 @@ module.exports = {
   SlideOutUp: chain(),
   LinearTransition: chain(),
   Layout: chain(),
-  useSharedValue: (init) => ({ value: init }),
+  // One mutable box per hook call, kept across renders — what Reanimated does.
+  // A fresh `{ value }` per render would leave a gesture callback created on
+  // the first render reading a box no later effect ever writes to.
+  useSharedValue: (init) => React.useRef({ value: init }).current,
   useAnimatedStyle: (fn) => fn(),
+  // The Becoming stage (NP-204) drives a camera through derived values and
+  // Gesture Handler's `GestureDetector`, which probes Reanimated for
+  // `useEvent` / `useHandler` and calls them during render. None of these
+  // animate in jest: a derived value is its function's answer, an event hook
+  // is its handler, a reaction never fires, and a cancel has nothing to stop.
+  useDerivedValue: (fn) => ({ value: fn() }),
+  useAnimatedProps: (fn) => fn(),
+  useAnimatedReaction: () => {},
+  // Reanimated's `useEvent` hands the handler the NATIVE event; RNTL's
+  // `fireEvent` (which Gesture Handler's `fireGestureHandler` dispatches
+  // through) hands it the wrapped `{ nativeEvent }`. Unwrap, so a test-driven
+  // pan reaches the gesture's callbacks with its `handlerTag` and `state`.
+  useEvent: (handler) => (event) =>
+    handler(event && typeof event === "object" && "nativeEvent" in event ? event.nativeEvent : event),
+  useHandler: () => ({ context: {}, doDependenciesDiffer: false, useWeb: false }),
+  useAnimatedRef: () => ({ current: null }),
+  cancelAnimation: () => {},
+  makeMutable: (init) => ({ value: init }),
+  runOnUI: (fn) => fn,
+  setGestureState: () => {},
+  Easing: {
+    linear: (t) => t,
+    ease: (t) => t,
+    quad: (t) => t,
+    cubic: (t) => t,
+    sin: (t) => t,
+    exp: (t) => t,
+    bezier: () => (t) => t,
+    in: (fn) => fn,
+    out: (fn) => fn,
+    inOut: (fn) => fn,
+  },
+  Extrapolation: { CLAMP: "clamp", EXTEND: "extend", IDENTITY: "identity" },
   withTiming: (toValue, _, callback) => {
     callback?.(true);
     return toValue;
