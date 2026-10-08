@@ -12,9 +12,14 @@
 // `test-support/appRoutes.tsx`) and reads the bar that comes out.
 //
 // NP-013 then changed WHAT the bar should say: the web's BottomNav is the
-// source of truth for order, labels and icons, so the four buttons below are
+// source of truth for order, labels and icons, so the buttons below are
 // Workout, Mind, Home, Nutrition — the web's five minus Community, which is
 // hidden on the web too.
+//
+// NP-351 added the fifth back, as **Profile**. Four buttons put Home 3rd of 4,
+// so the button Jon wanted under his thumb was never actually centred; Profile
+// takes Community's slot (it was already a screen here, hidden with
+// `href: null`) and Home is exactly in the middle of five.
 
 jest.mock("expo-secure-store", () => {
   const mem = new Map<string, string>();
@@ -105,23 +110,24 @@ beforeEach(() => {
 });
 
 /**
- * The web's bar, minus Community while it is hidden
+ * The web's bar with Profile in Community's slot
  * (`webapp/components/BottomNav.tsx`: Workout, Mind, Home, Nutrition,
  * Community). Native used to ship Home, Programs, Mind, Nutrition, Chat.
  */
-const WEB_TAB_LABELS = ["Workout", "Mind", "Home", "Nutrition"];
+const NATIVE_TAB_LABELS = ["Workout", "Mind", "Home", "Nutrition", "Profile"];
 
 describe("the tab bar", () => {
-  it("has exactly the web's four buttons, in the web's order", async () => {
+  it("has five buttons, in the web's order, with Home in the middle", async () => {
     await renderShell("/(tabs)/dashboard");
     expect(
       await screen.findByTestId(screenId("(app)/(tabs)/dashboard/index")),
     ).toBeTruthy();
 
-    expect(tabLabels()).toEqual(WEB_TAB_LABELS);
+    expect(tabLabels()).toEqual(NATIVE_TAB_LABELS);
 
-    // Home in the MIDDLE, under the thumb, exactly where the web puts it —
-    // and the labels the web uses, not the four different ones native had.
+    // Home in the MIDDLE, under the thumb — the whole point of NP-351. With
+    // four buttons it was 3rd of 4, which is not the middle of anything.
+    expect(tabLabels()).toHaveLength(5);
     expect(tabLabels()[2]).toBe("Home");
     expect(tabLabels()).not.toContain("Programs");
     expect(tabLabels()).not.toContain("Chat");
@@ -144,9 +150,14 @@ describe("the tab bar", () => {
     ]);
     // Community is hidden on the web too (FeatureGuard answers "Coming soon"),
     // and NP-032 owns the native chat routes behind
-    // EXPO_PUBLIC_COMMUNITY_ENABLED. Everything else matches, in order.
-    expect(webLabels.filter((l) => l !== "Community")).toEqual(WEB_TAB_LABELS);
-    expect(TAB_ROUTES.map((r) => r.title)).toEqual(WEB_TAB_LABELS);
+    // EXPO_PUBLIC_COMMUNITY_ENABLED — so slot 5 is Profile until community
+    // ships on native, and the first four are the web's, in the web's order.
+    expect(webLabels.slice(0, 4)).toEqual(NATIVE_TAB_LABELS.slice(0, 4));
+    expect(NATIVE_TAB_LABELS[4]).toBe("Profile");
+    expect(TAB_ROUTES.map((r) => r.title)).toEqual(NATIVE_TAB_LABELS);
+    // Whatever slot 5 holds, Home is the centre of five.
+    expect(TAB_ROUTES[2]?.name).toBe("dashboard");
+    expect(TAB_ROUTES).toHaveLength(5);
   });
 
   it("keeps the chat routes reachable but off the bar", async () => {
@@ -156,7 +167,7 @@ describe("the tab bar", () => {
     expect(
       await screen.findByTestId(screenId("(app)/(tabs)/chat/index")),
     ).toBeTruthy();
-    expect(tabLabels()).toEqual(WEB_TAB_LABELS);
+    expect(tabLabels()).toEqual(NATIVE_TAB_LABELS);
   });
 
   it("puts no nested screen in the tab navigator", async () => {
@@ -164,10 +175,12 @@ describe("the tab bar", () => {
     await screen.findByTestId(screenId("(app)/(tabs)/dashboard/index"));
 
     // "Home, tab, 1 of N" counts the navigator's screens, hidden ones
-    // included: the four buttons plus chat, calendar and profile, which are in
-    // the tree with `href: null`. It was 20 while every nested screen —
+    // included: the five buttons plus chat and calendar, which are in the tree
+    // with `href: null`. It was 20 while every nested screen —
     // `programming/[id]/workout/[idx]/live`, `nutrition/recipes/[id]`,
     // `profile/health` and the rest — was a screen of the TAB navigator.
+    // (Still 7 after NP-351: `profile` moved from hidden to a button, it did
+    // not join the navigator.)
     for (const button of tabButtons()) {
       expect(button.total).toBe(7);
     }
@@ -176,11 +189,12 @@ describe("the tab bar", () => {
     // is not in this list any more: "Workout" is a LABEL now — the web's name
     // for the programming tab — and a flattened
     // `programming/[id]/workout/[idx]/index` is caught by the slash-or-bracket
-    // check above regardless.)
+    // check above regardless. Nor is "profile": that is a LABEL too since
+    // NP-351, while `profile/health` is still caught by the same check.)
     for (const label of tabLabels()) {
       expect(label).not.toMatch(/[/[]/);
       expect(label).not.toMatch(
-        /live|search|saved|settings|health|recipes|food|log|phase|calendar|profile/i,
+        /live|search|saved|settings|health|recipes|food|log|phase|calendar/i,
       );
     }
   });
@@ -235,7 +249,7 @@ describe("detail screens push inside their tab", () => {
 
       // Pushed, not replaced: the tab bar is still there and the tab the
       // member started in is still the tab they are in.
-      expect(tabLabels()).toEqual(WEB_TAB_LABELS);
+      expect(tabLabels()).toEqual(NATIVE_TAB_LABELS);
       expect(rendered.getPathname()).toBe(to.replace("/(tabs)", ""));
 
       // …and Back — which is what the iOS edge swipe invokes — returns to the

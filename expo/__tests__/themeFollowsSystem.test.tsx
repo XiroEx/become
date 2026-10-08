@@ -273,8 +273,19 @@ describe("the window, the status bar and the navigators follow it too", () => {
     const tabs = readExpo("app/(app)/(tabs)/_layout.tsx");
     expect(tabs).toContain("tabBarActiveTintColor: colors.primary");
     expect(tabs).toContain('tabBarInactiveTintColor: colors["muted-foreground"]');
-    expect(tabs).toContain("backgroundColor: colors.background");
-    expect(tabs).toContain("borderTopColor: colors.border");
+    expect(tabs).toContain("sceneStyle: { backgroundColor: colors.background }");
+
+    // The bar's own SURFACE moved out of here with NP-351: it is no longer an
+    // opaque `backgroundColor` + `borderTopColor` on `tabBarStyle` but a
+    // floating glass capsule, which gets its material from the platform and
+    // its border/active-pill washes from `tint()` — the same hook, so a system
+    // flip still re-renders them.
+    const bar = readExpo("components/navigation/GlassTabBar.tsx");
+    expect(bar).toContain("useThemeTokens()");
+    expect(bar).toContain('tint("border", 0.7)');
+    expect(bar).toContain('tint("card", liquidGlass ? 0 : 0.6)');
+    expect(bar).toContain('colorScheme={isDark ? "dark" : "light"}');
+    expect(bar).not.toContain("borderTopColor");
   });
 
   it("renders a real screen in both modes, spinner and skeleton included", () => {

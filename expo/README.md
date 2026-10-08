@@ -655,8 +655,9 @@ Full detail — including the device QA checklist — is in
   breaks because **React Native's `flexShrink` is 0 where CSS's is 1** — a
   `<Text>` in a flex ROW keeps its intrinsic width and runs off the end instead
   of wrapping. So text in a row gets `WRAPPABLE_TEXT`, and rows of controls get
-  `flex: 1` wrappers. (The tab bar's labels do not scale, by react-navigation's
-  design: it uses iOS's Large Content Viewer instead.)
+  `flex: 1` wrappers. (The tab bar has no text to scale since NP-351: it is
+  icon-only, as the web's is, and each button carries the label as its
+  accessible name — "Home, tab, 3 of 7".)
 - **Reduce Motion is honoured** — `lib/a11y/reducedMotion.ts`. React Native
   applies none of it: `Modal.animationType` animates and every Reanimated
   `withTiming` runs whatever the setting says. The rule that travels: a file
@@ -841,12 +842,47 @@ See the plan doc for full sequencing.
   `webapp/lib/goals/suggestions.ts`, `webapp/lib/suggestions/**`), so a url
   added over there fails this suite until it has a row.
 - **The tab bar is the WEB's tab bar** — order, labels and icons come from
-  `webapp/components/BottomNav.tsx`: Workout, Mind, Home, Nutrition, minus
-  Community while the web hides it behind `FeatureGuard`. The `programming`
-  folder is the *Workout* tab (the route keeps its name; renaming it would
-  break every `/(tabs)/programming/…` href), and `chat` stays in the tree as a
-  hidden tab until NP-032 removes those routes behind
-  `EXPO_PUBLIC_COMMUNITY_ENABLED`.
+  `webapp/components/BottomNav.tsx`: Workout, Mind, Home, Nutrition, with
+  **Profile** in Community's slot while the web hides Community behind
+  `FeatureGuard` (NP-351). Five buttons, so **Home is exactly in the middle** —
+  with four it was 3rd of 4 and never actually under the thumb. The
+  `programming` folder is the *Workout* tab (the route keeps its name; renaming
+  it would break every `/(tabs)/programming/…` href), and `chat` and `calendar`
+  stay in the tree as hidden tabs (`href: null`) until NP-032 removes the chat
+  routes behind `EXPO_PUBLIC_COMMUNITY_ENABLED`. Swap slot 5 back to Community
+  when community ships on native.
+- **The bar is a floating glass pill, drawn by us** (NP-351) —
+  `components/navigation/GlassTabBar.tsx` is the navigator's `tabBar`: the web's
+  detached capsule (`rounded-full`, `bg-white/80 dark:bg-zinc-900/80`,
+  `backdrop-blur-xl`, `shadow-lg`, `env(safe-area-inset-bottom) + 10px` off the
+  bottom), icon-only, with the active tab in the NEUTRAL primary (NP-313) behind
+  the web's `bg-zinc-900/10 dark:bg-white/15` pill. The material is the
+  platform's own: `GlassView` from `expo-glass-effect` (a real `UIGlassEffect` —
+  Apple's Liquid Glass) when `isLiquidGlassAvailable()`, `expo-blur` with
+  `tint="systemChromeMaterial"` on older iOS, and the same `BlurView` with
+  `experimentalBlurMethod="dimezisBlurView"` over a translucent `card` wash on
+  Android, where there is no system material and the blur can decline to
+  render. It is NOT `expo-router/unstable-native-tabs`: `NativeTabs` would get
+  Liquid Glass for free, but a `UITabBar` is edge-attached, full-width and
+  SF-Symbol-only, and on Android it is a Material bottom bar — it cannot be the
+  web's pill on either platform. It stays the JS `Tabs` navigator, so every tab
+  keeps its `TabStack`, and it still emits `tabPress` exactly as bottom-tabs'
+  own bar does (so `useScrollToTop` and a `preventDefault()`ed tab change both
+  still work) plus a `lightHaptic()` on every press.
+- **The bar reserves nothing — the screens do** — it is absolutely positioned
+  so content scrolls UNDER the glass. Two rules, both from
+  `lib/navigation/tabBarInset.ts` (the one place the pill's height, gap and
+  side inset are written down; a hand-typed `paddingBottom: 100` is a number
+  that drifts from the bar):
+  - the five tab **roots** pad their own scroll content by
+    `TAB_BAR_CONTENT_INSET`, so their content passes under the glass — which is
+    the whole reason it is glass;
+  - every **pushed** screen inside a tab takes `useTabBarScreenInset()` as its
+    container's `paddingBottom`, applied once in
+    `components/navigation/TabStack.tsx`, because the long tail (a program's
+    detail, Nutrition Goals, the recipe editor…) is two dozen screens and a
+    button under the bar is a button nobody can press. The root screen
+    (`name="index"`) opts out of that padding so it is not padded twice.
 - **The app entry is `index.js`, not `expo-router/entry` directly** — it imports
   that same module and then registers the Android App Widget task handler
   (NP-198). Android wakes a widget's provider as a headless JS task with no UI,
