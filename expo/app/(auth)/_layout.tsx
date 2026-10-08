@@ -1,5 +1,6 @@
 import { Stack } from "expo-router";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useStackAnimation } from "@/lib/navigation/screenAnimation";
 
 /**
  * THE UNGUARDED GROUP: sign-in, the magic-link verifier, and account restore.
@@ -15,12 +16,16 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  */
 export default function AuthGroupLayout() {
   const { colors } = useThemeTokens();
+  // One explicit push for every Stack in the app, reduced motion included
+  // (NP-340, `lib/navigation/screenAnimation.ts`).
+  const animation = useStackAnimation();
 
   return (
     <Stack
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
+        animation,
       }}
     />
   );

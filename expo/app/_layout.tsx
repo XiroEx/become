@@ -1,7 +1,7 @@
 import "../global.css";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { View } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -31,6 +31,8 @@ import {
   useThemeTokens,
   useThemedWindowBackground,
 } from "@/lib/theme/useThemeTokens";
+import { useNavigationTheme } from "@/lib/theme/navigationTheme";
+import { useStackAnimation } from "@/lib/navigation/screenAnimation";
 import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
 
 /**
@@ -150,6 +152,23 @@ export default function RootLayout() {
   // The window behind every screen, repainted from the theme while the splash is
   // still up and again on every live flip of the system setting.
   useThemedWindowBackground();
+  // The NAVIGATORS' surfaces, which are neither the window nor a screen: the
+  // native stack container behind a sliding push and the bottom-tabs scene
+  // wrapper. Both are painted from React Navigation's theme and from nothing
+  // else, and that theme defaulted to the LIGHT one in both schemes — the
+  // left-edge white flash George saw (NP-340, see lib/theme/navigationTheme.ts).
+  const navigationTheme = useNavigationTheme();
+  // One explicit push animation instead of Android's version-dependent default,
+  // and a cut when the OS asks for reduced motion (NP-340).
+  const animation = useStackAnimation();
+  // The two plain containers above the router. Transparent, they showed the
+  // native window colour through any frame a screen did not cover; the window
+  // is themed too (above), but it is set asynchronously, so these say it as
+  // well rather than relying on the order of two unrelated effects.
+  const rootStyle = useMemo(
+    () => ({ flex: 1, backgroundColor: colors.background }),
+    [colors.background],
+  );
 
   // Nothing at all until Geist is in memory. The launch screen is still up
   // (`holdSplashForFonts()` above), so this is not a blank frame — it is the
@@ -157,94 +176,101 @@ export default function RootLayout() {
   if (!fontsReady) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        {/* One session for the whole app, above every route. */}
-        <AuthProvider>
-          {/* `style` names the CONTENT: light glyphs on a dark surface, dark
-              glyphs on a light one. Derived from the theme, so it flips with the
-              system setting instead of leaving white-on-white icons (NP-123). */}
-          <StatusBar style={statusBarStyle} />
-          <ColdOpenUnlock />
-          {/* Records the member's timezone on launch and on the first foreground
-              of a new local day. The notify cron skips a member with none
-              stored, and a workout save used to be the only thing that wrote
-              one. */}
-          <TimezoneReporter />
-          {/* Draws the widgets feed's `badgeCount` on the app icon at launch
-              and on each foreground (NP-067): the number of daily commitments
-              still open, cleared at zero and on sign-out. At the ROOT on
-              purpose — a screen-mounted sync would miss every other tab's
-              completions, and the sign-out transition unmounts (app). */}
-          <AppBadgeSync />
-          {/* Keeps the Android home-screen widgets in step with the session
-              (NP-198): a signed-in open hands the read-only widgets token over
-              and redraws the four tiles from the feed; a sign-out forgets it and
-              draws the sign-in prompt. At the ROOT on purpose — the sign-out
-              transition unmounts anything inside (app), which is exactly when
-              the widgets must stop showing the member's day. */}
-          <WidgetsBridge />
-          {/*
-            THE mount point for refusal handling: every screen below reaches it
-            with useApiErrorHandler(). The remaining answers arrive with the cards
-            that build them — sign-out (NP-002) and the consent sheet (NP-046) —
-            and `session` is the JWT, which is what arms "sign out once per
-            session". Until then a refused request comes back to the screen it
-            came from, with the server's wording and no sheet, which is already
-            the correct behaviour for every other class.
-
-            `onPlanGate` is wired HERE and only here (NP-052): a plan gate is the
-            one refusal that answers with an upsell, and `classifyApiError`
-            guarantees what reaches it — a 403 carrying BOTH `feature` and
-            `requiresTier`. A 429 spend ceiling is `rate-limited` and never
-            arrives; an ownership 403 is `forbidden` and never arrives either.
-          */}
-          <ApiErrorHandlerProvider
-            onPlanGate={raiseUpgradeSheet}
-            onAiConsent={raiseAiConsentPrompt}
-          >
+    <GestureHandlerRootView style={rootStyle}>
+      {/* ABOVE every navigator in the app, so the root Stack, the (app) and
+          (auth) Stacks, the tab navigator and all seven tab Stacks read the
+          same theme — and so does anything calling React Navigation's
+          `useTheme()`. */}
+      <ThemeProvider value={navigationTheme}>
+        <SafeAreaProvider>
+          {/* One session for the whole app, above every route. */}
+          <AuthProvider>
+            {/* `style` names the CONTENT: light glyphs on a dark surface, dark
+                glyphs on a light one. Derived from the theme, so it flips with the
+                system setting instead of leaving white-on-white icons (NP-123). */}
+            <StatusBar style={statusBarStyle} />
+            <ColdOpenUnlock />
+            {/* Records the member's timezone on launch and on the first foreground
+                of a new local day. The notify cron skips a member with none
+                stored, and a workout save used to be the only thing that wrote
+                one. */}
+            <TimezoneReporter />
+            {/* Draws the widgets feed's `badgeCount` on the app icon at launch
+                and on each foreground (NP-067): the number of daily commitments
+                still open, cleared at zero and on sign-out. At the ROOT on
+                purpose — a screen-mounted sync would miss every other tab's
+                completions, and the sign-out transition unmounts (app). */}
+            <AppBadgeSync />
+            {/* Keeps the Android home-screen widgets in step with the session
+                (NP-198): a signed-in open hands the read-only widgets token over
+                and redraws the four tiles from the feed; a sign-out forgets it and
+                draws the sign-in prompt. At the ROOT on purpose — the sign-out
+                transition unmounts anything inside (app), which is exactly when
+                the widgets must stop showing the member's day. */}
+            <WidgetsBridge />
             {/*
-              ABOVE EVERY ROUTE, and above the Stack rather than inside it: the
-              connection can go while any screen is open, and the writes it
-              queues (weight and mood, each keeping the day it was logged on)
-              are replayed by a reconnect that may land minutes later, with a
-              different screen — or none — mounted. It is also where a
-              sign-out clears the queue. See components/offline/.
+              THE mount point for refusal handling: every screen below reaches it
+              with useApiErrorHandler(). The remaining answers arrive with the cards
+              that build them — sign-out (NP-002) and the consent sheet (NP-046) —
+              and `session` is the JWT, which is what arms "sign out once per
+              session". Until then a refused request comes back to the screen it
+              came from, with the server's wording and no sheet, which is already
+              the correct behaviour for every other class.
+
+              `onPlanGate` is wired HERE and only here (NP-052): a plan gate is the
+              one refusal that answers with an upsell, and `classifyApiError`
+              guarantees what reaches it — a 403 carrying BOTH `feature` and
+              `requiresTier`. A 429 spend ceiling is `rate-limited` and never
+              arrives; an ownership 403 is `forbidden` and never arrives either.
             */}
-            <View style={{ flex: 1 }}>
-              <ConnectivityBanner />
+            <ApiErrorHandlerProvider
+              onPlanGate={raiseUpgradeSheet}
+              onAiConsent={raiseAiConsentPrompt}
+            >
               {/*
-                THE upgrade sheet, mounted once and above every route (NP-052).
-                It renders nothing until `showUpgradeSheet(gate)` is called, and
-                it lives here rather than in a screen because a 403 can be routed
-                by code that is rendering nothing at all — the AI run client, the
-                offline replay — and can land after the screen that asked for it
-                has gone.
+                ABOVE EVERY ROUTE, and above the Stack rather than inside it: the
+                connection can go while any screen is open, and the writes it
+                queues (weight and mood, each keeping the day it was logged on)
+                are replayed by a reconnect that may land minutes later, with a
+                different screen — or none — mounted. It is also where a
+                sign-out clears the queue. See components/offline/.
               */}
-              <UpgradeSheetHost />
-              {/*
-                THE AI consent prompt, mounted once at the root (NP-046). It renders
-                nothing until an AI refusal routes to `raiseAiConsentPrompt` or
-                `showAiConsentPrompt()` is called.
-              */}
-              <AiConsentPromptHost />
-              <VersionGate>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: colors.background },
-                  }}
-                >
-                  <Stack.Screen name="index" />
-                  <Stack.Screen name="(auth)" />
-                  <Stack.Screen name="(app)" />
-                  <Stack.Screen name="onboarding" />
-                </Stack>
-              </VersionGate>
-            </View>
-          </ApiErrorHandlerProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
+              <View style={rootStyle}>
+                <ConnectivityBanner />
+                {/*
+                  THE upgrade sheet, mounted once and above every route (NP-052).
+                  It renders nothing until `showUpgradeSheet(gate)` is called, and
+                  it lives here rather than in a screen because a 403 can be routed
+                  by code that is rendering nothing at all — the AI run client, the
+                  offline replay — and can land after the screen that asked for it
+                  has gone.
+                */}
+                <UpgradeSheetHost />
+                {/*
+                  THE AI consent prompt, mounted once at the root (NP-046). It renders
+                  nothing until an AI refusal routes to `raiseAiConsentPrompt` or
+                  `showAiConsentPrompt()` is called.
+                */}
+                <AiConsentPromptHost />
+                <VersionGate>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: colors.background },
+                      animation,
+                    }}
+                  >
+                    <Stack.Screen name="index" />
+                    <Stack.Screen name="(auth)" />
+                    <Stack.Screen name="(app)" />
+                    <Stack.Screen name="onboarding" />
+                  </Stack>
+                </VersionGate>
+              </View>
+            </ApiErrorHandlerProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </ThemeProvider>
     </GestureHandlerRootView>
   );
 }
