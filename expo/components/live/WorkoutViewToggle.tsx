@@ -43,11 +43,11 @@ export function WorkoutViewToggle({
         style={[
           minTouchTarget,
           {
-            flex: 1,
             alignItems: "center",
             justifyContent: "center",
             borderRadius: 999,
-            paddingHorizontal: 12,
+            paddingHorizontal: 14,
+            paddingVertical: 5,
             backgroundColor: selected ? colors.primary : "transparent",
           },
         ]}
@@ -71,6 +71,7 @@ export function WorkoutViewToggle({
       style={{
         flexDirection: "row",
         alignItems: "center",
+        alignSelf: "center",
         gap: 2,
         padding: 2,
         borderRadius: 999,

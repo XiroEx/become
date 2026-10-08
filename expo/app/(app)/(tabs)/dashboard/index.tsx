@@ -314,10 +314,11 @@ export default function DashboardRoute() {
     // screen Up Next, Current Program's Continue, the calendar and every
     // other training entry point open (NP-256). Without it this opened the
     // read-only overview instead.
+    const dayParam = currentDayLabel ? `&day=${encodeURIComponent(currentDayLabel)}` : "";
     router.push(
-      `/(tabs)/programming/${programId}/workout/${workoutIndex}/live?phase=${workoutPhaseIndex}`,
+      `/(tabs)/programming/${programId}/workout/${workoutIndex}/live?phase=${workoutPhaseIndex}${dayParam}`,
     );
-  }, [router, programId, workoutIndex, workoutPhaseIndex]);
+  }, [router, programId, workoutIndex, workoutPhaseIndex, currentDayLabel]);
 
   const onOpenCalendar = useCallback(() => {
     router.push("/(tabs)/calendar");

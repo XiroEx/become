@@ -735,7 +735,7 @@ describe("WorkoutOverviewRoute", () => {
     fireEvent.press(getByTestId("workout-overview-start-live"));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/prog-1/workout/1/live?phase=0",
+      "/(tabs)/programming/prog-1/workout/1/live?phase=0&day=Day%202",
     );
   });
 
@@ -751,7 +751,7 @@ describe("WorkoutOverviewRoute", () => {
     fireEvent.press(getByTestId("workout-overview-start-live"));
 
     expect(mockPush).toHaveBeenCalledWith(
-      "/(tabs)/programming/prog-1/workout/0/live?phase=1",
+      "/(tabs)/programming/prog-1/workout/0/live?phase=1&day=Day%201",
     );
   });
 });

@@ -436,7 +436,9 @@ export default function ProgramDetailRoute() {
     if (workoutIndex < 0 || workoutIndex >= phaseWorkouts.length) {
       workoutIndex = 0;
     }
-    const dayParam = dayLabel ? `&day=${encodeURIComponent(dayLabel)}` : "";
+    const resolvedDay =
+      dayLabel || phaseWorkouts[workoutIndex]?.day || `Day ${workoutIndex + 1}`;
+    const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
     router.push(
       `/(tabs)/programming/${encodeURIComponent(id)}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
     );
@@ -455,7 +457,8 @@ export default function ProgramDetailRoute() {
         );
         if (wIdx < 0) wIdx = 0;
       }
-      const dayParam = dLabel ? `&day=${encodeURIComponent(dLabel)}` : "";
+      const resolvedDay = dLabel || phaseWorkouts[wIdx]?.day || `Day ${wIdx + 1}`;
+      const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
       router.push(
         `/(tabs)/programming/${encodeURIComponent(id)}/workout/${wIdx}/live?phase=${pIdx}${dayParam}`,
       );
@@ -479,7 +482,9 @@ export default function ProgramDetailRoute() {
     if (resumeIdx < 0 || resumeIdx >= phaseWorkouts.length) {
       resumeIdx = 0;
     }
-    const dayParam = resumeDay ? `&day=${encodeURIComponent(resumeDay)}` : "";
+    const resolvedDay =
+      resumeDay || phaseWorkouts[resumeIdx]?.day || `Day ${resumeIdx + 1}`;
+    const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
     router.push(
       `/(tabs)/programming/${encodeURIComponent(id)}/workout/${resumeIdx}/live?phase=${resumePhase}${dayParam}`,
     );

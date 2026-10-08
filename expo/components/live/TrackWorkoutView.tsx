@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
+import { ChevronDown } from "lucide-react-native";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
 import { ExerciseHint } from "@/components/live/ExerciseHint";
 import {
@@ -14,6 +16,7 @@ import {
   getBellWeightInfo,
   moveExercise,
   removeExercise,
+  tracksTime,
   ungroupAt,
   type WorkoutStep,
 } from "@become/core";
@@ -168,6 +171,7 @@ export function TrackWorkoutView({
   onExerciseChange,
   testID,
 }: TrackWorkoutViewProps) {
+  const { colors } = useThemeTokens();
   // Collapsed state is opt-IN per slug: absent (the common case) means open,
   // so every existing caller that never taps a header still sees every set —
   // only NP-287's new chevron can close one.
@@ -221,8 +225,13 @@ export function TrackWorkoutView({
     const allDone = totalCount > 0 && doneCount === totalCount;
     const pct = completionPercent(doneCount, totalCount);
     const isCollapsed = !!collapsed[ex.slug];
+    const numSets = ex.sets || 3;
+    const isTimed = tracksTime(ex.trackingType);
+    const unit = isTimed
+      ? (numSets === 1 ? "round" : "rounds")
+      : (numSets === 1 && ex.sets === 1 ? "sets" : numSets === 1 ? "set" : "sets");
     const metaParts = [
-      ex.repsLabel ? `${ex.sets}×${ex.repsLabel}` : `${ex.sets} sets`,
+      ex.repsLabel ? `${numSets}×${ex.repsLabel}` : `${numSets} ${unit}`,
       ex.difficulty ? capitalize(ex.difficulty) : null,
     ].filter(Boolean);
 
@@ -244,10 +253,14 @@ export function TrackWorkoutView({
           <View
             testID={`${testID}-exercise-${ex.slug}-badge`}
             className={`h-9 w-9 rounded-xl items-center justify-center ${
-              allDone ? "bg-green-500" : "bg-foreground"
+              allDone ? "bg-green-500" : "bg-zinc-100 dark:bg-zinc-800"
             }`}
           >
-            <Text className="text-background text-sm font-bold">
+            <Text
+              className={`${
+                allDone ? "text-white" : "text-zinc-700 dark:text-zinc-300"
+              } text-sm font-bold`}
+            >
               {allDone ? "✓" : exIdx + 1}
             </Text>
           </View>
@@ -285,9 +298,11 @@ export function TrackWorkoutView({
                 className="h-full rounded-full bg-green-500"
               />
             </View>
-            <Text className="text-muted-foreground text-xs">
-              {isCollapsed ? "▸" : "▾"}
-            </Text>
+            <ChevronDown
+              size={18}
+              color={colors["muted-foreground"]}
+              style={{ transform: [{ rotate: isCollapsed ? "-90deg" : "0deg" }] }}
+            />
           </View>
         </Pressable>
 
@@ -307,7 +322,7 @@ export function TrackWorkoutView({
             {ex.notes ? (
               <Text
                 testID={`${testID}-${ex.slug}-notes`}
-                className="text-muted-foreground text-xs mb-2"
+                className="text-blue-600 dark:text-blue-400 text-xs mb-2"
               >
                 {ex.notes}
               </Text>
@@ -321,6 +336,8 @@ export function TrackWorkoutView({
                 exerciseName={ex.name}
                 equipment={ex.equipment}
                 showQuickPicks
+                targetReps={ex.repsLabel}
+                targetDuration={ex.durationLabel}
                 state={s}
                 prefill={ex.prefill?.[i] ?? null}
                 trackingType={ex.trackingType}
@@ -422,14 +439,12 @@ export function TrackWorkoutView({
           >
             {head.groupLabel ?? groupId}
           </Text>
-          {rounds > 1 ? (
-            <Text
-              testID={`${testID}-group-${groupId}-rounds`}
-              className="text-muted-foreground text-xs"
-            >
-              {`Runs as ${rounds} interleaved rounds`}
-            </Text>
-          ) : null}
+          <Text
+            testID={`${testID}-group-${groupId}-subtitle`}
+            className="text-muted-foreground text-xs"
+          >
+            {`— ${members.length} exercises${head.groupRest ? `, ${head.groupRest} rest between rounds` : ", minimal rest between exercises"}`}
+          </Text>
           <View style={{ flex: 1 }} />
           {onExerciseChange ? (
             <Pressable
@@ -455,34 +470,6 @@ export function TrackWorkoutView({
           </Text>
         </View>
 
-        {/* Each member's video/notes/hint, once — before the round rows. */}
-        <View style={{ marginTop: 10, gap: 10 }}>
-          {members.map(({ ex }) => (
-            <View key={ex.slug} testID={`${testID}-exercise-${ex.slug}`} style={{ gap: 4 }}>
-              <Text className="text-foreground text-sm font-semibold">{ex.name}</Text>
-              <FramedVideo
-                src={ex.videoUrl}
-                surface="live"
-                exerciseName={ex.name}
-                videoWidth={ex.videoWidth}
-                videoHeight={ex.videoHeight}
-                videoFraming={ex.videoFraming}
-                videoTrim={ex.videoTrim}
-                testID={`${testID}-${ex.slug}-video`}
-              />
-              {ex.notes ? (
-                <Text
-                  testID={`${testID}-${ex.slug}-notes`}
-                  className="text-muted-foreground text-xs"
-                >
-                  {ex.notes}
-                </Text>
-              ) : null}
-              {renderHint(ex.slug)}
-            </View>
-          ))}
-        </View>
-
         {/* ROUND 1, ROUND 2, … — every member's set for that round, together. */}
         <View style={{ marginTop: 10, gap: 8 }}>
           {Array.from({ length: rounds }, (_, r) => (
@@ -501,12 +488,19 @@ export function TrackWorkoutView({
                   if (!s) return null;
                   const bell = getBellWeightInfo(ex);
                   return (
-                    <View key={ex.slug} className="rounded-lg border border-border bg-card p-2">
+                    <View
+                      key={ex.slug}
+                      // Each member is named by its slug once: on its round-1 card
+                      // (the web's grouped Track has no separate per-member block).
+                      testID={r === 0 ? `${testID}-exercise-${ex.slug}` : undefined}
+                      className="rounded-lg border border-border bg-card p-2"
+                    >
                       <View
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
                           justifyContent: "space-between",
+                          marginBottom: 4,
                         }}
                       >
                         <Text className="text-foreground text-xs font-semibold">{ex.name}</Text>
@@ -524,11 +518,14 @@ export function TrackWorkoutView({
                         ) : null}
                       </View>
                       <LiveSetRow
+                        compact
                         setIndex={r}
                         bell={bell}
                         exerciseName={ex.name}
                         equipment={ex.equipment}
                         showQuickPicks
+                        targetReps={ex.repsLabel}
+                        targetDuration={ex.durationLabel}
                         state={s}
                         prefill={ex.prefill?.[r] ?? null}
                         trackingType={ex.trackingType}

@@ -501,9 +501,13 @@ export default function LiveWorkoutRoute({
               body={workoutShareBody}
               getToken={() => token ?? undefined}
               testID="live-workout-share"
+              iconOnly
             />
           ) : undefined
         }
+        day={resolvedDay || (workout as any)?.day || day || "Day 1"}
+        onViewPRs={() => router.push("/progress" as never)}
+        onExerciseChange={applyExerciseChange}
         positionScope={programScope(id, resolvedDay)}
         positionStore={
           positionStore !== undefined
