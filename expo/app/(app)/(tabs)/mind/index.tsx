@@ -876,9 +876,8 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
         {/* The Becoming — where you started, where you are, what's next, for
             all three pillars. Present in both the available and cooldown
             states (web parity: `webapp/components/mind/MindJourney.tsx:574-589`).
-            Native has no Becoming stage yet (NP-203/NP-204 decide that); this
-            opens the same screen `BecomingDoor` on the dashboard already
-            routes to. */}
+            Opens the same screen `BecomingDoor` on the dashboard routes to —
+            the journey stage (NP-204), with the details sheet over it. */}
         <Pressable
           testID="mind-becoming-link"
           accessibilityRole="button"

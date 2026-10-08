@@ -11,6 +11,7 @@ import {
   type BillingPlan,
 } from '@/lib/billing/config'
 import { describeStripeError, getStripe } from '@/lib/billing/stripeClient'
+import { isTrialEligible, TRIAL_DAYS } from '@/lib/billing/trial'
 import { ensureStripeCustomer } from '@/lib/billing/customer'
 import { readCustomerId, writeCustomerIdIfAbsent } from '@/lib/billing/mongoDeps'
 import { checkoutCancelUrl, checkoutSuccessUrl, parseReturnTarget } from '@/lib/billing/urls'
@@ -29,11 +30,20 @@ export const dynamic = 'force-dynamic'
 /**
  * POST /api/billing/checkout — start a Stripe Checkout session.
  *
- * Body: `{ plan?: 'monthly' | 'annual', returnTo?: 'web' | 'app' }`. The plan is
- * OPTIONAL and defaults to monthly, because the shipped UpgradeSheet posts
- * `{ feature, tier }` with no plan at all — a required field here would 400 the
- * only caller in the app. An explicitly wrong value is still a 400; a missing
- * one is not.
+ * Body: `{ plan?: 'monthly' | 'annual', returnTo?: 'web' | 'app', trial?: boolean }`.
+ * The plan is OPTIONAL and defaults to monthly, because the shipped
+ * UpgradeSheet posts `{ feature, tier }` with no plan at all — a required
+ * field here would 400 the only caller in the app. An explicitly wrong value
+ * is still a 400; a missing one is not.
+ *
+ * `trial: true` is the onboarding offer's flag, and it is ADVISORY, never
+ * trusted outright: the response always carries `trialApplied`, the field the
+ * caller must read rather than assume. It is honoured only for an account
+ * that has never held a subscription (`isTrialEligible`, lib/billing/trial.ts)
+ * — Stripe does not stop a cancel-and-rejoin from minting a free trial every
+ * time, so this route is the one place that remembers. A returning buyer who
+ * asks for a trial still gets a normal paid checkout; `trialApplied: false`
+ * is the signal, not a refusal, because the purchase itself is still wanted.
  *
  * `returnTo` is the NATIVE app's flag and defaults to 'web', so every browser
  * caller keeps returning to /dashboard/plan exactly as before. 'app' swaps the
@@ -64,6 +74,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_plan' }, { status: 400 })
     }
     const plan: BillingPlan = isPlan(rawPlan) ? rawPlan : 'monthly'
+    const wantsTrial = (body as { trial?: unknown } | null)?.trial === true
 
     // Absent is 'web'. An unknown value is a 400 rather than a quiet fall back,
     // because a typo'd 'App' would return a native buyer to /dashboard/plan in
@@ -152,6 +163,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // The trial is honoured only once per account, ever — see
+    // lib/billing/trial.ts. A returning buyer still checks out normally;
+    // `applyTrial` (reported back as `trialApplied`) is the only thing that
+    // changes, not whether the purchase goes through.
+    const applyTrial = wantsTrial && isTrialEligible(user.subscription)
+
     const appChannel = IS_BETA ? 'beta' : 'prod'
     const customerId = await ensureStripeCustomer({
       userId: auth.userId,
@@ -185,7 +202,12 @@ export async function POST(request: NextRequest) {
         consent_collection: CHECKOUT_CONSENT_COLLECTION,
         // Copied onto the subscription, so every later subscription event and
         // every invoice snapshot can attribute itself without a customer lookup.
-        subscription_data: { metadata: { userId: auth.userId, plan, appChannel } },
+        // `trial_period_days` only ever comes from `applyTrial`, never from the
+        // raw request flag — see the eligibility check above.
+        subscription_data: {
+          metadata: { userId: auth.userId, plan, appChannel },
+          ...(applyTrial ? { trial_period_days: TRIAL_DAYS } : {}),
+        },
         // ORIGIN-AWARE. The app answers on both become.redbtn.io and
         // becomeurbest.com, and a session belongs to ONE host — so returning a
         // becomeurbest.com buyer to NEXT_PUBLIC_APP_URL lands them signed out
@@ -229,7 +251,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'checkout_failed' }, { status: 502 })
     }
 
-    return NextResponse.json({ url: session.url, sessionId: session.id, mode: cfg.mode })
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+      mode: cfg.mode,
+      trialApplied: applyTrial,
+    })
   } catch (error) {
     // Never the message: a Stripe error can echo request params back.
     console.error('[billing] checkout failed:', describeStripeError(error))

@@ -1,6 +1,6 @@
 {
   "name": "@become/core",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -176,6 +176,16 @@
       "types": "./dist/types/training/index.d.ts",
       "import": "./dist/esm/training/index.js",
       "require": "./dist/cjs/training/index.js"
+    },
+    "./becoming": {
+      "types": "./dist/types/becoming/index.d.ts",
+      "import": "./dist/esm/becoming/index.js",
+      "require": "./dist/cjs/becoming/index.js"
+    },
+    "./becoming/layout": {
+      "types": "./dist/types/becoming/layout.d.ts",
+      "import": "./dist/esm/becoming/layout.js",
+      "require": "./dist/cjs/becoming/layout.js"
     },
     "./profileIcons": {
       "types": "./dist/types/profileIcons.d.ts",
