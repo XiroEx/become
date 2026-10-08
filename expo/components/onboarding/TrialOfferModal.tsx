@@ -51,8 +51,8 @@ import {
   TRIAL_OFFER_HEADING,
   TRIAL_OFFER_SUBHEADING,
 } from "@/lib/billing/trialOfferCopy";
+import { CheckoutAction } from "@/components/entitlements/UpgradeSheet";
 import {
-  CheckoutAction,
   openBillingPortal,
   openExternally,
   PORTAL_PATH,
