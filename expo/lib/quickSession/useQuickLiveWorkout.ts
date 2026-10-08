@@ -137,6 +137,7 @@ export interface UseQuickLiveWorkoutResult {
   stored: StoredQuickSession | null;
   needsName: boolean;
   restoredGrid: LiveGrid | null;
+  grid: LiveGrid;
   /**
    * Last-time numbers keyed by exercise NAME (`quickHistory.ts`) — the
    * `exerciseHistory` prop `LiveWorkoutClient` and `WorkoutSummary` already
@@ -310,7 +311,8 @@ export function useQuickLiveWorkout(
   const [workout, setWorkout] = useState<LiveWorkoutViewModel | null>(null);
   const [stored, setStored] = useState<StoredQuickSession | null>(null);
   const [needsName, setNeedsName] = useState(false);
-  const [restoredGrid, setRestoredGrid] = useState<LiveGrid | null>(null);  const [exerciseHistory, setExerciseHistory] = useState<
+  const [restoredGrid, setRestoredGrid] = useState<LiveGrid | null>(null);
+  const [grid, setGrid] = useState<LiveGrid>({});  const [exerciseHistory, setExerciseHistory] = useState<
     Record<string, ExerciseHistoryEntry>
   >({});
   const [finishing, setFinishing] = useState(false);
@@ -507,6 +509,7 @@ export function useQuickLiveWorkout(
         const restored = progressToLiveGrid(live, progress?.grid ?? null);
         gridRef.current = restored ?? {};
         setRestoredGrid(restored);
+        setGrid(restored ?? {});
 
         const title = current.title || "Quick Session";
         setWorkout({
@@ -587,6 +590,7 @@ export function useQuickLiveWorkout(
   const onGridChange = useCallback(
     (grid: LiveGrid) => {
       gridRef.current = grid;
+      setGrid(grid);
       void writeQuickProgress(sessionId, liveGridToProgress(grid), store);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
@@ -687,6 +691,7 @@ export function useQuickLiveWorkout(
       if (oldEx.slug !== candidate.slug) delete nextGrid[oldEx.slug];
       gridRef.current = nextGrid;
       setRestoredGrid(nextGrid);
+      setGrid(nextGrid);
       void writeQuickProgress(sessionId, liveGridToProgress(nextGrid), store);
 
       // Persist into the stash with the dedicated helper (not the generic
@@ -773,6 +778,7 @@ export function useQuickLiveWorkout(
   const onFinish = useCallback(
     (grid: LiveGrid) => {
       gridRef.current = grid;
+      setGrid(grid);
       void writeQuickProgress(sessionId, liveGridToProgress(grid), store);
       // The route decides: when the session still needs a name it opens
       // `QuickSessionNamePrompt`; otherwise it finishes directly.
@@ -800,6 +806,7 @@ export function useQuickLiveWorkout(
       gridRef.current = nextGrid;
       setWorkout((w) => (w ? { ...w, exercises: nextExercises } : w));
       setRestoredGrid(nextGrid);
+      setGrid(nextGrid);
       const draft = nextExercises.map((ex) => ({
         exerciseSlug: ex.slug,
         name: ex.name,
@@ -918,6 +925,7 @@ export function useQuickLiveWorkout(
     stored,
     needsName,
     restoredGrid,
+    grid,
     exerciseHistory,
     finishing,
     finishedGrid,
