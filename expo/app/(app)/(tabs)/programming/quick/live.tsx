@@ -29,8 +29,10 @@ import { ProfileResponseSchema, StreakResponseSchema } from "@become/api-client"
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import {
   asyncStorageKeyValueStore,
+  hasWorkoutProgress,
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
+import { useLiveBackGuard } from "@/lib/live/useLiveBackGuard";
 import { localDateKey } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -64,6 +66,10 @@ export interface QuickLiveRouteProps {
     streak?: { streakDays: number; nextMilestone: number | null } | null;
     goal?: string | null;
   };
+  /** Navigator override for tests. */
+  navigation?: import("@/lib/live/useLiveBackGuard").BackGuardNavigator | null;
+  /** BackHandler override for tests. */
+  backHandler?: import("@/lib/android/backHandler").BackHandlerLike | null;
 }
 
 /**
@@ -90,6 +96,8 @@ export default function QuickLiveRoute({
   initialOriginKey,
   getNow,
   summaryDataForTests,
+  navigation,
+  backHandler,
 }: QuickLiveRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -106,6 +114,7 @@ export default function QuickLiveRoute({
     workout,
     stored,
     restoredGrid,
+    grid,
     exerciseHistory,
     finishing,
     finishedGrid,
@@ -202,6 +211,19 @@ export default function QuickLiveRoute({
   };
 
   const showSummary = finishedGrid !== null;
+
+  // Leaving with unsaved sets loses the workout (NP-082, NP-331): confirm first.
+  // Android hardware back is intercepted through the shared hook; the iOS
+  // swipe-back is disabled on this route while there is unsaved work.
+  // Only guard when there is actual entered work (typed values or completed sets)
+  // so exiting a fresh untouched workout doesn't prompt.
+  const hasEnteredWork = useMemo(() => hasWorkoutProgress(grid), [grid]);
+
+  useLiveBackGuard({
+    enabled: !showSummary && !loading && workout !== null && hasEnteredWork,
+    ...(navigation !== undefined ? { navigation } : {}),
+    ...(backHandler !== undefined ? { backHandler } : {}),
+  });
 
   const summaryHistory: Record<string, (typeof exerciseHistory)[string]> =
     exerciseHistory ?? {};

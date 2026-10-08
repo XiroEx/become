@@ -28,6 +28,7 @@ import {
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import {
   asyncStorageKeyValueStore,
+  hasWorkoutProgress,
   type KeyValueStore,
 } from "@/lib/live/liveWorkoutCache";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
@@ -69,6 +70,10 @@ export interface LiveWorkoutRouteProps {
     streak?: { streakDays: number; nextMilestone: number | null } | null;
     goal?: string | null;
   };
+  /** Navigator override for tests. */
+  navigation?: import("@/lib/live/useLiveBackGuard").BackGuardNavigator | null;
+  /** BackHandler override for tests. */
+  backHandler?: import("@/lib/android/backHandler").BackHandlerLike | null;
 }
 
 /**
@@ -103,6 +108,8 @@ export default function LiveWorkoutRoute({
   getNow,
   saveQueue,
   summaryDataForTests,
+  navigation,
+  backHandler,
 }: LiveWorkoutRouteProps = {}) {
   const router = useRouter();
   const { colors } = useThemeTokens();
@@ -243,13 +250,17 @@ export default function LiveWorkoutRoute({
   );
   const { hints: exerciseHints, dismissHint } = useExerciseHints(workoutSlugs);
 
-  // Leaving with unsaved sets loses the workout (NP-082): confirm first.
+  // Leaving with unsaved sets loses the workout (NP-082, NP-331): confirm first.
   // Android hardware back is intercepted through the shared hook; the iOS
   // swipe-back is disabled on this route while there is unsaved work.
-  // `finishedGrid` is outside React's render output here, so the guard
-  // subscribes in an effect (inside `useLiveBackGuard`).
+  // Only guard when there is actual entered work (typed values or completed sets)
+  // so exiting a fresh untouched workout doesn't prompt.
+  const hasEnteredWork = useMemo(() => hasWorkoutProgress(grid), [grid]);
+
   useLiveBackGuard({
-    enabled: !showSummary && !loading && workout !== null,
+    enabled: !showSummary && !loading && workout !== null && hasEnteredWork,
+    ...(navigation !== undefined ? { navigation } : {}),
+    ...(backHandler !== undefined ? { backHandler } : {}),
   });
 
   // The web fetches streak + goal when the summary appears — the save

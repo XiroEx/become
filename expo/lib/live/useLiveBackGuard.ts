@@ -12,10 +12,10 @@
  * one). In the app the route passes nothing and the real navigator is used.
  */
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Alert, BackHandler } from "react-native";
 import { useNavigation, useRouter } from "expo-router";
-import { useAndroidBackHandler } from "@/lib/android/backHandler";
+import { useAndroidBackHandler, type BackHandlerLike } from "@/lib/android/backHandler";
 
 export interface BackGuardNavigator {
   setOptions: (options: { gestureEnabled?: boolean }) => void;
@@ -34,6 +34,8 @@ export interface UseLiveBackGuardInput {
   enabled: boolean;
   /** Navigator override for tests (defaults to expo-router's). */
   navigation?: BackGuardNavigator | null;
+  /** BackHandler override for tests (defaults to React Native's BackHandler). */
+  backHandler?: BackHandlerLike | null;
 }
 
 export function confirmLeaveAlert(onLeave: () => void): void {
@@ -51,8 +53,10 @@ export function confirmLeaveAlert(onLeave: () => void): void {
 export function useLiveBackGuard({
   enabled,
   navigation: navigationOverride,
+  backHandler: backHandlerOverride,
 }: UseLiveBackGuardInput): void {
   const router = useRouter();
+  const leavingRef = useRef(false);
   let hookNavigation: BackGuardNavigator | null = null;
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -61,22 +65,32 @@ export function useLiveBackGuard({
     hookNavigation = null;
   }
   const navigation = navigationOverride !== undefined ? navigationOverride : hookNavigation;
+  const backHandler = backHandlerOverride !== undefined ? backHandlerOverride : BackHandler;
 
   useAndroidBackHandler({
     enabled,
     onBack: () => {
-      confirmLeaveAlert(() => router.back());
+      confirmLeaveAlert(() => {
+        leavingRef.current = true;
+        router.back();
+      });
       return true;
     },
-    backHandler: BackHandler,
+    backHandler: backHandler ?? undefined,
   });
 
   useEffect(() => {
     if (!enabled || !navigation) return;
     navigation.setOptions({ gestureEnabled: false });
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (leavingRef.current) {
+        return;
+      }
       e.preventDefault();
-      confirmLeaveAlert(() => navigation.dispatch(e.data.action));
+      confirmLeaveAlert(() => {
+        leavingRef.current = true;
+        navigation.dispatch(e.data.action);
+      });
     });
     return () => {
       navigation.setOptions({ gestureEnabled: true });
