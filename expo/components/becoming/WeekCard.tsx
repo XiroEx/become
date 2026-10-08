@@ -1,5 +1,6 @@
-import React, { memo, useCallback, useState } from 'react'
+import React, { memo, useCallback, useEffect, useState } from 'react'
 import { View, StyleSheet, Pressable, type LayoutChangeEvent } from 'react-native'
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated'
 import { Text } from '@/components/Text'
 import Svg, { Defs, LinearGradient, Polyline, RadialGradient, Rect, Stop, Circle as SvgCircle } from 'react-native-svg'
 import {
@@ -21,7 +22,30 @@ import {
 import type { Fact, WeekSnapshot, CardPillar, Highlight, WeekSignals, Suggestion, NextStep } from '@/lib/becoming/types'
 import { rankSuggestions, MAX_CARD_STEPS } from '@/lib/becoming/weekSummary'
 import { SUN_FADE_AT, SUN_RADIUS, WASH_FADE_AT, cardRing, cardSky, gradientLine, sunCentre } from '@/lib/becoming/cardSky'
-import { minTouchTarget } from '@/lib/a11y/touchTarget'
+import {
+  EXIT_EDGE_RADIUS,
+  EXIT_PULSE_EASING,
+  EXIT_PULSE_LOW,
+  EXIT_PULSE_MS,
+  SPARK_DOT_R,
+  SPARK_H,
+  SPARK_LINE_ALPHA,
+  SPARK_PADDING,
+  SPARK_STROKE_WIDTH,
+  SPARK_W,
+  WHISPER_ALPHA,
+  WHISPER_FONT_FAMILY,
+  WHISPER_FONT_SIZE,
+  exitEdgePlacement,
+  exitEdgeShadow,
+  focusTone,
+  identityWhisper,
+  sparklinePoints,
+  type ExitEdge,
+} from '@/lib/becoming/focusedCard'
+import type { Pillar } from '@/lib/becoming/pillarColors'
+import { useReducedMotion } from '@/lib/a11y/reducedMotion'
+import { hitSlopToMinTarget, minTouchTarget } from '@/lib/a11y/touchTarget'
 import { becomingStageTokens, rgbOf } from '@/lib/theme/tokens'
 import { useThemeTokens } from '@/lib/theme/useThemeTokens'
 
@@ -127,35 +151,82 @@ function HighlightPill({ h }: { h: Highlight }) {
   )
 }
 
-function Sparkline({ scores }: { scores: number[] }) {
-  const { colors } = useThemeTokens()
-  if (scores.length < 2) return null
-  const W = 52
-  const H = 18
-  const pad = 2
-  const min = Math.min(...scores)
-  const max = Math.max(...scores)
-  const range = max - min || 1
-  const pts = scores.map((s, i) => {
-    const x = pad + (i / (scores.length - 1)) * (W - pad * 2)
-    const y = H - pad - ((s - min) / range) * (H - pad * 2)
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  const lastX = W - pad
-  const lastY = H - pad - ((scores[scores.length - 1]! - min) / range) * (H - pad * 2)
+/**
+ * The web's `p-1` button around a 56 × 22 drawing is 64 × 30: that size is
+ * the design, so the 44-point rule is held with slop, not by growing it.
+ */
+const SPARK_HIT_SLOP = hitSlopToMinTarget(SPARK_W + SPARK_PADDING * 2, SPARK_H + SPARK_PADDING * 2)
 
+/**
+ * The whole path in miniature (NP-343): every week's altitude as one line,
+ * this week's dot in the week's colour, top-right of the focused card's
+ * eyebrow. A button — tapping it zooms out to the overview, as on the web.
+ * Every number is `lib/becoming/focusedCard.ts`'s, held to the web's there.
+ */
+function Sparkline({
+  altitudes,
+  at,
+  color,
+  onPress,
+}: {
+  altitudes: readonly number[]
+  at: number
+  color: string
+  onPress?: () => void
+}) {
+  const { colors, isDark } = useThemeTokens()
+  const { points, cx, cy } = sparklinePoints(altitudes, at)
+  const line = isDark ? rgbOf(becomingStageTokens.ink, SPARK_LINE_ALPHA) : colors['muted-foreground']
   return (
-    <Svg width={W} height={H} style={styles.sparkWrap} accessibilityLabel="Week score trend">
-      <Polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={colors['muted-foreground']}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <SvgCircle cx={lastX} cy={lastY} r="2" fill={colors['muted-foreground']} />
-    </Svg>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="See your whole line"
+      hitSlop={SPARK_HIT_SLOP}
+      style={styles.sparkBtn}
+      testID="week-card-spark"
+    >
+      <Svg width={SPARK_W} height={SPARK_H} viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}>
+        <Polyline points={points} fill="none" stroke={line} strokeWidth={SPARK_STROKE_WIDTH} strokeLinejoin="round" />
+        <SvgCircle cx={cx} cy={cy} r={SPARK_DOT_R} fill={color} />
+      </Svg>
+    </Pressable>
+  )
+}
+
+/**
+ * The exit-edge light (NP-343): a 3 px bar in the week's colour on the edge
+ * that faces the next card — top on a climb, bottom on a dip, right on a
+ * hold — with the web's glow, pulsing like Tailwind's `animate-pulse`.
+ * Reduce Motion holds it lit and still: the bar is the hint, the pulse is
+ * decoration. The shared value is written through `set()`, Reanimated's own
+ * setter, so nothing here mutates a hook's result.
+ */
+function ExitEdgeLight({ edge, subject, score }: { edge: ExitEdge; subject: Pillar; score: number }) {
+  const reduced = useReducedMotion()
+  const pulse = useSharedValue(1)
+  useEffect(() => {
+    if (reduced) {
+      cancelAnimation(pulse)
+      pulse.set(1)
+      return
+    }
+    const half = { duration: EXIT_PULSE_MS / 2, easing: Easing.bezier(...EXIT_PULSE_EASING) }
+    pulse.set(withRepeat(withSequence(withTiming(EXIT_PULSE_LOW, half), withTiming(1, half)), -1, false))
+    return () => cancelAnimation(pulse)
+  }, [reduced, pulse])
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }))
+  return (
+    <Animated.View
+      pointerEvents="none"
+      testID="week-card-exit"
+      style={[
+        styles.exitEdge,
+        exitEdgePlacement(edge),
+        { backgroundColor: focusTone(subject, score), boxShadow: exitEdgeShadow(subject, score) },
+        pulseStyle,
+      ]}
+    />
   )
 }
 
@@ -223,6 +294,18 @@ export interface WeekCardProps {
   onNavigate?: (url: string) => void
   isPeak?: boolean
   /**
+   * The stage's focused card (NP-343). Only it carries the sparkline and the
+   * exit-edge light, as on the web; a neighbour, or a card mounted bare,
+   * draws neither whatever else it is given.
+   */
+  focused?: boolean
+  /** Which edge faces the next card — the light that hints the way forward. */
+  exitEdge?: ExitEdge | null
+  /** The whole path in miniature (top-right of the eyebrow): every week's altitude, and this week's index on it. */
+  spark?: { altitudes: readonly number[]; at: number } | null
+  /** Tapping the sparkline: the stage's `enterOverview`. */
+  onSparkline?: () => void
+  /**
    * The stage's card box (`cardSize`), both or neither. Given, the card IS
    * that size — content is laid out inside it, the "what to work on" block
    * and the identity row sit on its bottom edge, and anything that will not
@@ -241,6 +324,10 @@ export const WeekCard = memo(function WeekCard({
   onDetails,
   onNavigate,
   isPeak,
+  focused = false,
+  exitEdge = null,
+  spark = null,
+  onSparkline,
   width,
   height,
 }: WeekCardProps) {
@@ -261,6 +348,11 @@ export const WeekCard = memo(function WeekCard({
   // outside the stage keeps following the system's `card`.
   const ground = isDark ? rgbOf(becomingStageTokens.card) : colors.card
   const ring = cardRing(w.subject, w.score, currentWeek)
+  // The focused card's extras (NP-343): the sparkline's dot and the exit-edge
+  // bar are the web's `tone`; the whisper is 45% white on the stage's dark
+  // ground, and follows the system's muted ink on a card mounted elsewhere.
+  const tone = focusTone(w.subject, w.score)
+  const whisper = isDark ? rgbOf(becomingStageTokens.ink, WHISPER_ALPHA) : colors['muted-foreground']
 
   // Suggestions for What to work on next
   const steps: { pillar: CardPillar; suggestion: Suggestion }[] = React.useMemo(() => {
@@ -293,6 +385,8 @@ export const WeekCard = memo(function WeekCard({
       accessibilityLabel={`Week card for ${w.label}. ${w.headline}.`}
     >
       <CardSky week={w} width={width} height={height} />
+      {/* Edge light toward the next card — the focused card only, as on the web. */}
+      {focused && exitEdge ? <ExitEdgeLight edge={exitEdge} subject={w.subject} score={w.score} /> : null}
       <View style={[styles.cardPadding, sized && styles.fill]} testID="week-card-body">
         {/* Eyebrow */}
         <View style={styles.eyebrowRow}>
@@ -308,7 +402,7 @@ export const WeekCard = memo(function WeekCard({
           </View>
 
           <View style={styles.eyebrowRight}>
-            {w.spark && w.spark.length >= 2 ? <Sparkline scores={w.spark} /> : null}
+            {focused && spark ? <Sparkline altitudes={spark.altitudes} at={spark.at} color={tone} onPress={onSparkline} /> : null}
 
             {w.isCurrent ? (
               <View style={[styles.liveBadge, { backgroundColor: tint('muted', 0.5) }]} testID="week-card-live">
@@ -446,8 +540,9 @@ export const WeekCard = memo(function WeekCard({
 
         {/* Identity & Details Footer */}
         <View style={[styles.footerRow, { borderTopColor: colors.border }]}>
-          <Text style={[styles.identityText, { color: colors['muted-foreground'] }]} numberOfLines={1}>
-            {w.identity ? `“${w.identity}”` : identity ? `“${identity}”` : 'The Becoming'}
+          {/* The identity whisper: the web's `Becoming: <identity>`, serif italic at 45% white. */}
+          <Text style={[styles.identityText, { color: whisper }]} numberOfLines={1} testID="week-card-identity">
+            {identityWhisper(w.identity ?? identity, w.subject)}
           </Text>
 
           {onDetails && (
@@ -619,9 +714,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  sparkWrap: {
-    padding: 2,
+  sparkBtn: {
+    padding: SPARK_PADDING,
     borderRadius: 6,
+  },
+  exitEdge: {
+    position: 'absolute',
+    borderRadius: EXIT_EDGE_RADIUS,
   },
   liveBadge: {
     flexDirection: 'row',
@@ -814,8 +913,9 @@ const styles = StyleSheet.create({
   },
   identityText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: WHISPER_FONT_SIZE,
     fontStyle: 'italic',
+    fontFamily: WHISPER_FONT_FAMILY,
   },
   detailsBtn: {
     flexDirection: 'row',

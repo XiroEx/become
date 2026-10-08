@@ -22,6 +22,23 @@ const Animated = {
   createAnimatedComponent: (c) => c,
 };
 
+/** Reanimated's `SharedValue` shape: `.value`, `get()`, `set()` (a value or an updater), and the listener pair. */
+const mutable = (init) => {
+  const box = {
+    value: init,
+    get: () => box.value,
+    set: (next) => {
+      box.value = typeof next === "function" ? next(box.value) : next;
+    },
+    addListener: () => {},
+    removeListener: () => {},
+    modify: (fn) => {
+      if (fn) box.value = fn(box.value);
+    },
+  };
+  return box;
+};
+
 module.exports = {
   __esModule: true,
   default: Animated,
@@ -46,8 +63,11 @@ module.exports = {
   Layout: chain(),
   // One mutable box per hook call, kept across renders — what Reanimated does.
   // A fresh `{ value }` per render would leave a gesture callback created on
-  // the first render reading a box no later effect ever writes to.
-  useSharedValue: (init) => React.useRef({ value: init }).current,
+  // the first render reading a box no later effect ever writes to. The box
+  // has Reanimated's `get()` / `set()` too (the week card's edge light writes
+  // through `set()`, which the React Compiler lint does not read as a
+  // mutation the way `sv.value = …` is).
+  useSharedValue: (init) => React.useRef(mutable(init)).current,
   useAnimatedStyle: (fn) => fn(),
   // The Becoming stage (NP-204) drives a camera through derived values and
   // Gesture Handler's `GestureDetector`, which probes Reanimated for
@@ -66,7 +86,7 @@ module.exports = {
   useHandler: () => ({ context: {}, doDependenciesDiffer: false, useWeb: false }),
   useAnimatedRef: () => ({ current: null }),
   cancelAnimation: () => {},
-  makeMutable: (init) => ({ value: init }),
+  makeMutable: mutable,
   runOnUI: (fn) => fn,
   setGestureState: () => {},
   Easing: {
@@ -92,6 +112,8 @@ module.exports = {
   },
   withDelay: (_, val) => val,
   withSequence: (...vals) => vals[vals.length - 1],
+  // A loop has no frames to loop in jest: the value is the animation's end.
+  withRepeat: (val) => val,
   runOnJS: (fn) => fn,
   interpolate: (val, input, output) => output[0],
 };
