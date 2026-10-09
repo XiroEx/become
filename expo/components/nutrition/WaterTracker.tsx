@@ -62,7 +62,7 @@ export function WaterTracker({
         </View>
         <Text
           testID="nutrition-water-label"
-          className="text-muted-foreground text-xs font-medium tabular-nums"
+          className="text-muted-foreground text-sm tabular-nums"
         >
           <Text
             className={
@@ -119,11 +119,11 @@ export function WaterTracker({
               alignItems: "center",
               justifyContent: "center",
               paddingVertical: 8,
-              paddingHorizontal: 4,
-              borderRadius: 10,
+              paddingHorizontal: 8,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: colors.border,
-              backgroundColor: colors.card,
+              backgroundColor: colors.muted,
               opacity: disabled ? 0.5 : 1,
             }}
           >
