@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
-import { Bookmark, ChevronRight, Filter } from "lucide-react-native";
+import { Bookmark, ChevronRight, Filter, Search } from "lucide-react-native";
 import {
   ActiveProgramsApiResponseSchema,
   ProgramCatalogItemSchema,
@@ -475,14 +475,14 @@ export function ProgramsCatalog({
                   style={{
                     flexDirection: "row",
                     alignItems: "flex-start",
-                    gap: 8,
+                    gap: 12,
                     borderWidth: 1,
                     borderLeftWidth: 4,
                     borderColor: colors.border,
                     borderLeftColor: colors.success,
                     borderRadius: 16,
                     backgroundColor: colors.card,
-                    padding: 12,
+                    padding: 16,
                   }}
                 >
                   <Pressable
@@ -503,7 +503,7 @@ export function ProgramsCatalog({
                           : colors["muted-foreground"]
                       }
                       fill={isItemSaved ? colors.success : "transparent"}
-                      size={18}
+                      size={20}
                       strokeWidth={1.5}
                     />
                   </Pressable>
@@ -515,21 +515,12 @@ export function ProgramsCatalog({
                     accessibilityLabel={`Open program ${program.name}`}
                     style={{ flex: 1 }}
                   >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        flexWrap: "wrap",
-                      }}
+                    <Text
+                      className="text-foreground font-semibold text-base"
+                      numberOfLines={2}
                     >
-                      <Text
-                        className="text-foreground font-semibold text-base flex-1"
-                        numberOfLines={1}
-                      >
-                        {program.name}
-                      </Text>
-                    </View>
+                      {program.name}
+                    </Text>
                     <View
                       style={{
                         flexDirection: "row",
@@ -554,7 +545,7 @@ export function ProgramsCatalog({
                       ) : null}
                     </View>
                     {program.targetUser ? (
-                      <Text className="text-muted-foreground text-xs mt-1">
+                      <Text className="text-muted-foreground text-sm mt-1">
                         {program.targetUser}
                       </Text>
                     ) : null}
@@ -587,7 +578,7 @@ export function ProgramsCatalog({
                   </Pressable>
                   <ChevronRight
                     color={colors["muted-foreground"]}
-                    size={16}
+                    size={20}
                     strokeWidth={1.5}
                   />
                 </View>
@@ -610,15 +601,16 @@ export function ProgramsCatalog({
           justifyContent: "space-between",
         }}
       >
-        <Text className="text-foreground text-lg font-bold">
-          {hasFilters ? "Search Results" : catalogTitle}
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+          <Text className="text-foreground text-lg font-bold">
+            {hasFilters ? "Search Results" : catalogTitle}
+          </Text>
           {displayTotal > 0 ? (
             <Text className="text-muted-foreground text-sm font-normal">
-              {" "}
               ({displayTotal})
             </Text>
           ) : null}
-        </Text>
+        </View>
 
         <Pressable
           testID="programming-browse-filter-toggle"
@@ -630,11 +622,11 @@ export function ProgramsCatalog({
           }`}
         >
           <Filter
-            size={14}
+            size={16}
             color={showFilters || hasFilters ? colors.success : colors["muted-foreground"]}
           />
           <Text
-            className={`text-xs font-semibold ${
+            className={`text-sm font-medium ${
               showFilters || hasFilters ? "text-success" : "text-muted-foreground"
             }`}
           >
@@ -650,10 +642,16 @@ export function ProgramsCatalog({
       <View style={{ marginBottom: 12 }}>
         <Input
           testID="programming-browse-search-input"
-          label="Search programs"
+          accessibilityLabel="Search programs"
           placeholder="Search by name, tags, or description…"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          leftIcon={
+            <Search
+              size={18}
+              color={colors["muted-foreground"]}
+            />
+          }
         />
       </View>
 
@@ -663,13 +661,13 @@ export function ProgramsCatalog({
       <View style={{ marginBottom: 16 }}>
         {showFilters ? (
           <View
-            className="p-3 rounded-xl border border-border bg-card mb-2"
+            className="p-4 rounded-xl border border-border bg-card mb-4"
             style={{ gap: 12 }}
           >
             {/* Tag Filters */}
             {availableTags.length > 0 ? (
               <View>
-                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
+                <Text className="text-muted-foreground text-xs uppercase font-medium mb-2 tracking-wide">
                   Tags
                 </Text>
                 <View
@@ -693,10 +691,10 @@ export function ProgramsCatalog({
                         }`}
                       >
                         <Text
-                          className={`text-xs ${
+                          className={`text-sm ${
                             isSelected
                               ? "text-primary-foreground font-semibold"
-                              : "text-foreground"
+                              : "text-foreground font-medium"
                           }`}
                         >
                           {tag}
@@ -710,7 +708,7 @@ export function ProgramsCatalog({
 
             {/* Level Filter */}
             <View>
-              <Text className="text-muted-foreground text-xs uppercase font-medium mb-2">
+              <Text className="text-muted-foreground text-xs uppercase font-medium mb-2 tracking-wide">
                 Experience Level
               </Text>
               <View
@@ -736,10 +734,10 @@ export function ProgramsCatalog({
                       }`}
                     >
                       <Text
-                        className={`text-xs ${
+                        className={`text-sm ${
                           isSelected
                             ? "text-primary-foreground font-semibold"
-                            : "text-foreground"
+                            : "text-foreground font-medium"
                         }`}
                       >
                         {level}
@@ -757,7 +755,7 @@ export function ProgramsCatalog({
                 accessibilityLabel="Clear all filters"
                 onPress={handleClearFilters}
               >
-                <Text className="text-destructive text-xs font-medium">
+                <Text className="text-destructive text-sm font-medium">
                   Clear all filters
                 </Text>
               </Pressable>
