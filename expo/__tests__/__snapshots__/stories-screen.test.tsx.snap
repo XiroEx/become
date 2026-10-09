@@ -512,26 +512,35 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             Display name
           </Text>
-          <TextInput
-            accessibilityLabel="Display name"
-            className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-border"
-            onChangeText={[Function]}
-            placeholder="Jon"
-            placeholderTextColor="rgb(161 161 170)"
+          <View
             style={
-              [
-                {
-                  "minHeight": 44,
-                  "minWidth": 44,
-                },
-                {
-                  "fontFamily": "Geist-Regular",
-                },
-              ]
+              {
+                "justifyContent": "center",
+                "position": "relative",
+              }
             }
-            testID="input-name"
-            value=""
-          />
+          >
+            <TextInput
+              accessibilityLabel="Display name"
+              className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-border"
+              onChangeText={[Function]}
+              placeholder="Jon"
+              placeholderTextColor="rgb(161 161 170)"
+              style={
+                [
+                  {
+                    "minHeight": 44,
+                    "minWidth": 44,
+                  },
+                  {
+                    "fontFamily": "Geist-Regular",
+                  },
+                ]
+              }
+              testID="input-name"
+              value=""
+            />
+          </View>
         </View>
         <View
           style={
@@ -557,26 +566,35 @@ exports[`StoriesScreen matches a stable snapshot of the stories tree 1`] = `
           >
             Email
           </Text>
-          <TextInput
-            accessibilityHint="Enter a valid email"
-            accessibilityLabel="Email"
-            className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-destructive"
-            editable={false}
-            placeholderTextColor="rgb(161 161 170)"
+          <View
             style={
-              [
-                {
-                  "minHeight": 44,
-                  "minWidth": 44,
-                },
-                {
-                  "fontFamily": "Geist-Regular",
-                },
-              ]
+              {
+                "justifyContent": "center",
+                "position": "relative",
+              }
             }
-            testID="input-error"
-            value="not-an-email"
-          />
+          >
+            <TextInput
+              accessibilityHint="Enter a valid email"
+              accessibilityLabel="Email"
+              className="bg-card border rounded-xl px-3 py-2.5 text-foreground border-destructive"
+              editable={false}
+              placeholderTextColor="rgb(161 161 170)"
+              style={
+                [
+                  {
+                    "minHeight": 44,
+                    "minWidth": 44,
+                  },
+                  {
+                    "fontFamily": "Geist-Regular",
+                  },
+                ]
+              }
+              testID="input-error"
+              value="not-an-email"
+            />
+          </View>
           <Text
             accessibilityLiveRegion="assertive"
             accessibilityRole="alert"
