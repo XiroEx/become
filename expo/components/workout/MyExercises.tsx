@@ -7,6 +7,7 @@ import {
   Dumbbell,
   Globe2,
   Pencil,
+  Plus,
   Search,
   Sparkles,
   Trash2,
@@ -165,33 +166,54 @@ export function MyExercises({
   // the search/sort/filter row has something to filter).
   if (exercises.length === 0) {
     return (
-      <View testID={`${testID}-empty`} style={{ padding: 16, alignItems: "center", gap: 12 }}>
+      <View testID={`${testID}-empty`} style={{ padding: 16, alignItems: "center" }}>
         <View
           style={{
-            width: 64,
-            height: 64,
-            borderRadius: 32,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: colors.muted,
+            marginBottom: 12,
           }}
         >
-          <Dumbbell size={28} color={colors["muted-foreground"]} />
+          <Dumbbell size={24} color={colors["muted-foreground"]} />
         </View>
-        <Text className="text-foreground text-base font-semibold text-center">
+        <Text className="text-foreground text-sm font-semibold text-center">
           No custom exercises yet
         </Text>
-        <Text className="text-muted-foreground text-sm text-center">
-          Tap &quot;Create&quot; to build your first exercise.
+        <Text className="text-muted-foreground text-xs text-center mt-1">
+          Tap &quot;Add&quot; to create your first exercise.
         </Text>
         {onCreate ? (
-          <Button
+          <Pressable
             testID={`${testID}-create-empty`}
             onPress={() => void onCreate()}
+            accessibilityRole="button"
             accessibilityLabel="Create your first exercise"
+            style={[
+              minTouchTarget,
+              {
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                backgroundColor: colors.success,
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 999,
+                marginTop: 16,
+              },
+            ]}
           >
-            Create Exercise
-          </Button>
+            <Plus size={14} color={colors["brand-foreground"]} strokeWidth={2.5} />
+            <Text
+              className="text-xs font-semibold"
+              style={{ color: colors["brand-foreground"] }}
+            >
+              Create Exercise
+            </Text>
+          </Pressable>
         ) : null}
       </View>
     );
