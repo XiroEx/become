@@ -374,7 +374,7 @@ describe("Eating Timeline Parity (NP-178)", () => {
     });
 
     it("switching views via 3-segment control updates view mode", async () => {
-      mockParams = {};
+      mockParams = { view: "week" };
       const { getByTestId } = render(<NutritionIndexRoute />);
 
       await waitFor(() => {
