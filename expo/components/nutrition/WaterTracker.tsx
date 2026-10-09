@@ -62,7 +62,7 @@ export function WaterTracker({
         </View>
         <Text
           testID="nutrition-water-label"
-          className="text-muted-foreground text-xs font-medium tabular-nums"
+          className="text-muted-foreground text-sm font-medium tabular-nums"
         >
           <Text
             className={
@@ -114,16 +114,17 @@ export function WaterTracker({
             accessibilityLabel={`Add ${item.label} (${item.sublabel}) of water`}
             disabled={disabled}
             onPress={() => onAddWater(item.amount)}
+            className="border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800"
             style={{
               flex: 1,
               alignItems: "center",
               justifyContent: "center",
               paddingVertical: 8,
-              paddingHorizontal: 4,
-              borderRadius: 10,
+              paddingHorizontal: 8,
+              borderRadius: 8,
               borderWidth: 1,
               borderColor: colors.border,
-              backgroundColor: colors.card,
+              backgroundColor: colors.muted,
               opacity: disabled ? 0.5 : 1,
             }}
           >
