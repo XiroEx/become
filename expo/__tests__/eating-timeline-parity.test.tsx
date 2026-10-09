@@ -373,21 +373,19 @@ describe("Eating Timeline Parity (NP-178)", () => {
       });
     });
 
-    it("switching views via 3-segment control updates view mode", async () => {
+    it("does not render extra 3-segment view selector on day tab (NP-370)", async () => {
       mockParams = {};
+      const { queryByTestId } = render(<NutritionIndexRoute />);
+      expect(queryByTestId("nutrition-view-selector")).toBeNull();
+    });
+
+    it("switching views via 3-segment control updates view mode", async () => {
+      mockParams = { view: "week" };
       const { getByTestId } = render(<NutritionIndexRoute />);
 
       await waitFor(() => {
         expect(getByTestId("nutrition-view-selector")).toBeTruthy();
       });
-
-      // Switch to week view
-      fireEvent.press(getByTestId("nutrition-view-week"));
-      expect(mockPush).toHaveBeenCalledWith(
-        expect.objectContaining({
-          params: expect.objectContaining({ view: "week" }),
-        }),
-      );
 
       // Switch to month view
       fireEvent.press(getByTestId("nutrition-view-month"));

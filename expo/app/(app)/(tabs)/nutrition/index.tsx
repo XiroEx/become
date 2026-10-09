@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   BookOpen,
-  CalendarClock,
   CalendarDays,
   Camera,
   ChefHat,
@@ -1785,11 +1784,11 @@ export default function NutritionIndexRoute() {
           <Text className="text-foreground text-2xl font-bold" numberOfLines={1}>
             Nutrition
           </Text>
-          <Text className="text-muted-foreground text-xs mt-0.5" numberOfLines={1}>
+          <Text className="text-muted-foreground text-sm mt-1" numberOfLines={1}>
             Track your food, macros, and hydration
           </Text>
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {/* My Stuff header action */}
           <Pressable
             testID="nutrition-my-stuff-button"
@@ -1802,10 +1801,11 @@ export default function NutritionIndexRoute() {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 4,
-              paddingHorizontal: 8,
-              paddingVertical: 6,
-              borderRadius: 8,
+              justifyContent: "center",
+              gap: 6,
+              height: 40,
+              paddingHorizontal: 12,
+              borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.border,
               backgroundColor: colors.card,
@@ -1824,10 +1824,11 @@ export default function NutritionIndexRoute() {
             style={{
               flexDirection: "row",
               alignItems: "center",
-              gap: 4,
-              paddingHorizontal: 8,
-              paddingVertical: 6,
-              borderRadius: 8,
+              justifyContent: "center",
+              gap: 6,
+              height: 40,
+              paddingHorizontal: 12,
+              borderRadius: 12,
               borderWidth: 1,
               borderColor: colors.border,
               backgroundColor: colors.card,
@@ -1868,9 +1869,9 @@ export default function NutritionIndexRoute() {
         </View>
       ) : null}
 
-      {/* 3-segment View Selector (Day / Week / Month). Training preferences
-          moved to Settings > Training (NP-302); Nutrition Planning moved to
-          Settings > Settings, matching the web's tab layout. */}
+      {/* 3-segment View Selector (Day / Week / Month). Removed from the day tab
+          matching web source of truth; available in week and month views. */}
+      {viewMode !== "day" && (
       <View
         testID="nutrition-view-selector"
         style={{
@@ -1975,6 +1976,7 @@ export default function NutritionIndexRoute() {
           </Text>
         </Pressable>
       </View>
+      )}
 
       {/* Date Navigation & Swipe Container */}
       <View
@@ -2041,14 +2043,14 @@ export default function NutritionIndexRoute() {
               onPress={() => openSearch()}
               style={{
                 flex: 1,
+                height: 40,
                 flexDirection: "row",
                 alignItems: "center",
                 backgroundColor: colors.card,
                 borderColor: colors.border,
                 borderWidth: 1,
                 borderRadius: 12,
-                paddingHorizontal: 14,
-                paddingVertical: 10,
+                paddingHorizontal: 16,
               }}
             >
               <Search size={16} color={colors["muted-foreground"]} />
@@ -2065,8 +2067,8 @@ export default function NutritionIndexRoute() {
               accessibilityLabel="Camera options"
               onPress={handleToggleCameraMenu}
               style={{
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
@@ -2075,7 +2077,7 @@ export default function NutritionIndexRoute() {
                 justifyContent: "center",
               }}
             >
-              <Camera size={18} color={colors.foreground} />
+              <Camera size={20} color={colors.foreground} />
             </Pressable>
 
             {/* Upload button */}
@@ -2086,8 +2088,8 @@ export default function NutritionIndexRoute() {
               accessibilityLabel="Upload options"
               onPress={handleToggleUploadMenu}
               style={{
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 borderRadius: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
@@ -2096,7 +2098,7 @@ export default function NutritionIndexRoute() {
                 justifyContent: "center",
               }}
             >
-              <Upload size={18} color={colors.foreground} />
+              <Upload size={20} color={colors.foreground} />
             </Pressable>
           </View>
 
@@ -2467,15 +2469,16 @@ export default function NutritionIndexRoute() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: 12,
-                paddingVertical: 14,
+                backgroundColor: colors.card,
+                paddingVertical: 12,
                 opacity: isFuture ? 0.5 : 1,
               }}
             >
               <View
                 className="bg-green-100 dark:bg-green-900/30"
-                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+                style={{ width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
               >
-                <Plus size={18} color={colors.foreground} />
+                <Plus size={20} color={colors.success} />
               </View>
               <Text className="text-foreground text-xs font-medium">Quick Add</Text>
             </Pressable>
@@ -2492,14 +2495,15 @@ export default function NutritionIndexRoute() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: 12,
-                paddingVertical: 14,
+                backgroundColor: colors.card,
+                paddingVertical: 12,
               }}
             >
               <View
                 className="bg-orange-100 dark:bg-orange-900/30"
-                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+                style={{ width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
               >
-                <BookOpen size={18} color={colors.orange} />
+                <BookOpen size={20} color={colors.orange} />
               </View>
               <Text className="text-foreground text-xs font-medium">My Stuff</Text>
             </Pressable>
@@ -2516,14 +2520,15 @@ export default function NutritionIndexRoute() {
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: 12,
-                paddingVertical: 14,
+                backgroundColor: colors.card,
+                paddingVertical: 12,
               }}
             >
               <View
                 className="bg-blue-100 dark:bg-blue-900/30"
-                style={{ width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" }}
+                style={{ width: 40, height: 40, borderRadius: 8, alignItems: "center", justifyContent: "center" }}
               >
-                <CalendarClock size={18} color={colors.foreground} />
+                <CalendarDays size={20} color={colors.info} />
               </View>
               <Text className="text-foreground text-xs font-medium">Meal Plan</Text>
             </Pressable>
