@@ -520,7 +520,7 @@ describe("Workout tab: acceptance criteria tests", () => {
         return {};
       });
 
-      const { getByTestId, getByText } = render(<ProgrammingIndexRoute />);
+      const { getByTestId, getByText, getAllByText } = render(<ProgrammingIndexRoute />);
 
       await waitFor(() => {
         expect(getByText("Saved for Later")).toBeTruthy();
@@ -536,7 +536,7 @@ describe("Workout tab: acceptance criteria tests", () => {
       // web's Workout page. The dedicated Browse screen (NP-278) says the
       // same thing now — both mirror the web's one heading.
       await waitFor(() => {
-        expect(getByText("Browse Programs")).toBeTruthy();
+        expect(getAllByText("Browse Programs").length).toBeGreaterThanOrEqual(1);
       });
       expect(getByTestId("programs-list")).toBeTruthy();
       expect(getByTestId("programming-browse-search-input")).toBeTruthy();

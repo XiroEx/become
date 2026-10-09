@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { View, TextInput } from "react-native";
 import { Text } from "@/components/Text";
 import type { TextInputProps } from "react-native";
@@ -9,6 +10,7 @@ export interface InputProps extends Omit<TextInputProps, "style"> {
   label?: string;
   error?: string;
   testID?: string;
+  leftIcon?: ReactNode;
 }
 
 export function Input({
@@ -17,6 +19,7 @@ export function Input({
   testID,
   accessibilityLabel,
   accessibilityHint,
+  leftIcon,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
@@ -24,7 +27,7 @@ export function Input({
   const errorId = testID ? `${testID}-error` : undefined;
   // The field itself is the one TextInput in the app, and a TextInput is not a
   // Text: `components/Text.tsx` never sees it, so it carries the family here.
-  const inputClassName = `bg-card border rounded-xl px-3 py-2.5 text-foreground ${
+  const inputClassName = `bg-card border rounded-xl ${leftIcon ? "pl-10 pr-3" : "px-3"} py-2.5 text-foreground ${
     error ? "border-destructive" : "border-border"
   }`;
   // THE ERROR IS PART OF THE FIELD, to a screen reader. The red line underneath
@@ -46,17 +49,36 @@ export function Input({
           {label}
         </Text>
       ) : null}
-      <TextInput
-        testID={testID}
-        accessibilityLabel={accessibilityLabel ?? label}
-        accessibilityHint={hint}
-        placeholderTextColor={colors["muted-foreground"]}
-        className={inputClassName}
-        // 44 points tall, the same minimum every other control in the app
-        // holds: the padding alone leaves it a few points short.
-        style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
-        {...inputProps}
-      />
+      <View style={{ position: "relative", justifyContent: "center" }}>
+        {leftIcon ? (
+          <View
+            testID={testID ? `${testID}-left-icon` : undefined}
+            style={{
+              position: "absolute",
+              left: 12,
+              zIndex: 1,
+            }}
+            pointerEvents="none"
+          >
+            {leftIcon}
+          </View>
+        ) : null}
+        <TextInput
+          testID={testID}
+          accessibilityLabel={accessibilityLabel ?? label}
+          accessibilityHint={hint}
+          placeholderTextColor={colors["muted-foreground"]}
+          className={inputClassName}
+          // 44 points tall, the same minimum every other control in the app
+          // holds: the padding alone leaves it a few points short.
+          style={[
+            minTouchTarget,
+            { fontFamily: geistFontFamily(inputClassName) },
+            leftIcon ? { paddingLeft: 40 } : null,
+          ]}
+          {...inputProps}
+        />
+      </View>
       {error ? (
         <Text
           testID={errorId}
