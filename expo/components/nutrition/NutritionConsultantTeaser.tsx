@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Pressable, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { ChevronRight, Sparkles } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -23,7 +24,7 @@ export function NutritionConsultantTeaser({
   remaining,
   testID = "nutrition-consultant-teaser",
 }: NutritionConsultantTeaserProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [open, setOpen] = useState(false);
 
   // Mirrors `NutritionAITeaser.tsx`: lead with a tailored nudge only once
@@ -46,39 +47,48 @@ export function NutritionConsultantTeaser({
         accessibilityRole="button"
         accessibilityLabel="Your nutrition consultant"
         onPress={() => setOpen(true)}
-        className="border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10"
-        style={{
-          borderRadius: 18,
-          borderWidth: 1,
-          padding: 14,
-        }}
+        style={{ borderRadius: 16, overflow: "hidden" }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View
-            className="bg-teal-500"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 14,
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: 12,
-            }}
-          >
-            <Sparkles size={18} color={colors["primary-foreground"]} />
+        <LinearGradient
+          colors={[tint("mind-emerald", 0.08), tint("teal", 0.08)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: tint("mind-emerald", 0.25),
+            padding: 16,
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <LinearGradient
+              colors={[colors["mind-emerald"], colors.teal]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: 12,
+              }}
+            >
+              <Sparkles size={20} color={colors["primary-foreground"]} />
+            </LinearGradient>
+            <View style={{ flex: 1 }}>
+              <Text className="text-foreground text-sm font-semibold">
+                Your nutrition consultant
+              </Text>
+              <Text testID={`${testID}-subtitle`} className="text-muted-foreground text-xs" numberOfLines={1}>
+                {hasRemaining
+                  ? `Hit your last ${Math.max(0, Math.round(remaining!.calories))} cal — tap for a suggestion.`
+                  : "Meal plans, macro help, and real answers for your goals."}
+              </Text>
+            </View>
+            <ChevronRight size={20} color={colors["muted-foreground"]} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text className="text-foreground text-sm font-semibold">
-              Your nutrition consultant
-            </Text>
-            <Text testID={`${testID}-subtitle`} className="text-muted-foreground text-xs" numberOfLines={1}>
-              {hasRemaining
-                ? `Hit your last ${Math.max(0, Math.round(remaining!.calories))} cal — tap for a suggestion.`
-                : "Meal plans, macro help, and real answers for your goals."}
-            </Text>
-          </View>
-          <ChevronRight size={18} color={colors["muted-foreground"]} />
-        </View>
+        </LinearGradient>
       </Pressable>
 
       <CoachChat
