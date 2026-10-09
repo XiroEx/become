@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { View } from "react-native";
 import { Text } from "@/components/Text";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ProgramDetailResponseSchema,
   ActiveProgramsApiResponseSchema,
@@ -43,6 +43,7 @@ import { programEditDestination } from "@/lib/programs/customPrograms";
 
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -524,12 +525,12 @@ export default function ProgramDetailRoute() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-detail-route"
     >
       {error ? (
-        <View style={{ padding: 16 }}>
+        <View style={{ padding: 16, paddingTop: insets.top + 16 }}>
           <Text testID="programming-detail-error" className="text-destructive">
             Couldn&apos;t load this program.
           </Text>

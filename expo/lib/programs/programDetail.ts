@@ -87,6 +87,11 @@ export function toProgramDetailViewModel(
     goal: program.goal,
     targetUser: narrowTargetUser(program.target_user),
     phases: (program.phases ?? []).map(phaseOutline),
+    coverImage: program.coverImage ?? null,
+    coverParallax: program.coverParallax,
+    coverZoom: program.coverZoom,
+    coverPositionX: program.coverPositionX,
+    coverPositionY: program.coverPositionY,
   };
 }
 

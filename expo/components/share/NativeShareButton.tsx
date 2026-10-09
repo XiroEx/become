@@ -10,7 +10,13 @@
  */
 
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Pressable } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from "react-native";
 import { Share2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
@@ -31,6 +37,9 @@ export interface NativeShareButtonProps {
   /** Render as a round icon button with no text label (web header parity). */
   iconOnly?: boolean;
   testID?: string;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
+  tintColor?: string;
 }
 
 export function NativeShareButton({
@@ -41,10 +50,14 @@ export function NativeShareButton({
   onShared,
   iconOnly = false,
   testID = "share-button",
+  style,
+  textStyle,
+  tintColor,
 }: NativeShareButtonProps) {
   const { colors } = useThemeTokens();
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const iconColor = tintColor ?? colors.foreground;
 
   const onPress = useCallback(async () => {
     if (sharing) return;
@@ -77,7 +90,7 @@ export function NativeShareButton({
         accessibilityState={{ busy: sharing }}
         onPress={() => void onPress()}
         disabled={sharing}
-        style={
+        style={[
           iconOnly
             ? {
                 width: 36,
@@ -99,16 +112,22 @@ export function NativeShareButton({
                 borderWidth: 1,
                 borderColor: colors.border,
                 opacity: sharing ? 0.6 : 1,
-              }
-        }
+              },
+          style,
+        ]}
       >
         {sharing ? (
-          <ActivityIndicator size="small" color={colors.foreground} />
+          <ActivityIndicator size="small" color={iconColor} />
         ) : (
-          <Share2 size={16} color={colors.foreground} />
+          <Share2 size={16} color={iconColor} />
         )}
         {!iconOnly ? (
-          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+          <Text
+            style={[
+              { fontSize: 14, fontWeight: "500", color: iconColor },
+              textStyle,
+            ]}
+          >
             {sharing ? "Sharing…" : "Share"}
           </Text>
         ) : null}
