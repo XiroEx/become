@@ -187,21 +187,19 @@ export function DateNav({
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <Text
             testID="nutrition-current-date"
-            className="text-foreground text-base font-semibold"
+            className="text-foreground text-sm font-semibold"
           >
             {formatDateDisplay(dateKey)}
           </Text>
-          <ChevronDown size={16} color={colors["muted-foreground"]} />
+          <ChevronDown size={14} color={colors["muted-foreground"]} />
         </View>
         {isToday ? (
-          <View
+          <Text
             testID="nutrition-today-badge"
-            className="bg-emerald-500/10 px-2 py-0.5 rounded-full mt-0.5"
+            className="text-emerald-600 dark:text-emerald-400 text-[10px] font-medium uppercase tracking-wider"
           >
-            <Text className="text-emerald-600 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
-              Today
-            </Text>
-          </View>
+            Today
+          </Text>
         ) : null}
       </Pressable>
 

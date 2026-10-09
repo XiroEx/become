@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { ChevronRight, Sparkles } from "lucide-react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { CoachChat } from "@/components/ai/CoachChat";
@@ -23,7 +24,7 @@ export function NutritionConsultantTeaser({
   remaining,
   testID = "nutrition-consultant-teaser",
 }: NutritionConsultantTeaserProps) {
-  const { colors } = useThemeTokens();
+  const { colors, isDark } = useThemeTokens();
   const [open, setOpen] = useState(false);
 
   // Mirrors `NutritionAITeaser.tsx`: lead with a tailored nudge only once
@@ -46,27 +47,41 @@ export function NutritionConsultantTeaser({
         accessibilityRole="button"
         accessibilityLabel="Your nutrition consultant"
         onPress={() => setOpen(true)}
-        className="border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10"
         style={{
-          borderRadius: 18,
+          borderRadius: 16,
           borderWidth: 1,
-          padding: 14,
+          borderColor: isDark ? "rgba(16, 185, 129, 0.2)" : "#a7f3d0",
+          overflow: "hidden",
+          position: "relative",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <View
-            className="bg-teal-500"
+        <LinearGradient
+          colors={
+            isDark
+              ? ["rgba(16, 185, 129, 0.1)", "rgba(20, 184, 166, 0.1)"]
+              : ["#ecfdf5", "#f0fdfa"]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <View style={{ flexDirection: "row", alignItems: "center", padding: 16 }}>
+          <LinearGradient
+            colors={["#10b981", "#14b8a6"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{
               width: 40,
               height: 40,
-              borderRadius: 14,
+              borderRadius: 12,
               alignItems: "center",
               justifyContent: "center",
               marginRight: 12,
             }}
           >
-            <Sparkles size={18} color={colors["primary-foreground"]} />
-          </View>
+            <Sparkles size={20} color="#ffffff" />
+          </LinearGradient>
           <View style={{ flex: 1 }}>
             <Text className="text-foreground text-sm font-semibold">
               Your nutrition consultant
@@ -77,7 +92,7 @@ export function NutritionConsultantTeaser({
                 : "Meal plans, macro help, and real answers for your goals."}
             </Text>
           </View>
-          <ChevronRight size={18} color={colors["muted-foreground"]} />
+          <ChevronRight size={20} color={colors["muted-foreground"]} />
         </View>
       </Pressable>
 
