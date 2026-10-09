@@ -261,7 +261,7 @@ export function BecomingDoor({
                   ? isDark
                     ? "hsl(258, 80%, 75%)"
                     : "hsl(258, 70%, 45%)"
-                  : colors.accent
+                  : colors["mind-violet"]
               }
             />
             <View style={styles.chipContent}>
@@ -278,6 +278,8 @@ export function BecomingDoor({
                   styles.chipValue,
                   { color: colors.foreground },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {mindChip.value}
               </Text>
@@ -287,6 +289,8 @@ export function BecomingDoor({
                     styles.chipSub,
                     { color: colors["muted-foreground"] },
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {mindChip.sub}
                 </Text>
@@ -314,7 +318,7 @@ export function BecomingDoor({
                   ? isDark
                     ? "hsl(38, 90%, 65%)"
                     : "hsl(38, 90%, 45%)"
-                  : colors.primary
+                  : colors.brand
               }
             />
             <View style={styles.chipContent}>
@@ -331,6 +335,8 @@ export function BecomingDoor({
                   styles.chipValue,
                   { color: colors.foreground },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {nutritionChip.value}
               </Text>
@@ -340,6 +346,8 @@ export function BecomingDoor({
                     styles.chipSub,
                     { color: colors["muted-foreground"] },
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {nutritionChip.sub}
                 </Text>
@@ -384,6 +392,8 @@ export function BecomingDoor({
                   styles.chipValue,
                   { color: colors.foreground },
                 ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {trainingChip.value}
               </Text>
@@ -393,6 +403,8 @@ export function BecomingDoor({
                     styles.chipSub,
                     { color: colors["muted-foreground"] },
                   ]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
                 >
                   {trainingChip.sub}
                 </Text>
@@ -463,7 +475,7 @@ const styles = StyleSheet.create({
   iconBadge: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -492,7 +504,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   chipContent: {
     flex: 1,

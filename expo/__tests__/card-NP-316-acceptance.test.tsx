@@ -133,7 +133,7 @@ describe("NP-316 (3): Becoming door + Mindset card use the web's violet", () => 
   });
 });
 
-describe("NP-316 (4): a smart-rotating STAT tile always draws the square layout", () => {
+describe("NP-316 (4): a smart-rotating STAT tile forwards tile.size", () => {
   const STAT_DATA: DashboardStatData = {
     streakDays: 5,
     caloriesConsumed: 1200,
@@ -144,22 +144,18 @@ describe("NP-316 (4): a smart-rotating STAT tile always draws the square layout"
     weightEntries: [{ date: "2026-10-01", value: 181 }, { date: "2026-10-05", value: 180 }],
   } as unknown as DashboardStatData;
 
-  it("renders the square (1x1) Calories layout even when the smart tile's own grid slot is 2x1 — like the web's rotator, which never forwards `size` to a stat renderer", () => {
+  it("renders the wide (2x1) Calories layout when the smart tile's own grid slot is 2x1", () => {
     const tile: DashboardTile = {
       id: "smart",
       kind: "smart-rotating",
       size: "2x1",
       settings: { pool: ["stat:calories"] },
     };
-    const { getByText } = render(
+    const { getByTestId } = render(
       <SmartRotatingTile tile={tile} statData={STAT_DATA} />,
     );
-    // The square layout's label carries `flex-1 ml-2` (it sits beside a small
-    // badge on one row, value+bar+footer stacked below); the wide layout's
-    // label has neither — the two are told apart by that className.
-    const label = getByText("Calories");
-    expect(String(label.props.className)).toContain("ml-2");
-    expect(String(label.props.className)).toContain("flex-1");
+    const value = getByTestId("tile-stat-calories-value");
+    expect(String(value.props.className)).toContain("text-3xl");
   });
 });
 

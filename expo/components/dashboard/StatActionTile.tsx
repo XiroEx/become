@@ -145,23 +145,27 @@ export function StatActionTile({
         </View>
       ) : (
         <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
+          <View style={styles.squareTopRow}>
             <View style={[styles.badgeSmall, { backgroundColor: bg }]}>
-              <IconComponent size={16} color={color} />
+              <IconComponent size={18} color={color} />
             </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {label}
+            <View style={styles.squareMeta}>
+              <Text
+                className="text-muted-foreground text-xs font-medium"
+                numberOfLines={1}
+              >
+                {label}
+              </Text>
+              <Text className="text-foreground text-2xl font-extrabold tracking-tight">
+                {actionValue}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.squareBottom}>
+            <Text className="text-muted-foreground text-[10px]" numberOfLines={1}>
+              {subtitle}
             </Text>
           </View>
-          <Text className="text-foreground text-2xl font-bold mt-2">
-            {actionValue}
-          </Text>
-          <Text className="text-muted-foreground text-[10px] mt-1" numberOfLines={1}>
-            {subtitle}
-          </Text>
         </View>
       )}
     </Pressable>
@@ -173,6 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
+    height: "100%",
     minHeight: 96,
     justifyContent: "center",
   },
@@ -202,19 +207,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   squareContent: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
+  },
+  squareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   squareHeader: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  squareBottom: {
+    width: "100%",
   },
 });
 

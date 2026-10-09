@@ -179,6 +179,8 @@ export interface DashboardScreenProps {
    * Current Program card's `Progress` label (NP-256).
    */
   onOpenProgress?: () => void;
+  /** Opens chat from Quick Links (NP-352). */
+  onOpenChat?: () => void;
   /** Nutrition quick-link description (calories today when known). */
   quickLinksNutritionDescription?: string | null;
   /** Action tile callback: opens Mind tab / session. */
@@ -304,6 +306,7 @@ export function DashboardScreen({
   onOpenPrograms,
   onOpenHistory,
   onOpenProgress,
+  onOpenChat,
   quickLinksNutritionDescription,
   onOpenMind,
   onOpenBecoming,
@@ -489,7 +492,7 @@ export function DashboardScreen({
         testID="dashboard-scroll"
         contentContainerStyle={{
           padding: 16,
-          gap: 16,
+          gap: 12,
           // Clear the floating glass tab bar (NP-351): it is absolutely
           // positioned, so content scrolls UNDER it and nothing reserves the
           // space but this.
@@ -618,8 +621,7 @@ export function DashboardScreen({
         <View
           style={{
             alignItems: "flex-end",
-            marginTop: -6,
-            marginBottom: 4,
+            marginTop: 8,
           }}
         >
           <Pressable
@@ -763,6 +765,7 @@ export function DashboardScreen({
           onOpenPrograms={onOpenPrograms ?? onBrowsePrograms}
           onOpenNutrition={onOpenNutrition}
           onOpenProgress={onOpenProgress ?? onOpenHistory}
+          onOpenChat={onOpenChat}
           nutritionDescription={quickLinksNutritionDescription}
         />
 

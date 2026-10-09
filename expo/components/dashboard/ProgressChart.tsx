@@ -399,17 +399,9 @@ export function ProgressChart({
             /* Line / Area Chart */
             (() => {
               const values = data.map((d) => d.value);
-              let minVal = Math.min(...values);
-              let maxVal = Math.max(...values);
-              if (
-                activeChart === "weight" &&
-                targetWeight != null &&
-                targetWeight > 0
-              ) {
-                minVal = Math.min(minVal, targetWeight);
-                maxVal = Math.max(maxVal, targetWeight);
-              }
-              // The web's YAxis domain is `['dataMin - 2', 'dataMax + 2']`.
+              const minVal = Math.min(...values);
+              const maxVal = Math.max(...values);
+              // The web's YAxis domain is strictly data-driven: `['dataMin - 2', 'dataMax + 2']`.
               let yMin = minVal - 2;
               let yMax = maxVal + 2;
               if (yMax <= yMin) {
@@ -454,12 +446,13 @@ export function ProgressChart({
                 }
               }
 
-              // Target weight reference line
+              // Target weight reference line: strictly rendered only when inside domain
               let targetY: number | null = null;
               if (
                 activeChart === "weight" &&
                 targetWeight != null &&
-                targetWeight > 0
+                targetWeight >= yMin &&
+                targetWeight <= yMax
               ) {
                 targetY = getY(targetWeight);
               }
@@ -473,8 +466,8 @@ export function ProgressChart({
                     </LinearGradient>
                   </Defs>
 
-                  {/* Horizontal grid lines */}
-                  {[0, 0.5, 1].map((ratio) => {
+                  {/* 4 horizontal grid lines with numeric ticks */}
+                  {[0, 1 / 3, 2 / 3, 1].map((ratio) => {
                     const y = paddingTop + plotHeight * ratio;
                     const val = yMax - ratio * yRange;
                     return (
@@ -500,6 +493,47 @@ export function ProgressChart({
                       </React.Fragment>
                     );
                   })}
+
+                  {/* 5 evenly spaced date ticks & vertical gridlines */}
+                  {(() => {
+                    const count = pts.length;
+                    const tickIndices =
+                      count <= 5
+                        ? pts.map((_, i) => i)
+                        : [
+                            0,
+                            Math.round((count - 1) * 0.25),
+                            Math.round((count - 1) * 0.5),
+                            Math.round((count - 1) * 0.75),
+                            count - 1,
+                          ];
+                    return tickIndices.map((idx) => {
+                      const pt = pts[idx];
+                      if (!pt) return null;
+                      return (
+                        <React.Fragment key={`v-grid-${idx}`}>
+                          <Line
+                            x1={pt.x}
+                            y1={paddingTop}
+                            x2={pt.x}
+                            y2={paddingTop + plotHeight}
+                            stroke={colors.border}
+                            strokeWidth={1}
+                            strokeDasharray="3,3"
+                          />
+                          <SvgText
+                            x={pt.x}
+                            y={paddingTop + plotHeight + 16}
+                            fontSize={9}
+                            fill={colors["muted-foreground"]}
+                            textAnchor="middle"
+                          >
+                            {pt.date}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    });
+                  })()}
 
                   {/* Target weight line */}
                   {targetY != null && targetWeight != null ? (
@@ -542,33 +576,6 @@ export function ProgressChart({
                       fill="none"
                     />
                   ) : null}
-
-                  {/* Date labels only — the web's Area chart has no resting-state
-                      dot (`dot` is unset, which Recharts defaults to hidden
-                      until hover), so none is drawn here either. */}
-                  {pts.map((pt, i) => {
-                    const showDate =
-                      pts.length <= 6 ||
-                      i === 0 ||
-                      i === pts.length - 1 ||
-                      i === Math.floor(pts.length / 2);
-
-                    return (
-                      <React.Fragment key={`point-${i}`}>
-                        {showDate ? (
-                          <SvgText
-                            x={pt.x}
-                            y={paddingTop + plotHeight + 16}
-                            fontSize={9}
-                            fill={colors["muted-foreground"]}
-                            textAnchor="middle"
-                          >
-                            {pt.date}
-                          </SvgText>
-                        ) : null}
-                      </React.Fragment>
-                    );
-                  })}
                 </Svg>
               );
             })()
