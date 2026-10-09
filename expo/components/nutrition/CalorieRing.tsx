@@ -206,7 +206,8 @@ export function CalorieRing({
       : fatsPct;
 
   return (
-    <Card testID={testID}>
+    <>
+      <Card testID={testID}>
       {/* Card header */}
       <View
         style={{
@@ -304,7 +305,7 @@ export function CalorieRing({
           >
             <Text
               testID="day-totals-kcal"
-              className={`text-3xl font-bold ${
+              className={`text-2xl font-bold ${
                 isOver ? "text-red-500" : "text-foreground"
               }`}
             >
@@ -333,16 +334,6 @@ export function CalorieRing({
             {Math.abs(remaining)} {isOver ? "over" : "remaining"}
           </Text>
         </Text>
-
-        {/* Goal line */}
-        {goalLine ? (
-          <Text
-            testID="nutrition-goal-line"
-            className="text-muted-foreground text-xs text-center mt-1"
-          >
-            {goalLine}
-          </Text>
-        ) : null}
 
         {hasPlanned ? (
           <View
@@ -389,7 +380,7 @@ export function CalorieRing({
                     marginBottom: 4,
                   }}
                 >
-                  <Text className="text-foreground text-xs font-semibold">Protein</Text>
+                  <Text className="text-foreground text-sm font-medium">Protein</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text
                       testID="day-totals-protein"
@@ -400,7 +391,7 @@ export function CalorieRing({
                     {renderMacroPill(protein.current, protein.goal, "floor", "day-totals-protein-pill")}
                   </View>
                 </View>
-                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                <View className="h-2.5 rounded-full bg-muted overflow-hidden relative">
                   {proteinPlannedPct > proteinPct && (
                     <View
                       testID="macro-bar-protein-planned"
@@ -433,7 +424,7 @@ export function CalorieRing({
                     marginBottom: 4,
                   }}
                 >
-                  <Text className="text-foreground text-xs font-semibold">Carbs</Text>
+                  <Text className="text-foreground text-sm font-medium">Carbs</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text
                       testID="day-totals-carbs"
@@ -444,7 +435,7 @@ export function CalorieRing({
                     {renderMacroPill(carbs.current, carbs.goal, "ceiling", "day-totals-carbs-pill")}
                   </View>
                 </View>
-                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                <View className="h-2.5 rounded-full bg-muted overflow-hidden relative">
                   {carbsPlannedPct > carbsPct && (
                     <View
                       testID="macro-bar-carbs-planned"
@@ -478,7 +469,7 @@ export function CalorieRing({
                     marginBottom: 4,
                   }}
                 >
-                  <Text className="text-foreground text-xs font-semibold">Fats</Text>
+                  <Text className="text-foreground text-sm font-medium">Fats</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text
                       testID="day-totals-fat"
@@ -489,7 +480,7 @@ export function CalorieRing({
                     {renderMacroPill(fats.current, fats.goal, "ceiling", "day-totals-fat-pill")}
                   </View>
                 </View>
-                <View className="h-2 rounded-full bg-muted overflow-hidden relative">
+                <View className="h-2.5 rounded-full bg-muted overflow-hidden relative">
                   {fatsPlannedPct > fatsPct && (
                     <View
                       testID="macro-bar-fats-planned"
@@ -528,5 +519,14 @@ export function CalorieRing({
         ) : null}
       </View>
     </Card>
+    {goalLine ? (
+      <Text
+        testID="nutrition-goal-line"
+        className="text-muted-foreground text-xs text-center -mt-2"
+      >
+        {goalLine}
+      </Text>
+    ) : null}
+  </>
   );
 }
