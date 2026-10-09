@@ -462,7 +462,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     rowGap: 8,
   },
+  // Web's grid is `auto-rows-[6rem]` with `[&>*]:h-full` — EVERY cell is a
+  // fixed 96px, so a 2x2 row never shows one card taller than its neighbour
+  // (NP-352). A `minHeight` here would let a tile with more content (Super
+  // Streak's dots row) grow past its siblings again; this must stay a fixed
+  // `height`, and every tile renderer fills it with `height: "100%"`.
   cell: {
+    height: 96,
     marginBottom: 8,
   },
   cell1x1: {},
