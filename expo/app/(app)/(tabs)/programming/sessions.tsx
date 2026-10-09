@@ -857,9 +857,9 @@ export default function SessionsHubRoute() {
 
           {sessions.length === 0 ? (
             // Dashed empty-state card — matches the web's `EmptyState`
-            // (rounded-xl, dashed border, icon circle) so the hub never
-            // paints bare "No sessions yet" text with nowhere to go: the
-            // Import/Build header above and the hub tabs stay reachable.
+            // (rounded-2xl, dashed border without opaque card fill, icon circle)
+            // so the hub never paints bare "No sessions yet" text with nowhere
+            // to go: the Import/Build header above and the hub tabs stay reachable.
             <View
               testID="sessions-hub-empty"
               style={{
@@ -869,29 +869,27 @@ export default function SessionsHubRoute() {
                 borderWidth: 1,
                 borderStyle: "dashed",
                 borderColor: colors.border,
-                backgroundColor: colors.muted,
-                paddingVertical: 48,
-                paddingHorizontal: 16,
+                padding: 32,
               }}
             >
               <View
                 style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
+                  width: 48,
+                  height: 48,
+                  borderRadius: 24,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: colors.card,
+                  backgroundColor: colors.muted,
                   marginBottom: 12,
                 }}
               >
-                <Zap color={colors["muted-foreground"]} size={28} strokeWidth={1.5} />
+                <Zap color={colors["muted-foreground"]} size={24} strokeWidth={1.5} />
               </View>
-              <Text className="text-foreground text-base font-semibold text-center">
+              <Text className="text-foreground text-sm font-semibold text-center">
                 No sessions yet
               </Text>
               <Text
-                className="text-muted-foreground text-sm text-center"
+                className="text-muted-foreground text-xs text-center"
                 style={{ marginTop: 4, maxWidth: 280 }}
               >
                 Tap Build to create your first session.

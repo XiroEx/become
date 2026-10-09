@@ -538,7 +538,7 @@ export function SessionBuilder({
     <View testID={testID} style={{ gap: 12 }}>
       <Input
         testID={`${testID}-title`}
-        label="Session name"
+        accessibilityLabel="Session name"
         placeholder="Session title"
         value={title}
         onChangeText={(text) => {
@@ -578,26 +578,17 @@ export function SessionBuilder({
       ) : null}
 
       <View>
-        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
-          <View style={{ flex: 1 }}>
-            <Input
-              testID={`${testID}-search`}
-              label="Add an exercise"
-              placeholder="Add an exercise…"
-              value={query}
-              onChangeText={setQuery}
-              autoCapitalize="none"
-              autoCorrect={false}
-              accessibilityHint="Type at least two characters to search the catalogue and your custom exercises"
-            />
-          </View>
-          {/* The web's magnifier (`<Search>` inside the field) — the native
-              Input has no icon slot, so this sits beside it, matching the
-              same pattern used by AddExerciseSheet's search row. */}
-          <View style={{ height: 44, justifyContent: "center" }}>
-            <Search size={18} color={colors["muted-foreground"]} />
-          </View>
-        </View>
+        <Input
+          testID={`${testID}-search`}
+          accessibilityLabel="Add an exercise"
+          placeholder="Add an exercise…"
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          accessibilityHint="Type at least two characters to search the catalogue and your custom exercises"
+          leftIcon={<Search size={18} color={colors["muted-foreground"]} />}
+        />
         {searching ? (
           <Text testID={`${testID}-searching`} className="text-muted-foreground text-xs mt-1">
             Searching…
@@ -1005,20 +996,18 @@ export function SessionBuilder({
         accessibilityLabel={`Start session${chosen.length > 0 ? ` with ${chosen.length} exercises` : ""}`}
         disabled={chosen.length === 0}
         onPress={() => void start()}
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          borderRadius: 12,
-          paddingVertical: 12,
-          backgroundColor: colors.success,
-          opacity: chosen.length === 0 ? 0.5 : 1,
-          ...minTouchTarget,
-        }}
+        className="flex-row items-center justify-center gap-2 rounded-xl bg-emerald-600 active:bg-emerald-700 py-3"
+        style={[
+          minTouchTarget,
+          {
+            borderRadius: 12,
+            paddingVertical: 12,
+            opacity: chosen.length === 0 ? 0.5 : 1,
+          },
+        ]}
       >
-        <Dumbbell size={16} color={colors["primary-foreground"]} strokeWidth={2} />
-        <Text style={{ fontSize: 14, fontWeight: "600", color: colors["primary-foreground"] }}>
+        <Dumbbell size={16} color="#ffffff" strokeWidth={2} />
+        <Text className="text-white text-sm font-semibold">
           Start session
         </Text>
         {chosen.length > 0 ? (
@@ -1026,14 +1015,15 @@ export function SessionBuilder({
           // not `(3)` appended to the label text.
           <View
             testID={`${testID}-start-badge`}
+            className="rounded-full bg-white/20 px-1.5 py-0.5"
             style={{
               borderRadius: 999,
               paddingHorizontal: 6,
               paddingVertical: 2,
-              backgroundColor: tint("primary-foreground", 0.2),
+              backgroundColor: "rgba(255, 255, 255, 0.2)",
             }}
           >
-            <Text style={{ fontSize: 11, color: colors["primary-foreground"] }}>
+            <Text className="text-white text-[11px] font-semibold" style={{ fontSize: 11, color: "#ffffff" }}>
               {chosen.length}
             </Text>
           </View>
