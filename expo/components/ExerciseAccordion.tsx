@@ -90,7 +90,7 @@ export function ExerciseAccordion({
   onPlayPress,
   testID = "program-detail",
 }: ExerciseAccordionProps) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<AccordionTab>("video");
 
@@ -138,7 +138,7 @@ export function ExerciseAccordion({
         borderRadius: 12,
         backgroundColor: colors.card,
         borderWidth: 1,
-        borderColor: isExpanded ? colors.primary : colors.border,
+        borderColor: colors.border,
         overflow: "hidden",
       }}
     >
@@ -150,8 +150,8 @@ export function ExerciseAccordion({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          padding: 12,
+          gap: 16,
+          padding: 16,
         }}
       >
         {/* Exercise number — ALWAYS a filled number circle, never a thumbnail
@@ -177,22 +177,32 @@ export function ExerciseAccordion({
         <View style={{ flex: 1 }}>
           <Text
             testID={`${testID}-exercise-name-${exercise.slug}`}
-            style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}
+            style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}
           >
             {exercise.name}
           </Text>
-          {hasPrescription ? (
+          {exercise.type === "conditioning" && exercise.details ? (
+            <Text
+              style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}
+            >
+              {exercise.details}
+            </Text>
+          ) : hasPrescription ? (
             <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
-              {setsReps}
+              {exercise.sets ? `${exercise.sets} ${exercise.sets === 1 ? "set" : "sets"}` : null}
+              {exercise.sets && exercise.reps ? (
+                <Text style={{ color: isDark ? "#52525b" : "#d4d4d8" }}> • </Text>
+              ) : null}
+              {exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : null}
               {exercise.rest ? (
                 <>
-                  {setsReps ? " · " : ""}
+                  <Text style={{ color: isDark ? "#52525b" : "#d4d4d8" }}> • </Text>
                   <Text style={{ color: colors.success }}>{exercise.rest} rest</Text>
                 </>
               ) : null}
             </Text>
           ) : null}
-          {exercise.details && !isExpanded ? (
+          {exercise.type !== "conditioning" && exercise.details && !isExpanded ? (
             <Text
               numberOfLines={1}
               style={{ fontSize: 12, color: colors["muted-foreground"], marginTop: 2 }}
@@ -215,8 +225,11 @@ export function ExerciseAccordion({
             handleVideoClick();
           }}
           style={{
-            padding: 8,
-            borderRadius: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: isPlaying ? tint("success", 0.2) : colors.muted,
           }}
         >
