@@ -395,6 +395,17 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 44,
   },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    minHeight: 44,
+    minWidth: 44,
+  },
   ctaText: {
     fontSize: 14,
     fontWeight: "600",

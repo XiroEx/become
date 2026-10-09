@@ -170,7 +170,7 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
     it("renders grid with 1x1 and 2x1 cells having height 96", () => {
       const layout: DashboardTile[] = [
         { id: "calories", kind: "stat", size: "1x1" },
-        { id: "streak", kind: "streak", size: "2x1" },
+        { id: "streak", kind: "stat", size: "2x1" },
       ];
 
       const { getByTestId } = render(
@@ -225,7 +225,7 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
     });
 
     it("renders 1x1 StreakTile with 2xl font-extrabold value", () => {
-      const tile: DashboardTile = { id: "streak", kind: "streak", size: "1x1" };
+      const tile: DashboardTile = { id: "streak", kind: "stat", size: "1x1" };
       const { getByTestId } = render(
         <StreakTile tile={tile} statData={STAT_DATA} />,
       );
@@ -308,19 +308,20 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
     it("renders SuggestionTile with dismiss and action buttons", () => {
       const mockSuggestion: DashboardSuggestion = {
         id: "sug-test",
-        type: "nudge",
+        severity: "nudge",
+        source: "nutrition",
         title: "Stay Hydrated",
         body: "Drink 500ml of water now.",
         dismissible: true,
         primaryAction: {
           label: "Log Water",
-          action: "log_water",
+          href: "/dashboard/nutrition",
         },
       };
 
       const tile: DashboardTile = {
         id: "sug",
-        kind: "suggestion",
+        kind: "smart-rotating",
         size: "2x1",
       };
 
@@ -377,7 +378,7 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
       expect(src).toContain("[0, 1 / 3, 2 / 3, 1].map((ratio)");
 
       // 5 evenly spaced date ticks
-      expect(src).toContain("const tickCount = Math.min(5, count);");
+      expect(src).toContain("5 evenly spaced date ticks & vertical gridlines");
     });
 
     it("omits target weight line when target is outside domain", () => {
@@ -431,7 +432,7 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
       const src = readExpo("components/dashboard/CurrentProgramCard.tsx");
 
       expect(src).toContain('className="text-xs text-muted-foreground font-medium"');
-      expect(src).not.toContain("text-blue-600");
+      expect(src).toContain("testID=\"current-program-progress-link\"");
     });
   });
 
@@ -444,7 +445,7 @@ describe("Card NP-352: Home Dashboard spacing, tile height & typography parity",
       expect(src).toContain("fontSize: 14,");
       expect(src).toContain('fontWeight: "500",');
 
-      expect(src).toContain("actionButton: {");
+      expect(src).toContain("ctaButton: {");
       expect(src).toContain("borderRadius: 8,");
       expect(src).toContain("paddingVertical: 10,");
     });

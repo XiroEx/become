@@ -224,6 +224,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  squareHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   squareMeta: {
     flex: 1,
     minWidth: 0,

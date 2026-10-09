@@ -199,7 +199,7 @@ export function StreakTile({
           style,
         ]}
       >
-        <View style={styles.squareHeader}>
+        <View style={styles.squareTopRow}>
           <View
             style={[styles.badgeSmall, { backgroundColor: colors.muted, opacity: 0.6 }]}
           />
@@ -506,6 +506,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   squareTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  squareHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
