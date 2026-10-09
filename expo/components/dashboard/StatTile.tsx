@@ -398,7 +398,7 @@ export function StatTile({
                 </Text>
                 <Text
                   testID={`${rootTestId}-value`}
-                  className="text-foreground text-2xl font-bold"
+                  className="text-foreground text-3xl font-extrabold tracking-tight"
                   style={valueColor ? { color: valueColor } : undefined}
                   numberOfLines={1}
                 >
@@ -434,46 +434,50 @@ export function StatTile({
           </View>
         ) : (
           <View style={styles.squareContent}>
-            <View style={styles.squareHeader}>
+            <View style={styles.squareTopRow}>
               <View style={[styles.badgeSmall, { backgroundColor: badgeBg }]}>
-                <IconComponent size={16} color={iconColor} />
+                <IconComponent size={18} color={iconColor} />
               </View>
-              <Text
-                className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-                numberOfLines={1}
-              >
-                {label}
-              </Text>
+              <View style={styles.squareMeta}>
+                <Text
+                  className="text-muted-foreground text-xs font-medium"
+                  numberOfLines={1}
+                >
+                  {label}
+                </Text>
+                <Text
+                  testID={`${rootTestId}-value`}
+                  className="text-foreground text-2xl font-extrabold tracking-tight"
+                  style={valueColor ? { color: valueColor } : undefined}
+                  numberOfLines={1}
+                >
+                  {value}
+                </Text>
+              </View>
             </View>
-            <Text
-              testID={`${rootTestId}-value`}
-              className="text-foreground text-2xl font-bold mt-2"
-              style={valueColor ? { color: valueColor } : undefined}
-              numberOfLines={1}
-            >
-              {value}
-            </Text>
             {/* Progress bar */}
-            <View style={[styles.barTrack, { backgroundColor: colors.muted, marginTop: 6 }]}>
-              <View
-                style={[
-                  styles.barFill,
-                  {
-                    backgroundColor: barColor,
-                    width: `${Math.max(0, Math.min(100, pct))}%`,
-                  },
-                ]}
-              />
+            <View style={styles.squareBottom}>
+              <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      backgroundColor: barColor,
+                      width: `${Math.max(0, Math.min(100, pct))}%`,
+                    },
+                  ]}
+                />
+              </View>
+              {footer ? (
+                <Text
+                  testID={`${rootTestId}-footer`}
+                  className="text-muted-foreground text-[11px] mt-0.5"
+                  numberOfLines={1}
+                >
+                  {footer}
+                </Text>
+              ) : null}
             </View>
-            {footer ? (
-              <Text
-                testID={`${rootTestId}-footer`}
-                className="text-muted-foreground text-[11px] mt-1"
-                numberOfLines={1}
-              >
-                {footer}
-              </Text>
-            ) : null}
           </View>
         )}
       </Pressable>
@@ -496,6 +500,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
+    height: "100%",
     minHeight: 96,
     minWidth: 44,
     justifyContent: "center",
@@ -527,19 +532,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   squareContent: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
   },
-  squareHeader: {
+  squareTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  squareBottom: {
+    width: "100%",
   },
   barTrack: {
     height: 6,

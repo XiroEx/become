@@ -243,18 +243,19 @@ export function StreakTile({
   const renderValue = () => {
     if (p.emphasis) {
       return (
-        <Text
-          testID="streak-super-value"
-          className="text-foreground text-2xl font-bold"
-          numberOfLines={1}
-        >
-          <FireNumber>{p.value}</FireNumber>
+        <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+          <FireNumber
+            testID="streak-super-value"
+            className={wide ? "text-3xl" : "text-2xl"}
+          >
+            {p.value}
+          </FireNumber>
           {p.unit ? (
-            <Text className="text-xs font-semibold text-muted-foreground">
-              {" "}{p.unit}
+            <Text className="text-xs font-semibold text-muted-foreground ml-1">
+              {p.unit}
             </Text>
           ) : null}
-        </Text>
+        </View>
       );
     }
     // Formatted value matching both full unit display and building label
@@ -262,7 +263,7 @@ export function StreakTile({
     return (
       <Text
         testID="tile-streak-value"
-        className="text-foreground text-2xl font-bold"
+        className="text-foreground text-2xl font-extrabold tracking-tight"
         numberOfLines={1}
       >
         {formattedVal}
@@ -366,85 +367,87 @@ export function StreakTile({
         </View>
       ) : (
         <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
+          <View style={styles.squareTopRow}>
             <View style={[styles.badgeSmall, { backgroundColor: ink.badge }]}>
-              <IconComponent size={16} color={ink.icon} />
+              <IconComponent size={18} color={ink.icon} />
             </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {p.label}
-            </Text>
-          </View>
-          <View style={{ marginTop: 8 }}>
-            {renderValue()}
-          </View>
-          {/* Progress bar */}
-          <View
-            style={[
-              styles.barTrack,
-              { backgroundColor: colors.muted, marginTop: 6 },
-            ]}
-          >
-            <View
-              style={[
-                styles.barFill,
-                {
-                  backgroundColor: ink.bar,
-                  width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                },
-              ]}
-            />
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 4,
-            }}
-          >
-            {p.footer ? (
+            <View style={styles.squareMeta}>
               <Text
-                testID="tile-streak-footer"
-                className="text-muted-foreground text-[11px] flex-1 mr-2"
+                className="text-muted-foreground text-xs font-medium"
                 numberOfLines={1}
               >
-                {p.footer}
+                {p.label}
               </Text>
-            ) : null}
-            {pages.length > 1 ? (
+              {renderValue()}
+            </View>
+          </View>
+          {/* Progress bar */}
+          <View style={styles.squareBottom}>
+            <View
+              style={[
+                styles.barTrack,
+                { backgroundColor: colors.muted },
+              ]}
+            >
               <View
-                testID="streak-tile-dots"
-                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-              >
-                {pages.map((pg, idx) => (
-                  <Pressable
-                    key={pg.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={pg.fullLabel}
-                    accessibilityState={{ selected: idx === i }}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      goTo(idx);
-                    }}
-                    hitSlop={6}
-                    style={{
-                      height: 4,
-                      width: idx === i ? 10 : 4,
-                      borderRadius: 2,
-                      backgroundColor:
-                        idx === i
-                          ? pg.id === "super"
-                            ? colors.accent
-                            : colors["muted-foreground"]
-                          : colors.border,
-                    }}
-                  />
-                ))}
-              </View>
-            ) : null}
+                style={[
+                  styles.barFill,
+                  {
+                    backgroundColor: ink.bar,
+                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginTop: 2,
+              }}
+            >
+              {p.footer ? (
+                <Text
+                  testID="tile-streak-footer"
+                  className="text-muted-foreground text-[11px] flex-1 mr-2"
+                  numberOfLines={1}
+                >
+                  {p.footer}
+                </Text>
+              ) : null}
+              {pages.length > 1 ? (
+                <View
+                  testID="streak-tile-dots"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                >
+                  {pages.map((pg, idx) => (
+                    <Pressable
+                      key={pg.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={pg.fullLabel}
+                      accessibilityState={{ selected: idx === i }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        goTo(idx);
+                      }}
+                      hitSlop={6}
+                      style={{
+                        height: 4,
+                        width: idx === i ? 10 : 4,
+                        borderRadius: 2,
+                        backgroundColor:
+                          idx === i
+                            ? pg.id === "super"
+                              ? colors.accent
+                              : colors["muted-foreground"]
+                            : colors.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       )}
@@ -457,6 +460,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
+    height: "100%",
     minHeight: 96,
     minWidth: 44,
     justifyContent: "center",
@@ -489,19 +493,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
   squareContent: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
   },
-  squareHeader: {
+  squareTopRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 12,
+  },
+  squareMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  squareBottom: {
+    width: "100%",
   },
   barTrack: {
     height: 6,

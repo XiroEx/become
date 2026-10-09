@@ -57,12 +57,14 @@ export interface FireNumberProps {
   children: React.ReactNode;
   style?: StyleProp<TextStyle>;
   className?: string;
+  testID?: string;
 }
 
 export function FireNumber({
   children,
   style,
   className = "",
+  testID,
 }: FireNumberProps) {
   const flameAnim = useMemo(() => new Animated.Value(0.75), []);
 
@@ -136,7 +138,7 @@ export function FireNumber({
 
       {/* The digits themselves, with flame glow and solid orange ink */}
       <Text
-        testID="fire-number"
+        testID={testID ?? "fire-number"}
         style={[
           {
             color: FIRE_ORANGE,

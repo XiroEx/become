@@ -190,14 +190,7 @@ export function SmartRotatingTile({
   } else if (isActionStatId(item.id)) {
     card = (
       <StatActionTile
-        // NP-316: the web's rotator calls `TILE_DEFS[id].render(statContext)`
-        // with NO size argument for a stat card, so it always draws the
-        // default 1x1 (square, bar-under-value) layout regardless of the
-        // smart tile's own grid footprint — only a metric card's renderer
-        // gets the real size. Passing `tile.size` through here let a 2x1
-        // smart-tile slot force the "wide" layout's short, inline bar, which
-        // collides with the value at larger font scales.
-        tile={{ id: item.id, kind: "stat", size: "1x1" }}
+        tile={{ id: item.id, kind: "stat", size: tile.size }}
         onOpenMind={onOpenMind}
         onOpenNutrition={onOpenNutrition}
         onOpenWorkoutNow={onOpenWorkoutNow}
@@ -209,9 +202,7 @@ export function SmartRotatingTile({
   } else {
     card = (
       <StatTile
-        // NP-316: same reasoning as the action-tile branch above — a rotated
-        // stat card always renders square, matching the web's rotator.
-        tile={{ id: item.id, kind: "stat", size: "1x1" }}
+        tile={{ id: item.id, kind: "stat", size: tile.size }}
         statData={statData}
         onOpenCalendar={onOpenCalendar}
         onOpenNutrition={onOpenNutrition}

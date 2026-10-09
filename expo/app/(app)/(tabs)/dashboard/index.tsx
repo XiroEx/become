@@ -943,6 +943,9 @@ export default function DashboardRoute() {
       onOpenPrograms={onBrowsePrograms}
       onOpenHistory={onOpenHistory}
       onOpenProgress={onOpenProgress}
+      onOpenChat={() => {
+        router.push("/(tabs)/chat" as never);
+      }}
       onOpenNutritionGoals={onOpenNutritionGoals}
       quickLinksNutritionDescription={quickLinksNutritionDescription}
       loading={initialLoading}
