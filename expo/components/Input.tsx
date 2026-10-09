@@ -1,7 +1,7 @@
 import { View, TextInput } from "react-native";
 import type { ReactNode } from "react";
+import type { StyleProp, TextStyle, TextInputProps } from "react-native";
 import { Text } from "@/components/Text";
-import type { TextInputProps } from "react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { geistFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -11,6 +11,7 @@ export interface InputProps extends Omit<TextInputProps, "style"> {
   error?: string;
   testID?: string;
   leftIcon?: ReactNode;
+  style?: StyleProp<TextStyle>;
 }
 
 export function Input({
@@ -20,6 +21,7 @@ export function Input({
   accessibilityLabel,
   accessibilityHint,
   leftIcon,
+  style,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
@@ -73,9 +75,15 @@ export function Input({
           accessibilityHint={hint}
           placeholderTextColor={colors["muted-foreground"]}
           className={inputClassName}
+          textAlignVertical={inputProps.multiline ? "top" : undefined}
           // 44 points tall, the same minimum every other control in the app
           // holds: the padding alone leaves it a few points short.
-          style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
+          style={[
+            minTouchTarget,
+            { fontFamily: geistFontFamily(inputClassName) },
+            inputProps.multiline ? { minHeight: 80 } : null,
+            style,
+          ]}
           {...inputProps}
         />
       </View>

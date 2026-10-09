@@ -101,28 +101,38 @@ export function MyPrograms({
 
   if (programs.length === 0) {
     // Native counterpart of the web's `EmptyState` on
-    // `MyProgramsClient.tsx`: an icon circle, title + description, and the
-    // "Create Your First Program" CTA — plus a nudge toward the creator in
-    // the words of the web's onboarding tour
-    // (`webapp/lib/tutorials/sections/programs.ts`'s `programs-new` segment).
-    // "Walk me through it" steps through that 8-step tour's copy (dots +
-    // Next, see `PROGRAM_TOUR_STEPS`) before landing on the same creator
-    // `onCreate` opens (NP-330) — decided in NP-164: choice (b) short native
-    // hub tour with decline (NP-207) rather than DOM spotlights.
+    // `MyProgramsClient.tsx` (NP-359): enclosed in a dashed rounded-2xl
+    // outline card (`rounded-2xl border border-dashed border-zinc-300
+    // dark:border-zinc-700 p-8 text-center`), with 48x48 icon circle,
+    // text-sm title, text-xs subtitle, and green rounded-full pill CTA
+    // (`rounded-full bg-green-500 px-4 py-2 text-xs font-semibold`).
+    // Followed by the onboarding tour tip card (NP-330).
     return (
-      <View testID={`${testID}-empty`} style={{ padding: 16, gap: 16 }}>
-        <View style={{ alignItems: "center", gap: 10 }}>
+      <View style={{ padding: 16, gap: 16 }}>
+        <View
+          testID={`${testID}-empty`}
+          style={{
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 16,
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: colors.border,
+            padding: 32,
+          }}
+        >
           <View
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: colors.muted,
+              marginBottom: 12,
             }}
           >
-            <Plus size={28} color={colors["muted-foreground"]} />
+            <Plus size={24} color={colors["muted-foreground"]} />
           </View>
           {/*
             NP-330: Android measured this bold title narrower than it drew
@@ -131,25 +141,24 @@ export function MyPrograms({
             wrap instead of clip, at any font scale.
           */}
           <Text
-            className="text-foreground text-base font-semibold text-center"
+            className="text-foreground text-sm font-semibold text-center"
             numberOfLines={3}
             style={{ alignSelf: "stretch", paddingHorizontal: 8 }}
           >
             You haven&apos;t created any custom programs yet
           </Text>
-          <Text className="text-muted-foreground text-sm text-center">
+          <Text
+            className="text-muted-foreground text-xs text-center"
+            style={{ marginTop: 4 }}
+          >
             Build your own training program tailored to your goals.
           </Text>
           {onCreate ? (
-            <View style={{ marginTop: 4, alignSelf: "stretch", alignItems: "center" }}>
+            <View style={{ marginTop: 16, alignSelf: "stretch", alignItems: "center" }}>
               {/*
-                NP-330: the same Android clipping bug ("Create Your First
-                Progra") traced back to this label being a `<Text>` nested
-                INSIDE `Button`'s own wrapping `<Text>` (via a `View` child) —
-                invalid text nesting that measures fine in Jest but not on a
-                real Android TextView. A plain `Pressable` with the icon and
-                label as SIBLINGS, the label `flexShrink`-able and allowed two
-                lines, fixes the measurement instead of papering over it.
+                NP-359: styled as a green rounded-full pill (rounded-full
+                bg-green-500 px-4 py-2 text-xs font-semibold text-white)
+                matching web's EmptyState CTA.
               */}
               <Pressable
                 testID={`${testID}-create-empty`}
@@ -162,10 +171,10 @@ export function MyPrograms({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 8,
-                    paddingHorizontal: 20,
-                    paddingVertical: 10,
-                    borderRadius: 12,
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 9999,
                     backgroundColor: colors.success,
                     maxWidth: "100%",
                   },
@@ -173,7 +182,7 @@ export function MyPrograms({
               >
                 <Plus size={16} color={colors["primary-foreground"]} />
                 <Text
-                  className="text-primary-foreground text-sm font-semibold"
+                  className="text-primary-foreground text-xs font-semibold"
                   style={WRAPPABLE_TEXT}
                   numberOfLines={2}
                 >

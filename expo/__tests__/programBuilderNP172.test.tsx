@@ -220,11 +220,8 @@ function fillDetails(screen: ReturnType<typeof render>) {
   );
   fireEvent.changeText(screen.getByTestId("program-builder-goal"), "Get strong");
   fireEvent.changeText(screen.getByTestId("program-builder-weeks"), "8");
-  // One session a week: the other blank sessions would each refuse the save
-  // with "give it a title" (the web requires a title per session too).
-  fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
-  fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
-  fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
+  // Two sessions a week: each session given a title to satisfy validation.
+  fireEvent.press(screen.getByTestId("program-builder-days-2"));
   fireEvent.press(screen.getByTestId("program-builder-step-phases"));
   fireEvent.changeText(
     screen.getByTestId("program-builder-phase-0-weeks"),
@@ -238,6 +235,12 @@ function fillDetails(screen: ReturnType<typeof render>) {
     screen.getByTestId("program-builder-phase-0-workout-0-title"),
     "Upper Power",
   );
+  fireEvent.press(screen.getByTestId("program-builder-phase-0-day-1"));
+  fireEvent.changeText(
+    screen.getByTestId("program-builder-phase-0-workout-1-title"),
+    "Lower Power",
+  );
+  fireEvent.press(screen.getByTestId("program-builder-phase-0-day-0"));
 }
 
 const WORKOUT = "program-builder-phase-0-workout-0";

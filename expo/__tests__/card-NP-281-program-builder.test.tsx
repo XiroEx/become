@@ -630,21 +630,15 @@ describe("(id: NP-281-details) the details step carries the web's equipment chip
     openScratch(screen);
 
     fireEvent.press(screen.getByTestId("program-builder-days-5"));
-    expect(screen.getByTestId("program-builder-days-value")).toHaveTextContent(
-      "5",
-    );
     fireEvent.press(screen.getByTestId("program-builder-step-phases"));
     expect(
       screen.getByTestId("program-builder-phase-0-summary"),
     ).toHaveTextContent(/5 workouts/);
-    // The ± stepper stays for the one case the chips cannot say.
+    // NP-359: extra ± stepper under chips was dropped for web parity.
     fireEvent.press(screen.getByTestId("program-builder-step-details"));
-    for (let i = 0; i < 4; i += 1) {
-      fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
-    }
-    expect(screen.getByTestId("program-builder-days-value")).toHaveTextContent(
-      "1",
-    );
+    expect(screen.queryByTestId("program-builder-days-decrease")).toBeNull();
+    expect(screen.queryByTestId("program-builder-days-value")).toBeNull();
+    expect(screen.queryByTestId("program-builder-days-increase")).toBeNull();
   });
 
   it("marks the required fields with the web's asterisks", async () => {
