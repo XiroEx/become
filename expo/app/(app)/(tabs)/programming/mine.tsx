@@ -321,12 +321,13 @@ export default function MyProgramsRoute() {
         ) : null}
 
         {/*
-          No `empty` prop here on purpose (NP-282): `ScreenState`'s own empty
-          branch is a bare title + message with no icon, no CTA and no tip,
+          No `empty` prop here on purpose (NP-282, NP-359): `ScreenState`'s own
+          empty branch is a bare title + message with no icon, no CTA and no tip,
           which is exactly the native/web gap this card closes. `MyPrograms`
-          renders its OWN full empty state (icon, "Create Your First
-          Program", the "Design your own program" tip) once `programs` is
-          empty, so this only needs to carry loading/error through.
+          renders its OWN full empty state (dashed rounded-2xl card, icon,
+          "Create Your First Program" rounded-full green pill CTA, and the
+          "Design your own program" tip) once `programs` is empty, so this only
+          needs to carry loading/error through.
         */}
         <ScreenState
           loading={custom.loading}
