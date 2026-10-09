@@ -248,12 +248,17 @@ export function SmartRotatingTile({
 const styles = StyleSheet.create({
   wrapper: {
     position: "relative",
+    // Resolves the fixed 96px cell down to the rendered card below, which
+    // fills it with `height: "100%"` (NP-352).
+    height: "100%",
   },
   card: {
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    minHeight: 96,
+    // Fills the grid's fixed 96px cell (NP-352) instead of growing to
+    // content — a `minHeight` here let this tile out-grow its row-mate.
+    height: "100%",
     alignItems: "center",
     justifyContent: "center",
   },

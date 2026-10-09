@@ -536,9 +536,12 @@ export function SessionBuilder({
 
   return (
     <View testID={testID} style={{ gap: 12 }}>
+      {/* No label above (NP-358) — the web's session-name field carries
+          none either (`webapp/components/SessionBuilder.tsx`); the
+          accessible name travels through `accessibilityLabel` instead of a
+          visible `<Text>` above the field. */}
       <Input
         testID={`${testID}-title`}
-        label="Session name"
         placeholder="Session title"
         value={title}
         onChangeText={(text) => {
@@ -546,6 +549,7 @@ export function SessionBuilder({
           setTitleWasEdited(true);
         }}
         autoCapitalize="words"
+        accessibilityLabel="Session name"
       />
 
       {unresolvedNote ? (
@@ -580,22 +584,21 @@ export function SessionBuilder({
       <View>
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
           <View style={{ flex: 1 }}>
+            {/* No label above (the web's field has none either) — and the
+                magnifier sits INSET inside the field, on the left, matching
+                the web's `<Search className="absolute left-3 ...">` rather
+                than floating beside the input as a second element. */}
             <Input
               testID={`${testID}-search`}
-              label="Add an exercise"
               placeholder="Add an exercise…"
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
               autoCorrect={false}
+              accessibilityLabel="Add an exercise"
               accessibilityHint="Type at least two characters to search the catalogue and your custom exercises"
+              leftIcon={<Search size={16} color={colors["muted-foreground"]} />}
             />
-          </View>
-          {/* The web's magnifier (`<Search>` inside the field) — the native
-              Input has no icon slot, so this sits beside it, matching the
-              same pattern used by AddExerciseSheet's search row. */}
-          <View style={{ height: 44, justifyContent: "center" }}>
-            <Search size={18} color={colors["muted-foreground"]} />
           </View>
         </View>
         {searching ? (

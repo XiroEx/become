@@ -199,37 +199,40 @@ export function StreakTile({
           style,
         ]}
       >
-        <View style={styles.squareHeader}>
+        <View style={styles.squareContent}>
+          <View style={styles.topRow}>
+            <View
+              style={[styles.circleBadge, { backgroundColor: colors.muted, opacity: 0.6 }]}
+            />
+            <View style={styles.topMeta}>
+              <View
+                style={{
+                  height: 10,
+                  width: "60%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                }}
+              />
+              <View
+                style={{
+                  height: 22,
+                  width: "50%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                  marginTop: 4,
+                }}
+              />
+            </View>
+          </View>
           <View
-            style={[styles.badgeSmall, { backgroundColor: colors.muted, opacity: 0.6 }]}
-          />
-          <View
-            style={{
-              height: 12,
-              width: "50%",
-              backgroundColor: colors.muted,
-              opacity: 0.6,
-              borderRadius: 4,
-              marginLeft: 8,
-            }}
+            style={[
+              styles.barTrack,
+              { backgroundColor: colors.muted, opacity: 0.6 },
+            ]}
           />
         </View>
-        <View
-          style={{
-            height: 24,
-            width: "40%",
-            backgroundColor: colors.muted,
-            opacity: 0.6,
-            borderRadius: 4,
-            marginTop: 8,
-          }}
-        />
-        <View
-          style={[
-            styles.barTrack,
-            { backgroundColor: colors.muted, opacity: 0.6, marginTop: 8 },
-          ]}
-        />
       </View>
     );
   }
@@ -245,7 +248,7 @@ export function StreakTile({
       return (
         <Text
           testID="streak-super-value"
-          className="text-foreground text-2xl font-bold"
+          className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
           numberOfLines={1}
         >
           <FireNumber>{p.value}</FireNumber>
@@ -262,7 +265,7 @@ export function StreakTile({
     return (
       <Text
         testID="tile-streak-value"
-        className="text-foreground text-2xl font-bold"
+        className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
         numberOfLines={1}
       >
         {formattedVal}
@@ -365,86 +368,85 @@ export function StreakTile({
           </View>
         </View>
       ) : (
+        // Horizontal 1x1 layout, matching the web's `StatTile.tsx` (NP-352):
+        // a circular badge on the LEFT with label + value stacked beside it,
+        // not the old vertically-stacked badge-above-label shape.
         <View style={styles.squareContent}>
-          <View style={styles.squareHeader}>
-            <View style={[styles.badgeSmall, { backgroundColor: ink.badge }]}>
-              <IconComponent size={16} color={ink.icon} />
+          <View style={styles.topRow}>
+            <View style={[styles.circleBadge, { backgroundColor: ink.badge }]}>
+              <IconComponent size={18} color={ink.icon} />
             </View>
-            <Text
-              className="text-muted-foreground text-xs font-medium flex-1 ml-2"
-              numberOfLines={1}
-            >
-              {p.label}
-            </Text>
-          </View>
-          <View style={{ marginTop: 8 }}>
-            {renderValue()}
-          </View>
-          {/* Progress bar */}
-          <View
-            style={[
-              styles.barTrack,
-              { backgroundColor: colors.muted, marginTop: 6 },
-            ]}
-          >
-            <View
-              style={[
-                styles.barFill,
-                {
-                  backgroundColor: ink.bar,
-                  width: `${Math.max(0, Math.min(100, p.pct))}%`,
-                },
-              ]}
-            />
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginTop: 4,
-            }}
-          >
-            {p.footer ? (
+            <View style={styles.topMeta}>
               <Text
-                testID="tile-streak-footer"
-                className="text-muted-foreground text-[11px] flex-1 mr-2"
+                className="text-muted-foreground text-xs"
                 numberOfLines={1}
               >
-                {p.footer}
+                {p.label}
               </Text>
-            ) : null}
-            {pages.length > 1 ? (
+              {renderValue()}
+            </View>
+          </View>
+          <View style={styles.bottomCol}>
+            {/* Progress bar */}
+            <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
               <View
-                testID="streak-tile-dots"
-                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-              >
-                {pages.map((pg, idx) => (
-                  <Pressable
-                    key={pg.id}
-                    accessibilityRole="button"
-                    accessibilityLabel={pg.fullLabel}
-                    accessibilityState={{ selected: idx === i }}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      goTo(idx);
-                    }}
-                    hitSlop={6}
-                    style={{
-                      height: 4,
-                      width: idx === i ? 10 : 4,
-                      borderRadius: 2,
-                      backgroundColor:
-                        idx === i
-                          ? pg.id === "super"
-                            ? colors.accent
-                            : colors["muted-foreground"]
-                          : colors.border,
-                    }}
-                  />
-                ))}
-              </View>
-            ) : null}
+                style={[
+                  styles.barFill,
+                  {
+                    backgroundColor: ink.bar,
+                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              {p.footer ? (
+                <Text
+                  testID="tile-streak-footer"
+                  className="text-muted-foreground text-[11px] flex-1 mr-2"
+                  numberOfLines={1}
+                >
+                  {p.footer}
+                </Text>
+              ) : null}
+              {pages.length > 1 ? (
+                <View
+                  testID="streak-tile-dots"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                >
+                  {pages.map((pg, idx) => (
+                    <Pressable
+                      key={pg.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={pg.fullLabel}
+                      accessibilityState={{ selected: idx === i }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        goTo(idx);
+                      }}
+                      hitSlop={6}
+                      style={{
+                        height: 4,
+                        width: idx === i ? 10 : 4,
+                        borderRadius: 2,
+                        backgroundColor:
+                          idx === i
+                            ? pg.id === "super"
+                              ? colors.accent
+                              : colors["muted-foreground"]
+                            : colors.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
           </View>
         </View>
       )}
@@ -457,7 +459,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
-    minHeight: 96,
+    // Fills the grid's fixed 96px cell (NP-352) instead of growing to
+    // content — a `minHeight` here is how Super Streak ended up visibly
+    // taller than its row-mates.
+    height: "100%",
     minWidth: 44,
     justifyContent: "center",
   },
@@ -488,20 +493,34 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   squareContent: {
     flex: 1,
     justifyContent: "center",
+    gap: 6,
   },
-  squareHeader: {
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
+  },
+  // The web's circular badge on the left of the 1x1 layout (`h-9 w-9
+  // rounded-full`) — the old `badgeSmall` was a rounded SQUARE sitting
+  // above the label (NP-352).
+  circleBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  topMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  bottomCol: {
+    gap: 2,
   },
   barTrack: {
     height: 6,
