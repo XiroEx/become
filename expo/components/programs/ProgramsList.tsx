@@ -140,17 +140,22 @@ export function ProgramsList({
               accessibilityLabel={`Open program ${item.name}`}
               style={{ flex: 1 }}
             >
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              <Text
+                testID={`${testID}-title-${item.id}`}
+                className="text-foreground text-base font-semibold"
+                numberOfLines={2}
               >
-                <Text
-                  testID={`${testID}-title-${item.id}`}
-                  className="text-foreground text-base font-semibold flex-1"
-                  numberOfLines={1}
+                {item.name}
+              </Text>
+              {item.durationWeeks || item.trainingDaysPerWeek ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 6,
+                    marginTop: 4,
+                  }}
                 >
-                  {item.name}
-                </Text>
-                <View style={{ flexDirection: "row", gap: 6, flexShrink: 0 }}>
                   {item.durationWeeks ? (
                     <View className="rounded-full bg-muted px-2 py-0.5">
                       <Text className="text-muted-foreground text-xs font-medium">
@@ -166,9 +171,9 @@ export function ProgramsList({
                     </View>
                   ) : null}
                 </View>
-              </View>
+              ) : null}
               {item.targetUser ? (
-                <Text className="text-muted-foreground text-sm mt-0.5">
+                <Text className="text-muted-foreground text-sm mt-1">
                   {item.targetUser}
                 </Text>
               ) : null}
@@ -200,7 +205,7 @@ export function ProgramsList({
 
             <ChevronRight
               color={colors["muted-foreground"]}
-              size={18}
+              size={20}
               strokeWidth={1.5}
             />
           </View>
