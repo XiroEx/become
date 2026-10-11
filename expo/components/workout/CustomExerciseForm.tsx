@@ -105,14 +105,17 @@ export function CustomExerciseForm({
                     justifyContent: "space-between",
                     paddingHorizontal: 12,
                     paddingVertical: 8,
-                    borderRadius: 12,
+                    borderRadius: 8,
                     borderWidth: 1,
                     borderColor: active ? colors.success : colors.border,
                     backgroundColor: active ? tint("success", 0.1) : "transparent",
                   },
                 ]}
               >
-                <Text className="text-foreground text-xs font-medium">
+                <Text
+                  className="text-xs font-medium"
+                  style={{ color: active ? colors.success : colors.foreground }}
+                >
                   {CUSTOM_EXERCISE_TRACKING_LABELS[tracking]}
                 </Text>
                 <Text className="text-muted-foreground text-xs">
@@ -146,11 +149,16 @@ export function CustomExerciseForm({
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: active ? colors.success : colors.border,
-                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  backgroundColor: active ? colors.success : "transparent",
                   justifyContent: "center",
                 }}
               >
-                <Text className="text-foreground text-xs font-medium">
+                <Text
+                  className="text-xs font-medium"
+                  style={{
+                    color: active ? colors["primary-foreground"] : colors.foreground,
+                  }}
+                >
                   {CUSTOM_EXERCISE_MUSCLE_GROUP_LABELS[group]}
                 </Text>
               </Pressable>
@@ -179,11 +187,16 @@ export function CustomExerciseForm({
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: active ? colors.success : colors.border,
-                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  backgroundColor: active ? colors.success : "transparent",
                   justifyContent: "center",
                 }}
               >
-                <Text className="text-foreground text-xs font-medium">
+                <Text
+                  className="text-xs font-medium"
+                  style={{
+                    color: active ? colors["primary-foreground"] : colors.foreground,
+                  }}
+                >
                   {CUSTOM_EXERCISE_CATEGORY_LABELS[category]}
                 </Text>
               </Pressable>
@@ -223,14 +236,26 @@ export function CustomExerciseForm({
                   borderRadius: 999,
                   borderWidth: 1,
                   borderColor: active ? colors.success : colors.border,
-                  backgroundColor: active ? tint("success", 0.1) : "transparent",
+                  backgroundColor: active ? colors.success : "transparent",
                   justifyContent: "center",
                 }}
               >
-                <Text className="text-foreground text-xs font-medium">
+                <Text
+                  className="text-xs font-medium"
+                  style={{
+                    color: active ? colors["primary-foreground"] : colors.foreground,
+                  }}
+                >
                   {CUSTOM_EXERCISE_ROLE_LABELS[role]}
                 </Text>
-                <Text className="text-muted-foreground text-xs">
+                <Text
+                  className="text-xs"
+                  style={{
+                    color: active
+                      ? tint("primary-foreground", 0.75)
+                      : colors["muted-foreground"],
+                  }}
+                >
                   {CUSTOM_EXERCISE_ROLE_HINTS[role]}
                 </Text>
               </Pressable>

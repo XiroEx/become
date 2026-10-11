@@ -99,7 +99,10 @@ export function CurrentProgramCard({
             disabled={!onPressProgress}
             hitSlop={8}
           >
-            <Text className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+            {/* Subtle grey, matching the web's `text-zinc-500
+                dark:text-zinc-400` — not the bright blue link native used to
+                draw here (NP-352). */}
+            <Text className="text-xs text-muted-foreground font-medium">
               Progress
             </Text>
           </Pressable>

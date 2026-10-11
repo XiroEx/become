@@ -70,6 +70,26 @@ const moodLabels: Record<number, string> = {
   5: "😊",
 };
 
+// The web's `CartesianGrid` on the line/area tabs draws 4 horizontal
+// gridlines for its data-driven `['dataMin - 2', 'dataMax + 2']` domain —
+// not the 3 this chart used to hardcode at `[0, 0.5, 1]` (NP-352).
+const HORIZONTAL_GRID_RATIOS = [0, 1 / 3, 2 / 3, 1];
+
+/**
+ * Up to `max` evenly-spaced indices across `[0, count-1]`, inclusive of both
+ * ends — the web's 5 X-axis date ticks (`Sep 14, Sep 20, Sep 26, Oct 2, Oct
+ * 8`). Deduped so a short series does not repeat an index.
+ */
+export function evenlySpacedIndices(count: number, max: number): number[] {
+  if (count <= 0) return [];
+  if (count <= max) return Array.from({ length: count }, (_, i) => i);
+  const indices = new Set<number>();
+  for (let i = 0; i < max; i++) {
+    indices.add(Math.round((i * (count - 1)) / (max - 1)));
+  }
+  return Array.from(indices).sort((a, b) => a - b);
+}
+
 function weightTrendSentiment(
   trend: "up" | "down" | "neutral",
   goal?: string | null,
@@ -435,6 +455,11 @@ export function ProgressChart({
                 val: d.value,
               }));
 
+              // Up to 5 evenly-spaced indices (first, ..., last), matching
+              // the web's 5 X-axis date ticks — not the 3 (first/middle/
+              // last) this used to thin down to beyond 6 points (NP-352).
+              const tickIndices = evenlySpacedIndices(pts.length, 5);
+
               // Build line path
               let linePath = "";
               let areaPath = "";
@@ -473,13 +498,16 @@ export function ProgressChart({
                     </LinearGradient>
                   </Defs>
 
-                  {/* Horizontal grid lines */}
-                  {[0, 0.5, 1].map((ratio) => {
+                  {/* Horizontal grid lines — the web's `CartesianGrid` draws 4
+                      (its data-driven domain ticks every ~2 units), not the
+                      3 this used to hardcode (NP-352). */}
+                  {HORIZONTAL_GRID_RATIOS.map((ratio) => {
                     const y = paddingTop + plotHeight * ratio;
                     const val = yMax - ratio * yRange;
                     return (
                       <React.Fragment key={`grid-${ratio}`}>
                         <Line
+                          testID="progress-chart-hgrid"
                           x1={paddingLeft}
                           y1={y}
                           x2={paddingLeft + plotWidth}
@@ -498,6 +526,27 @@ export function ProgressChart({
                           {val.toFixed(0)}
                         </SvgText>
                       </React.Fragment>
+                    );
+                  })}
+
+                  {/* Vertical grid lines at the same x-ticks as the date
+                      labels below — the web's `CartesianGrid` draws both
+                      axes; this used to draw horizontal only (NP-352). */}
+                  {tickIndices.map((idx) => {
+                    const pt = pts[idx];
+                    if (!pt) return null;
+                    return (
+                      <Line
+                        key={`vgrid-${idx}`}
+                        testID="progress-chart-vgrid"
+                        x1={pt.x}
+                        y1={paddingTop}
+                        x2={pt.x}
+                        y2={paddingTop + plotHeight}
+                        stroke={colors.border}
+                        strokeWidth={1}
+                        strokeDasharray="3,3"
+                      />
                     );
                   })}
 
@@ -547,11 +596,7 @@ export function ProgressChart({
                       dot (`dot` is unset, which Recharts defaults to hidden
                       until hover), so none is drawn here either. */}
                   {pts.map((pt, i) => {
-                    const showDate =
-                      pts.length <= 6 ||
-                      i === 0 ||
-                      i === pts.length - 1 ||
-                      i === Math.floor(pts.length / 2);
+                    const showDate = pts.length <= 5 || tickIndices.includes(i);
 
                     return (
                       <React.Fragment key={`point-${i}`}>

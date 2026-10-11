@@ -154,12 +154,13 @@ describe("NP-316 (4): a smart-rotating STAT tile always draws the square layout"
     const { getByText } = render(
       <SmartRotatingTile tile={tile} statData={STAT_DATA} />,
     );
-    // The square layout's label carries `flex-1 ml-2` (it sits beside a small
-    // badge on one row, value+bar+footer stacked below); the wide layout's
-    // label has neither — the two are told apart by that className.
+    // The square (1x1) layout's label is NOT `font-medium` (NP-352: it sits
+    // beside a circular badge, stacked above the value, matching the web's
+    // `text-xs text-zinc-500` with no weight class); the wide layout's label
+    // IS `font-medium` — the two are told apart by that className.
     const label = getByText("Calories");
-    expect(String(label.props.className)).toContain("ml-2");
-    expect(String(label.props.className)).toContain("flex-1");
+    expect(String(label.props.className)).not.toContain("font-medium");
+    expect(String(label.props.className)).toContain("text-xs");
   });
 });
 

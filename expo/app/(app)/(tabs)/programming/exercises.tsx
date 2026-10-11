@@ -3,7 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Lock, Plus } from "lucide-react-native";
+import { ArrowLeft, Dumbbell, Lock, Plus, Sparkles, X, Zap } from "lucide-react-native";
 import type { z } from "zod";
 import {
   CustomExerciseDeleteResponseSchema,
@@ -65,6 +65,13 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
  *     bug 6ab18beb, fixed on the web first) — see `applyCategoryChange` in
  *     `lib/workout/customExercises`, applied at pick time in the form.
  */
+type HubTabKey = "exercises" | "sessions" | "programs";
+const HUB_TABS: { key: HubTabKey; label: string; route: string; icon: typeof Dumbbell }[] = [
+  { key: "exercises", label: "Exercises", route: "/(tabs)/programming/exercises", icon: Dumbbell },
+  { key: "sessions", label: "Sessions", route: "/(tabs)/programming/sessions", icon: Zap },
+  { key: "programs", label: "Programs", route: "/(tabs)/programming/mine", icon: Sparkles },
+];
+
 export default function MyExercisesRoute() {
   const { colors } = useThemeTokens();
   const router = useRouter();
@@ -320,28 +327,107 @@ export default function MyExercisesRoute() {
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Hub Header: circular back button + My Workout (NP-357) */}
         <View
           style={{
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
             paddingHorizontal: 16,
             paddingTop: 16,
-            marginBottom: 4,
+            marginBottom: 16,
+            gap: 12,
           }}
         >
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flex: 1 }}>
-            <Pressable
-              testID="my-exercises-back"
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              onPress={goBack}
-              style={[minTouchTarget, { justifyContent: "center" }]}
-            >
-              <Text className="text-primary text-base">‹ Back</Text>
-            </Pressable>
-            <Text className="text-foreground text-2xl font-bold">My exercises</Text>
-          </View>
+          <Pressable
+            testID="my-exercises-back"
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={goBack}
+            style={[
+              minTouchTarget,
+              {
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            ]}
+          >
+            <ArrowLeft size={16} color={colors.foreground} strokeWidth={2} />
+          </Pressable>
+          <Text className="text-foreground text-xl font-bold sm:text-2xl">
+            My Workout
+          </Text>
+        </View>
+
+        {/* Workout Hub tab switcher: Exercises / Sessions / Programs (NP-357) */}
+        <View
+          testID="exercises-hub-tabs"
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+            paddingHorizontal: 16,
+            marginBottom: 12,
+          }}
+        >
+          {HUB_TABS.map((t) => {
+            const active = t.key === "exercises";
+            const Icon = t.icon;
+            return (
+              <Pressable
+                key={t.key}
+                testID={`exercises-hub-tab-${t.key}`}
+                accessibilityRole="button"
+                accessibilityLabel={`${t.label} tab`}
+                accessibilityState={{ selected: active }}
+                disabled={active}
+                onPress={() => {
+                  if (!active) router.push(t.route as never);
+                }}
+                style={[
+                  minTouchTarget,
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: active ? colors.success : colors.muted,
+                  },
+                ]}
+              >
+                <Icon
+                  color={active ? colors["primary-foreground"] : colors["muted-foreground"]}
+                  size={14}
+                  strokeWidth={2}
+                />
+                <Text
+                  className="text-xs font-semibold"
+                  style={{
+                    color: active ? colors["primary-foreground"] : colors["muted-foreground"],
+                  }}
+                >
+                  {t.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Pinned below tabs: + Add button (NP-357) */}
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "flex-end",
+            paddingHorizontal: 16,
+            marginBottom: 12,
+          }}
+        >
           <Pressable
             testID="my-exercises-create"
             accessibilityRole="button"
@@ -358,27 +444,25 @@ export default function MyExercisesRoute() {
                 alignItems: "center",
                 gap: 6,
                 paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingVertical: 6,
                 borderRadius: 999,
-                backgroundColor: colors.primary,
+                backgroundColor: colors.success,
               },
             ]}
           >
             {mayCreate ? (
-              <Plus size={16} color={colors["primary-foreground"]} />
+              <Plus size={14} color={colors["brand-foreground"]} strokeWidth={2.5} />
             ) : (
-              <Lock size={16} color={colors["primary-foreground"]} />
+              <Lock size={14} color={colors["brand-foreground"]} strokeWidth={2.5} />
             )}
-            <Text className="text-primary-foreground text-sm font-semibold">Create</Text>
+            <Text
+              className="text-xs font-semibold"
+              style={{ color: colors["brand-foreground"] }}
+            >
+              Add
+            </Text>
           </Pressable>
         </View>
-
-        <Text
-          className="text-muted-foreground text-sm"
-          style={{ paddingHorizontal: 16, marginBottom: 8 }}
-        >
-          Exercises you built yourself — use them in any workout or program.
-        </Text>
 
         {entitlements && entitlements.enforced !== false ? (
           <View style={{ paddingHorizontal: 16, marginBottom: 8, gap: 8 }}>
@@ -437,6 +521,18 @@ export default function MyExercisesRoute() {
         onClose={closeCreate}
         title="New Custom Exercise"
         sheetStyle={{ maxHeight: "90%" }}
+        headerTrailing={
+          <Pressable
+            testID="my-exercises-create-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={closeCreate}
+            hitSlop={8}
+            style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+          >
+            <X size={20} color={colors["muted-foreground"]} />
+          </Pressable>
+        }
       >
         <ScrollView
           testID="my-exercises-create-form-scroll"

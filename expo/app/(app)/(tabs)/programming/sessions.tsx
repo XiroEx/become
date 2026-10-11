@@ -869,7 +869,11 @@ export default function SessionsHubRoute() {
                 borderWidth: 1,
                 borderStyle: "dashed",
                 borderColor: colors.border,
-                backgroundColor: colors.muted,
+                // No opaque fill — the web's empty-state card is a dashed
+                // outline over the page background (`border-dashed
+                // border-zinc-300 dark:border-zinc-700`), not a solid
+                // `bg-muted` tile. A filled card here was the native-only
+                // drift this pass removes.
                 paddingVertical: 48,
                 paddingHorizontal: 16,
               }}
