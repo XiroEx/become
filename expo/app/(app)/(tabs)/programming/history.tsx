@@ -15,7 +15,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { ScreenState } from "@/components/ScreenState";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import {
   HISTORY_FILTERS,
@@ -64,6 +64,12 @@ import {
  * header's round back button and the Android hardware back/gesture go through
  * `handleBack`: pop if there is somewhere local to pop to, otherwise land on
  * Home — never on whatever tab happens to be first in the bar.
+ *
+ * NP-360: visual/spacing parity pass (Android build 24f4e34d) — circular 32x32
+ * (h-8 w-8 rounded-full border) back button, filter chip count badge styling
+ * (white/25 when active, dark muted / zinc-700 when inactive, white text on active),
+ * and row parity (smooth w-1.5 rounded-l-2xl accent stripe, purple badge for
+ * quick sessions, green badge for program sessions).
  */
 
 function HistoryRow({
@@ -124,7 +130,9 @@ function HistoryRow({
             left: 0,
             top: 0,
             bottom: 0,
-            width: 4,
+            width: 6,
+            borderTopLeftRadius: 16,
+            borderBottomLeftRadius: 16,
             backgroundColor: accentColor,
           }}
         />
@@ -137,12 +145,12 @@ function HistoryRow({
             justifyContent: "center",
             flexShrink: 0,
             backgroundColor: isQuick
-              ? tint("accent", 0.15)
+              ? tint("purple", 0.15)
               : tint("success", 0.15),
           }}
         >
           {isQuick ? (
-            <Sparkles size={20} color={colors.accent} />
+            <Sparkles size={20} color={colors.purple} />
           ) : (
             <Dumbbell size={20} color={colors.success} />
           )}
@@ -163,7 +171,7 @@ function HistoryRow({
                 paddingVertical: 2,
                 flexShrink: 0,
                 backgroundColor: isQuick
-                  ? tint("accent", 0.15)
+                  ? tint("purple", 0.15)
                   : tint("success", 0.15),
               }}
             >
@@ -173,7 +181,7 @@ function HistoryRow({
                   fontWeight: "500",
                   textTransform: "uppercase",
                   letterSpacing: 0.5,
-                  color: isQuick ? colors.accent : colors.success,
+                  color: isQuick ? colors.purple : colors.success,
                 }}
               >
                 {isQuick ? "Quick" : "Program"}
@@ -184,6 +192,7 @@ function HistoryRow({
             style={{
               flexDirection: "row",
               alignItems: "center",
+              flexWrap: "wrap",
               marginTop: 2,
               gap: 12,
             }}
@@ -224,7 +233,7 @@ export default function HistoryRoute({
   tokenForTests,
   backHandler = BackHandler,
 }: HistoryRouteProps = {}) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const router = useRouter();
   const { token: authToken } = useAuth();
   const token = tokenForTests !== undefined ? tokenForTests : authToken;
@@ -369,29 +378,27 @@ export default function HistoryRoute({
               accessibilityRole="button"
               accessibilityLabel="Back"
               onPress={handleBack}
-              style={[
-                minTouchTarget,
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                },
-              ]}
+              hitSlop={hitSlopToMinTarget(32, 32)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
             >
-              <ChevronLeft size={20} color={colors.foreground} />
+              <ChevronLeft size={16} color={colors.foreground} />
             </Pressable>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              <History size={22} color={colors.success} />
+              <History size={24} color={colors.success} />
               <Text
                 accessibilityRole="header"
-                className="text-foreground text-2xl font-bold"
+                className="text-foreground text-2xl font-bold sm:text-3xl"
               >
                 History
               </Text>
@@ -441,7 +448,7 @@ export default function HistoryRoute({
                       fontSize: 14,
                       fontWeight: "600",
                       color: active
-                        ? colors["primary-foreground"]
+                        ? "#ffffff"
                         : colors.foreground,
                     }}
                   >
@@ -452,8 +459,10 @@ export default function HistoryRoute({
                       borderRadius: 999,
                       paddingHorizontal: 6,
                       backgroundColor: active
-                        ? tint("success", 0.35)
-                        : colors.muted,
+                        ? "rgba(255, 255, 255, 0.25)"
+                        : isDark
+                          ? "rgb(63, 63, 70)"
+                          : "rgb(228, 228, 231)",
                     }}
                   >
                     <Text
@@ -461,7 +470,7 @@ export default function HistoryRoute({
                       style={{
                         fontSize: 12,
                         color: active
-                          ? colors["primary-foreground"]
+                          ? "#ffffff"
                           : colors["muted-foreground"],
                       }}
                     >
