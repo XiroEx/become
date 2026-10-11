@@ -81,9 +81,9 @@ export function Input({
           style={[
             minTouchTarget,
             { fontFamily: geistFontFamily(inputClassName) },
-            inputProps.multiline ? { minHeight: 80 } : null,
+            inputProps.multiline ? { minHeight: 80 } : undefined,
             style,
-          ]}
+          ].filter(Boolean) as StyleProp<TextStyle>}
           {...inputProps}
         />
       </View>
