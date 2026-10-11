@@ -98,14 +98,17 @@ describe("ProgramDetail", () => {
     expect(queryByText("Build a base of strength and movement quality.")).toBeNull();
   });
 
-  it("renders a card/tab per phase + workout titles", () => {
+  // NP-361: single-line phase tabs — "Phase 1 (Weeks 1–4)" on one line,
+  // matching the web's `{phase.phase} ({phase.weeks})` instead of the two
+  // stacked lines (name, then weeks) native used to render.
+  it("renders a card/tab per phase + workout titles, with the weeks on the same line", () => {
     const { getByTestId, getByText } = render(
       <ProgramDetail program={sample} />,
     );
     expect(getByTestId("program-detail-phase-0")).toBeTruthy();
     expect(getByTestId("program-detail-phase-1")).toBeTruthy();
-    expect(getByText("Phase 1 — Foundation")).toBeTruthy();
-    expect(getByText("Phase 2 — Hypertrophy")).toBeTruthy();
+    expect(getByText("Phase 1 — Foundation (Weeks 1–4)")).toBeTruthy();
+    expect(getByText("Phase 2 — Hypertrophy (Weeks 5–8)")).toBeTruthy();
   });
 
   it("fires onPhasePress with the phase index", () => {

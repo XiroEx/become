@@ -113,8 +113,8 @@ export function ExerciseAccordion({
   };
 
   const repsText = exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : "";
-  const setsReps = exercise.sets ? `${exercise.sets} sets${repsText ? ` · ${repsText}` : ""}` : repsText;
-  const hasPrescription = Boolean(setsReps || exercise.rest);
+  const setsText = exercise.sets ? `${exercise.sets} sets` : "";
+  const hasPrescription = Boolean(setsText || repsText || exercise.rest);
 
   const tabs: { key: AccordionTab; label: string }[] = [
     { key: "video", label: "Video" },
@@ -137,21 +137,28 @@ export function ExerciseAccordion({
       style={{
         borderRadius: 12,
         backgroundColor: colors.card,
+        // NP-361: a CONSTANT ring — the web's `ring-1 ring-zinc-200
+        // dark:ring-zinc-800` never recolours on expand (only a `hover:`
+        // variant exists, which has no RN equivalent). The native border used
+        // to flip to `colors.primary` while expanded; that stark recolour is
+        // the defect this card calls out, so the border is always `border`.
         borderWidth: 1,
-        borderColor: isExpanded ? colors.primary : colors.border,
+        borderColor: colors.border,
         overflow: "hidden",
       }}
     >
-      {/* Header Row */}
+      {/* Header Row — 16px padding/gap (NP-361 point 5), matching the web's
+          `px-4 py-4 gap-4` instead of the tighter `padding: 12, gap: 12`. */}
       <Pressable
+        testID={`${testID}-exercise-header-${exercise.slug}`}
         onPress={handleToggle}
         accessibilityRole="button"
         accessibilityLabel={`${exercise.name} details, ${isExpanded ? "expanded" : "collapsed"}`}
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          padding: 12,
+          gap: 16,
+          padding: 16,
         }}
       >
         {/* Exercise number — ALWAYS a filled number circle, never a thumbnail
@@ -177,16 +184,24 @@ export function ExerciseAccordion({
         <View style={{ flex: 1 }}>
           <Text
             testID={`${testID}-exercise-name-${exercise.slug}`}
-            style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}
+            style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}
           >
             {exercise.name}
           </Text>
           {hasPrescription ? (
+            // NP-361: every "•" separator takes the web's distinct, lighter
+            // `mx-1.5 text-zinc-300 dark:text-zinc-600` colour instead of the
+            // same muted-foreground as the surrounding text — `border` is the
+            // nearest existing token to that lighter zinc step. Built from
+            // separate spans (not one pre-joined string) so each bullet gets
+            // its own colour while the rendered text stays " · "-joined.
             <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
-              {setsReps}
+              {setsText}
+              {setsText && repsText ? <Text style={{ color: colors.border }}> · </Text> : null}
+              {repsText}
               {exercise.rest ? (
                 <>
-                  {setsReps ? " · " : ""}
+                  {setsText || repsText ? <Text style={{ color: colors.border }}> · </Text> : null}
                   <Text style={{ color: colors.success }}>{exercise.rest} rest</Text>
                 </>
               ) : null}
@@ -215,13 +230,18 @@ export function ExerciseAccordion({
             handleVideoClick();
           }}
           style={{
-            padding: 8,
-            borderRadius: 20,
+            // NP-361: `h-9 w-9 rounded-full` — the web's exact video-button
+            // size instead of a padding-derived circle.
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: isPlaying ? tint("success", 0.2) : colors.muted,
           }}
         >
           <Play
-            size={14}
+            size={16}
             color={isPlaying ? colors.success : colors["muted-foreground"]}
             fill={isPlaying ? colors.success : colors["muted-foreground"]}
           />
