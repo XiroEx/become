@@ -41,9 +41,17 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { programEditDestination } from "@/lib/programs/customPrograms";
 
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 export default function ProgramDetailRoute() {
   const { colors } = useThemeTokens();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsetsOrZero();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";

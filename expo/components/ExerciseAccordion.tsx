@@ -90,7 +90,7 @@ export function ExerciseAccordion({
   onPlayPress,
   testID = "program-detail",
 }: ExerciseAccordionProps) {
-  const { colors, tint, isDark } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const [internalExpanded, setInternalExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<AccordionTab>("video");
 
@@ -191,12 +191,12 @@ export function ExerciseAccordion({
             <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
               {exercise.sets ? `${exercise.sets} ${exercise.sets === 1 ? "set" : "sets"}` : null}
               {exercise.sets && exercise.reps ? (
-                <Text style={{ color: isDark ? "#52525b" : "#d4d4d8" }}> • </Text>
+                <Text style={{ color: colors.border }}> • </Text>
               ) : null}
               {exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : null}
               {exercise.rest ? (
                 <>
-                  <Text style={{ color: isDark ? "#52525b" : "#d4d4d8" }}> • </Text>
+                  <Text style={{ color: colors.border }}> • </Text>
                   <Text style={{ color: colors.success }}>{exercise.rest} rest</Text>
                 </>
               ) : null}

@@ -11,7 +11,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import { render } from "@testing-library/react-native";
 import { ProgramDetail, type ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 
@@ -120,8 +121,8 @@ describe("NP-361 (1): Full-bleed parallax cover hero with sliding content panel"
     const src = readComponentSrc("ProgramDetail.tsx");
     expect(src).toContain("imageTranslateY");
     expect(src).toContain("LinearGradient");
-    expect(src).toContain("rgba(0, 0, 0, 0.3)");
-    expect(src).toContain("rgba(0, 0, 0, 0.8)");
+    expect(src).toContain("rgbOf(becomingStageTokens.shade, 0.3)");
+    expect(src).toContain("rgbOf(becomingStageTokens.shade, 0.8)");
   });
 
   it("sliding content panel has zIndex: 10, rounded top corners, and slides up over hero", () => {
@@ -186,8 +187,8 @@ describe("NP-361 (3): Phase Selector Tabs & Focus Card", () => {
 
   it("nests phase focus inside with circular lightning badge", () => {
     const { getByTestId, getByText } = render(<ProgramDetail program={sampleProgram} />);
-    const focusCard = getByTestId("program-detail-focus");
-    expect(focusCard || getByTestId("program-detail-phase-focus")).toBeTruthy();
+    const focusCard = getByTestId("program-detail-phase-focus");
+    expect(focusCard).toBeTruthy();
     expect(getByText("Hypertrophy base and core stabilization")).toBeTruthy();
   });
 });
@@ -197,8 +198,9 @@ describe("NP-361 (4): Training Days Selector", () => {
     const { getByText } = render(<ProgramDetail program={sampleProgram} />);
     const heading = getByText("Training Days");
     expect(heading).toBeTruthy();
-    expect(heading.props.style?.fontSize).toBe(14);
-    expect(heading.props.style?.fontWeight).toBe("600");
+    const flatHeadingStyle = StyleSheet.flatten(heading.props.style);
+    expect(flatHeadingStyle.fontSize).toBe(14);
+    expect(flatHeadingStyle.fontWeight).toBe("600");
   });
 
   it("lays out training days in a 4-column grid", () => {
@@ -234,7 +236,10 @@ describe("NP-361 (5): Workout Title & Accordion Rows", () => {
     );
 
     expect(getByTestId("program-detail-exercise-bench-press")).toBeTruthy();
-    expect(getByTestId("program-detail-exercise-name-bench-press").props.style?.fontSize).toBe(16);
+    const flatExerciseNameStyle = StyleSheet.flatten(
+      getByTestId("program-detail-exercise-name-bench-press").props.style,
+    );
+    expect(flatExerciseNameStyle.fontSize).toBe(16);
 
     const src = readAccordionSrc();
     expect(src).toContain("padding: 16");

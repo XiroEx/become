@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   Animated,
   Dimensions,
@@ -30,11 +30,26 @@ import { Button } from "@/components/Button";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { getTokens, tintToken, type TokenName } from "@/lib/theme/tokens";
+import {
+  becomingStageTokens,
+  getTokens,
+  onDarkForeground,
+  rgbOf,
+  tintToken,
+  type TokenName,
+} from "@/lib/theme/tokens";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
 import type { ActiveProgramSummary } from "@become/api-client";
+
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
 
 export interface ProgramExerciseDetail {
   slug: string;
@@ -230,12 +245,12 @@ export function ProgramDetail({
   onScroll: onScrollProp,
 }: ProgramDetailProps) {
   const { colors, tint, isDark } = useThemeTokens();
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsetsOrZero();
   const windowHeight = Dimensions.get("window").height;
   const heroMinHeight = Math.max(380, Math.round(windowHeight * 0.52));
   const [heroHeight, setHeroHeight] = useState(heroMinHeight);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollY = useMemo(() => new Animated.Value(0), []);
 
   // Parallax transforms for hero cover & sticky sliding sheet
   const heroTranslateY = scrollY.interpolate({
@@ -543,7 +558,7 @@ export function ProgramDetail({
         }}
         style={{
           minHeight: heroMinHeight,
-          backgroundColor: "#18181b",
+          backgroundColor: heroRgb("card"),
           overflow: "hidden",
           transform: [{ translateY: heroTranslateY }],
           zIndex: 0,
@@ -573,8 +588,8 @@ export function ProgramDetail({
             <LinearGradient
               colors={
                 isDark
-                  ? ["#000000", "#18181b", "#000000"]
-                  : ["#18181b", "#27272a", "#18181b"]
+                  ? [heroRgb("background"), heroRgb("card"), heroRgb("background")]
+                  : [heroRgb("card"), heroRgb("muted"), heroRgb("card")]
               }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -586,7 +601,11 @@ export function ProgramDetail({
         {/* Gradient overlay: lighter at top so the image breathes,
             darker at the bottom so program text stays legible. */}
         <LinearGradient
-          colors={["rgba(0, 0, 0, 0.3)", "rgba(0, 0, 0, 0.45)", "rgba(0, 0, 0, 0.8)"]}
+          colors={[
+            rgbOf(becomingStageTokens.shade, 0.3),
+            rgbOf(becomingStageTokens.shade, 0.45),
+            rgbOf(becomingStageTokens.shade, 0.8),
+          ]}
           locations={[0, 0.5, 1]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
@@ -624,11 +643,11 @@ export function ProgramDetail({
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 9999,
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    backgroundColor: heroTint("foreground", 0.1),
                   }}
                 >
-                  <ChevronLeft size={16} color="#ffffff" strokeWidth={2} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#ffffff" }}>
+                  <ChevronLeft size={16} color={heroRgb("foreground")} strokeWidth={2} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("foreground") }}>
                     All Programs
                   </Text>
                 </Pressable>
@@ -648,11 +667,11 @@ export function ProgramDetail({
                     paddingHorizontal: 12,
                     paddingVertical: 6,
                     borderRadius: 9999,
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    backgroundColor: heroTint("foreground", 0.1),
                   }}
                 >
-                  <Calendar size={16} color="#ffffff" strokeWidth={2} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#ffffff" }}>
+                  <Calendar size={16} color={heroRgb("foreground")} strokeWidth={2} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("foreground") }}>
                     Calendar
                   </Text>
                 </Pressable>
@@ -676,11 +695,11 @@ export function ProgramDetail({
                     paddingHorizontal: 12,
                     paddingVertical: 4,
                     borderRadius: 9999,
-                    backgroundColor: "rgba(34, 197, 94, 0.2)",
+                    backgroundColor: heroTint("mind-green", 0.2),
                   }}
                 >
-                  <Clock size={14} color="#4ade80" strokeWidth={2} />
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#4ade80" }}>
+                  <Clock size={14} color={heroRgb("success")} strokeWidth={2} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: heroRgb("success") }}>
                     {program.durationWeeks} Weeks
                   </Text>
                 </View>
@@ -694,11 +713,11 @@ export function ProgramDetail({
                     paddingHorizontal: 12,
                     paddingVertical: 4,
                     borderRadius: 9999,
-                    backgroundColor: "rgba(59, 130, 246, 0.2)",
+                    backgroundColor: heroTint("mind-blue", 0.2),
                   }}
                 >
-                  <Calendar size={14} color="#60a5fa" strokeWidth={2} />
-                  <Text style={{ fontSize: 12, fontWeight: "600", color: "#60a5fa" }}>
+                  <Calendar size={14} color={heroRgb("info")} strokeWidth={2} />
+                  <Text style={{ fontSize: 12, fontWeight: "600", color: heroRgb("info") }}>
                     {program.trainingDaysPerWeek}x/week
                   </Text>
                 </View>
@@ -710,17 +729,17 @@ export function ProgramDetail({
               <View style={{ flex: 1 }}>
                 <Text
                   testID={`${testID}-name`}
-                  style={{ fontSize: 24, fontWeight: "800", color: "#ffffff" }}
+                  style={{ fontSize: 24, fontWeight: "800", color: heroRgb("foreground") }}
                 >
                   {program.name}
                 </Text>
                 {program.targetUser ? (
-                  <Text style={{ fontSize: 15, color: "#d4d4d8", marginTop: 6 }}>
+                  <Text style={{ fontSize: 15, color: heroTint("foreground", 0.8), marginTop: 6 }}>
                     {program.targetUser}
                   </Text>
                 ) : null}
                 {program.goal ? (
-                  <Text style={{ fontSize: 13, color: "#a1a1aa", marginTop: 4 }}>
+                  <Text style={{ fontSize: 13, color: heroRgb("muted-foreground"), marginTop: 4 }}>
                     {program.goal}
                   </Text>
                 ) : null}
@@ -740,12 +759,12 @@ export function ProgramDetail({
                   style={{
                     borderRadius: 12,
                     borderWidth: 1,
-                    borderColor: "rgba(255, 255, 255, 0.3)",
+                    borderColor: heroTint("foreground", 0.3),
                     padding: 10,
                   }}
                 >
                   <Heart
-                    color={isSaved ? heroRgb("brand") : "#ffffff"}
+                    color={isSaved ? heroRgb("brand") : heroRgb("foreground")}
                     fill={isSaved ? heroRgb("brand") : "transparent"}
                     size={22}
                     strokeWidth={1.5}
@@ -764,12 +783,12 @@ export function ProgramDetail({
                     paddingHorizontal: 20,
                     paddingVertical: 10,
                     borderRadius: 9999,
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    backgroundColor: heroTint("foreground", 0.1),
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: "rgba(255, 255, 255, 0.6)" }}>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: heroTint("foreground", 0.6) }}>
                     Loading…
                   </Text>
                 </View>
@@ -787,7 +806,7 @@ export function ProgramDetail({
                   }}
                 >
                   <LinearGradient
-                    colors={["#22c55e", "#059669"]}
+                    colors={[heroRgb("mind-green"), heroRgb("mind-emerald")]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={{
@@ -798,7 +817,7 @@ export function ProgramDetail({
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#ffffff" }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("foreground") }}>
                       Continue
                     </Text>
                   </LinearGradient>
@@ -817,7 +836,7 @@ export function ProgramDetail({
                   }}
                 >
                   <LinearGradient
-                    colors={["#22c55e", "#059669"]}
+                    colors={[heroRgb("mind-green"), heroRgb("mind-emerald")]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
                     style={{
@@ -828,7 +847,7 @@ export function ProgramDetail({
                       justifyContent: "center",
                     }}
                   >
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#ffffff" }}>
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("foreground") }}>
                       {onEnroll ? "Enroll in program" : "Start program"}
                     </Text>
                   </LinearGradient>
@@ -850,22 +869,22 @@ export function ProgramDetail({
                   paddingVertical: 10,
                   borderRadius: 9999,
                   backgroundColor: hasInProgressWorkout
-                    ? "rgba(234, 179, 8, 0.2)"
-                    : "rgba(255, 255, 255, 0.1)",
+                    ? heroTint("accent", 0.2)
+                    : heroTint("foreground", 0.1),
                   borderWidth: hasInProgressWorkout ? 1 : 0,
-                  borderColor: hasInProgressWorkout ? "rgba(234, 179, 8, 0.5)" : "transparent",
+                  borderColor: hasInProgressWorkout ? heroTint("accent", 0.5) : "transparent",
                   opacity: actionPending ? 0.5 : 1,
                 }}
               >
                 {hasInProgressWorkout ? (
                   <>
-                    <Clock size={16} color="#facc15" strokeWidth={2} />
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#facc15" }}>Resume</Text>
+                    <Clock size={16} color={heroRgb("accent")} strokeWidth={2} />
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("accent") }}>Resume</Text>
                   </>
                 ) : (
                   <>
-                    <Play size={16} color="#ffffff" fill="#ffffff" />
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: "#ffffff" }}>
+                    <Play size={16} color={heroRgb("foreground")} fill={heroRgb("foreground")} />
+                    <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("foreground") }}>
                       Workout
                     </Text>
                   </>
@@ -884,15 +903,15 @@ export function ProgramDetail({
                     borderRadius: 9999,
                     paddingHorizontal: 16,
                     paddingVertical: 10,
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    backgroundColor: heroTint("foreground", 0.1),
                     borderWidth: 0,
                   }}
                   textStyle={{
                     fontSize: 15,
                     fontWeight: "600",
-                    color: "#ffffff",
+                    color: heroRgb("foreground"),
                   }}
-                  tintColor="#ffffff"
+                  tintColor={heroRgb("foreground")}
                 />
               ) : null}
             </View>
@@ -904,13 +923,13 @@ export function ProgramDetail({
                   marginTop: 16,
                   paddingTop: 16,
                   borderTopWidth: 1,
-                  borderTopColor: "rgba(255, 255, 255, 0.15)",
+                  borderTopColor: heroTint("foreground", 0.15),
                   gap: 12,
                 }}
               >
                 {onSetStartDate ? (
                   <Pressable
-                    testID={`${testID}-start-date`}
+                    testID={`${testID}-set-start-date`}
                     accessibilityRole="button"
                     accessibilityLabel="Change program start date"
                     onPress={onSetStartDate}
@@ -1141,13 +1160,7 @@ export function ProgramDetail({
                       paddingHorizontal: 20,
                       paddingVertical: 12,
                       borderRadius: 8,
-                      backgroundColor: isSelected
-                        ? isDark
-                          ? "#ffffff"
-                          : "#18181b"
-                        : isDark
-                          ? "#27272a"
-                          : "#f4f4f5",
+                      backgroundColor: isSelected ? colors.primary : colors.muted,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
@@ -1157,12 +1170,8 @@ export function ProgramDetail({
                         fontSize: 14,
                         fontWeight: isSelected ? "700" : "600",
                         color: isSelected
-                          ? isDark
-                            ? "#000000"
-                            : "#ffffff"
-                          : isDark
-                            ? "#a1a1aa"
-                            : "#52525b",
+                          ? colors["primary-foreground"]
+                          : colors["muted-foreground"],
                       }}
                     >
                       <Text>{phase.name}</Text>
@@ -1179,7 +1188,7 @@ export function ProgramDetail({
                 style={{
                   marginTop: 12,
                   borderRadius: 8,
-                  backgroundColor: isDark ? "rgba(39, 39, 42, 0.5)" : "#f4f4f5",
+                  backgroundColor: isDark ? tint("muted", 0.5) : colors.muted,
                   padding: 12,
                 }}
               >
@@ -1189,15 +1198,15 @@ export function ProgramDetail({
                       width: 32,
                       height: 32,
                       borderRadius: 16,
-                      backgroundColor: isDark ? "#ffffff" : "#18181b",
+                      backgroundColor: colors.primary,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
                     <Zap
                       size={16}
-                      color={isDark ? "#000000" : "#ffffff"}
-                      fill={isDark ? "#000000" : "#ffffff"}
+                      color={colors["primary-foreground"]}
+                      fill={colors["primary-foreground"]}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
@@ -1243,21 +1252,9 @@ export function ProgramDetail({
                       paddingHorizontal: 8,
                       paddingVertical: 10,
                       borderRadius: 8,
-                      backgroundColor: isSelected
-                        ? isDark
-                          ? "#ffffff"
-                          : "#18181b"
-                        : isDark
-                          ? "#18181b"
-                          : "#ffffff",
+                      backgroundColor: isSelected ? colors.primary : colors.card,
                       borderWidth: 1,
-                      borderColor: isSelected
-                        ? isDark
-                          ? "#ffffff"
-                          : "#18181b"
-                        : isDark
-                          ? "#27272a"
-                          : "#e4e4e7",
+                      borderColor: isSelected ? colors.primary : colors.border,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
@@ -1275,12 +1272,8 @@ export function ProgramDetail({
                           fontSize: 14,
                           fontWeight: "600",
                           color: isSelected
-                            ? isDark
-                              ? "#000000"
-                              : "#ffffff"
-                            : isDark
-                              ? "#a1a1aa"
-                              : "#52525b",
+                            ? colors["primary-foreground"]
+                            : colors["muted-foreground"],
                         }}
                       >
                         {dayKey}
@@ -1292,9 +1285,7 @@ export function ProgramDetail({
                             strokeWidth={2.5}
                             color={
                               isSelected
-                                ? isDark
-                                  ? "#000000"
-                                  : "#ffffff"
+                                ? colors["primary-foreground"]
                                 : colors.success
                             }
                           />
@@ -1322,8 +1313,8 @@ export function ProgramDetail({
               <LinearGradient
                 colors={
                   isDark
-                    ? ["#3f3f46", "#27272a"]
-                    : ["#18181b", "#3f3f46"]
+                    ? [heroRgb("muted"), heroRgb("card")]
+                    : [colors.primary, heroRgb("muted")]
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -1333,14 +1324,14 @@ export function ProgramDetail({
                   borderRadius: 12,
                   alignItems: "center",
                   justifyContent: "center",
-                  shadowColor: "#000",
+                  shadowColor: colors.primary,
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.15,
                   shadowRadius: 4,
                   elevation: 3,
                 }}
               >
-                <AlignLeft size={20} color="#ffffff" strokeWidth={2} />
+                <AlignLeft size={20} color={onDarkForeground} strokeWidth={2} />
               </LinearGradient>
               <View style={{ flex: 1 }}>
                 <Text
