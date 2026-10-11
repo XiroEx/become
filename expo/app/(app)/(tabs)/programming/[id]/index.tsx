@@ -524,7 +524,7 @@ export default function ProgramDetailRoute() {
 
   return (
     <SafeAreaView
-      edges={["top", "bottom"]}
+      edges={["bottom"]}
       style={{ flex: 1, backgroundColor: colors.background }}
       testID="programming-detail-route"
     >

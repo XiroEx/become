@@ -14,6 +14,7 @@ import { ActivityIndicator, Pressable } from "react-native";
 import { Share2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { resolveToken, tintToken } from "@/lib/theme/tokens";
 import { shareLink } from "@/lib/share/shareLink";
 import type { ShareCreateRequest } from "@become/api-client";
 
@@ -30,6 +31,8 @@ export interface NativeShareButtonProps {
   onShared?: (url: string) => void;
   /** Render as a round icon button with no text label (web header parity). */
   iconOnly?: boolean;
+  /** Visual tone: hero uses translucent white pill on dark hero (web parity). */
+  tone?: "default" | "hero";
   testID?: string;
 }
 
@@ -40,6 +43,7 @@ export function NativeShareButton({
   onError,
   onShared,
   iconOnly = false,
+  tone = "default",
   testID = "share-button",
 }: NativeShareButtonProps) {
   const { colors } = useThemeTokens();
@@ -68,6 +72,44 @@ export function NativeShareButton({
 
   if (!visible) return null;
 
+  const darkFg = `rgb(${resolveToken("foreground", "dark")})`;
+  const heroBg = tintToken("foreground", "dark", 0.1);
+  const fgColor = tone === "hero" ? darkFg : colors.foreground;
+
+  const buttonStyle = iconOnly
+    ? {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center" as const,
+        justifyContent: "center" as const,
+        backgroundColor: colors.muted,
+        opacity: sharing ? 0.6 : 1,
+      }
+    : tone === "hero"
+      ? {
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          gap: 6,
+          borderRadius: 9999,
+          paddingHorizontal: 16,
+          paddingVertical: 10,
+          backgroundColor: heroBg,
+          opacity: sharing ? 0.6 : 1,
+        }
+      : {
+          flexDirection: "row" as const,
+          alignItems: "center" as const,
+          gap: 6,
+          borderRadius: 999,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          backgroundColor: colors.card,
+          borderWidth: 1,
+          borderColor: colors.border,
+          opacity: sharing ? 0.6 : 1,
+        };
+
   return (
     <>
       <Pressable
@@ -77,38 +119,15 @@ export function NativeShareButton({
         accessibilityState={{ busy: sharing }}
         onPress={() => void onPress()}
         disabled={sharing}
-        style={
-          iconOnly
-            ? {
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.muted,
-                opacity: sharing ? 0.6 : 1,
-              }
-            : {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                borderRadius: 999,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
-                opacity: sharing ? 0.6 : 1,
-              }
-        }
+        style={buttonStyle}
       >
         {sharing ? (
-          <ActivityIndicator size="small" color={colors.foreground} />
+          <ActivityIndicator size="small" color={fgColor} />
         ) : (
-          <Share2 size={16} color={colors.foreground} />
+          <Share2 size={16} color={fgColor} />
         )}
         {!iconOnly ? (
-          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+          <Text style={{ fontSize: 14, fontWeight: tone === "hero" ? "600" : "500", color: fgColor }}>
             {sharing ? "Sharing…" : "Share"}
           </Text>
         ) : null}

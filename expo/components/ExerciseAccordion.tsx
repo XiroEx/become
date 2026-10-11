@@ -138,7 +138,7 @@ export function ExerciseAccordion({
         borderRadius: 12,
         backgroundColor: colors.card,
         borderWidth: 1,
-        borderColor: isExpanded ? colors.primary : colors.border,
+        borderColor: colors.border,
         overflow: "hidden",
       }}
     >
@@ -150,8 +150,8 @@ export function ExerciseAccordion({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          padding: 12,
+          gap: 16,
+          padding: 16,
         }}
       >
         {/* Exercise number — ALWAYS a filled number circle, never a thumbnail
@@ -177,7 +177,7 @@ export function ExerciseAccordion({
         <View style={{ flex: 1 }}>
           <Text
             testID={`${testID}-exercise-name-${exercise.slug}`}
-            style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}
+            style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}
           >
             {exercise.name}
           </Text>
@@ -215,8 +215,11 @@ export function ExerciseAccordion({
             handleVideoClick();
           }}
           style={{
-            padding: 8,
-            borderRadius: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: isPlaying ? tint("success", 0.2) : colors.muted,
           }}
         >

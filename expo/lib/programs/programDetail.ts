@@ -86,6 +86,11 @@ export function toProgramDetailViewModel(
     trainingDaysPerWeek: program.training_days_per_week,
     goal: program.goal,
     targetUser: narrowTargetUser(program.target_user),
+    coverImage: program.coverImage ?? null,
+    coverParallax: program.coverParallax,
+    coverZoom: program.coverZoom,
+    coverPositionX: program.coverPositionX,
+    coverPositionY: program.coverPositionY,
     phases: (program.phases ?? []).map(phaseOutline),
   };
 }
