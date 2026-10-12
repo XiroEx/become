@@ -25,6 +25,7 @@ import { SessionEditor } from "@/components/workout/SessionEditor";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import {
   clearQuickSession,
   quickSessionLiveHref,
@@ -109,6 +110,7 @@ function toAccordionExercise(ex: DraftExercise, index: number) {
 export default function QuickSessionOverviewRoute() {
   const router = useRouter();
   const { colors } = useThemeTokens();
+  const tabBarInset = useTabBarScreenInset();
   const { token } = useAuth();
   const params = useLocalSearchParams<{
     session?: string;
@@ -742,7 +744,7 @@ export default function QuickSessionOverviewRoute() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: 24,
+          bottom: tabBarInset + 24,
           paddingHorizontal: 16,
         }}
       >
