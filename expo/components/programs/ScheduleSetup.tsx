@@ -224,7 +224,7 @@ export function ScheduleSetup({
             }}
           >
             <Text className="text-muted-foreground text-xs">Completed</Text>
-            <Text className="text-foreground text-base font-bold">
+            <Text className="text-foreground text-lg font-bold">
               {completedCount}/{totalCount}
             </Text>
           </View>
@@ -241,7 +241,7 @@ export function ScheduleSetup({
             <Text className="text-muted-foreground text-xs">
               Training Days
             </Text>
-            <Text className="text-foreground text-sm font-bold">
+            <Text className="text-foreground text-lg font-bold">
               {daysList || "None"}
             </Text>
           </View>
@@ -326,13 +326,42 @@ export function ScheduleSetup({
             View Full Calendar
           </Button>
 
-          <Button
+          {/* NP-362: the web's "Edit Training Days" is an explicit bordered
+              card button (`border border-zinc-200 px-4 py-3 ... dark:border-zinc-700`),
+              not a borderless ghost button — same treatment as
+              ProgramNudgeModal's native bordered CTAs. */}
+          <Pressable
             testID="edit-training-days-btn"
-            variant="ghost"
+            accessibilityRole="button"
+            accessibilityLabel="Edit Training Days"
             onPress={onEditTrainingDays}
+            style={[
+              minTouchTarget,
+              {
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 12,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+            ]}
           >
-            Edit Training Days
-          </Button>
+            <Text
+              style={[
+                WRAPPABLE_TEXT,
+                {
+                  color: colors["muted-foreground"],
+                  fontWeight: "600",
+                  fontSize: 14,
+                  textAlign: "center",
+                },
+              ]}
+            >
+              Edit Training Days
+            </Text>
+          </Pressable>
 
           <Pressable
             testID="recreate-schedule-btn"

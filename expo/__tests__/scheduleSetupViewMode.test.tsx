@@ -109,6 +109,28 @@ describe("ScheduleSetup view mode", () => {
     expect(onEditTrainingDays).toHaveBeenCalledTimes(1);
   });
 
+  it("NP-362: Completed and Training Days tile values use 18px font-bold, matching the web's `text-lg font-bold`", () => {
+    const { getByText } = render(<ScheduleSetup {...baseProps} />);
+
+    const completedValue = getByText("1/4");
+    expect(completedValue.props.className).toBe("text-foreground text-lg font-bold");
+
+    const trainingDaysValue = getByText("Mon, Wed, Fri");
+    expect(trainingDaysValue.props.className).toBe("text-foreground text-lg font-bold");
+  });
+
+  it("NP-362: Edit Training Days renders as a bordered card button, not a borderless ghost button", () => {
+    const { getByTestId } = render(<ScheduleSetup {...baseProps} />);
+
+    const editButton = getByTestId("edit-training-days-btn");
+    const flatStyle = Array.isArray(editButton.props.style)
+      ? Object.assign({}, ...editButton.props.style.filter(Boolean))
+      : editButton.props.style;
+    expect(flatStyle.borderWidth).toBeGreaterThanOrEqual(1);
+    expect(flatStyle.borderColor).toBeTruthy();
+    expect(flatStyle.borderRadius).toBe(12);
+  });
+
   it("Recreate Schedule still transitions to the create wizard", () => {
     const onRecreate = jest.fn();
     const { getByTestId } = render(
