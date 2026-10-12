@@ -759,6 +759,7 @@ export function ProgramDetail({
               {activeProgramLoading ? (
                 <Pressable
                   testID={`${testID}-start-loading`}
+                  accessibilityRole="button"
                   accessibilityLabel="Loading program status"
                   disabled
                   style={{
