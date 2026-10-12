@@ -8,7 +8,6 @@ import {
   ClipboardList,
   Copy,
   Dumbbell,
-  Minus,
   Plus,
   Trash2,
 } from "lucide-react-native";
@@ -24,7 +23,6 @@ import {
   BUILDER_TARGET_USER_OPTIONS,
   BUILDER_TRAINING_DAY_OPTIONS,
   MAX_DURATION_WEEKS,
-  MAX_TRAINING_DAYS_PER_WEEK,
   type BuilderExercise,
   type BuilderGroupType,
   type CustomProgramBuilderPayload,
@@ -123,9 +121,11 @@ function slug(value: string): string {
  *
  *   • REQUIRED EQUIPMENT. The web's sixteen chips, which the phone could not
  *     edit at all — so a program built on a phone claimed no equipment.
- *   • TRAINING DAYS/WEEK as chips 2–7, the web's control, with the ± stepper
- *     kept beside them because the chip row cannot say "one session a week"
- *     and the builder allows it.
+ *   • TRAINING DAYS/WEEK as chips 2–7, the web's control and, since NP-359,
+ *     its ONLY control — the ± stepper this used to keep beside them for
+ *     "one session a week" is gone, because the web never had one either;
+ *     `clampTrainingDays` still allows 1 underneath for state restored from
+ *     an older draft or an import, it is just not reachable from this UI.
  *   • THE FLOATING SAVE. The web's always-reachable `Save` / `Saved` pill, so
  *     saving does not mean stepping through to Review first. It floats over
  *     the scroll (this component owns the ScrollView for exactly that reason)
@@ -393,185 +393,128 @@ export function ProgramBuilder({
           ) : null}
 
           {/* ── Step 1: the program itself ─────────────────────────────── */}
+          {/* NP-359: the web lays this step out FLAT — no bordered card
+              wraps each section, just the section heading and its fields,
+              one after another — so the Cards that used to enclose Program
+              Details / Duration & Schedule / Target Audience / Required
+              Equipment are plain Views now, with the same testIDs. */}
           {step === 0 ? (
-            <View style={{ gap: 16 }}>
-              <Card testID={`${testID}-details`} title="Program Details">
-                <View style={{ gap: 12 }}>
-                  <Input
-                    testID={`${testID}-name`}
-                    label="Program Name *"
-                    placeholder="e.g. 12-Week Strength Builder"
-                    value={state.name}
-                    onChangeText={(text) => setField("name", text)}
-                  />
-                  <Input
-                    testID={`${testID}-description`}
-                    label="Description"
-                    placeholder="What is this program for?"
-                    value={state.description}
-                    onChangeText={(text) => setField("description", text)}
-                    multiline
-                    numberOfLines={3}
-                  />
-                  <Input
-                    testID={`${testID}-goal`}
-                    label="Goal *"
-                    placeholder="e.g. Build strength"
-                    value={state.goal}
-                    onChangeText={(text) => setField("goal", text)}
-                  />
-                </View>
-              </Card>
+            <View style={{ gap: 20 }}>
+              <View testID={`${testID}-details`} style={{ gap: 12 }}>
+                <Text className="text-foreground text-base font-semibold">
+                  Program Details
+                </Text>
+                <Input
+                  testID={`${testID}-name`}
+                  label="Program Name *"
+                  placeholder="e.g. 12-Week Strength Builder"
+                  value={state.name}
+                  onChangeText={(text) => setField("name", text)}
+                />
+                {/* NP-359: the web's description is a multi-line TEXTAREA
+                    (`rows={3}`), top-aligned — `Input`'s `multiline` now
+                    carries that same shape instead of reading as a fatter
+                    single line. */}
+                <Input
+                  testID={`${testID}-description`}
+                  label="Description"
+                  placeholder="Brief description of the program..."
+                  value={state.description}
+                  onChangeText={(text) => setField("description", text)}
+                  multiline
+                  numberOfLines={3}
+                />
+                <Input
+                  testID={`${testID}-goal`}
+                  label="Goal *"
+                  placeholder="e.g. Build strength"
+                  value={state.goal}
+                  onChangeText={(text) => setField("goal", text)}
+                />
+              </View>
 
-              <Card testID={`${testID}-schedule`} title="Duration & Schedule">
-                <View style={{ gap: 12 }}>
-                  <Input
-                    testID={`${testID}-weeks`}
-                    label="Duration (weeks) *"
-                    accessibilityHint={`Between 1 and ${MAX_DURATION_WEEKS}`}
-                    keyboardType="number-pad"
-                    value={String(state.duration_weeks)}
-                    onChangeText={(text) => {
-                      const digits = text.replace(/[^0-9]/g, "");
-                      if (digits === "") return;
-                      setField(
-                        "duration_weeks",
-                        clampDurationWeeks(Number(digits)),
-                      );
+              <View testID={`${testID}-schedule`} style={{ gap: 12 }}>
+                <Text className="text-foreground text-base font-semibold">
+                  Duration & Schedule
+                </Text>
+                <Input
+                  testID={`${testID}-weeks`}
+                  label="Duration (weeks) *"
+                  accessibilityHint={`Between 1 and ${MAX_DURATION_WEEKS}`}
+                  keyboardType="number-pad"
+                  value={String(state.duration_weeks)}
+                  onChangeText={(text) => {
+                    const digits = text.replace(/[^0-9]/g, "");
+                    if (digits === "") return;
+                    setField(
+                      "duration_weeks",
+                      clampDurationWeeks(Number(digits)),
+                    );
+                  }}
+                />
+
+                {/* NP-359: the web's Training Days/Week is JUST this chip
+                    row, 2–7 — no ± stepper beside it. Native's own stepper
+                    (which used to reach "one session a week", a case the
+                    chips cannot say) is dropped to match; `withTrainingDays`
+                    and `clampTrainingDays` underneath are unchanged, so a
+                    draft or import that already has 1 still renders fine. */}
+                <View style={{ gap: 6 }}>
+                  <Text className="text-foreground text-sm font-medium">
+                    Training Days/Week *
+                  </Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
                     }}
-                  />
-
-                  {/* THE WEB'S CHIPS, 2–7, plus the ± pair: a stepper can say
-                      "one session a week" and the chip row cannot, and this
-                      number resizes every phase, so a half-typed "" must not
-                      have to mean 1. */}
-                  <View style={{ gap: 6 }}>
-                    <Text className="text-foreground text-sm font-medium">
-                      Training Days/Week *
-                    </Text>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      {BUILDER_TRAINING_DAY_OPTIONS.map((days) => {
-                        const selected = state.training_days_per_week === days;
-                        return (
-                          <Pressable
-                            key={days}
-                            testID={`${testID}-days-${days}`}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            accessibilityLabel={`${days} training days a week`}
-                            onPress={() =>
-                              update((prev) => withTrainingDays(prev, days))
+                  >
+                    {BUILDER_TRAINING_DAY_OPTIONS.map((days) => {
+                      const selected = state.training_days_per_week === days;
+                      return (
+                        <Pressable
+                          key={days}
+                          testID={`${testID}-days-${days}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`${days} training days a week`}
+                          onPress={() =>
+                            update((prev) => withTrainingDays(prev, days))
+                          }
+                          style={[
+                            minTouchTarget,
+                            {
+                              flex: 1,
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderRadius: 12,
+                              backgroundColor: selected
+                                ? colors.primary
+                                : colors.muted,
+                            },
+                          ]}
+                        >
+                          <Text
+                            className={
+                              selected
+                                ? "text-primary-foreground text-sm font-semibold"
+                                : "text-muted-foreground text-sm font-semibold"
                             }
-                            style={[
-                              minTouchTarget,
-                              {
-                                flex: 1,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderRadius: 12,
-                                backgroundColor: selected
-                                  ? colors.primary
-                                  : colors.muted,
-                              },
-                            ]}
                           >
-                            <Text
-                              className={
-                                selected
-                                  ? "text-primary-foreground text-sm font-semibold"
-                                  : "text-muted-foreground text-sm font-semibold"
-                              }
-                            >
-                              {days}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <Pressable
-                        testID={`${testID}-days-decrease`}
-                        accessibilityRole="button"
-                        accessibilityLabel="One session a week fewer"
-                        disabled={state.training_days_per_week <= 1}
-                        onPress={() =>
-                          update((prev) =>
-                            withTrainingDays(
-                              prev,
-                              prev.training_days_per_week - 1,
-                            ),
-                          )
-                        }
-                        style={[
-                          minTouchTarget,
-                          {
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderRadius: 12,
-                            backgroundColor: colors.muted,
-                            opacity: state.training_days_per_week <= 1 ? 0.5 : 1,
-                          },
-                        ]}
-                      >
-                        <Minus size={18} color={colors["muted-foreground"]} />
-                      </Pressable>
-                      <Text
-                        testID={`${testID}-days-value`}
-                        className="text-foreground text-base font-semibold"
-                      >
-                        {state.training_days_per_week}
-                      </Text>
-                      <Pressable
-                        testID={`${testID}-days-increase`}
-                        accessibilityRole="button"
-                        accessibilityLabel="One session a week more"
-                        disabled={
-                          state.training_days_per_week >=
-                          MAX_TRAINING_DAYS_PER_WEEK
-                        }
-                        onPress={() =>
-                          update((prev) =>
-                            withTrainingDays(
-                              prev,
-                              prev.training_days_per_week + 1,
-                            ),
-                          )
-                        }
-                        style={[
-                          minTouchTarget,
-                          {
-                            alignItems: "center",
-                            justifyContent: "center",
-                            borderRadius: 12,
-                            backgroundColor: colors.muted,
-                            opacity:
-                              state.training_days_per_week >=
-                              MAX_TRAINING_DAYS_PER_WEEK
-                                ? 0.5
-                                : 1,
-                          },
-                        ]}
-                      >
-                        <Plus size={18} color={colors["muted-foreground"]} />
-                      </Pressable>
-                    </View>
+                            {days}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
-              </Card>
+              </View>
 
-              <Card testID={`${testID}-audience`} title="Target Audience">
+              <View testID={`${testID}-audience`} style={{ gap: 12 }}>
+                <Text className="text-foreground text-base font-semibold">
+                  Target Audience
+                </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {BUILDER_TARGET_USER_OPTIONS.map((option) => {
                     const selected = state.target_user === option;
@@ -617,13 +560,16 @@ export function ProgramBuilder({
                     );
                   })}
                 </View>
-              </Card>
+              </View>
 
               {/* REQUIRED EQUIPMENT (NP-281): the web's sixteen chips, green
                   when picked — `success` is the token for the web's
                   `bg-green-600`, and `brand-foreground` is white in BOTH
                   modes, which `primary-foreground` is not. */}
-              <Card testID={`${testID}-equipment`} title="Required Equipment">
+              <View testID={`${testID}-equipment`} style={{ gap: 12 }}>
+                <Text className="text-foreground text-base font-semibold">
+                  Required Equipment
+                </Text>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {BUILDER_EQUIPMENT_OPTIONS.map((item) => {
                     const selected = state.equipment.includes(item);
@@ -676,7 +622,7 @@ export function ProgramBuilder({
                     );
                   })}
                 </View>
-              </Card>
+              </View>
             </View>
           ) : null}
 

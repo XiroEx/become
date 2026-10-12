@@ -111,18 +111,29 @@ export function MyPrograms({
     // hub tour with decline (NP-207) rather than DOM spotlights.
     return (
       <View testID={`${testID}-empty`} style={{ padding: 16, gap: 16 }}>
-        <View style={{ alignItems: "center", gap: 10 }}>
+        {/*
+          NP-359: the web wraps the empty state in a dashed outline card
+          (`rounded-2xl border border-dashed ... p-8 text-center`) rather
+          than painting it straight on the page background — this is that
+          same enclosing card, so the icon/title/subtitle/CTA sit inside a
+          visible boundary like they do on the web.
+        */}
+        <View
+          testID={`${testID}-empty-card`}
+          className="rounded-2xl border border-dashed border-border"
+          style={{ paddingVertical: 32, paddingHorizontal: 20, alignItems: "center", gap: 10 }}
+        >
           <View
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: colors.muted,
             }}
           >
-            <Plus size={28} color={colors["muted-foreground"]} />
+            <Plus size={24} color={colors["muted-foreground"]} />
           </View>
           {/*
             NP-330: Android measured this bold title narrower than it drew
@@ -131,13 +142,13 @@ export function MyPrograms({
             wrap instead of clip, at any font scale.
           */}
           <Text
-            className="text-foreground text-base font-semibold text-center"
+            className="text-foreground text-sm font-semibold text-center"
             numberOfLines={3}
             style={{ alignSelf: "stretch", paddingHorizontal: 8 }}
           >
             You haven&apos;t created any custom programs yet
           </Text>
-          <Text className="text-muted-foreground text-sm text-center">
+          <Text className="text-muted-foreground text-xs text-center">
             Build your own training program tailored to your goals.
           </Text>
           {onCreate ? (
@@ -150,6 +161,11 @@ export function MyPrograms({
                 real Android TextView. A plain `Pressable` with the icon and
                 label as SIBLINGS, the label `flexShrink`-able and allowed two
                 lines, fixes the measurement instead of papering over it.
+
+                NP-359: the web's CTA here is a GREEN ROUNDED-FULL PILL
+                (`rounded-full bg-green-500 px-4 py-2 text-xs`), not the
+                `rounded-xl` button native used to draw — `borderRadius: 999`
+                plus the smaller `text-xs` pill padding matches it.
               */}
               <Pressable
                 testID={`${testID}-create-empty`}
@@ -162,18 +178,18 @@ export function MyPrograms({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 8,
-                    paddingHorizontal: 20,
-                    paddingVertical: 10,
-                    borderRadius: 12,
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 999,
                     backgroundColor: colors.success,
                     maxWidth: "100%",
                   },
                 ]}
               >
-                <Plus size={16} color={colors["primary-foreground"]} />
+                <Plus size={14} color={colors["primary-foreground"]} />
                 <Text
-                  className="text-primary-foreground text-sm font-semibold"
+                  className="text-primary-foreground text-xs font-semibold"
                   style={WRAPPABLE_TEXT}
                   numberOfLines={2}
                 >

@@ -333,6 +333,12 @@ export default function NewProgramRoute() {
               {/* ── The chooser, the web's own two cards ─────────────────── */}
               {entryMode === "choose" ? (
                 <View testID="programming-new-entry-choice" style={{ gap: 12 }}>
+                  {/*
+                    NP-359: the web's chooser cards are a VERTICAL layout —
+                    the icon container centred at top, title and subtitle
+                    centred underneath it — not the horizontal icon-left,
+                    text-right row this used to draw.
+                  */}
                   <Pressable
                     testID="programming-new-entry-scratch"
                     accessibilityRole="button"
@@ -343,10 +349,8 @@ export default function NewProgramRoute() {
                       setEntryMode("scratch");
                     }}
                     style={{
-                      flexDirection: "row",
                       alignItems: "center",
-                      gap: 12,
-                      padding: 16,
+                      padding: 24,
                       borderRadius: 16,
                       backgroundColor: colors.card,
                       borderWidth: 1,
@@ -355,24 +359,26 @@ export default function NewProgramRoute() {
                   >
                     <View
                       style={{
-                        width: 44,
-                        height: 44,
+                        width: 48,
+                        height: 48,
                         borderRadius: 12,
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: colors.muted,
+                        marginBottom: 12,
                       }}
                     >
                       <PencilLine size={22} color={colors.foreground} />
                     </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text className="text-foreground text-base font-semibold">
-                        Start from scratch
-                      </Text>
-                      <Text className="text-muted-foreground text-sm">
-                        Build it step by step in the editor
-                      </Text>
-                    </View>
+                    <Text className="text-foreground text-base font-semibold text-center">
+                      Start from scratch
+                    </Text>
+                    <Text
+                      className="text-muted-foreground text-sm text-center"
+                      style={{ marginTop: 4 }}
+                    >
+                      Build it step by step in the editor
+                    </Text>
                   </Pressable>
 
                   {!atCap ? (
@@ -383,10 +389,8 @@ export default function NewProgramRoute() {
                       accessibilityHint="Paste text, or upload a file"
                       onPress={() => setEntryMode("import")}
                       style={{
-                        flexDirection: "row",
                         alignItems: "center",
-                        gap: 12,
-                        padding: 16,
+                        padding: 24,
                         borderRadius: 16,
                         backgroundColor: colors.card,
                         borderWidth: 1,
@@ -395,24 +399,26 @@ export default function NewProgramRoute() {
                     >
                       <View
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           borderRadius: 12,
                           alignItems: "center",
                           justifyContent: "center",
                           backgroundColor: colors.muted,
+                          marginBottom: 12,
                         }}
                       >
                         <Upload size={22} color={colors.mindset} />
                       </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text className="text-foreground text-base font-semibold">
-                          Import a program
-                        </Text>
-                        <Text className="text-muted-foreground text-sm">
-                          Paste text, or upload a file
-                        </Text>
-                      </View>
+                      <Text className="text-foreground text-base font-semibold text-center">
+                        Import a program
+                      </Text>
+                      <Text
+                        className="text-muted-foreground text-sm text-center"
+                        style={{ marginTop: 4 }}
+                      >
+                        Paste text, or upload a file
+                      </Text>
                     </Pressable>
                   ) : null}
                 </View>

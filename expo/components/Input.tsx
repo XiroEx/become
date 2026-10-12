@@ -1,7 +1,7 @@
 import { View, TextInput } from "react-native";
 import type { ReactNode } from "react";
 import { Text } from "@/components/Text";
-import type { TextInputProps } from "react-native";
+import type { StyleProp, TextInputProps, TextStyle } from "react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { geistFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -11,7 +11,26 @@ export interface InputProps extends Omit<TextInputProps, "style"> {
   error?: string;
   testID?: string;
   leftIcon?: ReactNode;
+  /**
+   * Extra styling merged onto the TextInput itself — e.g. a textarea's
+   * `minHeight`. Composed with `.filter(Boolean)` below so a caller that
+   * does not pass it (the common case) never adds a stray falsy entry to
+   * the rendered `style` array.
+   */
+  style?: StyleProp<TextStyle>;
 }
+
+/**
+ * A `multiline` field gets the web textarea's own shape (`rows={3}`): tall
+ * enough for three lines and top-aligned, not the single-line field's
+ * vertically-centred text — otherwise `multiline` alone reads as a fatter
+ * single-line box, not a textarea (NP-359).
+ */
+const MULTILINE_STYLE: TextStyle = {
+  minHeight: 80,
+  textAlignVertical: "top",
+  paddingTop: 10,
+};
 
 export function Input({
   label,
@@ -20,6 +39,8 @@ export function Input({
   accessibilityLabel,
   accessibilityHint,
   leftIcon,
+  style,
+  multiline,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
@@ -73,9 +94,19 @@ export function Input({
           accessibilityHint={hint}
           placeholderTextColor={colors["muted-foreground"]}
           className={inputClassName}
+          multiline={multiline}
           // 44 points tall, the same minimum every other control in the app
-          // holds: the padding alone leaves it a few points short.
-          style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
+          // holds: the padding alone leaves it a few points short. A
+          // `multiline` field grows past that into the textarea shape, and a
+          // caller's own `style` has the final word — `.filter(Boolean)`
+          // keeps a skipped entry (no multiline, no `style`) from landing a
+          // `false` in the rendered array (NP-359: that broke a snapshot).
+          style={[
+            minTouchTarget,
+            { fontFamily: geistFontFamily(inputClassName) },
+            multiline && MULTILINE_STYLE,
+            style,
+          ].filter(Boolean)}
           {...inputProps}
         />
       </View>

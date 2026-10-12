@@ -492,8 +492,9 @@ async function buildTwoPhasesOfThree(screen: ReturnType<typeof render>) {
   );
   fireEvent.changeText(screen.getByTestId("program-builder-goal"), "Get strong");
   fireEvent.changeText(screen.getByTestId("program-builder-weeks"), "8");
-  // 4 → 3 sessions a week (the trailing blank session goes with it).
-  fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
+  // 4 → 3 sessions a week (the trailing blank session goes with it). NP-359
+  // dropped the ± stepper that used to do this; the chip is the only way now.
+  fireEvent.press(screen.getByTestId("program-builder-days-3"));
   fireEvent.press(screen.getByTestId("program-builder-target-advanced"));
 
   // Step 2: phases and sessions.

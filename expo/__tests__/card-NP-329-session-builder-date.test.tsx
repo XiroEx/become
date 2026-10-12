@@ -220,6 +220,21 @@ describe("NP-329 DatePicker tinting and native picker", () => {
 });
 
 describe("NP-329 ScheduleSetup tinting", () => {
+  // `SCHEDULE.scheduledWorkouts` is fixed at 2026-10-07 / 2026-10-09 — once
+  // the real wall clock passes those dates, `ScheduleSetup`'s own "upcoming"
+  // filter correctly excludes them and `upcoming-workout-0` stops rendering.
+  // That is the filter working as intended, not a regression; pinning the
+  // clock to a date the fixture is genuinely upcoming on (any day between
+  // 2026-09-14 and 2026-10-09) keeps this test about the tinting, not the
+  // calendar. Do not change the fixture's dates to match "today" — that
+  // just reintroduces the same rot next week.
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-08T12:00:00.000Z"));
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it("uses tintToken('info', 0.12) on header icon tile and upcoming workout tiles in view mode", () => {
     const { getByTestId } = render(
       <ScheduleSetup
