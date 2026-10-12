@@ -220,6 +220,13 @@ describe("NP-329 DatePicker tinting and native picker", () => {
 });
 
 describe("NP-329 ScheduleSetup tinting", () => {
+  beforeAll(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-10-08T12:00:00.000Z"));
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it("uses tintToken('info', 0.12) on header icon tile and upcoming workout tiles in view mode", () => {
     const { getByTestId } = render(
       <ScheduleSetup

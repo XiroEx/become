@@ -111,18 +111,28 @@ export function MyPrograms({
     // hub tour with decline (NP-207) rather than DOM spotlights.
     return (
       <View testID={`${testID}-empty`} style={{ padding: 16, gap: 16 }}>
-        <View style={{ alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            borderRadius: 16,
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: colors.border,
+            padding: 32,
+            alignItems: "center",
+          }}
+        >
           <View
             style={{
-              width: 64,
-              height: 64,
-              borderRadius: 32,
+              width: 48,
+              height: 48,
+              borderRadius: 24,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: colors.muted,
+              marginBottom: 12,
             }}
           >
-            <Plus size={28} color={colors["muted-foreground"]} />
+            <Plus size={24} color={colors["muted-foreground"]} />
           </View>
           {/*
             NP-330: Android measured this bold title narrower than it drew
@@ -131,17 +141,20 @@ export function MyPrograms({
             wrap instead of clip, at any font scale.
           */}
           <Text
-            className="text-foreground text-base font-semibold text-center"
+            className="text-foreground text-sm font-semibold text-center"
             numberOfLines={3}
             style={{ alignSelf: "stretch", paddingHorizontal: 8 }}
           >
             You haven&apos;t created any custom programs yet
           </Text>
-          <Text className="text-muted-foreground text-sm text-center">
+          <Text
+            className="text-muted-foreground text-xs text-center"
+            style={{ marginTop: 4 }}
+          >
             Build your own training program tailored to your goals.
           </Text>
           {onCreate ? (
-            <View style={{ marginTop: 4, alignSelf: "stretch", alignItems: "center" }}>
+            <View style={{ marginTop: 16, alignSelf: "stretch", alignItems: "center" }}>
               {/*
                 NP-330: the same Android clipping bug ("Create Your First
                 Progra") traced back to this label being a `<Text>` nested
@@ -162,10 +175,10 @@ export function MyPrograms({
                     flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 8,
-                    paddingHorizontal: 20,
-                    paddingVertical: 10,
-                    borderRadius: 12,
+                    gap: 6,
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                    borderRadius: 999,
                     backgroundColor: colors.success,
                     maxWidth: "100%",
                   },
@@ -173,7 +186,7 @@ export function MyPrograms({
               >
                 <Plus size={16} color={colors["primary-foreground"]} />
                 <Text
-                  className="text-primary-foreground text-sm font-semibold"
+                  className="text-primary-foreground text-xs font-semibold"
                   style={WRAPPABLE_TEXT}
                   numberOfLines={2}
                 >
