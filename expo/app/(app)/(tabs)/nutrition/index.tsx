@@ -110,6 +110,7 @@ import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAd
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import { PlansResponseSchema, type MealPlan, type PlansResponse } from "@/lib/nutrition/mealPlans";
 import type { MealPlanItem } from "@/components/nutrition/NutritionPlanCard";
 import { TimelineWeekView } from "@/components/nutrition/TimelineWeekView";
@@ -140,6 +141,7 @@ const EMPTY_LOGS: MealLog[] = [];
 
 export default function NutritionIndexRoute() {
   const { colors, scrim, tint } = useThemeTokens();
+  const tabBarInset = useTabBarScreenInset();
   const router = useRouter();
   const { token } = useAuth();
   const params = useLocalSearchParams<{
@@ -3198,7 +3200,7 @@ export default function NutritionIndexRoute() {
         onPress={() => openSearch()}
         style={{
           position: "absolute",
-          bottom: 24,
+          bottom: tabBarInset + 24,
           right: 20,
           width: 56,
           height: 56,

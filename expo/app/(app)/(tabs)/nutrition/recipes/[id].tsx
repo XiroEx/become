@@ -37,6 +37,7 @@ import {
   minutesOfDay,
 } from "@/lib/nutrition/mealSchedule";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 
 /**
  * THE RECIPE PAGE, ON THE PHONE (NP-144).
@@ -60,6 +61,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  */
 export default function RecipeDetailRoute() {
   const { colors } = useThemeTokens();
+  const tabBarInset = useTabBarScreenInset();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -330,7 +332,13 @@ export default function RecipeDetailRoute() {
       {/* A floating toast (the web's own), not a plain line of scroll-flow text. */}
       <View
         pointerEvents="none"
-        style={{ position: "absolute", left: 0, right: 0, bottom: 24, alignItems: "center" }}
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: tabBarInset + 24,
+          alignItems: "center",
+        }}
       >
         <Toast toast={toast} testID="recipe-detail-toast" />
       </View>

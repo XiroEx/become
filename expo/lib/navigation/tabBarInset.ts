@@ -61,9 +61,23 @@ export function tabBarScreenInset(safeAreaBottom: number): number {
  * opt out of it and pad their own scroll content with `TAB_BAR_CONTENT_INSET`
  * instead, so the five screens the bar actually lives on have content passing
  * under the glass.
+ *
+ * `useSafeAreaInsets` throws without a `SafeAreaProvider` above it in the
+ * tree; the real app always has one (`app/_layout.tsx`), but the many
+ * existing screen tests mount a tab screen bare (`BottomSheet`'s own
+ * `useSafeAreaInsetsOrZero`, NP-321, is the precedent). Falling back to zero
+ * there keeps every one of those a no-op while fixing the real device.
  */
+function useSafeAreaInsetsOrZero() {
+  try {
+    return useSafeAreaInsets();
+  } catch {
+    return { top: 0, bottom: 0, left: 0, right: 0 };
+  }
+}
+
 export function useTabBarScreenInset(): number {
-  const insets = useSafeAreaInsets();
+  const insets = useSafeAreaInsetsOrZero();
   return tabBarScreenInset(insets.bottom);
 }
 
