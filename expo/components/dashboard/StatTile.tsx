@@ -402,6 +402,8 @@ export function StatTile({
                   className="text-foreground text-2xl font-bold"
                   style={valueColor ? { color: valueColor } : undefined}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
                 >
                   {value}
                 </Text>
@@ -456,6 +458,8 @@ export function StatTile({
                   className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
                   style={valueColor ? { color: valueColor } : undefined}
                   numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
                 >
                   {value}
                 </Text>
