@@ -73,6 +73,7 @@ import {
   unsaveFood,
 } from "@/lib/nutrition/myStuff";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import { useDebouncedValue } from "@/lib/programs/useDebouncedValue";
 
 // useFocusEffect is re-exported from expo-router. Fall back gracefully if
@@ -118,6 +119,7 @@ function mealIdOf(meal: Meal): string {
 
 export default function MyStuffRoute() {
   const { colors } = useThemeTokens();
+  const tabBarInset = useTabBarScreenInset();
   const router = useRouter();
   const { token } = useAuth();
   // A plan gate (e.g. the custom-foods cap on save-as-food) raises the
@@ -1123,7 +1125,7 @@ export default function MyStuffRoute() {
           onPress={handleCreateMeal}
           style={{
             position: "absolute",
-            bottom: 24,
+            bottom: tabBarInset + 24,
             right: 16,
             width: 56,
             height: 56,
@@ -1144,7 +1146,7 @@ export default function MyStuffRoute() {
           onPress={handleCreateRecipe}
           style={{
             position: "absolute",
-            bottom: 24,
+            bottom: tabBarInset + 24,
             right: 16,
             width: 56,
             height: 56,

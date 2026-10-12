@@ -17,6 +17,7 @@ import { Card } from "@/components/Card";
 import { Input } from "@/components/Input";
 import { Modal } from "@/components/Modal";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
 import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import {
   BUILDER_EQUIPMENT_OPTIONS,
@@ -149,6 +150,7 @@ export function ProgramBuilder({
   testID = "program-builder",
 }: ProgramBuilderProps) {
   const { colors, tint } = useThemeTokens();
+  const tabBarInset = useTabBarScreenInset();
   const [state, setState] = useState<ProgramBuilderState>(
     () => initialState ?? emptyProgramBuilderState(),
   );
@@ -1238,7 +1240,7 @@ export function ProgramBuilder({
           tap-eating overlay. */}
       <View
         pointerEvents="box-none"
-        style={{ position: "absolute", right: 16, bottom: 16 }}
+        style={{ position: "absolute", right: 16, bottom: tabBarInset + 16 }}
       >
         <Pressable
           testID={`${testID}-floating-save`}
