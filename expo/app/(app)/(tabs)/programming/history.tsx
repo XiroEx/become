@@ -15,7 +15,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { ScreenState } from "@/components/ScreenState";
-import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import {
   HISTORY_FILTERS,
@@ -64,12 +64,6 @@ import {
  * header's round back button and the Android hardware back/gesture go through
  * `handleBack`: pop if there is somewhere local to pop to, otherwise land on
  * Home — never on whatever tab happens to be first in the bar.
- *
- * NP-360: visual/spacing parity pass (Android build 24f4e34d) — circular 32x32
- * (h-8 w-8 rounded-full border) back button, filter chip count badge styling
- * (white/25 when active, dark muted / zinc-700 when inactive, white text on active),
- * and row parity (smooth w-1.5 rounded-l-2xl accent stripe, purple badge for
- * quick sessions, green badge for program sessions).
  */
 
 function HistoryRow({
@@ -92,7 +86,7 @@ function HistoryRow({
   // Web's left accent stripe (`Card accent="info"|"success"`): blue for
   // quick sessions, green for programs. Corrections live in the Training
   // Log (`app/(app)/progress.tsx`) — this row only opens/reopens.
-  const accentColor = isQuick ? colors.info : colors.success;
+  const accentColor = isQuick ? colors.info : colors["mind-emerald"];
 
   return (
     <Pressable
@@ -125,6 +119,9 @@ function HistoryRow({
       >
         <View
           aria-hidden
+          className={`absolute inset-y-0 left-0 w-1.5 rounded-l-2xl ${
+            isQuick ? "bg-blue-500" : "bg-emerald-500"
+          }`}
           style={{
             position: "absolute",
             left: 0,
@@ -137,6 +134,11 @@ function HistoryRow({
           }}
         />
         <View
+          className={`h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            isQuick
+              ? "bg-purple-100 dark:bg-purple-900/30"
+              : "bg-green-100 dark:bg-green-900/30"
+          }`}
           style={{
             width: 40,
             height: 40,
@@ -158,13 +160,18 @@ function HistoryRow({
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text
-              className="text-foreground text-sm font-semibold"
+              className="text-foreground text-sm font-semibold truncate"
               style={[WRAPPABLE_TEXT, { flexShrink: 1 }]}
               numberOfLines={1}
             >
               {log.title}
             </Text>
             <View
+              className={`rounded-full px-1.5 py-0.5 shrink-0 ${
+                isQuick
+                  ? "bg-purple-100 dark:bg-purple-900/30"
+                  : "bg-green-100 dark:bg-green-900/30"
+              }`}
               style={{
                 borderRadius: 999,
                 paddingHorizontal: 6,
@@ -176,6 +183,11 @@ function HistoryRow({
               }}
             >
               <Text
+                className={`text-[10px] font-medium uppercase tracking-wide ${
+                  isQuick
+                    ? "text-purple-700 dark:text-purple-300"
+                    : "text-green-700 dark:text-green-300"
+                }`}
                 style={{
                   fontSize: 10,
                   fontWeight: "500",
@@ -192,7 +204,6 @@ function HistoryRow({
             style={{
               flexDirection: "row",
               alignItems: "center",
-              flexWrap: "wrap",
               marginTop: 2,
               gap: 12,
             }}
@@ -378,19 +389,22 @@ export default function HistoryRoute({
               accessibilityRole="button"
               accessibilityLabel="Back"
               onPress={handleBack}
-              hitSlop={hitSlopToMinTarget(32, 32)}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                justifyContent: "center",
-                alignItems: "center",
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
+              className="h-8 w-8 rounded-full border border-border items-center justify-center bg-card"
+              style={[
+                minTouchTarget,
+                {
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <ChevronLeft size={16} color={colors.foreground} />
+              <ChevronLeft size={18} color={colors.foreground} strokeWidth={2} />
             </Pressable>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
@@ -398,7 +412,7 @@ export default function HistoryRoute({
               <History size={24} color={colors.success} />
               <Text
                 accessibilityRole="header"
-                className="text-foreground text-2xl font-bold sm:text-3xl"
+                className="text-foreground text-2xl font-extrabold sm:text-3xl"
               >
                 History
               </Text>
@@ -428,6 +442,9 @@ export default function HistoryRoute({
                   accessibilityLabel={`Filter by ${f.label}, ${counts[f.key]} sessions`}
                   accessibilityState={{ selected: active }}
                   onPress={() => setFilter(f.key)}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 ${
+                    active ? "bg-success" : "bg-muted"
+                  }`}
                   style={[
                     minTouchTarget,
                     {
@@ -437,40 +454,47 @@ export default function HistoryRoute({
                       borderRadius: 999,
                       paddingHorizontal: 14,
                       paddingVertical: 6,
-                      backgroundColor: active ? colors.success : colors.card,
-                      borderWidth: 1,
-                      borderColor: active ? colors.success : colors.border,
+                      backgroundColor: active ? colors.success : colors.muted,
                     },
                   ]}
                 >
                   <Text
+                    className={`text-sm font-semibold ${
+                      active ? "text-white" : "text-muted-foreground"
+                    }`}
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
                       color: active
-                        ? "#ffffff"
-                        : colors.foreground,
+                        ? colors["brand-foreground"]
+                        : colors["muted-foreground"],
                     }}
                   >
                     {f.label}
                   </Text>
                   <View
+                    className={`rounded-full px-1.5 ${
+                      active ? "bg-white/25" : "bg-zinc-200 dark:bg-zinc-700"
+                    }`}
                     style={{
                       borderRadius: 999,
                       paddingHorizontal: 6,
                       backgroundColor: active
-                        ? "rgba(255, 255, 255, 0.25)"
+                        ? tint("brand-foreground", 0.25)
                         : isDark
-                          ? "rgb(63, 63, 70)"
-                          : "rgb(228, 228, 231)",
+                          ? tint("muted-foreground", 0.25)
+                          : colors.border,
                     }}
                   >
                     <Text
                       testID={`history-filter-${f.key}-count`}
+                      className={`text-xs ${
+                        active ? "text-white" : "text-muted-foreground"
+                      }`}
                       style={{
                         fontSize: 12,
                         color: active
-                          ? "#ffffff"
+                          ? colors["brand-foreground"]
                           : colors["muted-foreground"],
                       }}
                     >

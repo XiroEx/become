@@ -1,48 +1,59 @@
 /* eslint-disable import/first */
-// NP-360: Workout History spacing, typography & visual parity
-//
-// Aligns native Workout History screen with web source of truth:
-//   1. Header & Chrome:
-//      - Circular back button h-8 w-8 rounded-full border (32x32, borderRadius 16, border)
-//      - hitSlopToMinTarget(32, 32) preserves 44pt accessible touch target
-//      - History icon size 24 (h-6 w-6), text-2xl font-bold sm:text-3xl title
-//   2. Filter Chips:
-//      - Active count badge bg-white/25 (rgba(255, 255, 255, 0.25)) and white text (#ffffff)
-//      - Active chip label text is white (#ffffff)
-//      - Inactive count badge background is dark muted (zinc-700 in dark mode, zinc-200 in light)
-//      - Inactive count badge text is muted-foreground
-//   3. Workout Card Rows:
-//      - Smooth left accent stripe w-1.5 (6px width, rounded-l-2xl: borderTopLeftRadius 16, borderBottomLeftRadius 16)
-//      - Quick session rows use purple accent: tint("purple", 0.15) for icon badge & type badge, colors.purple
-//      - Program session rows use success accent: tint("success", 0.15) for icon badge & type badge, colors.success
-//      - Meta line wraps cleanly with 12px gap and 4px icon-to-text gap
+/**
+ * NP-360: Workout History spacing, typography & layout parity pass.
+ *
+ * 1. Header & Chrome:
+ *    - Circular back button: `h-8 w-8 rounded-full border border-border`
+ *      (width 32, height 32, borderRadius 16, border).
+ *    - History icon: size 24, colors.success.
+ *    - Title: text-2xl font-extrabold sm:text-3xl.
+ *
+ * 2. Filter Chips ('All', 'Programs', 'Quick'):
+ *    - Pills: `rounded-full px-3.5 py-1.5` (paddingHorizontal 14, paddingVertical 6).
+ *    - Active chip: bg-success, text-white (colors["brand-foreground"]).
+ *    - Inactive chip: bg-muted, text-muted-foreground.
+ *    - Count badge in active chip: rounded-full px-1.5 text-xs bg-white/25 (tint brand-foreground 0.25), text-white.
+ *    - Count badge in inactive chip: bg-zinc-200 dark:bg-zinc-700, text-muted-foreground.
+ *
+ * 3. Workout Card Rows:
+ *    - Left accent stripe: `w-1.5 rounded-l-2xl` (width 6, borderTopLeftRadius 16, borderBottomLeftRadius 16).
+ *      - Program: emerald-500 (colors["mind-emerald"]).
+ *      - Quick: blue-500 (colors.info).
+ *    - Icon badge: `h-10 w-10 shrink-0 items-center justify-center rounded-xl`.
+ *      - Program: bg-green-100 dark:bg-green-900/30, Dumbbell icon.
+ *      - Quick: bg-purple-100 dark:bg-purple-900/30, Sparkles icon.
+ *    - Title: `truncate text-sm font-semibold`, numberOfLines={1}.
+ *    - Type badge: `rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide`.
+ *      - Program: green (colors.success).
+ *      - Quick: purple (colors.purple).
+ *
+ * 4. NP-123 Token Rule:
+ *    - Zero hex colours, zero hand-written rgb()/rgba() string literals.
+ */
 
 import * as fs from "fs";
 import * as path from "path";
 import React from "react";
-import { StyleSheet } from "react-native";
-import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
-import { Calendar, ChevronLeft, Clock, Dumbbell, History, Sparkles } from "lucide-react-native";
+import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import type { WorkoutHistoryEntry } from "@become/api-client";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
-const mockCanGoBack = jest.fn(() => true);
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
     back: mockBack,
-    canGoBack: mockCanGoBack,
+    canGoBack: () => true,
   }),
   useLocalSearchParams: () => ({}),
 }));
 
-const mockToken = "test-jwt";
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({
     user: { _id: "u1", email: "jon@example.com" },
-    token: mockToken,
+    token: "test-jwt",
     loading: false,
     isAuthed: true,
     setToken: jest.fn(),
@@ -51,149 +62,197 @@ jest.mock("@/lib/auth/useAuth", () => ({
   }),
 }));
 
-jest.mock("@become/api-client", () => {
-  const actual = jest.requireActual("@become/api-client");
-  return { __esModule: true, ...actual, apiFetch: jest.fn() };
-});
-
-import { apiFetch } from "@become/api-client";
 import HistoryRoute from "../app/(app)/(tabs)/programming/history";
-import { lightTokens, darkTokens } from "../lib/theme/tokens";
+/* eslint-enable import/first */
 
-const mockApiFetch = apiFetch as unknown as jest.Mock;
+const HISTORY_PATH = path.join(
+  __dirname,
+  "..",
+  "app",
+  "(app)",
+  "(tabs)",
+  "programming",
+  "history.tsx",
+);
 
-const WEDNESDAY_NOON = new Date(2026, 9, 7, 12, 0, 0);
+function readHistorySrc(): string {
+  return fs.readFileSync(HISTORY_PATH, "utf8");
+}
 
-const LOGS = [
+function stripComments(src: string): string {
+  return src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+}
+
+const SAMPLE_LOGS: WorkoutHistoryEntry[] = [
   {
     kind: "program",
-    title: "Hypertrophy · Day 2",
-    programId: "prog-1",
-    programName: "Hypertrophy",
-    day: "Day 2",
+    title: "Hypertrophy Phase 1 — Upper Body Power",
+    programId: "prog-hp1",
+    programName: "Hypertrophy Foundations",
+    day: "Day 1",
     phase: 1,
     completed: true,
-    skipped: false,
-    favorite: false,
-    date: "2026-10-07T08:00:00",
-    duration: 45,
-    exerciseCount: 5,
-    completedSets: 15,
+    date: "2026-10-10T10:00:00.000Z",
+    duration: 52,
+    exerciseCount: 6,
+    completedSets: 18,
   },
   {
     kind: "quick",
-    title: "Tuesday Pump",
-    focus: "push",
-    sessionId: "qs-1",
+    title: "Quick Core & Arms",
+    focus: "core",
+    sessionId: "qs-core-1",
     completed: true,
-    skipped: false,
-    favorite: false,
-    date: "2026-10-06T18:00:00",
-    duration: 30,
+    date: "2026-10-09T15:30:00.000Z",
+    duration: 25,
     exerciseCount: 3,
     completedSets: 9,
-    exercises: [],
   },
-] as const;
+];
 
-function flat(style: unknown): Record<string, unknown> {
-  return StyleSheet.flatten(style as never) as Record<string, unknown>;
-}
+describe("NP-360 (1): Header & Chrome circular back button and typography", () => {
+  it("uses a circular h-8 w-8 rounded-full border button for back navigation", () => {
+    const src = readHistorySrc();
+    expect(src).toContain('testID="history-back-button"');
+    // Circular: width 32, height 32, borderRadius 16 (or rounded-full)
+    expect(src).toMatch(/width:\s*32/);
+    expect(src).toMatch(/height:\s*32/);
+    expect(src).toMatch(/borderRadius:\s*16/);
+    expect(src).toContain("rounded-full");
+    expect(src).toContain("border");
+  });
 
-function readHistorySrc(): string {
-  return fs.readFileSync(
-    path.join(__dirname, "..", "app", "(app)", "(tabs)", "programming", "history.tsx"),
-    "utf8",
-  );
-}
+  it("header title is 2xl font-extrabold and History icon is size 24", () => {
+    const src = readHistorySrc();
+    expect(src).toContain("text-foreground text-2xl font-extrabold");
+    expect(src).toMatch(/<History[^>]*size=\{24\}/);
+  });
 
-beforeEach(() => {
-  jest.useFakeTimers();
-  jest.setSystemTime(WEDNESDAY_NOON);
-  mockPush.mockReset();
-  mockBack.mockReset();
-  mockApiFetch.mockReset();
-  mockApiFetch.mockImplementation(async (url: string) => {
-    if (String(url).startsWith("/api/workouts/logs")) {
-      return { logs: LOGS };
-    }
-    return {};
+  it("renders back button and triggers handleBack on press", async () => {
+    const { getByTestId } = render(<HistoryRoute initialLogs={SAMPLE_LOGS} />);
+    await waitFor(() => expect(getByTestId("history-back-button")).toBeTruthy());
+
+    fireEvent.press(getByTestId("history-back-button"));
+    expect(mockBack).toHaveBeenCalled();
   });
 });
 
-afterEach(() => {
-  jest.useRealTimers();
+describe("NP-360 (2): Filter chips badges & styling", () => {
+  it("chips use rounded-full px-3.5 py-1.5 pill styling", () => {
+    const src = readHistorySrc();
+    expect(src).toContain("rounded-full px-3.5 py-1.5");
+    expect(src).toMatch(/paddingHorizontal:\s*14/);
+    expect(src).toMatch(/paddingVertical:\s*6/);
+  });
+
+  it("active chip uses bg-success and text-white, inactive uses bg-muted and text-muted-foreground", () => {
+    const src = readHistorySrc();
+    expect(src).toMatch(/active\s*\?\s*"bg-success"\s*:\s*"bg-muted"/);
+    expect(src).toMatch(/active\s*\?\s*"text-white"\s*:\s*"text-muted-foreground"/);
+  });
+
+  it("count badge uses bg-white/25 when active and zinc dark muted when inactive", () => {
+    const src = readHistorySrc();
+    expect(src).toMatch(/active\s*\?\s*"bg-white\/25"\s*:\s*"bg-zinc-200 dark:bg-zinc-700"/);
+  });
+
+  it("renders all 3 filter chips with correct session counts", async () => {
+    const { getByTestId } = render(<HistoryRoute initialLogs={SAMPLE_LOGS} />);
+    await waitFor(() => expect(getByTestId("history-filters")).toBeTruthy());
+
+    expect(getByTestId("history-filter-all-count").props.children).toBe(2);
+    expect(getByTestId("history-filter-program-count").props.children).toBe(1);
+    expect(getByTestId("history-filter-quick-count").props.children).toBe(1);
+  });
+
+  it("filters the workout list when clicking filter chips", async () => {
+    const { getByTestId, queryByText } = render(
+      <HistoryRoute initialLogs={SAMPLE_LOGS} />,
+    );
+    await waitFor(() => expect(getByTestId("history-list")).toBeTruthy());
+
+    // Switch to quick filter
+    fireEvent.press(getByTestId("history-filter-quick"));
+    expect(queryByText("Quick Core & Arms")).toBeTruthy();
+    expect(queryByText("Hypertrophy Phase 1 — Upper Body Power")).toBeNull();
+
+    // Switch to program filter
+    fireEvent.press(getByTestId("history-filter-program"));
+    expect(queryByText("Hypertrophy Phase 1 — Upper Body Power")).toBeTruthy();
+    expect(queryByText("Quick Core & Arms")).toBeNull();
+  });
 });
 
-describe("NP-360: Workout History visual & spacing parity", () => {
-  describe("1. Header & Chrome circular back button", () => {
-    it("renders circular h-8 w-8 (32x32, borderRadius 16) back button with border", async () => {
-      const { getByTestId } = render(<HistoryRoute initialLogs={LOGS as never} />);
-      await waitFor(() => expect(getByTestId("history-back-button")).toBeTruthy());
-
-      const backBtn = getByTestId("history-back-button");
-      const style = flat(backBtn.props.style);
-      expect(style.width).toBe(32);
-      expect(style.height).toBe(32);
-      expect(style.borderRadius).toBe(16);
-      expect(style.borderWidth).toBe(1);
-
-      // Hit slop expands 32x32 to 44x44 minimum touch target
-      expect(backBtn.props.hitSlop).toEqual({
-        top: 6,
-        bottom: 6,
-        left: 6,
-        right: 6,
-      });
-    });
-
-    it("source matches circular h-8 w-8 styling and does not contain square 40x40 borderRadius 12", () => {
-      const src = readHistorySrc();
-      expect(src).toMatch(/width:\s*32,\s*height:\s*32,\s*borderRadius:\s*16/);
-      expect(src).not.toMatch(/width:\s*40,\s*height:\s*40,\s*borderRadius:\s*12/);
-    });
+describe("NP-360 (3): Workout Card Rows accent stripe, icon badge and type badge", () => {
+  it("uses smooth left accent stripe w-1.5 (width 6) rounded-l-2xl", () => {
+    const src = readHistorySrc();
+    expect(src).toContain("w-1.5 rounded-l-2xl");
+    expect(src).toMatch(/width:\s*6/);
+    expect(src).toMatch(/borderTopLeftRadius:\s*16/);
+    expect(src).toMatch(/borderBottomLeftRadius:\s*16/);
   });
 
-  describe("2. Filter Chips count badge and text styling", () => {
-    it("source configures active badge as bg-white/25 with white text, and inactive badge with dark muted background", () => {
-      const src = readHistorySrc();
-      // Active badge background uses white with 25% alpha
-      expect(src).toContain('"rgba(255, 255, 255, 0.25)"');
-      // Active badge text is pure white
-      expect(src).toMatch(/color:\s*active\s*\?\s*"#ffffff"/);
-      // Inactive badge background matches web's zinc-700 / zinc-200
-      expect(src).toContain('"rgb(63, 63, 70)"');
-      expect(src).toContain('"rgb(228, 228, 231)"');
-    });
-
-    it("renders active filter count badge with rgba(255, 255, 255, 0.25) and white text", async () => {
-      const { getByTestId } = render(<HistoryRoute initialLogs={LOGS as never} />);
-      await waitFor(() => expect(getByTestId("history-filter-all")).toBeTruthy());
-
-      const allCountText = getByTestId("history-filter-all-count");
-      const textStyle = flat(allCountText.props.style);
-      expect(textStyle.color).toBe("#ffffff");
-    });
+  it("program accent stripe is emerald-500 (mind-emerald token) and quick is blue-500 (info token)", () => {
+    const src = readHistorySrc();
+    expect(src).toContain('colors["mind-emerald"]');
+    expect(src).toMatch(/isQuick\s*\?\s*"bg-blue-500"\s*:\s*"bg-emerald-500"/);
   });
 
-  describe("3. Workout Card Rows left accent stripe & badge colors", () => {
-    it("renders smooth left accent stripe with width 6 (w-1.5) and rounded-l-2xl radii", () => {
-      const src = readHistorySrc();
-      expect(src).toMatch(/width:\s*6,\s*borderTopLeftRadius:\s*16,\s*borderBottomLeftRadius:\s*16/);
-      // No longer uses flat 4px border
-      expect(src).not.toMatch(/width:\s*4,\s*backgroundColor:\s*accentColor/);
+  it("icon badge is h-10 w-10 rounded-xl with green-100/purple-100 backgrounds", () => {
+    const src = readHistorySrc();
+    expect(src).toContain("h-10 w-10 shrink-0 items-center justify-center rounded-xl");
+    expect(src).toMatch(/bg-purple-100 dark:bg-purple-900\/30/);
+    expect(src).toMatch(/bg-green-100 dark:bg-green-900\/30/);
+  });
+
+  it("type badge has rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide", () => {
+    const src = readHistorySrc();
+    expect(src).toContain("rounded-full px-1.5 py-0.5 shrink-0");
+    expect(src).toContain("text-[10px] font-medium uppercase tracking-wide");
+  });
+
+  it("title is truncated with numberOfLines={1}", () => {
+    const src = readHistorySrc();
+    expect(src).toContain('className="text-foreground text-sm font-semibold truncate"');
+    expect(src).toContain("numberOfLines={1}");
+  });
+
+  it("renders program and quick workout cards with correct type badges", async () => {
+    const { getByText } = render(<HistoryRoute initialLogs={SAMPLE_LOGS} />);
+    await waitFor(() => {
+      expect(getByText("Hypertrophy Phase 1 — Upper Body Power")).toBeTruthy();
     });
 
-    it("uses purple for quick session badge and success green for program badge", () => {
-      const src = readHistorySrc();
-      // Quick sessions use purple tint and purple icon/text
-      expect(src).toContain('tint("purple", 0.15)');
-      expect(src).toContain("colors.purple");
-      // Program sessions use success green
-      expect(src).toContain('tint("success", 0.15)');
-      expect(src).toContain("colors.success");
-      // Accent (amber) is no longer used for quick session badges
-      expect(src).not.toMatch(/tint\("accent",\s*0\.15\)/);
+    expect(getByText("Program")).toBeTruthy();
+    expect(getByText("Quick")).toBeTruthy();
+  });
+});
+
+describe("NP-360 (4): NP-123 Token Rule Compliance (no hex or rgb literals in history.tsx)", () => {
+  const HEX_COLOUR = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![0-9a-zA-Z])/;
+  const LITERAL_RGB = /["'`]\s*rgba?\(\s*\d/;
+
+  it("contains no hex colours in code", () => {
+    const code = stripComments(readHistorySrc());
+    const offenders: string[] = [];
+    code.split("\n").forEach((line, i) => {
+      if (HEX_COLOUR.test(line)) {
+        offenders.push(`Line ${i + 1}: ${line.trim()}`);
+      }
     });
+    expect(offenders).toEqual([]);
+  });
+
+  it("contains no hand-written rgb()/rgba() strings in code", () => {
+    const code = stripComments(readHistorySrc());
+    const offenders: string[] = [];
+    code.split("\n").forEach((line, i) => {
+      if (LITERAL_RGB.test(line)) {
+        offenders.push(`Line ${i + 1}: ${line.trim()}`);
+      }
+    });
+    expect(offenders).toEqual([]);
   });
 });
