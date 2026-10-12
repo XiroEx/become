@@ -627,7 +627,7 @@ export const WeekCard = memo(function WeekCard({
             {wins.map((win: string, idx: number) => (
               <View key={`win-${idx}`} style={styles.winRow}>
                 <Sparkles size={14} color={colors.accent} style={{ marginTop: 2 }} />
-                <Text style={[styles.winText, { color: colors.foreground }]}>{win}</Text>
+                <Text style={[styles.winText, { color: colors.foreground }]} numberOfLines={2}>{win}</Text>
               </View>
             ))}
           </LandingRow>
@@ -658,11 +658,14 @@ export const WeekCard = memo(function WeekCard({
                   >
                     <Icon size={14} color={TINT[st.pillar]} style={{ marginTop: 3 }} />
                     <View style={styles.stepContent}>
+                      {/* The web stacks title and sub on their own lines (NP-381):
+                          cramming both into a single `numberOfLines={1}` Text
+                          truncated the detail text the web shows in full. */}
                       <Text style={[styles.stepTitle, { color: colors.foreground }]} numberOfLines={1}>
-                        {st.suggestion.title}{' '}
-                        <Text style={{ color: colors['muted-foreground'], fontWeight: '400' }}>
-                          · {st.suggestion.sub}
-                        </Text>
+                        {st.suggestion.title}
+                      </Text>
+                      <Text style={[styles.stepSub, { color: colors['muted-foreground'] }]} numberOfLines={1}>
+                        {st.suggestion.sub}
                       </Text>
                     </View>
                     <ChevronRight size={12} color={colors['muted-foreground']} style={{ marginTop: 3 }} />
