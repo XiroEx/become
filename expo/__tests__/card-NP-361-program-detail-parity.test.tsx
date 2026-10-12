@@ -17,6 +17,15 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
 import type { ProgramDetailViewModel } from "@/components/programs/ProgramDetail";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
+import { getTokens } from "@/lib/theme/tokens";
+
+// The Continue/Start CTA pill is dark-pinned (`heroRgb("success")`, same
+// hero palette as the rest of the full-bleed cover header) rather than
+// following the app's light/dark mode — this is the fix for the follow-up
+// QA note ("Continue button has no visible fill in light theme"): a
+// solid, always-opaque green fill that can never resolve to a transparent
+// or undefined background regardless of the device's colour scheme.
+const HERO_SUCCESS_RGB = `rgb(${getTokens("dark").success})`;
 
 const sample: ProgramDetailViewModel = {
   id: "prog-361",
@@ -114,6 +123,26 @@ describe("(NP-361) Program Detail spacing/type parity", () => {
       expect(getByTestId("program-detail-share").props.style).toEqual(
         expect.objectContaining({ borderRadius: 999 }),
       );
+    });
+
+    it("Continue has a solid, always-visible green fill (not theme-dependent, never transparent)", () => {
+      const { getByTestId } = render(
+        <ProgramDetail program={sample} isEnrolled onContinue={() => {}} />,
+      );
+      const continueButton = getByTestId("program-detail-continue");
+      expect(continueButton.props.style).toEqual(
+        expect.objectContaining({ backgroundColor: HERO_SUCCESS_RGB }),
+      );
+      expect(continueButton.props.style.backgroundColor).toBeTruthy();
+    });
+
+    it("Start program has the same solid, always-visible green fill as Continue", () => {
+      const { getByTestId } = render(<ProgramDetail program={sample} />);
+      const startButton = getByTestId("program-detail-start");
+      expect(startButton.props.style).toEqual(
+        expect.objectContaining({ backgroundColor: HERO_SUCCESS_RGB }),
+      );
+      expect(startButton.props.style.backgroundColor).toBeTruthy();
     });
 
     it("Share and the save heart both render, as independent controls", () => {
