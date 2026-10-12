@@ -226,6 +226,12 @@ describe('NP-192 / NP-012: The Becoming door, story, and details', () => {
       expect(getByTestId('week-card-sub')).toBeTruthy()
       expect(getByText('live')).toBeTruthy()
       expect(getByText('What to work on')).toBeTruthy()
+      // NP-381: the web shows each step's title and detail text in full, on
+      // their own lines — a single `numberOfLines={1}` Text crammed title
+      // and sub together and ellipsized the detail away. Both must now
+      // render as their own, separately queryable text.
+      expect(getByText('Complete 1 more workout')).toBeTruthy()
+      expect(getByText('Hit your 4 workouts/week goal')).toBeTruthy()
       // The web's rule (NP-342): the live card ends on WHAT TO WORK ON and a
       // finished week keeps the banked wins — never both on one card.
       expect(queryByTestId('week-card-wins')).toBeNull()
