@@ -34,7 +34,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import React from "react";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
 import type { WorkoutHistoryEntry } from "@become/api-client";
 
 const mockPush = jest.fn();
@@ -220,13 +220,21 @@ describe("NP-360 (3): Workout Card Rows accent stripe, icon badge and type badge
   });
 
   it("renders program and quick workout cards with correct type badges", async () => {
-    const { getByText } = render(<HistoryRoute initialLogs={SAMPLE_LOGS} />);
+    const { getByText, getByTestId } = render(
+      <HistoryRoute initialLogs={SAMPLE_LOGS} />,
+    );
     await waitFor(() => {
       expect(getByText("Hypertrophy Phase 1 — Upper Body Power")).toBeTruthy();
     });
 
-    expect(getByText("Program")).toBeTruthy();
-    expect(getByText("Quick")).toBeTruthy();
+    // Scope to each row: the "Quick" filter chip label and the row's type
+    // badge both render the text "Quick", so a bare `getByText` is ambiguous.
+    const programRow = getByTestId(
+      "history-row-program-2026-10-10T10:00:00.000Z-0",
+    );
+    const quickRow = getByTestId("history-row-quick-qs-core-1-1");
+    expect(within(programRow).getByText("Program")).toBeTruthy();
+    expect(within(quickRow).getByText("Quick")).toBeTruthy();
   });
 });
 
