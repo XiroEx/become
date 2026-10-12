@@ -493,7 +493,7 @@ async function buildTwoPhasesOfThree(screen: ReturnType<typeof render>) {
   fireEvent.changeText(screen.getByTestId("program-builder-goal"), "Get strong");
   fireEvent.changeText(screen.getByTestId("program-builder-weeks"), "8");
   // 4 → 3 sessions a week (the trailing blank session goes with it).
-  fireEvent.press(screen.getByTestId("program-builder-days-decrease"));
+  fireEvent.press(screen.getByTestId("program-builder-days-3"));
   fireEvent.press(screen.getByTestId("program-builder-target-advanced"));
 
   // Step 2: phases and sessions.

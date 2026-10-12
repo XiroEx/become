@@ -6,7 +6,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { geistFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
-export interface InputProps extends Omit<TextInputProps, "style"> {
+export interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   testID?: string;
@@ -20,6 +20,7 @@ export function Input({
   accessibilityLabel,
   accessibilityHint,
   leftIcon,
+  style,
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
@@ -41,6 +42,15 @@ export function Input({
       ? `${accessibilityHint}. ${error}`
       : error
     : accessibilityHint;
+  const multilineStyle = inputProps.multiline
+    ? { textAlignVertical: "top" as const }
+    : null;
+  const computedStyle = [
+    minTouchTarget,
+    { fontFamily: geistFontFamily(inputClassName) },
+    multilineStyle,
+    style,
+  ].filter(Boolean);
   return (
     <View testID={testID ? `${testID}-container` : undefined}>
       {label ? (
@@ -75,7 +85,7 @@ export function Input({
           className={inputClassName}
           // 44 points tall, the same minimum every other control in the app
           // holds: the padding alone leaves it a few points short.
-          style={[minTouchTarget, { fontFamily: geistFontFamily(inputClassName) }]}
+          style={computedStyle}
           {...inputProps}
         />
       </View>
