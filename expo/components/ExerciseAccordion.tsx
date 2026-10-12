@@ -113,8 +113,8 @@ export function ExerciseAccordion({
   };
 
   const repsText = exercise.reps ? `${exercise.reps} ${exercise.repsUnit ?? "reps"}` : "";
-  const setsReps = exercise.sets ? `${exercise.sets} sets${repsText ? ` · ${repsText}` : ""}` : repsText;
-  const hasPrescription = Boolean(setsReps || exercise.rest);
+  const setsText = exercise.sets ? `${exercise.sets} sets` : "";
+  const hasPrescription = Boolean(setsText || repsText || exercise.rest);
 
   const tabs: { key: AccordionTab; label: string }[] = [
     { key: "video", label: "Video" },
@@ -142,7 +142,8 @@ export function ExerciseAccordion({
         overflow: "hidden",
       }}
     >
-      {/* Header Row */}
+      {/* Header Row — 16px padding + 16px gap (NP-361 #5), matching the
+          web's `px-4 py-4 ... gap-4`. */}
       <Pressable
         onPress={handleToggle}
         accessibilityRole="button"
@@ -150,8 +151,8 @@ export function ExerciseAccordion({
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
-          padding: 12,
+          gap: 16,
+          padding: 16,
         }}
       >
         {/* Exercise number — ALWAYS a filled number circle, never a thumbnail
@@ -177,16 +178,26 @@ export function ExerciseAccordion({
         <View style={{ flex: 1 }}>
           <Text
             testID={`${testID}-exercise-name-${exercise.slug}`}
-            style={{ fontSize: 15, fontWeight: "600", color: colors.foreground }}
+            style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}
           >
             {exercise.name}
           </Text>
           {hasPrescription ? (
             <Text style={{ fontSize: 13, color: colors["muted-foreground"], marginTop: 2 }}>
-              {setsReps}
+              {setsText}
+              {/* Bullet separators (NP-361 #5) — the web's own
+                  `mx-1.5 text-zinc-300 dark:text-zinc-600` spans, dimmed
+                  relative to the surrounding text rather than full
+                  `muted-foreground` strength. */}
+              {setsText && repsText ? (
+                <Text style={{ color: colors["muted-foreground"], opacity: 0.5 }}> · </Text>
+              ) : null}
+              {repsText}
               {exercise.rest ? (
                 <>
-                  {setsReps ? " · " : ""}
+                  {setsText || repsText ? (
+                    <Text style={{ color: colors["muted-foreground"], opacity: 0.5 }}> · </Text>
+                  ) : null}
                   <Text style={{ color: colors.success }}>{exercise.rest} rest</Text>
                 </>
               ) : null}
@@ -205,7 +216,8 @@ export function ExerciseAccordion({
         {/* Play/demo button — ALWAYS rendered (web shows it on every row and
             opens the video tab even when there is no demo yet; FramedVideo
             draws its own "demo is coming" placeholder in that case), grey by
-            default to match the web's `bg-zinc-100 text-zinc-400`. */}
+            default to match the web's `h-9 w-9 rounded-full bg-zinc-100
+            text-zinc-400`. */}
         <Pressable
           testID={`${testID}-exercise-demo-${exercise.slug}`}
           accessibilityLabel={`${exercise.name} demo video`}
@@ -215,8 +227,11 @@ export function ExerciseAccordion({
             handleVideoClick();
           }}
           style={{
-            padding: 8,
-            borderRadius: 20,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            alignItems: "center",
+            justifyContent: "center",
             backgroundColor: isPlaying ? tint("success", 0.2) : colors.muted,
           }}
         >
@@ -236,14 +251,14 @@ export function ExerciseAccordion({
         </View>
       </Pressable>
 
-      {/* Expanded Accordion Body */}
+      {/* Expanded Accordion Body — 16px padding (NP-361 #5). */}
       {isExpanded ? (
         <View
           testID={`${testID}-exercise-expanded-${exercise.slug}`}
           style={{
             borderTopWidth: 1,
             borderTopColor: colors.border,
-            padding: 12,
+            padding: 16,
             gap: 12,
           }}
         >

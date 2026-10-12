@@ -87,6 +87,9 @@ export function toProgramDetailViewModel(
     goal: program.goal,
     targetUser: narrowTargetUser(program.target_user),
     phases: (program.phases ?? []).map(phaseOutline),
+    // Full-bleed hero photo (NP-361 #1) — straight passthrough of the
+    // web's `program.coverImage`.
+    coverImage: program.coverImage ?? null,
   };
 }
 

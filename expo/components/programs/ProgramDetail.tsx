@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, ScrollView, Pressable } from "react-native";
+import { ActivityIndicator, Image, StyleSheet, View, ScrollView, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import {
   Calendar,
@@ -8,15 +9,17 @@ import {
   Clock,
   Heart,
   History,
+  List,
   Pause as PauseIcon,
   Play,
   TimerReset,
   X,
+  Zap,
 } from "lucide-react-native";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { getTokens, tintToken, type TokenName } from "@/lib/theme/tokens";
+import { getTokens, rgbOf, tintToken, type TokenName } from "@/lib/theme/tokens";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
 import { useSingleVideoPlayer } from "@/lib/video/useSingleVideoPlayer";
@@ -68,6 +71,12 @@ export interface ProgramDetailViewModel {
   goal?: string;
   targetUser?: "Beginner" | "Intermediate" | "Advanced";
   phases: ProgramPhaseOutline[];
+  /**
+   * Full-bleed hero photo (NP-361 #1) — `program.coverImage` on the web's
+   * `ProgramDetailResponseSchema`. Omitted, the hero falls back to the
+   * dark-pinned card colour it always had.
+   */
+  coverImage?: string | null;
 }
 
 export interface ProgramDetailProps {
@@ -476,18 +485,46 @@ export function ProgramDetail({
       onScroll={handleScroll}
       scrollEventThrottle={16}
     >
-      {/* Hero — a dark card matching the web's dark hero-over-photo (NP-284):
-          nav pills, duration/frequency badges, title, target user and goal.
-          Always dark (heroRgb/heroTint), independent of app light/dark mode,
-          same as the web's hero is always dark regardless of page theme. */}
+      {/* Hero — full-bleed cover-photo header (NP-361 #1): a photo (or the
+          dark-pinned fallback colour when the program carries none) behind a
+          dark gradient scrim, with the nav pills / badges / title / action
+          buttons anchored to its bottom edge. Bleeds past the ScrollView's
+          own 16px inset on both sides and the top so the photo runs edge to
+          edge, the way the web's `-mx-3 -mt-4` hero does. Always dark-tinted
+          (heroRgb/heroTint), independent of app light/dark mode, like the
+          web's hero. The rounded-top panel right below it is what "slides
+          up and over" the hero as the member scrolls. */}
       <View
+        testID={`${testID}-hero`}
         style={{
-          borderRadius: 20,
+          marginHorizontal: -16,
+          marginTop: -16,
+          minHeight: 320,
           backgroundColor: heroRgb("card"),
-          padding: 16,
-          gap: 14,
+          overflow: "hidden",
         }}
       >
+        {program.coverImage ? (
+          <Image
+            testID={`${testID}-hero-cover`}
+            source={{ uri: program.coverImage }}
+            resizeMode="cover"
+            style={StyleSheet.absoluteFill}
+          />
+        ) : null}
+        {/* Gradient overlay: lighter at the top so the photo breathes,
+            darker at the bottom so the title/badges/buttons stay legible —
+            the web's `from-black/30 via-black/45 to-black/80`. */}
+        <LinearGradient
+          colors={[rgbOf("0 0 0", 0.3), rgbOf("0 0 0", 0.45), rgbOf("0 0 0", 0.8)]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={{
+            padding: 16,
+            gap: 14,
+          }}
+        >
         {onBack || onOpenCalendar ? (
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             {onBack ? (
@@ -629,44 +666,77 @@ export function ProgramDetail({
               />
             </Pressable>
           ) : null}
-          {shareBody ? (
-            <NativeShareButton
-              body={shareBody}
-              getToken={shareGetToken}
-              testID={`${testID}-share`}
-            />
-          ) : null}
         </View>
 
-        {/* Action Buttons: Continue / Start Program + Workout / Resume */}
+        {/* Action Buttons: Continue / Start Program + Workout / Resume + Share
+            (NP-361 #2) — rounded-full pills matching the web's
+            `rounded-full ... px-5 py-2.5` CTAs, Share folded in alongside
+            them instead of a separate top icon row. */}
         <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
           <View style={{ flex: 1, minWidth: 130 }}>
             {activeProgramLoading ? (
-              <Button
+              <Pressable
                 testID={`${testID}-start-loading`}
-                variant="secondary"
-                disabled
-                loading
+                accessibilityRole="button"
                 accessibilityLabel="Loading program status"
+                disabled
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  borderRadius: 9999,
+                  backgroundColor: heroTint("foreground", 0.1),
+                  opacity: 0.6,
+                }}
               >
-                Loading…
-              </Button>
+                <ActivityIndicator size="small" color={heroRgb("foreground")} />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: heroRgb("foreground") }}>
+                  Loading…
+                </Text>
+              </Pressable>
             ) : isEnrolled ? (
-              <Button
+              <Pressable
                 testID={`${testID}-continue`}
+                accessibilityRole="button"
                 onPress={onContinue}
                 disabled={actionPending}
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  borderRadius: 9999,
+                  backgroundColor: heroRgb("success"),
+                  opacity: actionPending ? 0.6 : 1,
+                }}
               >
-                Continue
-              </Button>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
+                  Continue
+                </Text>
+              </Pressable>
             ) : (
-              <Button
+              <Pressable
                 testID={`${testID}-start`}
+                accessibilityRole="button"
                 onPress={onEnroll ?? onStart ?? (() => {})}
                 disabled={actionPending}
+                style={{
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 20,
+                  paddingVertical: 12,
+                  borderRadius: 9999,
+                  backgroundColor: heroRgb("success"),
+                  opacity: actionPending ? 0.6 : 1,
+                }}
               >
-                {onEnroll ? "Enroll in program" : "Start program"}
-              </Button>
+                <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
+                  {onEnroll ? "Enroll in program" : "Start program"}
+                </Text>
+              </Pressable>
             )}
           </View>
 
@@ -703,6 +773,15 @@ export function ProgramDetail({
               </>
             )}
           </Pressable>
+
+          {shareBody ? (
+            <NativeShareButton
+              body={shareBody}
+              getToken={shareGetToken}
+              tone="hero"
+              testID={`${testID}-share`}
+            />
+          ) : null}
         </View>
 
         {/* Enrolled block — start date link, progress, Schedule + Training
@@ -884,8 +963,27 @@ export function ProgramDetail({
             ) : null}
           </View>
         ) : null}
+        </View>
       </View>
 
+      {/* Content panel — slides up and over the full-bleed hero (NP-361 #1):
+          rounded top corners + solid background, with a negative top margin
+          so it visually overlaps the hero's bottom edge, mirroring the
+          web's `relative z-10 bg-zinc-50 dark:bg-zinc-950 sm:rounded-t-2xl`
+          sheet sliding over its sticky hero. */}
+      <View
+        testID={`${testID}-content-panel`}
+        style={{
+          marginHorizontal: -16,
+          marginTop: -20,
+          paddingHorizontal: 16,
+          paddingTop: 20,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          backgroundColor: colors.background,
+          gap: 16,
+        }}
+      >
       {/* Program editor entry point (native builder, NP-171) — not part of
           the web hero, stays its own secondary action. */}
       {onEdit ? (
@@ -900,10 +998,11 @@ export function ProgramDetail({
         </Button>
       ) : null}
 
-      {/* Phase Selector Tabs */}
+      {/* Phase Selector Tabs — wrapped in a Card (NP-361 #3), single-line
+          tabs ("Phase 1 (Weeks 1–4)") instead of stacked two-line labels. */}
       {program.phases.length > 0 ? (
-        <View style={{ gap: 8 }}>
-          <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+        <Card testID={`${testID}-phase-card`}>
+          <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wider mb-2">
             Select Phase
           </Text>
           <ScrollView
@@ -921,16 +1020,17 @@ export function ProgramDetail({
                   accessibilityLabel={`Phase ${phase.name}`}
                   onPress={() => handleSelectPhase(phase.phaseIndex)}
                   style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
                     paddingHorizontal: 16,
                     paddingVertical: 10,
-                    borderRadius: 12,
-                    backgroundColor: isSelected ? colors.primary : colors.card,
-                    borderWidth: 1,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    alignItems: "center",
+                    borderRadius: 10,
+                    backgroundColor: isSelected ? colors.primary : colors.muted,
                   }}
                 >
                   <Text
+                    numberOfLines={1}
                     style={{
                       fontSize: 14,
                       fontWeight: isSelected ? "700" : "600",
@@ -943,15 +1043,16 @@ export function ProgramDetail({
                   </Text>
                   {phase.weeks || phase.weekStart ? (
                     <Text
+                      numberOfLines={1}
                       style={{
-                        fontSize: 11,
+                        fontSize: 13,
+                        fontWeight: isSelected ? "700" : "600",
                         color: isSelected
                           ? colors["primary-foreground"]
                           : colors["muted-foreground"],
-                        marginTop: 2,
                       }}
                     >
-                      {phase.weeks || `Weeks ${phase.weekStart}–${phase.weekEnd}`}
+                      ({phase.weeks || `Weeks ${phase.weekStart}–${phase.weekEnd}`})
                     </Text>
                   ) : null}
                 </Pressable>
@@ -960,28 +1061,57 @@ export function ProgramDetail({
           </ScrollView>
 
           {currentPhase?.focus ? (
-            <Card testID={`${testID}-phase-focus`}>
-              <Text className="text-muted-foreground text-xs uppercase font-semibold">
-                Focus
-              </Text>
-              <Text className="text-foreground text-sm mt-1">
-                {currentPhase.focus}
-              </Text>
-            </Card>
+            // Circular lightning badge (NP-361 #3) — the web's
+            // `h-8 w-8 rounded-full bg-zinc-900 dark:bg-white` on the focus
+            // block, nested inside the same Card as the tabs rather than a
+            // standalone Card of its own.
+            <View
+              testID={`${testID}-phase-focus`}
+              style={{
+                marginTop: 12,
+                flexDirection: "row",
+                alignItems: "flex-start",
+                gap: 10,
+                backgroundColor: colors.muted,
+                borderRadius: 10,
+                padding: 12,
+              }}
+            >
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.primary,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Zap size={16} color={colors["primary-foreground"]} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text className="text-muted-foreground text-xs uppercase font-semibold">
+                  Focus
+                </Text>
+                <Text className="text-foreground text-sm mt-1">
+                  {currentPhase.focus}
+                </Text>
+              </View>
+            </View>
           ) : null}
-        </View>
+        </Card>
       ) : null}
 
-      {/* Day Selector Tabs */}
+      {/* Day Selector Tabs — a 4-column grid (NP-361 #4) instead of a
+          horizontally scrolling list, matching the web's
+          `grid grid-cols-4 gap-1.5`. */}
       {currentPhaseWorkouts.length > 0 ? (
         <View style={{ gap: 8 }}>
-          <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+          <Text className="text-foreground text-sm font-semibold">
             Training Days
           </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingVertical: 2 }}
+          <View
+            style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
           >
             {currentPhaseWorkouts.map((w) => {
               const dayKey = w.day ?? `Day ${w.workoutIndex + 1}`;
@@ -995,18 +1125,21 @@ export function ProgramDetail({
                   accessibilityLabel={`${dayKey}${isCompleted ? " (Completed)" : ""}`}
                   onPress={() => handleSelectDay(dayKey)}
                   style={{
+                    width: "23%",
                     flexDirection: "row",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: 6,
-                    paddingHorizontal: 16,
+                    paddingHorizontal: 8,
                     paddingVertical: 10,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     backgroundColor: isSelected ? colors.primary : colors.card,
                     borderWidth: 1,
                     borderColor: isSelected ? colors.primary : colors.border,
                   }}
                 >
                   <Text
+                    numberOfLines={1}
                     style={{
                       fontSize: 14,
                       fontWeight: isSelected ? "700" : "600",
@@ -1031,32 +1164,50 @@ export function ProgramDetail({
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </View>
         </View>
       ) : null}
 
       {/* Selected Workout & Exercise List */}
       {currentWorkout ? (
         <View style={{ gap: 12, marginTop: 4 }}>
-          <View>
-            <Text
-              testID={`${testID}-workout-title`}
-              className="text-foreground text-xl font-bold"
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {/* Square icon badge (NP-361 #5) — the web's
+                `h-10 w-10 rounded-xl bg-linear-to-br from-zinc-900 to-zinc-700`. */}
+            <View
+              testID={`${testID}-workout-icon`}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 14,
+                backgroundColor: colors.primary,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              {currentWorkout.title}
-            </Text>
-            <Text
-              testID={`${testID}-workout-exercise-count`}
-              className="text-muted-foreground text-sm"
-            >
-              {currentWorkout.exercises?.length ?? currentWorkout.exerciseCount} exercise
-              {(currentWorkout.exercises?.length ?? currentWorkout.exerciseCount) === 1 ? "" : "s"}
-            </Text>
+              <List size={20} color={colors["primary-foreground"]} strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text
+                testID={`${testID}-workout-title`}
+                className="text-foreground text-xl font-bold"
+              >
+                {currentWorkout.title}
+              </Text>
+              <Text
+                testID={`${testID}-workout-exercise-count`}
+                className="text-muted-foreground text-sm"
+              >
+                {currentWorkout.exercises?.length ?? currentWorkout.exerciseCount} exercise
+                {(currentWorkout.exercises?.length ?? currentWorkout.exerciseCount) === 1 ? "" : "s"}
+              </Text>
+            </View>
           </View>
 
           {renderedExercises}
         </View>
       ) : null}
+      </View>
     </ScrollView>
   );
 }

@@ -9,11 +9,12 @@
  * `canShareProgram` in `@/lib/share/shareLink`).
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable } from "react-native";
 import { Share2 } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { getTokens, tintToken } from "@/lib/theme/tokens";
 import { shareLink } from "@/lib/share/shareLink";
 import type { ShareCreateRequest } from "@become/api-client";
 
@@ -30,6 +31,13 @@ export interface NativeShareButtonProps {
   onShared?: (url: string) => void;
   /** Render as a round icon button with no text label (web header parity). */
   iconOnly?: boolean;
+  /**
+   * `"hero"` renders the web's `rounded-full bg-white/10 px-4 py-2.5` pill
+   * for a dark-photo hero (NP-361 #2) — ProgramDetail's action-button row —
+   * instead of the default light-surface card/border pill. Dark-pinned like
+   * the rest of that hero (`getTokens("dark")`), independent of app mode.
+   */
+  tone?: "default" | "hero";
   testID?: string;
 }
 
@@ -40,9 +48,13 @@ export function NativeShareButton({
   onError,
   onShared,
   iconOnly = false,
+  tone = "default",
   testID = "share-button",
 }: NativeShareButtonProps) {
   const { colors } = useThemeTokens();
+  const heroTokens = useMemo(() => getTokens("dark"), []);
+  const heroForeground = `rgb(${heroTokens.foreground})`;
+  const heroPillBg = tintToken("foreground", "dark", 0.1);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,27 +100,47 @@ export function NativeShareButton({
                 backgroundColor: colors.muted,
                 opacity: sharing ? 0.6 : 1,
               }
-            : {
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                borderRadius: 999,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.border,
-                opacity: sharing ? 0.6 : 1,
-              }
+            : tone === "hero"
+              ? {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  borderRadius: 999,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  backgroundColor: heroPillBg,
+                  opacity: sharing ? 0.6 : 1,
+                }
+              : {
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  opacity: sharing ? 0.6 : 1,
+                }
         }
       >
         {sharing ? (
-          <ActivityIndicator size="small" color={colors.foreground} />
+          <ActivityIndicator
+            size="small"
+            color={tone === "hero" ? heroForeground : colors.foreground}
+          />
         ) : (
-          <Share2 size={16} color={colors.foreground} />
+          <Share2 size={16} color={tone === "hero" ? heroForeground : colors.foreground} />
         )}
         {!iconOnly ? (
-          <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+          <Text
+            style={{
+              fontSize: 14,
+              fontWeight: tone === "hero" ? "600" : "500",
+              color: tone === "hero" ? heroForeground : colors.foreground,
+            }}
+          >
             {sharing ? "Sharing…" : "Share"}
           </Text>
         ) : null}
