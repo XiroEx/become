@@ -13,9 +13,10 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { darkTokens, rgbOf } from "@/lib/theme/tokens";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { ScreenState } from "@/components/ScreenState";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import {
   HISTORY_FILTERS,
@@ -105,6 +106,7 @@ function HistoryRow({
       style={[minTouchTarget, { opacity: busy ? 0.6 : 1 }]}
     >
       <View
+        testID="history-row-card"
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -119,12 +121,17 @@ function HistoryRow({
       >
         <View
           aria-hidden
+          testID="history-row-accent"
           style={{
             position: "absolute",
             left: 0,
             top: 0,
             bottom: 0,
-            width: 4,
+            // The web's `w-1.5 rounded-l-2xl` stripe is 6pt wide, clipped to
+            // the card's own rounded corners by the parent's
+            // `overflow: "hidden"` + matching `borderRadius: 16` above —
+            // never a flat `borderLeftWidth`, which paints a square corner.
+            width: 6,
             backgroundColor: accentColor,
           }}
         />
@@ -224,7 +231,7 @@ export default function HistoryRoute({
   tokenForTests,
   backHandler = BackHandler,
 }: HistoryRouteProps = {}) {
-  const { colors, tint } = useThemeTokens();
+  const { colors } = useThemeTokens();
   const router = useRouter();
   const { token: authToken } = useAuth();
   const token = tokenForTests !== undefined ? tokenForTests : authToken;
@@ -369,19 +376,17 @@ export default function HistoryRoute({
               accessibilityRole="button"
               accessibilityLabel="Back"
               onPress={handleBack}
-              style={[
-                minTouchTarget,
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                },
-              ]}
+              hitSlop={hitSlopToMinTarget(32, 32)}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
             >
               <ChevronLeft size={20} color={colors.foreground} />
             </Pressable>
@@ -448,11 +453,18 @@ export default function HistoryRoute({
                     {f.label}
                   </Text>
                   <View
+                    testID={`history-filter-${f.key}-badge`}
                     style={{
                       borderRadius: 999,
                       paddingHorizontal: 6,
+                      // Web's chip-count badge: `bg-white/25` on the active
+                      // (green) chip, `bg-zinc-100 dark:bg-zinc-800` (the
+                      // `muted` token) on the inactive one — white/25 is
+                      // mode-invariant like the web's class, built from the
+                      // dark palette's (white) foreground rather than a
+                      // literal (NP-123).
                       backgroundColor: active
-                        ? tint("success", 0.35)
+                        ? rgbOf(darkTokens.foreground, 0.25)
                         : colors.muted,
                     }}
                   >
