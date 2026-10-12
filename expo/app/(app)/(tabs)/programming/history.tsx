@@ -15,7 +15,7 @@ import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useScreenFocus } from "@/lib/navigation/useScreenFocus";
 import { ScreenState } from "@/components/ScreenState";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import {
   HISTORY_FILTERS,
@@ -119,16 +119,28 @@ function HistoryRow({
       >
         <View
           aria-hidden
+          testID="history-row-accent"
+          className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl ${
+            isQuick ? "bg-blue-500" : "bg-emerald-500"
+          }`}
           style={{
             position: "absolute",
             left: 0,
             top: 0,
             bottom: 0,
-            width: 4,
+            width: 6,
+            borderTopLeftRadius: 16,
+            borderBottomLeftRadius: 16,
             backgroundColor: accentColor,
           }}
         />
         <View
+          testID="history-row-icon-badge"
+          className={`h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            isQuick
+              ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400"
+              : "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+          }`}
           style={{
             width: 40,
             height: 40,
@@ -137,12 +149,12 @@ function HistoryRow({
             justifyContent: "center",
             flexShrink: 0,
             backgroundColor: isQuick
-              ? tint("accent", 0.15)
+              ? tint("purple", 0.15)
               : tint("success", 0.15),
           }}
         >
           {isQuick ? (
-            <Sparkles size={20} color={colors.accent} />
+            <Sparkles size={20} color={colors.purple} />
           ) : (
             <Dumbbell size={20} color={colors.success} />
           )}
@@ -150,30 +162,41 @@ function HistoryRow({
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text
-              className="text-foreground text-sm font-semibold"
+              className="text-foreground text-sm font-semibold truncate"
               style={[WRAPPABLE_TEXT, { flexShrink: 1 }]}
               numberOfLines={1}
             >
               {log.title}
             </Text>
             <View
+              testID="history-row-type-badge"
+              className={`shrink-0 rounded-full px-1.5 py-0.5 ${
+                isQuick
+                  ? "bg-purple-100 dark:bg-purple-900/30"
+                  : "bg-green-100 dark:bg-green-900/30"
+              }`}
               style={{
                 borderRadius: 999,
                 paddingHorizontal: 6,
                 paddingVertical: 2,
                 flexShrink: 0,
                 backgroundColor: isQuick
-                  ? tint("accent", 0.15)
+                  ? tint("purple", 0.15)
                   : tint("success", 0.15),
               }}
             >
               <Text
+                className={`text-[10px] font-medium uppercase tracking-wide ${
+                  isQuick
+                    ? "text-purple-700 dark:text-purple-300"
+                    : "text-green-700 dark:text-green-300"
+                }`}
                 style={{
                   fontSize: 10,
                   fontWeight: "500",
                   textTransform: "uppercase",
                   letterSpacing: 0.5,
-                  color: isQuick ? colors.accent : colors.success,
+                  color: isQuick ? colors.purple : colors.success,
                 }}
               >
                 {isQuick ? "Quick" : "Program"}
@@ -181,6 +204,7 @@ function HistoryRow({
             </View>
           </View>
           <View
+            className="mt-0.5 flex-row flex-wrap items-center gap-x-3 gap-y-0.5"
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -188,7 +212,10 @@ function HistoryRow({
               gap: 12,
             }}
           >
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <View
+              className="flex-row items-center gap-1"
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
               <Calendar size={12} color={colors["muted-foreground"]} />
               <Text className="text-muted-foreground text-xs">{label}</Text>
             </View>
@@ -196,7 +223,10 @@ function HistoryRow({
               {log.exerciseCount} {log.exerciseCount === 1 ? "exercise" : "exercises"}
             </Text>
             {log.duration ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <View
+                className="flex-row items-center gap-1"
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              >
                 <Clock size={12} color={colors["muted-foreground"]} />
                 <Text className="text-muted-foreground text-xs">
                   {log.duration} min
@@ -224,7 +254,7 @@ export default function HistoryRoute({
   tokenForTests,
   backHandler = BackHandler,
 }: HistoryRouteProps = {}) {
-  const { colors, tint } = useThemeTokens();
+  const { colors, tint, isDark } = useThemeTokens();
   const router = useRouter();
   const { token: authToken } = useAuth();
   const token = tokenForTests !== undefined ? tokenForTests : authToken;
@@ -369,29 +399,29 @@ export default function HistoryRoute({
               accessibilityRole="button"
               accessibilityLabel="Back"
               onPress={handleBack}
-              style={[
-                minTouchTarget,
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 12,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                },
-              ]}
+              hitSlop={hitSlopToMinTarget(32, 32)}
+              className="h-8 w-8 rounded-full border border-zinc-200 dark:border-zinc-800 items-center justify-center bg-card"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: colors.card,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
             >
-              <ChevronLeft size={20} color={colors.foreground} />
+              <ChevronLeft size={16} color={colors.foreground} />
             </Pressable>
             <View
               style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
-              <History size={22} color={colors.success} />
+              <History size={24} color={colors.success} />
               <Text
                 accessibilityRole="header"
-                className="text-foreground text-2xl font-bold"
+                className="text-foreground text-2xl font-extrabold sm:text-3xl"
+                style={{ fontSize: 24, fontWeight: "800" }}
               >
                 History
               </Text>
@@ -421,6 +451,11 @@ export default function HistoryRoute({
                   accessibilityLabel={`Filter by ${f.label}, ${counts[f.key]} sessions`}
                   accessibilityState={{ selected: active }}
                   onPress={() => setFilter(f.key)}
+                  className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-1.5 ${
+                    active
+                      ? "bg-green-500"
+                      : "bg-zinc-100 dark:bg-zinc-800"
+                  }`}
                   style={[
                     minTouchTarget,
                     {
@@ -437,31 +472,47 @@ export default function HistoryRoute({
                   ]}
                 >
                   <Text
+                    className={
+                      active
+                        ? "text-white text-sm font-semibold"
+                        : "text-zinc-600 dark:text-zinc-300 text-sm font-semibold"
+                    }
                     style={{
                       fontSize: 14,
                       fontWeight: "600",
                       color: active
-                        ? colors["primary-foreground"]
+                        ? colors["brand-foreground"]
                         : colors.foreground,
                     }}
                   >
                     {f.label}
                   </Text>
                   <View
+                    testID={`history-filter-${f.key}-badge`}
+                    className={`rounded-full px-1.5 ${
+                      active ? "bg-white/25" : "bg-zinc-200 dark:bg-zinc-700"
+                    }`}
                     style={{
                       borderRadius: 999,
                       paddingHorizontal: 6,
                       backgroundColor: active
-                        ? tint("success", 0.35)
-                        : colors.muted,
+                        ? tint("brand-foreground", 0.25)
+                        : isDark
+                          ? colors.muted
+                          : colors.border,
                     }}
                   >
                     <Text
                       testID={`history-filter-${f.key}-count`}
+                      className={
+                        active
+                          ? "text-white text-xs"
+                          : "text-zinc-600 dark:text-zinc-300 text-xs"
+                      }
                       style={{
                         fontSize: 12,
                         color: active
-                          ? colors["primary-foreground"]
+                          ? colors["brand-foreground"]
                           : colors["muted-foreground"],
                       }}
                     >
