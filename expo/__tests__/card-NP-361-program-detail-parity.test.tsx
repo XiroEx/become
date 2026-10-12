@@ -129,6 +129,31 @@ describe("(NP-361) Program Detail spacing/type parity", () => {
       expect(getByTestId("program-detail-share")).toBeTruthy();
       expect(getByTestId("program-detail-start")).toBeTruthy();
     });
+
+    // QA (build 038c67f2): "Continue button has no visible fill in light
+    // theme (bare text on dark card)" — a solid `backgroundColor:
+    // heroRgb("success")` on the Pressable was reported invisible in some
+    // light-theme renders. Fixed with a real two-stop LinearGradient
+    // (web's `bg-linear-to-r from-green-500 to-emerald-600`) using the
+    // mode-invariant `mind-green`/`mind-emerald` tokens, so the fill can
+    // never resolve to a theme-dependent value.
+    it("Continue and Start fill with a green→emerald gradient, not a flat colour", () => {
+      const { getByTestId, rerender } = render(
+        <ProgramDetail program={sample} isEnrolled onContinue={() => {}} />,
+      );
+      const continueFill = getByTestId("program-detail-continue-fill");
+      expect(continueFill.props.colors).toHaveLength(2);
+      expect(continueFill.props.colors[0]).not.toEqual(continueFill.props.colors[1]);
+      // Pressable itself clips the gradient to the pill shape and carries
+      // no backgroundColor of its own — the gradient is the only fill.
+      expect(getByTestId("program-detail-continue").props.style).toEqual(
+        expect.objectContaining({ borderRadius: 9999, overflow: "hidden" }),
+      );
+
+      rerender(<ProgramDetail program={sample} />);
+      const startFill = getByTestId("program-detail-start-fill");
+      expect(startFill.props.colors).toEqual(continueFill.props.colors);
+    });
   });
 
   // Point 3: Select Phase inside a Card, single line, lightning badge.

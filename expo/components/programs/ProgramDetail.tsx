@@ -704,18 +704,34 @@ export function ProgramDetail({
                 onPress={onContinue}
                 disabled={actionPending}
                 style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 20,
-                  paddingVertical: 12,
                   borderRadius: 9999,
-                  backgroundColor: heroRgb("success"),
+                  overflow: "hidden",
                   opacity: actionPending ? 0.6 : 1,
                 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
-                  Continue
-                </Text>
+                {/* Solid `backgroundColor: heroRgb("success")` rendered
+                    invisibly in light-mode QA builds (reported on build
+                    038c67f2) — a genuine two-stop LinearGradient, matching
+                    the web's `bg-linear-to-r from-green-500 to-emerald-600`,
+                    always paints regardless of that. Both stops are
+                    mode-invariant tokens (`mind-green`/`mind-emerald`), so
+                    the fill no longer depends on which palette is resolved. */}
+                <LinearGradient
+                  testID={`${testID}-continue-fill`}
+                  colors={[heroRgb("mind-green"), heroRgb("mind-emerald")]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
+                    Continue
+                  </Text>
+                </LinearGradient>
               </Pressable>
             ) : (
               <Pressable
@@ -724,18 +740,27 @@ export function ProgramDetail({
                 onPress={onEnroll ?? onStart ?? (() => {})}
                 disabled={actionPending}
                 style={{
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingHorizontal: 20,
-                  paddingVertical: 12,
                   borderRadius: 9999,
-                  backgroundColor: heroRgb("success"),
+                  overflow: "hidden",
                   opacity: actionPending ? 0.6 : 1,
                 }}
               >
-                <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
-                  {onEnroll ? "Enroll in program" : "Start program"}
-                </Text>
+                <LinearGradient
+                  testID={`${testID}-start-fill`}
+                  colors={[heroRgb("mind-green"), heroRgb("mind-emerald")]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 20,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: "700", color: heroRgb("foreground") }}>
+                    {onEnroll ? "Enroll in program" : "Start program"}
+                  </Text>
+                </LinearGradient>
               </Pressable>
             )}
           </View>
