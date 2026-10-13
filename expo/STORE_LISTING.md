@@ -155,3 +155,6 @@ a printed count disagrees with the string, the App Store and Play names drift
 apart, a ladder rung stops starting with `Become` or goes over 30, the chosen
 name is not one of the rungs, the home-screen row stops matching `app.json`'s
 `expo.name`, or `RELEASE.md` stops pointing at this document.
+
+The App Privacy answers and the age rating answers live in
+[`APP_PRIVACY_AND_AGE_RATING.md`](./APP_PRIVACY_AND_AGE_RATING.md).

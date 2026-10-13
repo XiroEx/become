@@ -274,6 +274,8 @@ export interface LegalDoc {
   title: string
   /** One line under the title, in plain language. */
   standfirst: string
+  /** When this document last changed, if it differs from LEGAL_LAST_UPDATED. */
+  lastUpdated?: { label: string; iso: string }
   sections: LegalSection[]
 }
 

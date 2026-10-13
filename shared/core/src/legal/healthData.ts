@@ -28,6 +28,7 @@ import {
   LEGAL_SECONDARY_DOMAIN,
   type LegalDoc,
 } from './index'
+import { PRIVACY_LAST_UPDATED, PRIVACY_LAST_UPDATED_ISO } from './privacy'
 
 /** Statutory response window under both laws. Stated once, asserted by test. */
 export const HEALTH_DATA_RESPONSE_DAYS = 45
@@ -35,6 +36,8 @@ export const HEALTH_DATA_RESPONSE_DAYS = 45
 export const HEALTH_DATA: LegalDoc = {
   slug: 'health-data',
   title: 'Consumer Health Data Privacy Policy',
+  // Changed with the Privacy Policy's 2026-10-13 correction (the push services).
+  lastUpdated: { label: PRIVACY_LAST_UPDATED, iso: PRIVACY_LAST_UPDATED_ISO },
   standfirst:
     'For Washington and Nevada, whose laws treat what you enter into a fitness app as consumer health data. It applies to everyone, wherever you live.',
   sections: [
@@ -191,6 +194,11 @@ export const HEALTH_DATA: LegalDoc = {
               term: 'Gmail SMTP (Google LLC) — transactional email',
               detail:
                 'Sends sign-in links and streak emails. A streak email names the number of days in your streak and nothing else about you. Contact: [policies.google.com/privacy](https://policies.google.com/privacy).',
+            },
+            {
+              term: 'Apple Push Notification service (Apple Inc.) and Firebase Cloud Messaging (Google LLC): push notifications',
+              detail:
+                'Deliver the push notifications you turn on in the App Store and Google Play apps. They receive your device’s push token and the notification itself, such as a reminder that today’s workout is waiting. Contact: [apple.com/legal/privacy](https://www.apple.com/legal/privacy/) and [policies.google.com/privacy](https://policies.google.com/privacy).',
             },
           ],
         },

@@ -163,7 +163,10 @@ export default function LegalDocument({
   doc,
   notice,
 }: {
-  doc: LegalDoc
+  /** `lastUpdated` overrides the shared LEGAL_LAST_UPDATED for a document
+   *  that changed on its own (a privacy-only correction must not re-date the
+   *  Terms). Declared here because the pinned @become/core predates it. */
+  doc: LegalDoc & { lastUpdated?: { label: string; iso: string } }
   /** An optional banner under the header — used by /delete-account to confirm
    *  a request that has just been made. Server-rendered like everything else
    *  here; no state, no client bundle. */
@@ -199,7 +202,10 @@ export default function LegalDocument({
             {doc.standfirst}
           </p>
           <p className="mt-3 text-xs font-medium text-zinc-500 dark:text-zinc-500">
-            Last updated <time dateTime={LEGAL_LAST_UPDATED_ISO}>{LEGAL_LAST_UPDATED}</time>
+            Last updated{' '}
+            <time dateTime={doc.lastUpdated?.iso ?? LEGAL_LAST_UPDATED_ISO}>
+              {doc.lastUpdated?.label ?? LEGAL_LAST_UPDATED}
+            </time>
             {' · '}
             Version {LEGAL_VERSION}
           </p>
