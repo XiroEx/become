@@ -290,36 +290,29 @@ describe("ProgramDetail", () => {
     expect(getByText("2 exercises · minimal rest between exercises")).toBeTruthy();
   });
 
-  it("renders Save/Unsave toggle button and calls onToggleSave", () => {
-    const onToggleSave = jest.fn();
-    const { getByTestId, rerender } = render(
+  // NP-382: visual QA against the web found the native header wrapping Share
+  // onto a 2nd line and showing a heart/favourite control the web's program
+  // detail hero never has (the web's save toggle lives only on the programs
+  // list). Fixed by dropping the force-growing wrapper around the Start/
+  // Continue pill and removing the heart entirely.
+  it("renders no save/favourite heart control — the web's program detail header has none", () => {
+    const { queryByTestId } = render(<ProgramDetail program={sample} />);
+    expect(queryByTestId("program-detail-toggle-save")).toBeNull();
+  });
+
+  it("keeps the Start/Workout/Share action row on one line (no flex-grow sibling forcing a wrap)", () => {
+    const { getByTestId } = render(
       <ProgramDetail
         program={sample}
-        isSaved={false}
-        onToggleSave={onToggleSave}
+        onContinue={() => {}}
+        shareBody={{ kind: "program", programId: "prog-123" }}
       />,
     );
-
-    const toggleBtn = getByTestId("program-detail-toggle-save");
-    expect(toggleBtn).toBeTruthy();
-    expect(toggleBtn.props.accessibilityLabel).toBe(
-      "Save program Strength Foundation",
-    );
-
-    fireEvent.press(toggleBtn);
-    expect(onToggleSave).toHaveBeenCalledTimes(1);
-
-    // When saved, label updates to Unsave
-    rerender(
-      <ProgramDetail
-        program={sample}
-        isSaved={true}
-        onToggleSave={onToggleSave}
-      />,
-    );
-    expect(getByTestId("program-detail-toggle-save").props.accessibilityLabel).toBe(
-      "Unsave program Strength Foundation",
-    );
+    // Neither CTA pill nor its wrapper claims `flex: 1` — that's what was
+    // force-growing the pill and pushing Share onto a 2nd row.
+    expect(getByTestId("program-detail-start").props.style.flex).toBeUndefined();
+    expect(getByTestId("program-detail-workout-live").props.style.flex).toBeUndefined();
+    expect(getByTestId("program-detail-share")).toBeTruthy();
   });
 
   it("renders Pause/Resume button, toggles label based on status, and calls onPauseResume", () => {

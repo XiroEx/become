@@ -10,15 +10,11 @@ import {
   WorkoutResumeResponseSchema,
   ProgramStartDateResponseSchema,
   ProgramAbandonResponseSchema,
-  SavedProgramsResponseSchema,
-  SaveToggleResponseSchema,
   ScheduleApiResponseSchema,
   type ProgramAbandonRequest,
   type ProgramAbandonResponse,
   type ProgramStartDateRequest,
   type ProgramStartDateResponse,
-  type SaveProgramRequest,
-  type SaveToggleResponse,
 } from "@become/api-client";
 import { ProgramDetail } from "@/components/programs/ProgramDetail";
 import { EnrollmentModal } from "@/components/programs/EnrollmentModal";
@@ -152,23 +148,6 @@ export default function ProgramDetailRoute() {
       (progress.data === null && activeProgram?.status === "in-progress"),
   );
 
-  const saved = useFetch(
-    "/api/programs/saved",
-    SavedProgramsResponseSchema,
-    { ...fetchOpts, skip: !token },
-  );
-
-  const [optimisticSaved, setOptimisticSaved] = useState<boolean | null>(null);
-
-  const isSaved =
-    optimisticSaved !== null
-      ? optimisticSaved
-      : Boolean(
-          saved.data?.savedPrograms?.some(
-            (p) => (p.program_id ?? p._id) === id,
-          ),
-        );
-
   const mutOpts = {
     baseUrl: WEBAPP_BASE_URL,
     getToken: () => token ?? undefined,
@@ -199,29 +178,6 @@ export default function ProgramDetailRoute() {
     "/api/programs/abandon",
     ProgramAbandonResponseSchema,
     { method: "POST", ...mutOpts },
-  );
-
-  const saveMut = useMutation<SaveProgramRequest, SaveToggleResponse>(
-    "/api/programs/saved",
-    SaveToggleResponseSchema,
-    {
-      method: "POST",
-      ...mutOpts,
-      onSuccess: () => {
-        void saved.refetch();
-      },
-    },
-  );
-  const unsaveMut = useMutation<SaveProgramRequest, SaveToggleResponse>(
-    "/api/programs/saved",
-    SaveToggleResponseSchema,
-    {
-      method: "DELETE",
-      ...mutOpts,
-      onSuccess: () => {
-        void saved.refetch();
-      },
-    },
   );
 
   const [actionPending, setActionPending] = useState(false);
@@ -320,21 +276,6 @@ export default function ProgramDetailRoute() {
     },
     [runAction, scheduleMutations, id, active, schedulesFetch],
   );
-
-  const onToggleSave = useCallback(async () => {
-    const nextSaved = !isSaved;
-    setOptimisticSaved(nextSaved);
-    try {
-      if (nextSaved) {
-        await saveMut.mutate({ programId: id });
-      } else {
-        await unsaveMut.mutate({ programId: id });
-      }
-    } catch {
-      setOptimisticSaved(!nextSaved);
-      await saved.refetch();
-    }
-  }, [isSaved, id, saveMut, unsaveMut, saved]);
 
   const program: ProgramDetailViewModel = useMemo(() => {
     return data
@@ -558,8 +499,6 @@ export default function ProgramDetailRoute() {
         onOpenTrainingLog={onOpenTrainingLog}
         onBack={onBack}
         onOpenCalendar={onOpenCalendar}
-        isSaved={isSaved}
-        onToggleSave={onToggleSave}
         onEdit={isOwner ? onEdit : undefined}
         actionPending={actionPending}
         shareBody={shareable ? { kind: "program", programId: id } : undefined}
