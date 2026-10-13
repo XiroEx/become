@@ -190,7 +190,10 @@ function TabButton({
         gap: 6,
         paddingVertical: 8,
         borderRadius: 10,
-        backgroundColor: active ? colors.primary : "transparent",
+        // NP-374: web's active tab pill is `bg-zinc-900 text-white
+        // dark:bg-white dark:text-black` — the inverted foreground/background
+        // pair, not the brand `primary` colour.
+        backgroundColor: active ? colors.foreground : "transparent",
       }}
     >
       {icon}
@@ -198,7 +201,7 @@ function TabButton({
         style={{
           fontSize: 12,
           fontWeight: "600",
-          color: active ? colors["primary-foreground"] : colors.foreground,
+          color: active ? colors.background : colors.foreground,
         }}
       >
         {label}
@@ -1168,6 +1171,21 @@ export function ScheduleMealsDrawer({
         }
       >
         <View style={{ gap: 12 }}>
+          {/* NP-374: the web header is `border-b border-zinc-200 p-4` around the
+              icon badge + title + circular ✕ — the badge and ✕ already match
+              (`BottomSheet`'s `headerLeading`/`headerTrailing` above), so this
+              divider is the one piece still missing: full-bleed (negative
+              margin cancels the sheet's own `p-5`) so it reads as the
+              header's bottom border, not a rule inside the body. */}
+          <View
+            testID="schedule-meals-drawer-header-divider"
+            style={{
+              marginHorizontal: -20,
+              marginTop: -8,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border,
+            }}
+          />
           <Text testID="schedule-meals-subtitle" className="text-muted-foreground text-xs">
             {rangeMode
               ? `${formatDatePillLabel(fromKey)} → ${formatDatePillLabel(toKey)}`
@@ -1279,7 +1297,10 @@ export function ScheduleMealsDrawer({
           )}
 
           <View
-            style={{ flexDirection: "row", gap: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 3 }}
+            testID="schedule-meals-tabs"
+            // NP-374: web's segmented control is `rounded-xl border border-zinc-200
+            // ... p-0.5` — `borderRadius: 12, borderWidth: 1, padding: 2` natively.
+            style={{ flexDirection: "row", gap: 4, borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 2 }}
           >
             {!rangeMode ? (
               <TabButton
@@ -1287,7 +1308,7 @@ export function ScheduleMealsDrawer({
                 active={effectiveTab === "by-day"}
                 onPress={() => setActiveTab("by-day")}
                 icon={
-                  <Utensils size={14} color={effectiveTab === "by-day" ? colors["primary-foreground"] : colors.foreground} />
+                  <Utensils size={14} color={effectiveTab === "by-day" ? colors.background : colors.foreground} />
                 }
                 label="By day"
               />
@@ -1297,7 +1318,7 @@ export function ScheduleMealsDrawer({
               active={effectiveTab === "from-meals"}
               onPress={() => setActiveTab("from-meals")}
               icon={
-                <ChefHat size={14} color={effectiveTab === "from-meals" ? colors["primary-foreground"] : colors.foreground} />
+                <ChefHat size={14} color={effectiveTab === "from-meals" ? colors.background : colors.foreground} />
               }
               label="From meals"
             />
@@ -1306,7 +1327,7 @@ export function ScheduleMealsDrawer({
               active={effectiveTab === "copy-day"}
               onPress={() => setActiveTab("copy-day")}
               icon={
-                <CalendarDays size={14} color={effectiveTab === "copy-day" ? colors["primary-foreground"] : colors.foreground} />
+                <CalendarDays size={14} color={effectiveTab === "copy-day" ? colors.background : colors.foreground} />
               }
               label="Copy day"
             />
@@ -1341,9 +1362,29 @@ export function ScheduleMealsDrawer({
             />
           </ScrollView>
 
-          <Button testID="schedule-meals-done" onPress={handleClose} variant="inverted">
-            Done
-          </Button>
+          {/* NP-374: web's fixed footer is `border-t border-zinc-200 p-4`
+              around an `h-11 w-full rounded-xl bg-zinc-900` CTA — a border-top
+              separator above the full-width Done button (`height: 44,
+              borderRadius: 12, backgroundColor: colors.foreground`, already
+              what `variant="inverted"` draws), not just the button alone. */}
+          <View
+            testID="schedule-meals-footer"
+            style={{
+              borderTopWidth: 1,
+              borderTopColor: colors.border,
+              paddingTop: 12,
+              marginTop: 4,
+            }}
+          >
+            <Button
+              testID="schedule-meals-done"
+              onPress={handleClose}
+              variant="inverted"
+              style={{ height: 44, borderRadius: 12 }}
+            >
+              Done
+            </Button>
+          </View>
         </View>
       </BottomSheet>
 
