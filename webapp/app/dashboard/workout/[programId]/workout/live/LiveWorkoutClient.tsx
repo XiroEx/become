@@ -10,6 +10,8 @@ import {
   type ExerciseVideoDisplay,
 } from "@/lib/data/exerciseVideos";
 import { buildWorkoutFlow, type WorkoutStep } from "@/lib/workoutUtils";
+import { getRestDuration as getRestDurationForExercise } from "@/lib/workout/restDuration";
+import { fireRestAlert } from "@/lib/workout/restAlert";
 import ExerciseSwapModal, { type SwapScope } from "@/components/ExerciseSwapModal";
 import EquipmentAssumptionRow from "@/components/workout/EquipmentAssumptionRow";
 import IncompleteWorkoutModal, { type StaleIncompleteData } from "@/components/IncompleteWorkoutModal";
@@ -999,16 +1001,6 @@ export default function LiveWorkoutPage() {
       .catch(() => {})
   }, [showSummary])
 
-  const parseRestTime = (rest: string): number => {
-    const match = rest.match(/(\d+)/);
-    if (match) {
-      const num = parseInt(match[1]);
-      if (rest.includes("min")) return num * 60;
-      return num;
-    }
-    return 60;
-  };
-
   // Rest timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -1017,10 +1009,9 @@ export default function LiveWorkoutPage() {
         setRestTimeRemaining((prev) => prev - 1);
       }, 1000);
     } else if (isResting && restTimeRemaining === 0) {
-      // Vibrate on completion if supported
-      if (typeof navigator !== "undefined" && navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
-      }
+      // NP-210 (Jon, 2026-10-13): the rest alert gives BOTH sound and
+      // vibration when the timer ends — never one alone.
+      fireRestAlert();
       setIsResting(false);
     }
     return () => clearInterval(interval);
@@ -1283,26 +1274,16 @@ export default function LiveWorkoutPage() {
     });
   }, [currentStep, saveWorkout]);
 
-  // Determine rest duration based on step context
-  // Smart rest default based on tracking type: heavy compound → 3min, bodyweight/isolation → 90s, else 60s
-  const getSmartRestDefault = (exercise?: Exercise): string => {
-    const t = exercise?.trackingType || exercise?.type || ""
-    if (t === "reps_weight") return "3min"
-    if (t === "reps_bodyweight" || t === "reps_only") return "90s"
-    return "60s"
-  }
-
+  // Determine rest duration based on step context. The rule itself
+  // (getSmartRestDefault / getRestDuration) lives in @/lib/workout/
+  // restDuration — Track (NP-210) reuses the exact same rule rather than a
+  // second copy of it.
   const getRestDuration = (step: WorkoutStep): number => {
     const exercise = exercises[step.exerciseIndex];
-    if (step.groupId && !step.isLastInRound) {
-      // Within a superset round — no rest between exercises
-      return 0;
-    } else if (step.groupId && step.isLastInRound) {
-      // End of a superset round — use groupRest or exercise rest
-      return parseRestTime(exercise?.groupRest || exercise?.rest || getSmartRestDefault(exercise));
-    }
-    // Normal exercise — use explicit rest field or smart default
-    return parseRestTime(exercise?.rest || getSmartRestDefault(exercise));
+    return getRestDurationForExercise(exercise, {
+      inGroup: !!step.groupId,
+      isLastInRound: step.isLastInRound,
+    });
   };
 
   // A workout that started on one local calendar day and is finishing on
