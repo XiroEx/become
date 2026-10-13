@@ -318,6 +318,17 @@ export default function WorkoutClient() {
       !savedProgramIds.has(program.program_id)
   );
 
+  // `totalPrograms` is /api/programs/search's raw pagination total for the
+  // current page of `allPrograms` — it counts every program the catalog
+  // query matches, including ones `filteredPrograms` hides (already
+  // enrolled or already saved). Subtract exactly what got hidden from THIS
+  // page so the "Browse Programs (N)" heading always matches the number of
+  // cards actually rendered below, instead of drifting from it (NP-378:
+  // native already applies the equivalent fix as `displayTotal` in
+  // ProgramsCatalog.tsx under NP-278).
+  const excludedFromBrowseCount = allPrograms.length - filteredPrograms.length;
+  const displayTotalPrograms = Math.max(totalPrograms - excludedFromBrowseCount, 0);
+
   // ─── Goal-based recommendation matching ──────────────────────────────────
   const GOAL_KEYWORDS: Record<FitnessGoal, string[]> = {
     lose_weight: ["weight loss", "fat loss", "cut", "cutting", "lean", "shred"],
@@ -740,9 +751,9 @@ export default function WorkoutClient() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
             Browse Programs
-            {totalPrograms > 0 && (
+            {displayTotalPrograms > 0 && (
               <span className="ml-2 text-sm font-normal text-zinc-500">
-                ({totalPrograms})
+                ({displayTotalPrograms})
               </span>
             )}
           </h2>

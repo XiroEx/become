@@ -145,18 +145,19 @@ describe("(NP-361) Program Detail spacing/type parity", () => {
       expect(startButton.props.style.backgroundColor).toBeTruthy();
     });
 
-    it("Share and the save heart both render, as independent controls", () => {
-      const onToggleSave = jest.fn();
-      const { getByTestId } = render(
+    // NP-382: the web's program detail header has no heart/favourite control,
+    // and Share must stay on the same row as Start (no sibling flex-grows).
+    it("Share renders without a save heart, and nothing force-grows onto a 2nd row", () => {
+      const { getByTestId, queryByTestId } = render(
         <ProgramDetail
           program={sample}
-          onToggleSave={onToggleSave}
           shareBody={{ kind: "program", programId: "prog-361" }}
         />,
       );
-      expect(getByTestId("program-detail-toggle-save")).toBeTruthy();
+      expect(queryByTestId("program-detail-toggle-save")).toBeNull();
       expect(getByTestId("program-detail-share")).toBeTruthy();
       expect(getByTestId("program-detail-start")).toBeTruthy();
+      expect(getByTestId("program-detail-start").props.style.flex).toBeUndefined();
     });
   });
 
