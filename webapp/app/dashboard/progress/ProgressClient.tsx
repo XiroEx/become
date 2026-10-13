@@ -63,6 +63,28 @@ interface ProgressData {
   fitnessGoal?: FitnessGoal
 }
 
+// ── Chart ink ──────────────────────────────────────────────────────────────────
+
+/**
+ * Paint for anything a chart draws in the page's own ink — the Weekly Volume
+ * bars, the PR trend line and its dots.
+ *
+ * It must never be a literal hex. The bars and the trend line used to be
+ * `#18181b`, a light-mode-only ink that is invisible on the dark theme's
+ * near-black canvas, so the dark app rendered what looked like an empty axis.
+ * `currentColor` inherits the theme's ink instead — redstyle's `--text-primary`
+ * token, set as `body { color }` (#18181b in light, #ffffff in dark) — which is
+ * exactly how the axis ticks in this file already resolve their colour.
+ */
+export const CHART_INK = 'currentColor'
+
+/**
+ * Opacity for chart furniture drawn in the same ink but meant to stay quiet:
+ * the body-composition grid lines and the Weekly Volume hover cursor. Both were
+ * hardcoded `rgba(0, 0, 0, …)`, i.e. black on black in dark mode.
+ */
+export const CHART_HAIRLINE_OPACITY = 0.08
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function fmt(lbs: number): string {
@@ -277,7 +299,7 @@ function PRChartModal({ pr, points, onClose, onChanged }: {
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
                   <YAxis tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} className="text-zinc-400 dark:text-zinc-600" />
                   <Tooltip formatter={(v) => [`${v} lbs`, 'Best weight']} contentStyle={{ fontSize: 11, borderRadius: 10 }} />
-                  <Line type="monotone" dataKey="weight" stroke="#18181b" strokeWidth={2} dot={{ r: 3, fill: '#18181b' }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="weight" stroke={CHART_INK} strokeWidth={2} dot={{ r: 3, fill: CHART_INK }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -433,7 +455,7 @@ function BodyCompChart({
               <stop offset="95%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={CHART_INK} strokeOpacity={CHART_HAIRLINE_OPACITY} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
           <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'currentColor' }} tickLine={false} axisLine={false} className="text-zinc-400 dark:text-zinc-600" />
           <Tooltip formatter={(v) => [`${v} ${unit}`, label]} contentStyle={{ fontSize: 12, borderRadius: 12 }} />
@@ -553,11 +575,11 @@ export default function ProgressClient() {
                   tickFormatter={(v: number) => hasVolume ? (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : String(v)}
                   className="text-zinc-400 dark:text-zinc-600"
                 />
-                <Tooltip content={<VolumeTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
+                <Tooltip content={<VolumeTooltip />} cursor={{ fill: CHART_INK, fillOpacity: CHART_HAIRLINE_OPACITY }} />
                 <Bar
                   dataKey={hasVolume ? 'volume' : 'workouts'}
                   radius={[4, 4, 0, 0]}
-                  fill="#18181b"
+                  fill={CHART_INK}
                 />
               </BarChart>
             </ResponsiveContainer>

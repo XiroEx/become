@@ -1506,6 +1506,7 @@ export function LiveWorkoutClient({
                 testID={`${testID}-view`}
                 active={view}
                 onChange={handleViewChange}
+                variant="translucent"
               />
             }
             {...(typeof activeSeconds === "number" ? { activeSeconds } : {})}

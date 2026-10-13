@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, List, Plus, Repeat, X } from "lucide-react-native";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, Repeat, X } from "lucide-react-native";
 import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
@@ -35,7 +35,9 @@ import {
 } from "@/components/live/LiveWorkoutClient";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
+import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
+import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
 export interface LiveStepViewProps {
   exercises: LiveWorkoutExercise[];
@@ -193,12 +195,41 @@ export function LiveStepView({
   keyboardDoneVisible,
   testID,
 }: LiveStepViewProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
   const total = workoutFlow.length;
   const safeIndex = Math.min(Math.max(stepIndex, 0), Math.max(total - 1, 0));
   const step = workoutFlow[safeIndex];
   const exercise = step ? exercises[step.exerciseIndex] : undefined;
   const [inputsOpen, setInputsOpen] = useState(true);
+
+  // THE RED PULSING DOT (the web's `animate-pulse` on the elapsed timer).
+  // Plain `Animated`, not moti/Reanimated, so `lib/a11y/reducedMotion`'s
+  // import-sweep rule does not apply — Reduce Motion is still honoured by
+  // holding the dot at full opacity instead of starting the loop.
+  const reducedMotion = useReducedMotion();
+  const timerDotOpacity = useMemo(() => new Animated.Value(1), []);
+  useEffect(() => {
+    if (reducedMotion) {
+      timerDotOpacity.setValue(1);
+      return;
+    }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(timerDotOpacity, {
+          toValue: 0.4,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(timerDotOpacity, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [reducedMotion, timerDotOpacity]);
 
   if (!step || !exercise) {
     return (
@@ -294,7 +325,11 @@ export function LiveStepView({
 
   return (
     <View testID={`${testID}-live`} style={{ flex: 1 }}>
-      {/* TOP BAR — the web's exit / Track|Live / red-dot timer row. */}
+      {/* TOP BAR — the web's floating immersive chrome: exit / Track|Live /
+          red-dot timer, `flex items-center justify-between px-4 py-3`. The
+          exit button is the web's `h-9 w-9 rounded-full bg-white/10` —
+          drawn with a theme tint rather than the literal white, so a light
+          phone still reads this bar in light mode (NP-288). */}
       <View
         testID={`${testID}-live-topbar`}
         style={{
@@ -302,8 +337,8 @@ export function LiveStepView({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 8,
-          paddingHorizontal: 12,
-          paddingVertical: 8,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
         }}
       >
         {onExit ? (
@@ -312,16 +347,15 @@ export function LiveStepView({
             accessibilityRole="button"
             accessibilityLabel="Exit live workout"
             onPress={onExit}
-            style={[
-              minTouchTarget,
-              {
-                width: 40,
-                borderRadius: 999,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: colors.muted,
-              },
-            ]}
+            hitSlop={hitSlopToMinTarget(36, 36)}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 999,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: tint("foreground", 0.1),
+            }}
           >
             <X size={18} color={colors.foreground} />
           </Pressable>
@@ -341,30 +375,26 @@ export function LiveStepView({
             </Text>
           ) : null}
           {typeof activeSeconds === "number" ? (
+            // The web's `flex items-center gap-1.5 text-xs font-mono
+            // text-zinc-400` — no pill chrome around the dot and the time,
+            // just the two sitting directly in the top bar.
             <View
               testID={`${testID}-live-timer`}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 999,
-                backgroundColor: colors.muted,
-              }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
             >
-              <View
+              <Animated.View
                 testID={`${testID}-live-timer-dot`}
                 style={{
                   width: 8,
                   height: 8,
                   borderRadius: 999,
                   backgroundColor: colors.brand,
+                  opacity: timerDotOpacity,
                 }}
               />
               <Text
                 testID={`${testID}-elapsed`}
-                className="text-foreground font-mono text-sm tabular-nums"
+                className="text-muted-foreground font-mono text-xs tabular-nums"
               >
                 {formatElapsed(activeSeconds)}
               </Text>
@@ -420,25 +450,29 @@ export function LiveStepView({
           testID={`${testID}-live-${exercise.slug}-video`}
         />
         {onOpenExercises ? (
+          // The web's exercise rail: `flex flex-col gap-1.5 absolute right-3
+          // top-1/2 -translate-y-1/2` — bare dots pinned to the video's
+          // right edge, no icon and no pill chrome around them. The
+          // Pressable spans the clip's full height (top:0, bottom:0,
+          // justifyContent:"center") to land the dot column at the
+          // vertical centre without measuring its own height, and widens
+          // the tap target past the dots' narrow width.
           <Pressable
             testID={`${testID}-live-exercises`}
             accessibilityRole="button"
             accessibilityLabel={exercisesLabel ?? "Open exercise list"}
             onPress={onOpenExercises}
+            hitSlop={{ top: 0, bottom: 0, left: 16, right: 16 }}
             style={{
               position: "absolute",
-              right: 8,
-              top: 8,
+              right: 12,
+              top: 0,
+              bottom: 0,
+              justifyContent: "center",
               alignItems: "center",
-              gap: 6,
-              paddingHorizontal: 8,
-              paddingVertical: 8,
-              borderRadius: 999,
-              backgroundColor: colors.muted,
             }}
           >
-            <List size={16} color={colors.foreground} />
-            <View testID={`${testID}-live-dots`} style={{ gap: 4 }}>
+            <View testID={`${testID}-live-dots`} style={{ gap: 6 }}>
               {exercises.map((ex, idx) => {
                 const done = exerciseDone?.[idx] ?? false;
                 const isCurrent = idx === step.exerciseIndex;
@@ -681,25 +715,43 @@ export function LiveStepView({
                 Done → / Finish Workout. Blank inputs open the skip modal
                 (`onRequestSkip`); otherwise the button always completes. It
                 is NEVER destructive-red — the web draws it neutral while
-                skipping and green only for a real completion. */}
+                skipping and green only for a real completion.
+                Styled as the web's own CTA — `w-full rounded-full
+                bg-emerald-500 py-4 font-bold text-base` (`success` is the
+                emerald token everywhere else in the app) — rather than
+                `Button`'s shared `rounded-xl`, which the web's pill shape
+                does not use here. */}
             <View style={{ flex: 1 }}>
-              <Button
+              <Pressable
                 testID={`${testID}-live-complete`}
-                variant={isSkipping && !isLastStep ? "secondary" : "success"}
-                size="lg"
-                onPress={() =>
-                  isSkipping && !isLastStep && onRequestSkip
-                    ? onRequestSkip()
-                    : onCompleteStep?.()
-                }
+                accessibilityRole="button"
+                accessibilityLabel={completeLabel}
                 accessibilityHint={
                   isInterval
                     ? undefined
                     : "Completes with exactly what was typed; blank stays blank"
                 }
+                onPress={() =>
+                  isSkipping && !isLastStep && onRequestSkip
+                    ? onRequestSkip()
+                    : onCompleteStep?.()
+                }
+                style={{ minHeight: 44 }}
+                className={`items-center justify-center rounded-full py-4 ${
+                  isSkipping && !isLastStep ? "bg-muted" : "bg-success"
+                }`}
               >
-                {completeLabel}
-              </Button>
+                <Text
+                  style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+                  className={`text-base font-bold ${
+                    isSkipping && !isLastStep
+                      ? "text-foreground"
+                      : "text-primary-foreground"
+                  }`}
+                >
+                  {completeLabel}
+                </Text>
+              </Pressable>
             </View>
           </View>
           {/* The web's previous-set reference, under the buttons. */}
