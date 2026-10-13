@@ -123,14 +123,8 @@ export function QuickAddSheet({
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: tint("accent", 0.15),
-                }}
+                className="h-9 w-9 rounded-lg items-center justify-center"
+                style={{ backgroundColor: tint("accent", 0.15) }}
               >
                 <Zap size={20} color={colors.accent} />
               </View>
@@ -154,9 +148,12 @@ export function QuickAddSheet({
             </Pressable>
           </View>
 
-          {/* Calories (required) */}
+          {/* Calories (required) — NP-373: the web's large, prominent
+              calorie well (`text-lg font-bold`), not the same compact weight
+              as the optional macros beside it. */}
           <Input
             testID="quick-add-calories-input"
+            variant="prominent"
             label="Calories *"
             placeholder="e.g., 350"
             keyboardType="numeric"
@@ -267,12 +264,15 @@ export function QuickAddSheet({
             onChangeText={setNote}
           />
 
-          {/* Action buttons */}
+          {/* Action buttons — NP-373: the web's side-by-side footer pair
+              (bordered Cancel + inverted Add), not the flat `secondary`
+              Cancel used elsewhere. */}
           <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
             <View style={{ flex: 1 }}>
               <Button
                 testID="quick-add-cancel-button"
-                variant="secondary"
+                variant="outline"
+                size="footer"
                 onPress={handleClose}
               >
                 Cancel
@@ -282,6 +282,7 @@ export function QuickAddSheet({
               <Button
                 testID="quick-add-submit-button"
                 variant="inverted"
+                size="footer"
                 loading={loading}
                 onPress={handleSubmit}
               >
