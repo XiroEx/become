@@ -245,19 +245,27 @@ export function StreakTile({
 
   const renderValue = () => {
     if (p.emphasis) {
+      // A ROW, not a <Text> with the FireNumber nested inside it. A View inside
+      // a Text is laid out as an inline placeholder, and the flame bands the
+      // FireNumber positions against its own box (above the digits, below the
+      // digits) had nothing reliable to measure against there — which is how
+      // the flame ended up drawn over the Super Streak digits. The Streaks
+      // screen's StreakValue has always used a baseline row; this matches it,
+      // and the web's `flex items-baseline`.
       return (
-        <Text
-          testID="streak-super-value"
-          className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
-          numberOfLines={1}
-        >
-          <FireNumber>{p.value}</FireNumber>
+        <View testID="streak-super-value" style={styles.superValueRow}>
+          <FireNumber className="text-2xl font-extrabold tracking-tight leading-none">
+            {p.value}
+          </FireNumber>
           {p.unit ? (
-            <Text className="text-xs font-semibold text-muted-foreground">
-              {" "}{p.unit}
+            <Text
+              className="text-xs font-semibold text-muted-foreground"
+              numberOfLines={1}
+            >
+              {p.unit}
             </Text>
           ) : null}
-        </Text>
+        </View>
       );
     }
     // Formatted value matching both full unit display and building label
@@ -518,6 +526,13 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     justifyContent: "center",
+  },
+  // The emphasised (Super Streak) value: the number and its unit on one
+  // baseline, the way the web's `flex items-baseline gap-1` row reads.
+  superValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
   },
   bottomCol: {
     gap: 2,
