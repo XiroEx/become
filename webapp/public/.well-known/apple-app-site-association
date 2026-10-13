@@ -3,7 +3,7 @@
     "details": [
       {
         "appIDs": [
-          "TEAM_ID_PLACEHOLDER.io.redbtn.become"
+          "Y7X4278T48.io.redbtn.become"
         ],
         "components": [
           {
@@ -16,7 +16,7 @@
   },
   "webcredentials": {
     "apps": [
-      "TEAM_ID_PLACEHOLDER.io.redbtn.become"
+      "Y7X4278T48.io.redbtn.become"
     ]
   }
 }

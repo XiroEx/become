@@ -53,6 +53,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // The AASA has no file extension, so it was served as
+      // application/octet-stream. Apple expects JSON.
+      {
+        source: '/.well-known/apple-app-site-association',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/json',
+          },
+        ],
+      },
       {
         source: '/exercises/:path*.mov',
         headers: [

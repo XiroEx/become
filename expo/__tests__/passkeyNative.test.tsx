@@ -205,4 +205,28 @@ describe("the platform header", () => {
       global.fetch = originalFetch;
     }
   });
+
+  it("is sent on all four calls, register AND authenticate, when the defaults are used", async () => {
+    Platform.OS = "android";
+    const originalFetch = global.fetch;
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ challengeId: "c1", options: {}, token: "t" }),
+    })) as unknown as typeof fetch;
+    global.fetch = fetchMock;
+    try {
+      await registerPasskeyNative("tok", { passkey: fakePasskey() });
+      await signInWithPasskeyNative({ passkey: fakePasskey() });
+      const calls = (fetchMock as jest.Mock).mock.calls as [string, { headers: Record<string, string> }][];
+      expect(calls.map(([url]) => url.replace(/^.*(\/api\/)/, "/api/"))).toEqual([
+        "/api/auth/passkey/register/options",
+        "/api/auth/passkey/register/verify",
+        "/api/auth/passkey/authenticate/options",
+        "/api/auth/passkey/authenticate/verify",
+      ]);
+      for (const [, init] of calls) expect(init.headers[PASSKEY_PLATFORM_HEADER]).toBe("android");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });

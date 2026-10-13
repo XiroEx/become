@@ -33,6 +33,15 @@ describe("iOS config — app.json", () => {
       "applinks:become.redbtn.io",
     );
   });
+
+  // Passkeys are issued for rpID redbtn.io (shared across redbtn apps), so
+  // the app must be associated with redbtn.io for webcredentials, not only
+  // with become.redbtn.io.
+  it("claims webcredentials for both become.redbtn.io and the rpID redbtn.io", () => {
+    expect(parsed.expo.ios?.associatedDomains).toEqual(
+      expect.arrayContaining(["webcredentials:become.redbtn.io", "webcredentials:redbtn.io"]),
+    );
+  });
 });
 
 // Two questions every upload asks. Answer them in the config and neither the
