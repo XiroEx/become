@@ -646,25 +646,15 @@ describe("ProgramDetailRoute mutations", () => {
     });
   });
 
-  it("save toggle POSTs and DELETEs /api/programs/saved {programId}", async () => {
-    const { getByTestId } = render(<ProgramDetailRoute />);
-    await waitFor(() => expect(getByTestId("program-detail-toggle-save")).toBeTruthy());
+  // NP-382: the web's Program header has no save/favourite control, so the
+  // route no longer renders the heart or calls /api/programs/saved from here.
+  it("renders no save/favourite heart and never calls /api/programs/saved", async () => {
+    const { getByTestId, queryByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-share")).toBeTruthy());
 
-    await act(async () => {
-      fireEvent.press(getByTestId("program-detail-toggle-save"));
-    });
-
-    await waitFor(() => {
-      expect(callsByPathMethod("/api/programs/saved", "POST").length).toBeGreaterThan(0);
-    });
-    const postCall = callsByPathMethod("/api/programs/saved", "POST")[0]!;
-    expect(postCall[2]).toEqual(
-      expect.objectContaining({
-        method: "POST",
-        body: { programId: "prog-1" },
-        baseUrl: WEBAPP_BASE_URL,
-      }),
-    );
+    expect(queryByTestId("program-detail-toggle-save")).toBeNull();
+    expect(callsByPathMethod("/api/programs/saved", "POST").length).toBe(0);
+    expect(callsByPathMethod("/api/programs/saved", "DELETE").length).toBe(0);
   });
 });
 

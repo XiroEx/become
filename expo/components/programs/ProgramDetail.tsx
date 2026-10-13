@@ -3,12 +3,11 @@ import { ActivityIndicator, Image, StyleSheet, View, ScrollView, Pressable } fro
 import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import {
+  BarChart3,
   Calendar,
   Check,
   ChevronLeft,
   Clock,
-  Heart,
-  History,
   List,
   Pause as PauseIcon,
   Play,
@@ -130,10 +129,6 @@ export interface ProgramDetailProps {
   onEdit?: () => void;
   /** Disables the action buttons while a mutation is in flight. */
   actionPending?: boolean;
-  /** Whether this program is saved by the user. */
-  isSaved?: boolean;
-  /** Save or unsave this program. */
-  onToggleSave?: () => void | Promise<void>;
   /**
    * Share affordance (NP-165): the exact `POST /api/share` body for this
    * program (`{ kind: 'program', programId }`), or omitted to hide the
@@ -211,8 +206,6 @@ export function ProgramDetail({
   onOpenCalendar,
   onEdit,
   actionPending = false,
-  isSaved = false,
-  onToggleSave,
   shareBody,
   shareGetToken,
   testID = "program-detail",
@@ -615,65 +608,43 @@ export function ProgramDetail({
           ) : null}
         </View>
 
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Text
-              testID={`${testID}-name`}
-              style={{ fontSize: 24, fontWeight: "800", color: heroRgb("foreground") }}
-            >
-              {program.name}
+        {/* NP-382: the web's Program header has no save/favourite control here
+            (`ProgramDetailClient.tsx` — just the name/target/goal block and
+            the action-button row below), so native must not render one
+            either. The heart used to sit beside the title; removed along
+            with the `isSaved`/`onToggleSave` props it depended on. */}
+        <View>
+          <Text
+            testID={`${testID}-name`}
+            style={{ fontSize: 24, fontWeight: "800", color: heroRgb("foreground") }}
+          >
+            {program.name}
+          </Text>
+          {program.targetUser ? (
+            <Text style={{ fontSize: 15, color: heroRgb("foreground"), opacity: 0.85, marginTop: 6 }}>
+              {program.targetUser}
             </Text>
-            {program.targetUser ? (
-              <Text style={{ fontSize: 15, color: heroRgb("foreground"), opacity: 0.85, marginTop: 6 }}>
-                {program.targetUser}
-              </Text>
-            ) : null}
-            {program.goal ? (
-              <Text style={{ fontSize: 13, color: heroRgb("foreground"), opacity: 0.6, marginTop: 4 }}>
-                {program.goal}
-              </Text>
-            ) : null}
-          </View>
-
-          {onToggleSave ? (
-            <Pressable
-              testID={`${testID}-toggle-save`}
-              accessibilityRole="button"
-              accessibilityLabel={
-                isSaved
-                  ? `Unsave program ${program.name}`
-                  : `Save program ${program.name}`
-              }
-              onPress={onToggleSave}
-              disabled={actionPending}
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: heroTint("foreground", 0.3),
-                padding: 10,
-              }}
-            >
-              <Heart
-                // Saved reads as a filled RED heart, which is the one thing on
-                // this hero that is a brand accent rather than chrome — and the
-                // hero is dark-pinned, so it takes the dark palette's `brand`
-                // (red-500, the colour this heart has always been). `primary`
-                // is zinc-900 in light mode now (NP-313) and would vanish here.
-                color={isSaved ? heroRgb("brand") : heroRgb("foreground")}
-                fill={isSaved ? heroRgb("brand") : "transparent"}
-                size={22}
-                strokeWidth={1.5}
-              />
-            </Pressable>
+          ) : null}
+          {program.goal ? (
+            <Text style={{ fontSize: 13, color: heroRgb("foreground"), opacity: 0.6, marginTop: 4 }}>
+              {program.goal}
+            </Text>
           ) : null}
         </View>
 
         {/* Action Buttons: Continue / Start Program + Workout / Resume + Share
-            (NP-361 #2) — rounded-full pills matching the web's
+            (NP-361 #2, NP-382) — rounded-full pills matching the web's
             `rounded-full ... px-5 py-2.5` CTAs, Share folded in alongside
-            them instead of a separate top icon row. */}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
-          <View style={{ flex: 1, minWidth: 130 }}>
+            them instead of a separate top icon row. Web sizes every pill to
+            its own content (`whitespace-nowrap`, no flex-grow) so they sit on
+            one row; the Start/Continue button here must do the same —
+            `flex: 1, minWidth: 130` used to force it to grow and push Share
+            onto a second line on real devices (NP-382). */}
+        <View
+          testID={`${testID}-action-row`}
+          style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10 }}
+        >
+          <View testID={`${testID}-start-wrapper`}>
             {activeProgramLoading ? (
               <Pressable
                 testID={`${testID}-start-loading`}
@@ -863,7 +834,10 @@ export function ProgramDetail({
                     onPress={onOpenTrainingLog}
                     style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
                   >
-                    <History size={14} color={heroRgb("success")} strokeWidth={2} />
+                    {/* NP-382 (minor): web's Training Log link carries a bar-chart
+                        glyph, not a clock — matches the icon the native Training
+                        Log screen itself already uses (app/(app)/progress.tsx). */}
+                    <BarChart3 size={14} color={heroRgb("success")} strokeWidth={2} />
                     <Text style={{ fontSize: 13, fontWeight: "600", color: heroRgb("success") }}>
                       Training Log
                     </Text>

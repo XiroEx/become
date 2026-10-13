@@ -290,36 +290,12 @@ describe("ProgramDetail", () => {
     expect(getByText("2 exercises · minimal rest between exercises")).toBeTruthy();
   });
 
-  it("renders Save/Unsave toggle button and calls onToggleSave", () => {
-    const onToggleSave = jest.fn();
-    const { getByTestId, rerender } = render(
-      <ProgramDetail
-        program={sample}
-        isSaved={false}
-        onToggleSave={onToggleSave}
-      />,
-    );
-
-    const toggleBtn = getByTestId("program-detail-toggle-save");
-    expect(toggleBtn).toBeTruthy();
-    expect(toggleBtn.props.accessibilityLabel).toBe(
-      "Save program Strength Foundation",
-    );
-
-    fireEvent.press(toggleBtn);
-    expect(onToggleSave).toHaveBeenCalledTimes(1);
-
-    // When saved, label updates to Unsave
-    rerender(
-      <ProgramDetail
-        program={sample}
-        isSaved={true}
-        onToggleSave={onToggleSave}
-      />,
-    );
-    expect(getByTestId("program-detail-toggle-save").props.accessibilityLabel).toBe(
-      "Unsave program Strength Foundation",
-    );
+  // NP-382: the web's Program header (ProgramDetailClient.tsx) has no
+  // save/favourite control next to the title — native must not render one
+  // either, and no longer accepts isSaved/onToggleSave props to produce one.
+  it("renders no save/favourite heart button (native parity, NP-382)", () => {
+    const { queryByTestId } = render(<ProgramDetail program={sample} />);
+    expect(queryByTestId("program-detail-toggle-save")).toBeNull();
   });
 
   it("renders Pause/Resume button, toggles label based on status, and calls onPauseResume", () => {

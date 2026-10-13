@@ -145,18 +145,29 @@ describe("(NP-361) Program Detail spacing/type parity", () => {
       expect(startButton.props.style.backgroundColor).toBeTruthy();
     });
 
-    it("Share and the save heart both render, as independent controls", () => {
-      const onToggleSave = jest.fn();
-      const { getByTestId } = render(
+    // NP-382: the web's Program header has no save/favourite heart next to
+    // Share — native shouldn't either, and the Start/Workout/Share pills no
+    // longer force-grow (`flex: 1`) the way that used to push Share onto a
+    // second row on real devices.
+    it("Share renders with Start, with no save heart, and the action row never force-grows", () => {
+      const { getByTestId, queryByTestId } = render(
         <ProgramDetail
           program={sample}
-          onToggleSave={onToggleSave}
           shareBody={{ kind: "program", programId: "prog-361" }}
         />,
       );
-      expect(getByTestId("program-detail-toggle-save")).toBeTruthy();
+      expect(queryByTestId("program-detail-toggle-save")).toBeNull();
       expect(getByTestId("program-detail-share")).toBeTruthy();
       expect(getByTestId("program-detail-start")).toBeTruthy();
+      // The Start pill's wrapper no longer force-grows to fill the row —
+      // that's what used to push Share onto a second line (NP-382).
+      const startWrapper = getByTestId("program-detail-start-wrapper");
+      expect(startWrapper.props.style).not.toEqual(
+        expect.objectContaining({ flex: 1 }),
+      );
+      expect(startWrapper.props.style).not.toEqual(
+        expect.objectContaining({ minWidth: 130 }),
+      );
     });
   });
 
