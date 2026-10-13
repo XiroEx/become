@@ -676,3 +676,167 @@ describe("Card NP-321 — FoodSearchSheet header, capture row and badges", () =>
     expect(String(badgeStyle.backgroundColor)).toMatch(/^rgba\(/);
   });
 });
+
+describe("Card NP-371 — single header bar, interactive tag dropdown, capture/chip spacing", () => {
+  beforeEach(() => {
+    mockApiFetch.mockReset();
+    mockPush.mockReset();
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      const method = init?.method ?? "GET";
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/meals") && method === "POST") {
+        return { success: true };
+      }
+      if (url.startsWith("/api/meals")) return { meals: [] };
+      return {};
+    });
+  });
+
+  it("(id: np371-single-header) the title row carries ONE circular ✕ — there is no second close button next to a non-interactive 'ADDING TO' pill", () => {
+    const { getByTestId, queryAllByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} currentTag="breakfast" debounceMs={0} />,
+    );
+    // Exactly one close button in the whole tree.
+    expect(queryAllByTestId("food-search-close")).toHaveLength(1);
+    const close = getByTestId("food-search-close");
+    const closeStyle = Array.isArray(close.props.style)
+      ? Object.assign({}, ...close.props.style)
+      : close.props.style;
+    // Circular — web parity for `h-8 w-8 rounded-full` (radius === half the box).
+    expect(closeStyle.width).toBe(closeStyle.height);
+    expect(closeStyle.borderRadius).toBe(closeStyle.width / 2);
+  });
+
+  it("(id: np371-tag-dropdown) 'ADDING TO' is now an interactive dropdown: opens a tag grid, and picking one updates the label", () => {
+    const { getByTestId, queryByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={() => {}}
+        currentTag="breakfast"
+        availableTags={{ defaults: ["breakfast", "lunch", "dinner", "snack"], userTags: ["post-workout"] }}
+        debounceMs={0}
+      />,
+    );
+    expect(getByTestId("food-search-adding-to")).toHaveTextContent("ADDING TO BREAKFAST");
+    expect(queryByTestId("food-search-tag-picker")).toBeNull();
+
+    fireEvent.press(getByTestId("food-search-adding-to"));
+    expect(getByTestId("food-search-tag-picker")).toBeTruthy();
+    expect(getByTestId("food-search-tag-lunch")).toBeTruthy();
+    expect(getByTestId("food-search-tag-post-workout")).toBeTruthy();
+
+    fireEvent.press(getByTestId("food-search-tag-lunch"));
+    expect(getByTestId("food-search-adding-to")).toHaveTextContent("ADDING TO LUNCH");
+    // The picker closes once a tag is chosen, same as the web dropdown.
+    expect(queryByTestId("food-search-tag-picker")).toBeNull();
+  });
+
+  it("(id: np371-new-tag) the '+ New tag' input creates and selects a custom tag inline, matching the web's dropdown", () => {
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} currentTag="breakfast" debounceMs={0} />,
+    );
+    fireEvent.press(getByTestId("food-search-adding-to"));
+    expect(getByTestId("food-search-new-tag-add").props.accessibilityState?.disabled ?? false).toBe(true);
+
+    fireEvent.changeText(getByTestId("food-search-new-tag-input"), "Brunch Club");
+    fireEvent.press(getByTestId("food-search-new-tag-add"));
+
+    // Normalised the web's way — lowercased, spaces to hyphens.
+    expect(getByTestId("food-search-adding-to")).toHaveTextContent("ADDING TO BRUNCH-CLUB");
+  });
+
+  it("(id: np371-tag-flows-to-log) the dropdown's chosen tag, not the caller's original currentTag, is what a saved-meal pick logs under", async () => {
+    mockApiFetch.mockImplementation(async (url: string, _schema: unknown, init?: { method?: string }) => {
+      const method = init?.method ?? "GET";
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return { foods: [], recent: [], frequent: [], meals: [] };
+      }
+      if (url.startsWith("/api/meals") && method === "POST") return { success: true };
+      if (url.startsWith("/api/meals")) {
+        return {
+          meals: [{ _id: "meal-1", name: "Oat Bowl", items: [{ name: "Oats" }], totalNutrition: { calories: 300 } }],
+        };
+      }
+      return {};
+    });
+    const { getByTestId } = render(
+      <FoodSearchSheet
+        visible={true}
+        onClose={() => {}}
+        currentTag="breakfast"
+        availableTags={{ defaults: ["breakfast", "lunch"], userTags: [] }}
+        debounceMs={0}
+      />,
+    );
+    fireEvent.press(getByTestId("food-search-adding-to"));
+    fireEvent.press(getByTestId("food-search-tag-lunch"));
+
+    fireEvent.press(getByTestId("food-filter-meals"));
+    await waitFor(() => {
+      expect(getByTestId("meal-result-meal-1")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("meal-result-meal-1"));
+
+    await waitFor(() => {
+      const logCall = findCall("/api/meals/meal-1/log", "POST");
+      expect(logCall).toBeTruthy();
+      const body = (logCall?.[2] as { body?: { tags?: string[] } })?.body;
+      expect(body?.tags).toEqual(["lunch"]);
+    });
+  });
+
+  it("(id: np371-capture-radius) Barcode / Snap / Upload are rounded-xl (12px), not the old 10px", () => {
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} onSnapPhoto={() => {}} onUpload={() => {}} />,
+    );
+    for (const id of ["food-search-barcode-button", "food-search-snap-button", "food-search-upload-button"]) {
+      const node = getByTestId(id);
+      const style = Array.isArray(node.props.style)
+        ? Object.assign({}, ...node.props.style)
+        : node.props.style;
+      expect(style.borderRadius).toBe(12);
+    }
+  });
+
+  it("(id: np371-overview-headers) overview and search section headers render as shaded strips (bg-muted/90, 11px semibold uppercase tracking-wide), matching the web's sticky header classes", async () => {
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/nutrition/foods/overview")) {
+        return {
+          foods: [
+            { _id: "f1", name: "Oats", servingSize: 1, servingUnit: "g", nutrition: { calories: 1, protein: 0, carbs: 0, fats: 0 } },
+          ],
+          recent: [],
+          frequent: [],
+          meals: [],
+        };
+      }
+      if (url.startsWith("/api/meals")) return { meals: [] };
+      return {};
+    });
+    const { getByTestId } = render(
+      <FoodSearchSheet visible={true} onClose={() => {}} debounceMs={0} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("overview-header-your-foods")).toBeTruthy();
+    });
+    const header = getByTestId("overview-header-your-foods");
+    expect(header.props.className).toContain("text-[11px]");
+    expect(header.props.className).toContain("font-semibold");
+    expect(header.props.className).toContain("uppercase");
+    expect(header.props.className).toContain("tracking-wide");
+    // No more plain `text-xs font-bold` — that was the un-styled transparent row.
+    expect(header.props.className).not.toContain("font-bold");
+
+    // Walk up to the wrapping strip (the Text's own host node sits inside
+    // one or more intermediate component wrappers before the styled View).
+    let headerRow = header.parent;
+    while (headerRow && !String(headerRow.props?.className ?? "").includes("bg-muted")) {
+      headerRow = headerRow.parent;
+    }
+    expect(headerRow?.props.className).toContain("bg-muted/90");
+    expect(headerRow?.props.className).toContain("px-4");
+    expect(headerRow?.props.className).toContain("py-1.5");
+  });
+});
