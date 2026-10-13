@@ -69,4 +69,21 @@ describe("Android config — Firebase / FCM wiring (NP-338)", () => {
     );
     expect(packageNames).toContain("io.redbtn.become");
   });
+
+  it("is the real Firebase export, not the REPLACE_WITH_* placeholder", () => {
+    const resolved = path.resolve(
+      EXPO_ROOT,
+      parsed.expo.android?.googleServicesFile ?? "",
+    );
+    const raw = fs.readFileSync(resolved, "utf8");
+    expect(raw).not.toMatch(/REPLACE_WITH_/);
+    const config = JSON.parse(raw) as {
+      project_info?: { project_number?: string };
+      client?: { client_info?: { mobilesdk_app_id?: string } }[];
+    };
+    expect(config.project_info?.project_number).toMatch(/^\d+$/);
+    expect(config.client?.[0]?.client_info?.mobilesdk_app_id).toMatch(
+      /^1:\d+:android:[0-9a-f]+$/,
+    );
+  });
 });

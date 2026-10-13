@@ -43,19 +43,14 @@ the only lever that reaches an already-installed app. See
    `https://become.redbtn.io/.well-known/assetlinks.json` with the real Play
    App Signing SHA-256 fingerprint (placeholder ships in P6 — replace before
    the first Android submission).
-7. **`expo/google-services.json`** — the real export from the Firebase
-   console for `io.redbtn.become` (Project settings → Your apps → Android
-   app → `google-services.json`), wired through `android.googleServicesFile`
-   in `app.json` (NP-338). Without it `getDevicePushTokenAsync()` throws on
-   device and Settings → Notifications shows "Not reaching this device" with
-   Repair doing nothing (logcat: `[push] device token unavailable`). A
-   placeholder with sentinel values ships in the repo — same category as the
-   Play upload keystore above: required to ship, and real credentials this
-   repo cannot fabricate. Replace the whole file before any build that needs
-   Android push to reach a device, and confirm a real FCM token gets
-   upserted (Allow, then Repair) on a physical device — the emulator's
-   default image has no Play Services and cannot get one either. Server-side
-   FCM credentials to actually SEND a push are NP-063, tracked separately.
+7. **`expo/google-services.json`**: the real export from the Firebase
+   project "Become" (`become-2188e`, Android app `io.redbtn.become`),
+   committed 2026-10-13 and wired through `android.googleServicesFile` in
+   `app.json` (NP-338). It holds no secret: the API key in it is a public
+   client identifier. The server-side FCM HTTP v1 service account (which IS a
+   secret) lives only in `push.fcm` of `BECOME_RUNTIME_CONFIG` (redsecrets),
+   never in this repo. When the Play app signing key exists, add its SHA-256
+   to the Firebase Android app too.
 8. **The store name and subtitle**, from
    [`STORE_LISTING.md`](./STORE_LISTING.md): one name (≤30 characters) used on
    BOTH stores, the 30-character iOS subtitle and the 80-character Play short
