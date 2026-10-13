@@ -107,6 +107,8 @@ async function renderShell(url: string): Promise<void> {
 
 beforeEach(() => {
   fake.__reset();
+  // NP-032: off is the default every other test in this file relies on.
+  delete process.env.EXPO_PUBLIC_COMMUNITY_ENABLED;
 });
 
 /**
@@ -160,13 +162,42 @@ describe("the tab bar", () => {
     expect(TAB_ROUTES).toHaveLength(5);
   });
 
-  it("keeps the chat routes reachable but off the bar", async () => {
-    // NP-032 deletes them behind its own flag. Until then they stay in the
-    // tree as a hidden tab (`href: null`) — in the router, not in the bar.
+  it("registers the chat routes, reachable but off the bar, only while NP-032's flag is on", async () => {
+    const original = process.env.EXPO_PUBLIC_COMMUNITY_ENABLED;
+    process.env.EXPO_PUBLIC_COMMUNITY_ENABLED = "true";
+    try {
+      await renderShell("/(tabs)/chat");
+      expect(
+        await screen.findByTestId(screenId("(app)/(tabs)/chat/index")),
+      ).toBeTruthy();
+      expect(tabLabels()).toEqual(NATIVE_TAB_LABELS);
+    } finally {
+      process.env.EXPO_PUBLIC_COMMUNITY_ENABLED = original;
+    }
+  });
+
+  it("does not register the chat routes at all while the flag is off (NP-032)", async () => {
+    // Off is the default — every production build. `/(tabs)/chat` is not a
+    // registered screen any more, so a raw push to it resolves within the
+    // SAME navigator the way React Navigation resolves any unmatched state —
+    // never the chat screen, and never a crash. (Where a real entry point —
+    // a deep link, a notification tap — actually LANDS when chat is asked
+    // for is `app/+native-intent.tsx` and `lib/push/deepLinkRouter.ts`'s job,
+    // both of which explicitly target Home; see
+    // `__tests__/card-NP-032-acceptance.test.tsx`.)
+    delete process.env.EXPO_PUBLIC_COMMUNITY_ENABLED;
     await renderShell("/(tabs)/chat");
+    // Something else rendered instead — React Navigation's own fallback for
+    // an unmatched state within this navigator — but never the chat screen.
     expect(
-      await screen.findByTestId(screenId("(app)/(tabs)/chat/index")),
+      await screen.findByTestId(screenId("(app)/(tabs)/programming/index")),
     ).toBeTruthy();
+    expect(screen.queryByTestId(screenId("(app)/(tabs)/chat/index"))).toBeNull();
+    // Six registered screens now, not seven: the five buttons, calendar —
+    // and no chat.
+    for (const button of tabButtons()) {
+      expect(button.total).toBe(6);
+    }
     expect(tabLabels()).toEqual(NATIVE_TAB_LABELS);
   });
 
@@ -175,14 +206,15 @@ describe("the tab bar", () => {
     await screen.findByTestId(screenId("(app)/(tabs)/dashboard/index"));
 
     // "Home, tab, 1 of N" counts the navigator's screens, hidden ones
-    // included: the five buttons plus chat and calendar, which are in the tree
-    // with `href: null`. It was 20 while every nested screen —
+    // included: the five buttons plus calendar, which is in the tree with
+    // `href: null`. It was 20 while every nested screen —
     // `programming/[id]/workout/[idx]/live`, `nutrition/recipes/[id]`,
     // `profile/health` and the rest — was a screen of the TAB navigator.
-    // (Still 7 after NP-351: `profile` moved from hidden to a button, it did
-    // not join the navigator.)
+    // (Was 7 after NP-351: `profile` moved from hidden to a button, it did
+    // not join the navigator. Down to 6 since NP-032: chat only joins the
+    // navigator while its flag is on — off is this suite's default.)
     for (const button of tabButtons()) {
-      expect(button.total).toBe(7);
+      expect(button.total).toBe(6);
     }
 
     // And nothing that looks like a nested route reached the bar. ("workout"

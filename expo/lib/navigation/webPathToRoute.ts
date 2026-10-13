@@ -446,6 +446,18 @@ function matchPath(incoming: Incoming, options: ResolveOptions): ResolvedTarget 
     return native(NATIVE_ROUTES.profile, params, "exact");
   }
 
+  // ── Chat at the top level — `become://chat` and `become://chat/<id>` ──────
+  // (the custom scheme's own shape, per NP-032's card; `/dashboard/chat` is
+  // handled below, under `dashboard`). Same flag, same fallback: Home while
+  // NP-032 keeps chat out of the v1 build.
+  if (head === "chat") {
+    if (!options.communityEnabled) return native(NATIVE_ROUTES.home, params, "hidden");
+    const conversationId = segments[1];
+    return conversationId
+      ? native(`${NATIVE_ROUTES.chat}/${encodeURIComponent(conversationId)}`, params, "exact")
+      : native(NATIVE_ROUTES.chat, params, "exact");
+  }
+
   if (head !== "dashboard") {
     return native(NATIVE_ROUTES.home, params, "unknown");
   }

@@ -46,13 +46,23 @@ jest.mock("expo-router", () => {
     return null;
   }
   FakeTabsScreen.displayName = "FakeTabsScreen";
+  // NP-032's `Tabs.Protected` — this suite is about ordering/styling, not
+  // the flag, so the fake renders its children unconditionally regardless
+  // of `guard`. (The real guard's behaviour — chat registered only while
+  // the flag is on — is exercised against the REAL `expo-router` Tabs in
+  // `navigation-shell.test.tsx` and `card-NP-032-acceptance.test.tsx`.)
+  function FakeTabsProtected(props: { children?: ReactNode }) {
+    return props.children ?? null;
+  }
+  FakeTabsProtected.displayName = "FakeTabsProtected";
   FakeTabs.Screen = FakeTabsScreen;
+  FakeTabs.Protected = FakeTabsProtected;
   return { __esModule: true, Tabs: FakeTabs };
 });
 
 import * as fs from "fs";
 import * as path from "path";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Platform, StyleSheet, View } from "react-native";
 import { act, render, fireEvent } from "@testing-library/react-native";
 import { colorScheme } from "nativewind";
