@@ -7,7 +7,7 @@
       "namespace": "android_app",
       "package_name": "io.redbtn.become",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
       ]
     }
   },
@@ -19,9 +19,8 @@
       "namespace": "android_app",
       "package_name": "io.redbtn.become",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
+        "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
       ]
-    },
-    "comment": "NP-161: lets Android's Credential Manager offer this app's passkeys for become.redbtn.io — needed alongside the matching android:apk-key-hash origin in PASSKEY_ANDROID_ORIGIN."
+    }
   }
 ]

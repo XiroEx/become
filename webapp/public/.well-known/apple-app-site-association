@@ -3,12 +3,16 @@
     "details": [
       {
         "appIDs": [
-          "TEAM_ID_PLACEHOLDER.io.redbtn.become"
+          "Y7X4278T48.io.redbtn.become"
         ],
         "components": [
           {
             "/": "/verify",
             "comment": "Universal Link target for magic-link verification"
+          },
+          {
+            "/": "/account/restore",
+            "comment": "Universal Link target for the account-deletion restore link"
           }
         ]
       }
@@ -16,7 +20,7 @@
   },
   "webcredentials": {
     "apps": [
-      "TEAM_ID_PLACEHOLDER.io.redbtn.become"
+      "Y7X4278T48.io.redbtn.become"
     ]
   }
 }

@@ -16,7 +16,7 @@
 
 import { createRedAuth, type RedAuthInstance } from '@redbtn/redauth'
 import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
-import { type PasskeyOrigin } from './passkeyOrigin'
+import { type PasskeyOrigin, passkeyExpectedOrigins } from './passkeyOrigin'
 
 // Re-exported so existing `import { getRedAuth, passkeyOriginFromRequest } from
 // '@/lib/redauth'` call sites (the four passkey routes) need no change — the
@@ -40,16 +40,19 @@ export async function getRedAuth(passkeyOrigin: PasskeyOrigin = 'web'): Promise<
 
   const googleEnabled = Boolean(clientId && clientSecret)
 
-  // Android's origin: `android:apk-key-hash:<fingerprint>`, matching the
-  // `delegate_permission/common.get_login_creds` statement in
-  // webapp/public/.well-known/assetlinks.json. Unset until ops has the real
-  // Play App Signing certificate hash (same placeholder-then-replace
-  // pattern as TEAM_ID_PLACEHOLDER and REPLACE_WITH_PLAY_APP_SIGNING_SHA256)
-  // — falls back to the web origin, which simply means an Android assertion
-  // will not verify yet, not that the server throws.
-  const webOrigin = process.env.PASSKEY_ORIGIN || baseUrl
-  const androidOrigin = process.env.PASSKEY_ANDROID_ORIGIN || webOrigin
-  const origin = passkeyOrigin === 'android' ? androidOrigin : webOrigin
+  // Expected WebAuthn origins for this instance (lib/passkeyOrigin.ts):
+  // web = the web origin plus `https://<rpID>` (what the iOS app reports);
+  // android = `android:apk-key-hash:<fingerprint>` for each signing cert in
+  // BECOME_ANDROID_CERT_SHA256, or PASSKEY_ANDROID_ORIGIN (comma-separated)
+  // when set. Every Android cert must also be in both assetlinks.json files
+  // (become.redbtn.io and redbtn.io).
+  const rpID = process.env.PASSKEY_RP_ID || 'redbtn.io'
+  const origins = passkeyExpectedOrigins(passkeyOrigin, {
+    baseUrl,
+    rpID,
+    webOriginEnv: process.env.PASSKEY_ORIGIN,
+    androidOriginEnv: process.env.PASSKEY_ANDROID_ORIGIN,
+  })
 
   const instance = createRedAuth({
     mongoUri,
@@ -74,8 +77,10 @@ export async function getRedAuth(passkeyOrigin: PasskeyOrigin = 'web'): Promise<
       // @redbtn/redauth de-silo fix (>= the version that keys passkeys by
       // credentialId, not appName). Shared across BOTH instances below — the
       // Android one included — so a passkey made anywhere verifies anywhere.
-      rpID: process.env.PASSKEY_RP_ID || 'redbtn.io',
-      origin,
+      rpID,
+      // A list: redauth's type says `string`, but it passes the value
+      // straight to simplewebauthn's `expectedOrigin` (`string | string[]`).
+      origin: origins as unknown as string,
     },
   })
 

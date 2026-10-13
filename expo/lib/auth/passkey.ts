@@ -17,16 +17,17 @@
  * become.redbtn.io in a browser signs this app in, and a passkey added here
  * signs the browser in — the one rule NP-161 says must travel.
  *
- * ANDROID'S ORIGIN IS DIFFERENT, THOUGH: Credential Manager reports
- * `android:apk-key-hash:<fingerprint>` as the WebAuthn origin, never the
- * `https://become.redbtn.io` the web and iOS both present (iOS reports the
- * associated domain it is signed into, once `webcredentials:become.redbtn.io`
- * is in `ios.associatedDomains` — see app.json). `@redbtn/redauth` checks the
- * assertion against exactly ONE configured origin per instance, so every
- * request below carries `PASSKEY_PLATFORM_HEADER` — `webapp/lib/redauth.ts`'s
- * `passkeyOriginFromRequest` reads it to pick the Android-pinned instance.
- * Web never sends this header (nothing changes for it); iOS sends it too, but
- * resolves to the same "web" instance because its origin already matches.
+ * EACH PLATFORM REPORTS ITS OWN ORIGIN. The browser reports
+ * `https://become.redbtn.io`; the iOS app reports `https://redbtn.io`
+ * (`https://` + the rpID, which iOS lets the app use because of
+ * `webcredentials:redbtn.io` in app.json and the AASA on redbtn.io);
+ * Android's Credential Manager reports `android:apk-key-hash:<fingerprint>`
+ * (allowed by the `get_login_creds` statement in
+ * https://redbtn.io/.well-known/assetlinks.json). `webapp/lib/passkeyOrigin.ts`
+ * lists what each server instance accepts, and every request below carries
+ * `PASSKEY_PLATFORM_HEADER` so `passkeyOriginFromRequest` can pick the
+ * Android instance. Web never sends this header; iOS sends `ios`, which
+ * resolves to the web instance.
  */
 import { Platform } from "react-native";
 import {
