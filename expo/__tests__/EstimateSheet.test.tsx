@@ -530,11 +530,53 @@ describe("EstimateSheet describe sheet matches web (NP-263)", () => {
     });
     expect(getByTestId("estimate-sheet-describe-header")).toBeTruthy();
     expect(getByText("Add a photo too, or just use your words")).toBeTruthy();
-    expect(
-      getByText("In your words — add a photo too, or just estimate from the text."),
-    ).toBeTruthy();
     fireEvent.press(getByTestId("estimate-sheet-describe-close"));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("(NP-372) does not duplicate the hero title/subtitle inside the describe content — the sheet header is the only one", () => {
+    const { getByText, queryByText, getAllByText } = renderSheet({
+      initialPhase: "describe",
+    });
+    // The header's title renders once — not re-stated by a second hero block.
+    expect(getAllByText("Describe your meal")).toHaveLength(1);
+    expect(getByText("Add a photo too, or just use your words")).toBeTruthy();
+    // The web source of truth has no second subtitle in the content area.
+    expect(
+      queryByText("In your words — add a photo too, or just estimate from the text."),
+    ).toBeNull();
+  });
+
+  it("(NP-372) restores the web's full placeholder and the 110px/14px textarea sizing", () => {
+    const { getByTestId } = renderSheet({ initialPhase: "describe" });
+    const input = getByTestId("estimate-sheet-describe-input");
+    expect(input.props.placeholder).toBe(
+      "Describe your whole meal — the food and portions, plus any sauces, dressings, sides and drinks. e.g. chicken burrito bowl with rice, black beans, guac and salsa, and a large iced tea",
+    );
+    const style = Array.isArray(input.props.style)
+      ? Object.assign({}, ...input.props.style.filter(Boolean))
+      : input.props.style;
+    expect(style.minHeight).toBe(110);
+    expect(style.padding).toBe(14);
+  });
+
+  it("(NP-372) styles the photo/back/estimate actions with the bordered outline token and footer size (rounded-xl, text-sm font-semibold)", () => {
+    const { getByTestId } = renderSheet({ initialPhase: "describe" });
+    for (const testID of [
+      "estimate-sheet-describe-add-photo",
+      "estimate-sheet-describe-upload-photo",
+      "estimate-sheet-describe-back",
+    ]) {
+      const className: string = getByTestId(testID).props.className ?? "";
+      expect(className).toMatch(/border-border/);
+      expect(className).toMatch(/bg-card/);
+      expect(className).toMatch(/rounded-xl/);
+      expect(className).toMatch(/px-4 py-2\.5/);
+    }
+    const estimateClassName: string =
+      getByTestId("estimate-sheet-describe-estimate").props.className ?? "";
+    expect(estimateClassName).toMatch(/bg-success/);
+    expect(estimateClassName).toMatch(/px-4 py-2\.5/);
   });
 
   it("offers Add photo and Upload photo, carrying the typed text forward as the compose note", async () => {

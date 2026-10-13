@@ -181,6 +181,17 @@ describe("Calendar settings (PUT /api/schedule/settings)", () => {
     });
   });
 
+  // NP-368: web's header has a `< Back` link above the icon + title row;
+  // native used to rely on system back alone.
+  it("the header Back button calls router.back()", async () => {
+    const { getByTestId } = render(<CalendarSettingsRoute />);
+    await waitFor(() => {
+      expect(getByTestId("schedule-settings-day-2")).toBeTruthy();
+    });
+    fireEvent.press(getByTestId("calendar-settings-back-button"));
+    expect(mockBack).toHaveBeenCalled();
+  });
+
   it("PUTs the training-days settings with programId on submit", async () => {
     const { getByTestId } = render(<CalendarSettingsRoute />);
     // Wait for the form to hydrate from the schedule fetch (re-seeds via key).
