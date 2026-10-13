@@ -7,6 +7,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react-native";
 import { renderGlassTabBar } from "@/components/navigation/GlassTabBar";
+import { isCommunityEnabled } from "@/lib/flags/communityEnabled";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface TabRouteConfig {
@@ -39,10 +40,15 @@ export interface TabRouteConfig {
  * order, `__tests__/navigation-shell.test.tsx` reads it to prove it, and
  * centring Home does not require moving anything else.
  *
- * The `chat` and `calendar` folders are still in the tree and still reachable
- * by URL; they are listed below with `href: null` so they are not buttons.
- * NP-032 removes the chat routes behind `EXPO_PUBLIC_COMMUNITY_ENABLED` —
- * there is deliberately no second flag here.
+ * The `calendar` folder is still in the tree and still reachable by URL; it
+ * is listed below with `href: null` so it is not a button. `chat` is the
+ * same shape (`href: null`, no bar button) but wrapped in `Tabs.Protected`
+ * (NP-032): `EXPO_PUBLIC_COMMUNITY_ENABLED` off — every production build —
+ * means the chat screens are not registered with the navigator at all, so
+ * `/(tabs)/chat` and `/(tabs)/chat/<id>` resolve nowhere and land on this
+ * navigator's `initialRouteName` (Home) exactly like any other unmatched
+ * route. On, they are back exactly as they were before this card: reachable,
+ * still no bar button. There is deliberately no second flag here.
  *
  * `programming` is the Workout tab: the label is the web's, the screen is
  * today's programs list until NP-071 ports the web's workout home. A route
@@ -112,6 +118,9 @@ export default function TabsLayout() {
   // The bar is a native navigator surface, so none of it can be a class: the
   // colours come from the theme and re-render when the system flips (NP-123).
   const { colors } = useThemeTokens();
+  // NP-032: read at render, not at import, so a test can flip the env var
+  // and re-render rather than reach for `jest.resetModules()`.
+  const communityEnabled = isCommunityEnabled();
 
   return (
     <Tabs
@@ -166,7 +175,10 @@ export default function TabsLayout() {
         );
       })}
       {/* Hidden routes — present in the (tabs) tree but not in the tab bar. */}
-      <Tabs.Screen name="chat" options={{ href: null }} />
+      {/* NP-032: chat is only registered at all while the flag is on. */}
+      <Tabs.Protected guard={communityEnabled}>
+        <Tabs.Screen name="chat" options={{ href: null }} />
+      </Tabs.Protected>
       <Tabs.Screen name="calendar" options={{ href: null }} />
     </Tabs>
   );

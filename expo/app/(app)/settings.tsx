@@ -54,6 +54,7 @@ import {
   type NativeNotifPermission,
 } from "@/lib/settings/notificationPreferences";
 import { shouldShowDeniedRepromptAt } from "@/lib/push/reprompt";
+import { isCommunityEnabled } from "@/lib/flags/communityEnabled";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -890,7 +891,9 @@ export default function SettingsScreen({
               flat. `chatMessage` stays hidden while NP-032 keeps chat out. */}
           {notifReady ? (
             <View style={{ gap: 12 }}>
-              {visibleNotificationToggles().map(({ key, label, sublabel }) => (
+              {visibleNotificationToggles({
+                communityEnabled: isCommunityEnabled(),
+              }).map(({ key, label, sublabel }) => (
                 <View
                   key={key}
                   style={{

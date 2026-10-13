@@ -4,6 +4,7 @@ import {
   isBecomeWebHost,
   resolveWebPath,
 } from "@/lib/navigation/webPathToRoute";
+import { isCommunityEnabled } from "@/lib/flags/communityEnabled";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
 
 export interface NativeIntentInput {
@@ -137,7 +138,12 @@ export function redirectSystemPath({ path, initial }: NativeIntentInput): string
   if (direct) {
     targetHref = direct;
   } else {
-    const target = resolveWebPath(path);
+    // NP-032: chat (and, flag or no flag, community/groups/events) resolve
+    // Home while the build-time flag is off — the resolver's own "hidden"
+    // fallback, read here rather than duplicated.
+    const target = resolveWebPath(path, {
+      communityEnabled: isCommunityEnabled(),
+    });
 
     if (target.kind === "web") {
       // Fire and forget: `redirectSystemPath` is synchronous and the browser
