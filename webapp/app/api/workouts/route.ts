@@ -13,11 +13,16 @@ import { slotDateKey } from '@/lib/notifications/cronNotify'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
+import { memberWeightUnit } from '@/lib/memberWeightUnit'
+import { stampWeightUnit } from '@/lib/workout/stampWeightUnit'
 
 interface SetData {
   setNumber: number
   reps?: number       // null for time-only exercises
   weight?: number     // null for bodyweight/cardio
+  /** Stamped server-side from the member's profile.weightUnit — see
+   *  lib/workout/stampWeightUnit.ts. Never sent by the client. */
+  weightUnit?: 'lbs' | 'kg'
   duration?: number   // seconds — for time / intervals / time_distance
   distance?: number   // meters — for time_distance
   speed?: number      // mph — for time_distance / intervals
@@ -423,13 +428,20 @@ export async function POST(request: NextRequest) {
     }
 
     const body: WorkoutSaveRequest = rawBody
-    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes, scheduledDate } = body
+    const { programId, phase, day, exercises: rawExercises, completed, duration, activeSeconds, notes, scheduledDate } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     await dbConnect()
+
+    // NP-209: stamp every set with the member's CURRENT profile.weightUnit —
+    // raw + unit, never converted. A member with none stored yet (never
+    // asked) gets sets with no weightUnit, grandfathered as lbs at display
+    // time, same as a legacy pre-NP-209 set. memberWeightUnit() never throws
+    // (a bad/missing userId degrades to `undefined`, not a 500).
+    const exercises = stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
 
     let programCompleted = false
     let programName = ''
@@ -840,13 +852,16 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, started, favorite } = body
+  const { sessionId, title, needsName, focus, exercises: rawExercises, completed, duration, activeSeconds, notes, started, favorite } = body
 
-  if (!sessionId || !Array.isArray(exercises)) {
+  if (!sessionId || !Array.isArray(rawExercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   await dbConnect()
+
+  // NP-209: same stamping as the program-day save path above.
+  const exercises = stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
 
   // Only PERSIST a genuinely-reported offset — a MISSING `tz` must not be stored
   // as UTC (that poisons the cron into sending the morning reminder at ~3am the

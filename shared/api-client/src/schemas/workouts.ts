@@ -344,6 +344,14 @@ export const StoredWorkoutSetSchema = z
     setNumber: z.number().optional(),
     reps: z.number().nullish(),
     weight: z.number().nullish(),
+    /**
+     * NP-209: the unit `weight` was entered in, stamped server-side from the
+     * member's `profile.weightUnit` at save time (never sent by the client).
+     * Absent on every set logged before this existed (and on any set saved
+     * for a member with no stored `weightUnit` yet) — grandfathered as lbs at
+     * display time (`weightUnit ?? 'lbs'`), never converted.
+     */
+    weightUnit: z.enum(['lbs', 'kg']).nullish(),
     duration: z.number().nullish(),
     distance: z.number().nullish(),
     speed: z.number().nullish(),
@@ -442,6 +450,10 @@ export const ExercisePRSummarySchema = z
   .object({
     weight: z.number(),
     reps: z.number(),
+    /** NP-209: the unit `weight` was entered in — see
+     *  `webapp/lib/exercisePRs.ts#IPRDimension.unit`. Absent (a PR set before
+     *  this existed) is grandfathered as lbs at display time, never converted. */
+    unit: z.enum(['lbs', 'kg']).optional(),
   })
   .passthrough();
 

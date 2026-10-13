@@ -32,6 +32,7 @@ import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloo
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
+import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 import { getRestDuration, restGroupContext } from "@/lib/workout/restDuration";
 import { fireRestAlert } from "@/lib/workout/restAlert";
 
@@ -308,6 +309,9 @@ export default function WorkoutFormPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  // NP-209: lb/kg is the member's choice (profile.weightUnit), not a
+  // hardcoded 'lbs' — see lib/useMemberWeightUnit.ts.
+  const { weightUnit: memberWeightUnit } = useMemberWeightUnit();
   const programId = params.programId as string;
   const requestedDay = searchParams.get("day");
   const scheduledDate = searchParams.get("sd"); // exact Schedule slot date this log fulfills (gap 3)
@@ -1756,7 +1760,7 @@ export default function WorkoutFormPage() {
                                     ? (lastSeconds
                                         ? (durationUnit === "min" ? `${secondsToUnitDisplay(lastSeconds, "min")}m` : `${lastSeconds}s`)
                                         : 'completed')
-                                    : h.weight > 0 ? `${h.weight} lbs${bellSuffix} × ${h.reps} reps`
+                                    : h.weight > 0 ? `${h.weight} ${memberWeightUnit}${bellSuffix} × ${h.reps} reps`
                                     : h.reps > 0 ? `${h.reps} reps` : null
                                   return label ? (
                                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -2122,7 +2126,7 @@ export default function WorkoutFormPage() {
                                     }
                                     const gBell = getBellWeightInfo(exercise).style
                                     const fields: Array<{ key: keyof SetData; label: string; placeholder: string; span: string }> = []
-                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? "lbs/DB" : gBell === 'kettlebell' ? "lbs/KB" : "lbs", placeholder: "0", span: "col-span-4" })
+                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? `${memberWeightUnit}/DB` : gBell === 'kettlebell' ? `${memberWeightUnit}/KB` : memberWeightUnit, placeholder: "0", span: "col-span-4" })
                                     fields.push(
                                       gTimed
                                         ? { key: "duration", label: "sec", placeholder: exercise.duration?.replace(/[^0-9]/g, "") || "30", span: gWeight ? "col-span-4" : gSpeed ? "col-span-3" : "col-span-8" }
@@ -2286,6 +2290,7 @@ export default function WorkoutFormPage() {
             })}
             exercises={workout.exercises}
             exerciseHistory={exerciseHistory}
+            weightUnit={memberWeightUnit}
             summaryStreak={summaryStreak}
             summaryGoal={summaryGoal}
             formatTime={formatTime}
