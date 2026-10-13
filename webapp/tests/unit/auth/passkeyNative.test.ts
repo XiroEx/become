@@ -128,6 +128,23 @@ test('the AASA names the real Team ID in applinks and webcredentials, no placeho
   assert.ok(aasa.applinks.details.every((d) => d.appIDs.includes(APPLE_APP_ID)))
 })
 
+test('the AASA claims every path Android claims with an autoVerify intent filter', () => {
+  const aasa = JSON.parse(read('public/.well-known/apple-app-site-association')) as {
+    applinks: { details: Array<{ components: Array<{ '/': string }> }> }
+  }
+  const iosPaths = new Set(aasa.applinks.details.flatMap((d) => d.components.map((c) => c['/'])))
+  const appJson = JSON.parse(readRepo('expo/app.json')) as {
+    expo: { android: { intentFilters: Array<{ autoVerify?: boolean; data?: Array<{ host?: string; pathPrefix?: string }> }> } }
+  }
+  const androidPaths = appJson.expo.android.intentFilters
+    .filter((f) => f.autoVerify)
+    .flatMap((f) => f.data ?? [])
+    .filter((d) => d.host === 'become.redbtn.io' && d.pathPrefix)
+    .map((d) => d.pathPrefix!)
+  assert.ok(androidPaths.length > 0)
+  for (const path of androidPaths) assert.ok(iosPaths.has(path), `iOS does not claim ${path}`)
+})
+
 test('both assetlinks statements carry real fingerprints, and exactly the ones the server accepts', () => {
   const raw = read('public/.well-known/assetlinks.json')
   assert.ok(!/REPLACE_WITH/i.test(raw), 'a placeholder is still in assetlinks.json')

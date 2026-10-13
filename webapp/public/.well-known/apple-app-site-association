@@ -9,6 +9,10 @@
           {
             "/": "/verify",
             "comment": "Universal Link target for magic-link verification"
+          },
+          {
+            "/": "/account/restore",
+            "comment": "Universal Link target for the account-deletion restore link"
           }
         ]
       }
