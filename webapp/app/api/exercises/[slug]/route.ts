@@ -5,6 +5,11 @@ import connectDB from '@/lib/mongodb';
 import Exercise from '@/models/Exercise';
 import ExerciseVideo from '@/models/ExerciseVideo';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
+import {
+  adminWritableExerciseFilter,
+  isSharedSubmission,
+  type ExerciseOwnershipState,
+} from '@/lib/exerciseVisibility';
 
 interface RouteParams {
   params: Promise<{ slug: string }>;
@@ -13,6 +18,33 @@ interface RouteParams {
 /** A URL field counts as "set" only when it has non-whitespace content. */
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0;
+}
+
+/**
+ * Why the admin write did not match a row. "Exercise not found" was the single
+ * answer to both cases, which is what made the submitted-exercise bug so hard
+ * to read: the exercise was plainly on screen and the save said it did not
+ * exist. A member's private custom exercise is a refusal, not an absence, so
+ * it says so.
+ */
+async function refuseAdminWrite(slug: string) {
+  const existing = await Exercise.findOne({ slug })
+    .select('isCustom isUniversal reviewStatus')
+    .lean<ExerciseOwnershipState | null>();
+
+  if (existing) {
+    return NextResponse.json(
+      {
+        error:
+          "This is a member's private exercise — only the member who created it can edit or " +
+          'delete it. It becomes editable here once they submit it to the shared library and ' +
+          'it is approved.',
+      },
+      { status: 403 }
+    );
+  }
+
+  return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
 }
 
 // GET /api/exercises/[slug] — fetch single exercise (any authed user)
@@ -137,16 +169,22 @@ async function applyUpdate(request: NextRequest, slug: string) {
     update.thumbnailUrl = null;
   }
 
-  // Custom exercises are owner-managed via /api/exercises/custom — admins must
-  // NOT mutate them through this admin endpoint.
+  // Catalog exercises, plus a member's custom exercise that has been approved
+  // into the SHARED library (see lib/exerciseVisibility.ts). A private custom
+  // exercise stays owner-managed via /api/exercises/custom.
+  //
+  // Ownership survives this write: `update` is built from the `allowed` list
+  // above, which carries no `createdBy`, `isCustom`, `isUniversal` or
+  // `reviewStatus` — the exercise still belongs to the member who made it, is
+  // still in their own library, and is still theirs to edit and delete.
   const exercise = await Exercise.findOneAndUpdate(
-    { slug, isCustom: { $ne: true } },
+    adminWritableExerciseFilter(slug),
     Object.keys(unset).length ? { $set: update, $unset: unset } : { $set: update },
     { new: true, runValidators: true }
   );
 
   if (!exercise) {
-    return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    return await refuseAdminWrite(slug);
   }
 
   // Retire the linked ExerciseVideo row too. Without this the name-keyed
@@ -201,6 +239,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 }
 
 // DELETE /api/exercises/[slug] — remove exercise (admin only)
+//
+// For a catalog exercise this is a delete. For a member's approved submission
+// it is an UNPUBLISH: the row is theirs, it is still in their own library, and
+// an admin taking it out of the shared library must not destroy it (or the
+// workouts they built on it). Same decision as a review rejection, which is
+// what it is — so it is recorded the same way and they can edit and resubmit.
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const gate = await requireAdmin(request);
   if (!gate.ok) return gate.response;
@@ -209,11 +253,34 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { slug } = await params;
     await connectDB();
 
-    // Custom exercises are owner-managed via /api/exercises/custom.
-    const result = await Exercise.findOneAndDelete({ slug, isCustom: { $ne: true } });
-    if (!result) {
-      return NextResponse.json({ error: 'Exercise not found' }, { status: 404 });
+    // Private custom exercises are owner-managed via /api/exercises/custom.
+    const exercise = await Exercise.findOne(adminWritableExerciseFilter(slug));
+    if (!exercise) {
+      return await refuseAdminWrite(slug);
     }
+
+    if (isSharedSubmission(exercise)) {
+      exercise.isUniversal = false;
+      exercise.reviewStatus = 'rejected';
+      exercise.reviewedBy = gate.userId;
+      exercise.reviewedAt = new Date();
+      exercise.reviewNote = 'Removed from the shared library by an admin.';
+      await exercise.save();
+
+      invalidateExerciseCache();
+      return NextResponse.json({
+        message: 'Exercise removed from the shared library',
+        unpublished: true,
+        exercise: {
+          slug: exercise.slug,
+          isUniversal: exercise.isUniversal,
+          reviewStatus: exercise.reviewStatus,
+          createdBy: exercise.createdBy ?? null,
+        },
+      });
+    }
+
+    await Exercise.deleteOne({ _id: exercise._id });
 
     invalidateExerciseCache();
     return NextResponse.json({ message: 'Exercise deleted' });
