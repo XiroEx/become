@@ -32,6 +32,8 @@ import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloo
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
+import { getRestDuration, restGroupContext } from "@/lib/workout/restDuration";
+import { fireRestAlert } from "@/lib/workout/restAlert";
 
 // Match a direct video file URL by extension, with optional query string.
 // Covers local public/ paths AND remote URLs (e.g. the /api/blob proxy or a CDN).
@@ -332,6 +334,10 @@ export default function WorkoutFormPage() {
   const [staleIncomplete, setStaleIncomplete] = useState<StaleIncompleteData | null>(null);
   const [isCompleting, setIsCompleting] = useState(false);
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // NP-210: Track's own rest timer — started after a set is marked done,
+  // using the exact same rest-duration rule Live uses (@/lib/workout/
+  // restDuration), never a second rule.
+  const [restTimer, setRestTimer] = useState<{ exerciseIndex: number; remaining: number; total: number } | null>(null);
 
   // Summary state
   const [showSummary, setShowSummary] = useState(false);
@@ -1195,10 +1201,38 @@ export default function WorkoutFormPage() {
   const toggleSetComplete = (exerciseIndex: number, setIndex: number) => {
     const progress = exerciseProgress.find((ep) => ep.exerciseIndex === exerciseIndex);
     if (progress) {
-      updateSet(exerciseIndex, setIndex, "completed", !progress.sets[setIndex].completed);
+      const wasCompleted = progress.sets[setIndex].completed;
+      updateSet(exerciseIndex, setIndex, "completed", !wasCompleted);
+      // NP-210: a set going TO complete (not being un-checked) starts Track's
+      // own rest timer, using the exact same rest-duration rule Live uses —
+      // never a second rule. Mirrors Live, which only rests on advancing.
+      if (!wasCompleted && workout) {
+        const exercise = workout.exercises[exerciseIndex];
+        const duration = getRestDuration(exercise, restGroupContext(workout.exercises, exerciseIndex));
+        if (duration > 0) {
+          setRestTimer({ exerciseIndex, remaining: duration, total: duration });
+        }
+      }
     }
   };
 
+  // NP-210: counts the rest timer down and fires the shared sound-and-
+  // vibration alert at zero — the same alert Live fires, never a silent or
+  // sound-only version of it.
+  useEffect(() => {
+    if (!restTimer) return;
+    if (restTimer.remaining <= 0) {
+      fireRestAlert();
+      setRestTimer(null);
+      return;
+    }
+    const interval = setInterval(() => {
+      setRestTimer((prev) => (prev ? { ...prev, remaining: prev.remaining - 1 } : prev));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [restTimer]);
+
+  const skipRest = useCallback(() => setRestTimer(null), []);
 
   const skipSet = useCallback((exerciseIndex: number, setIndex: number) => {
     setExerciseProgress((prev) => {
@@ -1474,6 +1508,28 @@ export default function WorkoutFormPage() {
 
       {/* Exercise List */}
       <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6 sm:py-6">
+        {/* NP-210: Track's own rest timer, started after a set is marked
+            done. Same alert as Live (sound + vibration) at zero. */}
+        {restTimer && (
+          <div
+            data-testid="track-rest-timer"
+            className="mb-3 flex items-center justify-between rounded-xl border border-green-300 bg-green-50 px-4 py-3 dark:border-green-800 dark:bg-green-900/20"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-green-700 dark:text-green-300">Resting</span>
+              <span data-testid="track-rest-remaining" className="text-lg font-bold tabular-nums text-green-800 dark:text-green-200">
+                {Math.floor(restTimer.remaining / 60)}:{String(restTimer.remaining % 60).padStart(2, "0")}
+              </span>
+            </div>
+            <button
+              onClick={skipRest}
+              data-testid="track-rest-skip"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-100 dark:text-green-300 dark:hover:bg-green-900/40"
+            >
+              Skip
+            </button>
+          </div>
+        )}
         <div data-tour="track-exercises" className="space-y-3 sm:space-y-4">
           {groupExercises(workout.exercises).map((group, groupIndex) => {
             const isGrouped = group.groupId !== null && group.exercises.length > 1;
