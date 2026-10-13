@@ -180,16 +180,26 @@ export default function VideoFilmstripTrimmer({
         ref={stripRef}
         className="relative h-16 w-full touch-none overflow-hidden rounded-lg bg-zinc-800 select-none"
       >
+        {/* min-w-0 on every tile overrides the flex item's automatic
+            min-width — without it an <img>'s intrinsic pixel size stops it
+            shrinking to fit, so the later frames get clipped off the right
+            edge on a narrow viewport instead of evenly filling the strip. */}
         <div className="absolute inset-0 flex">
           {frames.length > 0
             ? frames.map((src, i) => (
                 // eslint-disable-next-line @next/next/no-img-element -- data URLs, not an optimizable remote asset
-                <img key={i} src={src} alt="" draggable={false} className="h-full flex-1 object-cover" />
+                <img
+                  key={i}
+                  src={src}
+                  alt=""
+                  draggable={false}
+                  className="h-full min-w-0 flex-1 object-cover"
+                />
               ))
             : Array.from({ length: FRAME_COUNT }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-full flex-1 animate-pulse border-r border-zinc-700/50 bg-zinc-700/60 last:border-r-0"
+                  className="h-full min-w-0 flex-1 animate-pulse border-r border-zinc-700/50 bg-zinc-700/60 last:border-r-0"
                 />
               ))}
         </div>

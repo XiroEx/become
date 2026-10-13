@@ -9,7 +9,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { MIN_TRIM_DURATION, formatTimecode, resolveTrim } from '../../lib/videoTrim'
+import {
+  MIN_TRIM_DURATION,
+  forcedPreviewSeekTarget,
+  formatTimecode,
+  resolveTrim,
+} from '../../lib/videoTrim'
 
 test('no trim stored → full length', () => {
   const r = resolveTrim({ videoTrim: null }, 30)
@@ -103,4 +108,41 @@ test('formatTimecode renders minutes and tenths', () => {
   assert.equal(formatTimecode(9.25), '0:09.3')
   assert.equal(formatTimecode(72.4), '1:12.4')
   assert.equal(formatTimecode(-1), '0:00.0')
+})
+
+test('forcedPreviewSeekTarget: first known window (no prior state) seeks to start', () => {
+  // Covers first metadata load, and the fresh mount of an admin's live
+  // preview once a saved trim is known.
+  assert.equal(forcedPreviewSeekTarget(null, { start: 5, end: 20 }), 5)
+})
+
+test('forcedPreviewSeekTarget: unchanged bounds defer to the caller\'s in-range check', () => {
+  assert.equal(forcedPreviewSeekTarget({ start: 5, end: 20 }, { start: 5, end: 20 }), null)
+})
+
+test('forcedPreviewSeekTarget: dragging only the start handle seeks to the new start', () => {
+  // This is the case that already worked before the fix (currentTime is
+  // usually below the new, later start) — must keep working after it.
+  assert.equal(forcedPreviewSeekTarget({ start: 0, end: 20 }, { start: 8, end: 20 }), 8)
+})
+
+test('forcedPreviewSeekTarget: dragging only the end handle previews near the new out-point', () => {
+  // The bug: playback is very often already inside the shrunk window, so the
+  // old "seek only if out of range" rule showed nothing. Landing just before
+  // the new end (not at the start) is what makes the tail trim visible.
+  assert.equal(forcedPreviewSeekTarget({ start: 0, end: 20 }, { start: 0, end: 9.58 }), 9.18)
+})
+
+test('forcedPreviewSeekTarget: the end-handle preview point never lands before start', () => {
+  // A very short clip near the front of the file must not seek negative or
+  // before the in-point.
+  assert.equal(forcedPreviewSeekTarget({ start: 3, end: 20 }, { start: 3, end: 3.2 }), 3)
+})
+
+test('forcedPreviewSeekTarget: both bounds changing at once (e.g. Reset) seeks to start', () => {
+  assert.equal(forcedPreviewSeekTarget({ start: 5, end: 9 }, { start: 0, end: 30 }), 0)
+})
+
+test('forcedPreviewSeekTarget: a null end after the change seeks to start, not the removed bound', () => {
+  assert.equal(forcedPreviewSeekTarget({ start: 2, end: 10 }, { start: 2, end: null }), 2)
 })
