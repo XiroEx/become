@@ -1293,178 +1293,195 @@ export function LiveWorkoutClient({
       testID={testID}
     >
       {view === "track" ? (
-        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-          {/* Top row: Back (left), small Track/Live pill (centered), Share (right) */}
+        <>
+          {/* Fixed sticky header (NP-364): Back, Track|Live toggle, Share,
+              title/day and the progress bar live OUTSIDE the ScrollView so
+              they stay on screen while scrolling through the workout — the
+              web's `sticky top-0 z-20 border-b` header, permanently
+              anchored at the top of the viewport. */}
           <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              position: "relative",
-              minHeight: 36,
-            }}
+            testID={`${testID}-header`}
+            className="border-b border-border bg-background"
+            style={{ paddingHorizontal: 16, paddingVertical: 12 }}
           >
-            {onExit ? (
-              <Pressable
-                testID={`${testID}-back`}
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                onPress={onExit}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 4,
-                  borderRadius: 999,
-                  backgroundColor: colors.muted,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                }}
-              >
-                <ChevronLeft size={16} color={colors.foreground} />
-                <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
-                  Back
-                </Text>
-              </Pressable>
-            ) : (
-              <View style={{ width: 60 }} />
-            )}
-
+            {/* Top row: Back (left), small Track/Live pill (centered), Share (right) */}
             <View
               style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
+                flexDirection: "row",
                 alignItems: "center",
-                pointerEvents: "box-none",
+                justifyContent: "space-between",
+                position: "relative",
+                minHeight: 36,
               }}
             >
-              <WorkoutViewToggle
-                testID={`${testID}-view`}
-                active={view}
-                onChange={handleViewChange}
-              />
-            </View>
+              {onExit ? (
+                <Pressable
+                  testID={`${testID}-back`}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  onPress={onExit}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    borderRadius: 999,
+                    backgroundColor: colors.muted,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                  }}
+                >
+                  <ChevronLeft size={16} color={colors.foreground} />
+                  <Text style={{ fontSize: 14, fontWeight: "500", color: colors.foreground }}>
+                    Back
+                  </Text>
+                </Pressable>
+              ) : (
+                <View style={{ width: 60 }} />
+              )}
 
-            <View testID={`${testID}-header-action`} style={{ minWidth: 60, alignItems: "flex-end" }}>
-              {headerAction ?? null}
-            </View>
-          </View>
-
-          {/* Centered Title and Day */}
-          <View style={{ alignItems: "center", marginTop: 4 }}>
-            <Text testID={`${testID}-title`} className="text-foreground text-xl font-bold text-center">
-              {workout.workoutTitle}
-            </Text>
-            {activeDay ? (
-              <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center mt-0.5">
-                {activeDay}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Workout Progress */}
-          <View style={{ marginTop: 8 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text className="text-muted-foreground text-xs font-medium">Workout Progress</Text>
-                {showResumed ? (
-                  <View className="rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5">
-                    <Text
-                      testID={`${testID}-resume-indicator`}
-                      className="text-yellow-700 dark:text-yellow-400 text-xs font-medium"
-                    >
-                      Resuming
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text className="text-muted-foreground text-xs font-medium tabular-nums">
-                {`${overallProgressPercent(grid)}%`}
-              </Text>
-            </View>
-            <View
-              testID={`${testID}-overall-progress`}
-              style={{
-                height: 8,
-                overflow: "hidden",
-                borderRadius: 999,
-                backgroundColor: colors.muted,
-              }}
-            >
               <View
                 style={{
-                  height: "100%",
-                  borderRadius: 999,
-                  width: `${overallProgressPercent(grid)}%`,
-                  // emerald-500 in both modes, the web bar's colour (NP-123: no hex).
-                  backgroundColor: colors["mind-emerald"],
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  alignItems: "center",
+                  pointerEvents: "box-none",
                 }}
-              />
+              >
+                <WorkoutViewToggle
+                  testID={`${testID}-view`}
+                  active={view}
+                  onChange={handleViewChange}
+                />
+              </View>
+
+              <View testID={`${testID}-header-action`} style={{ minWidth: 60, alignItems: "flex-end" }}>
+                {headerAction ?? null}
+              </View>
             </View>
-            <Text
-              testID={`${testID}-progress`}
-              style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
-            >
-              {`${completedSets} of ${totalSets} sets done`}
-            </Text>
-            {typeof activeSeconds === "number" ? (
+
+            {/* Centered Title and Day */}
+            <View style={{ alignItems: "center", marginTop: 4 }}>
+              <Text testID={`${testID}-title`} className="text-foreground text-xl font-bold text-center">
+                {workout.workoutTitle}
+              </Text>
+              {activeDay ? (
+                <Text testID={`${testID}-day`} className="text-muted-foreground text-xs text-center mt-0.5">
+                  {activeDay}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Workout Progress */}
+            <View style={{ marginTop: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text className="text-muted-foreground text-xs font-medium">Workout Progress</Text>
+                  {showResumed ? (
+                    <View className="rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2 py-0.5">
+                      <Text
+                        testID={`${testID}-resume-indicator`}
+                        className="text-yellow-700 dark:text-yellow-400 text-xs font-medium"
+                      >
+                        Resuming
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+                  {`${overallProgressPercent(grid)}%`}
+                </Text>
+              </View>
+              <View
+                testID={`${testID}-overall-progress`}
+                style={{
+                  height: 8,
+                  overflow: "hidden",
+                  borderRadius: 999,
+                  backgroundColor: colors.muted,
+                }}
+              >
+                <View
+                  style={{
+                    height: "100%",
+                    borderRadius: 999,
+                    width: `${overallProgressPercent(grid)}%`,
+                    // emerald-500 in both modes, the web bar's colour (NP-123: no hex).
+                    backgroundColor: colors["mind-emerald"],
+                  }}
+                />
+              </View>
               <Text
-                testID={`${testID}-elapsed`}
+                testID={`${testID}-progress`}
                 style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
               >
-                {formatElapsed(activeSeconds)}
+                {`${completedSets} of ${totalSets} sets done`}
               </Text>
-            ) : null}
-            {onViewPRs ? (
-              <View style={{ marginTop: 6, alignItems: "flex-end" }}>
-                <Pressable
-                  testID={`${testID}-view-prs`}
-                  onPress={onViewPRs}
-                  accessibilityRole="button"
-                  accessibilityLabel="View personal records"
+              {typeof activeSeconds === "number" ? (
+                <Text
+                  testID={`${testID}-elapsed`}
+                  style={{ position: "absolute", opacity: 0, height: 0, width: 0 }}
                 >
-                  <Text className="text-muted-foreground text-xs">View PRs →</Text>
-                </Pressable>
-              </View>
-            ) : null}
+                  {formatElapsed(activeSeconds)}
+                </Text>
+              ) : null}
+              {onViewPRs ? (
+                <View style={{ marginTop: 6, alignItems: "flex-end" }}>
+                  <Pressable
+                    testID={`${testID}-view-prs`}
+                    onPress={onViewPRs}
+                    accessibilityRole="button"
+                    accessibilityLabel="View personal records"
+                  >
+                    {/* The web's `View PRs →` is a blue-500 accent link, not a
+                        muted one (NP-364). */}
+                    <Text className="text-blue-500 dark:text-blue-400 text-xs font-semibold">
+                      View PRs →
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
           </View>
-          <TrackWorkoutView
-            testID={testID}
-            exercises={workout.exercises}
-            grid={grid}
-            workoutFlow={workoutFlow}
-            flowIndexByKey={flowIndexByKey}
-            groupType={workout.groupType}
-            round={round}
-            totalRounds={totalRounds}
-            onRoundChange={setRound}
-            onSetChange={handleSetChange}
-            onRequestSwap={onRequestSwap}
-            notes={notes}
-            onNotesChange={handleNotesChange}
-            showNotes={completedSets > 0}
-            exerciseHints={exerciseHints}
-            onDismissHint={onDismissHint}
-            onExerciseChange={onExerciseChange}
-          />
-          {/* Track keeps the compact rest bar: the web's Track page has no
-              rest UI at all, and a full-screen overlay there would cover the
-              grid the member is editing. Live gets the web's overlay. */}
-          {rest.active && rest.remainingSec > 0 ? (
-            <RestTimerBar
-              testID={`${testID}-rest`}
-              remainingSec={rest.remainingSec}
-              totalSec={rest.totalSec}
-              running={rest.running}
-              onPause={rest.pause}
-              onResume={rest.resume}
-              onSkip={rest.skip}
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+            <TrackWorkoutView
+              testID={testID}
+              exercises={workout.exercises}
+              grid={grid}
+              workoutFlow={workoutFlow}
+              flowIndexByKey={flowIndexByKey}
+              groupType={workout.groupType}
+              round={round}
+              totalRounds={totalRounds}
+              onRoundChange={setRound}
+              onSetChange={handleSetChange}
+              onRequestSwap={onRequestSwap}
+              notes={notes}
+              onNotesChange={handleNotesChange}
+              showNotes={completedSets > 0}
+              exerciseHints={exerciseHints}
+              onDismissHint={onDismissHint}
+              onExerciseChange={onExerciseChange}
             />
-          ) : null}
-          {banners}
-          <View style={{ height: 24 }} />
-          {finishButton}
-        </ScrollView>
+            {/* Track keeps the compact rest bar: the web's Track page has no
+                rest UI at all, and a full-screen overlay there would cover the
+                grid the member is editing. Live gets the web's overlay. */}
+            {rest.active && rest.remainingSec > 0 ? (
+              <RestTimerBar
+                testID={`${testID}-rest`}
+                remainingSec={rest.remainingSec}
+                totalSec={rest.totalSec}
+                running={rest.running}
+                onPause={rest.pause}
+                onResume={rest.resume}
+                onSkip={rest.skip}
+              />
+            ) : null}
+            {banners}
+            <View style={{ height: 24 }} />
+            {finishButton}
+          </ScrollView>
+        </>
       ) : (
         <View style={{ flex: 1 }}>
           <LiveStepView

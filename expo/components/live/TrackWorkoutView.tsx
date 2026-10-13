@@ -81,42 +81,57 @@ function completionPercent(completed: number, total: number): number {
   return Math.round((completed / total) * 100);
 }
 
-/** The web's `GROUP_STYLES` (purple superset, orange circuit, …), as NativeWind classes. */
-const GROUP_BLOCK_STYLES: Record<string, { container: string; label: string }> = {
+/**
+ * The web's `GROUP_STYLES` (purple superset, orange circuit, …), as
+ * NativeWind classes. `badge` is the web's pill badge fill
+ * (`rounded-full px-2.5 py-0.5 text-xs font-semibold text-white bg-*-500`,
+ * NP-364) — one solid colour per group type, matching `container`.
+ */
+const GROUP_BLOCK_STYLES: Record<
+  string,
+  { container: string; label: string; badge: string }
+> = {
   superset: {
     container:
       "border border-purple-200 dark:border-purple-900/40 bg-purple-50/60 dark:bg-purple-950/20",
     label: "text-purple-700 dark:text-purple-300",
+    badge: "bg-purple-500",
   },
   circuit: {
     container:
       "border border-orange-200 dark:border-orange-900/40 bg-orange-50/60 dark:bg-orange-950/20",
     label: "text-orange-700 dark:text-orange-300",
+    badge: "bg-orange-500",
   },
   triset: {
     container:
       "border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/60 dark:bg-indigo-950/20",
     label: "text-indigo-700 dark:text-indigo-300",
+    badge: "bg-indigo-500",
   },
   giant_set: {
     container:
       "border border-rose-200 dark:border-rose-900/40 bg-rose-50/60 dark:bg-rose-950/20",
     label: "text-rose-700 dark:text-rose-300",
+    badge: "bg-rose-500",
   },
   giantset: {
     container:
       "border border-rose-200 dark:border-rose-900/40 bg-rose-50/60 dark:bg-rose-950/20",
     label: "text-rose-700 dark:text-rose-300",
+    badge: "bg-rose-500",
   },
   emom: {
     container:
       "border border-teal-200 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20",
     label: "text-teal-700 dark:text-teal-300",
+    badge: "bg-teal-500",
   },
   amrap: {
     container:
       "border border-amber-200 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20",
     label: "text-amber-700 dark:text-amber-300",
+    badge: "bg-amber-500",
   },
 };
 
@@ -328,6 +343,14 @@ export function TrackWorkoutView({
               </Text>
             ) : null}
             {renderHint(ex.slug)}
+            {/* The web's table header row above the set grid — `SET · REPS ·
+                DONE`, 11px uppercase (NP-364). */}
+            <Text
+              testID={`${testID}-${ex.slug}-set-table-header`}
+              className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1"
+            >
+              SET · REPS · DONE
+            </Text>
             {sets.map((s, i) => (
               <LiveSetRow
                 key={i}
@@ -430,15 +453,24 @@ export function TrackWorkoutView({
       <View
         key={groupId}
         testID={`${testID}-group-${groupId}-block`}
-        className={`rounded-2xl p-3 ${style.container}`}
+        className={`rounded-2xl p-4 ${style.container}`}
       >
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <Text
-            testID={`${testID}-group-${groupId}`}
-            className={`text-sm font-bold ${style.label}`}
+          {/* The web's pill badge — solid colour fill, white text (NP-364),
+              not just a coloured label. Keeps the pre-existing testID (and
+              its plain-string children, asserted by NP-287/NP-172 coverage)
+              on the Text itself, now inside the pill. */}
+          <View
+            testID={`${testID}-group-${groupId}-badge`}
+            className={`rounded-full px-2.5 py-0.5 ${style.badge}`}
           >
-            {head.groupLabel ?? groupId}
-          </Text>
+            <Text
+              testID={`${testID}-group-${groupId}`}
+              className="text-xs font-semibold text-white"
+            >
+              {head.groupLabel ?? groupId}
+            </Text>
+          </View>
           <Text
             testID={`${testID}-group-${groupId}-subtitle`}
             className="text-muted-foreground text-xs"
