@@ -4,7 +4,7 @@
 // the client can store it in localStorage.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getRedAuth } from '@/lib/redauth'
+import { getRedAuth, passkeyOriginFromRequest } from '@/lib/redauth'
 import { bridgeToBecomeSession, authCookie } from '@/lib/authBridge'
 
 export async function POST(req: NextRequest) {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     if (!challengeId || !response) {
       return NextResponse.json({ error: 'challengeId and response are required' }, { status: 400 })
     }
-    const redauth = await getRedAuth()
+    const redauth = await getRedAuth(passkeyOriginFromRequest(req))
     const result = await redauth.verifyPasskeyAuthentication(challengeId, response)
     const email = result.user?.email
     if (!email) {

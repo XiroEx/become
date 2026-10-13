@@ -12,7 +12,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "io.redbtn.become",
       "buildNumber": "1",
-      "associatedDomains": ["applinks:become.redbtn.io"],
+      "associatedDomains": ["applinks:become.redbtn.io", "webcredentials:become.redbtn.io"],
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

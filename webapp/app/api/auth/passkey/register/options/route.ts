@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
-import { getRedAuth } from '@/lib/redauth'
+import { getRedAuth, passkeyOriginFromRequest } from '@/lib/redauth'
 
 export async function POST(req: NextRequest) {
   const auth = await verifyAuth(req)
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   try {
-    const redauth = await getRedAuth()
+    const redauth = await getRedAuth(passkeyOriginFromRequest(req))
     const { user } = await redauth.findOrCreateUser(auth.email)
     const { options, challengeId } = await redauth.createPasskeyRegistrationOptions(
       String(user._id),

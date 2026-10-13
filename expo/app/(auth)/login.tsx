@@ -44,6 +44,11 @@ import {
   signInWithGoogle,
   type GoogleSignInResult,
 } from "@/lib/auth/googleSignIn";
+import {
+  signInWithPasskeyNative,
+  passkeySupported,
+  type SignInWithPasskeyResult,
+} from "@/lib/auth/passkey";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import {
   useAndroidBackHandler,
@@ -137,6 +142,10 @@ export interface LoginScreenProps {
   appleSignInFn?: () => Promise<AppleSignInResult>;
   /** DI hook for tests — runs the system auth session and POSTs /api/auth/exchange. */
   googleSignInFn?: () => Promise<GoogleSignInResult>;
+  /** DI hook for tests — runs the on-device WebAuthn ceremony (NP-161). */
+  passkeySignInFn?: () => Promise<SignInWithPasskeyResult>;
+  /** DI hook for tests — overrides the device-support probe (NP-161). */
+  passkeySupportedFn?: () => boolean;
   /** DI hook for tests — POSTs /api/auth/apple/link with the Apple session. */
   appleLinkFn?: (token: string, email: string) => Promise<AppleLinkEmailResponse>;
   /** DI hook for tests — the Apple button's availability probe (iOS 13+ only). */
@@ -164,6 +173,8 @@ export default function LoginScreen({
   reviewSignInFn,
   appleSignInFn,
   googleSignInFn,
+  passkeySignInFn,
+  passkeySupportedFn,
   appleLinkFn,
   appleAvailableAsync,
   onAuthed,
@@ -205,6 +216,7 @@ export default function LoginScreen({
   const [reviewBusy, setReviewBusy] = useState(false);
   const [appleBusy, setAppleBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   /**
    * A finished Apple sign-in whose session is NOT stored yet, because the
    * account it opened is reachable only at a Hide My Email relay alias and may
@@ -265,6 +277,8 @@ export default function LoginScreen({
 
   const appleSignIn = appleSignInFn ?? (() => signInWithApple());
   const googleSignIn = googleSignInFn ?? (() => signInWithGoogle());
+  const passkeySignIn = passkeySignInFn ?? (() => signInWithPasskeyNative());
+  const passkeyDeviceSupported = (passkeySupportedFn ?? passkeySupported)();
   const appleLink =
     appleLinkFn ?? ((token: string, value: string) => sendAppleEmailLink(token, value));
 
@@ -585,6 +599,39 @@ export default function LoginScreen({
     }
   };
 
+  /**
+   * SIGN IN WITH A PASSKEY (NP-161). The whole ceremony lives in
+   * lib/auth/passkey.ts — the SAME options/verify round trip
+   * webapp/lib/passkeyClient.ts runs in a browser, run here through
+   * `react-native-passkey`, against the SAME `@redbtn/redauth` rpID. A
+   * passkey added on the web signs this app in with no extra setup; a
+   * passkey added here signs the web in.
+   */
+  const handlePasskeySignIn = async (): Promise<void> => {
+    if (passkeyBusy) return;
+    setError(null);
+    setPasskeyBusy(true);
+    try {
+      const result = await passkeySignIn();
+      if (result.status === "cancelled") return; // a dismissal is not an error
+      if (result.status === "unsupported") {
+        setError("Passkeys aren't available on this device.");
+        return;
+      }
+      if (result.status !== "signed-in") {
+        setError(result.message ?? "Passkey sign-in failed. Please try again.");
+        return;
+      }
+      await pendingStore.clear();
+      await Promise.resolve(handleAuthed(result.token));
+      router.replace("/");
+    } catch (err) {
+      setError(extractErrorMessage(err));
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
   /** Continue into the account Apple just created, relay address and all. */
   const handleAppleContinue = async (): Promise<void> => {
     const offer = appleOffer;
@@ -652,6 +699,15 @@ export default function LoginScreen({
   });
   const onGooglePress = useCallback(() => {
     void googleSignInRef.current();
+  }, []);
+
+  // The passkey button is memoised and latched the same way (NP-161).
+  const passkeySignInRef = useRef(handlePasskeySignIn);
+  useEffect(() => {
+    passkeySignInRef.current = handlePasskeySignIn;
+  });
+  const onPasskeyPress = useCallback(() => {
+    void passkeySignInRef.current();
   }, []);
 
   const handleChangeEmail = async (): Promise<void> => {
@@ -1150,6 +1206,36 @@ export default function LoginScreen({
                       className="text-muted-foreground text-xs text-center mt-2"
                     >
                       Signing in with Apple…
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
+
+              {/* SIGN IN WITH A PASSKEY (NP-161). Login mode only — a
+                  passkey authenticates an existing credential, so there is
+                  no equivalent "sign up with a passkey" action here (adding
+                  one happens from Settings, once already signed in). Hidden
+                  on a device too old to run the ceremony at all, same as
+                  Apple's button above it. */}
+              {mode === "login" && passkeyDeviceSupported ? (
+                <>
+                  <View style={{ height: 12 }} />
+                  <Button
+                    testID="passkey-sign-in-button"
+                    variant="secondary"
+                    onPress={onPasskeyPress}
+                    disabled={passkeyBusy}
+                    accessibilityLabel="Sign in with a passkey"
+                  >
+                    {passkeyBusy ? "Follow your device prompt…" : "Sign in with a passkey"}
+                  </Button>
+                  {passkeyBusy ? (
+                    <Text
+                      testID="passkey-sign-in-busy"
+                      accessibilityLiveRegion="polite"
+                      className="text-muted-foreground text-xs text-center mt-2"
+                    >
+                      Signing in with a passkey…
                     </Text>
                   ) : null}
                 </>

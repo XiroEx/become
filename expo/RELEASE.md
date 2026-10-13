@@ -106,6 +106,15 @@ cd android && ./gradlew bundleRelease
 #     Output: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
+**Chat, community, groups and events are out of this build on purpose (NP-032).**
+`EXPO_PUBLIC_COMMUNITY_ENABLED` is the one flag that controls all four — no
+Chat tab, no chat deep link or push lands anywhere but Home, no
+`/api/chat/*` request. It is OFF unless that exact string is set to `"true"`
+in the shell a build runs in, so an ordinary `npx expo prebuild` / archive /
+`gradlew bundleRelease` ships it off without anyone having to remember to
+unset anything. Never export it `true` for a store build — see
+`app/(app)/(tabs)/_layout.tsx` and `lib/flags/communityEnabled.ts`.
+
 **The build needs `../shared`, and a local build has it.**
 `@become/api-client` and `@become/core` are linked into `node_modules` from
 outside this directory (`"file:../shared/api-client"`), so the build has to run

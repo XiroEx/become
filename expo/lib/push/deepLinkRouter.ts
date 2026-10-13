@@ -24,6 +24,7 @@ import {
   NATIVE_ROUTES,
   resolveWebPath,
 } from "@/lib/navigation/webPathToRoute";
+import { isCommunityEnabled } from "@/lib/flags/communityEnabled";
 
 export type NotificationCategory =
   | "workout-reminder"
@@ -57,7 +58,11 @@ export interface NotificationPayload {
 
 export function routeForNotification(payload: NotificationPayload): string {
   if (typeof payload.url === "string" && payload.url.trim() !== "") {
-    const target = resolveWebPath(payload.url);
+    // NP-032: a chat push's url (`/dashboard/chat`) resolves Home while the
+    // flag is off, through the resolver's own "hidden" fallback.
+    const target = resolveWebPath(payload.url, {
+      communityEnabled: isCommunityEnabled(),
+    });
     // A push can name a web-only surface (an admin link, say). Opening a
     // browser is not a tap router's job, so it lands Home rather than nowhere.
     return target.kind === "native" ? target.href : NATIVE_ROUTES.home;

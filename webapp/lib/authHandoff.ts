@@ -68,9 +68,10 @@ export const HANDOFF_ALLOWED_PATHS = [
   '/dashboard/admin/exercises/:slug/edit',
   '/dashboard/admin/users',
   '/dashboard/admin/users/:userId',
-  // Passkey (card 6acdcae0433f8772a69adf8c). Native cannot run a WebAuthn
-  // registration ceremony on-device yet (NP-161), so its "Add a passkey"
-  // row hands the member to the real web Settings page instead.
+  // Passkey (card 6acdcae0433f8772a69adf8c, NP-161). "Add a passkey" in
+  // native Settings runs the WebAuthn ceremony on-device now
+  // (expo/lib/auth/passkey.ts) and only falls back to this hand-off on a
+  // device too old to run it (pre-iOS 15 / pre-Android API 28).
   '/dashboard/settings',
 ] as const
 

@@ -34,7 +34,14 @@ jest.mock("expo-router", () => {
     return null;
   }
   FakeTabsScreen.displayName = "FakeTabsScreen";
+  // NP-032's `Tabs.Protected` — this suite is about back-history, not the
+  // flag, so the fake renders its children unconditionally.
+  function FakeTabsProtected(props: { children?: unknown }) {
+    return (props.children ?? null) as never;
+  }
+  FakeTabsProtected.displayName = "FakeTabsProtected";
   FakeTabs.Screen = FakeTabsScreen;
+  FakeTabs.Protected = FakeTabsProtected;
   return {
     __esModule: true,
     Tabs: FakeTabs,
