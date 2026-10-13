@@ -16,6 +16,9 @@ import { fireEvent, render, waitFor, renderHook } from "@testing-library/react-n
 import type { AppStateStatus } from "react-native";
 import {
   createRealBiometricsCapability,
+  describeBiometricWording,
+  getSupportedAuthenticationTypes,
+  AUTHENTICATION_TYPE,
   BIOMETRIC_UNLOCK_REASON,
   type LocalAuthenticationModule,
 } from "@/lib/auth/localAuthentication";
@@ -23,10 +26,14 @@ import {
   APP_LOCK_GRACE_PERIOD_MS,
   useAppLock,
 } from "@/lib/auth/useAppLock";
-import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
+import {
+  BiometricUnlockSection,
+  BIOMETRIC_CONFIRM_REASON,
+} from "@/components/settings/BiometricUnlockSection";
 import {
   createBiometricsOptInStore,
   createMemoryBiometricsOptInStore,
+  type BiometricsCapability,
 } from "@/lib/auth/biometrics";
 import { createMemoryTokenStore } from "@/lib/auth/secureStoreToken";
 
@@ -126,6 +133,74 @@ describe("createRealBiometricsCapability", () => {
     expect(await capability.authenticate()).toEqual(
       expect.objectContaining({ success: false }),
     );
+  });
+});
+
+describe("getSupportedAuthenticationTypes", () => {
+  it("returns the module's supported types", async () => {
+    const mod = fakeModule({
+      supportedAuthenticationTypesAsync: jest.fn(async () => [
+        AUTHENTICATION_TYPE.FACIAL_RECOGNITION,
+      ]),
+    });
+    expect(await getSupportedAuthenticationTypes(() => mod)).toEqual([
+      AUTHENTICATION_TYPE.FACIAL_RECOGNITION,
+    ]);
+  });
+
+  it("a missing module, a missing method, or a throw all degrade to []", async () => {
+    expect(await getSupportedAuthenticationTypes(() => null)).toEqual([]);
+    expect(
+      await getSupportedAuthenticationTypes(() => fakeModule()),
+    ).toEqual([]);
+    expect(
+      await getSupportedAuthenticationTypes(() => {
+        throw new Error("UnavailabilityError");
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("describeBiometricWording — platform-appropriate copy (George, 2026-10-06 QA)", () => {
+  it("iOS reads Face ID when the hardware reports facial recognition", () => {
+    expect(
+      describeBiometricWording([AUTHENTICATION_TYPE.FACIAL_RECOGNITION], "ios"),
+    ).toEqual({ label: "Face ID", noun: "Face ID" });
+  });
+
+  it("iOS reads Touch ID for a fingerprint-only iPhone", () => {
+    expect(
+      describeBiometricWording([AUTHENTICATION_TYPE.FINGERPRINT], "ios"),
+    ).toEqual({ label: "Touch ID", noun: "Touch ID" });
+  });
+
+  it("iOS with nothing reported yet defaults to Face ID (prior behaviour)", () => {
+    expect(describeBiometricWording([], "ios")).toEqual({
+      label: "Face ID",
+      noun: "Face ID",
+    });
+  });
+
+  it("(QA) Android reads fingerprint instead of Face ID", () => {
+    expect(
+      describeBiometricWording([AUTHENTICATION_TYPE.FINGERPRINT], "android"),
+    ).toEqual({ label: "fingerprint", noun: "fingerprint" });
+  });
+
+  it("Android with only facial recognition reads face unlock", () => {
+    expect(
+      describeBiometricWording(
+        [AUTHENTICATION_TYPE.FACIAL_RECOGNITION],
+        "android",
+      ),
+    ).toEqual({ label: "face unlock", noun: "face unlock" });
+  });
+
+  it("Android with nothing reported yet falls back to generic biometrics", () => {
+    expect(describeBiometricWording([], "android")).toEqual({
+      label: "biometrics",
+      noun: "biometrics",
+    });
   });
 });
 
@@ -325,5 +400,163 @@ describe("BiometricUnlockSection — the Settings switch", () => {
     const toggle = getByTestId("biometric-unlock-toggle");
     expect(toggle.props.accessibilityRole).toBe("switch");
     expect(toggle.props.accessibilityLabel).toBe("Unlock with Face ID");
+  });
+});
+
+describe("BiometricUnlockSection — platform wording (George, 2026-10-06 QA)", () => {
+  function fakeCapability(
+    overrides: Partial<BiometricsCapability> = {},
+  ): BiometricsCapability {
+    return {
+      hasHardware: async () => true,
+      isEnrolled: async () => true,
+      authenticate: async () => ({ success: true }),
+      ...overrides,
+    };
+  }
+
+  it("Android with a fingerprint sensor reads 'Unlock with fingerprint', not Face ID", async () => {
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={createMemoryBiometricsOptInStore(false)}
+        biometrics={fakeCapability()}
+        platformOS="android"
+        getSupportedTypes={async () => [AUTHENTICATION_TYPE.FINGERPRINT]}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+    expect(toggle.props.accessibilityLabel).toBe("Unlock with fingerprint");
+    expect(toggle.props.accessibilityHint).toBe(
+      "Asks for fingerprint or the device passcode when reopening Become",
+    );
+  });
+
+  it("Android with nothing reported falls back to generic 'biometrics' wording", async () => {
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={createMemoryBiometricsOptInStore(false)}
+        biometrics={fakeCapability()}
+        platformOS="android"
+        getSupportedTypes={async () => []}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+    expect(toggle.props.accessibilityLabel).toBe("Unlock with biometrics");
+  });
+
+  it("iOS with a facial-recognition sensor keeps 'Unlock with Face ID'", async () => {
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={createMemoryBiometricsOptInStore(false)}
+        biometrics={fakeCapability()}
+        platformOS="ios"
+        getSupportedTypes={async () => [
+          AUTHENTICATION_TYPE.FACIAL_RECOGNITION,
+        ]}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+    expect(toggle.props.accessibilityLabel).toBe("Unlock with Face ID");
+  });
+});
+
+describe("BiometricUnlockSection — confirm immediately on turn-on (George, 2026-10-06 QA)", () => {
+  function fakeCapability(
+    overrides: Partial<BiometricsCapability> = {},
+  ): BiometricsCapability {
+    return {
+      hasHardware: async () => true,
+      isEnrolled: async () => true,
+      authenticate: async () => ({ success: true }),
+      ...overrides,
+    };
+  }
+
+  it("turning the switch ON asks for a confirming biometric prompt before opting in", async () => {
+    const store = createMemoryBiometricsOptInStore(false);
+    const authenticate = jest.fn(async () => ({ success: true }));
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={store}
+        biometrics={fakeCapability({ authenticate })}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+
+    fireEvent.press(toggle);
+    await waitFor(() => {
+      expect(authenticate).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: BIOMETRIC_CONFIRM_REASON }),
+      );
+    });
+    await waitFor(async () => {
+      expect(await store.isOptedIn()).toBe(true);
+    });
+  });
+
+  it("a failed confirm (biometric AND passcode) reverts the switch and never opts in", async () => {
+    const store = createMemoryBiometricsOptInStore(false);
+    const authenticate = jest.fn(async () => ({
+      success: false,
+      reason: "authentication_failed",
+    }));
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={store}
+        biometrics={fakeCapability({ authenticate })}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+
+    fireEvent.press(toggle);
+    await waitFor(() => {
+      expect(authenticate).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(
+        getByTestId("biometric-unlock-toggle").props.accessibilityState
+          ?.checked,
+      ).toBe(false);
+    });
+    expect(await store.isOptedIn()).toBe(false);
+  });
+
+  it("a device the probe found unavailable opts in without a confirm prompt", async () => {
+    const store = createMemoryBiometricsOptInStore(false);
+    const authenticate = jest.fn(async () => ({ success: true }));
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={store}
+        biometrics={fakeCapability({
+          hasHardware: async () => false,
+          authenticate,
+        })}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+
+    fireEvent.press(toggle);
+    await waitFor(async () => {
+      expect(await store.isOptedIn()).toBe(true);
+    });
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
+  it("turning the switch OFF never prompts", async () => {
+    const store = createMemoryBiometricsOptInStore(true);
+    const authenticate = jest.fn(async () => ({ success: true }));
+    const { getByTestId } = render(
+      <BiometricUnlockSection
+        store={store}
+        biometrics={fakeCapability({ authenticate })}
+      />,
+    );
+    const toggle = await waitFor(() => getByTestId("biometric-unlock-toggle"));
+
+    fireEvent.press(toggle);
+    await waitFor(async () => {
+      expect(await store.isOptedIn()).toBe(false);
+    });
+    expect(authenticate).not.toHaveBeenCalled();
   });
 });
