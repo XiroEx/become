@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { resolveFraming, type VideoFramingInput, type VideoSurface } from '@/lib/videoFraming';
-import { resolveTrim, type VideoTrimOverride } from '@/lib/videoTrim';
+import { forcedPreviewSeekTarget, resolveTrim, type VideoTrimOverride } from '@/lib/videoTrim';
 
 // Same detection regex used elsewhere — kept local so this component is
 // self-contained when imported by anything that already imports the regex.
@@ -196,14 +196,25 @@ export default function FramedVideo({
     [trim]
   );
 
-  // Seek to the in-point whenever the window changes — covers both the first
-  // metadata load and an admin dragging the slider in the trim editor.
+  // Seek to reflect the trim window whenever it changes — covers both the
+  // first metadata load and an admin dragging a handle in the trim editor.
+  // `forcedPreviewSeekTarget` (compared by value, not the `trim` object
+  // identity, which is new every render) is what makes a drag landing inside
+  // the *previous* window still produce a visible seek — see its docstring.
+  const prevTrimRef = useRef<{ start: number; end: number | null } | null>(null);
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (trim.isFullLength) return;
-    if (Math.abs(v.currentTime - trim.start) < 0.05) return;
-    if (v.currentTime < trim.start || (trim.end !== null && v.currentTime > trim.end)) {
+    if (trim.isFullLength) {
+      prevTrimRef.current = null;
+      return;
+    }
+    const target = forcedPreviewSeekTarget(prevTrimRef.current, trim);
+    prevTrimRef.current = { start: trim.start, end: trim.end };
+
+    if (target !== null) {
+      v.currentTime = target;
+    } else if (v.currentTime < trim.start || (trim.end !== null && v.currentTime > trim.end)) {
       v.currentTime = trim.start;
     }
   }, [trim, duration]);

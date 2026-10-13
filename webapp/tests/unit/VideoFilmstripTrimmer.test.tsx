@@ -76,6 +76,24 @@ test('before frame extraction lands, the strip renders placeholder tiles rather 
   assert.doesNotMatch(html, /<img/)
 })
 
+test('placeholder tiles shrink to fit the strip instead of overflowing it', () => {
+  // Regression: an <img> flex child defaults to min-width:auto, so without an
+  // explicit override the tiles refuse to shrink below their natural pixel
+  // width and the strip's later frames get clipped off the right edge on a
+  // narrow (mobile) viewport instead of evenly filling it.
+  const html = renderToStaticMarkup(
+    <VideoFilmstripTrimmer
+      videoUrl="/videos/a.mp4"
+      duration={20}
+      start={0}
+      end={null}
+      minDuration={0.5}
+      onChange={() => {}}
+    />,
+  )
+  assert.match(html, /class="[^"]*min-w-0[^"]*flex-1[^"]*"/)
+})
+
 test('no frame-unavailable note when nothing has failed yet', () => {
   const html = renderToStaticMarkup(
     <VideoFilmstripTrimmer
