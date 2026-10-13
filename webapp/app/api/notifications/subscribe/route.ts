@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import PushSubscription from '@/models/PushSubscription'
 import UserProgress from '@/models/UserProgress'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
+import { parseSubscribeBody } from '@/lib/push/subscribeBody'
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,15 +13,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: authResult.error ?? 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { endpoint, keys, platform = 'web', reenable } = body
-
-    if (!endpoint) {
-      return NextResponse.json({ error: 'endpoint is required' }, { status: 400 })
+    // web: endpoint URL + keys. ios/android: the RAW device token (APNs hex /
+    // FCM registration token), never an Expo push token (NP-063).
+    const parsed = parseSubscribeBody(await request.json().catch(() => null))
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
     }
-    if (platform === 'web' && (!keys?.p256dh || !keys?.auth)) {
-      return NextResponse.json({ error: 'keys.p256dh and keys.auth required for web subscriptions' }, { status: 400 })
-    }
+    const { endpoint, keys, platform, reenable, apnsEnvironment } = parsed
 
     await dbConnect()
 
@@ -38,10 +37,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Upsert — replace any existing subscription at this endpoint (handles re-subscribes)
+    // Upsert — replace any existing subscription at this endpoint (handles
+    // re-subscribes, and a phone that changes hands moves to the new member).
+    const update: Record<string, unknown> = { userId: authResult.userId, platform, endpoint }
+    const unset: Record<string, ''> = {}
+    if (keys) update.keys = keys
+    else unset.keys = ''
+    if (apnsEnvironment) update.apnsEnvironment = apnsEnvironment
     await PushSubscription.findOneAndUpdate(
       { endpoint },
-      { userId: authResult.userId, platform, endpoint, keys },
+      Object.keys(unset).length > 0 ? { $set: update, $unset: unset } : { $set: update },
       { upsert: true, new: true },
     )
 

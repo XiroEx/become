@@ -186,7 +186,8 @@ const FEATURE_KEYS = [
   'window',
 ]
 
-const PUSH_ENDPOINT = 'ExponentPushToken[np015-contract-test]'
+// A raw APNs device token (64 hex chars). The route refuses Expo push tokens (NP-063).
+const PUSH_ENDPOINT = 'a0'.repeat(32)
 
 before(async () => {
   await seedMembers()
@@ -565,8 +566,8 @@ test('PATCH /api/notifications/preferences, POST subscribe and POST unsubscribe 
     expectKeys: ['success'],
   })
 
-  // A NATIVE registration: `endpoint` carries an Expo push token and there are
-  // no web-push keys. `reenable` is the only thing allowed to flip the master
+  // A NATIVE registration: `endpoint` carries the raw APNs device token and
+  // there are no web-push keys. `reenable` is the only thing allowed to flip the master
   // switch back on.
   const subscribed = await sendJson(subscribePOST, 'POST', '/api/notifications/subscribe', FREE_MEMBER, {
     endpoint: PUSH_ENDPOINT,
