@@ -25,6 +25,15 @@ interface ExerciseListItem {
   isActive?: boolean
   videoUrl?: string | null
   instructions?: string[]
+  /** A member made this one and an admin approved it into the shared library.
+   *  It is still theirs — removing it here unpublishes it, it is not a delete. */
+  isCustom?: boolean
+  isUniversal?: boolean
+}
+
+/** A member's exercise that lives in the shared library because it was approved. */
+function isMemberSubmission(ex: ExerciseListItem): boolean {
+  return ex.isCustom === true
 }
 
 type IssueFilter = '' | 'duplicate' | 'noVideo' | 'broken'
@@ -197,7 +206,12 @@ export default function AdminExercisesPage() {
       })
       if (res.ok) {
         setExercises((prev) => prev.filter((x) => x.slug !== ex.slug))
-        setToast({ msg: `Deleted "${ex.name}"`, type: 'success' })
+        setToast({
+          msg: isMemberSubmission(ex)
+            ? `Removed "${ex.name}" from the shared library`
+            : `Deleted "${ex.name}"`,
+          type: 'success',
+        })
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         setToast({ msg: data.error ?? 'Delete failed', type: 'error' })
@@ -226,10 +240,14 @@ export default function AdminExercisesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 dark:bg-zinc-900">
             <h3 className="mb-2 text-lg font-bold text-zinc-900 dark:text-zinc-100">
-              Delete &quot;{confirmDelete.name}&quot;?
+              {isMemberSubmission(confirmDelete)
+                ? `Remove "${confirmDelete.name}" from the shared library?`
+                : `Delete "${confirmDelete.name}"?`}
             </h3>
             <p className="mb-6 text-sm text-zinc-500 dark:text-zinc-400">
-              Programs that reference this exercise by slug will show it as missing.
+              {isMemberSubmission(confirmDelete)
+                ? 'A member created this one. It stays in their own library — it just stops being shared with everyone else, and they can edit it and submit it again.'
+                : 'Programs that reference this exercise by slug will show it as missing.'}
             </p>
             <div className="flex gap-3">
               <button
@@ -244,7 +262,13 @@ export default function AdminExercisesPage() {
                 disabled={deleting}
                 className="flex-1 rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
               >
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting
+                  ? isMemberSubmission(confirmDelete)
+                    ? 'Removing…'
+                    : 'Deleting…'
+                  : isMemberSubmission(confirmDelete)
+                    ? 'Remove'
+                    : 'Delete'}
               </button>
             </div>
           </div>
@@ -409,6 +433,14 @@ export default function AdminExercisesPage() {
                       inactive
                     </span>
                   )}
+                  {isMemberSubmission(ex) && (
+                    <span
+                      className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-violet-700 dark:bg-violet-900 dark:text-violet-300"
+                      title="Submitted by a member and approved into the shared library — it still belongs to them"
+                    >
+                      member
+                    </span>
+                  )}
                 </div>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {ex.slug}
@@ -453,7 +485,7 @@ export default function AdminExercisesPage() {
                 <button
                   onClick={() => setConfirmDelete(ex)}
                   className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
-                  title="Delete"
+                  title={isMemberSubmission(ex) ? 'Remove from the shared library' : 'Delete'}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
