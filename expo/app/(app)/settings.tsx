@@ -22,7 +22,6 @@ import { Button } from "@/components/Button";
 import { Toggle } from "@/components/Toggle";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { BiometricUnlockSection } from "@/components/settings/BiometricUnlockSection";
-import { PasskeySection } from "@/components/settings/PasskeySection";
 import { FeedbackSheet } from "@/components/settings/FeedbackSheet";
 import { ProfileSettingsScreen } from "@/components/profile/ProfileSettingsScreen";
 import { TrainingPreferencesScreen } from "@/components/settings/TrainingPreferences";
@@ -65,13 +64,13 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  * Native Settings screen. NP-302 added the web's Profile / Training /
  * Settings segmented tabs (`webapp/app/dashboard/settings/page.tsx`):
  *
- *   - Profile: `ProfileSettingsScreen` embedded — Account (name/email), Body
- *     Stats, pace and Save Changes, then Health sync as the native extra.
+ *   - Profile: `ProfileSettingsScreen` embedded — Account (name, email and
+ *     Passkey, where the web has it), Body Stats, pace and Save Changes,
+ *     then Health sync as the native extra.
  *   - Training: `TrainingPreferencesScreen` embedded — Fitness Goals,
  *     Experience & Schedule, Equipment & Injuries.
  *   - Settings: Account (sign out, admin tools, Plan), Security (NP-187),
- *     Passkey (card 6acdcae0433f8772a69adf8c, native ceremony via NP-161;
- *     see PasskeySection for why), Notifications (NP-068), AI features
+ *     Notifications (NP-068), AI features
  *     (NP-046), Nutrition Planning (moved here from the Training tab to
  *     match the web), Legal & support, and Delete account at the bottom
  *     (two taps away).
@@ -747,9 +746,6 @@ export default function SettingsScreen({
 
         {/* 2. Security Section (NP-187) */}
         <BiometricUnlockSection />
-
-        {/* 2b. Passkey Section (card 6acdcae0433f8772a69adf8c) */}
-        <PasskeySection />
 
         {/* 3. Notifications Section (NP-068) */}
         <View
