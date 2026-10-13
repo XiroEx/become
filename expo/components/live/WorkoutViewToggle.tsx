@@ -6,10 +6,22 @@ import { minTouchTarget } from "@/lib/a11y/touchTarget";
 /** The two ways to see one workout. */
 export type WorkoutView = "track" | "live";
 
+/**
+ * `solid` (default) is the Track header's pill: `colors.muted` behind,
+ * `colors.primary` behind the active segment — unchanged from before NP-365.
+ * `translucent` is the Live top bar's floating pill — the web's
+ * `bg-white/10 rounded-full p-0.5` with an active `bg-white text-black`
+ * segment — drawn with a theme tint and the foreground/background pair
+ * rather than the web's literal white/black, so a light phone still reads
+ * the Live top bar in light mode (NP-288's rule).
+ */
+export type WorkoutViewToggleVariant = "solid" | "translucent";
+
 export interface WorkoutViewToggleProps {
   active: WorkoutView;
   onChange: (view: WorkoutView) => void;
   testID?: string;
+  variant?: WorkoutViewToggleVariant;
 }
 
 /**
@@ -26,8 +38,10 @@ export function WorkoutViewToggle({
   active,
   onChange,
   testID = "workout-view-toggle",
+  variant = "solid",
 }: WorkoutViewToggleProps) {
-  const { colors } = useThemeTokens();
+  const { colors, tint } = useThemeTokens();
+  const translucent = variant === "translucent";
 
   const segment = (view: WorkoutView, label: string) => {
     const selected = active === view;
@@ -46,15 +60,23 @@ export function WorkoutViewToggle({
             alignItems: "center",
             justifyContent: "center",
             borderRadius: 999,
-            paddingHorizontal: 14,
-            paddingVertical: 5,
-            backgroundColor: selected ? colors.primary : "transparent",
+            paddingHorizontal: 12,
+            paddingVertical: 4,
+            backgroundColor: selected
+              ? translucent
+                ? colors.foreground
+                : colors.primary
+              : "transparent",
           },
         ]}
       >
         <Text
           className={`text-xs font-semibold ${
-            selected ? "text-primary-foreground" : "text-muted-foreground"
+            selected
+              ? translucent
+                ? "text-background"
+                : "text-primary-foreground"
+              : "text-muted-foreground"
           }`}
         >
           {label}
@@ -75,7 +97,7 @@ export function WorkoutViewToggle({
         gap: 2,
         padding: 2,
         borderRadius: 999,
-        backgroundColor: colors.muted,
+        backgroundColor: translucent ? tint("foreground", 0.1) : colors.muted,
       }}
     >
       {segment("track", "Track")}
