@@ -53,6 +53,8 @@ import {
   type NativeNotifPermission,
 } from "@/lib/settings/notificationPreferences";
 import { shouldShowDeniedRepromptAt } from "@/lib/push/reprompt";
+import { resetNativeTourProgress } from "@/lib/tour/nativeTourProgress";
+import { requestNativeTourReplay } from "@/lib/tour/nativeTourRequest";
 import { isCommunityEnabled } from "@/lib/flags/communityEnabled";
 import { defaultBrowserLauncher } from "@/lib/programs/browserLauncher";
 import { openWebSignedIn } from "@/lib/web/openWebSignedIn";
@@ -1053,6 +1055,40 @@ export default function SettingsScreen({
             Self-contained — renders nothing for a member with no
             manageable subscription. */}
         <BillingSection />
+
+        {/* 4d. Help (NP-207) — the native coach-mark tour's one re-prompt
+            path. The card's own words: "never re-prompting once settled
+            unless the member asks for it (e.g. Settings/Help)". Resets the
+            tour's own progress key and asks the tabs-mounted overlay
+            (components/tour/NativeTourOverlay.tsx) to show the upfront
+            prompt again; never touches the web's "become-onboarding" key. */}
+        <View
+          testID="settings-help-section"
+          className="rounded-xl border border-border bg-card p-4"
+          style={{ gap: 12 }}
+        >
+          <Text
+            accessibilityRole="header"
+            className="text-foreground text-base font-semibold"
+          >
+            Help
+          </Text>
+          <Text className="text-muted-foreground text-xs">
+            A short walkthrough of Dashboard, Training, Nutrition, Mind and
+            Profile.
+          </Text>
+          <Button
+            testID="settings-replay-tour-button"
+            variant="secondary"
+            onPress={() => {
+              void resetNativeTourProgress();
+              requestNativeTourReplay();
+              router.back();
+            }}
+          >
+            Take the app tour
+          </Button>
+        </View>
 
         {/* 5. Legal & support Section */}
         <View
