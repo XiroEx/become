@@ -7,6 +7,7 @@ import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgres
 import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
+import { alignProgramWeek, resolveRawCurrentWeek } from '@/lib/dashboard/currentProgramWeek'
 
 export async function GET(request: NextRequest) {
   try {
@@ -200,11 +201,25 @@ export async function GET(request: NextRequest) {
     }
 
     // Build current program from real data only (never use mock programId)
+    // currentWeek/currentPhase: clamp the week to the program's own length and
+    // re-derive the phase from THAT week (rather than trusting the separately
+    // stored currentPhase counter), so "Phase N • Week W of T" can never show
+    // a week past T under a phase that disagrees with it (NP-377).
+    const alignedWeek = activeProgram ? alignProgramWeek({
+      rawWeek: resolveRawCurrentWeek({
+        scheduleCurrentWeek,
+        completedWorkouts: activeProgram.completedWorkouts,
+      }),
+      totalWeeks: scheduleTotalWeeks,
+      phases: (programDetails as { phases?: Array<{ weeks?: string }> } | null)?.phases,
+      fallbackPhase: activeProgram.currentPhase || 1,
+    }) : null
+
     const currentProgramData = activeProgram ? {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
-      currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      currentPhase: alignedWeek!.currentPhase,
+      currentWeek: alignedWeek!.currentWeek,
       completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
       totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
     } : progress.currentProgram?.programId ? progress.currentProgram : null
