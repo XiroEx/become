@@ -56,4 +56,59 @@ describe("ProgramsList", () => {
     fireEvent.press(getByTestId("programs-list-item-prog-1"));
     expect(onItemPress).toHaveBeenCalledWith("prog-1");
   });
+
+  // NP-278: the browse card must mirror the web's — `Nw`/`Nx/wk` chips next
+  // to the title, the level line for EVERY target_user (including the two
+  // "X to Y" values), and a tags row capped at 4 with "+N more".
+  describe("(NP-278) the browse card matches the web's", () => {
+    it("shows a level line for 'Beginner to Intermediate', not just the 3 single levels", () => {
+      const programs: ProgramSummary[] = [
+        {
+          id: "p1",
+          name: "12 Week Fat-Loss Foundation Program",
+          description: "d",
+          targetUser: "Beginner to Intermediate",
+        },
+      ];
+      const { getByText } = render(<ProgramsList programs={programs} />);
+      expect(getByText("Beginner to Intermediate")).toBeTruthy();
+    });
+
+    it("renders duration and frequency as separate chips, not concatenated into the level line", () => {
+      const programs: ProgramSummary[] = [
+        {
+          id: "p1",
+          name: "Strength 5x5",
+          description: "d",
+          durationWeeks: 4,
+          trainingDaysPerWeek: 5,
+          targetUser: "Intermediate",
+        },
+      ];
+      const { getByText, queryByText } = render(
+        <ProgramsList programs={programs} />,
+      );
+      expect(getByText("4w")).toBeTruthy();
+      expect(getByText("5x/wk")).toBeTruthy();
+      expect(getByText("Intermediate")).toBeTruthy();
+      expect(
+        queryByText("Intermediate · 4 weeks · 5d / week"),
+      ).toBeNull();
+    });
+
+    it("caps tags at 4 and shows '+N more' for the rest", () => {
+      const programs: ProgramSummary[] = [
+        {
+          id: "p1",
+          name: "Tagged Program",
+          description: "d",
+          tags: ["Fat Loss", "HIIT", "Conditioning", "Strength", "Mobility"],
+        },
+      ];
+      const { getByText } = render(<ProgramsList programs={programs} />);
+      expect(getByText("Fat Loss")).toBeTruthy();
+      expect(getByText("Strength")).toBeTruthy();
+      expect(getByText("+1 more")).toBeTruthy();
+    });
+  });
 });

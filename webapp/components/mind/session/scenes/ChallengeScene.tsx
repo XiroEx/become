@@ -61,7 +61,7 @@ export default function ChallengeScene({ move, onDone, preview }: SceneProps) {
       }
     }
     setJustDone(true)
-    setTimeout(onDone, 1100)
+    setTimeout(() => onDone({ q: "Today's hard thing", a: text ?? '' }), 1100)
   }
 
   return (

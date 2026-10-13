@@ -1,0 +1,622 @@
+/**
+ * The Becoming, week by week — pure.
+ *
+ * A "Becoming" is one week (Sunday-start) of a member's life in the app,
+ * scored for consistency across the three pillars, placed on a path that
+ * always moves forward and, for a consistent member, trends up. Given the raw
+ * events bucketed by day key (all in the member's local zone), this produces
+ * the ordered list of week snapshots with:
+ *
+ *   • score      0–100 consistency for the week
+ *   • step       'up' | 'flat' | 'down' — how the path moves INTO this week
+ *   • altitude   cumulative height (never drops much; floors at 0)
+ *   • headline / sub — the story line, from data, deterministic
+ *
+ * "New one weekly on Sundays": the current week is live (partial), earlier
+ * weeks are frozen by construction because their events cannot change.
+ */
+
+import { weekKeyOf, shiftDay, weekdayOf } from '@/lib/streaks/pillars'
+
+export type MindState = 'stressed' | 'distracted' | 'low_energy' | 'locked_in'
+
+export interface DayEvents {
+  /** Completed workouts that day (titles/day labels). */
+  workouts: string[]
+  /** PRs set that day. */
+  prs: Array<{ name: string; e1RM: number }>
+  foodLogged: boolean
+  proteinHit: boolean | null
+  calories: number | null
+  mindSession: boolean
+  mood: number | null
+  states: MindState[]
+  wins: string[]
+  /** Weight in the member's unit, if weighed that day. */
+  weight: number | null
+  chapterUnlocked: number | null
+}
+
+export interface WeekInput {
+  /** Every day key with any event, plus the empty days between — the caller passes a full range. */
+  days: Map<string, DayEvents>
+  todayKey: string
+  /** Workouts per week the member committed to (null = unknown). */
+  weeklyTarget: number | null
+  /** Adherence targets. */
+  logTarget: number
+  proteinTarget: number
+  /** Nutrition target for the story ("3 lbs to go"). */
+  targetWeight: number | null
+  weightUnit: 'lbs' | 'kg'
+  direction: 'lose' | 'maintain' | 'gain' | null
+  identity: string | null
+  /** Optional cap on how many weeks back to render. */
+  maxWeeks?: number
+}
+
+export type Subject = 'training' | 'fuel' | 'mind' | 'all' | 'empty'
+
+/**
+ * Which pillars this member was actually using around a given week.
+ *
+ * The card is written for one person, so it may only speak about the parts of
+ * the app that person uses. Telling a member who has never opened Mind that
+ * they did 0 of 7 sessions, every week, forever, is a fact about a feature
+ * they declined — not about them.
+ *
+ * Computed over the RAW week sequence (before runs of empty weeks collapse
+ * into one "away" card) so the window is always the same number of real
+ * calendar weeks.
+ */
+export interface PillarUse {
+  training: boolean
+  fuel: boolean
+  mind: boolean
+  /** How they use Mind when they do: real sessions, or only the daily check-in. */
+  mindMode: 'sessions' | 'checkins' | null
+}
+
+/** Everything, which is what an unqualified caller means. */
+export const ALL_PILLARS: PillarUse = { training: true, fuel: true, mind: true, mindMode: 'sessions' }
+
+/**
+ * How far back "still using this" looks: this week and the three before it.
+ * Short enough that a pillar someone has genuinely dropped stops taking up
+ * room; long enough that one ordinary off-week does not delete a row from
+ * under a member who is mid-habit.
+ */
+export const RECENT_WEEKS = 4
+
+export interface DayProof {
+  key: string
+  workout: boolean
+  /**
+   * Workouts that day. The card compares this week against the same days of
+   * the week before, and two sessions in one day is two workouts — a boolean
+   * would report that as "the same as last week".
+   */
+  workoutCount: number
+  food: boolean
+  /** Anything on the mind side: a session, a mood check-in or a state log. */
+  mind: boolean
+  /** A completed Mind SESSION specifically — the number the card reports. */
+  mindSession: boolean
+  /** Future day on the live week. */
+  future: boolean
+}
+
+/**
+ * A fact a card can state about a week. The story line and the card's
+ * highlights draw from the same list, so the headline can say which facts it
+ * already told and the card does not print them a second time underneath.
+ */
+export type Fact = 'workouts' | 'prs' | 'logging' | 'protein' | 'weight' | 'sessions' | 'checkins' | 'state' | 'chapter' | 'active'
+
+export interface WeekSnapshot {
+  index: number
+  weekKey: string
+  /** Sunday..Saturday labels for the UI. */
+  label: string
+  isCurrent: boolean
+  isFirst: boolean
+  daysElapsed: number
+  score: number
+  step: 'up' | 'flat' | 'down' | 'start'
+  altitude: number
+  /** What the week was mostly about — colours the tile. */
+  subject: Subject
+  /** Sun..Sat, what happened each day. */
+  days: DayProof[]
+  /** A collapsed run of empty weeks: how many, and the span. */
+  gap?: { weeks: number; fromKey: string; toKey: string }
+  /** Which pillars this member was using around this week. */
+  uses: PillarUse
+  mind: { sessions: number; moodDays: number; dominant: MindState | null; wins: string[]; chapterUnlocked: number | null }
+  nutrition: { logDays: number; proteinDays: number; avgCalories: number | null; weightStart: number | null; weightEnd: number | null; delta: number | null }
+  training: { workouts: number; target: number | null; hit: boolean; prs: Array<{ name: string; e1RM: number }>; prCount: number }
+  headline: string
+  sub: string
+  /** Facts the headline and sub already state — the card leaves them out. */
+  said: Fact[]
+  /** Short chips for the overview / graph tooltip. */
+  tags: string[]
+}
+
+export const STEP_UP = 1
+export const STEP_FLAT = 0.25
+export const STEP_DOWN = -0.5
+/** The path never falls more than this below your best — it stagnates, it does not dive. */
+export const FLOOR_BELOW_PEAK = 1.5
+export const SCORE_UP = 60
+export const SCORE_FLAT = 30
+/** Runs of at least this many empty weeks collapse into one "away" card. */
+export const GAP_MIN_WEEKS = 3
+
+/** How a mind state reads inside a sentence — "mostly locked in". */
+export const STATE_WORD: Record<MindState, string> = {
+  stressed: 'stressed', distracted: 'distracted', low_energy: 'low on energy', locked_in: 'locked in',
+}
+
+export function emptyDay(): DayEvents {
+  return { workouts: [], prs: [], foodLogged: false, proteinHit: null, calories: null, mindSession: false, mood: null, states: [], wins: [], weight: null, chapterUnlocked: null }
+}
+
+/**
+ * Fold admin-granted streak credits (StreakCredit — "the app was down" / "honor
+ * this streak") into the day map before scoring. The Streaks page unions these
+ * into its own day sets (lib/streaks/compute.ts); Becoming was reading the raw
+ * logs only, so a credited member saw a lower "this week" count here than the
+ * Streaks tile showed for the same week. A credited day counts once per
+ * pillar — same union semantics as the Set the Streaks page builds — so a day
+ * that already has a real workout is untouched rather than double-counted.
+ */
+export function applyCredits(
+  days: Map<string, DayEvents>,
+  credits: { workout?: string[]; nutrition?: string[]; mindset?: string[] },
+): void {
+  const day = (k: string) => { let d = days.get(k); if (!d) { d = emptyDay(); days.set(k, d) } return d }
+  for (const k of credits.workout ?? []) { const d = day(k); if (d.workouts.length === 0) d.workouts.push('Credited') }
+  for (const k of credits.nutrition ?? []) { day(k).foodLogged = true }
+  for (const k of credits.mindset ?? []) { day(k).mindSession = true }
+}
+
+/** Every day key in [from, to]. */
+function range(from: string, to: string): string[] {
+  const out: string[] = []
+  for (let k = from; k <= to; k = shiftDay(k, 1)) out.push(k)
+  return out
+}
+
+/** "Jul 12" for a day key. */
+function monthDay(key: string): string {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+}
+
+function fmtWeekLabel(weekKey: string): string {
+  const [y, m, d] = weekKey.split('-').map(Number)
+  const start = new Date(Date.UTC(y, m - 1, d))
+  const end = new Date(start.getTime() + 6 * 86_400_000)
+  const mo = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })
+  return start.getUTCMonth() === end.getUTCMonth()
+    ? `${mo(start)} ${start.getUTCDate()}–${end.getUTCDate()}`
+    : `${mo(start)} ${start.getUTCDate()} – ${mo(end)} ${end.getUTCDate()}`
+}
+
+/**
+ * Weekly consistency 0–100. Training is against the member's own target
+ * (or 3/wk when unknown), nutrition and mind against days. Partial current
+ * weeks are scored on days elapsed so Monday is not "a bad week".
+ */
+export function weekScore(w: { workouts: number; target: number | null; logDays: number; mindDays: number }, daysElapsed: number): number {
+  const d = Math.max(1, Math.min(7, daysElapsed))
+  const target = w.target && w.target > 0 ? w.target : 3
+  const expectedWorkouts = Math.max(0.5, target * (d / 7))
+  const training = Math.min(1, w.workouts / expectedWorkouts)
+  const nutrition = Math.min(1, w.logDays / d)
+  const mind = Math.min(1, w.mindDays / d)
+  return Math.round((training * 0.4 + nutrition * 0.3 + mind * 0.3) * 100)
+}
+
+export function stepFor(score: number): 'up' | 'flat' | 'down' {
+  if (score >= SCORE_UP) return 'up'
+  if (score >= SCORE_FLAT) return 'flat'
+  return 'down'
+}
+
+/** What the week was mostly about. "all" when every pillar showed up properly. */
+export function subjectFor(w: { workouts: number; target: number | null; logDays: number; mindDays: number; sessions: number }, daysElapsed: number): Subject {
+  const d = Math.max(1, Math.min(7, daysElapsed))
+  const target = w.target && w.target > 0 ? w.target : 3
+  const t = Math.min(1, w.workouts / Math.max(0.5, target * (d / 7)))
+  const f = Math.min(1, w.logDays / d)
+  const m = Math.min(1, w.mindDays / d)
+  if (t + f + m < 0.15) return 'empty'
+  if (t >= 0.6 && f >= 0.6 && m >= 0.6) return 'all'
+  const best = Math.max(t, f, m)
+  if (best === t) return 'training'
+  if (best === f) return 'fuel'
+  return 'mind'
+}
+
+function dominantState(states: MindState[]): MindState | null {
+  if (!states.length) return null
+  const c = new Map<MindState, number>()
+  for (const s of states) c.set(s, (c.get(s) ?? 0) + 1)
+  return [...c.entries()].sort((a, b) => b[1] - a[1])[0][0]
+}
+
+/**
+ * "a workout, a meal or a session" — but only naming the parts of the app this
+ * member actually uses. A brand-new member uses none of it yet, and for them
+ * the full invitation is exactly right, so an empty set falls back to all three.
+ */
+function firstLine(uses: PillarUse): string {
+  const opts = [uses.training && 'A workout', uses.fuel && 'a meal', uses.mind && 'a session'].filter(Boolean) as string[]
+  const list = opts.length ? opts : ['A workout', 'a meal', 'a session']
+  const head = list.length === 1 ? list[0] : `${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}`
+  return head.charAt(0).toUpperCase() + head.slice(1)
+}
+
+/** "training or food" — whichever of the two this member uses, or null for neither. */
+function missingWord(uses: PillarUse): string | null {
+  const parts = [uses.training && 'training', uses.fuel && 'food'].filter(Boolean) as string[]
+  return parts.length ? parts.join(' or ') : null
+}
+
+/** What the week before added up to — enough for "more than last week" and nothing else. */
+export interface StoryPrev { training: number; fuel: number; sessions: number }
+
+const PICKED_UP: Record<'training' | 'fuel' | 'mind', string> = {
+  training: 'Training picked up',
+  fuel: 'Logging picked up',
+  mind: 'Mind picked up',
+}
+const FEWER: Record<'training' | 'fuel' | 'mind', string> = {
+  training: 'Fewer workouts',
+  fuel: 'Fewer days logged',
+  mind: 'Fewer Mind sessions',
+}
+
+/**
+ * An ordinary week, told by what CHANGED against the one before — which part
+ * of the app picked up, or which one eased off. This used to be "Kept it
+ * moving" over a recital of the counts, which made most weeks read the same;
+ * the counts are the card's highlights now, directly under this line.
+ *
+ * A drop is only ever named for a pillar that had something in it the week
+ * before, so nobody is told about a feature they were not using.
+ */
+function changeStory(
+  w: { step: WeekSnapshot['step']; training: { workouts: number }; nutrition: { logDays: number }; mind: { sessions: number; dominant: MindState | null } },
+  prev: StoryPrev | null,
+): { headline: string; sub: string; said: Fact[] } {
+  const dom = w.mind.dominant ? `Mostly ${STATE_WORD[w.mind.dominant]}.` : null
+  const said: Fact[] = dom ? ['state'] : []
+  const quiet = w.step === 'down' ? 'A quieter week' : null
+  const sub = (lead: string | null) => [lead, dom].filter(Boolean).join(' ') || 'On the board, and it counts.'
+  if (!prev) return { headline: quiet ?? 'Kept it moving', sub: sub(null), said }
+  const diff = { training: w.training.workouts - prev.training, fuel: w.nutrition.logDays - prev.fuel, mind: w.mind.sessions - prev.sessions }
+  const order = (['training', 'fuel', 'mind'] as const)
+  if (prev.training + prev.fuel + prev.sessions === 0) return { headline: 'Back on the board', sub: sub('After a blank week.'), said }
+  const up = [...order].filter(p => diff[p] > 0).sort((a, b) => diff[b] - diff[a])[0]
+  const down = [...order].filter(p => diff[p] < 0).sort((a, b) => diff[a] - diff[b])[0]
+  // "Mind picked up" / "Up on the week before" says the same thing twice, so a
+  // clean rise lets the mood (when there is one) have the line instead.
+  if (up) return { headline: quiet ?? PICKED_UP[up], sub: sub(down ? `${FEWER[down]} than the week before.` : dom ? null : 'Up on the week before.'), said }
+  if (down) return { headline: quiet ?? 'A lighter week', sub: sub(`${FEWER[down]} than the week before.`), said }
+  return { headline: quiet ?? 'Holding steady', sub: sub('Level with the week before.'), said }
+}
+
+/**
+ * The sentence for the week — deterministic from data, never generic when
+ * there is something to say.
+ *
+ * `said` lists the facts the headline and sub already state. The card's
+ * highlights leave those out, so "New best: Bench" is not followed by a tile
+ * that says Bench again, and a sub never recites counts the tiles are about to
+ * show as numbers.
+ */
+export function storyFor(
+  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags' | 'said'>,
+  input: Pick<WeekInput, 'weightUnit' | 'direction' | 'targetWeight'>,
+  uses: PillarUse = ALL_PILLARS,
+  prev: StoryPrev | null = null,
+): { headline: string; sub: string; said: Fact[]; tags: string[] } {
+  const tags: string[] = []
+  const t = w.training, n = w.nutrition, m = w.mind
+  const unit = input.weightUnit
+  const delta = n.delta
+  const wantsDown = input.direction === 'lose'
+  const wantsUp = input.direction === 'gain'
+  const scaleMoved = delta != null && Math.abs(delta) >= (unit === 'kg' ? 0.4 : 1)
+  const scaleRightWay = scaleMoved && ((wantsDown && (delta as number) < 0) || (wantsUp && (delta as number) > 0))
+  const scaleWrongWay = scaleMoved && ((wantsDown && (delta as number) > 0) || (wantsUp && (delta as number) < 0))
+
+  if (t.workouts) tags.push(`${t.workouts}${t.target ? `/${t.target}` : ''} workouts`)
+  if (t.prCount) tags.push(`${t.prCount} PR${t.prCount === 1 ? '' : 's'}`)
+  if (n.logDays) tags.push(`${n.logDays}/7 logged`)
+  if (m.sessions) tags.push(`${m.sessions} session${m.sessions === 1 ? '' : 's'}`)
+  if (scaleMoved) tags.push(`${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit}`)
+  if (m.chapterUnlocked) tags.push(`Ch ${m.chapterUnlocked}`)
+
+  const nothingSubstantive = t.workouts === 0 && n.logDays === 0 && m.sessions === 0 && t.prCount === 0
+  // The live week speaks in the present tense until it settles on Sunday.
+  if (w.isCurrent) {
+    if (nothingSubstantive) {
+      if (w.daysElapsed <= 1) return { headline: 'A new week of becoming', sub: 'Blank so far. What you do in the next six days is what this card will say.', said: [], tags }
+      const checked = m.moodDays ? ` You have checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}.` : ''
+      return { headline: 'Still being written', sub: `Day ${w.daysElapsed} of 7.${checked} ${firstLine(uses)} puts the first real line on this card.`, said: m.moodDays ? ['checkins'] : [], tags }
+    }
+    return { ...liveStoryFor(w, { delta, scaleMoved, scaleRightWay, scaleWrongWay, unit }, uses), tags }
+  }
+  if (w.isFirst && !w.isCurrent) {
+    return { headline: 'Where it started', sub: 'Your first week. Everything since is measured from here.', said: [], tags }
+  }
+  if (m.chapterUnlocked && m.chapterUnlocked > 1) {
+    return { headline: `Chapter ${m.chapterUnlocked} opened`, sub: `The week your mind work earned the next chapter${t.hit ? ' — and the training week hit its target too' : ''}.`, said: ['chapter'], tags }
+  }
+  if (t.prCount >= 2) {
+    return { headline: `${t.prCount} personal records`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. The strongest week on paper so far.`, said: ['prs'], tags }
+  }
+  if (t.hit && n.logDays >= 5 && m.sessions >= 3) {
+    return { headline: 'The whole system, working', sub: 'Training, food and mind all showed up. This is what a full week looks like.', said: [], tags }
+  }
+  if (scaleRightWay) {
+    return { headline: 'The scale moved', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} this week, the way you wanted${t.hit ? ', with the training week hit' : ''}.`, said: ['weight'], tags }
+  }
+  if (t.hit) {
+    const behind = n.logDays >= 5 ? `And ${n.logDays} days of food logged behind it.`
+      : n.logDays > 0 ? `Food logged ${n.logDays} of 7 — the training carried this one.`
+      : uses.fuel ? 'Training carried this week; the logging did not show up.'
+      : 'A full training week, start to finish.'
+    return { headline: `${t.workouts} of ${t.target}. Week hit.`, sub: behind, said: n.logDays > 0 ? ['workouts', 'logging'] : ['workouts'], tags }
+  }
+  if (t.prCount === 1) {
+    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift moved the week.`, said: ['prs'], tags }
+  }
+  if (m.sessions >= 4 && t.workouts === 0) {
+    return { headline: 'The mind kept showing up', sub: `${m.sessions} sessions and no training — the body is next.`, said: ['sessions'], tags }
+  }
+  if (n.logDays >= 6 && t.workouts === 0) {
+    return { headline: 'Logged everything, lifted nothing', sub: `${n.logDays} days of food, no workouts. Honest, and it counts.`, said: ['logging'], tags }
+  }
+  if (scaleWrongWay) {
+    return { headline: 'The scale pushed back', sub: `${(delta as number) > 0 ? '+' : ''}${(delta as number).toFixed(1)} ${unit} — ${n.logDays >= 5 ? 'and you logged, so it is data, not a mystery' : 'with thin logging, hard to say why'}.`, said: ['weight'], tags }
+  }
+  if (t.workouts > 0 || n.logDays > 0 || m.sessions > 0) {
+    return { ...changeStory(w, prev), tags }
+  }
+  // Quiet weeks that still left a trace: check-ins, a weigh-in, a banked win.
+  if (m.wins.length) {
+    const quote = `you wrote it down: “${m.wins[0].slice(0, 80)}${m.wins[0].length > 80 ? '…' : ''}”`
+    const missed = missingWord(uses)
+    return { headline: `${m.wins.length === 1 ? 'A win, banked' : `${m.wins.length} wins, banked`}`, sub: missed ? `No ${missed} logged, but ${quote}` : `Nothing else logged, but ${quote}`, said: [], tags }
+  }
+  if (m.moodDays) {
+    const dom = m.dominant ? `, mostly ${STATE_WORD[m.dominant]}` : ''
+    const missed = missingWord(uses)
+    return { headline: `Checked in ${m.moodDays} day${m.moodDays === 1 ? '' : 's'}`, sub: missed ? `No ${missed} logged this week${dom}. Showing up to say how you feel still counts.` : `Showing up to say how you feel still counts${dom}.`, said: m.dominant ? ['checkins', 'state'] : ['checkins'], tags }
+  }
+  if (n.delta != null) {
+    return { headline: 'Weighed in, that was it', sub: `${n.weightEnd} ${unit} on the scale${n.delta !== 0 ? ` (${n.delta > 0 ? '+' : ''}${n.delta})` : ''}. Nothing else logged. The path holds.`, said: ['weight'], tags }
+  }
+  return { headline: 'A week away', sub: 'Nothing logged. The path holds; it just does not climb.', said: [], tags }
+}
+
+/**
+ * The live week, in the present tense. Same priorities as the frozen rules,
+ * but "so far" — the card is still being written until Sunday.
+ */
+function liveStoryFor(
+  w: Omit<WeekSnapshot, 'headline' | 'sub' | 'tags' | 'said'>,
+  x: { delta: number | null; scaleMoved: boolean; scaleRightWay: boolean; scaleWrongWay: boolean; unit: 'lbs' | 'kg' },
+  uses: PillarUse = ALL_PILLARS,
+): { headline: string; sub: string; said: Fact[] } {
+  const t = w.training, n = w.nutrition, m = w.mind
+  const left = 7 - w.daysElapsed
+  const daysLeft = left <= 0 ? 'the week seals tonight' : left === 1 ? 'one day left' : `${left} days left`
+  const DaysLeft = daysLeft.charAt(0).toUpperCase() + daysLeft.slice(1)
+  const need = t.target ? Math.max(0, t.target - t.workouts) : 0
+  if (m.chapterUnlocked && m.chapterUnlocked > 1) {
+    return { headline: `Chapter ${m.chapterUnlocked} is open`, sub: `Your mind work just earned the next chapter — and ${daysLeft} to build on it.`, said: ['chapter'] }
+  }
+  if (t.prCount >= 2) {
+    return { headline: `${t.prCount} personal records, so far`, sub: `${t.prs.slice(0, 3).map(p => p.name).join(', ')}${t.prCount > 3 ? ` and ${t.prCount - 3} more` : ''}. Already the strongest week on paper, and ${daysLeft}.`, said: ['prs'] }
+  }
+  if (t.hit && n.logDays >= Math.min(5, w.daysElapsed) && m.sessions >= 3) {
+    return { headline: 'The whole system is working', sub: 'Training, food and mind are all showing up. Keep it rolling through Saturday.', said: [] }
+  }
+  if (x.scaleRightWay) {
+    return { headline: 'The scale is moving', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far this week, the way you want${t.hit ? ', with the training week already hit' : ''}.`, said: ['weight'] }
+  }
+  if (t.hit) {
+    const behind = n.logDays >= 4 ? `And ${n.logDays} days of food logged behind it.`
+      : n.logDays > 0 ? `Food logged ${n.logDays} of ${w.daysElapsed} — the training is carrying it so far.`
+      : uses.fuel ? 'Training is carrying it; the logging has not shown up yet.'
+      : 'The week is already where you wanted it.'
+    return { headline: `${t.workouts} of ${t.target}. Week hit, ${daysLeft}.`, sub: behind, said: n.logDays > 0 ? ['workouts', 'logging'] : ['workouts'] }
+  }
+  if (t.prCount === 1) {
+    return { headline: `New best: ${t.prs[0].name}`, sub: `e1RM ${t.prs[0].e1RM}. One lift has moved the week already, and there is ${daysLeft}.`, said: ['prs'] }
+  }
+  if (t.target && t.workouts > 0 && need > 0) {
+    // "Nothing logged yet on the food side" is a shortfall to someone who logs
+    // food and noise to everyone else, so it is only said to a food logger.
+    // What they DID log is a highlight under this line, not a clause in it.
+    const food = !n.logDays && uses.fuel ? ' Nothing logged yet on the food side.' : ''
+    return { headline: `${t.workouts} down, ${need} to go`, sub: `${daysLeft} to hit ${t.target}.${food}`, said: ['workouts'] }
+  }
+  if (m.sessions >= 2 && t.workouts === 0) {
+    return { headline: 'The mind is showing up', sub: `${m.sessions} sessions so far and no training yet — the body is next, and there is ${daysLeft}.`, said: ['sessions'] }
+  }
+  if (n.logDays >= 2 && t.workouts === 0) {
+    return { headline: 'Logging every day, lifting nothing yet', sub: `${n.logDays} of ${w.daysElapsed} days of food. Honest, and it counts. ${DaysLeft}.`, said: ['logging'] }
+  }
+  if (x.scaleWrongWay) {
+    return { headline: 'The scale is pushing back', sub: `${(x.delta as number) > 0 ? '+' : ''}${(x.delta as number).toFixed(1)} ${x.unit} so far — ${n.logDays >= 3 ? 'you are logging, so it is data, not a mystery' : 'with thin logging, hard to say why yet'}.`, said: ['weight'] }
+  }
+  return { headline: 'Keeping it moving', sub: `${DaysLeft} to add to it.`, said: [] }
+}
+
+export function buildWeeks(input: WeekInput): WeekSnapshot[] {
+  const keys = [...input.days.keys()].sort()
+  if (!keys.length) return []
+  const firstKey = keys[0]
+  const firstWeek = weekKeyOf(firstKey)
+  const thisWeek = weekKeyOf(input.todayKey)
+  // Weeks from first activity through this week (bounded).
+  const weekKeys: string[] = []
+  for (let wk = firstWeek; wk <= thisWeek; wk = shiftDay(wk, 7)) weekKeys.push(wk)
+  const capped = input.maxWeeks && weekKeys.length > input.maxWeeks ? weekKeys.slice(-input.maxWeeks) : weekKeys
+
+  let altitude = 0
+  let peak = 0
+  let lastStep: WeekSnapshot['step'] = 'start'
+  const out: WeekSnapshot[] = []
+  // Per-week pillar totals, in raw calendar order, so "are they still using
+  // this" is always the same number of real weeks back — gap collapsing
+  // happens afterwards and would otherwise stretch the window.
+  const perWeek: Array<{ training: number; fuel: number; sessions: number; mindDays: number }> = []
+  capped.forEach((wk, i) => {
+    const isCurrent = wk === thisWeek
+    const end = isCurrent ? input.todayKey : shiftDay(wk, 6)
+    const daysElapsed = isCurrent ? weekdayOf(input.todayKey) + 1 : 7
+    const days = range(wk, end).map(k => input.days.get(k) ?? emptyDay())
+
+    let workouts = 0, logDays = 0, proteinDays = 0, sessions = 0, moodDays = 0
+    let calSum = 0, calDays = 0
+    const prs: Array<{ name: string; e1RM: number }> = []
+    const states: MindState[] = []
+    const wins: string[] = []
+    let weightStart: number | null = null, weightEnd: number | null = null
+    let chapterUnlocked: number | null = null
+    for (const d of days) {
+      workouts += d.workouts.length
+      prs.push(...d.prs)
+      if (d.foodLogged) logDays += 1
+      if (d.proteinHit) proteinDays += 1
+      if (d.calories != null && d.calories > 0) { calSum += d.calories; calDays += 1 }
+      if (d.mindSession) sessions += 1
+      if (d.mood != null) moodDays += 1
+      states.push(...d.states)
+      wins.push(...d.wins)
+      if (d.weight != null) { if (weightStart == null) weightStart = d.weight; weightEnd = d.weight }
+      if (d.chapterUnlocked && (!chapterUnlocked || d.chapterUnlocked > chapterUnlocked)) chapterUnlocked = d.chapterUnlocked
+    }
+    const mindDays = new Set<number>()
+    days.forEach((d, idx) => { if (d.mindSession || d.mood != null || d.states.length) mindDays.add(idx) })
+
+    const score = weekScore({ workouts, target: input.weeklyTarget, logDays, mindDays: mindDays.size }, daysElapsed)
+    let step: WeekSnapshot['step'] = i === 0 && capped.length === weekKeys.length ? 'start' : stepFor(score)
+    // The hard-week override: showing up on a week you mostly felt stressed or
+    // low on energy, and still hitting the training target, IS the story — it climbs.
+    const dom = dominantState(states)
+    if (step !== 'start' && (dom === 'stressed' || dom === 'low_energy') && input.weeklyTarget && workouts >= input.weeklyTarget) step = 'up'
+    // Only FROZEN weeks move the path; the live week previews from where the last one left it.
+    if (i > 0 && !isCurrent) {
+      const delta = step === 'up' ? STEP_UP : step === 'flat' ? STEP_FLAT : STEP_DOWN
+      // A dip is clamped to the floor (never more than FLOOR_BELOW_PEAK under your best) and to 0.
+      // A dip that the floor stops renders as a hold — the path stagnates, it does not dive.
+      const floor = Math.max(0, peak - FLOOR_BELOW_PEAK)
+      // Two dips never touch: a dip straight after a dip is a hold. The worst
+      // stretch sags; it never falls.
+      const effective = step === 'down' && lastStep === 'down' ? 0 : delta
+      const next = Math.max(floor, altitude + effective)
+      if (step === 'down' && next >= altitude) step = 'flat'
+      altitude = next
+      peak = Math.max(peak, altitude)
+      lastStep = step
+    }
+    perWeek.push({ training: workouts, fuel: logDays, sessions, mindDays: mindDays.size })
+    const near = perWeek.slice(Math.max(0, perWeek.length - RECENT_WEEKS))
+    const mindMode: PillarUse['mindMode'] = near.some(x => x.sessions > 0) ? 'sessions' : near.some(x => x.mindDays > 0) ? 'checkins' : null
+    const uses: PillarUse = {
+      training: near.some(x => x.training > 0),
+      fuel: near.some(x => x.fuel > 0),
+      mind: mindMode != null,
+      mindMode,
+    }
+    const target = input.weeklyTarget
+    const hit = !!target && workouts >= target
+    const proof: DayProof[] = Array.from({ length: 7 }, (_, di) => {
+      const key = shiftDay(wk, di)
+      const d = input.days.get(key)
+      const future = isCurrent && di >= daysElapsed
+      return {
+        key,
+        workout: !!d && d.workouts.length > 0,
+        workoutCount: d?.workouts.length ?? 0,
+        food: !!d?.foodLogged,
+        mind: !!d && (d.mindSession || d.mood != null || d.states.length > 0),
+        mindSession: !!d?.mindSession,
+        future,
+      }
+    })
+    // "Where it started" is only the TRUE first week; under a cap the first kept week is just a week.
+    const isFirst = i === 0 && capped.length === weekKeys.length
+    const base = {
+      index: i, weekKey: wk, label: fmtWeekLabel(wk), isCurrent, isFirst, daysElapsed, score, step, altitude,
+      subject: subjectFor({ workouts, target, logDays, mindDays: mindDays.size, sessions }, daysElapsed),
+      days: proof, uses,
+      mind: { sessions, moodDays, dominant: dominantState(states), wins: wins.slice(0, 5), chapterUnlocked },
+      nutrition: {
+        logDays, proteinDays,
+        avgCalories: calDays ? Math.round(calSum / calDays) : null,
+        weightStart, weightEnd,
+        delta: weightStart != null && weightEnd != null && weightStart !== weightEnd ? Math.round((weightEnd - weightStart) * 10) / 10 : (weightStart != null && weightEnd != null ? 0 : null),
+      },
+      training: { workouts, target, hit, prs: prs.slice(0, 5), prCount: prs.length },
+    }
+    const story = storyFor(base, input, uses, perWeek.length >= 2 ? perWeek[perWeek.length - 2] : null)
+    out.push({ ...base, ...story })
+  })
+  return collapseGaps(out)
+}
+
+/** Is this frozen week empty of anything a member did? */
+export function isEmptyWeek(w: WeekSnapshot): boolean {
+  return !w.isCurrent && !w.isFirst && w.training.workouts === 0 && w.nutrition.logDays === 0 && w.mind.sessions === 0 && w.mind.moodDays === 0 && w.mind.wins.length === 0 && w.training.prs.length === 0 && w.nutrition.delta == null
+}
+
+/**
+ * Runs of GAP_MIN_WEEKS+ empty weeks collapse into ONE "away" card, so a
+ * member who drifted for two months swipes once through it rather than eight
+ * times through nothing. Altitude is whatever the run ended at; indexes are
+ * re-numbered so the path stays a simple sequence.
+ */
+export function collapseGaps(weeks: WeekSnapshot[]): WeekSnapshot[] {
+  const out: WeekSnapshot[] = []
+  let i = 0
+  while (i < weeks.length) {
+    if (isEmptyWeek(weeks[i])) {
+      let j = i
+      while (j < weeks.length && isEmptyWeek(weeks[j])) j++
+      const run = weeks.slice(i, j)
+      if (run.length >= GAP_MIN_WEEKS) {
+        const last = run[run.length - 1]
+        const first = run[0]
+        out.push({
+          ...last,
+          weekKey: first.weekKey,
+          label: `${monthDay(first.weekKey)} – ${monthDay(shiftDay(last.weekKey, 6))}`,
+          step: 'flat',
+          subject: 'empty',
+          headline: `Away for ${run.length} weeks`,
+          sub: 'Nothing logged. The path held its ground and waited.',
+          said: [],
+          tags: [`${run.length} weeks`],
+          gap: { weeks: run.length, fromKey: first.weekKey, toKey: last.weekKey },
+        })
+        i = j
+        continue
+      }
+      for (const w of run) out.push(w)
+      i = j
+      continue
+    }
+    out.push(weeks[i]); i++
+  }
+  return out.map((w, idx) => ({ ...w, index: idx }))
+}

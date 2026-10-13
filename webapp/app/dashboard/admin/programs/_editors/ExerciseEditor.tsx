@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Exercise, ExerciseType } from "@/lib/data/programs";
 import { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
+import ExerciseVariationPicker, { type ExerciseVariation } from "@/components/ExerciseVariationPicker";
 
 interface DbExerciseSuggestion {
   slug: string;
@@ -61,6 +62,24 @@ const EXERCISE_SUGGESTIONS: Partial<Record<ExerciseType, string[]>> = {
     "Static Stretching", "Foam Rolling", "Light Walking",
     "Yoga Flow", "Deep Breathing", "Mobility Work",
   ],
+};
+
+const IMPORT_FLAG_CONFIG: Record<string, { label: string; className: string; title: string }> = {
+  new: {
+    label: "New exercise",
+    className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+    title: "Not in the exercise library — saving will create it as a new exercise.",
+  },
+  broken: {
+    label: "Needs review",
+    className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    title: "Couldn't tell sets/reps/rest for this one — check it before saving.",
+  },
+  grouped: {
+    label: "Possible group",
+    className: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    title: "Looks like it's meant to be linked with another exercise (a superset/circuit) — use the group controls if so.",
+  },
 };
 
 const GROUP_TYPE_COLORS: Record<string, string> = {
@@ -161,6 +180,21 @@ export default function ExerciseEditor({
             {exercise.groupLabel || exercise.groupType || 'Group'}
           </span>
         )}
+
+        {/* Import review flags (see lib/workout/importProgram.ts) */}
+        {exercise.importFlags?.map((flag) => {
+          const config = IMPORT_FLAG_CONFIG[flag];
+          if (!config) return null;
+          return (
+            <span
+              key={flag}
+              title={config.title}
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.className}`}
+            >
+              {config.label}
+            </span>
+          );
+        })}
 
         {/* Exercise Name Preview */}
         <span className="flex-1 truncate text-sm font-medium text-zinc-900 dark:text-white">
@@ -302,6 +336,15 @@ export default function ExerciseEditor({
               </div>
             </div>
           </div>
+
+          {/* Pick a variation — same "N variations" picker as Swap Exercise,
+              surfaced whenever the matched catalog exercise (e.g. Machine
+              Chest Press) has sibling equipment/style variants. */}
+          <ExerciseVariationPicker
+            slug={exercise.exerciseSlug}
+            selectedSlug={exercise.exerciseSlug}
+            onSelect={(v: ExerciseVariation) => onUpdate({ ...exercise, name: v.name, exerciseSlug: v.slug })}
+          />
 
           {/* Row 2: Sets, Reps, Rest (for strength/abs) */}
           {showSetsReps && (

@@ -156,6 +156,44 @@ describe("createOfflineQueue", () => {
     expect(q.items()[0]!.primaryKey).toBe("2026-05-27");
   });
 
+  // THE SIGN-OUT PATH (NP-190). A pending write belongs to the session that
+  // made it, and the snapshot on disk is what a cold start reads back — so
+  // emptying the array alone would hand the next member the last one's
+  // weigh-in.
+  it("clear() empties the queue in memory AND on disk", async () => {
+    const storage = createMemoryAsyncStorage();
+    const flusher = jest.fn(async () => ({ ok: true }));
+    const q = createOfflineQueue<unknown>({ flusher, storage });
+    await q.enqueue(item("weight", "2026-05-27", { weight: 180 }));
+    await q.enqueue(item("mood", "2026-05-27", { mood: 4 }));
+    expect(q.size()).toBe(2);
+
+    await q.clear();
+
+    expect(q.size()).toBe(0);
+    expect(await storage.getItem("become.offline-queue.v1")).toBeNull();
+    // Nothing left to deliver.
+    await q.flush();
+    expect(flusher).not.toHaveBeenCalled();
+  });
+
+  it("a cleared queue does not come back on the next cold start", async () => {
+    const storage = createMemoryAsyncStorage();
+    const q = createOfflineQueue<unknown>({
+      flusher: async () => ({ ok: true }),
+      storage,
+    });
+    await q.enqueue(item("mood", "2026-05-27", { mood: 2 }));
+    await q.clear();
+
+    const next = createOfflineQueue<unknown>({
+      flusher: async () => ({ ok: true }),
+      storage,
+    });
+    await next.rehydrate();
+    expect(next.size()).toBe(0);
+  });
+
   it("start() subscribes to NetInfo + flushes when isConnected reports true", async () => {
     let onlineListener: ((online: boolean) => void) | null = null;
     const netInfo: NetInfoLike = {

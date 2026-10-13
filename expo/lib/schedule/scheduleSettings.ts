@@ -1,30 +1,24 @@
 /**
  * Validation helpers for the schedule settings form.
  *
- * Mirrors the webapp's Schedule model: training days are integers 0-6
- * (Sunday=0), the start date is a YYYY-MM-DD string, and auto-advance is a
- * boolean. Pure helpers — UI binding happens in ScheduleSettingsForm.
+ * Training days are integers 0-6 (Sunday=0). Start-date changes belong to
+ * program management (NP-111). Pure helpers — UI binding happens in
+ * ScheduleSettingsForm.
  */
 export interface ScheduleSettings {
   trainingDays: number[];
-  startDate: string;
-  autoAdvance: boolean;
 }
 
 export type ScheduleSettingsError =
   | "training-days-empty"
   | "training-days-too-many"
   | "training-days-out-of-range"
-  | "training-days-duplicate"
-  | "start-date-bad-format"
-  | "start-date-impossible";
+  | "training-days-duplicate";
 
 export interface ScheduleSettingsValidation {
   ok: boolean;
   errors: ScheduleSettingsError[];
 }
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function validateScheduleSettings(
   s: ScheduleSettings,
@@ -37,17 +31,6 @@ export function validateScheduleSettings(
   }
   if (new Set(s.trainingDays).size !== s.trainingDays.length) {
     errors.push("training-days-duplicate");
-  }
-  if (!ISO_DATE_RE.test(s.startDate)) {
-    errors.push("start-date-bad-format");
-  } else {
-    const parsed = new Date(`${s.startDate}T00:00:00Z`);
-    if (
-      Number.isNaN(parsed.getTime()) ||
-      parsed.toISOString().slice(0, 10) !== s.startDate
-    ) {
-      errors.push("start-date-impossible");
-    }
   }
   return { ok: errors.length === 0, errors };
 }

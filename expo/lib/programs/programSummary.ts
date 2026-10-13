@@ -1,17 +1,12 @@
 import type { ProgramCatalogItem } from "@become/api-client";
 import type { ProgramSummary } from "@/components/programs/ProgramsList";
-
-const TARGET_USERS: ReadonlyArray<ProgramSummary["targetUser"]> = [
-  "Beginner",
-  "Intermediate",
-  "Advanced",
-];
+import { BROWSE_LEVELS } from "@/lib/programs/levels";
 
 function narrowTargetUser(
   value: string | undefined,
 ): ProgramSummary["targetUser"] {
-  return TARGET_USERS.includes(value as ProgramSummary["targetUser"])
-    ? (value as ProgramSummary["targetUser"])
+  return (BROWSE_LEVELS as readonly string[]).includes(value ?? "")
+    ? value
     : undefined;
 }
 
@@ -21,7 +16,7 @@ function narrowTargetUser(
  * is the canonical id; falls back to `_id` when a projection omits it.
  */
 export function toProgramSummary(raw: ProgramCatalogItem): ProgramSummary {
-  return {
+  const summary: ProgramSummary = {
     id: raw.program_id ?? raw._id ?? "",
     name: raw.name,
     description: raw.description ?? "",
@@ -30,4 +25,11 @@ export function toProgramSummary(raw: ProgramCatalogItem): ProgramSummary {
     goal: raw.goal,
     targetUser: narrowTargetUser(raw.target_user),
   };
+  if (raw.tags !== undefined) {
+    summary.tags = raw.tags;
+  }
+  if (raw.isCustom !== undefined) {
+    summary.isCustom = raw.isCustom;
+  }
+  return summary;
 }

@@ -11,12 +11,13 @@ import NutritionAITeaser from '@/components/nutrition/NutritionAITeaser'
 import CalorieRing from '@/components/nutrition/CalorieRing'
 import TagSection, { type MealLogLite } from '@/components/nutrition/TagSection'
 import WaterTracker from '@/components/nutrition/WaterTracker'
-import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
+import FoodSearchModal, { type LoggedFoodEntry } from '@/components/nutrition/FoodSearchModal'
 import SnapPlateModal from '@/components/nutrition/SnapPlateModal'
 import QuickAddModal from '@/components/nutrition/QuickAddModal'
 import EditFoodModal from '@/components/nutrition/EditFoodModal'
+import EditMealModal from '@/components/nutrition/EditMealModal'
 import ScheduleMealsDrawer from '@/components/nutrition/ScheduleMealsDrawer'
-import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
+import { Plus, BookOpen, UtensilsCrossed, Zap, Trash2, Search, ScanBarcode, Tag as TagIcon, Clock, ChefHat, CalendarDays, CalendarClock, Copy, Camera, ImagePlus, Upload, PencilLine, History, ChevronDown } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
@@ -27,6 +28,12 @@ import { isFutureLocalDate, todayLocalKey } from '@/lib/mealPlanDates'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import { fetchPlansInRange } from '@/app/dashboard/timeline/planning'
 import { invalidateMindSession } from '@/lib/mind/sessionCache'
+import { buildDayOccurrences } from '@/lib/nutrition/dayOrder'
+import { findLogForTag as findLogForTagPure } from '@/lib/nutrition/logTagMatch'
+import { useEntitlements } from '@/hooks/useEntitlements'
+import { createMealTag } from '@/hooks/useMealSchedule'
+import { defaultTagAt, minutesOfDay, sortMinutesForTag, type TagWindow } from '@/lib/nutrition/mealSchedule'
+import { nutritionGoalLine, type Direction as GoalDirection, type PaceStatus } from '@/lib/nutrition/goalLine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -58,13 +65,7 @@ function formatDateParam(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-function getDefaultTagForNow(): string {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 11) return 'breakfast'
-  if (h >= 11 && h < 14) return 'lunch'
-  if (h >= 17 && h < 21) return 'dinner'
-  return 'snack'
-}
+
 
 // ── Defaults ───────────────────────────────────────────────────────────────────
 
@@ -97,10 +98,16 @@ function NutritionPageInner() {
   const initialDate = useMemo(() => parseDateParam(searchParams?.get('date')), [searchParams])
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate)
   const [logs, setLogs] = useState<MealLogLite[]>([])
-  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
   const [water, setWater] = useState({ current: 0, goal: 96 })
   const [quickAdds, setQuickAdds] = useState<QuickAddRow[]>([])
   const [goals, setGoals] = useState<NutritionGoals>(defaultGoals)
+  // The weight-goal side of things (lib/goals) — just enough to tie the ring
+  // to the target: "2,910 cal/day, on track for 205 lb". Fetched once; it
+  // doesn't change while paging between days.
+  const [goalWeight, setGoalWeight] = useState<{
+    weight: number | null; unit: 'lbs' | 'kg'; direction: GoalDirection | null; paceStatus: PaceStatus | null
+  } | null>(null)
   const [tagsResp, setTagsResp] = useState<{ defaults: string[]; userTags: string[] }>({
     defaults: DEFAULT_TAGS, userTags: [],
   })
@@ -159,18 +166,53 @@ function NutritionPageInner() {
       console.error('[nutrition] image capture failed', err)
     }
   }, [])
-  const [quickAddOpen, setQuickAddOpen] = useState(false)
-  const [editEntry, setEditEntry] = useState<{ logId: string; item: IMealItem & { _id?: string } } | null>(null)
+  const [quickAddOpen, setQuickAddOpen] = useState(() => searchParams?.get('quickAdd') === 'true')
+  useEffect(() => {
+    if (searchParams?.get('quickAdd') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from route param
+      setQuickAddOpen(true)
+    }
+  }, [searchParams])
+  const [editEntry, setEditEntry] = useState<{
+    logId: string
+    item: IMealItem & { _id?: string }
+    currentTag: string
+    loggedAt: string
+    untimed?: boolean
+  } | null>(null)
+  // Edit a whole logged meal (tag + time) at once, from the meal group
+  // card's own edit affordance — separate from editEntry, which edits one
+  // food item and (for a multi-item meal) splits it off.
+  const [editMeal, setEditMeal] = useState<{
+    logId: string
+    mealName?: string
+    currentTag: string
+    loggedAt: string
+    untimed?: boolean
+  } | null>(null)
   // When set, the food picker appends to THIS specific MealLog (used by "add to
   // this meal" on a logged meal group) rather than the smart tag-append.
   const [addToLogId, setAddToLogId] = useState<string | null>(null)
   const { toast, showToast } = useToast(4000)
+  // Saving a reusable meal needs a free `custom-meals` slot; multi-add never
+  // does. Read (not assumed) so a capped member sees "Log 3 items" instead of
+  // an "Add to meal" the server would refuse — and canCreate, not allowed,
+  // because a member at 3/3 may still edit and delete the meals they have.
+  const { data: entitlements, feature: entitlementFor } = useEntitlements()
+  const canSaveMeals =
+    !entitlements ||
+    entitlements.enforced === false ||
+    entitlementFor('custom-meals')?.canCreate !== false
   // "+ Add tag" inline input state
   const [showAddTagInput, setShowAddTagInput] = useState(false)
   const [newTagInput, setNewTagInput] = useState('')
   // Plans for the visible date — fetched only when viewingFuture (today/past
   // days don't render plans).
   const [plans, setPlans] = useState<MealPlan[]>([])
+  // The member's meal-tag time windows. Empty is the normal state for someone
+  // who has never opened the Meal Schedule screen, and everything downstream
+  // falls back to the app-wide table in that case.
+  const [scheduleWindows, setScheduleWindows] = useState<TagWindow[]>([])
   // Schedule-meals drawer — opens on "Schedule meals" CTA when viewingFuture.
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false)
 
@@ -234,7 +276,7 @@ function NutritionPageInner() {
     changeDate(d)
   }
   const anyOverlayOpen =
-    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null || snapPlateOpen
+    foodSearchOpen || quickAddOpen || scheduleDrawerOpen || editEntry !== null || editMeal !== null || snapPlateOpen
   const swipe = useSwipeNav({
     onPrev: () => shiftDay(-1),
     onNext: () => shiftDay(1),
@@ -250,6 +292,8 @@ function NutritionPageInner() {
   // morning should appear on today's nutrition page, not only on the plan/timeline
   // page). Past days render logs only.
   const showPlans = dateParam >= todayLocalKey()
+  // Exactly today — not future, not past. Drives where "Schedule meals" sits.
+  const viewingToday = dateParam === todayLocalKey()
 
   // ── Auth helper ────────────────────────────────────────────────────────────
 
@@ -276,15 +320,18 @@ function NutritionPageInner() {
           protein: Math.round(data.dailyTotals?.protein ?? 0),
           carbs: Math.round(data.dailyTotals?.carbs ?? 0),
           fats: Math.round(data.dailyTotals?.fats ?? 0),
+          // Already computed by the log API; it was simply never carried
+          // through to the UI.
+          fiber: Math.round(data.dailyTotals?.fiber ?? 0),
         })
       } else {
         setLogs([])
-        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
       }
     } catch (err) {
       console.error('Failed to fetch meal logs:', err)
       setLogs([])
-      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 })
+      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 })
     }
   }, [dateParam, getHeaders])
 
@@ -337,6 +384,40 @@ function NutritionPageInner() {
     }
   }, [getHeaders])
 
+  // Fetched once per mount: the windows change on a settings screen, not while
+  // scrolling days, and a failure here is not worth surfacing — an empty
+  // schedule is a valid state that falls back to app-wide defaults.
+  const fetchSchedule = useCallback(async () => {
+    try {
+      const res = await fetch('/api/nutrition/meal-schedule', { headers: getHeaders() })
+      if (!res.ok) return
+      const data = await res.json().catch(() => null)
+      if (Array.isArray(data?.windows)) setScheduleWindows(data.windows as TagWindow[])
+    } catch {
+      // Keep the empty default.
+    }
+  }, [getHeaders])
+
+  // Also fetched once per mount, same reasoning as fetchSchedule — the target
+  // weight and pace don't move while paging between days.
+  const fetchGoalWeight = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: getHeaders() })
+      if (!res.ok) return
+      const data = await res.json().catch(() => null)
+      const n = data?.nutrition
+      if (!n) return
+      setGoalWeight({
+        weight: n.target?.weight ?? null,
+        unit: n.unit === 'kg' ? 'kg' : 'lbs',
+        direction: n.direction ?? null,
+        paceStatus: n.pace?.status ?? null,
+      })
+    } catch {
+      // No goal line — the ring still stands on its own.
+    }
+  }, [getHeaders])
+
   // Fetch plans for the visible date. Only meaningful when viewingFuture, but
   // we always fetch so that switching between today→future doesn't introduce
   // a flash of stale state. The view filters on viewingFuture downstream.
@@ -360,11 +441,11 @@ function NutritionPageInner() {
   useEffect(() => {
     async function init() {
       if (!didInitialLoad.current) setLoading(true)
-      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans()])
+      await Promise.all([fetchMealLogs(), fetchSideTables(), fetchGoals(), fetchTags(), fetchPlans(), fetchSchedule(), fetchGoalWeight()])
       if (!didInitialLoad.current) { setLoading(false); didInitialLoad.current = true }
     }
     init()
-  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans])
+  }, [fetchMealLogs, fetchSideTables, fetchGoals, fetchTags, fetchPlans, fetchSchedule, fetchGoalWeight])
 
   // Re-open a saved scan to edit (?scan=<id> from the Scan history "Edit"):
   // fetch it and open the plate review pre-loaded with its items.
@@ -391,69 +472,50 @@ function NutritionPageInner() {
     })()
   }, [searchParams, getHeaders])
 
-  // ── Visible tags ──────────────────────────────────────────────────────────────
-  // Only show tags that have content today, plus any session-added empty tags.
-  // Empty default sections (breakfast/lunch/etc with no entries) are hidden so
-  // the page isn't dominated by stub headers — the empty-state CTA invites the
-  // first log instead.
+  // ── The day, in the order it happened ─────────────────────────────────────────
+  //
+  // The unit here used to be the TAG: one section per tag, defaults in a fixed
+  // canonical sequence and custom tags ALPHABETICALLY after them. That produced
+  // two wrong readings of the same day:
+  //
+  //   • breakfast, snack, lunch, snack collapsed into ONE snack section holding
+  //     both snacks, rendered below lunch. The day no longer read in order and
+  //     the two sittings were pooled as though they were one.
+  //   • a "Bed" meal planned for 11pm sorted ABOVE a "Before Work" meal already
+  //     eaten at 8pm, purely because "bed" < "before work".
+  //
+  // The unit is now the OCCURRENCE — one contiguous sitting of one tag — and the
+  // whole day sorts by clock time. See lib/nutrition/dayOrder.ts for the rule.
+  //
+  // Empty tags the member added this session still need somewhere to live, so
+  // they are folded in at their scheduled position rather than pinned to the end.
+  const occurrences = useMemo(
+    () => buildDayOccurrences<MealLogLite, MealPlan>(logs, plans, scheduleWindows, { includePlans: showPlans }),
+    [logs, plans, scheduleWindows, showPlans],
+  )
 
-  const visibleTags = useMemo<string[]>(() => {
-    const defaultsWithContent: string[] = []
-    const customTagsToday = new Set<string>()
-    const addTag = (t: string) => {
-      if (DEFAULT_TAGS.includes(t)) {
-        if (!defaultsWithContent.includes(t)) defaultsWithContent.push(t)
-      } else {
-        customTagsToday.add(t)
-      }
-    }
-    for (const log of logs) {
-      const tags = (log.tags ?? []).map(t => String(t).toLowerCase())
-      const effective = tags.length === 0 ? ['snack'] : tags
-      for (const t of effective) addTag(t)
-    }
-    // When viewing a future date, plans drive section visibility too — a tag
-    // with only plans (no logs) still gets a row so the user sees what's
-    // scheduled.
-    if (showPlans) {
-      for (const p of plans) addTag(String(p.tag).toLowerCase())
-    }
-    // Defaults preserved in canonical order, then custom-with-content sorted, then session-added.
-    const out: string[] = DEFAULT_TAGS.filter(t => defaultsWithContent.includes(t))
-    const customSorted = Array.from(customTagsToday).sort()
-    for (const t of customSorted) if (!out.includes(t)) out.push(t)
-    for (const t of sessionTags) if (!out.includes(t)) out.push(t)
-    return out
-  }, [logs, sessionTags, showPlans, plans])
-
-  // Map tag -> logs that include this tag.
-  const logsByTag = useMemo<Record<string, MealLogLite[]>>(() => {
-    const map: Record<string, MealLogLite[]> = {}
-    for (const t of visibleTags) map[t] = []
-    for (const log of logs) {
-      const tags = (log.tags || []).map(t => String(t).toLowerCase())
-      // If the log has no tags at all, treat it as a "snack" so it stays visible.
-      const effective = tags.length === 0 ? ['snack'] : tags
-      for (const t of effective) {
-        if (!map[t]) map[t] = []
-        map[t].push(log)
-      }
-    }
-    return map
-  }, [visibleTags, logs])
-
-  // Map tag -> plans that target this tag. Empty when not viewing future.
-  const plansByTag = useMemo<Record<string, MealPlan[]>>(() => {
-    const map: Record<string, MealPlan[]> = {}
-    if (!showPlans) return map
-    for (const t of visibleTags) map[t] = []
-    for (const p of plans) {
-      const key = String(p.tag).toLowerCase()
-      if (!map[key]) map[key] = []
-      map[key].push(p)
-    }
-    return map
-  }, [showPlans, plans, visibleTags])
+  const sections = useMemo(() => {
+    const withContent = occurrences.map(o => ({ ...o, empty: false }))
+    const used = new Set(withContent.map(o => o.tag))
+    const empties = sessionTags
+      .map(t => String(t).toLowerCase())
+      .filter(t => !used.has(t))
+      .map(tag => ({
+        key: `empty:${tag}`,
+        tag,
+        sortMinutes: sortMinutesForTag(scheduleWindows, tag),
+        logs: [] as MealLogLite[],
+        plans: [] as MealPlan[],
+        planned: false,
+        untimed: false,
+        empty: true,
+      }))
+    return [...withContent, ...empties].sort((a, b) => {
+      if (a.sortMinutes !== b.sortMinutes) return a.sortMinutes - b.sortMinutes
+      if (a.planned !== b.planned) return a.planned ? 1 : -1
+      return 0
+    })
+  }, [occurrences, sessionTags, scheduleWindows])
 
   // ── Date navigation ───────────────────────────────────────────────────────
 
@@ -461,23 +523,133 @@ function NutritionPageInner() {
 
   const showErrorToast = (msg: string) => showToast(msg, 'error')
 
-  // Find an existing MealLog today whose primary tag === tag.
-  // "Primary tag" = first matching default tag in the log's tags array, else the
-  // first tag, else "snack".
-  const findLogForTag = useCallback((tag: string): MealLogLite | undefined => {
-    const norm = tag.toLowerCase()
-    return logs.find(log => {
-      const tags = (log.tags || []).map(t => String(t).toLowerCase())
-      if (tags.length === 0) return norm === 'snack'
-      // If the chosen tag is in the log's tags, count it as a candidate.
-      if (!tags.includes(norm)) return false
-      // Determine the log's primary tag.
-      const primary = tags.find(t => DEFAULT_TAGS.includes(t)) ?? tags[0]
-      return primary === norm
-    })
-  }, [logs])
+  // Find an existing "loose" MealLog today whose primary tag === tag, skipping
+  // named Meal-template logs (see lib/nutrition/logTagMatch).
+  const findLogForTag = useCallback(
+    (tag: string): MealLogLite | undefined => findLogForTagPure(logs, tag, DEFAULT_TAGS),
+    [logs],
+  )
 
-  const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string) => {
+  /**
+   * Fold items already logged today into one grouped entry, optionally keeping
+   * it as a reusable meal.
+   *
+   * The server does the create-then-strip in one request precisely so this
+   * client cannot leave a half-merged day behind on a dropped connection.
+   */
+  const handleCombine = async (
+    picks: { logId: string; itemId: string }[],
+    opts: { mealName?: string; saveAsMeal: boolean },
+  ) => {
+    if (picks.length < 2) return
+    try {
+      const res = await fetch('/api/meal-logs/combine', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ picks, mealName: opts.mealName, saveAsMeal: opts.saveAsMeal }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        showToast(data?.error || 'Could not combine those items.', 'error')
+        return
+      }
+      showToast(
+        opts.saveAsMeal && opts.mealName
+          ? `Combined ${picks.length} items and saved "${opts.mealName}"`
+          : `Combined ${picks.length} items`,
+        'success',
+      )
+      await fetchMealLogs()
+    } catch {
+      showToast('Could not combine those items.', 'error')
+    }
+  }
+
+  /**
+   * The legacy IFoodEntry shape -> MealItemInput. Shared so the single-add and
+   * multi-add paths cannot drift on which provenance fields they forward.
+   */
+  const toMealItemInput = (food: LoggedFoodEntry) => ({
+    foodId: food.foodId,
+    variantId: food.variantId,
+    variantName: food.variantName,
+    name: food.name,
+    brand: food.brand,
+    servingSize: food.servingSize,
+    servingUnit: food.servingUnit,
+    servings: food.servings,
+    nutrition: food.nutrition,
+    servingLabel: food.servingLabel,
+    loggedQuantity: food.loggedQuantity,
+    loggedUnit: food.loggedUnit,
+    loggedGramsPerServing: food.loggedGramsPerServing,
+    loggedMlPerServing: food.loggedMlPerServing,
+  })
+
+  /**
+   * Log a whole basket in one pass, optionally keeping it as a reusable meal.
+   *
+   * Logging several items together is the point — a burger, its bun and the
+   * sauce were three round trips through the search sheet. Saving the MEAL is
+   * the extra, and it is what needs `custom-meals`, so a member without the
+   * entitlement still gets the multi-add.
+   *
+   * Order matters: the log is what the member asked for, so it goes first and
+   * a failure to save the meal never costs them the log.
+   */
+  const handleAddMany = async (
+    entries: LoggedFoodEntry[],
+    opts: { tag?: string; loggedAt?: string; mealName?: string; untimed?: boolean },
+  ) => {
+    if (entries.length === 0) return
+    const useTag = (opts.tag || foodSearchTag || 'snack').toLowerCase()
+    const items = entries.map(toMealItemInput)
+
+    try {
+      const res = await fetch('/api/meal-logs', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          source: 'manual',
+          tags: [useTag],
+          items,
+          // Name the log even when they are not saving a reusable meal, so the
+          // day reads "Turkey sandwich" instead of three loose rows.
+          ...(opts.mealName ? { mealName: opts.mealName } : {}),
+          ...(opts.loggedAt ? { loggedAt: opts.loggedAt } : {}),
+          untimed: opts.untimed === true,
+        }),
+      })
+      if (!res.ok) {
+        showToast('Could not log those items.', 'error')
+        return
+      }
+
+      if (opts.mealName) {
+        // Best effort. The items are already logged; failing to keep the meal
+        // is worth a quieter message than losing the log would be.
+        const mealRes = await fetch('/api/meals', {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ name: opts.mealName, items }),
+        })
+        showToast(
+          mealRes.ok
+            ? `Logged ${entries.length} items and saved "${opts.mealName}"`
+            : `Logged ${entries.length} items. Could not save the meal.`,
+          mealRes.ok ? 'success' : 'error',
+        )
+      } else {
+        showToast(`Logged ${entries.length} item${entries.length === 1 ? '' : 's'}`, 'success')
+      }
+
+      await fetchMealLogs()
+    } catch {
+      showToast('Could not log those items.', 'error')
+    }
+  }
+
+  const handleAddFood = async (food: IFoodEntry, tag?: string, loggedAtOverride?: string, untimed?: boolean) => {
     const useTag = (tag || foodSearchTag || 'snack').toLowerCase()
     try {
       // Build a MealItemInput from the legacy IFoodEntry shape. The
@@ -514,9 +686,14 @@ function NutritionPageInner() {
       // log of this tag" behavior.
       // "Add to this meal" targets a specific log; otherwise smart-append to the
       // tag's log (unless the user pinned a custom time → always a new entry).
+      // The smart-append target also has to agree on untimed-ness: merging a
+      // "Now"-timed item into an existing untimed log (or vice versa) would
+      // silently discard the user's choice and mislabel the whole section —
+      // this was the "I still incorrectly see 'no time'" report.
+      const smartTarget = loggedAtOverride ? undefined : findLogForTag(useTag)
       const existing = addToLogId
         ? logs.find(l => l._id === addToLogId)
-        : (loggedAtOverride ? undefined : findLogForTag(useTag))
+        : (smartTarget && Boolean(smartTarget.untimed) === (untimed === true) ? smartTarget : undefined)
       let res: Response
       if (existing) {
         res = await fetch(`/api/meal-logs/${existing._id}/items`, {
@@ -542,6 +719,9 @@ function NutritionPageInner() {
             items: [itemPayload],
             tags: [useTag],
             loggedAt,
+            // Logged for the day with no clock. The day view places it by the
+            // tag's anchor rather than by loggedAt's time-of-day.
+            untimed: untimed === true,
           }),
         })
       }
@@ -552,7 +732,7 @@ function NutritionPageInner() {
         setFoodSearchOpen(false)
         setFoodSearchAutoScan(false)
         setAddToLogId(null)
-        // Once a session-added tag has content, it'll appear via logsByTag — drop it.
+        // Once a session-added tag has content it becomes a real occurrence — drop it.
         setSessionTags(prev => prev.filter(t => t !== useTag))
       } else {
         const data = await res.json().catch(() => null)
@@ -582,14 +762,15 @@ function NutritionPageInner() {
     }
   }
 
-  // Log it — promote a plan into a real log (today only). Mirrors the meal-plan
-  // page's "Log it". Refetches so the planned row becomes a logged row.
+  // Log it — promote a plan into a real, explicitly untimed log (today only).
+  // The plan names the meal/day but not the moment it was eaten, so stamping
+  // the button-press time would invent information the member never supplied.
   const handleLogPlan = async (planId: string) => {
     try {
       const res = await fetch(`/api/meal-plans/${planId}/promote`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ untimed: true }),
       })
       if (!res.ok) throw new Error('promote_failed')
       await Promise.all([fetchMealLogs(), fetchPlans()])
@@ -721,9 +902,15 @@ function NutritionPageInner() {
   const handleAddSessionTag = () => {
     const norm = newTagInput.trim().toLowerCase().replace(/\s+/g, '-')
     if (!norm) return
-    if (!visibleTags.includes(norm)) {
+    // Only needs adding when nothing on the day already covers it; an existing
+    // occurrence of that tag is already a section.
+    if (!sections.some(s => s.tag === norm)) {
       setSessionTags(prev => [...prev, norm])
     }
+    // sessionTags is session-only by design (an empty section you added but
+    // never used should not linger), but the TAG itself must survive so it is
+    // offered next time. Those are different things and only the second is saved.
+    void createMealTag(norm)
     setNewTagInput('')
     setShowAddTagInput(false)
   }
@@ -734,20 +921,31 @@ function NutritionPageInner() {
 
   // Quick-add total calories
   const quickAddCalories = quickAdds.reduce((s, qa) => s + (qa.calories || 0), 0)
-  // Planned totals for the visible date — only meaningful when viewingFuture
-  // (when not, plans is empty / filtered upstream).
+  // Planned totals for the visible date — meaningful whenever plans can exist
+  // for it (today or a future day; past days never render plans, see showPlans).
   const plannedTotals = useMemo(() => {
-    if (!viewingFuture) return { calories: 0, protein: 0, carbs: 0, fats: 0 }
-    let c = 0, p = 0, cb = 0, f = 0
+    if (!showPlans) return { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+    let c = 0, p = 0, cb = 0, f = 0, fib = 0
     for (const plan of plans) {
       const n = plan.expectedNutrition
       c += n?.calories ?? 0
       p += n?.protein ?? 0
       cb += n?.carbs ?? 0
       f += n?.fats ?? 0
+      fib += (n as { fiber?: number } | undefined)?.fiber ?? 0
     }
-    return { calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb), fats: Math.round(f) }
-  }, [viewingFuture, plans])
+    return {
+      calories: Math.round(c), protein: Math.round(p), carbs: Math.round(cb),
+      fats: Math.round(f), fiber: Math.round(fib),
+    }
+  }, [showPlans, plans])
+
+  // Today only: meals still planned (not yet logged) render as a light shadow
+  // past the actual consumed arc/bars — a preview of where the day lands if
+  // the rest of today's plan gets eaten. Future days already show plannedTotals
+  // as the primary ring value (nothing to shadow against); past days don't
+  // carry a shadow since there's nothing left to eat.
+  const todayPlannedExtra = viewingToday ? plannedTotals : null
 
   // The CalorieRing shows MealLog daily totals + quick-add calories on today/
   // past dates. On future dates the ring previews PLANNED totals — there are
@@ -806,6 +1004,33 @@ function NutritionPageInner() {
   // FeatureGuard while the food DB + macro tracker stabilized. Kept the
   // FeatureGuard component around in case we need to gate other surfaces
   // again, but nutrition is unlocked for every authed user.
+
+  // "Schedule meals" is the same control everywhere, but WHERE it sits is what
+  // tells you what it means:
+  //
+  //   future day → above the timeline. Scheduling is the only thing you can do
+  //                on a day you have not lived yet, so it leads.
+  //   today      → below the water tracker, at the very end of the day. You
+  //                scroll down past what you have already eaten and it is
+  //                waiting there, which reads as "the rest of today" rather
+  //                than as a second, competing way to add food. Planning a meal
+  //                you have not eaten yet has always worked (the API allows
+  //                today; see /api/meal-plans §past-date check) — there was
+  //                simply nowhere on this page to reach it.
+  //   past day   → not rendered. There is no future left to plan.
+  //
+  // One definition, two placements, so the two can never drift apart.
+  const scheduleMealsButton = (
+    <button
+      type="button"
+      onClick={() => setScheduleDrawerOpen(true)}
+      className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+    >
+      <CalendarDays className="h-4 w-4" />
+      Schedule meals
+    </button>
+  )
+
   return (
     <>
       {/* pb-28 keeps the last interactive controls (water +oz, Quick Add / Meal
@@ -840,6 +1065,9 @@ function NutritionPageInner() {
                     <Link href={`/dashboard/timeline?date=${dateParam}`} onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
                       <Clock className="h-4 w-4" /> Timeline
                     </Link>
+                    <Link href="/dashboard/nutrition/meal-schedule" onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                      <CalendarClock className="h-4 w-4" /> Meal Schedule
+                    </Link>
                     <Link href="/dashboard/nutrition/scans" onClick={() => setNavMenuOpen(false)} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                       <History className="h-4 w-4" /> Estimate history
                     </Link>
@@ -854,7 +1082,7 @@ function NutritionPageInner() {
             (take photo / scan barcode) and an upload (upload photo / describe). */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => openFoodSearch(getDefaultTagForNow())}
+            onClick={() => openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())))}
             data-tour="nutrition-search"
             className="flex min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-left transition-colors hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800/60 dark:hover:border-zinc-700 dark:hover:bg-zinc-800"
           >
@@ -879,7 +1107,7 @@ function NutritionPageInner() {
                   <button onClick={() => { setCaptureMenu(null); openSnapCamera() }} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     <Camera className="h-4 w-4" /> Take photo
                   </button>
-                  <button onClick={() => { setCaptureMenu(null); openFoodSearch(getDefaultTagForNow(), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  <button onClick={() => { setCaptureMenu(null); openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())), true) }} className="flex w-full items-center gap-2.5 border-t border-zinc-100 px-3 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-800">
                     <ScanBarcode className="h-4 w-4" /> Scan barcode
                   </button>
                 </div>
@@ -925,17 +1153,17 @@ function NutritionPageInner() {
         />
 
         {/* Future-day schedule CTA — static across future-day paging, so it
-            sits OUTSIDE the sliding region. */}
-        {viewingFuture && visibleTags.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setScheduleDrawerOpen(true)}
-            className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-          >
-            <CalendarDays className="h-4 w-4" />
-            Schedule meals
-          </button>
-        )}
+            sits OUTSIDE the sliding region.
+            
+            NOT gated on visibleTags. It used to be, which meant the button only
+            existed once the day already had something on it — so on a fresh
+            future day it rendered from the PREVIOUS day's tags still sitting in
+            state, then vanished the moment they cleared. It read as a flash.
+            Worse, a member with quick-adds configured fell between this and the
+            empty state below (which requires no quick-adds) and got no way to
+            schedule at all. Scheduling is exactly what a future day is for; the
+            button should never be conditional on the day being non-empty. */}
+        {viewingFuture && scheduleMealsButton}
 
         {/* Date-scoped content — slides horizontally on date change (same
             motion as the calendar grid). popLayout keeps exit/enter stacked. */}
@@ -956,13 +1184,29 @@ function NutritionPageInner() {
         <CalorieRing
           consumed={totalConsumedCalories}
           goal={goals.calories}
-          protein={{ current: totalProtein, goal: goals.protein }}
-          carbs={{ current: totalCarbs, goal: goals.carbs }}
-          fats={{ current: totalFats, goal: goals.fats }}
+          protein={{ current: totalProtein, goal: goals.protein, planned: todayPlannedExtra?.protein }}
+          carbs={{ current: totalCarbs, goal: goals.carbs, planned: todayPlannedExtra?.carbs }}
+          fiber={viewingFuture ? plannedTotals.fiber : dailyTotals.fiber}
+          fats={{ current: totalFats, goal: goals.fats, planned: todayPlannedExtra?.fats }}
+          plannedExtra={todayPlannedExtra?.calories}
         />
+        {goalWeight && (
+          <p
+            data-testid="nutrition-goal-line"
+            className="-mt-2 text-center text-xs text-zinc-500 dark:text-zinc-400"
+          >
+            {nutritionGoalLine({
+              calories: goals.calories,
+              targetWeight: goalWeight.weight,
+              unit: goalWeight.unit,
+              direction: goalWeight.direction,
+              paceStatus: goalWeight.paceStatus,
+            })}
+          </p>
+        )}
 
         {/* Empty state — nothing logged today yet (or nothing planned, on a future day) */}
-        {visibleTags.length === 0 && quickAdds.length === 0 && (
+        {sections.length === 0 && quickAdds.length === 0 && (
           <EmptyState
             icon={<UtensilsCrossed className="h-6 w-6" />}
             title={viewingFuture ? 'Nothing planned yet' : 'Nothing logged yet'}
@@ -972,13 +1216,10 @@ function NutritionPageInner() {
             action={
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {viewingFuture ? (
-                  <button
-                    onClick={() => setScheduleDrawerOpen(true)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    Schedule meals
-                  </button>
+                  // The blue CTA above is always present on a future day now, so
+                  // a second Schedule button here would just be the same action
+                  // twice on one screen.
+                  null
                 ) : (
                   <>
                     <button
@@ -1012,26 +1253,37 @@ function NutritionPageInner() {
 
 
 
-        {/* Tag Sections */}
-        {visibleTags.map(tag => (
+        {/* One section per OCCURRENCE, in clock order — so a second snack later
+            in the day is its own section rather than being pooled into the
+            first one. Keyed by occurrence, not tag; two snack sections would
+            collide on a tag key. */}
+        {sections.map(section => (
           <TagSection
-            key={tag}
-            tag={tag}
-            logs={logsByTag[tag] || []}
-            plans={plansByTag[tag] || []}
+            key={section.key}
+            tag={section.tag}
+            logs={section.logs}
+            plans={section.plans}
+            // No clock label on an untimed sitting: it has a position, not a
+            // time, and printing the anchor would read as a time the member
+            // never entered.
+            occurrenceAt={section.logs.length > 0 && !section.untimed ? section.sortMinutes : undefined}
+            untimed={section.untimed}
             onAddFood={(t) => openFoodSearch(t, false)}
             onAddToMeal={(logId, t) => openAddToMeal(logId, t)}
-            onEditEntry={(logId, item) => setEditEntry({ logId, item })}
+            onEditEntry={(logId, item, currentTag, loggedAt, untimed) => {
+              setEditEntry({ logId, item, currentTag, loggedAt, untimed })
+            }}
+            onEditMeal={(logId, mealName, currentTag, loggedAt, untimed) => {
+              setEditMeal({ logId, mealName, currentTag, loggedAt, untimed })
+            }}
             onRemoveEntry={handleRemoveEntry}
             onRemovePlan={handleRemovePlan}
             onLogPlan={dateParam === todayLocalKey() ? handleLogPlan : undefined}
             onRemoveTag={handleRemoveSessionTag}
-            removable={
-              sessionTags.includes(tag)
-              && (logsByTag[tag] || []).length === 0
-              && (plansByTag[tag] || []).length === 0
-            }
+            removable={section.empty && sessionTags.includes(section.tag)}
             onPlan={(t) => openPlanDatePicker(t)}
+            onCombine={handleCombine}
+            canSaveMeals={canSaveMeals}
             futureDate={viewingFuture}
           />
         ))}
@@ -1121,6 +1373,9 @@ function NutritionPageInner() {
           onAddWater={handleAddWater}
         />
 
+        {/* End of today: what is still ahead of you. See scheduleMealsButton. */}
+        {viewingToday && scheduleMealsButton}
+
         </motion.div>
         </AnimatePresence>
         </div>
@@ -1179,7 +1434,7 @@ function NutritionPageInner() {
           as the day view scrolls. Sits above the floating BottomNav (z-40) and
           clears it via bottom-28; modals (z-50+) overlay it. */}
       <button
-        onClick={() => openFoodSearch(getDefaultTagForNow())}
+        onClick={() => openFoodSearch(defaultTagAt(scheduleWindows, minutesOfDay(new Date())))}
         aria-label={viewingFuture ? 'Schedule food' : 'Add food'}
         className="fixed bottom-28 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-zinc-900 text-white shadow-lg shadow-zinc-900/30 transition-transform hover:scale-105 active:scale-95 dark:bg-white dark:text-zinc-900"
       >
@@ -1189,7 +1444,7 @@ function NutritionPageInner() {
       {/* Snap Plate Modal — AI vision plate estimator */}
       <SnapPlateModal
         open={snapPlateOpen}
-        tag={getDefaultTagForNow()}
+        tag={defaultTagAt(scheduleWindows, minutesOfDay(new Date()))}
         tagOptions={Array.from(new Set([...tagsResp.defaults, ...tagsResp.userTags]))}
         dateKey={dateParam}
         initialPhase={snapPlatePhase}
@@ -1214,7 +1469,9 @@ function NutritionPageInner() {
         onUpload={() => openSnapUpload()}
         onDescribe={(text) => openDescribe(text)}
         onClose={() => { setFoodSearchOpen(false); setFoodSearchAutoScan(false); setPlanForDate(null); setAddToLogId(null) }}
-        onSelectFood={(entry, tag, loggedAt) => {
+        onAddMany={handleAddMany}
+        canSaveMeals={canSaveMeals}
+        onSelectFood={(entry, tag, loggedAt, _planOptions, untimed) => {
           if (planForDate) {
             // Submit to /api/meal-plans inline since the nutrition page's
             // handleAddFood targets the log endpoint by default.
@@ -1260,7 +1517,7 @@ function NutritionPageInner() {
               showErrorToast('Failed to plan food. Check your connection.')
             })
           }
-          return handleAddFood(entry, tag, loggedAt)
+          return handleAddFood(entry, tag, loggedAt, untimed)
         }}
       />
 
@@ -1322,8 +1579,25 @@ function NutritionPageInner() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        loggedAt={editEntry?.loggedAt}
+        untimed={editEntry?.untimed}
+        currentTag={editEntry?.currentTag}
+        availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
-        onSaved={fetchMealLogs}
+        onSaved={() => { fetchMealLogs(); fetchTags() }}
+      />
+
+      {/* Edit Meal Modal — moves a whole logged meal's tag/time at once */}
+      <EditMealModal
+        isOpen={editMeal !== null}
+        logId={editMeal?.logId ?? null}
+        mealName={editMeal?.mealName}
+        currentTag={editMeal?.currentTag ?? 'snack'}
+        loggedAt={editMeal?.loggedAt}
+        untimed={editMeal?.untimed}
+        availableTags={tagsResp}
+        onClose={() => setEditMeal(null)}
+        onSaved={() => { fetchMealLogs(); fetchTags() }}
       />
 
       {/* Schedule-meals drawer — opens from the future-date empty-state CTA

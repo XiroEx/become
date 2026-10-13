@@ -9,11 +9,16 @@ import {
   Scale,
   Dumbbell,
   Utensils,
+  Brain,
+  UtensilsCrossed,
+  Zap,
 } from 'lucide-react'
 import { Card, StatTile, type StatTileAccent, type StatTileSize } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import MoodCard, { type MoodLevel } from '@/components/MoodCard'
-import { STREAK_MILESTONES } from '@/lib/streakConstants'
+import type { StreaksLite } from '@/lib/streaks/tile'
+import StreakTile from '@/components/dashboard/StreakTile'
+import { describeGoal } from '@/lib/dashboard/goalTile'
 import type { MetricData } from '@/components/ProgressChart'
 
 /* -------------------------------------------------------------------------- */
@@ -29,6 +34,9 @@ export type DashboardTileId =
   | 'water'
   | 'weight'
   | 'workouts'
+  | 'mindset'
+  | 'nutrition'
+  | 'workoutNow'
 
 export interface UserProgressData {
   weightData: MetricData[]
@@ -53,6 +61,17 @@ export interface UserProgressData {
     thisWeekWorkouts: number
     goalProgress: number
   }
+  /** The member's goals from their profile — see /api/progress. */
+  goal?: {
+    fitnessGoal: string | null
+    nutritionDirection: string | null
+    targetWeightKg: number | null
+    startWeightKg: number | null
+    weeklyAvailability: number | null
+    weightUnit: 'lbs' | 'kg'
+    pace?: { kgPerWeek: number | null; status: string; etaWeeks: number | null; eta: string; behindByKg: number } | null
+  } | null
+  longestStreak?: number
 }
 
 export interface DashboardStreakData {
@@ -76,11 +95,21 @@ export interface DashboardTileContext {
   data: UserProgressData
   streakData: DashboardStreakData | null
   nutritionData: DashboardNutritionData | null
-  weeklyAvailability: number
+  /** Every streak the member is running (GET /api/streaks) — the streak tile pages through them. */
+  streaks?: StreaksLite | null
+  /** Workouts per week the member committed to; null when they never set one. */
+  weeklyAvailability: number | null
   weightUnit: 'lbs' | 'kg'
   todaysMood: MoodLevel | null
   isMoodUpdating: boolean
   onMoodChange: (mood: MoodLevel) => void
+  /** Opens the Log Weight bottom sheet in place — the Weight tile logs here
+   *  instead of navigating to Progress. */
+  onOpenWeightSheet: () => void
+  /** Opens the "Workout Now" quick-session sheet in place — the Workout Now
+   *  tile jumps straight into starting a session instead of navigating to
+   *  the Workout hub first. */
+  onOpenQuickSession: () => void
   /**
    * True while the backing data for stat tiles is still loading for the first
    * time (no value has arrived yet and there's no cached value to show). When
@@ -158,46 +187,24 @@ function StatTileSkeleton({ size = '1x1' }: { size?: StatTileSize }): React.Reac
 /* -------------------------------------------------------------------------- */
 
 function renderStreak(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
-  if (ctx.loading) return <StatTileSkeleton size={size} />
-  const { streakData, data } = ctx
-  const days = streakData?.streakDays ?? data.stats.streakDays ?? 0
-  const next = streakData?.nextMilestone
-
-  let footer: React.ReactNode
-  if (next && days > 0) {
-    const prev = STREAK_MILESTONES.filter(m => m <= days).slice(-1)[0] ?? 0
-    const pct = Math.min(100, Math.round(((days - prev) / (next - prev)) * 100))
-    footer = (
-      <div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-amber-500 transition-all duration-500"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-        <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">{next - days}d to 🏆</p>
-      </div>
-    )
-  } else {
-    footer = <PlaceholderFooter label="Start your streak" />
-  }
-
-  return (
-    <StatTile
-      size={size}
-      href="/dashboard/progress"
-      accent="amber"
-      icon={<Flame className={`${size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} ${streakData?.activityToday ? '' : 'opacity-40'}`} />}
-      label="Day Streak"
-      labelExtra={streakData && streakData.streakFreezes > 0 ? (
-        <span className="ml-1.5 text-blue-500 dark:text-blue-400">
-          {'❄'.repeat(streakData.streakFreezes)}
-        </span>
-      ) : null}
-      value={days}
-      footer={footer}
-    />
-  )
+  // Every streak, one page at a time — super first when there is one. Falls
+  // back to the day streak alone while /api/streaks is still in flight.
+  const fallback: StreaksLite | null = ctx.streaks ?? (ctx.streakData ? {
+    overall: {
+      current: ctx.streakData.streakDays,
+      best: ctx.streakData.longestStreak,
+      nextMilestone: ctx.streakData.nextMilestone,
+      activeToday: ctx.streakData.activityToday,
+      freezes: ctx.streakData.streakFreezes,
+    },
+    pillars: {
+      workout: { unit: 'days', current: 0, best: 0, thisWeek: 0, target: null, weekLost: false },
+      nutrition: { current: 0, best: 0, activeToday: false },
+      mindset: { current: 0, best: 0, activeToday: false },
+      super: { current: 0, best: 0, activeToday: false, today: { nutrition: false, mindset: false, trained: false, restDay: false, weekOnTrack: true } },
+    },
+  } : null)
+  return <StreakTile streaks={fallback} size={size} loading={ctx.loading && !fallback} />
 }
 
 function renderMood(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
@@ -214,19 +221,36 @@ function renderMood(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Reac
 
 function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
   if (ctx.loading) return <StatTileSkeleton size={size} />
-  const { data, weeklyAvailability } = ctx
-  const pct = weeklyAvailability > 0
-    ? Math.min(100, Math.round((data.stats.thisWeekWorkouts / weeklyAvailability) * 100))
-    : 0
-  const remaining = Math.max(0, weeklyAvailability - data.stats.thisWeekWorkouts)
+  const { data } = ctx
+  // The target is what the member set (profile.weeklyAvailability). No target
+  // means no fraction — "2/4" against an invented 4 was a goal nobody chose.
+  const target = data.goal?.weeklyAvailability ?? ctx.weeklyAvailability ?? null
+  const done = data.stats.thisWeekWorkouts
+  if (!target) {
+    return (
+      <StatTile
+        size={size}
+        href="/dashboard/settings"
+        accent="green"
+        icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+        label="This Week"
+        value={done}
+        footer={<PlaceholderFooter label="Set a weekly target" />}
+      />
+    )
+  }
+  const pct = Math.min(100, Math.round((done / target) * 100))
+  const remaining = Math.max(0, target - done)
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress#workouts"
+      // The training log — the sessions this number counts. (It used to open the
+      // streaks page, which is where the flame tile goes.)
+      href="/dashboard/history"
       accent="green"
       icon={<TrendingUp className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="This Week"
-      value={`${data.stats.thisWeekWorkouts}/${weeklyAvailability}`}
+      value={`${done}/${target}`}
       footer={(
         <div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -236,7 +260,7 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
             />
           </div>
           <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
-            {remaining === 0 ? 'Weekly goal hit 🎉' : `${remaining} to weekly goal`}
+            {remaining === 0 ? 'Weekly target hit 🎉' : `${remaining} to weekly target`}
           </p>
         </div>
       )}
@@ -247,24 +271,50 @@ function renderWeekly(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
 function renderGoal(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
   if (ctx.loading) return <StatTileSkeleton size={size} />
   const { data } = ctx
-  const pct = Math.min(100, Math.max(0, data.stats.goalProgress))
+  const unit = data.goal?.weightUnit ?? ctx.weightUnit
+  const weights = data.weightData
+  const view = describeGoal({
+    fitnessGoal: data.goal?.fitnessGoal,
+    nutritionDirection: data.goal?.nutritionDirection,
+    targetWeightKg: data.goal?.targetWeightKg,
+    startWeightKg: data.goal?.startWeightKg,
+    // weightData is in the member's unit already (weight is stored as logged).
+    latestWeight: weights.length ? weights[weights.length - 1].value : null,
+    earliestWeight: weights.length ? weights[0].value : null,
+    weightUnit: unit,
+    pace: data.goal?.pace ?? null,
+    program: data.currentProgram
+      ? {
+          name: data.currentProgram.name,
+          completedWorkouts: data.currentProgram.completedWorkouts,
+          totalWorkouts: data.currentProgram.totalWorkouts,
+          currentWeek: data.currentProgram.currentWeek,
+          totalWeeks: data.currentProgram.totalWeeks,
+          programId: data.currentProgram.programId,
+        }
+      : null,
+  })
+  // Amber: a goal is a target, the same gold the streaks and a complete week
+  // wear. Violet is the mind pillar, and this tile is not mind.
+  const barClass = view.atTarget ? 'bg-green-500' : 'bg-amber-500'
   return (
     <StatTile
       size={size}
-      accent="purple"
+      href={view.href}
+      accent="amber"
       icon={<Target className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
-      label="Goal"
-      value={`${data.stats.goalProgress}%`}
+      label={view.label}
+      value={view.kind === 'unset' ? <span className="text-zinc-400 dark:text-zinc-500">{view.value}</span> : view.value}
       footer={(
         <div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
             <div
-              className="h-full rounded-full bg-purple-500 transition-all duration-500"
-              style={{ width: `${pct}%` }}
+              className={`h-full rounded-full ${barClass} transition-all duration-500`}
+              style={{ width: `${view.pct}%` }}
             />
           </div>
-          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
-            {pct >= 100 ? 'Annual goal hit 🎯' : 'Annual goal'}
+          <p className="mt-0.5 truncate text-[11px] text-zinc-400 dark:text-zinc-600">
+            {view.direction === 'down' ? '↓ ' : view.direction === 'up' ? '↑ ' : ''}{view.footer}
           </p>
         </div>
       )}
@@ -386,7 +436,7 @@ function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
     return (
       <StatTile
         size={size}
-        href="/dashboard/progress"
+        onClick={ctx.onOpenWeightSheet}
         accent="zinc"
         icon={weightIcon}
         label="Weight"
@@ -424,7 +474,7 @@ function renderWeight(ctx: DashboardTileContext, size: StatTileSize = '1x1'): Re
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress"
+      onClick={ctx.onOpenWeightSheet}
       accent="zinc"
       icon={weightIcon}
       label="Weight"
@@ -450,7 +500,7 @@ function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
   return (
     <StatTile
       size={size}
-      href="/dashboard/progress#workouts"
+      href="/dashboard/history"
       accent="zinc"
       icon={<Dumbbell className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
       label="Total Workouts"
@@ -468,6 +518,57 @@ function renderWorkouts(ctx: DashboardTileContext, size: StatTileSize = '1x1'): 
           </p>
         </div>
       )}
+    />
+  )
+}
+
+function renderMindset(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      // ?start=1 tells MindJourney to compose + begin today's session the
+      // moment it's ready — the tile jumps straight past the Mind home
+      // screen into the session itself, not just onto the page.
+      href="/dashboard/mind?start=1"
+      accent="purple"
+      icon={<Brain className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Mindset"
+      value="Begin"
+      footer={<PlaceholderFooter label="Jump into today's session" />}
+    />
+  )
+}
+
+function renderNutritionAction(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      href="/dashboard/nutrition"
+      accent="red"
+      icon={<UtensilsCrossed className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Nutrition"
+      value="Log"
+      footer={<PlaceholderFooter label="Add today's meals" />}
+    />
+  )
+}
+
+function renderWorkoutNow(ctx: DashboardTileContext, size: StatTileSize = '1x1'): React.ReactNode {
+  if (ctx.loading) return <StatTileSkeleton size={size} />
+  return (
+    <StatTile
+      size={size}
+      // Opens the "Workout Now" sheet in place (same pattern as the Weight
+      // tile's onOpenWeightSheet) rather than navigating to the Workout hub
+      // first — the tile IS the shortcut.
+      onClick={ctx.onOpenQuickSession}
+      accent="green"
+      icon={<Zap className={size === '2x1' ? 'h-5 w-5' : 'h-4 w-4'} />}
+      label="Workout Now"
+      value="Start"
+      footer={<PlaceholderFooter label="Jump into a session now" />}
     />
   )
 }
@@ -496,7 +597,7 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
   weekly: {
     id: 'weekly',
     label: 'This Week',
-    description: 'Workouts logged this week',
+    description: 'Workouts finished vs your weekly target',
     accent: 'green',
     Icon: TrendingUp,
     render: renderWeekly,
@@ -504,7 +605,7 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
   goal: {
     id: 'goal',
     label: 'Goal',
-    description: 'Annual goal progress',
+    description: 'How far to your target',
     accent: 'purple',
     Icon: Target,
     render: renderGoal,
@@ -541,6 +642,30 @@ export const TILE_DEFS: Record<DashboardTileId, DashboardTileDef> = {
     Icon: Dumbbell,
     render: renderWorkouts,
   },
+  mindset: {
+    id: 'mindset',
+    label: 'Mindset',
+    description: "Jump straight into today's session",
+    accent: 'purple',
+    Icon: Brain,
+    render: renderMindset,
+  },
+  nutrition: {
+    id: 'nutrition',
+    label: 'Nutrition',
+    description: 'Jump straight into logging food',
+    accent: 'red',
+    Icon: UtensilsCrossed,
+    render: renderNutritionAction,
+  },
+  workoutNow: {
+    id: 'workoutNow',
+    label: 'Workout Now',
+    description: 'Jump straight into starting a workout',
+    accent: 'green',
+    Icon: Zap,
+    render: renderWorkoutNow,
+  },
 }
 
 export const ALL_TILE_IDS: DashboardTileId[] = [
@@ -552,6 +677,9 @@ export const ALL_TILE_IDS: DashboardTileId[] = [
   'water',
   'weight',
   'workouts',
+  'mindset',
+  'nutrition',
+  'workoutNow',
 ]
 
 export const DEFAULT_TILE_IDS: DashboardTileId[] = ['streak', 'mood', 'weekly', 'goal']

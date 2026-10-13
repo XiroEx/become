@@ -1252,6 +1252,28 @@ const exercises = [
     tags: ['conditioning', 'hiit', 'full_body'], region: 'full_body',
   }),
 
+  ex('Stair Climber', {
+    aliases: ['Stairmaster', 'Stair Master', 'StairMaster', 'Stepmill', 'Stair Mill'],
+    pat: ['gait'], role: 'secondary', mech: 'compound',
+    cat: 'cardio',
+    pri: ['quads', 'glutes', 'calves'], sec: ['hamstrings'], stab: ['abs'],
+    eq: ['stair_climber'],
+    track: 'time_distance',
+    cardio: { trackDistance: true, trackPace: false, trackCalories: true, trackHeartRate: true, trackIncline: false, trackResistance: true, trackCadence: true },
+    tags: ['cardio', 'low_impact', 'glute_builder', 'stairs'], region: 'lower_body',
+  }),
+
+  ex('Elliptical', {
+    aliases: ['Elliptical Trainer', 'Cross Trainer'],
+    pat: ['gait'], role: 'secondary', mech: 'compound',
+    cat: 'cardio', diff: 'beginner',
+    pri: ['quads', 'glutes', 'hamstrings'], sec: ['calves', 'front_delts'], stab: ['abs'],
+    eq: ['elliptical'],
+    track: 'time_distance',
+    cardio: { trackDistance: true, trackPace: true, trackCalories: true, trackHeartRate: true, trackIncline: false, trackResistance: true, trackCadence: true },
+    tags: ['cardio', 'low_impact', 'full_body'], region: 'full_body',
+  }),
+
   ex('Burpee', {
     aliases: ['Burpees'],
     pat: ['squat', 'horizontal_push'], role: 'compound', mech: 'compound',

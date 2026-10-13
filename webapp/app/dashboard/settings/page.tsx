@@ -1,15 +1,33 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import { getToken } from '@/lib/clientAuth'
+import PacePicker from '@/components/goals/PacePicker'
+import { defaultPaceKg } from '@become/core'
+import { ensurePushSubscription } from '@/lib/push/ensureSubscription'
 import PasskeySetupButton from '@/components/PasskeySetupButton'
+import LegalLinks from '@/components/legal/LegalLinks'
+import DangerZone from '@/components/settings/DangerZone'
+// Renders NOTHING unless Stripe is holding a subscription for this member, so
+// free members, grandfathered members and admins see no change at all.
+import BillingSection from '@/components/billing/BillingSection'
+import {
+  AI_CONSENT_SENDS,
+  AI_PROVIDER,
+  AI_PROVIDER_ROUTE,
+  HEALTH_DISCLAIMER_SHORT,
+  LEGAL_CONTACT_EMAIL,
+  LEGAL_DELETION_DAYS,
+} from '@become/core'
 import Toast from '@/components/ui/Toast'
 import { useToast } from '@/hooks/useToast'
 import type { FitnessGoal, ExperienceLevel, BiologicalSex, EquipmentType, WeightUnit, IUserProfile, PlanPromoteMode } from '@/models/User'
 // Conversions are shared with onboarding and the nutrition goals page so the
-// three screens can never disagree about what a member weighs. See lib/bodyUnits.
+// three screens can never disagree about what a member weighs. See @become/core.
 import {
   cmToFtIn,
   ftInToCm,
@@ -17,7 +35,7 @@ import {
   displayWeight,
   roundWeight,
   roundHeightCm,
-} from '@/lib/bodyUnits'
+} from '@become/core'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,15 +88,42 @@ interface NotificationPrefs {
   mealReminder: boolean
   reEngagement: boolean
   chatMessage: boolean
+  mindReminder: boolean
+  goalNudge: boolean
+  superStreakAtRisk: boolean
+  checkInReminder: boolean
+  dailyGlance: boolean
 }
 
 type NotificationPrefKey = keyof NotificationPrefs
 
 interface PreferencesResponse {
   preferences?: Partial<NotificationPrefs>
+  notificationsEnabled?: boolean
+  /** Streak / milestone email. Absent = on. */
+  emailEngagement?: boolean
+}
+
+interface ConsentResponse {
+  acceptedVersion?: string | null
+  acceptedAt?: string | null
+  /** The separate AI-sharing permission — lib/aiConsent.ts#AiConsentStatus. */
+  ai?: {
+    granted?: boolean
+    decided?: boolean
+    decidedAt?: string | null
+    revokedAt?: string | null
+  }
 }
 
 const NOTIFICATION_TOGGLES: { key: NotificationPrefKey; label: string; sublabel: string }[] = [
+  // First in the list and OFF by default — the one entry here that is not a
+  // nudge. It is the lock-screen card, so it only exists if you ask for it.
+  { key: 'dailyGlance', label: 'Daily glance (lock screen)', sublabel: "One morning card with your streak, calories left and today's session. Off by default." },
+  { key: 'checkInReminder', label: 'Daily check-in', sublabel: "Early afternoon nudge to log today's mood + weight if you haven't yet" },
+  { key: 'mindReminder', label: 'Daily mindset session', sublabel: 'Morning nudge when your session is ready' },
+  { key: 'goalNudge', label: 'Goal nudges', sublabel: 'Behind pace, protein floor missed, tight training week — evenings, at most one a day' },
+  { key: 'superStreakAtRisk', label: 'Super streak at risk', sublabel: 'Late afternoon, when one pillar is still missing and the streak would break tonight' },
   { key: 'streakAtRisk', label: 'Streak at risk', sublabel: 'When your streak is about to expire' },
   { key: 'workoutReminder', label: 'Workout reminder', sublabel: 'When you have a session scheduled today' },
   { key: 'mealReminder', label: 'Meal log reminder', sublabel: "Evening nudge when you haven't logged any food" },
@@ -101,9 +146,25 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageInner />
+    </Suspense>
+  )
+}
+
+function SettingsPageInner() {
+  const searchParams = useSearchParams()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'profile' | 'training' | 'settings'>('profile')
+  const [activeTab, setActiveTab] = useState<'profile' | 'training' | 'settings'>(() => {
+    const t = searchParams?.get('tab')
+    return t === 'training' || t === 'settings' ? t : 'profile'
+  })
+  // Deep link from the Becoming training suggestion (`?tab=training#weekly-availability`):
+  // the target field pulses once so it's found, not just landed on.
+  const [highlightWeekly, setHighlightWeekly] = useState(false)
+  const weeklyAvailabilityRef = useRef<HTMLDivElement>(null)
   const { toast, showToast } = useToast()
 
   // Form state
@@ -125,6 +186,9 @@ export default function SettingsPage() {
   // Weight — display values in current unit
   const [weightDisplay, setWeightDisplay] = useState<string>('')
   const [targetWeightDisplay, setTargetWeightDisplay] = useState<string>('')
+  // Pace toward the target — lives on the dated Goal (/api/goals), not the profile.
+  const [paceKgPerWeek, setPaceKgPerWeek] = useState<number | null>(null)
+  const [nutritionDirection, setNutritionDirection] = useState<'lose' | 'maintain' | 'gain' | null>(null)
 
   const [equipmentAccess, setEquipmentAccess] = useState<EquipmentType[]>([])
   const [injuryNotes, setInjuryNotes] = useState<string>('')
@@ -140,12 +204,35 @@ export default function SettingsPage() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>({
     streakAtRisk: true,
     workoutReminder: true,
+    mindReminder: true,
+    goalNudge: true,
+    superStreakAtRisk: true,
+    checkInReminder: true,
     mealReminder: true,
     reEngagement: true,
     chatMessage: true,
+    // Opt-in, unlike every other row. See the preferences route.
+    dailyGlance: false,
   })
   const [notifPrefsLoading, setNotifPrefsLoading] = useState(true)
   const [enablingNotifications, setEnablingNotifications] = useState(false)
+  // Whether THIS DEVICE currently has a subscription the server can reach.
+  // Distinct from browser permission: "granted" only means the user said yes
+  // once, not that we still hold a working subscription for them.
+  const [deviceRegistered, setDeviceRegistered] = useState<boolean | null>(null)
+  const [repairing, setRepairing] = useState(false)
+  // Master switch, separate from browser permission — a browser never lets a
+  // site revoke permission it already granted, so "off" has to live here.
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
+  const [disablingNotifications, setDisablingNotifications] = useState(false)
+  // Email is its own switch: it is not push, it is not gated by browser
+  // permission, and it is the one CAN-SPAM requires to be honoured.
+  const [emailEngagement, setEmailEngagement] = useState(true)
+  // What this member agreed to and when, from GET /api/me/consent.
+  const [consent, setConsent] = useState<ConsentResponse | null>(null)
+  // The separate AI permission. Its own switch because it is its own consent:
+  // it can be refused, it can be withdrawn, and the app works either way.
+  const [aiShareAllowed, setAiShareAllowed] = useState(false)
 
   const fetchProfile = useCallback(async () => {
     const token = getToken()
@@ -170,6 +257,17 @@ export default function SettingsPage() {
 
       const unit: WeightUnit = p.weightUnit ?? 'lbs'
       setWeightUnit(unit)
+      setNutritionDirection(p.nutritionDirection ?? null)
+
+      // The plan's pace (chosen at onboarding, or defaulted by direction).
+      fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => (r.ok ? r.json() : null))
+        .then((g: { nutrition?: { target?: { paceKgPerWeek?: number | null }; direction?: 'lose' | 'maintain' | 'gain' | null } } | null) => {
+          if (!g?.nutrition) return
+          if (g.nutrition.direction) setNutritionDirection(g.nutrition.direction)
+          setPaceKgPerWeek(g.nutrition.target?.paceKgPerWeek ?? null)
+        })
+        .catch(() => {})
 
       if (unit === 'lbs') {
         // Convert stored cm → ft/in
@@ -199,6 +297,21 @@ export default function SettingsPage() {
     fetchProfile()
   }, [fetchProfile])
 
+  useEffect(() => {
+    if (loading || typeof window === 'undefined') return
+    if (window.location.hash !== '#weekly-availability') return
+    setActiveTab('training')
+    setHighlightWeekly(true)
+    const timer = setTimeout(() => setHighlightWeekly(false), 3000)
+    return () => clearTimeout(timer)
+  }, [loading])
+
+  useEffect(() => {
+    if (activeTab === 'training' && highlightWeekly) {
+      weeklyAvailabilityRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [activeTab, highlightWeekly])
+
   // ─── Notifications ────────────────────────────────────────────────────────
 
   const fetchNotifPrefs = useCallback(async () => {
@@ -213,13 +326,20 @@ export default function SettingsPage() {
       })
       if (!res.ok) return
       const data: PreferencesResponse = await res.json()
+      setNotificationsEnabled(data.notificationsEnabled !== false)
+      setEmailEngagement(data.emailEngagement !== false)
       const p = data.preferences ?? {}
       setNotifPrefs({
+        mindReminder: p.mindReminder ?? true,
+        goalNudge: p.goalNudge ?? true,
+        superStreakAtRisk: p.superStreakAtRisk ?? true,
+        checkInReminder: p.checkInReminder ?? true,
         streakAtRisk: p.streakAtRisk ?? true,
         workoutReminder: p.workoutReminder ?? true,
         mealReminder: p.mealReminder ?? true,
         reEngagement: p.reEngagement ?? true,
         chatMessage: p.chatMessage ?? true,
+        dailyGlance: p.dailyGlance ?? false,
       })
     } catch {
       // ignore — defaults remain
@@ -237,10 +357,27 @@ export default function SettingsPage() {
     setNotifPermission(permission)
     if (permission === 'granted') {
       fetchNotifPrefs()
+      // "Granted" says the user agreed once; it does NOT say we still hold a
+      // subscription. Reconcile, then report what is actually true.
+      ensurePushSubscription()
+        .then((outcome) => setDeviceRegistered(outcome !== 'failed' && outcome !== 'unsupported'))
+        .catch(() => setDeviceRegistered(false))
     } else {
       setNotifPrefsLoading(false)
     }
   }, [fetchNotifPrefs])
+
+  const repairSubscription = async () => {
+    setRepairing(true)
+    try {
+      const outcome = await ensurePushSubscription({ force: true })
+      const ok = outcome !== 'failed' && outcome !== 'unsupported'
+      setDeviceRegistered(ok)
+      showToast(ok ? 'This device is registered' : 'Could not register this device', ok ? 'success' : 'error')
+    } finally {
+      setRepairing(false)
+    }
+  }
 
   const handleNotifToggle = async (key: NotificationPrefKey, value: boolean) => {
     const previous = notifPrefs[key]
@@ -265,6 +402,82 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error('PATCH failed')
     } catch {
       setNotifPrefs(prev => ({ ...prev, [key]: previous }))
+      showToast('Failed to save preference', 'error')
+    }
+  }
+
+  const fetchConsent = useCallback(async () => {
+    const token = getToken()
+    if (!token) return
+    try {
+      const res = await fetch('/api/me/consent', { headers: { Authorization: `Bearer ${token}` } })
+      if (!res.ok) return
+      const data = (await res.json()) as ConsentResponse
+      setConsent(data)
+      setAiShareAllowed(data.ai?.granted === true)
+    } catch {
+      // Informational only; the gate is what enforces it.
+    }
+  }, [])
+
+  // The AI permission, on and off. ON posts the grant; OFF is a DELETE, the
+  // withdrawal — and it takes effect on the very next AI request, because the
+  // server gate reads the record per request rather than caching it.
+  //
+  // Optimistic, then reverted on failure: a switch that silently stayed on
+  // after a member turned it off would be the worst possible bug on this
+  // particular control.
+  const handleAiConsentToggle = async (value: boolean) => {
+    const previous = aiShareAllowed
+    setAiShareAllowed(value)
+    const token = getToken()
+    if (!token) {
+      setAiShareAllowed(previous)
+      showToast('Failed to save preference', 'error')
+      return
+    }
+    try {
+      const res = value
+        ? await fetch('/api/me/ai-consent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ accepted: true, source: 'settings' }),
+          })
+        : await fetch('/api/me/ai-consent', {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+      if (!res.ok) throw new Error('save failed')
+      showToast(value ? 'AI features are on' : 'AI sharing is off', 'success')
+      fetchConsent()
+    } catch {
+      setAiShareAllowed(previous)
+      showToast('Failed to save preference', 'error')
+    }
+  }
+
+  useEffect(() => {
+    fetchConsent()
+  }, [fetchConsent])
+
+  const handleEmailToggle = async (value: boolean) => {
+    const previous = emailEngagement
+    setEmailEngagement(value)
+    const token = getToken()
+    if (!token) {
+      setEmailEngagement(previous)
+      showToast('Failed to save preference', 'error')
+      return
+    }
+    try {
+      const res = await fetch('/api/notifications/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ emailEngagement: value }),
+      })
+      if (!res.ok) throw new Error('PATCH failed')
+    } catch {
+      setEmailEngagement(previous)
       showToast('Failed to save preference', 'error')
     }
   }
@@ -301,6 +514,9 @@ export default function SettingsPage() {
                   p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')!))),
                   auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')!))),
                 },
+                // Explicit user action — the only thing allowed to clear a
+                // prior "turned off" state server-side. See subscribe/route.ts.
+                reenable: true,
               }),
             })
           }
@@ -309,6 +525,7 @@ export default function SettingsPage() {
         }
       }
 
+      setNotificationsEnabled(true)
       // Now that permission is granted, load per-type preferences
       setNotifPrefsLoading(true)
       await fetchNotifPrefs()
@@ -317,6 +534,43 @@ export default function SettingsPage() {
       showToast('Failed to enable notifications', 'error')
     } finally {
       setEnablingNotifications(false)
+    }
+  }
+
+  const disableNotifications = async () => {
+    setDisablingNotifications(true)
+    try {
+      // Drop this device's browser-level push registration so it stops
+      // holding a subscription the server has already forgotten.
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          const reg = await navigator.serviceWorker.ready
+          const sub = await reg.pushManager.getSubscription()
+          if (sub) await sub.unsubscribe()
+        } catch (err) {
+          console.warn('Push unsubscribe failed:', err)
+        }
+      }
+
+      const token = getToken()
+      if (!token) return
+      const res = await fetch('/api/notifications/unsubscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      })
+      if (!res.ok) throw new Error('unsubscribe failed')
+
+      setNotificationsEnabled(false)
+      setDeviceRegistered(null)
+      showToast('Notifications turned off')
+    } catch {
+      showToast('Failed to turn off notifications', 'error')
+    } finally {
+      setDisablingNotifications(false)
     }
   }
 
@@ -417,6 +671,15 @@ export default function SettingsPage() {
         body: JSON.stringify({ name, profile }),
       })
       if (res.ok) {
+        // Pace rides on the goal, which ensureGoals rebuilds from the profile we
+        // just saved (a changed target starts a fresh plan from today's weight).
+        if (storedTargetKg !== undefined && paceKgPerWeek) {
+          await fetch('/api/goals', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pillar: 'nutrition', paceKgPerWeek, tz: new Date().getTimezoneOffset() }),
+          }).catch(() => {})
+        }
         showToast('Profile saved successfully')
       } else {
         showToast('Failed to save profile', 'error')
@@ -674,6 +937,27 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+
+            {/* Pace toward the target — the plan behind the Goal tile and the Becoming page. */}
+            {targetWeightDisplay !== '' && weightDisplay !== '' && (() => {
+              const cur = Number(weightDisplay), tgt = Number(targetWeightDisplay)
+              const dir: 'lose' | 'maintain' | 'gain' =
+                nutritionDirection && nutritionDirection !== 'maintain' ? nutritionDirection
+                : Math.abs(cur - tgt) < (isImperial ? 2 : 0.9) ? 'maintain' : tgt < cur ? 'lose' : 'gain'
+              if (dir === 'maintain') return null
+              return (
+                <div className="mt-4">
+                  <PacePicker
+                    unit={isImperial ? 'lbs' : 'kg'}
+                    direction={dir}
+                    valueKgPerWeek={paceKgPerWeek ?? defaultPaceKg(dir)}
+                    onChange={setPaceKgPerWeek}
+                    latestWeight={cur}
+                    targetWeight={tgt}
+                  />
+                </div>
+              )
+            })()}
           </section>
 
           <SaveButton />
@@ -749,7 +1033,11 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-            <div>
+            <div
+              id="weekly-availability"
+              ref={weeklyAvailabilityRef}
+              className={`rounded-xl ${highlightWeekly ? 'settings-highlight-pulse' : ''}`}
+            >
               <label className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Weekly Availability</label>
               <div className="flex items-center gap-4">
                 <button
@@ -830,38 +1118,71 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                      notifPermission === 'granted'
+                      notifPermission === 'granted' && notificationsEnabled && deviceRegistered !== false
                         ? 'bg-green-500'
-                        : notifPermission === 'denied'
+                        : (notifPermission === 'granted' && notificationsEnabled) || notifPermission === 'denied'
                           ? 'bg-red-500'
                           : 'bg-zinc-400 dark:bg-zinc-500'
                     }`}
                   />
                   <p className="text-sm font-medium text-zinc-900 dark:text-white">
-                    {notifPermission === 'granted' ? 'Active' : notifPermission === 'denied' ? 'Blocked' : 'Not enabled'}
+                    {notifPermission === 'granted'
+                      ? !notificationsEnabled
+                        ? 'Off'
+                        : deviceRegistered === false
+                          ? 'Not reaching this device'
+                          : 'Active'
+                      : notifPermission === 'denied'
+                        ? 'Blocked'
+                        : 'Not enabled'}
                   </p>
                 </div>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   {notifPermission === 'granted'
-                    ? "You'll receive push notifications"
+                    ? !notificationsEnabled
+                      ? 'You turned off notifications for Become. Turn them back on anytime.'
+                      : deviceRegistered === false
+                        ? 'Permission is on, but this device has no working subscription. Tap Repair.'
+                        : "You'll receive push notifications"
                     : notifPermission === 'denied'
                       ? 'Enable in your browser settings to receive notifications'
                       : 'Turn on notifications to stay on your streak'}
                 </p>
               </div>
-              {notifPermission === 'default' && (
+              {(notifPermission === 'default' || (notifPermission === 'granted' && !notificationsEnabled)) && (
                 <button
                   type="button"
                   onClick={enableNotifications}
                   disabled={enablingNotifications}
                   className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
                 >
-                  {enablingNotifications ? 'Enabling…' : 'Enable'}
+                  {enablingNotifications ? 'Enabling…' : notifPermission === 'granted' ? 'Turn on' : 'Enable'}
+                </button>
+              )}
+              {/* Permission granted but unreachable — previously a dead end,
+                  since every subscribe path was gated on permission='default'. */}
+              {notifPermission === 'granted' && notificationsEnabled && deviceRegistered === false && (
+                <button
+                  type="button"
+                  onClick={repairSubscription}
+                  disabled={repairing}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {repairing ? 'Repairing…' : 'Repair'}
                 </button>
               )}
             </div>
-            {notifPermission === 'granted' && (
-              <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+            {notifPermission === 'granted' && notificationsEnabled && (
+              <>
+                <button
+                  type="button"
+                  onClick={disableNotifications}
+                  disabled={disablingNotifications}
+                  className="mt-3 text-xs font-medium text-red-600 hover:underline disabled:opacity-60 dark:text-red-400"
+                >
+                  {disablingNotifications ? 'Turning off…' : 'Turn off notifications'}
+                </button>
+                <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
                 {notifPrefsLoading ? (
                   <div className="space-y-4">
                     {[...Array(3)].map((_, i) => (
@@ -902,8 +1223,106 @@ export default function SettingsPage() {
                     )
                   })
                 )}
-              </div>
+                </div>
+              </>
             )}
+          </section>
+
+          {/* Email. Separate from push on purpose: a member with notifications
+              off, or on a browser that never asked, still gets streak mail —
+              and CAN-SPAM needs this switch to exist and to work. Sign-in
+              links are not on it; nobody can opt out of the only way in. */}
+          <section
+            id="email"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          >
+            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">Email</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">Streak and milestone emails</p>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  A note when you hit a streak milestone. Sign-in links always arrive.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={emailEngagement}
+                aria-label="Streak and milestone emails"
+                data-testid="email-engagement-toggle"
+                onClick={() => handleEmailToggle(!emailEngagement)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                  emailEngagement ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                    emailEngagement ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+          </section>
+
+          {/* AI features. The switch behind App Store Guideline 5.1.2(i): a
+              member's data reaches the AI provider only while this is on, and
+              turning it off is a withdrawal that takes effect on the next
+              request. It sits next to Email rather than inside Legal because a
+              member looking to turn something OFF looks among the switches. */}
+          <section
+            id="ai"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          >
+            <h2 className="mb-4 text-base font-semibold text-zinc-900 dark:text-white">AI features</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-zinc-900 dark:text-white">
+                  Share my inputs with {AI_PROVIDER}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Off means nothing you enter is sent to the AI, and AI features fall back to their non-AI versions.
+                </p>
+              </div>
+              <button
+                role="switch"
+                aria-checked={aiShareAllowed}
+                aria-label={`Share my inputs with ${AI_PROVIDER}`}
+                data-testid="ai-consent-toggle"
+                onClick={() => handleAiConsentToggle(!aiShareAllowed)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+                  aiShareAllowed ? 'bg-blue-600' : 'bg-zinc-600'
+                }`}
+              >
+                <span
+                  className={`mt-0.5 inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ease-in-out ${
+                    aiShareAllowed ? 'translate-x-5' : 'translate-x-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              What gets sent, when it is on, through {AI_PROVIDER_ROUTE}:
+            </p>
+            <ul className="mt-1.5 list-disc space-y-1 pl-5 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              {AI_CONSENT_SENDS.map(item => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {consent?.ai?.decidedAt && (
+              <p data-testid="ai-consent-record" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                {consent.ai.granted
+                  ? 'You allowed this on '
+                  : 'You turned this off on '}
+                {new Date(consent.ai.revokedAt ?? consent.ai.decidedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                .
+              </p>
+            )}
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              Section 7 of the{' '}
+              <Link href="/privacy#ai" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+                Privacy Policy
+              </Link>{' '}
+              describes this in full.
+            </p>
           </section>
 
           {/* Nutrition Planning */}
@@ -941,6 +1360,51 @@ export default function SettingsPage() {
           </section>
 
           <SaveButton />
+
+          {/* Billing. Above the legal block on purpose: the sentence down there
+              tells a member to cancel a paid plan before deleting the account,
+              and this is the button that does it. Self-contained — it decides
+              for itself whether that button or the note explaining there is no
+              payment method on the account is the honest thing to draw. */}
+          <BillingSection />
+
+          {/* Legal & support. Settings is where a member looks for these, and
+              where an App Store reviewer looks for the account-deletion path —
+              which lives in its own section rendered below in this tab. */}
+          <section
+            id="legal"
+            className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          >
+            <h2 className="mb-1 text-base font-semibold text-zinc-900 dark:text-white">
+              Legal &amp; support
+            </h2>
+            <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+              What you agreed to, what we hold, and how to reach a person.
+            </p>
+            <LegalLinks />
+            {consent?.acceptedAt && consent.acceptedVersion && (
+              <p data-testid="consent-record" className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                You agreed to the Terms and Privacy Policy ({consent.acceptedVersion}) on{' '}
+                {new Date(consent.acceptedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}.
+              </p>
+            )}
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{HEALTH_DISCLAIMER_SHORT}</p>
+            <p className="mt-4 border-t border-zinc-200 pt-4 text-xs leading-relaxed text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+              You can delete your account yourself, at the bottom of this screen. Everything goes within{' '}
+              {LEGAL_DELETION_DAYS} days of the request, and you have a few days to change your mind.
+              Cancel any paid plan first, or email{' '}
+              <a
+                href={`mailto:${LEGAL_CONTACT_EMAIL}`}
+                className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white"
+              >
+                {LEGAL_CONTACT_EMAIL}
+              </a>{' '}
+              and we will cancel it for you.
+            </p>
+          </section>
+
+          {/* Delete account surface — only appears in the "settings" tab */}
+          <DangerZone />
         </>
       )}
 

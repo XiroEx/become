@@ -1,7 +1,10 @@
 "use client"
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { loginWithPasskey, passkeysSupported } from '@/lib/passkeyClient'
+import { CONSENT_STATEMENT, LEGAL_MINIMUM_AGE } from '@/lib/legal'
+import { REVIEW_SIGN_IN_PATH } from '@/lib/reviewSignIn'
 
 interface Props {
   mode: 'login' | 'register'
@@ -10,13 +13,21 @@ interface Props {
 export default function AuthForm({ mode }: Props) {
   const router = useRouter()
   const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
+  // Register mode only. The box is `required`, so the browser blocks submit
+  // until it is ticked; the server refuses a register request without it too.
+  const [consent, setConsent] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
   const [canPasskey, setCanPasskey] = useState(false)
+  // App-reviewer door. Collapsed by default — it is one designated account and
+  // a code held in the runtime config, not something a member has. See
+  // lib/reviewSignIn.ts.
+  const [showReviewCode, setShowReviewCode] = useState(false)
+  const [reviewCode, setReviewCode] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
   const submittingRef = useRef(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -100,7 +111,7 @@ export default function AuthForm({ mode }: Props) {
       const res = await fetch('/api/auth/send-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, name, mode }),
+        body: JSON.stringify({ email, mode, ...(mode === 'register' ? { consent } : {}) }),
       })
 
       const data = await res.json()
@@ -116,6 +127,35 @@ export default function AuthForm({ mode }: Props) {
     } finally {
       submittingRef.current = false
       setLoading(false)
+    }
+  }
+
+  /**
+   * Spend a review code. Same screen, same email box — the only difference is
+   * that the server answers with the session directly instead of sending mail,
+   * which is the whole point: a reviewer has no inbox here.
+   */
+  async function handleReviewSignIn(e?: React.SyntheticEvent) {
+    e?.preventDefault()
+    if (reviewBusy) return
+    setError(null)
+    setReviewBusy(true)
+    try {
+      const res = await fetch(REVIEW_SIGN_IN_PATH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), code: reviewCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.token) {
+        throw new Error(data?.message || 'That review code is not valid for this email address.')
+      }
+      localStorage.setItem('token', data.token)
+      router.push('/dashboard')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not sign in with that review code.')
+    } finally {
+      setReviewBusy(false)
     }
   }
 
@@ -168,16 +208,10 @@ export default function AuthForm({ mode }: Props) {
 
   return (
     <form onSubmit={handleSendLink} className="flex w-full max-w-md flex-col gap-4">
-      {mode === 'register' && (
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Full name"
-          required
-          className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
-        />
-      )}
-
+      {/* Sign-up asks for an email and nothing else. A name typed here is a
+          stranger's demand before the member knows what they are getting;
+          onboarding asks for it a minute later, when it is obvious why we want
+          it. See app/onboarding — step 2. */}
       <input
         value={email}
         onChange={(e) => setEmail(e.target.value)}
@@ -187,8 +221,36 @@ export default function AuthForm({ mode }: Props) {
         className="rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-2 text-zinc-900 dark:text-white placeholder:text-zinc-500"
       />
 
+      {/* The moment of agreement. One tick covers age and terms together —
+          see CONSENT_STATEMENT — and the sentence is the same one the in-app
+          gate shows, so a member is never asked two different questions. The
+          links open in a new tab: navigating away here loses the typed form. */}
+      {mode === 'register' && (
+        <label className="flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+          <input
+            type="checkbox"
+            required
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            data-testid="consent-checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-zinc-300 accent-zinc-900 dark:border-zinc-600 dark:accent-white"
+          />
+          <span>
+            I am at least {LEGAL_MINIMUM_AGE} years old, and I agree to the{' '}
+            <Link href="/terms" target="_blank" rel="noreferrer" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Terms of Service
+            </Link>{' '}
+            and the{' '}
+            <Link href="/privacy" target="_blank" rel="noreferrer" className="font-medium text-zinc-900 underline underline-offset-2 dark:text-white">
+              Privacy Policy
+            </Link>
+            .<span className="sr-only"> {CONSENT_STATEMENT}</span>
+          </span>
+        </label>
+      )}
+
       <button
-        disabled={loading}
+        disabled={loading || (mode === 'register' && !consent)}
         className="cursor-pointer rounded bg-zinc-900 dark:bg-white px-4 py-2 text-white dark:text-zinc-900 font-medium disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? 'Sending...' : 'Continue with email'}
@@ -231,6 +293,60 @@ export default function AuthForm({ mode }: Props) {
           </svg>
           {passkeyBusy ? 'Waiting for passkey…' : 'Sign in with a passkey'}
         </button>
+      )}
+
+      {/* App reviewers. Apple and Google hand the build to a person who has to
+          sign in, and a magic link needs an inbox they do not have — so the one
+          designated demo account can be opened with the review code instead.
+          The code only ever works for that account, it is rate limited, and it
+          is switchable off from the runtime config (lib/reviewSignIn.ts).
+          Collapsed, and below the divider: it is not an option a member has. */}
+      {mode === 'login' && (
+        <div className="mt-1 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {!showReviewCode ? (
+            <button
+              type="button"
+              data-testid="review-code-disclosure"
+              onClick={() => setShowReviewCode(true)}
+              className="cursor-pointer text-xs text-zinc-500 underline underline-offset-2 dark:text-zinc-400"
+            >
+              App reviewer? Use a review code
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="review-code" className="text-xs text-zinc-500 dark:text-zinc-400">
+                Enter the email and review code you were given.
+              </label>
+              <input
+                id="review-code"
+                data-testid="review-code-input"
+                value={reviewCode}
+                onChange={(e) => setReviewCode(e.target.value)}
+                onKeyDown={(e) => {
+                  // Enter here means "spend the code", not "send me a link" —
+                  // without this the outer form would swallow it.
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void handleReviewSignIn()
+                  }
+                }}
+                placeholder="Review code"
+                autoComplete="one-time-code"
+                spellCheck={false}
+                className="rounded border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder:text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+              />
+              <button
+                type="button"
+                data-testid="review-code-submit"
+                disabled={reviewBusy || !email.trim() || !reviewCode.trim()}
+                onClick={handleReviewSignIn}
+                className="cursor-pointer rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:text-white"
+              >
+                {reviewBusy ? 'Signing in…' : 'Sign in with review code'}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}

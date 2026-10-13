@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -17,8 +17,24 @@ import {
   TrendingDown,
   Minus,
   TrendingUp,
+  HelpCircle,
+  AlertTriangle,
 } from 'lucide-react'
 import { getToken } from '@/lib/clientAuth'
+import { isFallbackName } from '@/lib/displayName'
+import ConsentGate from '@/components/ConsentGate'
+import TrialOfferModal from '@/components/onboarding/TrialOfferModal'
+import { HEALTH_DISCLAIMER_SHORT, LEGAL_MINIMUM_AGE } from '@become/core'
+import MacroExplainSheet from '@/components/nutrition/MacroExplainSheet'
+import PacePicker from '@/components/goals/PacePicker'
+import { defaultPaceKg, directionFromWeights, kgToUnit as goalKgToUnit } from '@become/core'
+import {
+  explainCalories,
+  explainMacro,
+  proteinNeedsFlag,
+  MACRO_LABELS,
+  type MacroKey,
+} from '@/lib/nutrition/macroExplain'
 import { defaultIconForGoal } from '@/lib/reward/icons'
 import {
   computeNutritionTargets,
@@ -26,8 +42,17 @@ import {
   activityFromTrainingDays,
   waterGoalOz,
   DIRECTION_EXPLANATION,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+  splitForPreset,
+  recommendPreset,
+  calorieAdjustment,
   type NutritionDirection,
-} from '@/lib/nutrition/tdee'
+  type ActivityLevel,
+  type MacroPreset,
+} from '@become/core'
 import type { FitnessGoal, ExperienceLevel, EquipmentType } from '@/lib/programMatch'
 import {
   lbsToKg,
@@ -36,7 +61,7 @@ import {
   displayWeight,
   roundWeight,
   roundHeightCm,
-} from '@/lib/bodyUnits'
+} from '@become/core'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,9 +77,19 @@ interface ProfileData {
   heightCm?: number
   currentWeightKg?: number
   targetWeightKg?: number
+  /** Chosen pace toward the target (kg/week). Lives on the Goal, not the profile;
+   *  posted to /api/goals right after the profile is saved. */
+  paceKgPerWeek?: number
   equipmentAccess?: EquipmentType[]
   injuryNotes?: string
   weeklyAvailability?: number
+  /** Asked DIRECTLY rather than inferred from training days. Training frequency
+   *  is not the same thing as daily activity — a labourer and a desk worker who
+   *  both lift 3x/week have very different TDEEs, and this multiplier swings the
+   *  calorie target by ~600 cal, so it is the least safe thing to guess. */
+  activityLevel?: ActivityLevel
+  /** Which macro split the member chose. */
+  macroPreset?: MacroPreset
   /** The unit the user actually typed in. Profile weights are always stored in
    *  kg, but the weight LOG is stored raw in the user's display unit — so we
    *  have to carry this through to seed the first log entry correctly. */
@@ -116,7 +151,23 @@ const DIRECTION_OPTIONS: { value: NutritionDirection; label: string; sub: string
 
 const TOTAL_STEPS = 5
 
-const STEP_TITLES = ['Goals', 'Background', 'Body & nutrition', 'Equipment', 'Review'] as const
+const STEP_TITLES = ['Goals', 'About you', 'Body & nutrition', 'Equipment', 'Review'] as const
+
+/** Every text box in the wizard, so a new step cannot invent its own. */
+const INPUT_CLS =
+  'w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white'
+
+/** Plain-English activity descriptions — the multiplier alone means nothing to a member. */
+const ACTIVITY_BLURBS: Record<ActivityLevel, string> = {
+  sedentary: 'Desk job, mostly sitting, little walking',
+  light: 'On your feet some of the day, light walking',
+  moderate: 'Moving a good part of the day',
+  active: 'On your feet most of the day, or a physical job',
+  very_active: 'Hard physical work all day',
+}
+
+/** 'custom' is a Nutrition-tab concept; onboarding offers the four real splits. */
+const MACRO_PRESET_CHOICES: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb']
 
 // ── Animation variants ────────────────────────────────────────────────────────
 
@@ -195,7 +246,18 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState(1)
   const [profile, setProfile] = useState<ProfileData>({})
+  /** What the member wants to be called. Sign-up no longer asks — it takes an
+   *  email and nothing else — so this is where the name is collected, and step
+   *  2 will not advance without one. An account created before that always
+   *  carries SOMETHING (verify-link invents the email's local part), so the box
+   *  starts empty unless the stored name is a real answer; prefilling
+   *  "george8794" is how you get a member called george8794. */
+  const [name, setName] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Shown after the profile save lands, before the push to /dashboard — the
+  // one moment between onboarding and the dashboard's first-run tour the card
+  // asks for. See components/onboarding/TrialOfferModal.tsx.
+  const [showTrialOffer, setShowTrialOffer] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
   /** Once the member picks a calorie direction themselves we stop re-deriving
    *  it from the primary goal — their explicit choice wins. */
@@ -207,6 +269,45 @@ export default function OnboardingPage() {
     profile.nutritionDirection ?? directionForGoal(primaryGoal)
 
   const { rec, loading: recLoading } = useRecommendation(profile, authChecked)
+  // Optional enrolment straight from the recommendation. Onboarding used to end
+  // with a program match the member could not act on, and a dashboard that then
+  // said "No program yet".
+  const [enrolling, setEnrolling] = useState(false)
+  const [enrolled, setEnrolled] = useState(false)
+
+  const enrolInRecommended = useCallback(async () => {
+    if (!rec || enrolling || enrolled) return
+    setEnrolling(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/programs/enroll', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ programId: rec.program_id }),
+      })
+      // A failure here must never block finishing onboarding — enrolling is a
+      // bonus, not a step.
+      if (res.ok) setEnrolled(true)
+    } catch {
+      /* stay un-enrolled; they can start it from the dashboard */
+    } finally {
+      setEnrolling(false)
+    }
+  }, [rec, enrolling, enrolled])
+
+  // Mifflin-St Jeor needs all four. Without them computeNutritionTargets()
+  // returns null, no goal document is seeded, and the member silently inherits
+  // the schema defaults (2000/150/200/65) that describe nobody. So step 3 cannot
+  // be passed until we can actually compute an honest number.
+  const canComputeTargets = Boolean(
+    profile.currentWeightKg &&
+    profile.heightCm &&
+    profile.age &&
+    profile.biologicalSex,
+  )
 
   const targets = useMemo(
     () =>
@@ -218,9 +319,13 @@ export default function OnboardingPage() {
         goals,
         direction: effectiveDirection,
         weeklyAvailability: profile.weeklyAvailability,
+        activityLevel: profile.activityLevel,
+        macroPreset: profile.macroPreset,
+        paceKgPerWeek: profile.paceKgPerWeek ?? defaultPaceKg(effectiveDirection),
       }),
-    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability]
+    [profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, goals, effectiveDirection, profile.weeklyAvailability, profile.activityLevel, profile.macroPreset, profile.paceKgPerWeek]
   )
+
 
   // ── Auth check on mount ──────────────────────────────────────────────────
   useEffect(() => {
@@ -256,6 +361,9 @@ export default function OnboardingPage() {
             router.replace('/dashboard')
             return
           }
+          // A name from Google, or one typed on a previous run through this
+          // flow, is a real answer worth keeping. The invented one is not.
+          if (!isFallbackName(data.name, data.email)) setName(String(data.name))
         }
       } catch {
         // If profile fetch fails, still show onboarding
@@ -311,11 +419,28 @@ export default function OnboardingPage() {
     setProfile((p) => ({ ...p, nutritionDirection: d }))
   }
 
-  // ── Submit (finish or skip) ──────────────────────────────────────────────
-  async function submit(profileOverride?: ProfileData) {
+  /** Step 3's onChange. Body stats and weights flow straight into the profile,
+   *  but a change to either weight also re-derives the calorie direction from
+   *  them — target weight is the intent; direction is read off it, not
+   *  collected a second time. Only while the member hasn't picked a direction
+   *  explicitly (setDirectionChoice), same as the goal-based default it replaces. */
+  const handleStep3Change = useCallback((updates: Partial<ProfileData>) => {
+    setProfile((p) => {
+      const next = { ...p, ...updates }
+      if (!directionTouched && ('currentWeightKg' in updates || 'targetWeightKg' in updates)) {
+        next.nutritionDirection =
+          directionFromWeights(next.currentWeightKg, next.targetWeightKg) ??
+          directionForGoal(next.fitnessGoals?.[0])
+      }
+      return next
+    })
+  }, [directionTouched])
+
+  // ── Submit (finish) ───────────────────────────────────────────────────────
+  async function submit() {
     setIsSubmitting(true)
     const token = getToken()
-    const payload = profileOverride ?? profile
+    const payload = profile
     const payloadGoals = payload.fitnessGoals ?? []
     const payloadDirection = payload.nutritionDirection ?? directionForGoal(payloadGoals[0])
 
@@ -327,8 +452,11 @@ export default function OnboardingPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          // Only when there is one: User.name is required, so writing an empty
+          // string here would replace the placeholder with nothing at all.
+          ...(name.trim() ? { name: name.trim() } : {}),
           profile: {
-            ...payload,
+            ...Object.fromEntries(Object.entries(payload).filter(([k]) => k !== 'paceKgPerWeek')),
             // fitnessGoal stays the single primary goal — the dashboard, nudge
             // modal, profile icon and AI context all read that one field.
             fitnessGoal: payloadGoals[0],
@@ -352,6 +480,19 @@ export default function OnboardingPage() {
       // user who entered 175 lb got a first log entry of 79 — which then showed
       // up as "79 lbs" on the dashboard/progress chart until they logged again.
       const seeds: Promise<unknown>[] = []
+
+      // The chosen pace lives on the dated Goal (lib/goals), created from the
+      // profile we just saved. Default by direction if the member never touched
+      // the chips.
+      if (payload.targetWeightKg && payloadDirection !== 'maintain') {
+        seeds.push(
+          fetch('/api/goals', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ pillar: 'nutrition', paceKgPerWeek: payload.paceKgPerWeek ?? defaultPaceKg(payloadDirection), tz: new Date().getTimezoneOffset() }),
+          }).catch(() => {})
+        )
+      }
 
       if (payload.currentWeightKg) {
         const unit = payload.weightUnit ?? 'lbs'
@@ -380,6 +521,9 @@ export default function OnboardingPage() {
         goals: payloadGoals,
         direction: payloadDirection,
         weeklyAvailability: payload.weeklyAvailability,
+        activityLevel: payload.activityLevel,
+        macroPreset: payload.macroPreset,
+        paceKgPerWeek: payload.paceKgPerWeek ?? defaultPaceKg(payloadDirection),
       })
       if (seedTargets) {
         seeds.push(
@@ -394,6 +538,7 @@ export default function OnboardingPage() {
               waterGoal: waterGoalOz(payload.currentWeightKg),
               goalType: seedTargets.direction,
               activityLevel: seedTargets.activityLevel,
+              macroPreset: payload.macroPreset ?? 'recommended',
             }),
           }).catch(() => {})
         )
@@ -408,9 +553,26 @@ export default function OnboardingPage() {
     } catch {
       // Still navigate on error — don't block the user
     } finally {
-      router.push('/dashboard')
+      // The trial offer decides for itself whether it has anything honest to
+      // show (TrialOfferModal bails to onDismiss when it does not), so this
+      // always opens it rather than branching here — a second, divergent
+      // "should we ask" check here could disagree with the one the modal
+      // itself makes.
+      setIsSubmitting(false)
+      setShowTrialOffer(true)
     }
   }
+
+  /** Either answer to the trial offer, or the offer deciding it had nothing
+   *  honest to show: all three land here, and the page has nothing left to do
+   *  but move on.
+   *
+   *  MEMOISED. TrialOfferModal's bail runs in an effect keyed on this prop, so
+   *  a fresh closure per render re-ran it and pushed /dashboard again for the
+   *  same decision. */
+  const finishOnboarding = useCallback(() => {
+    router.push('/dashboard')
+  }, [router])
 
   // ── Loading / auth gate ──────────────────────────────────────────────────
   if (!authChecked) {
@@ -425,6 +587,13 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
+      {/* A member created by Google or a passkey has no agreement on record
+          yet. Ask here, before a single health field is typed, not after. */}
+      <ConsentGate />
+      {/* The trial offer, after the profile save and before /dashboard — see
+          components/onboarding/TrialOfferModal.tsx for why it is a separate
+          surface from the upgrade sheet and the plan page. */}
+      {showTrialOffer && <TrialOfferModal onDismiss={finishOnboarding} />}
       {/* Progress bar */}
       <div className="fixed top-0 left-0 right-0 z-20 h-1 bg-zinc-200 dark:bg-zinc-800">
         <motion.div
@@ -467,6 +636,8 @@ export default function OnboardingPage() {
               )}
               {step === 2 && (
                 <Step2
+                  name={name}
+                  onNameChange={setName}
                   experienceLevel={profile.experienceLevel}
                   weeklyAvailability={profile.weeklyAvailability}
                   onExperienceChange={(v) => setProfile((p) => ({ ...p, experienceLevel: v }))}
@@ -478,7 +649,8 @@ export default function OnboardingPage() {
                   profile={profile}
                   direction={effectiveDirection}
                   targets={targets}
-                  onChange={(updates) => setProfile((p) => ({ ...p, ...updates }))}
+                  goals={goals}
+                  onChange={handleStep3Change}
                   onDirectionChange={setDirectionChoice}
                 />
               )}
@@ -491,14 +663,29 @@ export default function OnboardingPage() {
                 />
               )}
               {step === 5 && (
-                <Step5Review
-                  profile={profile}
-                  goals={goals}
-                  direction={effectiveDirection}
-                  targets={targets}
-                  rec={rec}
-                  onEdit={goToStep}
-                />
+                <>
+                  <Step5Review
+                    name={name}
+                    profile={profile}
+                    goals={goals}
+                    direction={effectiveDirection}
+                    targets={targets}
+                    rec={rec}
+                    onEdit={goToStep}
+                    enrolled={enrolled}
+                    enrolling={enrolling}
+                    onEnroll={enrolInRecommended}
+                  />
+                  {/* The health disclaimer, at the one moment the member is
+                      about to receive calorie targets and a program. Section 1
+                      of the Terms in one paragraph; never more than it says. */}
+                  <p
+                    data-testid="onboarding-health-disclaimer"
+                    className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs leading-relaxed text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+                  >
+                    {HEALTH_DISCLAIMER_SHORT}
+                  </p>
+                </>
               )}
             </motion.div>
           </AnimatePresence>
@@ -518,21 +705,16 @@ export default function OnboardingPage() {
             Back
           </button>
 
-          {/* Skip */}
-          <button
-            onClick={() => submit(profile)}
-            disabled={isSubmitting}
-            className="text-xs font-medium text-zinc-400 underline underline-offset-2 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-          >
-            Skip for now
-          </button>
-
           {/* Next / Finish */}
           {step < TOTAL_STEPS ? (
             <button
               onClick={goNext}
               data-testid="onboarding-next"
-              disabled={step === 1 && goals.length === 0}
+              disabled={
+                (step === 1 && goals.length === 0) ||
+                (step === 2 && !name.trim()) ||
+                (step === 3 && !canComputeTargets)
+              }
               className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:pointer-events-none disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
             >
               Next
@@ -561,10 +743,18 @@ function RecommendationCard({
   rec,
   loading,
   compact,
+  enrolled,
+  enrolling,
+  onEnroll,
 }: {
   rec: Recommendation | null
   loading: boolean
   compact?: boolean
+  /** Already enrolled in this program during onboarding. */
+  enrolled?: boolean
+  enrolling?: boolean
+  /** Omit to render the card as pure information (no action). */
+  onEnroll?: () => void
 }) {
   if (loading && !rec) {
     return (
@@ -619,6 +809,33 @@ function RecommendationCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Offer it — never force it. The card used to be read-only, so the one
+          moment a member is most bought in ended with nothing to press and the
+          dashboard afterwards said "No program yet". Enrolling stays optional —
+          this button simply is not shown once they've enrolled — even though
+          finishing the wizard itself is now mandatory. */}
+      {onEnroll && (
+        enrolled ? (
+          <p
+            data-testid="recommended-program-enrolled"
+            className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+          >
+            <Check className="h-3.5 w-3.5" />
+            Added — it will be waiting on your dashboard.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={onEnroll}
+            disabled={enrolling}
+            data-testid="recommended-program-enroll"
+            className="mt-3 w-full rounded-xl bg-zinc-900 py-2.5 text-xs font-bold text-white transition-transform active:scale-95 disabled:opacity-60 dark:bg-white dark:text-black"
+          >
+            {enrolling ? 'Adding…' : 'Start this program'}
+          </button>
+        )
       )}
     </motion.div>
   )
@@ -700,14 +917,18 @@ function Step1({
   )
 }
 
-// ── Step 2 — Background ───────────────────────────────────────────────────────
+// ── Step 2 — Name + background ────────────────────────────────────────────────
 
 function Step2({
+  name,
+  onNameChange,
   experienceLevel,
   weeklyAvailability,
   onExperienceChange,
   onAvailabilityChange,
 }: {
+  name: string
+  onNameChange: (v: string) => void
   experienceLevel?: ExperienceLevel
   weeklyAvailability?: number
   onExperienceChange: (v: ExperienceLevel) => void
@@ -718,15 +939,33 @@ function Step2({
   return (
     <div>
       <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
-        Your background
+        A bit about you
       </h1>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        This sets the difficulty of the program we match you with, and how active
-        we assume you are when we work out your calories.
+        Your name is how the app greets you. The rest sets the difficulty of the
+        program we match you with, and how active we assume you are when we work
+        out your calories.
       </p>
 
-      {/* Experience level */}
+      {/* Name — the one thing sign-up deliberately does not ask for. */}
       <div className="mt-6">
+        <label htmlFor="onboarding-name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          What should we call you?
+        </label>
+        <input
+          id="onboarding-name"
+          data-testid="onboarding-name"
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+          placeholder="First name or full name"
+          autoComplete="name"
+          maxLength={80}
+          className={`mt-3 ${INPUT_CLS}`}
+        />
+      </div>
+
+      {/* Experience level */}
+      <div className="mt-8">
         <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
           Experience level
         </label>
@@ -803,19 +1042,92 @@ function Step3({
   profile,
   direction,
   targets,
+  goals,
   onChange,
   onDirectionChange,
 }: {
   profile: ProfileData
   direction: NutritionDirection
   targets: ReturnType<typeof computeNutritionTargets>
+  goals: FitnessGoal[]
   onChange: (updates: Partial<ProfileData>) => void
   onDirectionChange: (d: NutritionDirection) => void
 }) {
-  // A target weight only makes sense when you're trying to move the number.
-  const showTargetWeight = direction !== 'maintain'
+  // Activity defaults from training days so the form arrives pre-filled with a
+  // sensible answer, but the member's explicit pick always wins.
+  const activity = profile.activityLevel ?? activityFromTrainingDays(profile.weeklyAvailability)
+  const macroPreset = profile.macroPreset ?? 'recommended'
+  // Which option gets the badge — and why — depends on goal AND experience.
+  // A beginner is pointed at Balanced even when the custom split is the more
+  // "correct" answer, because an accurate target they can't hit is worse than a
+  // slightly softer one they can.
+  const recommendation = recommendPreset(direction, goals, profile.experienceLevel)
+  const suggestedPreset = recommendation.preset
+  // Feeds the personalised "Recommended" split. Until the body stats and the
+  // calorie target exist there is nothing to personalise from, so the cards fall
+  // back to the static per-direction table.
+  const presetContext = targets && profile.currentWeightKg
+    ? { weightLbs: profile.currentWeightKg * 2.2046226218, calories: targets.calories, goals }
+    : undefined
+  // What the target weight alone implies, so the direction buttons below can
+  // be checked against it instead of just accepting whatever's picked. Shown
+  // regardless of direction — a member coming from "Maintain" who then types a
+  // target is exactly the case the field used to hide from.
+  const derivedDirection = directionFromWeights(profile.currentWeightKg, profile.targetWeightKg)
+  const directionMismatch = derivedDirection != null && derivedDirection !== direction
 
   const [useImperial, setUseImperial] = useState(true)
+
+  // Which figure the member tapped, if any.
+  const [explaining, setExplaining] = useState<MacroKey | 'calories' | null>(null)
+
+  const proteinFlagged = useMemo(
+    () =>
+      !!targets &&
+      proteinNeedsFlag(targets.protein, profile.currentWeightKg, targets.direction, goals),
+    [targets, profile.currentWeightKg, goals],
+  )
+
+  /** The sheet's contents, rebuilt from the SAME targets the card is showing. */
+  const explanation = useMemo(() => {
+    if (!explaining || !targets) return null
+    if (explaining === 'calories') {
+      const c = explainCalories(
+        {
+          currentWeightKg: profile.currentWeightKg,
+          heightCm: profile.heightCm,
+          age: profile.age,
+          biologicalSex: profile.biologicalSex,
+        },
+        targets.activityLevel,
+        targets.direction,
+        profile.paceKgPerWeek ?? defaultPaceKg(targets.direction),
+      )
+      if (!c) return null
+      return {
+        title: 'Where your calories come from',
+        headline: `${c.calories.toLocaleString()} cal / day`,
+        steps: c.steps,
+        note: undefined,
+      }
+    }
+    const m = explainMacro({
+      macro: explaining,
+      grams: targets[explaining],
+      calories: targets.calories,
+      percent: targets.split[explaining],
+      weightKg: profile.currentWeightKg,
+      direction: targets.direction,
+      goals,
+      presetLabel: MACRO_PRESET_LABELS[profile.macroPreset ?? 'recommended'],
+    })
+    return {
+      title: `Where your ${MACRO_LABELS[explaining].toLowerCase()} comes from`,
+      headline: `${m.grams} g${m.perLb ? ` · ${m.perLb} g per lb` : ''}`,
+      steps: m.steps,
+      note: m.note,
+    }
+  }, [explaining, targets, profile.currentWeightKg, profile.heightCm, profile.age, profile.biologicalSex, profile.macroPreset, profile.paceKgPerWeek, goals])
 
   // Imperial display state
   const initialHeight = profile.heightCm ? cmToFtIn(profile.heightCm) : { ft: '', inches: '' }
@@ -894,7 +1206,7 @@ function Step3({
     }
   }
 
-  const inputCls = "w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-900 placeholder-zinc-400 transition-colors focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:placeholder-zinc-500 dark:focus:border-white"
+  const inputCls = INPUT_CLS
 
   // What's still missing before we can compute an honest TDEE.
   const missing = [
@@ -949,7 +1261,7 @@ function Step3({
             <input
               type="number"
               inputMode="numeric"
-              min={10}
+              min={LEGAL_MINIMUM_AGE}
               max={100}
               placeholder="e.g. 28"
               data-testid="stat-age"
@@ -1016,7 +1328,7 @@ function Step3({
         </div>
 
         {/* Weight fields */}
-        <div className={`grid gap-4 ${showTargetWeight ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
               Current weight ({useImperial ? 'lbs' : 'kg'})
@@ -1034,25 +1346,37 @@ function Step3({
             </div>
           </div>
 
-          {showTargetWeight && (
-            <div>
-              <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
-                Target weight ({useImperial ? 'lbs' : 'kg'})
-              </label>
-              <div className="relative">
-                <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
-                  placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
-                  data-testid="stat-target-weight"
-                  value={useImperial ? targetLbs : targetKgDisplay}
-                  onChange={(e) => handleTargetWeightChange(e.target.value)}
-                  className={inputCls} />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
-                  {useImperial ? 'lbs' : 'kg'}
-                </span>
-              </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">
+              Target weight ({useImperial ? 'lbs' : 'kg'})
+            </label>
+            <div className="relative">
+              <input type="number" inputMode="decimal" step={useImperial ? '1' : '0.1'} min={0}
+                placeholder={useImperial ? 'e.g. 165' : 'e.g. 75'}
+                data-testid="stat-target-weight"
+                value={useImperial ? targetLbs : targetKgDisplay}
+                onChange={(e) => handleTargetWeightChange(e.target.value)}
+                className={inputCls} />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+                {useImperial ? 'lbs' : 'kg'}
+              </span>
             </div>
-          )}
+          </div>
         </div>
+
+        {/* ── Pace toward the target ─────────────────────────────────────── */}
+        {profile.targetWeightKg && profile.currentWeightKg ? (
+          <div className="pt-1">
+            <PacePicker
+              unit={useImperial ? 'lbs' : 'kg'}
+              direction={direction}
+              valueKgPerWeek={profile.paceKgPerWeek ?? defaultPaceKg(direction)}
+              onChange={(kg) => onChange({ paceKgPerWeek: kg })}
+              latestWeight={goalKgToUnit(profile.currentWeightKg, useImperial ? 'lbs' : 'kg')}
+              targetWeight={goalKgToUnit(profile.targetWeightKg, useImperial ? 'lbs' : 'kg')}
+            />
+          </div>
+        ) : null}
 
         {/* ── Calorie direction ─────────────────────────────────────────── */}
         <div className="pt-2">
@@ -1060,11 +1384,21 @@ function Step3({
             Which way are you eating?
           </label>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            Pre-set from your primary goal — change it if you disagree.
+            {derivedDirection
+              ? 'Pre-set from your target weight — change it if you disagree.'
+              : 'Pre-set from your primary goal — change it if you disagree.'}
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2">
             {DIRECTION_OPTIONS.map(({ value, label, sub, Icon }) => {
               const selected = direction === value
+              // Show the adjustment ACTUALLY applied, not the nominal one. The
+              // deficit is capped at 20% of TDEE and the surplus at 15%, so a
+              // smaller member reading "TDEE - 500" gets a different number and
+              // no way to reconcile it. With a live TDEE we can just say it.
+              const applied = targets ? calorieAdjustment(targets.tdee, value) : null
+              const subLabel = applied === null || applied === 0
+                ? sub
+                : `TDEE ${applied < 0 ? '−' : '+'} ${Math.abs(applied)}`
               return (
                 <button
                   key={value}
@@ -1080,15 +1414,139 @@ function Step3({
                   <Icon className="h-4 w-4" />
                   <p className="mt-1.5 text-xs font-semibold leading-tight">{label}</p>
                   <p className={`mt-0.5 text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
-                    {sub}
+                    {subLabel}
                   </p>
+                </button>
+              )
+            })}
+          </div>
+          {directionMismatch && derivedDirection && (
+            <button
+              type="button"
+              onClick={() => onDirectionChange(derivedDirection)}
+              data-testid="direction-mismatch-warning"
+              className="mt-2 flex w-full items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-left text-xs text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Your target is {derivedDirection === 'lose' ? 'below' : derivedDirection === 'gain' ? 'above' : 'close to'} your current weight
+                — that usually means {DIRECTION_OPTIONS.find((o) => o.value === derivedDirection)?.label}, not {DIRECTION_OPTIONS.find((o) => o.value === direction)?.label}.{' '}
+                <span className="font-semibold underline">Switch to {DIRECTION_OPTIONS.find((o) => o.value === derivedDirection)?.label}</span>
+              </span>
+            </button>
+          )}
+        </div>
+
+        {/* ── Activity level ────────────────────────────────────────────── */}
+        {/* Asked outright. It used to be inferred from weekly training days,
+            which conflates "how often do you lift" with "how much do you move" —
+            and it is the biggest single lever on the calorie target. */}
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            How active is your day, outside training?
+          </label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            Your job and daily movement, not your workouts. This has the biggest effect on your calories.
+          </p>
+          <div className="mt-3 space-y-2">
+            {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => {
+              const selected = activity === level
+              return (
+                <button
+                  key={level}
+                  onClick={() => onChange({ activityLevel: level })}
+                  data-testid={`activity-${level}`}
+                  aria-pressed={selected}
+                  className={`flex w-full items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  <span>
+                    <span className="block text-xs font-semibold">{ACTIVITY_LABELS[level]}</span>
+                    <span className={`block text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                      {ACTIVITY_BLURBS[level]}
+                    </span>
+                  </span>
+                  <span className={`text-[10px] tabular-nums ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    &times;{ACTIVITY_MULTIPLIERS[level]}
+                  </span>
                 </button>
               )
             })}
           </div>
         </div>
 
+        {/* ── Macro split ───────────────────────────────────────────────── */}
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            How do you want your macros split?
+          </label>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            You can change this any time in Nutrition.
+          </p>
+          <div className="mt-3 space-y-2">
+            {MACRO_PRESET_CHOICES.map((key) => {
+              const selected = macroPreset === key
+              // Show the ratio this option will ACTUALLY deliver. "Recommended"
+              // is personalised from their bodyweight, goal and calorie target,
+              // so it no longer reads identically to "Balanced".
+              const split = splitForPreset(key, direction, presetContext)
+              const isSuggested = key === suggestedPreset
+              return (
+                <button
+                  key={key}
+                  onClick={() => onChange({ macroPreset: key })}
+                  data-testid={`macro-preset-${key}`}
+                  aria-pressed={selected}
+                  className={`flex w-full items-start justify-between gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition-all duration-150 ${
+                    selected
+                      ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600'
+                  }`}
+                >
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold">
+                      {MACRO_PRESET_LABELS[key]}
+                      {isSuggested && (
+                        <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                          selected ? 'bg-white/20' : 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                        }`}>
+                          {recommendation.badge}
+                        </span>
+                      )}
+                    </span>
+                    <span className={`mt-0.5 block text-[10px] ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                      {MACRO_PRESET_BLURBS[key]}
+                    </span>
+                  </span>
+                  <span className={`shrink-0 text-[10px] tabular-nums ${selected ? 'opacity-70' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                    {split.protein}/{split.carbs}/{split.fats}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {/* Say WHY that one is badged. A recommendation the member doesn't
+              understand is just another option. */}
+          <p className="mt-2 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+            <span className="font-semibold">{MACRO_PRESET_LABELS[recommendation.preset]}</span>
+            {' — '}
+            {recommendation.why}
+          </p>
+        </div>
+
         {/* ── Live TDEE preview ─────────────────────────────────────────── */}
+        {!targets && (
+          <p
+            data-testid="targets-incomplete"
+            className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+          >
+            Add your age, height, weight and sex above and we&apos;ll calculate your real
+            calorie and macro targets. Without them we can only guess, and we would rather not.
+          </p>
+        )}
         {targets ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -1102,28 +1560,72 @@ function Step3({
                 Your daily targets
               </p>
             </div>
-            <p className="mt-2 text-2xl font-bold text-zinc-900 dark:text-white">
-              <span data-testid="preview-calories">{targets.calories.toLocaleString()}</span>
+            <button
+              type="button"
+              onClick={() => setExplaining('calories')}
+              className="mt-2 flex items-baseline gap-1.5 text-left"
+            >
+              <span className="text-2xl font-bold text-zinc-900 dark:text-white" data-testid="preview-calories">
+                {targets.calories.toLocaleString()}
+              </span>
               <span className="text-sm font-normal text-zinc-500"> cal / day</span>
-            </p>
+              <HelpCircle className="h-3.5 w-3.5 shrink-0 self-center text-zinc-400" />
+            </button>
+            {/* Every figure is tappable. A number you cannot interrogate reads as
+                a number somebody made up. */}
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-protein" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.protein}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Protein</p>
-              </div>
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-carbs" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.carbs}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Carbs</p>
-              </div>
-              <div className="rounded-lg bg-zinc-100 py-2 dark:bg-zinc-800">
-                <p data-testid="preview-fats" className="text-sm font-bold text-zinc-900 dark:text-white">{targets.fats}g</p>
-                <p className="text-[10px] uppercase tracking-wide text-zinc-500">Fats</p>
-              </div>
+              {([
+                ['protein', targets.protein, 'Protein'],
+                ['carbs', targets.carbs, 'Carbs'],
+                ['fats', targets.fats, 'Fats'],
+              ] as const).map(([key, grams, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setExplaining(key)}
+                  data-testid={`explain-${key}`}
+                  className={`rounded-lg py-2 transition-colors ${
+                    key === 'protein' && proteinFlagged
+                      ? 'bg-amber-100 hover:bg-amber-200 dark:bg-amber-500/20 dark:hover:bg-amber-500/30'
+                      : 'bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <p data-testid={`preview-${key}`} className="text-sm font-bold text-zinc-900 dark:text-white">
+                    {grams}g
+                  </p>
+                  <p className="flex items-center justify-center gap-0.5 text-[10px] uppercase tracking-wide text-zinc-500">
+                    {label}
+                    <HelpCircle className="h-2.5 w-2.5 shrink-0" />
+                  </p>
+                </button>
+              ))}
             </div>
+            {proteinFlagged && (
+              <button
+                type="button"
+                onClick={() => setExplaining('protein')}
+                data-testid="protein-flag"
+                className="mt-2 flex w-full items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-2 text-left dark:border-amber-500/40 dark:bg-amber-500/10"
+              >
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
+                  That protein number is outside the usual range for your bodyweight. It is not a
+                  mistake — tap to see how we got it.
+                </span>
+              </button>
+            )}
             <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               Your TDEE is about <span className="font-semibold text-zinc-700 dark:text-zinc-200">{targets.tdee.toLocaleString()} cal</span>.
-              We applied {DIRECTION_EXPLANATION[targets.direction]}.
+              We applied {DIRECTION_EXPLANATION[targets.direction]}. Tap any number to see how we got it.
             </p>
+            <MacroExplainSheet
+              isOpen={!!explanation}
+              title={explanation?.title ?? ''}
+              headline={explanation?.headline ?? ''}
+              steps={explanation?.steps ?? []}
+              note={explanation?.note}
+              onClose={() => setExplaining(null)}
+            />
           </motion.div>
         ) : (
           <div
@@ -1275,19 +1777,27 @@ function ReviewSection({
 }
 
 function Step5Review({
+  name,
   profile,
   goals,
   direction,
   targets,
   rec,
   onEdit,
+  enrolled,
+  enrolling,
+  onEnroll,
 }: {
+  name: string
   profile: ProfileData
   goals: FitnessGoal[]
   direction: NutritionDirection
   targets: ReturnType<typeof computeNutritionTargets>
   rec: Recommendation | null
   onEdit: (s: number) => void
+  enrolled: boolean
+  enrolling: boolean
+  onEnroll: () => void
 }) {
   const unit = profile.weightUnit ?? 'lbs'
   const showWeight = (kg?: number) =>
@@ -1338,6 +1848,9 @@ function Step5Review({
           onEdit={onEdit}
           why={`We treat ${days} sessions a week as "${activity.replace('_', ' ')}" when calculating your calories, and we only surface programs that fit that schedule.`}
         >
+          {/* The review plays back every answer, and the name is one now —
+              sign-up stopped asking for it. */}
+          <ReviewRow label="Name" value={name.trim() || 'Not set'} />
           <ReviewRow
             label="Experience"
             value={profile.experienceLevel
@@ -1368,7 +1881,7 @@ function Step5Review({
               : '—'}
           />
           <ReviewRow label="Current weight" value={showWeight(profile.currentWeightKg)} />
-          {direction !== 'maintain' && (
+          {profile.targetWeightKg != null && (
             <ReviewRow label="Target weight" value={showWeight(profile.targetWeightKg)} />
           )}
           <ReviewRow
@@ -1408,10 +1921,17 @@ function Step5Review({
         {rec && (
           <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Your program match</h2>
-            <RecommendationCard rec={rec} loading={false} compact />
+            <RecommendationCard
+              rec={rec}
+              loading={false}
+              compact
+              enrolled={enrolled}
+              enrolling={enrolling}
+              onEnroll={onEnroll}
+            />
             <p className="mt-3 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
-              You&apos;ll be able to start this from your dashboard — or browse the
-              full catalog if you&apos;d rather pick your own.
+              Entirely optional — you can also start it later from your dashboard,
+              or browse the full catalog if you&apos;d rather pick your own.
             </p>
           </div>
         )}

@@ -13,7 +13,7 @@
 //                     opens the FoodSearchModal in plan mode pinned to the
 //                     drawer's date. Also exposes per-slot "↻ Apply meal" which
 //                     opens MealApplySheet in plan mode.
-//   • From template — pick a saved Meal template and apply it to a tag across
+//   • From meals — pick a saved Meal and apply it to a tag across
 //                     a range of future dates with optional recurrence. POSTs
 //                     to /api/meal-plans/bulk-from-meal.
 //   • Copy day      — duplicate a source day's logs or plans onto target
@@ -114,6 +114,30 @@ function titleCaseTag(tag: string): string {
     .split(/[-_\s]+/)
     .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
     .join('-')
+}
+
+interface ItemNutritionLike {
+  name: string
+  nutrition?: { calories?: number }
+  servings?: number
+}
+
+/**
+ * An individual item's own display name + the calories it actually
+ * contributes (its own nutrition snapshot × however many servings were
+ * planned/logged).
+ *
+ * Never fall back to the plan/log's `mealName` here: that field labels the
+ * GROUP (e.g. a plan built by applying a saved "Turkey Sandwich" meal), not
+ * any one ingredient inside it. Every item in that plan previously inherited
+ * the group's name, so a sandwich, its bun and its condiment all rendered as
+ * three rows all reading "Turkey Sandwich."
+ */
+export function itemDisplay(it: ItemNutritionLike): { name: string; cal: number } {
+  return {
+    name: it.name,
+    cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
+  }
 }
 
 function getHeaders(): HeadersInit {
@@ -492,7 +516,7 @@ export default function ScheduleMealsDrawer({
                   active={activeTab === 'from-template'}
                   onClick={() => setActiveTab('from-template')}
                   icon={<ChefHat className="h-3.5 w-3.5" />}
-                  label="From template"
+                  label="From meals"
                 />
                 <TabButton
                   active={activeTab === 'copy-day'}
@@ -662,7 +686,7 @@ function TabButton({
 
 // ── By day tab ────────────────────────────────────────────────────────────────
 
-interface ByDayTabProps {
+export interface ByDayTabProps {
   dateKey: string
   slotTags: string[]
   plansBySlot: Map<string, MealPlan[]>
@@ -672,7 +696,7 @@ interface ByDayTabProps {
   onDeletePlan: (planId: string) => void
 }
 
-function ByDayTab({
+export function ByDayTab({
   dateKey,
   slotTags,
   plansBySlot,
@@ -722,9 +746,8 @@ function ByDayTab({
           for (const it of p.items) {
             items.push({
               planId: p._id,
-              name: p.mealName ?? it.name,
               brand: it.brand,
-              cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
+              ...itemDisplay(it),
             })
           }
         }
@@ -762,9 +785,9 @@ function ByDayTab({
               <button
                 type="button"
                 onClick={() => onApplyMeal(tag)}
-                aria-label={`Apply meal template to ${titleCaseTag(tag)}`}
+                aria-label={`Apply a saved meal to ${titleCaseTag(tag)}`}
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                title="Apply meal template"
+                title="Apply a saved meal"
               >
                 <ChefHat className="h-4 w-4" />
               </button>
@@ -955,7 +978,7 @@ function FromTemplateTab({ fromKey, toKey, availableTags, onApplied }: FromTempl
   return (
     <div className="space-y-3">
       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Apply a saved meal template across {targetDates.length === 1 ? 'this date' : `${targetDates.length} dates`}
+        Apply a saved meal across {targetDates.length === 1 ? 'this date' : `${targetDates.length} dates`}
         {repeatOpen && repeatCount > 1 ? ` × ${repeatCount} (${totalTargets} plans)` : ''}.
       </p>
 
@@ -1193,11 +1216,7 @@ function CopyDayTab({ fromKey, toKey, rangeMode, onApplied }: CopyDayTabProps) {
           for (const log of data?.logs ?? []) {
             const tag = (log.tags?.[0] ?? 'snack') as string
             for (const it of (log.items ?? []) as IMealItem[]) {
-              items.push({
-                tag,
-                name: log.mealName ?? it.name,
-                cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
-              })
+              items.push({ tag, ...itemDisplay(it) })
             }
           }
           setPreview(items)
@@ -1213,11 +1232,7 @@ function CopyDayTab({ fromKey, toKey, rangeMode, onApplied }: CopyDayTabProps) {
           for (const p of (data?.plans ?? []) as MealPlan[]) {
             if (p.status !== 'active') continue
             for (const it of p.items) {
-              items.push({
-                tag: p.tag,
-                name: p.mealName ?? it.name,
-                cal: Math.round((it.nutrition?.calories ?? 0) * (it.servings ?? 1)),
-              })
+              items.push({ tag: p.tag, ...itemDisplay(it) })
             }
           }
           setPreview(items)

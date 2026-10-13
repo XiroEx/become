@@ -17,9 +17,10 @@ export interface PollerOptions<T> {
 }
 
 export interface Poller {
-  start: () => void;
+  start: (immediate?: boolean) => void;
   stop: () => void;
   isRunning: () => boolean;
+  tickNow: () => Promise<void>;
 }
 
 export function createPoller<T>(options: PollerOptions<T>): Poller {
@@ -48,13 +49,17 @@ export function createPoller<T>(options: PollerOptions<T>): Poller {
     }, options.intervalMs);
   }
 
-  function start(): void {
+  function start(immediate: boolean = false): void {
     if (running) return;
     running = true;
     cancelled = false;
-    timer = setT(() => {
+    if (immediate) {
       void tick();
-    }, options.intervalMs);
+    } else {
+      timer = setT(() => {
+        void tick();
+      }, options.intervalMs);
+    }
   }
 
   function stop(): void {
@@ -70,5 +75,14 @@ export function createPoller<T>(options: PollerOptions<T>): Poller {
     return running;
   }
 
-  return { start, stop, isRunning };
+  async function tickNow(): Promise<void> {
+    if (cancelled || !running) return;
+    if (timer) {
+      clearT(timer);
+      timer = null;
+    }
+    await tick();
+  }
+
+  return { start, stop, isRunning, tickNow };
 }

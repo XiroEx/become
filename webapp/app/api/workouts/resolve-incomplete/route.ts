@@ -4,7 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
-import { calculateNextDay } from '@/app/api/programs/current-workout/route'
+import { calculateNextDay } from '@/lib/workout/dayOrder'
 import { readTzOffsetFromBody, localDateKey, localDayWindowForKey } from '@/lib/dayWindow'
 import { recordStreakActivity } from '@/lib/streak'
 

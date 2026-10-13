@@ -28,7 +28,7 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { createMemoryKeyValueStore } from "@/lib/live/liveWorkoutCache";
-import LiveWorkoutRoute from "../app/(tabs)/programming/[id]/workout/[idx]/live";
+import LiveWorkoutRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/live";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -47,6 +47,61 @@ const PROGRAM = {
           title: "Push A",
           exercises: [
             { exerciseSlug: "bench", name: "Bench", sets: 2, reps: "5" },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+/**
+ * The SAME workout as the web sends it (NP-019): hydrateExercises puts
+ * `trackingType` and the video fields on each exercise, and the program's own
+ * grouping rides alongside. These used to reach the route as passthrough
+ * extras and be read through a hand-written cast; they are typed now.
+ */
+const HYDRATED_PROGRAM = {
+  program_id: "prog-1",
+  name: "Strength",
+  phases: [
+    {
+      phase: "Phase 1",
+      weeks: "1-4",
+      focus: "f",
+      workouts: [
+        {
+          day: "Day 1",
+          title: "Push A",
+          exercises: [
+            {
+              exerciseSlug: "plank",
+              name: "Plank",
+              type: "strength",
+              sets: 1,
+              reps: "30s",
+              rest: "60 sec",
+              tempo: "—",
+              details: "Ribs down.",
+              groupId: "g1",
+              groupType: "giant_set",
+              groupLabel: "Core Block",
+              groupRounds: 3,
+              trackingType: "time",
+              videoUrl: "https://cdn.example.test/plank.mp4",
+              videoWidth: 1080,
+              videoHeight: 1920,
+              videoFraming: { fit: "cover", positionX: 50, positionY: 50 },
+              videoTrim: { start: 0.5, end: 6 },
+            },
+            {
+              // No groupLabel: the wire `groupType` is the fallback.
+              exerciseSlug: "hollow-hold",
+              name: "Hollow Hold",
+              sets: 1,
+              groupId: "g2",
+              groupType: "circuit",
+              trackingType: "reps_weight",
+            },
           ],
         },
       ],
@@ -114,6 +169,38 @@ describe("LiveWorkoutRoute", () => {
     });
   });
 
+  it("reads the hydrated trackingType and grouping straight off the parsed program — no cast", async () => {
+    mockApiFetch.mockReset();
+    mockApiFetch.mockResolvedValue(HYDRATED_PROGRAM);
+
+    const store = createMemoryKeyValueStore();
+    const { getByTestId, queryByTestId } = render(
+      <LiveWorkoutRoute cacheStore={store} />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("live-workout-exercise-plank")).toBeTruthy();
+    });
+
+    // trackingType: 'time' selects the duration input and drops weight/reps.
+    expect(getByTestId("live-workout-plank-set-0-duration")).toBeTruthy();
+    expect(queryByTestId("live-workout-plank-set-0-weight")).toBeNull();
+    expect(queryByTestId("live-workout-plank-set-0-reps")).toBeNull();
+    // …while the reps_weight exercise keeps them.
+    expect(getByTestId("live-workout-hollow-hold-set-0-weight")).toBeTruthy();
+
+    // The grouping renders a header per groupId, labelled by groupLabel…
+    expect(getByTestId("live-workout-group-g1").props.children).toBe(
+      "Core Block",
+    );
+    // …falling back to the wire groupType when the program named no label.
+    expect(getByTestId("live-workout-group-g2").props.children).toBe("circuit");
+
+    // And the coach's note still comes through as the exercise's notes.
+    expect(getByTestId("live-workout-plank-notes").props.children).toBe(
+      "Ribs down.",
+    );
+  });
+
   it("shows an invalid state for a bad workout index", () => {
     mockParams = { id: "prog-1", idx: "-1" };
     const { getByText } = render(<LiveWorkoutRoute />);
@@ -145,7 +232,9 @@ describe("LiveWorkoutRoute", () => {
       expect(getByTestId("live-workout-bench-set-0-weight")).toBeTruthy();
     });
 
-    // Log a set (each edit re-renders before the next, as with real input).
+    // Log every set (each edit re-renders before the next, as with real
+    // input). BOTH sets, because Complete Workout only exists once the whole
+    // workout is done — the web's rule, ported in NP-087.
     await act(async () => {
       fireEvent.changeText(
         getByTestId("live-workout-bench-set-0-weight"),
@@ -156,23 +245,34 @@ describe("LiveWorkoutRoute", () => {
       fireEvent.changeText(getByTestId("live-workout-bench-set-0-reps"), "5");
     });
     await act(async () => {
+      fireEvent.changeText(
+        getByTestId("live-workout-bench-set-1-weight"),
+        "225",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(getByTestId("live-workout-bench-set-1-reps"), "5");
+    });
+    await act(async () => {
       fireEvent.press(getByTestId("live-workout-finish"));
     });
 
-    await waitFor(() => {
-      const posts = mockApiFetch.mock.calls.filter(
+    // The COMPLETING save, not the autosaves: each set that ticks itself
+    // (NP-087) flushes the grid to the server straight away, so the first POST
+    // of the attempt is `completed: false` and the contract under test is the
+    // last one.
+    const completingPosts = () =>
+      mockApiFetch.mock.calls.filter(
         (c) =>
           String(c[0]) === "/api/workouts" &&
-          (c[2] as { method?: string }).method === "POST",
+          (c[2] as { method?: string }).method === "POST" &&
+          (c[2] as { body?: { completed?: boolean } }).body?.completed === true,
       );
-      expect(posts.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(completingPosts().length).toBeGreaterThan(0);
     });
 
-    const post = mockApiFetch.mock.calls.find(
-      (c) =>
-        String(c[0]) === "/api/workouts" &&
-        (c[2] as { method?: string }).method === "POST",
-    )!;
+    const post = completingPosts()[0]!;
     const opts = post[2] as {
       method?: string;
       baseUrl?: string;
@@ -181,11 +281,11 @@ describe("LiveWorkoutRoute", () => {
         phase?: number;
         day?: string;
         completed?: boolean;
-        exercises?: Array<{
+        exercises?: {
           name?: string;
           exerciseSlug?: string;
-          sets?: Array<{ setNumber?: number; weight?: number; completed?: boolean }>;
-        }>;
+          sets?: { setNumber?: number; weight?: number; completed?: boolean }[];
+        }[];
       };
     };
     expect(opts.method).toBe("POST");
@@ -198,12 +298,16 @@ describe("LiveWorkoutRoute", () => {
     expect(ex?.name).toBe("Bench");
     expect(ex?.exerciseSlug).toBe("bench");
     expect(ex?.sets).toHaveLength(2);
+    // `completed: true` without a tap on the checkbox: a `reps_weight` set
+    // ticks itself the moment it holds reps AND a weight (`isSetFilled`,
+    // NP-087). It used to need the tap, and a set logged but never ticked
+    // reached the server as an unfinished one.
     expect(ex?.sets?.[0]).toEqual(
       expect.objectContaining({
         setNumber: 1,
         weight: 225,
         reps: 5,
-        completed: false,
+        completed: true,
       }),
     );
 
@@ -240,6 +344,18 @@ describe("LiveWorkoutRoute", () => {
         "200",
       );
     });
+    await act(async () => {
+      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-0-reps"), "5");
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        ok.getByTestId("live-workout-bench-set-1-weight"),
+        "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(ok.getByTestId("live-workout-bench-set-1-reps"), "5");
+    });
     // Cache populated by the in-flight edit.
     await waitFor(async () => {
       expect(await store.get(cacheKey)).toBeTruthy();
@@ -275,6 +391,24 @@ describe("LiveWorkoutRoute", () => {
       fireEvent.changeText(
         fail.getByTestId("live-workout-bench-set-0-weight"),
         "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-0-reps"),
+        "5",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-1-weight"),
+        "200",
+      );
+    });
+    await act(async () => {
+      fireEvent.changeText(
+        fail.getByTestId("live-workout-bench-set-1-reps"),
+        "5",
       );
     });
     await waitFor(async () => {
@@ -328,7 +462,8 @@ describe("LiveWorkoutRoute", () => {
     const altCall = mockApiFetch.mock.calls.find((c) =>
       String(c[0]).startsWith("/api/exercises/alternatives"),
     )!;
-    expect(String(altCall[0])).toBe("/api/exercises/alternatives?slug=bench");
+    expect(String(altCall[0])).toContain("/api/exercises/alternatives?slug=bench");
+    expect(String(altCall[0])).toContain("workoutSlugs=bench");
     expect(altCall[2]).toEqual(
       expect.objectContaining({ baseUrl: WEBAPP_BASE_URL }),
     );

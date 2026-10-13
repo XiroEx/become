@@ -6,10 +6,24 @@ import Link from 'next/link'
 import { Settings2 } from 'lucide-react'
 import { Card } from '@/components/ui'
 import MacroBar from './MacroBar'
+import PlannedTooltip from './PlannedTooltip'
+import { usePlannedTooltip } from '@/hooks/usePlannedTooltip'
+import {
+  macroStatus,
+  macroStrokeColor,
+  macroTextClass,
+  MACRO_COLORS,
+} from '@/lib/nutrition/macroStatus'
 
 interface MacroValues {
   current: number
   goal: number
+  /**
+   * Grams still planned (not yet logged) for today, on top of `current`.
+   * Rendered as a light shadow past the solid fill — a preview of where the
+   * bar lands if the rest of today's plan gets eaten.
+   */
+  planned?: number
 }
 
 interface CalorieRingProps {
@@ -18,19 +32,38 @@ interface CalorieRingProps {
   protein: MacroValues
   carbs: MacroValues
   fats: MacroValues
+  /** Grams of the day's carbs that are fiber. Shaded inside the carb bar. */
+  fiber?: number
+  /**
+   * Calories still planned (not yet logged) for today, on top of `consumed`.
+   * Rendered as a light shadow arc past the solid ring — a preview of where
+   * the day lands if the rest of today's plan gets eaten.
+   */
+  plannedExtra?: number
 }
 
-export default function CalorieRing({ consumed, goal, protein, carbs, fats }: CalorieRingProps) {
+export default function CalorieRing({ consumed, goal, protein, carbs, fats, fiber, plannedExtra }: CalorieRingProps) {
   const router = useRouter()
   const remaining = goal - consumed
-  const isOver = consumed > goal
+  // Calories are a ceiling: hitting the target is the win, a few over is a
+  // nudge, well over is the warning. A single calorie over used to read exactly
+  // as red as 500 over.
+  const status = macroStatus(consumed, goal, 'ceiling')
+  const isOver = status === 'over' || status === 'warn'
   const percentage = goal > 0 ? Math.min(consumed / goal, 1) : 0
+  const plannedPercentage = goal > 0 && plannedExtra
+    ? Math.min((consumed + plannedExtra) / goal, 1)
+    : percentage
+  // Only when the shadow arc itself is visible is there anything to explain.
+  const hasPlanned = plannedPercentage > percentage
+  const { open: showTooltip, containerRef, show, hide } = usePlannedTooltip()
 
   const size = 180
   const strokeWidth = 14
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const strokeDashoffset = circumference - percentage * circumference
+  const plannedDashoffset = circumference - plannedPercentage * circumference
 
   return (
     <Card>
@@ -48,60 +81,110 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
 
       {/* Ring — button wrapper handles tap reliably on mobile */}
       <div className="flex flex-col items-center">
-        <button
-          onClick={() => router.push('/dashboard/nutrition/goals')}
-          className="relative cursor-pointer rounded-full focus:outline-none active:opacity-70"
-          style={{ width: size, height: size }}
-          aria-label="Edit calorie goals"
-        >
-          <svg width={size} height={size} className="-rotate-90" style={{ pointerEvents: 'none' }}>
-            <defs>
-              <linearGradient id="calorie-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#10b981" />
-                <stop offset="100%" stopColor="#22c55e" />
-              </linearGradient>
-            </defs>
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={strokeWidth}
-              className="text-zinc-200 dark:text-zinc-700"
-            />
-            <motion.circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={isOver ? '#ef4444' : 'url(#calorie-ring-gradient)'}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              initial={{ strokeDashoffset: circumference }}
-              animate={{ strokeDashoffset }}
-              transition={{ duration: 1.2, ease: 'easeOut' }}
-            />
-          </svg>
+        <div ref={containerRef} className="relative">
+          <button
+            onClick={() => router.push('/dashboard/nutrition/goals')}
+            onMouseEnter={() => hasPlanned && show()}
+            onMouseLeave={hide}
+            className="relative cursor-pointer rounded-full focus:outline-none active:opacity-70"
+            style={{ width: size, height: size }}
+            aria-label="Edit calorie goals"
+          >
+            <svg width={size} height={size} className="-rotate-90" style={{ pointerEvents: 'none' }}>
+              <defs>
+                <linearGradient id="calorie-ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#10b981" />
+                  <stop offset="100%" stopColor="#22c55e" />
+                </linearGradient>
+              </defs>
+              <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                className="text-zinc-200 dark:text-zinc-700"
+              />
+              {plannedPercentage > percentage && (
+                <motion.circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  initial={{ strokeDashoffset: circumference }}
+                  animate={{ strokeDashoffset: plannedDashoffset }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  className="text-emerald-400/40 dark:text-emerald-500/30"
+                  aria-hidden="true"
+                />
+              )}
+              <motion.circle
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={macroStrokeColor(status, 'url(#calorie-ring-gradient)')}
+                strokeWidth={strokeWidth}
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                initial={{ strokeDashoffset: circumference }}
+                animate={{ strokeDashoffset }}
+                transition={{ duration: 1.2, ease: 'easeOut' }}
+              />
+            </svg>
 
-          {/* Center text — pointer-events none so button receives the tap */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ pointerEvents: 'none' }}>
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4, duration: 0.4 }}
-              className={`text-2xl font-bold tabular-nums ${
-                isOver ? 'text-red-500' : 'text-zinc-900 dark:text-white'
-              }`}
+            {/* Center text — pointer-events none so button receives the tap */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ pointerEvents: 'none' }}>
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.4, duration: 0.4 }}
+                className={`text-2xl font-bold tabular-nums ${
+                  status === 'over' ? 'text-red-500'
+                    : status === 'warn' ? 'text-orange-600 dark:text-orange-400'
+                    : 'text-zinc-900 dark:text-white'
+                }`}
+              >
+                {Math.abs(remaining)}
+              </motion.span>
+              <span className={`text-xs font-medium ${
+                status === 'over' ? 'text-red-400'
+                  : status === 'warn' ? 'text-orange-500'
+                  : 'text-zinc-500 dark:text-zinc-400'
+              }`}>
+                {isOver ? 'over' : 'remaining'}
+              </span>
+            </div>
+          </button>
+
+          {hasPlanned && (
+            <button
+              type="button"
+              // Hover/focus is the sole trigger — a click is preceded by its
+              // own mouseenter (real on desktop, synthesized after touchend
+              // on mobile), so a click handler here would toggle the
+              // tooltip straight back shut the instant hover had just
+              // opened it.
+              onMouseEnter={show}
+              onMouseLeave={hide}
+              onFocus={show}
+              onBlur={hide}
+              onKeyDown={(e) => { if (e.key === 'Escape') hide() }}
+              className="absolute -bottom-1 -right-1 z-10 flex h-6 items-center rounded-full border border-emerald-400/50 bg-emerald-50 px-2 text-[10px] font-bold text-emerald-700 shadow-sm focus:outline-none dark:border-emerald-500/40 dark:bg-emerald-950 dark:text-emerald-300"
+              aria-label={`Calories including today's plan: ${Math.round(consumed + (plannedExtra ?? 0))} of ${goal}`}
+              aria-expanded={showTooltip}
             >
-              {Math.abs(remaining)}
-            </motion.span>
-            <span className={`text-xs font-medium ${isOver ? 'text-red-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
-              {isOver ? 'over' : 'remaining'}
-            </span>
-          </div>
-        </button>
+              +{Math.round(plannedExtra ?? 0)}
+            </button>
+          )}
+
+          <PlannedTooltip open={hasPlanned && showTooltip} label="Calories" current={consumed} planned={plannedExtra ?? 0} goal={goal} />
+        </div>
 
         {/* Goal breakdown */}
         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400 tabular-nums">
@@ -109,7 +192,7 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
           {' '}&minus;{' '}
           <span className="font-medium text-zinc-700 dark:text-zinc-300">Food {consumed}</span>
           {' '}={' '}
-          <span className={`font-semibold ${isOver ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+          <span className={macroTextClass(status === 'under' || status === 'empty' ? 'hit' : status)}>
             {Math.abs(remaining)} {isOver ? 'over' : 'remaining'}
           </span>
         </p>
@@ -117,9 +200,10 @@ export default function CalorieRing({ consumed, goal, protein, carbs, fats }: Ca
 
       {/* Macro bars */}
       <div className="mt-5 space-y-3" data-tour="macro-rows">
-        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color="bg-blue-600" />
-        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color="bg-green-600" />
-        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color="bg-amber-500" />
+        {/* Protein is a FLOOR — exceeding it is a good outcome, never a warning. */}
+        <MacroBar label="Protein" current={protein.current} goal={protein.goal} color={MACRO_COLORS.protein} kind="floor" plannedExtra={protein.planned} />
+        <MacroBar label="Carbs" current={carbs.current} goal={carbs.goal} color={MACRO_COLORS.carbs} fiber={fiber} plannedExtra={carbs.planned} />
+        <MacroBar label="Fats" current={fats.current} goal={fats.goal} color={MACRO_COLORS.fats} plannedExtra={fats.planned} />
       </div>
     </Card>
   )

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Pressable } from "react-native";
+import { Text } from "@/components/Text";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import type { MealType } from "@/lib/nutrition/daySelector";

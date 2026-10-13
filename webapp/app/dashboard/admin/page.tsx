@@ -25,6 +25,7 @@ import {
   CartesianGrid,
 } from 'recharts'
 import PageTransition from '@/components/PageTransition'
+import SubscriptionSweepCard from '@/components/admin/SubscriptionSweepCard'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -367,6 +368,9 @@ export default function AdminOverviewPage() {
         )}
       </div>
 
+      {/* Subscription sweep — the scheduled job that takes Plus away */}
+      <SubscriptionSweepCard />
+
       {/* Push notification tester */}
       <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-3 flex items-center gap-2">
@@ -458,7 +462,7 @@ export default function AdminOverviewPage() {
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 px-4 py-2.5 text-center text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             <Brain className="h-3.5 w-3.5" />
-            Mind XP
+            Mind progress
           </Link>
           <button
             onClick={() => setShowConfirm(true)}

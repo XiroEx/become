@@ -1,17 +1,18 @@
 /**
  * Nutrition section e2e tests.
  * Covers: daily log, food search, custom weight input, water tracking, goals page.
- * Runs against production: https://become.redbtn.io
+ * Target: PLAYWRIGHT_BASE_URL, default http://localhost:3000. It used to
+ * hardcode https://become.redbtn.io, so it ran against production even when
+ * the rest of the suite was pointed elsewhere.
  *
- * Uses production-signed tokens from e2e-admin-setup (admin role needed for
- * the nutrition FeatureGuard) and e2e-setup (user role, for goals page).
+ * Uses tokens from e2e-admin-setup (admin role needed for the nutrition
+ * FeatureGuard) and e2e-setup (user role, for goals page).
  */
 
 import { test, expect, type Page, type BrowserContext } from '@playwright/test'
 import fs from 'fs'
 import path from 'path'
-
-const BASE_URL = 'https://become.redbtn.io'
+import { BASE_URL } from './base-url'
 const BOOTSTRAP_TOKEN = process.env.BOOTSTRAP_TOKEN || ''
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots')
 fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true })

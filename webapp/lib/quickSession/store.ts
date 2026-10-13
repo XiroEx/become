@@ -5,7 +5,7 @@
 // only the id in the URL. The live client reads it back, runs the workout, and
 // saves with kind:'quick' + that sessionId.
 
-import type { DraftSession } from './types'
+import type { DraftExercise, DraftSession } from './types'
 
 export const QUICK_PROGRAM_ID = 'quick'
 
@@ -13,6 +13,21 @@ const KEY_PREFIX = 'quick_session_'
 
 export interface StoredQuickSession extends DraftSession {
   sessionId: string
+  /** Explicit lifecycle state. Automatic titles can sound meaningful, so the
+   * title text alone cannot tell whether the member chose a name. */
+  needsName?: boolean
+  /** Server log this repeat was copied from. Kept separate from sessionId so
+   *  completing the repeat cannot overwrite the historical workout. */
+  sourceSessionId?: string
+  /** Carried over from a favorited source session so repeating it doesn't
+   *  silently drop the star — see openQuickSession call sites. */
+  favorite?: boolean
+}
+
+interface StashQuickSessionOptions {
+  sourceSessionId?: string
+  needsName?: boolean
+  favorite?: boolean
 }
 
 function genId(): string {
@@ -32,9 +47,15 @@ function hashStr(s: string): number {
 }
 
 /** Persist a draft session and return its sessionId (used in the live URL). */
-export function stashQuickSession(session: DraftSession): string {
+export function stashQuickSession(session: DraftSession, options?: StashQuickSessionOptions): string {
   const sessionId = genId()
-  const payload: StoredQuickSession = { ...session, sessionId }
+  const payload: StoredQuickSession = {
+    ...session,
+    sessionId,
+    ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
+    ...(options?.sourceSessionId ? { sourceSessionId: options.sourceSessionId } : {}),
+    ...(options?.favorite ? { favorite: true } : {}),
+  }
   try {
     // localStorage (not sessionStorage) so a generated session survives closing
     // the live view / tab and can be re-opened from its overview — it used to
@@ -51,8 +72,16 @@ export function stashQuickSession(session: DraftSession): string {
  * its existing sessionId, so completing it updates the same log — consuming the
  * plan — rather than creating a new one).
  */
-export function stashQuickSessionWithId(session: DraftSession, sessionId: string): string {
-  const payload: StoredQuickSession = { ...session, sessionId }
+export function stashQuickSessionWithId(
+  session: DraftSession,
+  sessionId: string,
+  options?: Pick<StashQuickSessionOptions, 'needsName'>,
+): string {
+  const payload: StoredQuickSession = {
+    ...session,
+    sessionId,
+    ...(options?.needsName !== undefined ? { needsName: options.needsName } : {}),
+  }
   try {
     localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(payload))
   } catch {
@@ -69,7 +98,19 @@ export function stashQuickSessionWithId(session: DraftSession, sessionId: string
 export function swapQuickSessionExercise(
   sessionId: string,
   exIdx: number,
-  next: { name: string; exerciseSlug?: string; trackingType?: string; primaryMuscles?: string[] },
+  next: {
+    name: string
+    exerciseSlug?: string
+    trackingType?: string
+    primaryMuscles?: string[]
+    /** Always passed by the caller (possibly []) so a swap fully replaces the
+     *  old exercise's catalog metadata rather than leaving stale values —
+     *  e.g. swapping a dumbbell row for a bodyweight one must drop `equipment`,
+     *  not just skip setting the new one. */
+    equipment?: string[]
+    laterality?: string
+    movementPatterns?: string[]
+  },
 ): void {
   const s = readQuickSession(sessionId)
   if (!s || !Array.isArray(s.exercises) || !s.exercises[exIdx]) return
@@ -79,6 +120,9 @@ export function swapQuickSessionExercise(
     if (next.exerciseSlug !== undefined) patched.exerciseSlug = next.exerciseSlug
     if (next.trackingType) patched.trackingType = next.trackingType
     if (next.primaryMuscles) patched.primaryMuscles = next.primaryMuscles
+    if (next.equipment !== undefined) patched.equipment = next.equipment
+    if (next.laterality !== undefined) patched.laterality = next.laterality
+    if (next.movementPatterns !== undefined) patched.movementPatterns = next.movementPatterns
     return patched
   })
   stashQuickSessionWithId({ ...(s as DraftSession), exercises }, sessionId)
@@ -97,15 +141,63 @@ export function readQuickSession(sessionId: string): StoredQuickSession | null {
   }
 }
 
+/**
+ * Overwrite a stashed session's title/exercises in place, keeping its id.
+ *
+ * Backs the overview's edit mode. Kept separate from stashQuickSessionWithId so
+ * the intent reads at the call site — this is "the user changed this session",
+ * not "start this plan".
+ */
+export function updateQuickSession(
+  sessionId: string,
+  patch: { title?: string; exercises?: DraftExercise[] },
+): StoredQuickSession | null {
+  const current = readQuickSession(sessionId)
+  if (!current) return null
+  const next: StoredQuickSession = {
+    ...current,
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    // Saving a non-empty title in the editor is an explicit naming action.
+    ...(patch.title !== undefined ? { needsName: !patch.title.trim() } : {}),
+    ...(patch.exercises !== undefined ? { exercises: patch.exercises } : {}),
+  }
+  try {
+    localStorage.setItem(KEY_PREFIX + sessionId, JSON.stringify(next))
+  } catch {
+    /* storage unavailable — the caller still gets the updated object back */
+  }
+  return next
+}
+
 /** Remove a stashed session (call once it's completed). */
 export function clearQuickSession(sessionId: string): void {
   try { localStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
   try { sessionStorage.removeItem(KEY_PREFIX + sessionId) } catch { /* ignore */ }
 }
 
-/** The overview ("regular view") URL for a stashed quick session. */
-export function quickSessionOverviewHref(sessionId: string): string {
-  return `/dashboard/workout/quick-session?session=${encodeURIComponent(sessionId)}`
+/**
+ * The overview ("regular view") URL for a stashed quick session.
+ *
+ * `saved` marks a session that already exists server-side under this exact
+ * sessionId (a planned session). The overview uses it to decide whether editing
+ * should write back to that log — for an unsaved draft it must not, or the edit
+ * would insert a stray log nobody asked for.
+ *
+ * `date` (a local YYYY-MM-DD) pre-fills the overview's Log/Plan date — used
+ * when the session was started from a specific day on the Calendar, so the
+ * user isn't left to re-pick a date the app already knew.
+ */
+export function quickSessionOverviewHref(
+  sessionId: string,
+  opts?: { saved?: boolean; started?: boolean; date?: string },
+): string {
+  const q = [
+    `session=${encodeURIComponent(sessionId)}`,
+    ...(opts?.saved ? ['saved=1'] : []),
+    ...(opts?.started ? ['started=1'] : []),
+    ...(opts?.date ? [`date=${encodeURIComponent(opts.date)}`] : []),
+  ].join('&')
+  return `/dashboard/workout/quick-session?${q}`
 }
 
 /** The live route URL for a stashed quick session. */

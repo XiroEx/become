@@ -24,6 +24,23 @@ export interface GuidedStep {
   scale?: { min: number; max: number; minLabel: string; maxLabel: string }
 }
 
+/** Loose text match — punctuation and spacing vary between the two fields. */
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Does `body` already pose this question? The model frequently ends its body
+ * copy with the same question it puts in `inputPrompt`, and showing both reads
+ * as a stutter.
+ */
+function containsAsk(body: string | undefined, ask: string): boolean {
+  if (!body) return false
+  const b = normalize(body)
+  const a = normalize(ask)
+  return a.length > 0 && b.includes(a)
+}
+
 export default function GuidedFlow({
   title,
   steps,
@@ -64,6 +81,16 @@ export default function GuidedFlow({
   // to what the user actually wrote — so it's not the same canned close forever.
   const flowHasInput = steps.some((s) => !!s.inputPrompt)
   const isReflectStep = isLast && !!onReflect && flowHasInput
+
+  // THE ASK. `inputPrompt` used to be invisible: it gated the textarea and
+  // labelled the saved answer, but was never rendered. So when the model wrote a
+  // statement into `body` and put the actual question in `inputPrompt`, the
+  // member got a declaration and a bare text box with nothing asked of them —
+  // "One Concrete Action" and "The Amplified Impact" both landed that way. It
+  // only looked right when the model happened to repeat the question inside
+  // `body`, which is also why it must not render twice when it does.
+  const ask = step.inputPrompt?.trim() ?? ''
+  const showAsk = isInput && !!ask && !containsAsk(step.body, ask)
 
   useEffect(() => {
     if (!isReflectStep || reflectStarted.current) return
@@ -200,6 +227,13 @@ export default function GuidedFlow({
               <p className="text-xs uppercase tracking-widest text-white/40">{title}</p>
               <h2 className="mt-4 text-2xl font-extrabold leading-snug">{step.title}</h2>
               {step.body && <p className="mt-3 text-base leading-relaxed text-white/70">{step.body}</p>}
+
+              {/* The question itself — brighter and heavier than the body copy,
+                  so the screen reads as something asked rather than something
+                  declared at you. */}
+              {showAsk && (
+                <p className="mt-4 text-lg font-semibold leading-snug text-white">{ask}</p>
+              )}
 
               {/* ── Type-an-answer ── */}
               {isInput && (

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/workouts-post-prs.test.ts
+// Run with: npm run test:file tests/unit/workouts-post-prs.test.ts
 //
 // Tests the gating + persistence layer that POST /api/workouts uses to keep
 // exercisePRs in lockstep with workoutLogs. The pure PR math is exercised in

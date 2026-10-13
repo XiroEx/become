@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardLayout/route.test.ts
+// Run with: npm run test:file tests/unit/dashboardLayout/route.test.ts
 //
 // Auth + body-validation branches of GET/PATCH /api/dashboard/layout.
 // The 200 paths touch MongoDB (unavailable in the unit env) and are covered

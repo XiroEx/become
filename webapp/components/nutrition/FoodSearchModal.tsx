@@ -3,18 +3,46 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock } from 'lucide-react'
+import { Search, X, Plus, CalendarDays, Star, Loader2, Globe, ScanBarcode, Camera, Upload, PencilLine, Tag as TagIcon, ChevronDown, Check, Bookmark, Trash2, ChefHat, Repeat, Clock, BadgeCheck, AlertTriangle } from 'lucide-react'
 import { useLockScroll } from '@/lib/useLockScroll'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { getToken } from '@/lib/clientAuth'
+import FlagFoodSheet, { type LogCorrection } from '@/components/nutrition/FlagFoodSheet'
 import BarcodeScanner from './BarcodeScanner'
 import MealApplySheet from '@/components/meals/MealApplySheet'
 import QuantityPicker, { type QuantityPickerSelection } from './QuantityPicker'
 import DateOnlyPicker, { formatDatePillLabel } from '@/components/ui/DateOnlyPicker'
-import { combineDateWithNowTime } from '@/lib/mealPlanDates'
+import { buildLoggedAt } from '@/lib/mealPlanDates'
+import { useMealSchedule, createMealTag } from '@/hooks/useMealSchedule'
+import {
+  isOutsideWindow, windowForTag, formatClockLabel, formatHHMM, parseHHMM, minutesOfDay,
+  anchorMinutesForTag,
+} from '@/lib/nutrition/mealSchedule'
 import type { Unit } from '@/lib/units'
 import { prettifyUnitCodes } from '@/lib/units'
+import {
+  buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
+  variantForServingChoice,
+  type ServingChoice,
+  type ServingOptionVariant,
+} from '@/lib/nutrition/servingOptions'
+import { nutritionForQuantity } from '@/lib/foodMath'
+import { shouldShowOverview } from '@/lib/nutrition/overviewSections'
 import type { ServingUnit } from '@/models/Food'
+
+/**
+ * Exactly what `handleAddFood` builds: the legacy IFoodEntry shape plus the
+ * logged* provenance the API tolerates. Named so the multi-add callback and the
+ * basket can share it instead of restating the intersection three times.
+ */
+export type LoggedFoodEntry = IFoodEntry & {
+  servingLabel?: string
+  loggedQuantity?: number
+  loggedUnit?: Unit
+  loggedGramsPerServing?: number
+  loggedMlPerServing?: number
+}
 
 interface FoodSearchModalProps {
   isOpen: boolean
@@ -36,6 +64,21 @@ interface FoodSearchModalProps {
   // without loggedAt. The caller is responsible for routing to /api/meal-plans.
   mode?: 'log' | 'plan'
   onClose: () => void
+  /**
+   * Multi-add. Called with every basket item at once.
+   *
+   * `mealName` is set only when the member wants it kept for reuse; without it
+   * the items are just logged together. Logging several things in one pass is
+   * the actual pain (a burger, its bun and the sauce is three trips through
+   * this sheet today) and it is not worth gating, so saving the MEAL is the
+   * part that checks entitlement, not the multi-add.
+   */
+  onAddMany?: (
+    items: LoggedFoodEntry[],
+    opts: { tag?: string; loggedAt?: string; mealName?: string; untimed?: boolean },
+  ) => Promise<void> | void
+  /** False hides the "save it as a meal" half of the flow (needs `custom-meals`). */
+  canSaveMeals?: boolean
   // Tag is optional — meal-building flow ignores it.
   // loggedAt (ISO string) is optional — passed when user explicitly picks a custom time.
   // planOptions is plan-mode-only — passes the recurrence selection through.
@@ -44,6 +87,8 @@ interface FoodSearchModalProps {
     tag?: string,
     loggedAt?: string,
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
+    /** True when the member cleared the time: log for the DAY, no clock. */
+    untimed?: boolean,
   ) => void | Promise<void>
   autoScan?: boolean
   // Capture hub: when provided, the modal shows Snap / Upload / Describe buttons
@@ -106,6 +151,8 @@ interface FoodResult {
   isSaved?: boolean
   isBestMatch?: boolean
   persistable?: boolean
+  /** Curated by us rather than mirrored from USDA/OpenFoodFacts. */
+  isVerified?: boolean
 }
 
 interface MealResult {
@@ -138,79 +185,71 @@ function pickDefaultVariantIdx(variants: FoodVariant[] | undefined): number {
   return idx >= 0 ? idx : 0
 }
 
-// Pattern matching a parenthesized weight/volume in a label, e.g. "(28 g)".
-const ROW_PARENS_WEIGHT_RE = /\(\s*\d+(?:\.\d+)?\s*(?:g|grams?|ml|millilitres?|milliliters?|oz|ounces?|fl\s*oz)\s*\)/i
-
-// Friendly serving label for the row underline. USDA / OFF foods often store
-// nutrition per 100 g but carry the "real" household serving in displayLabel
-// or alternateServings[0]. Showing raw "100 g" when the food has a 28 g pouch
-// label is misleading — fall through the better signals first. Also append
-// "(28 g)" when the chosen label is just a count ("12 chips") and we know
-// the gram weight via the bridge or a mass-family servingSize.
-// Scale a food's stored nutrition (which for OFF imports is per-100g/ml) down
-// to its "actual" per-serving when gramsPerServing / mlPerServing diverge
-// from servingSize. Mirrors the QuantityPicker primary-chip behavior so the
-// number alongside the search result matches what the picker will preview.
-function rowCalories(food: FoodResult): number {
-  let scale = 1
-  if (food.servingUnit === 'g'
-    && food.gramsPerServing != null
-    && food.gramsPerServing > 0
-    && Math.abs(food.gramsPerServing - food.servingSize) > 0.001) {
-    scale = food.gramsPerServing / food.servingSize
-  } else if (food.servingUnit === 'ml'
-    && food.mlPerServing != null
-    && food.mlPerServing > 0
-    && Math.abs(food.mlPerServing - food.servingSize) > 0.001) {
-    scale = food.mlPerServing / food.servingSize
+// The collapsed row, the expanded picker's unit button, and the editable
+// "friendly name" bubble above it must all show the SAME default serving.
+// They used to be three hand-rolled selectors that "mirrored" each other and
+// drifted — a food with no displayLabel but a real native serving (e.g.
+// "1 serving") and a separate "1 package" alternate fell straight through to
+// the alternate in the old row/label logic, while `buildServingChoiceGroups`
+// (what the inline picker's own default, `choiceGroups.servings[0]`, is built
+// from) correctly kept the native serving as the default. And a food whose
+// displayLabel is just a bare echo of the per-100g/ml storage basis ("100 g")
+// used to win outright in the old logic, arbitrarily preferring that over a
+// real named serving the food also carries — exactly the builder's own
+// suppression rule exists to prevent. Deriving all three surfaces from the
+// one builder makes them agree by construction instead of by three people
+// independently guessing the same priority order.
+export function defaultServingChoice(variant: ServingOptionVariant): ServingChoice {
+  const fallback: ServingChoice = {
+    id: 'serving-primary',
+    group: 'servings',
+    label: prettifyUnitCodes(variant.displayLabel || `${variant.servingSize} ${variant.servingUnit}`),
+    quantity: variant.servingSize,
+    unit: variant.servingUnit as Unit,
   }
-  return Math.round((food.nutrition.calories ?? 0) * scale)
+  try {
+    return buildServingChoiceGroups(variant).servings[0] ?? fallback
+  } catch {
+    return fallback
+  }
 }
 
-function preferredServingLabel(food: FoodResult): string {
-  let base = ''
-  if (food.displayLabel && food.displayLabel.trim()) base = food.displayLabel.trim()
-  else if (food.alternateServings && food.alternateServings.length > 0) {
-    const alt = food.alternateServings[0]
-    if (alt.label && alt.label.trim()) base = alt.label.trim()
-  } else if (food.gramsPerServing != null && food.gramsPerServing > 0
-      && Math.abs(food.gramsPerServing - food.servingSize) > 0.1) {
-    base = `${Math.round(food.gramsPerServing)} g`
-  } else {
-    base = `${food.servingSize} ${food.servingUnit}`
+// Defensive: a row arriving without flattened nutrition once threw and
+// unmounted the whole sheet ("This page couldn't load"). A missing number
+// should cost one wrong row, never the page.
+export function rowCalories(food: FoodResult): number {
+  const choice = defaultServingChoice(food)
+  try {
+    const effective = variantForServingChoice(food, choice)
+    return Math.round(nutritionForQuantity(effective, choice.quantity, choice.unit).calories)
+  } catch {
+    return 0
   }
-  // Normalize raw upstream codes ("GRM"/"ONZ"/etc.) to friendly forms.
-  base = prettifyUnitCodes(base)
+}
 
-  if (ROW_PARENS_WEIGHT_RE.test(base)) return base
-
-  // Append "(N g)" when we have a gram bridge (or the variant is mass-native
-  // with a servingSize that isn't itself "100 g"). Skip the trivial "100 g"
-  // tail when the storage size already says it.
-  let grams: number | null = null
-  if (food.gramsPerServing != null && food.gramsPerServing > 0) grams = food.gramsPerServing
-  else if (food.servingUnit === 'g') grams = food.servingSize
-  else if (food.servingUnit === 'oz') grams = food.servingSize * 28.3495
-
-  if (grams != null && grams > 0
-      && !(Math.abs(grams - food.servingSize) < 0.5 && food.servingUnit === 'g')) {
-    const rounded = Math.abs(grams - Math.round(grams)) < 0.05
-      ? String(Math.round(grams))
-      : (Math.round(grams * 10) / 10).toString()
-    // Don't double up — if the base label already mentions the same gram
-    // value inline (e.g. "38 g"), skip the suffix.
-    const bareMatch = /\b(\d+(?:\.\d+)?)\s*g\b/i.exec(base)
-    if (bareMatch && Math.abs(Number(bareMatch[1]) - grams) < 0.5) return base
-    return `${base} (${rounded} g)`
-  }
-  return base
+export function preferredServingLabel(food: FoodResult): string {
+  return servingChoiceDisplayLabel(defaultServingChoice(food))
 }
 
 function variantFriendlyLabel(variant: FoodVariant | null): string {
   if (!variant) return ''
-  if (variant.displayLabel?.trim()) return prettifyUnitCodes(variant.displayLabel.trim())
-  const alt = variant.alternateServings?.find(s => s.label?.trim())
-  return alt ? prettifyUnitCodes(alt.label.trim()) : ''
+  return servingChoiceDisplayLabel(defaultServingChoice(variant))
+}
+
+/**
+ * Has the picker's live selection moved off the "1 default serving" baseline
+ * it resolved to on mount? The seeded label ("3 oz (85 g)") only describes
+ * that one baseline amount — once quantity or unit diverges from it (a
+ * member typing a custom 95 g instead of the default 85 g serving), the
+ * label no longer describes what's about to be logged.
+ */
+export function selectionDivergedFromBaseline(
+  baseline: { quantity: number; unit: string } | null,
+  sel: { quantity: number; unit: string },
+  epsilon = 0.001,
+): boolean {
+  if (!baseline) return false
+  return sel.unit !== baseline.unit || Math.abs(sel.quantity - baseline.quantity) > epsilon
 }
 
 function positiveDecimal(value: string): number {
@@ -241,10 +280,21 @@ function titleCaseTag(tag: string): string {
 
 type TabId = 'all' | 'meals' | 'mine' | 'recent' | 'frequent'
 
+/**
+ * The filter chips. There is deliberately NO "All" chip.
+ *
+ * 'all' is still the default STATE — it is the unfiltered list, which already
+ * shows foods — but it never needed a chip of its own. With no search text the
+ * unfiltered list and the "All" tab were the same thing, so the chip occupied
+ * the first slot of a scrolling row to express "no filter", which is what
+ * having nothing selected already means.
+ *
+ * Foods leads because it is the one people reach for; Meals came first only by
+ * accident of declaration order.
+ */
 const tabs: { id: TabId; label: string; Icon: typeof Search }[] = [
-  { id: 'all', label: 'All', Icon: Search },
-  { id: 'meals', label: 'Meals', Icon: ChefHat },
   { id: 'mine', label: 'Foods', Icon: Bookmark },
+  { id: 'meals', label: 'Meals', Icon: ChefHat },
   { id: 'recent', label: 'Recent', Icon: Clock },
   { id: 'frequent', label: 'Frequent', Icon: Star },
 ]
@@ -269,6 +319,8 @@ export default function FoodSearchModal({
   mode = 'log',
   onClose,
   onSelectFood,
+  onAddMany,
+  canSaveMeals = false,
   autoScan = false,
   onSnapPhoto,
   onUpload,
@@ -283,6 +335,33 @@ export default function FoodSearchModal({
 
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabId>('all')
+  // Restrict results to foods we curated ourselves. Composes with whichever tab
+  // is active rather than being a tab of its own, so "Recent, verified only" and
+  // "search chicken, verified only" both work.
+  const [verifiedOnly, setVerifiedOnly] = useState(false)
+  /**
+   * The four short lists behind an empty search box.
+   *
+   * Opening the sheet used to dump the whole saved-foods list under a "FOODS"
+   * banner — byte-for-byte the Foods filter minus the banner, which left three
+   * of the four chips unexplained until you tapped one. A preview of each makes
+   * the chips read as "more of that".
+   */
+  const [overview, setOverview] = useState<{
+    foods: FoodResult[]; meals: MealResult[]; recent: FoodResult[]; frequent: FoodResult[]
+  } | null>(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
+
+  // Verified is hidden while the box is empty, so it must also be RELEASED then.
+  // Otherwise clearing the query leaves a filter switched on with no chip on
+  // screen to switch it off — results quietly narrowed by an invisible control.
+  useEffect(() => {
+    if (query.trim().length === 0 && verifiedOnly) setVerifiedOnly(false)
+  }, [query, verifiedOnly])
+  const [flagOpen, setFlagOpen] = useState(false)
+  // Per-serving values the user corrected BEFORE logging. Applies to their
+  // entry only; the catalogue is the agent's to write.
+  const [nutritionOverride, setNutritionOverride] = useState<LogCorrection | null>(null)
   const [results, setResults] = useState<FoodResult[]>([])
   const [mealResults, setMealResults] = useState<MealResult[]>([])
   const [mealsLoading, setMealsLoading] = useState(false)
@@ -298,16 +377,56 @@ export default function FoodSearchModal({
   const [addQuantity, setAddQuantity] = useState('1')
   const [servingLabelDraft, setServingLabelDraft] = useState('')
   const [servingLabelEditing, setServingLabelEditing] = useState(false)
+  // Was the current draft typed by the member (via the pencil), or just the
+  // variant's own default label ("3 oz (85 g)") seeded on selection? Only a
+  // typed label survives a quantity change — the seeded one describes ONE
+  // default serving and goes stale the moment the picker no longer says that.
+  const [servingLabelUserEdited, setServingLabelUserEdited] = useState(false)
+  // The picker's own first emission after a variant (re)mount — "1 default
+  // serving" in that variant's unit. Compared against later emissions to tell
+  // "the member changed the amount" from "the picker just resolved itself."
+  const pickerBaselineRef = useRef<{ quantity: number; unit: string } | null>(null)
   // Index into selectedFood.variants — defaults to the variant marked isDefault.
   const [selectedVariantIdx, setSelectedVariantIdx] = useState(0)
   const [variantMenuOpen, setVariantMenuOpen] = useState(false)
   // Loading state for the import-on-pick network call.
   const [adding, setAdding] = useState(false)
+  // Multi-add. `basket` holds fully-built entries, so each item keeps its own
+  // quantity, unit and serving label — a burger, its bun and the sauce are not
+  // the same amount of anything, and collapsing them to one picker would be
+  // worse than the three trips this replaces.
+  const [mealMode, setMealMode] = useState(false)
+  const [basket, setBasket] = useState<LoggedFoodEntry[]>([])
+  const [basketOpen, setBasketOpen] = useState(false)
+  const [mealName, setMealName] = useState('')
+  const [saveAsMeal, setSaveAsMeal] = useState(true)
+  const [submittingMany, setSubmittingMany] = useState(false)
+  const basketRef = useRef<HTMLDivElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const actionRowRef = useRef<HTMLDivElement>(null)
+  const [basketHeight, setBasketHeight] = useState(0)
   const addingRef = useRef(false)
   // User-picked log date as YYYY-MM-DD — null means "Now" (today @ current
   // wall-clock time). Lets users backdate to yesterday / earlier. No time
   // component — see combineDateWithNowTime() at submit.
   const [customDate, setCustomDate] = useState<string | null>(null)
+  // How this entry gets its time. Three states, not two, because "no time" is a
+  // real choice and not the absence of one:
+  //
+  //   'now'    — stamp the wall clock at submit. The default.
+  //   'custom' — the member typed a time.
+  //   'none'   — logged for the DAY, no time. The day view places it by its
+  //              tag's anchor instead of by a clock reading.
+  //
+  // 'none' exists for people whose day runs past midnight. Logging last night's
+  // food at 1am with a real timestamp drops it at the TOP of that day, ahead of
+  // breakfast; without a time it falls into its natural slot in the order.
+  //
+  // This used to be a bare `customTime: string | null`, where clearing the time
+  // silently meant "use the current clock" — so the X read as a reset rather
+  // than a clear, which is exactly what it was reported as.
+  const [timeMode, setTimeMode] = useState<'now' | 'custom' | 'none'>('none')
+  const [customTime, setCustomTime] = useState<string | null>(null)
   // When true, the inline DateOnlyPicker disclosure is open.
   const [dateEditOpen, setDateEditOpen] = useState(false)
   // Recurrence disclosure (plan mode only). null = one-time plan; otherwise
@@ -396,8 +515,10 @@ export default function FoodSearchModal({
       setApplyMeal(null)
       setSelectedFood(null)
       setSelection(null)
+      setNutritionOverride(null)
       setSelectedVariantIdx(0)
       setActiveTab('all')
+      setVerifiedOnly(false)
       setScannerOpen(false)
       setBarcodeError(null)
       addingRef.current = false
@@ -406,6 +527,8 @@ export default function FoodSearchModal({
       setCustomTagInput('')
       setSaveToast(null)
       setCustomDate(null)
+      setCustomTime(null)
+      setTimeMode('none')
       setDateEditOpen(false)
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
@@ -501,29 +624,106 @@ export default function FoodSearchModal({
     }
   }, [])
 
+  /**
+   * The overview flattened into one list, with the index each section starts at.
+   *
+   * The row markup lives inline in the results map and is several hundred lines;
+   * rendering four sections meant either duplicating it or threading section
+   * boundaries through it. This is the second, which keeps one renderer.
+   *
+   * Sections are deduped server-side and backfilled, so one food never appears
+   * under Foods AND Recent AND Frequent — see the overview route.
+   */
+  /**
+   * The default filter with an empty box — i.e. the overview is what should be
+   * on screen. Separate from `showOverview` (which additionally needs the data
+   * to have ARRIVED), because the render has to know the difference between
+   * "no overview yet" and "nothing to search for". Conflating them is what made
+   * the whole default view collapse to "Type at least 2 characters".
+   *
+   * `results.length` is part of the gate because an explicit result set must
+   * always beat the default view. A BARCODE SCAN fills `results` and opens the
+   * scanned food without ever touching `query`, so gating on the query alone
+   * rendered the default list instead of the thing just scanned — and the add
+   * panel, which renders inline under its row, never appeared. It only looked
+   * like it worked when the scanned item happened to already be in the overview.
+   */
+  const showOverviewPending = shouldShowOverview({ activeTab, query, resultCount: results.length })
+  const showOverview = showOverviewPending && !!overview
+
+  const overviewRows = useMemo(() => {
+    if (!overview) return { rows: [] as FoodResult[], headers: new Map<number, string>() }
+    const rows: FoodResult[] = []
+    const headers = new Map<number, string>()
+    const push = (label: string, items: FoodResult[]) => {
+      if (!items.length) return
+      headers.set(rows.length, label)
+      rows.push(...items)
+    }
+    push('Your foods', overview.foods)
+    push('Recent', overview.recent)
+    push('Frequent', overview.frequent)
+    return { rows, headers }
+  }, [overview])
+
+  const fetchOverview = useCallback(async () => {
+    setOverviewLoading(true)
+    try {
+      const token = getToken()
+      const res = await fetch('/api/nutrition/foods/overview', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) { setOverview(null); return }
+      const data = await res.json()
+      const next = {
+        foods: data.foods ?? [],
+        meals: data.meals ?? [],
+        recent: data.recent ?? [],
+        frequent: data.frequent ?? [],
+      }
+      setOverview(next)
+      // Meals render through the existing Meals section rather than a fourth
+      // copy of the row markup.
+      setMealResults(next.meals)
+    } catch {
+      setOverview(null)
+    } finally {
+      setOverviewLoading(false)
+    }
+  }, [])
+
   const fetchResults = useCallback(
-    async (searchQuery: string, tab: TabId) => {
+    async (searchQuery: string, tab: TabId, verified: boolean) => {
       setLoading(true)
       try {
         const token = getToken()
         const headers: HeadersInit = {}
         if (token) headers['Authorization'] = `Bearer ${token}`
 
+        // Only the search endpoint takes verifiedOnly — it uses the flag to skip
+        // USDA/OFF entirely rather than fetch and discard. The recent/frequent/
+        // saved endpoints return a bounded personal list, so filtering those
+        // client-side costs nothing and keeps their routes untouched.
         let url: string
+        let filterClientSide = false
         if (tab === 'recent') {
           url = '/api/nutrition/foods/recent'
+          filterClientSide = verified
         } else if (tab === 'frequent') {
           url = '/api/nutrition/foods/frequent'
+          filterClientSide = verified
         } else if (tab === 'mine') {
           url = '/api/me/foods'
+          filterClientSide = verified
         } else {
-          url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}`
+          url = `/api/nutrition/foods?q=${encodeURIComponent(searchQuery)}${verified ? '&verifiedOnly=true' : ''}`
         }
 
         const res = await fetch(url, { headers })
         if (res.ok) {
           const data = await res.json()
-          setResults(data.foods || data || [])
+          const foods: FoodResult[] = data.foods || data || []
+          setResults(filterClientSide ? foods.filter(f => f.isVerified === true) : foods)
         } else {
           setResults([])
         }
@@ -550,26 +750,27 @@ export default function FoodSearchModal({
     }
 
     if (activeTab === 'recent' || activeTab === 'frequent' || activeTab === 'mine') {
-      fetchResults('', activeTab)
+      fetchResults('', activeTab, verifiedOnly)
       setMealResults([])
       return
     }
 
-    // "all" tab with an empty query: show the user's saved foods as the landing
-    // view. Falls back to the standard "type 2 chars" empty state if they have none.
+    // Default filter, empty box: the four-section overview rather than a dump of
+    // saved foods (which was identical to the Foods filter and explained none of
+    // the other chips).
     if (query.trim().length < 2) {
+      setResults([])
       if (activeTab === 'all') {
-        fetchResults('', 'mine')
+        fetchOverview() // repopulates mealResults from the overview
       } else {
-        setResults([])
+        setMealResults([])
       }
-      setMealResults([])
       return
     }
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      fetchResults(query, activeTab)
+      fetchResults(query, activeTab, verifiedOnly)
       fetchMeals(query) // surface matching saved meals alongside foods on All
     }, 300)
 
@@ -577,7 +778,7 @@ export default function FoodSearchModal({
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
    
-  }, [query, activeTab, isOpen, fetchResults, fetchMeals])
+  }, [query, activeTab, verifiedOnly, isOpen, fetchResults, fetchMeals, fetchOverview])
 
   // Active variant for the currently selected food (or null)
   const activeVariant = useMemo<FoodVariant | null>(() => {
@@ -585,17 +786,48 @@ export default function FoodSearchModal({
     return getActiveVariant(selectedFood, selectedVariantIdx)
   }, [selectedFood, selectedVariantIdx])
   const addQuantityMultiplier = positiveDecimal(addQuantity)
-  const previewNutrition = useMemo(
-    () => scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1),
-    [selection, addQuantityMultiplier],
-  )
+  const previewNutrition = useMemo(() => {
+    // A user correction is PER SERVING, matching what the log entry stores, so
+    // it scales by the same multiplier the picker applies. Without this the
+    // preview would keep showing the old numbers right after someone corrected
+    // them, which reads as the edit having silently failed.
+    if (nutritionOverride && selection) {
+      const factor = (selection.multiplier || 1) * (addQuantityMultiplier || 1)
+      return {
+        calories: nutritionOverride.calories * factor,
+        protein: nutritionOverride.protein * factor,
+        carbs: nutritionOverride.carbs * factor,
+        fats: nutritionOverride.fats * factor,
+      }
+    }
+    return scaleNutrition(selection?.nutrition, addQuantityMultiplier || 1)
+  }, [selection, addQuantityMultiplier, nutritionOverride])
 
   useEffect(() => {
     setServingLabelDraft(variantFriendlyLabel(activeVariant))
     setServingLabelEditing(false)
+    setServingLabelUserEdited(false)
+    pickerBaselineRef.current = null
     setAddQuantity('1')
     setVariantMenuOpen(false)
   }, [selectedFood?._id, selectedVariantIdx, activeVariant])
+
+  // The picker's default label ("3 oz (85 g)") only describes ONE serving. The
+  // moment the amount picked diverges from that default — the member typed a
+  // custom 95 g instead of the default 85 g serving — the seeded label starts
+  // lying about what's being logged (nutrition tracks the real amount fine;
+  // this caption doesn't). Clear it rather than submit a mismatched label,
+  // unless the member typed their own ("1 handful") — that survives any amount.
+  const handlePickerSelectionChange = useCallback((sel: QuantityPickerSelection) => {
+    setSelection(sel)
+    const baseline = pickerBaselineRef.current
+    if (!baseline) {
+      pickerBaselineRef.current = { quantity: sel.quantity, unit: sel.unit }
+      return
+    }
+    if (servingLabelUserEdited) return
+    if (selectionDivergedFromBaseline(baseline, sel)) setServingLabelDraft('')
+  }, [servingLabelUserEdited])
 
   // Copy-on-pick: external (usda-/off-) results get persisted to our Food
   // collection before being logged. Returns the resolved foodId + variants.
@@ -855,7 +1087,14 @@ export default function FoodSearchModal({
     }
   }
 
-  const handleAddFood = async () => {
+  /**
+   * `startMeal` is the "Build a meal" button: it turns multi-select on AND banks
+   * the item that is already open. Flipping the mode alone would make the first
+   * item cost two taps on the same row, which is the friction the basket exists
+   * to remove — and `mealMode` is still false in this closure at that point, so
+   * the intent has to arrive as an argument rather than be read off state.
+   */
+  const handleAddFood = async (opts?: { startMeal?: boolean }) => {
     if (!selectedFood || !activeVariant || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0) return
     if (addingRef.current) return
     addingRef.current = true
@@ -875,17 +1114,16 @@ export default function FoodSearchModal({
         resolvedVariantId = String(activeVariant._id)
       }
 
+      // A correction applies to every macro it was shown with, fiber
+      // included — same "apply the whole batch" rule as calories/protein/
+      // carbs/fats just below, not a selective per-field override.
+      const fiberValue = nutritionOverride?.fiber ?? activeVariant.nutrition.fiber
+
       // Build the legacy IFoodEntry shape, but extend with the new
       // logged{Quantity,Unit,GramsPerServing,MlPerServing} fields the API
       // tolerates. Nutrition stays as a per-serving snapshot; `servings`
       // carries the selected amount and quantity multiplier for server totals.
-      const entry: IFoodEntry & {
-        servingLabel?: string
-        loggedQuantity?: number
-        loggedUnit?: Unit
-        loggedGramsPerServing?: number
-        loggedMlPerServing?: number
-      } = {
+      const entry: LoggedFoodEntry = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         foodId: isObjectIdString(foodId) ? foodId : undefined,
         variantId: resolvedVariantId,
@@ -898,12 +1136,14 @@ export default function FoodSearchModal({
         // `servings` here is the back-compat "× per-variant-serving" multiplier.
         // New consumers should prefer loggedQuantity + loggedUnit.
         servings: selection.multiplier * addQuantityMultiplier,
+        // A user correction applies to THIS entry only — the shared food is the
+        // verification agent's to write, never the user's.
         nutrition: {
-          calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
-          protein:  Math.round(activeVariant.nutrition.protein  * 10) / 10,
-          carbs:    Math.round(activeVariant.nutrition.carbs    * 10) / 10,
-          fats:     Math.round(activeVariant.nutrition.fats     * 10) / 10,
-          fiber:  activeVariant.nutrition.fiber  != null ? Math.round(activeVariant.nutrition.fiber  * 10) / 10 : undefined,
+          calories: Math.round((nutritionOverride?.calories ?? activeVariant.nutrition.calories) * 10) / 10,
+          protein:  Math.round((nutritionOverride?.protein  ?? activeVariant.nutrition.protein)  * 10) / 10,
+          carbs:    Math.round((nutritionOverride?.carbs    ?? activeVariant.nutrition.carbs)    * 10) / 10,
+          fats:     Math.round((nutritionOverride?.fats     ?? activeVariant.nutrition.fats)     * 10) / 10,
+          fiber:  fiberValue != null ? Math.round(fiberValue * 10) / 10 : undefined,
           sugar:  activeVariant.nutrition.sugar  != null ? Math.round(activeVariant.nutrition.sugar  * 10) / 10 : undefined,
           sodium: activeVariant.nutrition.sodium != null ? Math.round(activeVariant.nutrition.sodium * 1000) / 1000 : undefined,
         },
@@ -919,8 +1159,17 @@ export default function FoodSearchModal({
       // even though the user never picked a time. When the user didn't pick a
       // date we send undefined so the server stamps "now".
       let loggedAtIso: string | undefined
-      if (!isPlanMode && customDate) {
-        loggedAtIso = combineDateWithNowTime(customDate)
+      // An untimed entry still gets a loggedAt (nothing downstream should have to
+      // cope with a missing timestamp) but it is stamped at the tag's ANCHOR, so
+      // even a consumer that only reads loggedAt orders it sensibly. The
+      // `untimed` flag is what makes the day view ignore the clock entirely.
+      const anchorHHMM = () => formatHHMM(anchorMinutesForTag(scheduleWindows, activeTag))
+      if (!isPlanMode && (customDate || timeMode !== 'now')) {
+        loggedAtIso = buildLoggedAt(
+          customDate,
+          timeMode === 'none' ? anchorHHMM() : customTime,
+          viewedDate,
+        )
       }
 
       // Plan-mode recurrence — pass only when the user opened the disclosure
@@ -931,12 +1180,21 @@ export default function FoodSearchModal({
         ? { repeat: { every: repeatEvery, count: repeatCount } }
         : undefined
 
-      await onSelectFood(
-        entry,
-        tagPickerEnabled ? activeTag : undefined,
-        loggedAtIso,
-        planOptions,
-      )
+      if (mealMode || opts?.startMeal) {
+        // Straight into the basket. Everything below still runs, so the sheet
+        // returns to the list ready for the next item — which is the whole
+        // point of the mode.
+        if (opts?.startMeal) setMealMode(true)
+        setBasket(prev => [...prev, entry])
+      } else {
+        await onSelectFood(
+          entry,
+          tagPickerEnabled ? activeTag : undefined,
+          loggedAtIso,
+          planOptions,
+          !isPlanMode && timeMode === 'none',
+        )
+      }
       setSelectedFood(null)
       setSelection(null)
       setAddQuantity('1')
@@ -944,6 +1202,8 @@ export default function FoodSearchModal({
       setServingLabelEditing(false)
       setSelectedVariantIdx(0)
       setCustomDate(null)
+      setCustomTime(null)
+      setTimeMode('none')
       setDateEditOpen(false)
       setRepeatOpen(false)
       setRepeatCount(6)
@@ -953,7 +1213,141 @@ export default function FoodSearchModal({
     }
   }
 
+  // Running totals for the tray. Each entry's nutrition is PER SERVING and
+  // `servings` carries the multiplier, so the basket has to multiply — summing
+  // the raw nutrition would under-count anyone who logged two of something.
+  const basketTotals = useMemo(() => {
+    return basket.reduce(
+      (t, it) => {
+        const mult = it.servings || 1
+        t.calories += (it.nutrition?.calories ?? 0) * mult
+        t.protein += (it.nutrition?.protein ?? 0) * mult
+        t.carbs += (it.nutrition?.carbs ?? 0) * mult
+        t.fats += (it.nutrition?.fats ?? 0) * mult
+        return t
+      },
+      { calories: 0, protein: 0, carbs: 0, fats: 0 },
+    )
+  }, [basket])
+
+  /**
+   * A name they can accept without thinking about it.
+   *
+   * Naming is friction at exactly the moment someone wants to be finished, so
+   * this is always pre-filled and always editable in place. Two or three items
+   * read best as their names; beyond that the list stops being a name.
+   */
+  const defaultMealName = useMemo(() => {
+    if (basket.length === 0) return ''
+    const names = basket.map(b => b.name.trim()).filter(Boolean)
+    if (names.length <= 3) return names.join(' + ')
+    return `${names.slice(0, 2).join(' + ')} +${names.length - 2} more`
+  }, [basket])
+
+  const removeFromBasket = (idx: number) => {
+    setBasket(prev => {
+      const next = prev.filter((_, i) => i !== idx)
+      if (next.length === 0) setBasketOpen(false)
+      return next
+    })
+  }
+
+  const exitMealMode = () => {
+    setMealMode(false)
+    setBasket([])
+    setBasketOpen(false)
+    setMealName('')
+    setSaveAsMeal(true)
+  }
+
+  // The basket floats over the results, and its height swings by ~200px between
+  // empty, collapsed and expanded. A fixed pad would either waste space or hide
+  // the expanded row's own Add button underneath it, so measure the real card.
+  useLayoutEffect(() => {
+    if (!mealMode) {
+      setBasketHeight(0)
+      return
+    }
+    setBasketHeight(basketRef.current?.offsetHeight ?? 0)
+  }, [mealMode, basket.length, basketOpen, canSaveMeals, saveAsMeal])
+
+  /**
+   * Pull the expanded row's action row above the basket.
+   *
+   * Reserving scroll room is not enough on its own: the row can open with its
+   * buttons already underneath the floating card (a few saved meals above the
+   * foods section is all it takes), and a CTA you have to discover by scrolling
+   * is a CTA you don't press. Runs after the accordion's height animation, so
+   * the measurement is of the settled layout.
+   */
+  useEffect(() => {
+    if (!selectedFood) return
+    const t = setTimeout(() => {
+      const row = actionRowRef.current
+      const scroller = resultsRef.current
+      if (!row || !scroller) return
+      const clearance = scroller.getBoundingClientRect().bottom - basketHeight - 12
+      const overflow = row.getBoundingClientRect().bottom - clearance
+      if (overflow > 0) scroller.scrollBy({ top: overflow, behavior: 'smooth' })
+    }, 260)
+    return () => clearTimeout(t)
+  }, [selectedFood, basketHeight, selection, dateEditOpen, repeatOpen])
+
+  const handleSubmitBasket = async () => {
+    if (basket.length === 0 || submittingMany || !onAddMany) return
+    setSubmittingMany(true)
+    try {
+      let loggedAtIso: string | undefined
+      if (!isPlanMode && (customDate || timeMode !== 'now')) {
+        loggedAtIso = buildLoggedAt(
+          customDate,
+          timeMode === 'none' ? formatHHMM(anchorMinutesForTag(scheduleWindows, activeTag)) : customTime,
+          viewedDate,
+        )
+      }
+      await onAddMany(basket, {
+        tag: tagPickerEnabled ? activeTag : undefined,
+        loggedAt: loggedAtIso,
+        untimed: !isPlanMode && timeMode === 'none',
+        // Only ask for a meal when they can keep one AND want to. Without this
+        // the items are still logged together, which is the part that matters.
+        mealName:
+          canSaveMeals && saveAsMeal
+            ? (mealName.trim() || defaultMealName || 'Meal')
+            : undefined,
+      })
+      exitMealMode()
+      onClose()
+    } finally {
+      setSubmittingMany(false)
+    }
+  }
+
   const tagLabel = tagPickerEnabled ? titleCaseTag(activeTag) : ''
+
+  // ── Schedule awareness ──────────────────────────────────────────────────────
+  //
+  // The schedule sets DEFAULTS, never rules. Someone who goes to bed at 8pm must
+  // still be able to log "Bed" at 8pm without fighting the app, so nothing here
+  // blocks or reassigns anything — it points out that the entry is landing
+  // outside its usual window and offers the scheduled time as ONE TAP, which the
+  // member is free to ignore.
+  const { windows: scheduleWindows } = useMealSchedule()
+  /** The minute this entry will actually be filed at. */
+  const effectiveMinutes = timeMode === 'custom' && customTime != null
+    ? (parseHHMM(customTime) ?? minutesOfDay(new Date()))
+    : minutesOfDay(new Date())
+  const tagWindow = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
+  // Only meaningful for today: on a backdated entry "outside its window" says
+  // nothing useful, since the member is reconstructing a past day anyway.
+  const outsideSchedule = !isPlanMode
+    && !customDate
+    // An untimed entry is not "outside" anything — it has no clock to be
+    // outside of, and it is placed by the anchor the hint would point at.
+    && timeMode !== 'none'
+    && tagPickerEnabled
+    && isOutsideWindow(scheduleWindows, activeTag, effectiveMinutes)
+
 
   // Build the unified tag list for the dropdown (defaults first, then user tags)
   const allTagOptions = useMemo<string[]>(() => {
@@ -976,6 +1370,8 @@ export default function FoodSearchModal({
     setActiveTag(norm)
     setCustomTagInput('')
     setTagDropdownOpen(false)
+    // Persist it, or the tag exists only until this sheet closes.
+    void createMealTag(norm)
   }
 
   return (
@@ -986,6 +1382,13 @@ export default function FoodSearchModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
+          // This modal can be nested inside another overlay (e.g. the Schedule
+          // Meals drawer's per-slot picker), whose own backdrop closes ON CLICK.
+          // Without this, every click in here — picking a food, opening the
+          // quantity picker — bubbles past our unhandled backdrop and closes
+          // the ANCESTOR overlay instead, which reads as "nothing happened,
+          // the search just closed."
+          onClick={(e) => e.stopPropagation()}
           className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-zinc-900 sm:items-center sm:justify-center sm:bg-black/60 sm:backdrop-blur-sm sm:p-4 touch-none"
           style={{
             paddingTop: 'env(safe-area-inset-top, 0px)',
@@ -1031,14 +1434,19 @@ export default function FoodSearchModal({
                     <span className="hidden sm:inline">Custom Food</span>
                     <span className="sm:hidden">Custom</span>
                   </Link>
+                  {/* No meal toggle here on purpose. It read as "browse meals"
+                      next to the Meals filter chip below, and the width it stole
+                      truncated the tag to "Din…". Multi-select now starts from
+                      the expanded row, where the intent is unambiguous. */}
                   <button
                     type="button"
                     onClick={() => setTagDropdownOpen(v => !v)}
+                    data-testid="tag-picker"
                     className="flex flex-1 min-w-0 items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:hover:bg-zinc-700"
                   >
                     <TagIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
                     <span className="text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Adding to</span>
-                    <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
+                    <span data-testid="tag-label" className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{tagLabel}</span>
                     <ChevronDown className={`ml-auto h-4 w-4 shrink-0 text-zinc-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
 
@@ -1057,6 +1465,7 @@ export default function FoodSearchModal({
                               key={t}
                               type="button"
                               onClick={() => { setActiveTag(t); setTagDropdownOpen(false) }}
+                              data-testid={`tag-option-${t}`}
                               className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition-colors ${
                                 activeTag === t
                                   ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
@@ -1235,10 +1644,38 @@ export default function FoodSearchModal({
               )}
               {/* Tabs — horizontally scrollable so no chip wraps or gets cut off */}
               <div className="mt-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {/* Verified narrows whichever tab is active rather than
+                    replacing it, so "Recent, verified only" is expressible.
+                    Hidden until there is a query: with an empty box there is no
+                    result set to narrow, so it was offering to filter nothing.
+                    First position because the row scrolls — placed after
+                    "Frequent" it sat off-screen on a phone. */}
+                {query.trim().length > 0 && (
+                <button
+                  onClick={() => setVerifiedOnly(v => !v)}
+                  aria-pressed={verifiedOnly}
+                  title="Show only foods verified by us"
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    verifiedOnly
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                  }`}
+                >
+                  <BadgeCheck className="h-3 w-3" />
+                  Verified
+                </button>
+                )}
+                {query.trim().length > 0 && (
+                  <span className="mx-1 w-px shrink-0 self-stretch bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+                )}
                 {tabs.map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    // Tapping the active chip clears it. Without this the only
+                    // way out of a filter was to pick a different one, which is
+                    // a trap once the "All" escape hatch is gone.
+                    onClick={() => setActiveTab(prev => (prev === tab.id ? 'all' : tab.id))}
+                    aria-pressed={activeTab === tab.id}
                     className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                       activeTab === tab.id
                         ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
@@ -1249,14 +1686,23 @@ export default function FoodSearchModal({
                     {tab.label}
                   </button>
                 ))}
+
               </div>
             </div>
 
             {/* Results */}
-            <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <div
+              ref={resultsRef}
+              className="flex-1 overflow-y-auto overscroll-contain"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: basketHeight ? basketHeight + 24 : undefined,
+                scrollPaddingBottom: basketHeight ? basketHeight + 12 : undefined,
+              }}
+            >
               {/* Meals section — only on "all" tab + query (≥2 chars). Sticky-style header
                   matches the "My Foods" header pattern; chevron toggles collapse. */}
-              {((activeTab === 'all' && query.trim().length >= 2 && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
+              {((activeTab === 'all' && (query.trim().length >= 2 || showOverview) && (mealsLoading || mealResults.length > 0)) || (activeTab === 'meals' && (mealsLoading || mealResults.length > 0))) && (
                 <div className="border-b border-zinc-100 dark:border-zinc-800">
                   <button
                     type="button"
@@ -1365,14 +1811,14 @@ export default function FoodSearchModal({
 
               {activeTab === 'meals' ? null :
               !foodsExpanded && activeTab === 'all' && query.trim().length >= 2 && mealResults.length > 0 && results.length > 0 ? null :
-              loading ? (
+              loading || (showOverviewPending && overviewLoading) ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
                   <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Searching...
+                    {showOverviewPending ? 'Loading…' : 'Searching...'}
                   </span>
                 </div>
-              ) : results.length === 0 ? (
+              ) : (showOverview ? overviewRows.rows.length === 0 && mealResults.length === 0 : results.length === 0) ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 px-4">
                   {activeTab === 'mine' ? (
                     <>
@@ -1423,9 +1869,15 @@ export default function FoodSearchModal({
                       </p>
                     </div>
                   )}
-                  {results.map((food, idx) => {
-                    const prev = idx > 0 ? results[idx - 1] : null
+                  {(showOverview ? overviewRows.rows : results).map((food, idx) => {
+                    const list = showOverview ? overviewRows.rows : results
+                    const prev = idx > 0 ? list[idx - 1] : null
+                    const overviewHeader = showOverview ? overviewRows.headers.get(idx) : undefined
+                    // The overview supplies its own section headers; the
+                    // saved/other split below is a SEARCH-time distinction and
+                    // would double up on them.
                     const showMyFoodsHeader =
+                      !showOverview &&
                       activeTab !== 'mine' &&
                       food.isSaved === true &&
                       (idx === 0 || prev?.isSaved !== true)
@@ -1436,9 +1888,14 @@ export default function FoodSearchModal({
                       prev?.isSaved === true
                     return (
                   <div
-                    key={food._id}
+                    key={showOverview ? `${food._id}-${idx}` : food._id}
                     className={`relative ${selectedFood?._id === food._id ? 'z-[70]' : 'z-0'}`}
                   >
+                    {overviewHeader && (
+                      <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-zinc-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-600 backdrop-blur dark:bg-zinc-800/60 dark:text-zinc-300">
+                        {overviewHeader}
+                      </div>
+                    )}
                     {showMyFoodsHeader && (
                       <div className="sticky top-0 z-[1] flex items-center gap-1.5 bg-amber-50/95 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800 backdrop-blur dark:bg-amber-900/30 dark:text-amber-200">
                         <Bookmark className="h-3 w-3 fill-current" />
@@ -1455,10 +1912,12 @@ export default function FoodSearchModal({
                         tabIndex={0}
                         onClick={() => {
                           if (selectedFood?._id === food._id) {
+                            setNutritionOverride(null)
                             setSelectedFood(null)
                             setSelection(null)
                           } else {
                             const variantIdx = pickDefaultVariantIdx(food.variants)
+                            setNutritionOverride(null)
                             setSelectedFood(food)
                             setSelectedVariantIdx(variantIdx)
                             setSelection(null)
@@ -1487,6 +1946,14 @@ export default function FoodSearchModal({
                             <p className="text-sm font-medium text-zinc-900 dark:text-white truncate">
                               {food.name}
                             </p>
+                            {food.isVerified && (
+                              <span title="Verified by Become" className="shrink-0">
+                                <BadgeCheck
+                                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                                  aria-label="Verified by Become"
+                                />
+                              </span>
+                            )}
                             {food.source === 'usda' && (
                               <span title="USDA FoodData Central" className="shrink-0">
                                 <Globe
@@ -1643,7 +2110,7 @@ export default function FoodSearchModal({
                                           <input
                                             type="text"
                                             value={servingLabelDraft}
-                                            onChange={(e) => setServingLabelDraft(e.target.value)}
+                                            onChange={(e) => { setServingLabelDraft(e.target.value); setServingLabelUserEdited(true) }}
                                             onBlur={() => setServingLabelEditing(false)}
                                             onKeyDown={(e) => {
                                               if (e.key === 'Enter') {
@@ -1681,7 +2148,7 @@ export default function FoodSearchModal({
                                       <QuantityPicker
                                         variant={activeVariant}
                                         layout="inline"
-                                        onChange={setSelection}
+                                        onChange={handlePickerSelectionChange}
                                       />
                                     </div>
                                     <div className="pt-0.5 text-right">
@@ -1738,11 +2205,94 @@ export default function FoodSearchModal({
                                           <X className="h-3 w-3" />
                                         </button>
                                       )}
+                                      {/* The time pill only appears once a time is
+                                          actually chosen, so the common "just log it
+                                          now" path keeps exactly one control. */}
+                                      {timeMode === 'custom' && customTime && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDateEditOpen(v => !v)}
+                                          data-testid="log-time-pill"
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition-colors hover:bg-blue-200 dark:bg-blue-900/40 dark:text-blue-200"
+                                          aria-label={`Logging at ${formatClockLabel(parseHHMM(customTime) ?? 0)}, tap to change`}
+                                        >
+                                          <Clock className="h-3 w-3" />
+                                          <span className="tabular-nums">{formatClockLabel(parseHHMM(customTime) ?? 0)}</span>
+                                        </button>
+                                      )}
+                                      {timeMode === 'none' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setDateEditOpen(v => !v)}
+                                          data-testid="no-time-pill"
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-200 px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition-colors hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-200"
+                                          aria-label="No time set, tap to change"
+                                        >
+                                          No time
+                                        </button>
+                                      )}
                                       <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">
-                                        {customDate ? 'Logged on chosen day' : 'Logged now'}
+                                        {timeMode === 'none'
+                                          ? 'Placed by meal order'
+                                          : timeMode === 'custom'
+                                            ? 'Logged at chosen time'
+                                            : customDate ? 'Logged on chosen day' : 'Logged now'}
                                       </span>
                                     </div>
+                                    {/* Shares the date row rather than sitting under the
+                                        macros, where it crowded the right edge. This row
+                                        already spans the full width, so there is room for
+                                        it without squeezing anything. */}
+                                    <button
+                                      type="button"
+                                      onClick={() => setFlagOpen(true)}
+                                      className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-medium underline-offset-2 hover:underline ${
+                                        nutritionOverride
+                                          ? 'text-amber-600 dark:text-amber-400'
+                                          : 'text-zinc-400 hover:text-amber-600 dark:text-zinc-500 dark:hover:text-amber-400'
+                                      }`}
+                                    >
+                                      <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+                                      {nutritionOverride ? 'Macros edited' : 'Something look wrong?'}
+                                    </button>
                                   </div>
+                                  {nutritionOverride && (
+                                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5 dark:bg-amber-900/20">
+                                      <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                                      <span className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                                        Your macros are ready. Tap <span className="font-semibold">Add</span> below to log them.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setNutritionOverride(null)}
+                                        data-testid="undo-macro-edit"
+                                        className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold text-amber-700 underline-offset-2 hover:underline dark:text-amber-300"
+                                      >
+                                        Undo
+                                      </button>
+                                    </div>
+                                  )}
+                                  {/* Logging a scheduled tag outside its window.
+                                      Not a warning and not a block -- going to bed
+                                      at 8pm is allowed. It states what will happen
+                                      and offers the usual time as one tap. */}
+                                  {outsideSchedule && tagWindow && (
+                                    <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-2.5 py-1.5 dark:bg-amber-900/20">
+                                      <Clock className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+                                      <span className="min-w-0 flex-1 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+                                        {tagLabel} usually runs {formatClockLabel(tagWindow.startMinutes)}
+                                        {' '}to {formatClockLabel(tagWindow.endMinutes)}.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setCustomTime(formatHHMM(tagWindow.startMinutes)); setTimeMode('custom') }}
+                                        data-testid="use-scheduled-time"
+                                        className="shrink-0 rounded-full bg-amber-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-amber-700"
+                                      >
+                                        Use {formatClockLabel(tagWindow.startMinutes)}
+                                      </button>
+                                    </div>
+                                  )}
                                   <AnimatePresence initial={false}>
                                     {dateEditOpen && (
                                       <motion.div
@@ -1757,16 +2307,86 @@ export default function FoodSearchModal({
                                           value={customDate ?? dateToKey(viewedDate ?? new Date())}
                                           maxDate={dateToKey(new Date())}
                                           showTodayChip
-                                          onClear={() => { setCustomDate(null); setDateEditOpen(false) }}
+                                          onClear={() => { setCustomDate(null); setCustomTime(null); setTimeMode('none'); setDateEditOpen(false) }}
                                           onChange={(next) => {
                                             // When the user picks "today", treat it as "Now"
                                             // (null) so the pill reflects that and we don't
                                             // pin a stale wall-clock time on submit.
                                             const todayKey = dateToKey(new Date())
                                             setCustomDate(next === todayKey ? null : next)
-                                            setDateEditOpen(false)
+                                            // Picking a PAST day is the moment a time starts
+                                            // mattering: without one, every entry backdated to
+                                            // that day lands at the current minute and the day
+                                            // reads in entry order instead of eating order. So
+                                            // the time control appears here, pre-filled with the
+                                            // tag's scheduled start when it has one.
+                                            if (next !== todayKey && timeMode === 'now') {
+                                              const w = tagPickerEnabled ? windowForTag(scheduleWindows, activeTag) : null
+                                              setCustomTime(formatHHMM(w ? w.startMinutes : minutesOfDay(new Date())))
+                                              setTimeMode('custom')
+                                            }
                                           }}
                                         />
+                                        {/* Time control. Present whenever a specific day is
+                                            chosen, and reachable any time via the time pill. */}
+                                        <div className="mt-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800/60">
+                                          <div className="flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                                            <span className="shrink-0 text-[11px] font-semibold text-zinc-600 dark:text-zinc-300">
+                                              Time
+                                            </span>
+                                            <input
+                                              type="time"
+                                              value={timeMode === 'custom' && customTime
+                                                ? customTime
+                                                : formatHHMM(minutesOfDay(new Date()))}
+                                              onChange={(ev) => {
+                                                const v = ev.target.value
+                                                if (!v) { setCustomTime(null); setTimeMode('none'); return }
+                                                setCustomTime(v)
+                                                setTimeMode('custom')
+                                              }}
+                                              disabled={timeMode === 'none'}
+                                              data-testid="log-time-input"
+                                              aria-label="Time this was eaten"
+                                              className="ml-auto rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs tabular-nums text-zinc-900 disabled:opacity-40 dark:border-zinc-600 dark:bg-zinc-900 dark:text-white"
+                                            />
+                                            {/* Now and X are separate on purpose. The X used to mean
+                                                "back to the current clock", which reads as a reset, not
+                                                a clear — so there was no way to say "no time at all". */}
+                                            <button
+                                              type="button"
+                                              onClick={() => { setCustomTime(null); setTimeMode('now') }}
+                                              data-testid="log-time-now"
+                                              aria-label="Use the current time"
+                                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
+                                                timeMode === 'now'
+                                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                                  : 'bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-300'
+                                              }`}
+                                            >
+                                              Now
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => { setCustomTime(null); setTimeMode('none') }}
+                                              data-testid="log-time-clear"
+                                              aria-label="Clear the time and log for the day only"
+                                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                                timeMode === 'none'
+                                                  ? 'bg-zinc-900 text-white dark:bg-white dark:text-black'
+                                                  : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                                              }`}
+                                            >
+                                              <X className="h-3 w-3" />
+                                            </button>
+                                          </div>
+                                          <p className="mt-1.5 text-[10px] leading-snug text-zinc-500 dark:text-zinc-400">
+                                            {timeMode === 'none'
+                                              ? 'No time. This sits in your meal order rather than at a clock position — useful when your day runs past midnight.'
+                                              : 'Tap the X to log for the day with no time at all.'}
+                                          </p>
+                                        </div>
                                       </motion.div>
                                     )}
                                   </AnimatePresence>
@@ -1837,11 +2457,15 @@ export default function FoodSearchModal({
                               )}
                               {/* Quantity multiplier box removed — the picker's own
                                   amount+unit is the single source of "how much". */}
-                              <div className="mt-2">
+                              {/* The row that used to be one full-width button.
+                                  Multi-select lives here now: it is the only
+                                  place where "several of these" is already the
+                                  thought in the member's head. */}
+                              <div ref={actionRowRef} className="mt-2 flex items-stretch gap-2">
                                 <button
-                                  onClick={handleAddFood}
+                                  onClick={() => handleAddFood()}
                                   disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
-                                  className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                                  className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 py-2 text-sm font-semibold text-white transition-colors hover:bg-black disabled:opacity-60 disabled:cursor-wait dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                                 >
                                   {adding ? (
                                     <>
@@ -1850,17 +2474,37 @@ export default function FoodSearchModal({
                                     </>
                                   ) : (
                                     <>
-                                      <Plus className="h-4 w-4" />
-                                      {isPlanMode
-                                        ? (
-                                            repeatOpen && repeatCount > 1
-                                              ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
-                                              : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
-                                          )
-                                        : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                      <Plus className="h-4 w-4 shrink-0" />
+                                      <span className="truncate">
+                                        {isPlanMode
+                                          ? (
+                                              repeatOpen && repeatCount > 1
+                                                ? `Plan ${tagLabel || 'meal'} ×${repeatCount}`
+                                                : (tagPickerEnabled ? `Plan ${tagLabel}` : 'Plan')
+                                            )
+                                          : mealMode
+                                            ? 'Add to meal'
+                                            : (tagPickerEnabled ? `Add to ${tagLabel}` : 'Add')}
+                                      </span>
                                     </>
                                   )}
                                 </button>
+                                {/* Hidden once the mode is on: the basket is the
+                                    state indicator from then on, and the primary
+                                    button above already says "Add to meal". */}
+                                {onAddMany && !isPlanMode && !mealMode && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAddFood({ startMeal: true })}
+                                    disabled={adding || !selection || selection.quantity <= 0 || addQuantityMultiplier <= 0}
+                                    data-testid="start-meal-mode"
+                                    title="Keep adding items and log them together as one meal"
+                                    className="flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-300 bg-white px-3 text-xs font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                  >
+                                    <ChefHat className="h-3.5 w-3.5 shrink-0" />
+                                    Build a meal
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </motion.div>
@@ -1873,6 +2517,145 @@ export default function FoodSearchModal({
               )}
             </div>
 
+            {/* Basket — floats over the results instead of docking under them,
+                so the item you are picking stays on screen while the meal you
+                are building stays visible. The scroller above pads itself by
+                this card's measured height so nothing hides behind it. */}
+            <AnimatePresence>
+              {mealMode && (
+                <motion.div
+                  ref={basketRef}
+                  key="meal-basket"
+                  initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 20, scale: 0.97 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+                  data-testid="meal-basket"
+                  className="absolute inset-x-3 bottom-3 z-30 rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-2xl backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/95"
+                >
+                  {basket.length === 0 ? (
+                    <div className="flex items-center gap-2">
+                      <ChefHat className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <p className="min-w-0 flex-1 text-xs text-zinc-500 dark:text-zinc-400">
+                        Building a meal &mdash; add each item as usual and they&rsquo;ll collect here.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={exitMealMode}
+                        data-testid="cancel-meal"
+                        aria-label="Cancel meal"
+                        className="shrink-0 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setBasketOpen(v => !v)}
+                          data-testid="basket-toggle"
+                          aria-expanded={basketOpen}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        >
+                          <span className="min-w-0 text-xs font-semibold text-zinc-900 dark:text-white">
+                            {basket.length} item{basket.length === 1 ? '' : 's'}
+                            <span className="ml-2 font-normal tabular-nums text-zinc-500 dark:text-zinc-400">
+                              {Math.round(basketTotals.calories)} cal &middot; {Math.round(basketTotals.protein)}p{' '}
+                              {Math.round(basketTotals.carbs)}c {Math.round(basketTotals.fats)}f
+                            </span>
+                          </span>
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 shrink-0 text-zinc-400 transition-transform ${basketOpen ? 'rotate-180' : ''}`}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={exitMealMode}
+                          data-testid="cancel-meal"
+                          aria-label="Cancel meal"
+                          className="shrink-0 rounded-full p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {basketOpen && (
+                        <ul className="mt-2 max-h-32 space-y-1 overflow-y-auto">
+                          {basket.map((it, i) => (
+                            <li
+                              key={`${it.id}-${i}`}
+                              className="flex items-center gap-2 rounded-lg bg-zinc-50 px-2 py-1.5 dark:bg-zinc-800"
+                            >
+                              <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-700 dark:text-zinc-200">
+                                {it.name}
+                                {it.servingLabel ? (
+                                  <span className="text-zinc-400"> &middot; {it.servingLabel}</span>
+                                ) : null}
+                              </span>
+                              <span className="shrink-0 text-[11px] tabular-nums text-zinc-500">
+                                {Math.round((it.nutrition?.calories ?? 0) * (it.servings || 1))} cal
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeFromBasket(i)}
+                                aria-label={`Remove ${it.name}`}
+                                className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-red-600 dark:hover:bg-zinc-700"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {canSaveMeals && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSaveAsMeal(v => !v)}
+                            aria-pressed={saveAsMeal}
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                              saveAsMeal
+                                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black'
+                                : 'border-zinc-300 dark:border-zinc-600'
+                            }`}
+                          >
+                            {saveAsMeal && <Check className="h-3 w-3" />}
+                          </button>
+                          {/* Pre-filled and editable in place: naming is friction at
+                              exactly the moment they want to be done. */}
+                          <input
+                            value={mealName}
+                            onChange={e => setMealName(e.target.value)}
+                            disabled={!saveAsMeal}
+                            placeholder={defaultMealName}
+                            data-testid="meal-name"
+                            aria-label="Meal name"
+                            className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                          />
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleSubmitBasket}
+                        disabled={submittingMany}
+                        data-testid="submit-basket"
+                        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                      >
+                        {submittingMany && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        {canSaveMeals && saveAsMeal
+                          ? `Add to meal and log ${basket.length}`
+                          : `Log ${basket.length} item${basket.length === 1 ? '' : 's'}`}
+                      </button>
+                    </>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {/* Save toast */}
             <AnimatePresence>
               {saveToast && (
@@ -1881,7 +2664,9 @@ export default function FoodSearchModal({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
                   transition={{ duration: 0.15 }}
-                  className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-lg dark:bg-white/95 dark:text-black"
+                  // Rides above the floating basket rather than under it.
+                  style={{ bottom: basketHeight ? basketHeight + 24 : 16 }}
+                  className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 rounded-full bg-zinc-900/95 px-4 py-2 text-xs font-medium text-white shadow-lg dark:bg-white/95 dark:text-black"
                 >
                   {saveToast}
                 </motion.div>
@@ -1892,6 +2677,29 @@ export default function FoodSearchModal({
       )}
 
       {/* Barcode scanner overlay — rendered outside the modal so it covers the full screen */}
+      {selectedFood && (
+        <FlagFoodSheet
+          isOpen={flagOpen}
+          foodId={String(selectedFood._id)}
+          foodName={selectedFood.name}
+          currentNutrition={activeVariant ? {
+            calories: Math.round(activeVariant.nutrition.calories * 10) / 10,
+            protein: Math.round(activeVariant.nutrition.protein * 10) / 10,
+            carbs: Math.round(activeVariant.nutrition.carbs * 10) / 10,
+            fats: Math.round(activeVariant.nutrition.fats * 10) / 10,
+            fiber: Math.round((activeVariant.nutrition.fiber ?? 0) * 10) / 10,
+          } : undefined}
+          // What the picker is showing right now, so the correction fields match
+          // the number on screen rather than the food's storage basis.
+          portion={selection ? {
+            label: servingLabelDraft.trim() || variantFriendlyLabel(activeVariant),
+            factor: selection.multiplier * (addQuantityMultiplier || 1),
+          } : undefined}
+          onApplyToLog={setNutritionOverride}
+          onClose={() => setFlagOpen(false)}
+        />
+      )}
+
       {scannerOpen && (
         <BarcodeScanner
           onClose={() => setScannerOpen(false)}

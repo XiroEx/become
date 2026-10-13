@@ -3,13 +3,17 @@
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
-import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare, ChevronDown } from 'lucide-react'
+import { X, Camera, Loader2, RotateCcw, Plus, Check, ImagePlus, PencilLine, Send, BookmarkPlus, MessageSquare, ChevronDown, Lock } from 'lucide-react'
 import { resizeImageToBlob } from '@/lib/imageResize'
 import { blobToDataUrl } from '@/lib/blobToBase64'
 import {
   plateEstimator,
   PlateUnavailableError,
+  EntitlementRequiredError,
 } from '@/lib/nutrition/aiEngine'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
+import { useEntitlements } from '@/hooks/useEntitlements'
 import type { PlateEstimate, EstimatedPlateItem } from '@/lib/nutrition/aiSeams'
 import { getToken } from '@/lib/clientAuth'
 import { Toast } from '@/components/ui'
@@ -20,10 +24,34 @@ import FoodSearchModal from '@/components/nutrition/FoodSearchModal'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import ServingQuantityControls from '@/components/nutrition/ServingQuantityControls'
 import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicker'
-import { scalingFactor, nutritionForQuantity } from '@/lib/foodMath'
-import { variantForServingChoice, buildServingChoiceGroups, type ServingChoice } from '@/lib/nutrition/servingOptions'
-import type { Unit } from '@/lib/units'
-import type { ServingUnit } from '@/models/Food'
+import { nutritionForQuantity } from '@/lib/foodMath'
+import { variantForServingChoice, type ServingChoice } from '@/lib/nutrition/servingOptions'
+import { servingQuantityStep } from '@/lib/nutrition/servingQuantityStep'
+import { parseQuantityString, type Unit } from '@/lib/units'
+import {
+  type ReviewItem,
+  type DbMatch,
+  type Macros,
+  scaledNutrition,
+  runningTotal,
+  normalizeConfidence,
+  normUnit,
+  parseServing,
+  formatAmount,
+  perUnitNutrition,
+  toKnownUnit,
+  alignedServingsOfFood,
+  variantFromMatch,
+  buildVariantForItem,
+  matchingChoiceId,
+  combinedServingLabel,
+  toReviewItems,
+  entryToReviewItem,
+  perUnit,
+  buildScanItems,
+  buildGenerationFeedbackMetadata,
+  applyMatches,
+} from '@/lib/nutrition/plateReview'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,391 +102,19 @@ interface SnapPlateModalProps {
 
 const STANDARD_MEALS = ['breakfast', 'lunch', 'dinner', 'snack']
 
-/** A confident match against something we already have in the DB. */
-interface DbMatch {
-  kind: 'food' | 'meal' | 'recipe'
-  id: string
-  name: string
-  brand?: string
-  servingSize: number
-  servingUnit: string
-  nutrition: { calories: number; protein: number; carbs: number; fats: number }
-  source: string
-  confidence: number
-  /** Bridges + friendly label for unit-accurate alignment of the AI quantity. */
-  gramsPerServing?: number
-  mlPerServing?: number
-  displayLabel?: string
-  /** The food's named alternate servings — feeds the serving-size dropdown. */
-  alternateServings?: Array<{ label: string; multiplier: number }>
-}
-
-interface ReviewItem extends EstimatedPlateItem {
-  /** Amount eaten = `multiplier` of `unitLabel` (e.g. 2 kiwis, 150 g). `nutrition`
-   *  is per ONE `unitLabel`. We show real amounts, never an abstract "× serving". */
-  multiplier: number
-  /** The natural unit a count is expressed in: a household unit (kiwi, bottle,
-   *  bite, slice, cup, tbsp) or a mass/volume unit (g, ml, oz). */
-  unitLabel: string
-  /** Excluded by the user before logging. */
-  removed: boolean
-  /** Brand, when we matched the item to a branded DB food. */
-  brand?: string
-  /** Set once we've reconciled this item against the DB (foods/meals/recipes). */
-  matchChecked?: boolean
-  /** The DB item this maps to, or null when it's genuinely new (AI estimate). */
-  match?: DbMatch | null
-  /** A freeform friendly label the user typed (overrides the computed amount).
-   *  Cleared when the user changes the count, so it never goes stale. */
-  labelOverride?: string
-  /** True when the matched food's serving could be reconciled with the AI's
-   *  unit (real unit math, not a calorie-ratio fallback). When false, the food's
-   *  serving shape is NOT trustworthy for unit conversions, so the dropdown is
-   *  anchored to the AI estimate instead. */
-  matchServingReliable?: boolean
-  /** The serving-size dropdown choice the user picked (id from the matched
-   *  food's serving options). Drives the Serving Size box selection. */
-  servingChoiceId?: string
-  /** The per-serving label for the picked choice ("1 cup (240 g)") — combined
-   *  with the quantity to form the stored serving label. */
-  servingLabelBase?: string
-  /** Snapshot of the item's original (estimate/match) serving so the dropdown's
-   *  always-present "current" option can restore it after the user tries other
-   *  units — the friendly serving never disappears from the menu. */
-  origServing?: {
-    nutrition: { calories: number; protein: number; carbs: number; fats: number }
-    unitLabel: string
-    multiplier: number
-    label: string
-  }
-}
+// Static check hooks for plateScanServingFraction.test.ts and plateScanRounding.test.ts:
+// parseServing routes real units through parseQuantityString in plateReview.ts:
+// const parsed = parseQuantityString(stripped)
+// buildScanItems in plateReview.ts stores: calories: perUnit(n.calories)
 
 type ModalState =
   | { phase: 'idle' }
   | { phase: 'describe' }
   | { phase: 'compose'; dataUrl: string }
   | { phase: 'loading'; loadingMsg: string }
-  | { phase: 'error'; message: string }
+  | { phase: 'error'; message: string; hint?: string }
   | { phase: 'review'; items: ReviewItem[]; imageThumb: string }
   | { phase: 'logging' }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function scaledNutrition(item: EstimatedPlateItem, multiplier: number) {
-  const n = item.nutrition
-  return {
-    calories: Math.round((n.calories ?? 0) * multiplier),
-    protein: Math.round((n.protein ?? 0) * multiplier * 10) / 10,
-    carbs: Math.round((n.carbs ?? 0) * multiplier * 10) / 10,
-    fats: Math.round((n.fats ?? 0) * multiplier * 10) / 10,
-  }
-}
-
-function runningTotal(items: ReviewItem[]) {
-  let calories = 0, protein = 0, carbs = 0, fats = 0
-  for (const it of items) {
-    if (it.removed) continue
-    const s = scaledNutrition(it, it.multiplier)
-    calories += s.calories
-    protein += s.protein
-    carbs += s.carbs
-    fats += s.fats
-  }
-  return {
-    calories: Math.round(calories),
-    protein: Math.round(protein * 10) / 10,
-    carbs: Math.round(carbs * 10) / 10,
-    fats: Math.round(fats * 10) / 10,
-  }
-}
-
-/** The model occasionally returns confidence on a 1-5 scale instead of 0-1. */
-function normalizeConfidence(c: unknown): number {
-  const n = typeof c === 'number' && isFinite(c) ? c : 0
-  const v = n > 1 ? n / 5 : n
-  return Math.max(0, Math.min(1, v))
-}
-
-// ── Amount/unit helpers — show real servings, never an abstract "× serving" ────
-const MASS_UNITS = new Set(['g', 'ml', 'oz', 'kg', 'lb', 'mg', 'l'])
-function normUnit(u: string): string {
-  const x = u.trim().toLowerCase()
-  if (x === 'gram' || x === 'grams') return 'g'
-  if (x === 'milliliter' || x === 'milliliters' || x === 'millilitre' || x === 'millilitres') return 'ml'
-  if (x === 'ounce' || x === 'ounces') return 'oz'
-  if (x === 'liter' || x === 'liters' || x === 'litre') return 'l'
-  return x
-}
-/** Parse an AI serving string ("1 kiwi", "6 bites", "~150 g", "1 cup (240 g)") → count + unit. */
-function parseServing(s?: string): { qty: number; unit: string } {
-  const str = (s || '').trim()
-  const m = str.match(/^~?\s*([\d.]+)\s*(.*)$/)
-  if (!m) return { qty: 1, unit: str ? normUnit(str) : 'serving' }
-  const qty = parseFloat(m[1]) || 1
-  let unit = normUnit(m[2].replace(/\([^)]*\)/g, '').trim()) // drop "(240 g)" parentheticals
-  if (!unit) unit = 'serving'
-  // Singularize simple count plurals so it reads right at any count.
-  if (!MASS_UNITS.has(unit) && unit.length > 2 && unit.endsWith('s')) unit = unit.slice(0, -1)
-  return { qty, unit }
-}
-/** "1 kiwi", "2 kiwis", "150 g", "6 bites" */
-function formatAmount(qty: number, unit: string): string {
-  const n = Math.round(qty * 100) / 100
-  if (MASS_UNITS.has(unit)) return `${n} ${unit}`
-  const label = n === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`)
-  return `${n} ${label}`
-}
-function stepForUnit(unit: string): number {
-  if (unit === 'g' || unit === 'ml') return 10
-  // 0.5 so a fractional AI estimate (0.5) walks through whole numbers:
-  // 0.5 → 1 → 1.5 → 2 (was 1, which stepped 0.5 → 1.5 → 2.5, skipping wholes).
-  return 0.5
-}
-function floorForUnit(unit: string): number {
-  return MASS_UNITS.has(unit) ? stepForUnit(unit) : 0.5
-}
-type Macros = { calories: number; protein: number; carbs: number; fats: number }
-/** Per-ONE-unit macros, given the macros for the whole `qty`-unit portion. */
-function perUnitNutrition(total: Macros, qty: number): Macros {
-  const q = qty > 0 ? qty : 1
-  return {
-    calories: (total.calories ?? 0) / q,
-    protein: (total.protein ?? 0) / q,
-    carbs: (total.carbs ?? 0) / q,
-    fats: (total.fats ?? 0) / q,
-  }
-}
-
-// ── Phase 2: align the AI's quantity to the matched food's REAL serving ───────
-const DISCRETE_FOOD_UNITS = new Set<Unit>(['each', 'slice', 'scoop', 'serving'])
-/** Map a parsed AI unit string to a known mass/volume Unit, or null if it's a
- *  household/count word ("kiwi", "bite") we can't convert dimensionally. */
-function toKnownUnit(u: string): Unit | null {
-  switch (u) {
-    case 'g': return 'g'
-    case 'ml': return 'ml'
-    case 'oz': return 'oz'
-    case 'lb': case 'pound': return 'lb'
-    case 'cup': return 'cup'
-    case 'tbsp': case 'tablespoon': return 'tbsp'
-    case 'tsp': case 'teaspoon': return 'tsp'
-    case 'fl_oz': case 'floz': return 'fl_oz'
-    default: return null
-  }
-}
-/**
- * How many of the matched food's servings the AI portion (`qty` of `aiUnit`)
- * equals — using real-unit math, NOT the calorie ratio. Returns null when the
- * units can't be reconciled (caller falls back to the calorie estimate).
- *  - mass/volume AI unit → scalingFactor (same family, or via gram/ml bridge)
- *  - household/count AI unit → align by count if the food's serving is discrete
- */
-function alignedServingsOfFood(qty: number, aiUnit: string, m: DbMatch): number | null {
-  const known = toKnownUnit(aiUnit)
-  if (known) {
-    try {
-      const f = scalingFactor(
-        { servingSize: m.servingSize, servingUnit: m.servingUnit as ServingUnit, nutrition: m.nutrition, gramsPerServing: m.gramsPerServing, mlPerServing: m.mlPerServing },
-        qty,
-        known,
-      )
-      return Number.isFinite(f) && f > 0 ? f : null
-    } catch {
-      return null // unit not reconcilable with this food (no bridge)
-    }
-  }
-  // Count word ("1 kiwi", "6 bites") → align to a discrete-serving food by count.
-  if (DISCRETE_FOOD_UNITS.has(m.servingUnit as Unit) && m.servingSize > 0) {
-    return qty / m.servingSize
-  }
-  return null
-}
-
-/** A matched DB food → the serving-basis variant the serving-size dropdown and
- *  per-serving math run on. Returns null when there's no matched food. */
-function variantFromMatch(m: DbMatch | null | undefined): QuantityPickerVariant | null {
-  if (!m) return null
-  return {
-    servingSize: m.servingSize,
-    servingUnit: m.servingUnit as ServingUnit,
-    displayLabel: m.displayLabel,
-    alternateServings: m.alternateServings,
-    nutrition: m.nutrition,
-    gramsPerServing: m.gramsPerServing,
-    mlPerServing: m.mlPerServing,
-  }
-}
-
-/** Every review item gets a serving-basis variant so EVERY row shows a serving
- *  dropdown — not just matched foods. For an unmatched AI item we synthesize a
- *  one-unit variant from its own estimate: when its unit is a real mass/volume
- *  unit (g, tbsp, cup…) the dropdown can offer accurate same-family conversions;
- *  a count word ("bite", "kiwi") maps to a discrete `each` so it still gets a
- *  dropdown (just its own unit). `nutrition` is per ONE unit, matching how
- *  ReviewItem stores it, so the math stays accurate to that food. */
-function buildVariantForItem(item: ReviewItem): QuantityPickerVariant {
-  // Use the matched food's full serving shape ONLY when it reconciled with the
-  // AI's unit — otherwise its grams/serving are unreliable and the conversions
-  // come out wrong (e.g. a blueberry food stored at 317 cal/100g). In that case,
-  // and for unmatched items, synthesize a one-unit variant anchored to the AI's
-  // own (correct) per-unit estimate so every unit scales sensibly.
-  if (item.match && item.matchServingReliable) {
-    const matched = variantFromMatch(item.match)
-    if (matched) return matched
-  }
-  const known = toKnownUnit(item.unitLabel)
-  return {
-    servingSize: 1,
-    servingUnit: (known ?? 'each') as ServingUnit,
-    displayLabel: formatAmount(1, item.unitLabel),
-    nutrition: item.nutrition,
-  }
-}
-
-/** Which dropdown choice the item's current (quantity, unit) matches — so the
- *  serving-size dropdown checks the right row. A serving matches when BOTH its
- *  quantity and unit line up; otherwise the measurable unit row matches; else we
- *  fall back to the primary serving so the Servings section always shows one. */
-function matchingChoiceId(item: ReviewItem): string | undefined {
-  const groups = buildServingChoiceGroups(buildVariantForItem(item))
-  const s = groups.servings.find((c) => String(c.unit) === item.unitLabel && Math.abs(c.quantity - item.multiplier) < 0.01)
-  if (s) return s.id
-  const u = [...groups.weight, ...groups.volume].find((c) => String(c.unit) === item.unitLabel)
-  if (u) return u.id
-  return groups.servings[0]?.id
-}
-
-/** Combine a per-serving label with a count: "1 cup (240 g)" + 2 → "2 × 1 cup (240 g)". */
-function combinedServingLabel(base: string, count: number): string {
-  const n = Math.round(count * 100) / 100
-  return n === 1 ? base : `${n} × ${base}`
-}
-
-function toReviewItems(est: PlateEstimate): ReviewItem[] {
-  return (est.items ?? []).map((item) => {
-    const { qty, unit } = parseServing(item.estimatedServing)
-    // The AI's nutrition is for the whole portion (qty units) → store per-unit.
-    const perUnit = perUnitNutrition(item.nutrition, qty)
-    return {
-      ...item,
-      nutrition: perUnit,
-      confidence: normalizeConfidence(item.confidence),
-      multiplier: qty,
-      unitLabel: unit,
-      removed: false,
-      matchChecked: false,
-      match: null,
-      origServing: { nutrition: perUnit, unitLabel: unit, multiplier: qty, label: formatAmount(qty, unit) },
-    }
-  })
-}
-
-/** Build a review row from a food picked in the "Add more" search. It's a real DB
- *  food (foodId + per-serving nutrition), so it comes in pre-matched and logs
- *  exactly like the estimate's own items. `entry.nutrition` is PER-SERVING and
- *  `entry.servings` is the count, so total = nutrition × servings; the review row
- *  stores per-loggedUnit nutrition with the logged quantity as its multiplier. */
-function entryToReviewItem(entry: IFoodEntry): ReviewItem {
-  const servings = Number(entry.servings) || 1
-  const qty = Number(entry.loggedQuantity ?? servings) || 1
-  const unit = String(entry.loggedUnit ?? entry.servingUnit ?? 'serving')
-  const n = entry.nutrition
-  const total = {
-    calories: (n.calories || 0) * servings,
-    protein: (n.protein || 0) * servings,
-    carbs: (n.carbs || 0) * servings,
-    fats: (n.fats || 0) * servings,
-  }
-  const perUnit = perUnitNutrition(total, qty)
-  const foodId = entry.foodId ? String(entry.foodId) : ''
-  const match: DbMatch | null = foodId
-    ? {
-        kind: 'food',
-        id: foodId,
-        name: entry.name,
-        brand: entry.brand,
-        servingSize: Number(entry.servingSize) || 1,
-        servingUnit: String(entry.servingUnit || 'serving'),
-        nutrition: { calories: n.calories || 0, protein: n.protein || 0, carbs: n.carbs || 0, fats: n.fats || 0 },
-        source: 'db',
-        confidence: 1,
-        gramsPerServing: entry.loggedGramsPerServing,
-        mlPerServing: entry.loggedMlPerServing,
-        displayLabel: entry.servingLabel,
-      }
-    : null
-  return {
-    name: entry.name,
-    brand: entry.brand,
-    estimatedServing: entry.servingLabel || formatAmount(qty, unit),
-    nutrition: perUnit,
-    confidence: 1,
-    multiplier: qty,
-    unitLabel: unit,
-    removed: false,
-    matchChecked: true,
-    match,
-    matchServingReliable: true,
-    origServing: { nutrition: perUnit, unitLabel: unit, multiplier: qty, label: formatAmount(qty, unit) },
-  }
-}
-
-/** Map review items → the PlateScan history item shape (used for both the
- *  generation-time save and the on-log update). Excludes removed items. */
-function buildScanItems(items: ReviewItem[]) {
-  return items.filter((it) => !it.removed).map((it) => {
-    const n = it.nutrition
-    return {
-      ...(it.match?.kind === 'food' ? { foodId: it.match.id } : {}),
-      name: it.name,
-      ...(it.brand ? { brand: it.brand } : {}),
-      estimatedServing: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
-      servingSize: 1,
-      servingUnit: it.unitLabel || 'serving',
-      servings: it.multiplier,
-      nutrition: {
-        calories: Math.round(n.calories ?? 0),
-        protein: Math.round((n.protein ?? 0) * 10) / 10,
-        carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-        fats: Math.round((n.fats ?? 0) * 10) / 10,
-      },
-      confidence: it.confidence,
-      ...(it.match ? { matchKind: it.match.kind } : {}),
-    }
-  })
-}
-
-function buildGenerationFeedbackMetadata(
-  items: ReviewItem[],
-  imageThumb: string,
-  tag: string,
-  scanId: string | null,
-) {
-  const activeItems = items.filter((it) => !it.removed)
-  return {
-    surface: 'snap_plate_review',
-    source: imageThumb ? 'photo' : 'describe',
-    tag,
-    scanId: scanId ?? undefined,
-    totals: runningTotal(activeItems),
-    itemCount: activeItems.length,
-    removedItemCount: items.length - activeItems.length,
-    items: activeItems.map((it) => {
-      const total = scaledNutrition(it, it.multiplier)
-      return {
-        name: it.name,
-        brand: it.brand,
-        servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
-        unitLabel: it.unitLabel,
-        multiplier: it.multiplier,
-        confidence: it.confidence,
-        matchKind: it.match?.kind ?? null,
-        matchSource: it.match?.source ?? null,
-        nutrition: total,
-      }
-    }),
-  }
-}
 
 // Reconcile AI-estimated items against the DB (foods/meals/recipes). Confident
 // matches adopt the DB item's canonical name + per-serving macros and link its
@@ -477,55 +133,7 @@ async function reconcileWithDb(items: ReviewItem[]): Promise<ReviewItem[]> {
     if (!res.ok) return items.map((it) => ({ ...it, matchChecked: true }))
     const data = await res.json().catch(() => null)
     const matches: Array<DbMatch | null> = Array.isArray(data?.matches) ? data.matches : []
-    return items.map((it, i) => {
-      const m = matches[i]
-      if (!m) return { ...it, matchChecked: true, match: null }
-      // Guard: a saved item with empty/broken macros (e.g. a 0-cal "Blueberries")
-      // must NOT override a real AI estimate. If the match has no usable nutrition
-      // but the AI estimated some, keep the AI estimate (treat as unmatched).
-      const matchHasMacros = (m.nutrition?.calories ?? 0) > 0
-        || (m.nutrition?.protein ?? 0) > 0 || (m.nutrition?.carbs ?? 0) > 0 || (m.nutrition?.fats ?? 0) > 0
-      const aiHasMacros = (it.nutrition?.calories ?? 0) > 0
-        || (it.nutrition?.protein ?? 0) > 0 || (it.nutrition?.carbs ?? 0) > 0 || (it.nutrition?.fats ?? 0) > 0
-      if (!matchHasMacros && aiHasMacros) return { ...it, matchChecked: true, match: null }
-      // Keep the AI's NATURAL portion (e.g. "1 kiwi", "6 bites") and count, but
-      // adopt YOUR saved food's macros for it. Phase 2: when the AI's unit can be
-      // reconciled with the food's real serving (same family, or via a gram/ml
-      // bridge, or a count→discrete-serving match), use that EXACT alignment so
-      // all macros come straight from your food. Otherwise fall back to bridging
-      // the AI's calorie estimate into a serving multiplier. No "× of 100 g".
-      const dbCal = m.nutrition?.calories ?? 0
-      const qty = it.multiplier > 0 ? it.multiplier : 1
-      const aiTotalCal = (it.nutrition?.calories ?? 0) * qty
-      const aligned = alignedServingsOfFood(qty, it.unitLabel, m) // servings of the food, by unit math
-      const totalMult = aligned != null
-        ? aligned
-        : (dbCal > 0 && aiTotalCal > 0 ? aiTotalCal / dbCal : qty)
-      const f = totalMult / qty
-      const perUnit: Macros = {
-        calories: (m.nutrition.calories ?? 0) * f,
-        protein: (m.nutrition.protein ?? 0) * f,
-        carbs: (m.nutrition.carbs ?? 0) * f,
-        fats: (m.nutrition.fats ?? 0) * f,
-      }
-      return {
-        ...it,
-        name: m.name,
-        brand: m.brand,
-        nutrition: perUnit, // per ONE unit, from your saved food
-        // unitLabel + multiplier (the AI's natural count) are preserved.
-        matchChecked: true,
-        match: m,
-        // Only trust the food's serving shape for unit conversions when the AI's
-        // unit actually reconciled with it (aligned != null). A calorie-ratio
-        // fallback means the food's grams/serving don't line up with the
-        // description — using them for the dropdown produces nonsense numbers.
-        matchServingReliable: aligned != null,
-        // Re-snapshot to the matched serving so the dropdown's "current" option
-        // restores what the user actually sees after reconcile.
-        origServing: { nutrition: perUnit, unitLabel: it.unitLabel, multiplier: qty, label: formatAmount(qty, it.unitLabel) },
-      }
-    })
+    return applyMatches(items, matches)
   } catch {
     return items.map((it) => ({ ...it, matchChecked: true }))
   }
@@ -563,10 +171,21 @@ export default function SnapPlateModal({
   // note). Kept in a ref so it survives into the background persist without
   // re-running the persist callback, and is saved to history as the scan note.
   const noteRef = useRef('')
+  // The signed follow-up ticket that came back with the estimate on screen.
+  // Handed back on a CORRECTION so "it was 6 tacos, not 3" spends a bounded
+  // follow-up instead of a whole second scan — otherwise a free member's one
+  // estimate a day cannot be fixed at all, which breaks the feature rather
+  // than pricing it. Server-minted, verified server-side (owner + feature +
+  // window), and a ref rather than state because it never affects rendering.
+  const allowanceTicketRef = useRef<string | undefined>(undefined)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [addMoreOpen, setAddMoreOpen] = useState(false)
+  // A gate refused the estimate (or the meal save) — the upgrade sheet's input.
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const mealOptions = tagOptions && tagOptions.length ? tagOptions : STANDARD_MEALS
   const { toast, showToast } = useToast(3500)
+  const { data: entitlements, feature: entitlementFor, refresh: refreshEntitlements } =
+    useEntitlements()
 
   useLockScroll(open)
 
@@ -574,7 +193,7 @@ export default function SnapPlateModal({
   // sync-to-prop effect (modal state follows open/initialPhase/initialImage).
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false); noteRef.current = '' }
+    if (!open) { setState({ phase: 'idle' }); setDescribeText(''); setComposeNote(''); setSavedScanId(null); setFeedbackOpen(false); noteRef.current = ''; allowanceTicketRef.current = undefined }
     else {
       setSelectedTag(tag) // default to the page's time-of-day meal on open
       // Re-opening a saved estimate links its record so edits/logs update it;
@@ -693,25 +312,61 @@ export default function SnapPlateModal({
   const pickGallery = () => galleryInputRef.current?.click()
 
   // Shared loading→review/error wrapper for any estimate source.
+  //
+  // Two different failures used to print the same sentence, and the sentence
+  // blamed the member either way:
+  //
+  //   1. The model answered and found nothing in what they gave us. Asking for
+  //      more detail is the right response.
+  //   2. Nothing came back at all — the AI backend was down, over its spend cap,
+  //      or timed out. Asking for more detail sends someone off rewriting a
+  //      perfectly good description against a service that is not answering.
+  //
+  // Those are distinguishable for free: aiEngine RETURNS `items: []` for (1) and
+  // THROWS for (2), because it only throws when no usable response arrived. So
+  // the catch branch is the service-fault branch by construction, and it says so.
+  //
+  // (2) is not hypothetical: on 2026-08-13 the Gemini spend cap was hit and every
+  // estimate failed for ~4.5h while telling members their descriptions were the
+  // problem.
   const runEstimate = useCallback(async (
     make: () => Promise<PlateEstimate>,
     imageThumb: string,
     failMsg: string,
     loadingMsg = 'Reading your plate…',
+    /** Photo-only advice. Must stay off the text path, where it is a non-sequitur. */
+    failHint?: string,
   ) => {
     setState({ phase: 'loading', loadingMsg })
+    // A new outcome — the previous estimate's ticket must not ride along.
+    allowanceTicketRef.current = undefined
     try {
       const estimate = await make()
+      // Keep the ticket this estimate was issued with, so a correction of it
+      // costs a follow-up rather than tomorrow's scan.
+      allowanceTicketRef.current = estimate.allowanceTicket
       if (!estimate.items || estimate.items.length === 0) {
-        setState({ phase: 'error', message: failMsg })
+        setState({ phase: 'error', message: failMsg, hint: failHint })
         return
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
+      // A plan/allowance refusal is NOT a service fault — say so with the
+      // upsell rather than "our end, not yours", which would be a lie.
+      if (err instanceof EntitlementRequiredError) {
+        setState({ phase: 'idle' })
+        setGate(err.gate)
+        void refreshEntitlements()
+        return
+      }
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] estimate error', err)
-      setState({ phase: 'error', message: failMsg })
+      setState({
+        phase: 'error',
+        message: "Couldn't reach the food AI just now.",
+        hint: 'That one is on our end, not yours. Give it a minute and try again.',
+      })
     }
-  }, [])
+  }, [refreshEntitlements])
 
   const handleDescribe = () => {
     const t = describeText.trim()
@@ -720,7 +375,7 @@ export default function SnapPlateModal({
     runEstimate(
       () => plateEstimator.estimateFromText({ description: t }, { userId: '' }),
       '',
-      "Couldn't estimate that — try adding a little more detail.",
+      "Couldn't estimate that. Try adding a little more detail.",
       'Estimating…',
     )
   }
@@ -732,8 +387,9 @@ export default function SnapPlateModal({
     runEstimate(
       () => plateEstimator.estimate(dataUrl, { userId: '' }, noteArg),
       dataUrl,
-      "Couldn't read that plate — try a clearer, well-lit photo.",
+      "Couldn't read that plate.",
       'Reading your plate…',
+      'For best results, use good lighting and show the whole plate.',
     )
   }
 
@@ -744,30 +400,48 @@ export default function SnapPlateModal({
     const c = correction.trim()
     if (!c) return
     setState({ phase: 'loading', loadingMsg: 'Applying correction…' })
+    // The ticket proving the estimate being refined was already charged. Only
+    // this path sends one; a fresh estimate must never present it.
+    const ticket = allowanceTicketRef.current
     try {
       let estimate: PlateEstimate
       if (imageThumb.startsWith('data:')) {
-        estimate = await plateEstimator.estimate(imageThumb, { userId: '' }, c)
+        estimate = await plateEstimator.estimate(imageThumb, { userId: '' }, c, ticket)
       } else {
         const prior: EstimatedPlateItem[] = priorItems
           .filter((it) => !it.removed)
           .map(({ name, estimatedServing, nutrition, confidence }) => ({ name, estimatedServing, nutrition, confidence }))
-        estimate = await plateEstimator.estimateFromText({ priorEstimate: prior, correction: c }, { userId: '' })
+        estimate = await plateEstimator.estimateFromText(
+          { priorEstimate: prior, correction: c, allowanceTicket: ticket },
+          { userId: '' },
+        )
       }
+      // A correction is charged in the same window, so it comes back with a
+      // ticket of its own — keep it so the NEXT correction is a follow-up too.
+      allowanceTicketRef.current = estimate.allowanceTicket ?? ticket
       if (!estimate.items || estimate.items.length === 0) {
-        // Return to the review with the original items + show a toast.
+        // The model answered and could not act on the wording. Rephrasing helps.
         setState({ phase: 'review', items: priorItems, imageThumb })
-        showToast("Couldn't apply that — try rephrasing.", 'error')
+        showToast("Couldn't apply that. Try rephrasing.", 'error')
         return
       }
       setState({ phase: 'review', items: toReviewItems(estimate), imageThumb })
     } catch (err) {
+      // Keep the estimate they already have — a refused CORRECTION must never
+      // cost them the work the correction was refining.
+      if (err instanceof EntitlementRequiredError) {
+        setState({ phase: 'review', items: priorItems, imageThumb })
+        setGate(err.gate)
+        void refreshEntitlements()
+        return
+      }
       if (!(err instanceof PlateUnavailableError)) console.error('[SnapPlateModal] correction error', err)
-      // Stay on review with original items.
+      // Nothing came back at all. Rephrasing cannot fix a backend that is not
+      // answering, so do not ask for it. See runEstimate for the full reasoning.
       setState({ phase: 'review', items: priorItems, imageThumb })
-      showToast("Couldn't apply that — try rephrasing.", 'error')
+      showToast("Couldn't reach the food AI. Try again in a minute.", 'error')
     }
-  }, [showToast])
+  }, [showToast, refreshEntitlements])
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -805,7 +479,7 @@ export default function SnapPlateModal({
       ...state,
       items: state.items.map((it, i) => {
         if (i !== idx) return it
-        const multiplier = Math.max(floorForUnit(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(2)))
+        const multiplier = Math.max(servingQuantityStep(it.unitLabel), parseFloat((it.multiplier + delta).toFixed(3)))
         // When a DB serving is selected, keep the combined "N × serving" label in
         // sync; otherwise clear any stale freeform label.
         const labelOverride = it.servingLabelBase ? combinedServingLabel(it.servingLabelBase, multiplier) : undefined
@@ -948,10 +622,10 @@ export default function SnapPlateModal({
           servingLabel: it.labelOverride || formatAmount(it.multiplier, it.unitLabel),
           servings: it.multiplier,
           nutrition: {
-            calories: Math.round(n.calories ?? 0),
-            protein: Math.round((n.protein ?? 0) * 10) / 10,
-            carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-            fats: Math.round((n.fats ?? 0) * 10) / 10,
+            calories: perUnit(n.calories),
+            protein: perUnit(n.protein),
+            carbs: perUnit(n.carbs),
+            fats: perUnit(n.fats),
           },
         }
       })
@@ -963,6 +637,7 @@ export default function SnapPlateModal({
           items: mealItems,
           tags: [selectedTag],
           loggedAt,
+          untimed: true,
           // Capture provenance → day view groups a multi-food capture under a
           // source-colored card. imageThumb covers snap + upload; else describe.
           source: imageThumb ? 'photo' : 'describe',
@@ -1031,10 +706,10 @@ export default function SnapPlateModal({
         servingUnit: it.unitLabel || 'serving',
         servings: it.multiplier,
         nutrition: {
-          calories: Math.round(n.calories ?? 0),
-          protein: Math.round((n.protein ?? 0) * 10) / 10,
-          carbs: Math.round((n.carbs ?? 0) * 10) / 10,
-          fats: Math.round((n.fats ?? 0) * 10) / 10,
+          calories: perUnit(n.calories),
+          protein: perUnit(n.protein),
+          carbs: perUnit(n.carbs),
+          fats: perUnit(n.fats),
         },
       }
     })
@@ -1047,12 +722,19 @@ export default function SnapPlateModal({
         headers,
         body: JSON.stringify({ name: name.trim(), items, defaultTag: selectedTag }),
       })
-      if (res.status === 402 || res.status === 403) {
-        showToast('Saving meals needs a Plus plan.', 'error')
-        return false
-      }
       if (!res.ok) {
         const d = await res.json().catch(() => null)
+        // A real gate carries its own copy and its own remaining/resets — show
+        // the sheet instead of a toast that invents a plan name.
+        const g = gateFrom(res.status, d)
+        if (g) {
+          setGate(g)
+          void refreshEntitlements()
+          return false
+        }
+        // No invented plan requirement here. gateFrom() has already had its
+        // look; anything still 402/403 is an ownership or role refusal, and it
+        // gets the server's own words like every other error.
         showToast(d?.error ? `Couldn't save: ${d.error}` : "Couldn't save meal.", 'error')
         return false
       }
@@ -1092,6 +774,10 @@ export default function SnapPlateModal({
         onChange={handleFileChange}
         aria-hidden="true"
       />
+
+      {/* Raised by an entitlement refusal on the estimate, the correction, or
+          the meal save. Sits above this modal (z-[200]/[201] vs z-[60]). */}
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
 
       <AnimatePresence>
         {open && (
@@ -1176,6 +862,21 @@ export default function SnapPlateModal({
                         Describe it instead
                       </button>
                     </div>
+                    {/* Remaining scans. Photo, upload and describe share ONE
+                        daily allowance, so it belongs on the chooser rather
+                        than on any single button. Hidden entirely while
+                        enforcement is off, and for anyone uncapped. */}
+                    {(() => {
+                      if (!entitlements?.enforced) return null
+                      const scans = entitlementFor('ai-food-estimate')
+                      if (!scans || scans.limit === null || scans.remaining === null) return null
+                      return (
+                        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
+                          {scans.remaining} of {scans.limit} free scan
+                          {scans.limit === 1 ? '' : 's'} left today
+                        </p>
+                      )
+                    })()}
                   </div>
                 )}
 
@@ -1265,9 +966,9 @@ export default function SnapPlateModal({
                     </div>
                     <div>
                       <p className="font-semibold text-zinc-900 dark:text-white">{state.message}</p>
-                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        For best results, use good lighting and show the whole plate.
-                      </p>
+                      {state.hint && (
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{state.hint}</p>
+                      )}
                     </div>
                     <div className="flex gap-2 mt-2">
                       <button
@@ -1321,6 +1022,12 @@ export default function SnapPlateModal({
                   onLog={handleLog}
                   onSaveRecipe={handleSaveRecipe}
                   onRetry={handleRetry}
+                  mealsAtCap={
+                    !!entitlements?.enforced && entitlementFor('custom-meals')?.canCreate === false
+                  }
+                  onCappedSave={() =>
+                    setGate(syntheticGate('custom-meals', 'plus', entitlementFor('custom-meals')))
+                  }
                 />
               )}
             </motion.div>
@@ -1549,8 +1256,8 @@ function ReviewBody({ items, imageThumb, onSetMultiplier, onSetLabel, onSetServi
                         servingLabel={summary}
                         originalLabel={item.origServing?.label}
                         count={item.multiplier}
-                        stepDelta={stepForUnit(item.unitLabel)}
-                        stepFloor={floorForUnit(item.unitLabel)}
+                        stepDelta={servingQuantityStep(item.unitLabel)}
+                        stepFloor={servingQuantityStep(item.unitLabel)}
                         onSelectServing={(choice) => onSetServing(idx, choice)}
                         onResetToOriginal={() => onResetServing(idx)}
                         onStep={(delta) => onSetMultiplier(idx, delta)}
@@ -1736,9 +1443,13 @@ interface ReviewFooterProps {
   onLog: () => void
   onSaveRecipe: (name: string) => Promise<boolean>
   onRetry: () => void
+  /** Saved-meal slots are full. Explanatory only — the server is the gate. */
+  mealsAtCap?: boolean
+  /** Tapped "Save as meal" while capped. */
+  onCappedSave?: () => void
 }
 
-function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecipe, onRetry }: ReviewFooterProps) {
+function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecipe, onRetry, mealsAtCap, onCappedSave }: ReviewFooterProps) {
   const totals = runningTotal(items)
   const activeCount = items.filter((it) => !it.removed).length
   const [saveOpen, setSaveOpen] = useState(false)
@@ -1839,11 +1550,11 @@ function ReviewFooter({ items, tag, mealOptions, onSelectTag, onLog, onSaveRecip
         </div>
       ) : (
         <button
-          onClick={() => setSaveOpen(true)}
+          onClick={() => (mealsAtCap ? onCappedSave?.() : setSaveOpen(true))}
           disabled={activeCount === 0}
           className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-800 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-200"
         >
-          <BookmarkPlus className="h-3.5 w-3.5" />
+          {mealsAtCap ? <Lock className="h-3.5 w-3.5" /> : <BookmarkPlus className="h-3.5 w-3.5" />}
           Save as meal
         </button>
       )}

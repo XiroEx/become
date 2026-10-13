@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Calendar, ChevronRight, ChevronLeft, Check, X, Clock, Dumbbell } from 'lucide-react'
 import { Card } from '@/components/ui'
+import { computeWeekStripDayStatus } from '@/lib/workout/dayStatus'
 
 interface ScheduledWorkout {
   date: string
@@ -299,10 +300,9 @@ export default function UpcomingWorkouts() {
               const workouts = workoutsByDate.get(key)
               const workout = workouts?.[0] // Primary workout for display
               const dayQuick = quickByDate.get(key)
-              const hasQuick = !!dayQuick && dayQuick.length > 0
               const isToday = isSameDay(day, today)
               const isPast = day < today
-              const isRest = (!workouts || workouts.length === 0) && !hasQuick
+              const dayStatus = computeWeekStripDayStatus(workouts, dayQuick)
 
               const inner = (
                 <>
@@ -320,19 +320,17 @@ export default function UpcomingWorkouts() {
                     {day.getDate()}
                   </span>
 
-                  {/* Status indicator (program slot, else quick session, else rest) */}
+                  {/* Status indicator: any completed workout (program or quick)
+                      wins, then the program slot, then a pending quick session,
+                      then rest. */}
                   <div className="mt-0.5 flex h-5 items-center justify-center">
-                    {workout ? (
-                      <StatusIcon status={workout.status} />
-                    ) : hasQuick ? (
-                      dayQuick!.some((q) => q.completed) ? (
-                        <StatusIcon status="completed" />
-                      ) : (
-                        <span className="h-2 w-2 rounded-full bg-purple-400 ring-1 ring-purple-300" />
-                      )
-                    ) : isRest ? (
+                    {dayStatus === 'quick' ? (
+                      <span className="h-2 w-2 rounded-full bg-purple-400 ring-1 ring-purple-300" />
+                    ) : dayStatus === 'rest' ? (
                       <span className="text-[9px] text-zinc-400 dark:text-zinc-600">Rest</span>
-                    ) : null}
+                    ) : (
+                      <StatusIcon status={dayStatus} />
+                    )}
                   </div>
 
                   {/* Multi-program indicator */}

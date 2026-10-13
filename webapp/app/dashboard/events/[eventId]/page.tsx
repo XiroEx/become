@@ -8,6 +8,7 @@ import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, formatEventTime, getToken } from '@/components/community/types'
+import FeatureGuard from '@/components/FeatureGuard'
 
 export default function EventDetailPage() {
   const params = useParams<{ eventId: string }>()
@@ -44,12 +45,13 @@ export default function EventDetailPage() {
     if (res.ok) load()
   }
 
-  if (loading) return <PageTransition><div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" /></PageTransition>
-  if (!event) return <PageTransition><EmptyState title="Event not found" description="This event is unavailable or has been canceled." /></PageTransition>
+  const group = event && typeof event.groupId === 'object' ? event.groupId : null
 
-  const group = typeof event.groupId === 'object' ? event.groupId : null
-
-  return (
+  const content = loading ? (
+    <PageTransition><div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" /></PageTransition>
+  ) : !event ? (
+    <PageTransition><EmptyState title="Event not found" description="This event is unavailable or has been canceled." /></PageTransition>
+  ) : (
     <PageTransition>
       <div className="mb-5">
         <Link href="/dashboard/events" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Events</Link>
@@ -80,5 +82,15 @@ export default function EventDetailPage() {
         </div>
       </Card>
     </PageTransition>
+  )
+
+  return (
+    <FeatureGuard
+      feature="Events"
+      description="Workshops, check-ins, and live sessions with your coach. Coming soon."
+      icon={<CalendarDays className="h-10 w-10" />}
+    >
+      {content}
+    </FeatureGuard>
   )
 }

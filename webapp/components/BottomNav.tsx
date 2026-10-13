@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { motion } from 'framer-motion'
 import { ClipboardList, Brain, Home, UtensilsCrossed, UsersRound } from 'lucide-react'
 
 export default function BottomNav() {
@@ -106,13 +107,26 @@ export default function BottomNav() {
               href={href}
               aria-label={label}
               title={label}
-              className={`relative flex h-12 w-14 items-center justify-center rounded-full transition-colors sm:w-16 ${
+              className={`relative flex h-12 w-14 items-center justify-center rounded-full sm:w-16 ${
                 active
-                  ? 'bg-zinc-900/10 text-black dark:bg-white/15 dark:text-white'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
+                  ? 'text-black dark:text-white'
+                  : 'text-zinc-500 transition-colors hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100'
               }`}
             >
-              <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.4 : 2} />
+              {active && (
+                <motion.span
+                  layoutId="bottom-nav-active-pill"
+                  className="absolute inset-0 rounded-full bg-zinc-900/10 dark:bg-white/15"
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+              <motion.span
+                className="relative flex items-center justify-center"
+                whileTap={{ scale: 0.85 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+              >
+                <Icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.4 : 2} />
+              </motion.span>
               {(badge ?? 0) > 0 && (
                 <span className="absolute right-1 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold leading-none text-white">
                   {badge! > 99 ? '99+' : badge}

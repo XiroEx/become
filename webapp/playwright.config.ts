@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+// Resolving the base URL THROWS at config load when it points at a
+// production-backed host without PLAYWRIGHT_ALLOW_PROD=1, so `npm run test:e2e`
+// cannot reach a real member's account by default. See tests/e2e/base-url.ts.
+import { BASE_URL } from './tests/e2e/base-url';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -7,7 +11,7 @@ export default defineConfig({
   workers: 1,
   reporter: [['list'], ['html', { outputFolder: '../playwright-report', open: 'never' }]],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'https://become.redbtn.io',
+    baseURL: BASE_URL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -17,10 +21,10 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'nudge',
-      testMatch: '**/nudge-visibility.spec.ts',
+      name: 'tutgate',
+      testMatch: '**/checkin-tutorial-gate.spec.ts',
       timeout: 120_000,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'off' },
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off', screenshot: 'only-on-failure' },
     },
     {
       name: 'swap-collapse',
@@ -49,22 +53,28 @@ export default defineConfig({
       },
     },
     {
-      name: 'estimate-barcode',
-      testMatch: '**/estimate-barcode.spec.ts',
-      timeout: 240_000,
-      use: {
-        ...devices['Desktop Chrome'],
-        viewport: { width: 390, height: 844 },
-        video: 'off',
-        trace: 'off',
-        screenshot: 'only-on-failure',
-      },
-    },
-    {
       name: 'exercise-prs-persisted',
       testMatch: '**/exercise-prs-persisted.spec.ts',
       timeout: 60_000,
       use: { ...devices['Desktop Chrome'], video: 'off' },
+    },
+    {
+      name: 'workout-integrity',
+      testMatch: '**/workout-integrity.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off' },
+    },
+    {
+      name: 'build-as-you-go',
+      testMatch: '**/build-as-you-go.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, isMobile: false, video: 'off' },
+    },
+    {
+      name: 'quick-session-abandon-save',
+      testMatch: '**/quick-session-abandon-save.spec.ts',
+      timeout: 60_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off' },
     },
     {
       name: 'swap-mobile',
@@ -84,6 +94,19 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 800 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'onboarding-macros',
+      testMatch: '**/onboarding-macros.spec.ts',
+      timeout: 180_000,
+      fullyParallel: false,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
         video: 'off',
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
@@ -120,6 +143,18 @@ export default defineConfig({
       name: 'app-shots',
       testMatch: '**/app-shots.spec.ts',
       use: { ...devices['Pixel 5'], video: 'off' },
+    },
+    {
+      name: 'landing',
+      testMatch: '**/landing.spec.ts',
+      timeout: 120_000,
+      retries: 0,
+      use: {
+        ...devices['Desktop Chrome'],
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
     },
     {
       name: 'nutri-shots',
@@ -222,6 +257,18 @@ export default defineConfig({
       },
     },
     {
+      name: 'meal-schedule-save-nav',
+      testMatch: '**/meal-schedule-save-nav.spec.ts',
+      timeout: 60_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
       name: 'keyboard-inset',
       testMatch: '**/keyboard-inset.spec.ts',
       timeout: 120_000,
@@ -234,8 +281,71 @@ export default defineConfig({
       },
     },
     {
+      name: 'mind-audit',
+      testMatch: '**/mind-session-audit.spec.ts',
+      timeout: 180_000,
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
+      name: 'search-overview',
+      testMatch: '**/search-overview.spec.ts',
+      timeout: 120_000,
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
+      name: 'plan-meals-cta',
+      testMatch: '**/plan-meals-cta.spec.ts',
+      timeout: 120_000,
+      retries: 0,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
+      name: 'meal-combine',
+      testMatch: '**/meal-combine.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
+      name: 'meal-multiselect',
+      testMatch: '**/meal-multiselect.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'off' },
+    },
+    {
       name: 'nutrition-regression',
       testMatch: '**/nutrition-regression.spec.ts',
+      timeout: 120_000,
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        video: 'off',
+        trace: 'retain-on-failure',
+        screenshot: 'only-on-failure',
+      },
+    },
+    {
+      name: 'becoming-journey',
+      testMatch: '**/becoming-journey.spec.ts',
+      timeout: 180_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'goals',
+      testMatch: '**/goals.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 }, video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'admin-streaks',
+      testMatch: '**/admin-streaks.spec.ts',
+      timeout: 120_000,
+      use: { ...devices['Desktop Chrome'], video: 'off', trace: 'retain-on-failure', screenshot: 'only-on-failure' },
+    },
+    {
+      name: 'dashboard-fixes',
+      testMatch: '**/dashboard-fixes.spec.ts',
       timeout: 120_000,
       use: {
         ...devices['Desktop Chrome'],

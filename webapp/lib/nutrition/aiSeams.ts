@@ -33,6 +33,14 @@ export interface PlateEstimate {
   items: EstimatedPlateItem[]
   total: IMealNutrition
   caveats?: string[]
+  /**
+   * The signed follow-up ticket this estimate was issued with, when the member
+   * is on a capped allowance. Hand it straight back on a CORRECTION of this
+   * same estimate and the refinement spends a bounded follow-up instead of a
+   * whole new scan. Not persisted, not part of the model's output — the
+   * server mints it and the client only relays it.
+   */
+  allowanceTicket?: string
 }
 
 /** Text input for a no-photo estimate or a correction of a prior estimate. */
@@ -43,13 +51,24 @@ export interface TextEstimateInput {
   priorEstimate?: EstimatedPlateItem[]
   /** The user's correction, e.g. "it was 6 tacos not 5". */
   correction?: string
+  /** The `allowanceTicket` of the estimate being corrected. Only ever set on a
+   *  correction: sending it with a fresh estimate would charge a new outcome
+   *  as a refinement of an old one. */
+  allowanceTicket?: string
 }
 
 /** Plate estimator: photo in (or text), loggable items out. */
 export interface PlateEstimator {
   /** Photo → estimate. Optional `note` lets the user describe the plate (e.g.
-   *  "these are 6 carnitas tacos") to improve identification/counts. */
-  estimate(imageBase64: string, ctx: NutritionAIContext, note?: string): Promise<PlateEstimate>
+   *  "these are 6 carnitas tacos") to improve identification/counts.
+   *  `allowanceTicket` is set only when this call re-runs the vision pass to
+   *  CORRECT an estimate the member already paid for. */
+  estimate(
+    imageBase64: string,
+    ctx: NutritionAIContext,
+    note?: string,
+    allowanceTicket?: string,
+  ): Promise<PlateEstimate>
   /** Estimate from words (describe a meal) or refine a prior estimate via a correction. */
   estimateFromText(input: TextEstimateInput, ctx: NutritionAIContext): Promise<PlateEstimate>
 }

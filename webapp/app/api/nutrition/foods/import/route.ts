@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Food from '@/models/Food'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import {
   importFromUSDA,
   importFromOpenFoodFacts,
@@ -67,7 +68,15 @@ export async function POST(request: NextRequest) {
       if (!data || !data.name) {
         return NextResponse.json({ error: 'data.name is required for source=manual' }, { status: 400 })
       }
-      const r = await importManualFood(data, authResult.userId)
+      // `data` is a request body, so `data.barcode` is whatever the client
+      // typed. A barcode is unique+sparse and is the first thing
+      // GET /api/nutrition/foods/barcode resolves, ahead of OFF and USDA and
+      // with no check on `source` — so honouring one here lets a member plant a
+      // row on a real UPC and hijack that product's scan for everyone. Dropped
+      // for members; admins curate the catalogue and keep it (their real
+      // surface for this is PATCH /api/admin/foods/[id]).
+      const trustedBarcode = await isVerifiedAdmin(authResult)
+      const r = await importManualFood(data, authResult.userId, { trustedBarcode })
       food = r.food
       created = r.created
     }

@@ -5,7 +5,7 @@ import type {
 } from "@/components/programs/ProgramDetail";
 import type { WorkoutOverviewViewModel } from "@/components/programs/WorkoutOverview";
 
-const TARGET_USERS: ReadonlyArray<ProgramDetailViewModel["targetUser"]> = [
+const TARGET_USERS: readonly ProgramDetailViewModel["targetUser"][] = [
   "Beginner",
   "Intermediate",
   "Advanced",
@@ -43,12 +43,33 @@ function phaseOutline(
   return {
     phaseIndex,
     name: phase.phase,
+    weeks: phase.weeks,
     weekStart: start,
     weekEnd: end,
+    focus: phase.focus,
     workouts: (phase.workouts ?? []).map((w, workoutIndex) => ({
       workoutIndex,
+      day: w.day ?? `Day ${workoutIndex + 1}`,
       title: w.title,
       exerciseCount: (w.exercises ?? []).length,
+      exercises: (w.exercises ?? []).map((ex, i) => ({
+        slug: ex.exerciseSlug ?? `exercise-${i}`,
+        name: ex.name ?? ex.exerciseSlug ?? "Exercise",
+        type: ex.type,
+        sets: ex.sets,
+        reps: ex.reps,
+        repsUnit: typeof ex.repsUnit === "string" ? ex.repsUnit : undefined,
+        rest: ex.rest,
+        details: ex.details,
+        tip: ex.tip,
+        groupId: ex.groupId,
+        groupType: ex.groupType,
+        groupLabel: ex.groupLabel,
+        groupRest: ex.groupRest,
+        groupRounds: ex.groupRounds,
+        thumbnailUrl: ex.thumbnailUrl ?? null,
+        videoUrl: ex.videoUrl ?? null,
+      })),
     })),
   };
 }
@@ -66,6 +87,9 @@ export function toProgramDetailViewModel(
     goal: program.goal,
     targetUser: narrowTargetUser(program.target_user),
     phases: (program.phases ?? []).map(phaseOutline),
+    // Full-bleed hero photo (NP-361 #1) — straight passthrough of the
+    // web's `program.coverImage`.
+    coverImage: program.coverImage ?? null,
   };
 }
 

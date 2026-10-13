@@ -6,6 +6,7 @@
 // directly (runStore.start + useAiRun) so they can reattach by runId.
 
 import { runStore } from './runStore'
+import type { GatePayload } from '@/lib/entitlementsClient'
 
 export interface AiTaskResult {
   ok: boolean
@@ -15,6 +16,19 @@ export interface AiTaskResult {
   unavailable?: boolean
   fallback?: boolean
   error?: string
+  /** Set (with `error: 'entitlement'`) when a tier/allowance gate refused the
+   *  run. Callers raise the upgrade sheet from this — and, where one exists,
+   *  ALSO fall through to the deterministic generator. `app/api/generate/*` is
+   *  deliberately unmetered (pinned as such in
+   *  tests/unit/allowance/inventory.test.ts): it is the fallback every AI route
+   *  degrades to, so metering it would turn a soft paywall into a dead end for
+   *  exactly the members who hit the cap. What must NOT happen is a retry of
+   *  the metered route, which would be refused again. */
+  gate?: GatePayload
+  /** The signed follow-up ticket minted for THIS outcome. Send it back as
+   *  `allowanceTicket` when refining this same outcome (a correction), so the
+   *  refinement spends a bounded follow-up rather than a fresh unit. */
+  allowanceTicket?: string
 }
 
 // Friendly labels for the global "generating…" indicator, by endpoint.
@@ -26,6 +40,7 @@ const ENDPOINT_LABELS: Array<[RegExp, string]> = [
   [/\/mind\/flow$/, 'Building your flow'],
   [/\/workout\/session$/, 'Generating your session'],
   [/\/workout\/program$/, 'Generating your program'],
+  [/\/workout\/import$/, 'Reading your program'],
   [/\/nutrition\/consultant$/, 'Consultant is replying'],
   [/\/nutrition\/plate$/, 'Reading your plate'],
   [/\/nutrition\/product$/, 'Looking that up'],
@@ -65,5 +80,7 @@ export async function runAiTask(
     unavailable: rec.error === 'unavailable',
     fallback: rec.error === 'fallback',
     error: rec.status === 'done' ? undefined : rec.error,
+    gate: rec.gate,
+    allowanceTicket: rec.allowanceTicket,
   }
 }

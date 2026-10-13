@@ -3,20 +3,34 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
-import { ArrowLeft, Save, Calculator } from 'lucide-react'
-import { Card } from '@/components/ui'
+import { ArrowLeft, Save, Calculator, Scale } from 'lucide-react'
+import {
+  AreaChart, Area, CartesianGrid, ReferenceLine,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts'
+import { Card, SegmentedControl } from '@/components/ui'
+import PlanCard from '@/components/goals/PlanCard'
+import WeightLogSheet from '@/components/WeightLogSheet'
 import {
   ACTIVITY_LABELS,
   DIRECTION_ADJUSTMENT,
   DIRECTION_LABELS,
   DIRECTION_EXPLANATION,
   calcTdee,
+  calorieAdjustment,
   computeNutritionTargets,
+  deliveredSplit,
+  gramsFromPercent,
+  percentFromGrams,
+  splitFromGrams,
+  MACRO_PRESET_LABELS,
+  type MacroPreset,
+  type MacroSplit,
   type ActivityLevel,
   type NutritionDirection,
-} from '@/lib/nutrition/tdee'
+} from '@become/core'
 import type { FitnessGoal } from '@/lib/programMatch'
-import { toKg, ftInToCm, displayWeight, type WeightUnit } from '@/lib/bodyUnits'
+import { toKg, kgToLbs, roundWeight, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@become/core'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection
@@ -36,35 +50,50 @@ interface ProgressData {
   bmiData: { date: string; value: number }[]
   currentProgram: { name: string } | null
   stats: { streakDays: number }
+  goal?: { targetWeightKg: number | null }
 }
 
-/** Labels and adjustments come from lib/nutrition/tdee so this page and the
- *  onboarding wizard describe the same choice the same way. They used to be
- *  hardcoded here, which is how "Gain Weight" in onboarding became "Gain Muscle"
- *  on this screen — the same +300 with two different names. */
-const GOAL_CARDS: { type: GoalType; label: string; description: string; adjustment: string }[] =
-  (['lose', 'maintain', 'gain'] as GoalType[]).map((type) => ({
-    type,
-    label: DIRECTION_LABELS[type],
-    description: DIRECTION_EXPLANATION[type],
-    adjustment:
-      DIRECTION_ADJUSTMENT[type] === 0
-        ? 'TDEE'
-        : `TDEE ${DIRECTION_ADJUSTMENT[type] > 0 ? '+' : '−'} ${Math.abs(DIRECTION_ADJUSTMENT[type])} cal`,
-  }))
+/** Labels come from lib/nutrition/tdee so this page and the onboarding wizard
+ *  describe the same choice the same way. They used to be hardcoded here,
+ *  which is how "Gain Weight" in onboarding became "Gain Muscle" on this
+ *  screen — the same +300 with two different names.
+ *
+ * The adjustment text is NOT a static lookup: it used to read the flat
+ * DIRECTION_ADJUSTMENT constant, so "Lose Weight" always said "TDEE - 500"
+ * no matter what pace was chosen on the Plan card above it. It now runs
+ * through calorieAdjustment() with the member's own pace for whichever
+ * direction the Plan is actually set to, so a 0.5 lb/week plan says -250 and a
+ * 1.5 lb/week plan says -750 (subject to the same safety cap either way). */
+function goalCardAdjustment(type: GoalType, tdee: number | null, paceLbPerWeek?: number): string {
+  if (type === 'maintain') return 'TDEE'
+  const applied = tdee != null ? calorieAdjustment(tdee, type, paceLbPerWeek) : DIRECTION_ADJUSTMENT[type]
+  return `TDEE ${applied > 0 ? '+' : '−'} ${Math.abs(applied)} cal`
+}
 
-/** 'recommended' runs the same computeNutritionTargets() the onboarding wizard
- *  uses, so recalculating here reproduces the numbers a member was shown when
- *  they signed up instead of silently rewriting them with a % split. */
-type MacroPreset = 'recommended' | 'balanced' | 'high_protein' | 'low_carb' | 'custom'
+/** Every preset now runs through the shared computeNutritionTargets(), which
+ *  applies the same bodyweight protein floor/cap here as during onboarding. The
+ *  page used to own its own percentage maths, so a preset picked here produced
+ *  different grams than the identical preset picked in the wizard. */
+const MACRO_PRESET_KEYS: MacroPreset[] = ['recommended', 'balanced', 'high_protein', 'low_carb', 'custom']
 
-const MACRO_PRESETS: { key: MacroPreset; label: string; protein: number; carbs: number; fats: number }[] = [
-  { key: 'recommended', label: 'Recommended (from your goal)', protein: 0, carbs: 0, fats: 0 },
-  { key: 'balanced', label: 'Balanced (30/40/30)', protein: 30, carbs: 40, fats: 30 },
-  { key: 'high_protein', label: 'High Protein (40/30/30)', protein: 40, carbs: 30, fats: 30 },
-  { key: 'low_carb', label: 'Low Carb (35/25/40)', protein: 35, carbs: 25, fats: 40 },
-  { key: 'custom', label: 'Custom', protein: 0, carbs: 0, fats: 0 }
-]
+/**
+ * The percentages an option advertises are the percentages the Daily Targets
+ * card below will show once it is picked — never a table lookup.
+ *
+ * This label used to call splitForPreset() with no member context, so "Custom
+ * (from your stats)" read the static RECOMMENDED_SPLITS row and announced
+ * 35/35/30 while the targets it had just written were 29/41/30. The static row
+ * is a fallback for screens that don't have the member's body stats; this
+ * screen does, and every preset it offers resolves through
+ * computeNutritionTargets() anyway. So the caller passes the split those grams
+ * actually work out to (see presetSplits) and this only formats it.
+ */
+function presetLabel(key: MacroPreset, split: MacroSplit | null): string {
+  if (key === 'custom') return MACRO_PRESET_LABELS.custom
+  const suffix = key === 'recommended' ? ' (from your stats)' : ''
+  const name = `${MACRO_PRESET_LABELS[key]}${suffix}`
+  return split ? `${name} — ${split.protein}/${split.carbs}/${split.fats}` : name
+}
 
 export default function NutritionGoalsPage() {
   const router = useRouter()
@@ -86,6 +115,10 @@ export default function NutritionGoalsPage() {
   // 'recommended' matches the onboarding wizard's math — the default so a
   // member who never touches this screen keeps the numbers they were shown.
   const [macroPreset, setMacroPreset] = useState<MacroPreset>('recommended')
+  /** Manual (custom) split can be hand-typed as grams or as a percent of
+   *  Calories — this only changes how the three inputs below are read/shown,
+   *  goals.protein/carbs/fats stay grams either way. */
+  const [macroInputMode, setMacroInputMode] = useState<'g' | '%'>('g')
   /** Latest LOGGED weight, in the member's display unit (see weightUnit). */
   const [userWeight, setUserWeight] = useState<number | null>(null)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lbs')
@@ -102,6 +135,20 @@ export default function NutritionGoalsPage() {
   const [manualHeightFt, setManualHeightFt] = useState('')
   const [manualHeightIn, setManualHeightIn] = useState('')
   const [tdee, setTdee] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState<'goals' | 'weight'>('goals')
+  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
+  /** Full logged history — only needed for the Weight tab's chart. */
+  const [weightSeries, setWeightSeries] = useState<{ date: string; value: number }[]>([])
+  const [targetWeightKg, setTargetWeightKg] = useState<number | null>(null)
+  // Bumped after logging weight so PlanCard (which owns its own fetch) remounts
+  // and re-reads /api/goals instead of showing the pre-log current weight.
+  const [planRefreshKey, setPlanRefreshKey] = useState(0)
+  /** The active nutrition Goal's chosen pace (kg/week) and the direction it
+   *  applies to — read once on load, then kept fresh by PlanCard's
+   *  onPaceChange. This is what lets the calorie/macro targets below actually
+   *  move when the Plan's pace chip is tapped, instead of only the ETA text. */
+  const [planPaceKgPerWeek, setPlanPaceKgPerWeek] = useState<number | null>(null)
+  const [planPaceDirection, setPlanPaceDirection] = useState<GoalType | null>(null)
 
   /** Profile values with the manual fallbacks folded in. */
   const effectiveStats = useMemo(() => {
@@ -126,51 +173,77 @@ export default function NutritionGoalsPage() {
     }
   }, [userAge, userSex, userHeightCm, userWeight, weightUnit, profileWeightKg, manualAge, manualSex, manualHeightFt, manualHeightIn])
 
-  const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType): number => {
-    return baseTdee + DIRECTION_ADJUSTMENT[goalType]
-  }, [])
+  /** Pace only applies to the direction it was chosen for — a lose-weight
+   *  pace has no meaning previewed against "Gain Weight". `override` lets a
+   *  caller hand in a just-written pace before it has round-tripped into
+   *  planPaceKgPerWeek state (see handlePlanPaceChange). */
+  const paceForDirection = useCallback((goalType?: GoalType, override?: number): number | undefined => {
+    if (override !== undefined) return override
+    return goalType && goalType === planPaceDirection ? (planPaceKgPerWeek ?? undefined) : undefined
+  }, [planPaceDirection, planPaceKgPerWeek])
+
+  const applyGoalAdjustment = useCallback((baseTdee: number, goalType: GoalType, paceKgPerWeekOverride?: number): number => {
+    const paceKg = paceForDirection(goalType, paceKgPerWeekOverride)
+    const paceLb = paceKg != null ? kgToLbs(paceKg) : undefined
+    return baseTdee + calorieAdjustment(baseTdee, goalType, paceLb)
+  }, [paceForDirection])
 
   /**
    * Writes calories + macros for a preset.
    * 'recommended' defers to the shared computeNutritionTargets(); the
    * percentage presets keep their historical behaviour.
    */
-  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel) => {
+  const applyMacroPreset = useCallback((preset: MacroPreset, cals: number, goalType?: GoalType, activity?: ActivityLevel, statsOverride?: typeof effectiveStats, paceKgPerWeekOverride?: number) => {
     if (preset === 'custom') return
 
-    if (preset === 'recommended') {
-      const targets = computeNutritionTargets({
-        ...effectiveStats,
-        goals: userFitnessGoals,
-        direction: goalType,
-        activityLevel: activity,
-      })
-      if (!targets) return
-      setGoals(prev => ({
-        ...prev,
-        calories: targets.calories,
-        protein: targets.protein,
-        carbs: targets.carbs,
-        fats: targets.fats
-      }))
-      return
-    }
-
-    const found = MACRO_PRESETS.find(p => p.key === preset)
-    if (!found) return
-
-    const proteinGrams = Math.round((cals * (found.protein / 100)) / 4)
-    const carbsGrams = Math.round((cals * (found.carbs / 100)) / 4)
-    const fatsGrams = Math.round((cals * (found.fats / 100)) / 9)
-
+    const targets = computeNutritionTargets({
+      ...(statsOverride ?? effectiveStats),
+      goals: userFitnessGoals,
+      direction: goalType,
+      activityLevel: activity,
+      macroPreset: preset,
+      paceKgPerWeek: paceForDirection(goalType, paceKgPerWeekOverride),
+    })
+    if (!targets) return
     setGoals(prev => ({
       ...prev,
-      calories: cals,
-      protein: proteinGrams,
-      carbs: carbsGrams,
-      fats: fatsGrams
+      // 'recommended' also re-derives calories; the explicit presets re-split the
+      // calorie number already on screen.
+      calories: preset === 'recommended' ? targets.calories : cals,
+      protein: targets.protein,
+      carbs: targets.carbs,
+      fats: targets.fats,
     }))
-  }, [effectiveStats, userFitnessGoals])
+  }, [effectiveStats, userFitnessGoals, paceForDirection])
+
+  /**
+   * What each option in the picker will actually deliver, as the percentages
+   * the Daily Targets card renders.
+   *
+   * Runs the same computeNutritionTargets() call applyMacroPreset() makes, with
+   * the same stats, direction, activity and pace, then reads the percentages
+   * back off the grams — so whichever option is selected, its label and the
+   * targets underneath it are the same numbers by construction. It also picks
+   * up anything the pipeline does AFTER the split, like the low-calorie carb
+   * floor, which a percentage table could never know about.
+   *
+   * Falls back to the static table when body stats are too sparse to compute
+   * targets at all: an approximate ratio still describes the choice, and the
+   * targets are empty in that state anyway.
+   */
+  const presetSplits = useMemo(() => {
+    const splits = {} as Record<MacroPreset, MacroSplit | null>
+    for (const key of MACRO_PRESET_KEYS) {
+      splits[key] = deliveredSplit(key, {
+        ...effectiveStats,
+        goals: userFitnessGoals,
+        direction: goals.goalType,
+        activityLevel: goals.activityLevel,
+        paceKgPerWeek: paceForDirection(goals.goalType),
+      })
+    }
+    return splits
+  }, [effectiveStats, userFitnessGoals, goals.goalType, goals.activityLevel, paceForDirection])
 
   useEffect(() => {
     async function fetchData() {
@@ -183,15 +256,23 @@ export default function NutritionGoalsPage() {
 
         const headers: HeadersInit = { 'Authorization': `Bearer ${token}` }
 
-        const [goalsRes, progressRes, profileRes] = await Promise.all([
+        const [goalsRes, progressRes, profileRes, planRes] = await Promise.all([
           fetch('/api/nutrition/goals', { headers }),
           fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, { headers }),
           fetch('/api/profile', { headers }),
+          fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers }),
         ])
 
         if (goalsRes.ok) {
           const goalsData = await goalsRes.json()
           setGoalsAreDefault(!!goalsData._isDefault)
+          // The selected split is persisted alongside the gram targets. This
+          // page used to ignore it on read and always start at `recommended`,
+          // so a saved 40/30/30 split was relabelled "Custom (from your
+          // stats)" after every reload even though its numbers were unchanged.
+          if (MACRO_PRESET_KEYS.includes(goalsData.macroPreset as MacroPreset)) {
+            setMacroPreset(goalsData.macroPreset as MacroPreset)
+          }
           setGoals({
             calories: goalsData.calories || 2000,
             protein: goalsData.protein || 150,
@@ -209,6 +290,8 @@ export default function NutritionGoalsPage() {
             const latestWeight = progressData.weightData[progressData.weightData.length - 1].value
             setUserWeight(latestWeight)
           }
+          setWeightSeries(progressData.weightData ?? [])
+          if (progressData.goal?.targetWeightKg) setTargetWeightKg(progressData.goal.targetWeightKg)
         }
 
         if (profileRes.ok) {
@@ -231,6 +314,14 @@ export default function NutritionGoalsPage() {
               : []
           setUserFitnessGoals(goalSet)
         }
+
+        if (planRes.ok) {
+          const plan = await planRes.json()
+          const paceKg = plan?.nutrition?.target?.paceKgPerWeek ?? null
+          const dir = plan?.nutrition?.direction ?? null
+          setPlanPaceKgPerWeek(paceKg)
+          setPlanPaceDirection(dir)
+        }
       } catch (error) {
         console.error('Failed to fetch goals/progress:', error)
       } finally {
@@ -247,15 +338,18 @@ export default function NutritionGoalsPage() {
   }, [effectiveStats, goals.activityLevel])
 
   /** Single path for "recompute calories + macros" so goal, activity and
-   *  preset changes can never diverge from each other. */
-  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel) => {
-    if (!tdee) return
-    const adjustedCals = applyGoalAdjustment(tdee, goalType)
+   *  preset changes can never diverge from each other. Accepts an explicit
+   *  tdee/stats pair for callers (like a fresh weigh-in) that need the
+   *  recompute to use a value that hasn't round-tripped through state yet. */
+  const applyTargets = useCallback((preset: MacroPreset, goalType: GoalType, activity: ActivityLevel, tdeeOverride?: number, statsOverride?: typeof effectiveStats, paceKgPerWeekOverride?: number) => {
+    const effectiveTdee = tdeeOverride ?? tdee
+    if (!effectiveTdee) return
+    const adjustedCals = applyGoalAdjustment(effectiveTdee, goalType, paceKgPerWeekOverride)
     if (preset === 'custom') {
       setGoals(prev => ({ ...prev, calories: adjustedCals }))
       return
     }
-    applyMacroPreset(preset, adjustedCals, goalType, activity)
+    applyMacroPreset(preset, adjustedCals, goalType, activity, statsOverride, paceKgPerWeekOverride)
   }, [tdee, applyGoalAdjustment, applyMacroPreset])
 
   // Auto-apply TDEE on first load if user has never saved goals
@@ -287,14 +381,69 @@ export default function NutritionGoalsPage() {
     }
   }
 
-  const getMacroPercentages = () => {
-    const totalCals = (goals.protein * 4) + (goals.carbs * 4) + (goals.fats * 9)
-    if (totalCals === 0) return { protein: 0, carbs: 0, fats: 0 }
-    return {
-      protein: Math.round((goals.protein * 4 / totalCals) * 100),
-      carbs: Math.round((goals.carbs * 4 / totalCals) * 100),
-      fats: Math.round((goals.fats * 9 / totalCals) * 100)
+  /** The Plan card's pace picker writes straight to the Goal and only knew
+   *  about its own ETA text — this is the other half of the connection: when
+   *  the member taps a new pace chip, recompute calories/macros for it right
+   *  away. Takes the pace PlanCard just wrote explicitly (rather than reading
+   *  planPaceKgPerWeek state) because the state set below hasn't landed yet
+   *  when applyTargets runs in this same call. */
+  const handlePlanPaceChange = useCallback((paceKgPerWeek: number, direction: GoalType) => {
+    setPlanPaceKgPerWeek(paceKgPerWeek)
+    setPlanPaceDirection(direction)
+    if (direction === goals.goalType) {
+      applyTargets(macroPreset, goals.goalType, goals.activityLevel, undefined, undefined, paceKgPerWeek)
     }
+  }, [goals.goalType, goals.activityLevel, macroPreset, applyTargets])
+
+  /** Logging a weigh-in from the Weight tab has to move every number that
+   *  reads off body weight: the chart point, the TDEE estimate, and — since
+   *  TDEE feeds calories/macros — the daily targets too. effectiveStats/tdee
+   *  are last-render values, so build the post-log stats inline instead of
+   *  setting state and hoping a later render catches up before the member
+   *  looks at the Goals tab. */
+  const handleWeightLogged = (weight: number) => {
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    setWeightSeries(prev => {
+      const filtered = prev.filter(d => d.date !== today)
+      return [...filtered, { date: today, value: weight }]
+    })
+    const kg = toKg(weight, weightUnit)
+    setUserWeight(weight)
+    setProfileWeightKg(kg)
+    setPlanRefreshKey(k => k + 1)
+
+    const nextStats = { ...effectiveStats, currentWeightKg: kg }
+    const nextTdee = calcTdee(nextStats, goals.activityLevel)
+    setTdee(nextTdee)
+    applyTargets(macroPreset, goals.goalType, goals.activityLevel, nextTdee ?? undefined, nextStats)
+  }
+
+  // Shared with the picker's labels (see presetSplits) so an option can never
+  // advertise a ratio the card below it then contradicts.
+  const getMacroPercentages = () => splitFromGrams(goals.protein, goals.carbs, goals.fats)
+
+  // The %-entry toggle only makes sense once the member is hand-typing
+  // numbers (macroPreset 'custom' — labelled "Manual"). Every other preset
+  // already IS a percentage split; its grams come from computeNutritionTargets().
+  const isPercentMode = macroPreset === 'custom' && macroInputMode === '%'
+
+  const MACRO_KCAL_PER_G = { protein: 4, carbs: 4, fats: 9 } as const
+
+  /** Reads a macro field in whichever unit is currently showing. */
+  const macroFieldValue = (key: keyof typeof MACRO_KCAL_PER_G) =>
+    isPercentMode
+      ? percentFromGrams(goals.calories, goals[key], MACRO_KCAL_PER_G[key])
+      : goals[key]
+
+  /** Writes a macro field from whichever unit is currently showing — grams
+   *  stay the value actually persisted, so switching the toggle never loses
+   *  precision or needs a separate save path. */
+  const handleMacroFieldChange = (key: keyof typeof MACRO_KCAL_PER_G, rawValue: number) => {
+    const grams = isPercentMode
+      ? gramsFromPercent(goals.calories, rawValue, MACRO_KCAL_PER_G[key])
+      : rawValue
+    setGoals(prev => ({ ...prev, [key]: grams }))
+    setMacroPreset('custom')
   }
 
   const handleSave = async () => {
@@ -314,7 +463,10 @@ export default function NutritionGoalsPage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(goals)
+        // Keep the label and the numbers as one persisted choice. Omitting
+        // macroPreset here left the old onboarding preset in Mongo even after
+        // the member explicitly picked Balanced / High Protein / Lower Carb.
+        body: JSON.stringify({ ...goals, macroPreset })
       })
 
       if (res.ok) {
@@ -333,6 +485,22 @@ export default function NutritionGoalsPage() {
 
   const percentages = getMacroPercentages()
 
+  // Reactive, unlike the old module-level GOAL_CARDS constant: the "TDEE ± X"
+  // line now recomputes from calorieAdjustment() whenever TDEE or the Plan's
+  // pace changes, instead of always showing the flat DIRECTION_ADJUSTMENT
+  // regardless of which pace chip was tapped above.
+  const goalCards = useMemo(
+    () => (['lose', 'maintain', 'gain'] as GoalType[]).map((type) => ({
+      type,
+      label: DIRECTION_LABELS[type],
+      description: DIRECTION_EXPLANATION[type],
+      adjustment: goalCardAdjustment(
+        type, tdee, type === planPaceDirection && planPaceKgPerWeek != null ? kgToLbs(planPaceKgPerWeek) : undefined,
+      ),
+    })),
+    [tdee, planPaceDirection, planPaceKgPerWeek],
+  )
+
   if (loading) {
     return (
       <PageTransition className="pb-6">
@@ -347,7 +515,10 @@ export default function NutritionGoalsPage() {
     )
   }
 
+  const targetWeightLbs = targetWeightKg ? roundWeight(kgToLbs(targetWeightKg)) : null
+
   return (
+    <>
     <PageTransition className="pb-6">
       {/* Header */}
       <div className="mb-4 flex items-center gap-3 sm:mb-6">
@@ -363,7 +534,105 @@ export default function NutritionGoalsPage() {
         </div>
       </div>
 
-      {/* User Stats */}
+      <SegmentedControl
+        className="mb-4 sm:mb-6"
+        segments={[
+          { value: 'goals', label: 'Goals' },
+          { value: 'weight', label: 'Weight' },
+        ]}
+        value={activeTab}
+        onChange={setActiveTab}
+      />
+
+      {/* The weight goal as a plan: target, pace, ETA, on/behind pace. Shown
+          on both tabs — it's the at-a-glance status either way. Remounted
+          (via key) after a weigh-in so it re-reads /api/goals instead of
+          showing the pre-log current weight. */}
+      <PlanCard key={planRefreshKey} className="mb-4 sm:mb-6" onPaceChange={({ paceKgPerWeek, direction }) => handlePlanPaceChange(paceKgPerWeek, direction)} />
+
+      {activeTab === 'weight' ? (
+        <Card className="mb-4 sm:mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Body Weight</h2>
+            {targetWeightLbs && (
+              <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                Goal: {targetWeightLbs} lbs
+              </span>
+            )}
+          </div>
+
+          {weightSeries.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={weightSeries} margin={{ left: -20, right: 8 }}>
+                  <defs>
+                    <linearGradient id="goalsWeightGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#18181b" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#18181b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickLine={false} axisLine={false}
+                    interval="preserveStartEnd"
+                    className="text-zinc-400 dark:text-zinc-600"
+                  />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tick={{ fontSize: 10, fill: 'currentColor' }}
+                    tickLine={false} axisLine={false}
+                    className="text-zinc-400 dark:text-zinc-600"
+                  />
+                  <Tooltip
+                    formatter={(v) => [`${v} lbs`, 'Weight']}
+                    contentStyle={{ fontSize: 12, borderRadius: 12 }}
+                  />
+                  {targetWeightLbs && (
+                    <ReferenceLine
+                      y={targetWeightLbs}
+                      stroke="#22c55e"
+                      strokeDasharray="4 4"
+                      strokeWidth={1.5}
+                      label={{ value: `Goal ${targetWeightLbs}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                    />
+                  )}
+                  <Area
+                    type="monotone" dataKey="value"
+                    stroke="#18181b" strokeWidth={2}
+                    fill="url(#goalsWeightGrad)"
+                    dot={false} activeDot={{ r: 4 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setWeightSheetOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+                >
+                  <Scale className="h-4 w-4" />
+                  Log Weight
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">No weight logged yet</p>
+              <button
+                type="button"
+                onClick={() => setWeightSheetOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                <Scale className="h-4 w-4" />
+                Log Weight
+              </button>
+            </div>
+          )}
+        </Card>
+      ) : (
+      <>
       <Card className="mb-4 sm:mb-6">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Your Stats</h2>
         <div className="flex flex-wrap gap-6">
@@ -379,7 +648,7 @@ export default function NutritionGoalsPage() {
           {userHeightCm && (
             <div>
               <p className="text-2xl font-bold text-zinc-900 dark:text-white">
-                {Math.floor(userHeightCm / 30.48)}&apos;{Math.round((userHeightCm % 30.48) / 2.54)}&quot;
+                {cmToFtIn(userHeightCm).ft}&apos;{cmToFtIn(userHeightCm).inches}&quot;
               </p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Height</p>
             </div>
@@ -465,7 +734,7 @@ export default function NutritionGoalsPage() {
       <div className="mb-4 sm:mb-6" data-tour="goals-type">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Goal</h2>
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          {GOAL_CARDS.map((card) => (
+          {goalCards.map((card) => (
             <button
               key={card.type}
               onClick={() => handleGoalTypeChange(card.type)}
@@ -520,15 +789,38 @@ export default function NutritionGoalsPage() {
           onChange={(e) => handlePresetChange(e.target.value as MacroPreset)}
           className="w-full cursor-pointer rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
         >
-          {MACRO_PRESETS.map((preset) => (
-            <option key={preset.key} value={preset.key}>{preset.label}</option>
+          {MACRO_PRESET_KEYS.map((key) => (
+            <option key={key} value={key}>{presetLabel(key, presetSplits[key])}</option>
           ))}
         </select>
       </Card>
 
       {/* Calorie & Macro Inputs */}
       <Card className="mb-4 sm:mb-6" data-tour="goals-macros">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Daily Targets</h2>
+          {/* Only Manual has numbers worth re-entering as a percent — every
+              other preset already resolves from percentages via
+              computeNutritionTargets(). */}
+          {macroPreset === 'custom' && (
+            <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-700">
+              {(['g', '%'] as const).map(mode => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setMacroInputMode(mode)}
+                  className={`rounded-md px-3 py-1 text-xs font-semibold transition-all ${
+                    macroInputMode === mode
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  {mode === 'g' ? 'Grams' : 'Percent'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Calories */}
         <div className="mb-4">
@@ -549,17 +841,17 @@ export default function NutritionGoalsPage() {
         {/* Protein */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Protein (g)</label>
-            <span className="text-xs text-blue-600 dark:text-blue-400">{percentages.protein}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Protein {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-blue-600 dark:text-blue-400">
+              {isPercentMode ? `${goals.protein}g` : `${percentages.protein}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.protein}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, protein: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('protein')}
+            onChange={(e) => handleMacroFieldChange('protein', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>
@@ -567,17 +859,17 @@ export default function NutritionGoalsPage() {
         {/* Carbs */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Carbs (g)</label>
-            <span className="text-xs text-green-600 dark:text-green-400">{percentages.carbs}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Carbs {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-green-600 dark:text-green-400">
+              {isPercentMode ? `${goals.carbs}g` : `${percentages.carbs}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.carbs}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, carbs: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('carbs')}
+            onChange={(e) => handleMacroFieldChange('carbs', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>
@@ -585,17 +877,17 @@ export default function NutritionGoalsPage() {
         {/* Fats */}
         <div className="mb-4">
           <div className="mb-1 flex items-center justify-between">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fats (g)</label>
-            <span className="text-xs text-yellow-600 dark:text-yellow-400">{percentages.fats}%</span>
+            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Fats {isPercentMode ? '(%)' : '(g)'}</label>
+            <span className="text-xs text-yellow-600 dark:text-yellow-400">
+              {isPercentMode ? `${goals.fats}g` : `${percentages.fats}%`}
+            </span>
           </div>
           <input
             type="number"
-            value={goals.fats}
-            onChange={(e) => {
-              setGoals(prev => ({ ...prev, fats: Number(e.target.value) }))
-              setMacroPreset('custom')
-            }}
+            value={macroFieldValue('fats')}
+            onChange={(e) => handleMacroFieldChange('fats', Number(e.target.value))}
             min={0}
+            max={isPercentMode ? 100 : undefined}
             className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 focus:border-zinc-900 focus:outline-none focus:ring-1 focus:ring-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:focus:border-white dark:focus:ring-white"
           />
         </div>
@@ -604,7 +896,7 @@ export default function NutritionGoalsPage() {
         <div className="flex h-3 w-full overflow-hidden rounded-full">
           <div className="bg-blue-600 transition-all duration-300" style={{ width: `${percentages.protein}%` }} />
           <div className="bg-green-600 transition-all duration-300" style={{ width: `${percentages.carbs}%` }} />
-          <div className="bg-yellow-600 transition-all duration-300" style={{ width: `${percentages.fats}%` }} />
+          <div className="bg-yellow-400 transition-all duration-300" style={{ width: `${percentages.fats}%` }} />
         </div>
         <div className="mt-2 flex justify-between text-xs text-zinc-500 dark:text-zinc-400">
           <span className="flex items-center gap-1">
@@ -614,7 +906,7 @@ export default function NutritionGoalsPage() {
             <span className="inline-block h-2 w-2 rounded-full bg-green-600" /> Carbs {percentages.carbs}%
           </span>
           <span className="flex items-center gap-1">
-            <span className="inline-block h-2 w-2 rounded-full bg-yellow-600" /> Fats {percentages.fats}%
+            <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" /> Fats {percentages.fats}%
           </span>
         </div>
       </Card>
@@ -652,6 +944,17 @@ export default function NutritionGoalsPage() {
           {saveMessage}
         </p>
       )}
+      </>
+      )}
     </PageTransition>
+
+    <WeightLogSheet
+      isOpen={weightSheetOpen}
+      onClose={() => setWeightSheetOpen(false)}
+      onLogged={handleWeightLogged}
+      lastWeight={weightSeries.length ? weightSeries[weightSeries.length - 1].value : undefined}
+      targetWeight={targetWeightLbs ?? undefined}
+    />
+    </>
   )
 }

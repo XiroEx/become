@@ -12,6 +12,7 @@ import DisciplineDashboard from '@/components/mind/DisciplineDashboard'
 import AntiSabotageDashboard from '@/components/mind/AntiSabotageDashboard'
 import SocialDashboard from '@/components/mind/SocialDashboard'
 import VisionDashboard from '@/components/mind/VisionDashboard'
+import TierGate from '@/components/TierGate'
 
 const SECTION_LABELS: Record<string, string> = {
   'state-shift': 'State Shift',
@@ -60,7 +61,17 @@ export default function MindSectionPage({ params }: { params: Promise<{ section:
           {section === 'discipline'    && <DisciplineDashboard />}
           {section === 'anti-sabotage' && <AntiSabotageDashboard />}
           {section === 'social'        && <SocialDashboard />}
-          {section === 'vision'        && <VisionDashboard />}
+          {/* Vision is the one tool that is a plan feature rather than a
+              chapter unlock. One wrap covers the whole surface — every action
+              inside it would otherwise 403. */}
+          {section === 'vision'        && (
+            <TierGate
+              feature="vision"
+              description="Paint the future you across five domains, then check your alignment daily."
+            >
+              <VisionDashboard />
+            </TierGate>
+          )}
         </ToolIntroGate>
       </div>
     </PageTransition>

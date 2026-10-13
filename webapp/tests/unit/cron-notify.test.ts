@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/cron-notify.test.ts
+// Run with: npm run test:file tests/unit/cron-notify.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -7,6 +7,7 @@ import {
   isActiveProgramForSchedule,
   localDateKeyForUser,
   localHourForUser,
+  MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION,
 } from '../../lib/notifications/cronNotify'
 
 test('localHourForUser returns null when timezone offset is missing', () => {
@@ -48,4 +49,158 @@ test('isActiveProgramForSchedule only allows active or in-progress matching prog
   assert.equal(isActiveProgramForSchedule(activePrograms, 'legacy-no-status'), true)
   assert.equal(isActiveProgramForSchedule(activePrograms, 'missing-program'), false)
   assert.equal(isActiveProgramForSchedule(activePrograms, undefined), false)
+})
+
+// ─── Mind reminder + delivery observability ──────────────────────────────────
+//
+// Context: the daily Mind session — the app's core ritual — had NO reminder at
+// all, and the cron's counters could not distinguish "nobody qualified" from
+// "19 users qualified and none of them has push enabled". Both reported 0.
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import {
+  MIND_REMINDER_START_HOUR,
+  MIND_REMINDER_END_HOUR,
+} from '../../lib/notifications/cronNotify'
+
+const CRON_ROUTE = readFileSync(
+  join(process.cwd(), 'app/api/cron/notify/route.ts'),
+  'utf8',
+)
+
+test('the mind reminder fires in the local morning, staggered after the workout one', () => {
+  // 8, not 7: the workout push owns 7am. They are separate reminders now (see
+  // below), so they need separate hours or they arrive stacked in one minute.
+  assert.equal(MIND_REMINDER_START_HOUR, 8)
+  assert.equal(MIND_REMINDER_END_HOUR, 11)
+})
+
+test('a mind reminder exists at all', () => {
+  assert.match(CRON_ROUTE, /tag: 'mind-reminder'/, 'the daily Mind session needs its own push')
+  assert.match(CRON_ROUTE, /url: '\/dashboard\/mind'/, 'it must deep-link to the Mind tab')
+})
+
+test('the mind reminder respects the 20h main-session cooldown', () => {
+  // Nudging toward a locked session sends them to Training Grounds, not a session.
+  assert.match(CRON_ROUTE, /mainSessionAvailable\(mind\?\.lastMainSessionAt/)
+})
+
+test('the mind reminder skips users who already did today', () => {
+  assert.match(CRON_ROUTE, /MindSession\.exists\(\{ userId: progress\.userId, dateKey: userLocalDateKey \}\)/)
+})
+
+test('the workout reminder no longer suppresses the mind one', () => {
+  // This test used to assert the OPPOSITE, and the old behaviour was the bug:
+  // the mind nudge was skipped on any day a workout reminder went out, and
+  // training days are most days, so members effectively never received it. A
+  // member asked for mindset notifications and this was why they had none.
+  // Staggering the windows (7am / 8am) solves the stacking that suppression was
+  // there to prevent. Do not restore it.
+  const mindBlock = CRON_ROUTE.slice(CRON_ROUTE.indexOf('2.6 Daily Mind session'))
+  assert.doesNotMatch(mindBlock, /One morning push total/)
+  assert.doesNotMatch(
+    mindBlock.slice(0, mindBlock.indexOf('deliver(')),
+    /if \(lastWorkout &&/,
+    'the mind block must not skip on a same-day workout push',
+  )
+})
+
+test('an in-progress program with no schedule is counted, not silently ignored', () => {
+  assert.match(CRON_ROUTE, /activeProgramsWithoutSchedule\+\+/)
+  assert.match(CRON_ROUTE, /tag: 'schedule-setup'/)
+})
+
+test('the schedule-setup nudge is weekly, not daily', () => {
+  assert.match(CRON_ROUTE, /lastPushSentAt\?\.scheduleSetup/)
+  assert.match(CRON_ROUTE, /7 \* 24 \* 60 \* 60 \* 1000/)
+})
+
+test('every send routes through deliver() so outcomes are counted', () => {
+  // A raw sendPushToUser call inside the handler would bypass the
+  // qualified/noSubscription split and reintroduce the blind spot this refactor
+  // exists to remove. The one call inside deliver() itself is the intended one, so
+  // only the handler body is checked.
+  const body = CRON_ROUTE.slice(CRON_ROUTE.indexOf('export async function GET'))
+  const rawSends = body.match(/sendPushToUser\(/g) ?? []
+  assert.equal(rawSends.length, 0, 'use deliver(), not sendPushToUser, inside the handler')
+  const delivers = body.match(/await deliver\(t\./g) ?? []
+  assert.ok(delivers.length >= 6, `expected 6+ deliver() calls, found ${delivers.length}`)
+})
+
+test('the response separates qualified from delivered from unreachable', () => {
+  for (const field of ['qualified', 'delivered', 'noSubscription', 'failed']) {
+    assert.match(CRON_ROUTE, new RegExp(`${field}: `), `Tally must track ${field}`)
+  }
+  assert.match(CRON_ROUTE, /notifications: t/, 'the per-type tallies must be returned')
+})
+
+// ─── Daily check-in reminder ──────────────────────────────────────────────────
+//
+// Context: the mood + weight check-in only ever appeared in the in-app modal,
+// which fires whenever a member happens to open the app — never on a
+// schedule. That is why some members reported never seeing it (they weren't
+// in the app while it was due) and others reported getting it at night
+// (whenever they happened to open the app then). This gives it a real push,
+// restricted to daytime hours like every other reminder.
+
+import { CHECK_IN_REMINDER_START_HOUR, CHECK_IN_REMINDER_END_HOUR } from '../../lib/notifications/cronNotify'
+
+test('the check-in reminder window is restricted to daytime hours, never night', () => {
+  assert.ok(CHECK_IN_REMINDER_START_HOUR >= 6, 'must not start before 6am local')
+  assert.ok(CHECK_IN_REMINDER_END_HOUR <= 20, 'must not run into the evening/night')
+  assert.ok(CHECK_IN_REMINDER_START_HOUR < CHECK_IN_REMINDER_END_HOUR)
+})
+
+test('a check-in reminder push exists and deep-links to the dashboard', () => {
+  assert.match(CRON_ROUTE, /tag: 'checkin-reminder'/, 'the daily check-in needs its own push')
+  assert.match(CRON_ROUTE, /url: '\/dashboard'/)
+})
+
+test('the check-in reminder is pref-gated and only fires once local timezone is known', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /notificationPrefs\.checkInReminder.*\$ne: false/)
+  assert.match(block, /timezoneOffset: \{ \$exists: true \}/)
+})
+
+test('the check-in reminder skips members who already completed or skipped today', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /checkInFactsForToday\(/, 'must reuse the same "logged today" rule as the modal')
+  assert.match(block, /if \(skippedToday \|\| \(moodLoggedToday && weightLoggedToday\)\) continue/)
+})
+
+test('the check-in reminder is rate-limited to once per local day', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('2.66 Daily check-in reminder'),
+    CRON_ROUTE.indexOf('2.7 Program with no schedule'),
+  )
+  assert.match(block, /lastPushSentAt\?\.checkInReminder/)
+  assert.match(block, /lastPushSentAt\.checkInReminder': now/)
+})
+
+// ─── Streak-at-risk minimum streak ─────────────────────────────────────────
+//
+// Context: a brand-new member's very first logged day already sets
+// streakDays to 1, so the at-risk sweep (23-47h after that log) fired
+// "Don't break your 1-day streak" before the member had anything a product
+// milestone would call a streak (STREAK_MILESTONES starts at 3). Gate the
+// notification on the same 3-day floor.
+
+test('a 1-day streak does not qualify for the at-risk notification', () => {
+  assert.equal(MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION, 3)
+})
+
+test('the streak-at-risk query is gated on the minimum streak, not any streak', () => {
+  const block = CRON_ROUTE.slice(
+    CRON_ROUTE.indexOf('1. Streak at-risk'),
+    CRON_ROUTE.indexOf('2. Workout reminder'),
+  )
+  assert.match(block, /streakDays: \{ \$gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION \}/)
+  assert.doesNotMatch(block, /streakDays: \{ \$gte: 1 \}/)
 })

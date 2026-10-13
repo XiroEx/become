@@ -1,5 +1,5 @@
 /* eslint-disable import/first */
-import { render, waitFor } from "@testing-library/react-native";
+import { fireEvent, render, waitFor, within } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 let mockParams: { token?: string; mode?: string } = {};
@@ -32,9 +32,13 @@ jest.mock("@become/api-client", () => {
   return { __esModule: true, ...actual, apiFetch: jest.fn() };
 });
 
-import { apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
+import { ApiError, apiFetch, VerifyLinkResponseSchema } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import VerifyRoute, { VerifyScreen } from "../app/verify";
+import { X, XCircle } from "lucide-react-native";
+import VerifyRoute, {
+  VerifyScreen,
+  friendlyVerifyErrorMessage,
+} from "../app/(auth)/verify";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -55,7 +59,12 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
       mode: "login" | "register",
     ) => Promise<{ token: string }>;
     const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
-    expect(getByTestId("verify-spinner")).toBeTruthy();
+    // NP-124: the spinner is hidden from assistive technology (an unlabelled
+    // ActivityIndicator announces nothing; the text beside it says everything),
+    // so the query has to ask for hidden elements to see it at all.
+    expect(
+      getByTestId("verify-spinner", { includeHiddenElements: true }),
+    ).toBeTruthy();
     expect(getByTestId("verify-working-text")).toBeTruthy();
   });
 
@@ -71,7 +80,7 @@ describe("VerifyScreen (presentational, prop-driven)", () => {
     await waitFor(() => {
       expect(onSuccess).toHaveBeenCalledWith("new-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("shows an error when the token is missing", () => {
@@ -149,7 +158,31 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     await waitFor(() => {
       expect(mockSetToken).toHaveBeenCalledWith("persisted-jwt");
     });
-    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/dashboard");
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("clears any pending magic-link session on successful verify", async () => {
+    mockParams = { token: "real-token-1234", mode: "register" };
+    const verifyFn = jest.fn(async () => ({ token: "new-jwt" }));
+    const mockClear = jest.fn(async () => {});
+    const pendingStore = {
+      get: jest.fn(async () => null),
+      set: jest.fn(async () => {}),
+      clear: mockClear,
+    };
+    render(
+      <VerifyScreen
+        verifyFn={verifyFn}
+        pendingSessionStore={pendingStore}
+      />,
+    );
+    await waitFor(() => {
+      expect(verifyFn).toHaveBeenCalledWith("real-token-1234", "register");
+    });
+    await waitFor(() => {
+      expect(mockClear).toHaveBeenCalled();
+    });
+    expect(mockReplace).toHaveBeenCalledWith("/");
   });
 
   it("does not persist a token when verify fails", async () => {
@@ -161,5 +194,132 @@ describe("VerifyRoute (default export, route wrapper)", () => {
     });
     expect(mockSetToken).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+});
+
+// Acceptance criterion (NP-252): the error state is the web's card — an icon,
+// "Verification failed", a friendly message mapped from the error, and a
+// "Try again" button back to sign-in — not a raw error line on a blank
+// screen with no way out.
+describe("VerifyScreen error card (NP-252 web parity)", () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockSetToken.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockApiFetch.mockReset();
+    mockParams = {};
+  });
+
+  it("no token: shows the web's 'No verification token provided.' message", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    expect(getByTestId("verify-error-title").props.children).toBe(
+      "Verification failed",
+    );
+    expect(getByTestId("verify-error-message").props.children).toBe(
+      "No verification token provided.",
+    );
+  });
+
+  it("missing/invalid mode: shows the web's 'expired or invalid' message", () => {
+    mockParams = { token: "real-token-1234", mode: "bogus" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    expect(getByTestId("verify-error-message").props.children).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("a server refusal renders the server's message verbatim, not 'API error 400'", async () => {
+    mockParams = { token: "real-token-1234", mode: "login" };
+    const verifyFn = jest.fn(async () => {
+      throw new ApiError(400, {
+        message: "This link has expired or is invalid. Please request a new one.",
+      });
+    });
+    const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
+    await waitFor(() => {
+      expect(getByTestId("verify-error-message").props.children).toBe(
+        "This link has expired or is invalid. Please request a new one.",
+      );
+    });
+  });
+
+  it("an unclassifiable failure falls back to the web's generic line", async () => {
+    mockParams = { token: "real-token-1234", mode: "login" };
+    const verifyFn = jest.fn(async () => {
+      throw new Error();
+    });
+    const { getByTestId } = render(<VerifyScreen verifyFn={verifyFn} />);
+    await waitFor(() => {
+      expect(getByTestId("verify-error-message").props.children).toBe(
+        "Something went wrong. Please try again.",
+      );
+    });
+  });
+
+  it("'Try again' routes back to sign-in — there is always a way back", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    fireEvent.press(getByTestId("verify-retry"));
+    expect(mockReplace).toHaveBeenCalledWith("/login");
+  });
+});
+
+// NP-312: the error state must sit inside the same rounded card web draws
+// (`webapp/app/verify/page.tsx`: "rounded-lg bg-white dark:bg-zinc-900 ...
+// shadow dark:border"), and use a plain X icon — not a circled-X glyph drawn
+// on top of our own tint circle.
+describe("VerifyScreen error card (NP-312 native-vs-web parity)", () => {
+  beforeEach(() => {
+    mockReplace.mockReset();
+    mockSetToken.mockReset();
+    mockSetToken.mockResolvedValue(undefined);
+    mockApiFetch.mockReset();
+    mockParams = {};
+  });
+
+  it("wraps the error state in the card surface (bg-card + border-border), not the bare page background", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    const card = getByTestId("verify-error");
+    expect(card.props.className).toContain("bg-card");
+    expect(card.props.className).toContain("border-border");
+  });
+
+  it("uses the plain X icon, not the circled XCircle glyph", () => {
+    mockParams = { mode: "login" };
+    const { getByTestId } = render(<VerifyScreen verifyFn={jest.fn() as never} />);
+    const card = getByTestId("verify-error");
+    expect(within(card).UNSAFE_getByType(X)).toBeTruthy();
+    expect(() => within(card).UNSAFE_getByType(XCircle)).toThrow();
+  });
+});
+
+describe("friendlyVerifyErrorMessage (pure mapping)", () => {
+  it("maps the native-only local-validation sentinels onto the web's copy", () => {
+    expect(friendlyVerifyErrorMessage("no-token")).toBe(
+      "No verification token provided.",
+    );
+    expect(friendlyVerifyErrorMessage("bad-mode")).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("passes a server ApiError's message through verbatim", () => {
+    const err = new ApiError(400, {
+      message: "This link has expired or is invalid. Please request a new one.",
+    });
+    expect(friendlyVerifyErrorMessage(err)).toBe(
+      "This link has expired or is invalid. Please request a new one.",
+    );
+  });
+
+  it("falls back to the web's generic line for anything else", () => {
+    expect(friendlyVerifyErrorMessage(new Error("boom"))).toBe(
+      "Something went wrong. Please try again.",
+    );
+    expect(friendlyVerifyErrorMessage(null)).toBe(
+      "Something went wrong. Please try again.",
+    );
   });
 });

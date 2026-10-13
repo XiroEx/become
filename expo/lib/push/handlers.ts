@@ -29,49 +29,12 @@ export async function ensureNotificationPermission(
   return current;
 }
 
-export interface ForegroundDisplay {
-  title: string;
-  body: string;
-}
-
-/**
- * Friendly default messages for foreground (in-app toast) display. Server-
- * provided title/body still override; this just builds a fallback when only
- * the category is known.
- */
-export function buildForegroundDisplay(
-  payload: NotificationPayload,
-): ForegroundDisplay {
-  switch (payload.category) {
-    case "workout-reminder":
-      return {
-        title: "Time to train",
-        body: "Your workout is ready when you are.",
-      };
-    case "streak-at-risk":
-      return {
-        title: "Streak at risk",
-        body: "Log something today to keep it alive.",
-      };
-    case "streak-saved":
-      return {
-        title: "Streak saved",
-        body: "We used a freeze. Tomorrow's on you.",
-      };
-    case "re-engagement":
-      return {
-        title: "Come back",
-        body: "Even one mood log keeps the thread alive.",
-      };
-    default:
-      return { title: "Become", body: "Open the app for details." };
-  }
-}
-
 /**
  * Tap handler: maps a notification to a route, then delegates to the
  * caller-provided navigator (typically `router.push`). Returns the route
  * string so callers can also log / persist last-route.
+ *
+ * The payload's url is the only routing input — see `deepLinkRouter.ts`.
  */
 export function handleNotificationTap(
   payload: NotificationPayload,

@@ -5,6 +5,18 @@ import { motion } from 'framer-motion'
 import { Trophy, Award, Dumbbell, Flame, Rocket, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/Card'
+import { setUnitLabel } from '@/lib/workout/tracking'
+import {
+  computeSummaryPRs,
+  formatSummarySet,
+  isActiveSummarySet,
+  summaryGroupBlocks,
+  summaryMetricTiles,
+  type SummaryExercise,
+  type SummaryHistoryEntry,
+  type SummarySet,
+  type SummaryTileKey,
+} from '@/lib/workout/summaryMetrics'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -44,13 +56,41 @@ export interface SummaryProps {
   programId?: string
   workout: { day: string; title: string } | null
   elapsedTime: number
-  exerciseData: { reps: string; weight: string; completed: boolean }[][]
-  exercises: { name: string }[]
-  exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
+  /**
+   * Sets per exercise, in canonical fields. A caller whose inputs disagree
+   * with that (the Live view types cardio into its reps/weight boxes) must
+   * translate on the way in — see lib/workout/summaryMetrics.ts.
+   */
+  exerciseData: SummarySet[][]
+  /** Name, tracking type and group membership, aligned with `exerciseData`. */
+  exercises: SummaryExercise[]
+  exerciseHistory: Record<string, SummaryHistoryEntry>
   summaryStreak: { streakDays: number; nextMilestone: number | null } | null
   summaryGoal: string | null
   formatTime: (s: number) => string
   onDone: () => void
+}
+
+/** The colour each stat tile wears. Duration keeps the emerald it always had. */
+const TILE_TONES: Record<SummaryTileKey, string> = {
+  count: 'text-blue-600 dark:text-blue-400',
+  volume: 'text-violet-600 dark:text-violet-400',
+  time: 'text-amber-600 dark:text-amber-400',
+  distance: 'text-cyan-600 dark:text-cyan-400',
+}
+
+/**
+ * How a group block reads, borrowed verbatim from the Track view's
+ * `GROUP_STYLES` so a circuit is the same orange on the screen that
+ * celebrates it as on the screen that ran it.
+ */
+const GROUP_TONES: Record<string, { border: string; bg: string; badge: string; icon: string }> = {
+  superset: { border: 'border-purple-200 dark:border-purple-900/40', bg: 'bg-purple-50/50 dark:bg-purple-950/20', badge: 'bg-purple-500', icon: '⇄' },
+  circuit: { border: 'border-orange-200 dark:border-orange-900/40', bg: 'bg-orange-50/50 dark:bg-orange-950/20', badge: 'bg-orange-500', icon: '🔄' },
+  triset: { border: 'border-indigo-200 dark:border-indigo-900/40', bg: 'bg-indigo-50/50 dark:bg-indigo-950/20', badge: 'bg-indigo-500', icon: '⇄' },
+  giant_set: { border: 'border-rose-200 dark:border-rose-900/40', bg: 'bg-rose-50/50 dark:bg-rose-950/20', badge: 'bg-rose-500', icon: '⇄' },
+  emom: { border: 'border-teal-200 dark:border-teal-900/40', bg: 'bg-teal-50/50 dark:bg-teal-950/20', badge: 'bg-teal-500', icon: '⏱' },
+  amrap: { border: 'border-amber-200 dark:border-amber-900/40', bg: 'bg-amber-50/50 dark:bg-amber-950/20', badge: 'bg-amber-500', icon: '🔥' },
 }
 
 // ─── Confetti ─────────────────────────────────────────────────────────────────
@@ -95,6 +135,14 @@ export function ConfettiBurst() {
 }
 
 // ─── WorkoutSummary ───────────────────────────────────────────────────────────
+//
+// The finish screen. Everything it says about a SET is asked of
+// lib/workout/summaryMetrics.ts, which answers by tracking type — this used to
+// read every set as reps × weight, so a treadmill, a plank and a stair climber
+// came out as `0×0` chips with a volume number built out of minutes, and the
+// circuit or superset the member had just fought through was flattened into a
+// plain list. The screen now draws the blocks the session actually ran, with
+// the same colours and words the Track view ran them under.
 
 export default function WorkoutSummary({
   programCompleted, completedProgramName, programId, workout,
@@ -103,31 +151,60 @@ export default function WorkoutSummary({
 }: SummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length]
 
-  // Compute PRs
-  const newPRs = exercises.map((exercise, exIdx) => {
-    const sets = exerciseData[exIdx] || []
-    const activeSets = sets.filter(s => s.completed && !(s.reps === "0" && s.weight === "0"))
-    const history = exerciseHistory[exercise.name]
-    if (!history || activeSets.length === 0) return null
-    const bestSet = activeSets.reduce((best, s) => {
-      const w = parseFloat(s.weight) || 0, r = parseInt(s.reps) || 0
-      const bw = parseFloat(best.weight) || 0, br = parseInt(best.reps) || 0
-      return w > bw || (w === bw && r > br) ? s : best
-    }, activeSets[0])
-    const isPR = (parseFloat(bestSet.weight) || 0) > history.weight ||
-      ((parseFloat(bestSet.weight) || 0) === history.weight && (parseInt(bestSet.reps) || 0) > history.reps)
-    return isPR ? { name: exercise.name, bestSet, history } : null
-  }).filter((x): x is NonNullable<typeof x> => x !== null)
+  // Records, the stat tiles and the session's shape all read the exercise's
+  // tracking type rather than assuming reps × weight — see summaryMetrics.ts.
+  const newPRs = computeSummaryPRs(exercises, exerciseData, exerciseHistory)
+  const metricTiles = summaryMetricTiles(exercises, exerciseData)
+  const groupBlocks = summaryGroupBlocks(exercises, exerciseData)
 
-  const totalSets = exerciseData.reduce((sum, sets) => sum + sets.filter(s => s.completed).length, 0)
-  const totalVolume = Math.round(exerciseData.reduce((sum, sets) =>
-    sum + sets.reduce((ss, s) => s.completed ? ss + (parseFloat(s.weight) || 0) * (parseInt(s.reps) || 0) : ss, 0), 0))
+  const statTiles = [
+    { key: 'duration', tone: 'text-emerald-600 dark:text-emerald-400', value: formatTime(elapsedTime), label: 'Duration' },
+    ...metricTiles.map(t => ({ key: t.key, tone: TILE_TONES[t.key], value: t.value, label: t.label })),
+  ]
 
   const closingMessage = summaryGoal ? GOAL_CLOSINGS[summaryGoal] : GOAL_CLOSINGS.general_health
 
   const streakProgress = summaryStreak?.nextMilestone
     ? Math.min((summaryStreak.streakDays / summaryStreak.nextMilestone) * 100, 100)
     : 0
+
+  // One exercise's card. Shared by the group blocks and the standalone
+  // exercises so a circuit member reads exactly like a lone exercise, just
+  // inside the block that says it was a circuit.
+  const renderExerciseCard = (exercise: SummaryExercise, exIdx: number) => {
+    const sets = exerciseData[exIdx] || []
+    const activeSets = sets.filter(s => isActiveSummarySet(s, exercise.trackingType))
+    const skipped = sets.filter(s => s.completed).length - activeSets.length
+    const isPR = newPRs.some(pr => pr.name === exercise.name)
+    // "3/3 rounds" for timed work, "3/3 sets" for counted work.
+    const noun = setUnitLabel(exercise.trackingType, sets.length).toLowerCase()
+    return (
+      <Card key={exIdx} variant="compact" data-testid={`summary-exercise-${exIdx}`}>
+        <div className="mb-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
+            {isPR && (
+              <span className="inline-flex items-center gap-0.5 text-xs text-yellow-600 dark:text-yellow-400">
+                <Trophy className="h-3 w-3" /> PR
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-zinc-500 dark:text-zinc-500">
+            {activeSets.length}/{sets.length} {noun}{skipped > 0 ? ` (${skipped} skipped)` : ''}
+          </span>
+        </div>
+        {activeSets.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {activeSets.map((s, i) => (
+              <span key={i} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                {formatSummarySet(s, exercise.trackingType, exercise.name)}
+              </span>
+            ))}
+          </div>
+        )}
+      </Card>
+    )
+  }
 
   return (
     <motion.div
@@ -198,20 +275,14 @@ export default function WorkoutSummary({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="grid grid-cols-3 gap-2"
+          className={`grid gap-2 ${statTiles.length > 3 ? 'grid-cols-2' : 'grid-cols-3'}`}
         >
-          <Card variant="compact" className="text-center">
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatTime(elapsedTime)}</p>
-            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Duration</p>
-          </Card>
-          <Card variant="compact" className="text-center">
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{totalSets}</p>
-            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Sets</p>
-          </Card>
-          <Card variant="compact" className="text-center">
-            <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{totalVolume.toLocaleString()}</p>
-            <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Volume lbs</p>
-          </Card>
+          {statTiles.map(tile => (
+            <Card key={tile.key} variant="compact" className="text-center" data-testid={`summary-stat-${tile.key}`}>
+              <p className={`text-2xl font-bold ${tile.tone}`}>{tile.value}</p>
+              <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{tile.label}</p>
+            </Card>
+          ))}
         </motion.div>
 
         {/* Streak card */}
@@ -277,19 +348,11 @@ export default function WorkoutSummary({
               </p>
               <div className="space-y-2">
                 {newPRs.map((pr, i) => (
-                  <div key={i} className="flex items-center justify-between">
+                  <div key={i} className="flex items-center justify-between" data-testid={`summary-pr-${i}`}>
                     <span className="text-sm font-semibold text-zinc-900 dark:text-white">{pr.name}</span>
                     <div className="text-right">
-                      <span className="text-sm font-bold text-yellow-700 dark:text-yellow-400">
-                        {parseFloat(pr.bestSet.weight) > 0
-                          ? `${pr.bestSet.weight} × ${pr.bestSet.reps}`
-                          : `${pr.bestSet.reps} reps`}
-                      </span>
-                      <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">
-                        prev {pr.history.weight > 0
-                          ? `${pr.history.weight} × ${pr.history.reps}`
-                          : `${pr.history.reps} reps`}
-                      </span>
+                      <span className="text-sm font-bold text-yellow-700 dark:text-yellow-400">{pr.bestLabel}</span>
+                      <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-500">prev {pr.prevLabel}</span>
                     </div>
                   </div>
                 ))}
@@ -306,36 +369,28 @@ export default function WorkoutSummary({
         >
           <p className="mb-3 text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-500">Exercise Breakdown</p>
           <div className="space-y-2">
-            {exercises.map((exercise, exIdx) => {
-              const sets = exerciseData[exIdx] || []
-              const activeSets = sets.filter(s => s.completed && !(s.reps === "0" && s.weight === "0"))
-              const skipped = sets.filter(s => s.completed && s.reps === "0" && s.weight === "0").length
-              const isPR = newPRs.some(pr => pr.name === exercise.name)
+            {groupBlocks.map((block, blockIdx) => {
+              const cards = block.members.map(({ exercise, index }) => renderExerciseCard(exercise, index))
+              if (!block.label) return <div key={`solo-${blockIdx}`} className="space-y-2">{cards}</div>
+              const tone = GROUP_TONES[block.kind ?? 'superset'] ?? GROUP_TONES.superset
               return (
-                <Card key={exIdx} variant="compact">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{exercise.name}</h3>
-                      {isPR && (
-                        <span className="inline-flex items-center gap-0.5 text-xs text-yellow-600 dark:text-yellow-400">
-                          <Trophy className="h-3 w-3" /> PR
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                      {activeSets.length}/{sets.length} sets{skipped > 0 ? ` (${skipped} skipped)` : ''}
+                <div
+                  key={`group-${blockIdx}`}
+                  data-testid={`summary-group-${block.kind}`}
+                  className={`rounded-xl border p-2.5 ${tone.border} ${tone.bg}`}
+                >
+                  <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg text-xs text-white ${tone.badge}`}>
+                      {tone.icon}
+                    </span>
+                    <span className="text-xs font-bold uppercase tracking-wide text-zinc-800 dark:text-zinc-200">{block.label}</span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {block.rounds ? `${block.rounds} ${block.rounds === 1 ? 'round' : 'rounds'} · ` : ''}
+                      {block.members.length} exercises
                     </span>
                   </div>
-                  {activeSets.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeSets.map((s, i) => (
-                        <span key={i} className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                          {parseFloat(s.weight) > 0 ? `${s.weight}×${s.reps}` : `${s.reps} reps`}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </Card>
+                  <div className="space-y-2">{cards}</div>
+                </div>
               )
             })}
           </div>

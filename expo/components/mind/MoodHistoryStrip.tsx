@@ -1,4 +1,5 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 import type { ProgressMoodPoint } from "@become/api-client";
 
 const MOOD_EMOJI: Record<number, string> = {

@@ -16,6 +16,8 @@ export interface OnboardingGuardProps {
  * user explicitly has `onboardingCompleted === false`, fires
  * `onNeedsOnboarding` and renders nothing (the redirect takes over). Legacy
  * users (flag absent) and completed users fall straight through to children.
+ * While auth is loading or the user object has not arrived yet, renders nothing
+ * so protected content never flashes before onboarding status is known.
  */
 export function OnboardingGuard({
   user,
@@ -28,6 +30,6 @@ export function OnboardingGuard({
     if (gated) onNeedsOnboarding();
   }, [gated, onNeedsOnboarding]);
 
-  if (gated) return null;
+  if (loading || user === null || gated) return null;
   return <>{children}</>;
 }

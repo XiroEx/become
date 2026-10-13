@@ -1,7 +1,39 @@
+import type {
+  NutritionDirection,
+  ActivityLevel,
+  MacroPreset,
+} from "@become/core";
+import {
+  LEGAL_MINIMUM_AGE,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+} from "@become/core";
+
+export {
+  LEGAL_MINIMUM_AGE,
+  ACTIVITY_LABELS,
+  ACTIVITY_MULTIPLIERS,
+  MACRO_PRESET_LABELS,
+  MACRO_PRESET_BLURBS,
+};
+
 /**
- * Onboarding option sets, mirroring webapp/app/onboarding/page.tsx so the native
- * questionnaire produces the same `profile` payload the backend already
- * understands (PATCH /api/profile { profile, onboardingCompleted: true }).
+ * Onboarding option sets and types, mirroring webapp/app/onboarding/page.tsx
+ * so the native flow produces the exact payload the backend expects:
+ * PATCH /api/profile {
+ *   name,
+ *   profile: {
+ *     ...answers,
+ *     fitnessGoal: goals[0],
+ *     fitnessGoals,
+ *     nutritionDirection,
+ *     weightUnit: unit ?? "lbs"
+ *   },
+ *   onboardingCompleted: true,
+ *   profileIcon: defaultIconForGoal(goals[0])
+ * }
  */
 export type FitnessGoal =
   | "lose_weight"
@@ -21,7 +53,9 @@ export type EquipmentType =
   | "cables"
   | "full_gym";
 
-export const GOAL_OPTIONS: { value: FitnessGoal; label: string }[] = [
+export const MAX_GOALS = 3;
+
+export const GOAL_OPTIONS: readonly { value: FitnessGoal; label: string }[] = [
   { value: "lose_weight", label: "Lose Weight" },
   { value: "gain_muscle", label: "Build Muscle" },
   { value: "maintain", label: "Maintain & Tone" },
@@ -29,19 +63,42 @@ export const GOAL_OPTIONS: { value: FitnessGoal; label: string }[] = [
   { value: "general_health", label: "General Health" },
 ];
 
-export const EXPERIENCE_OPTIONS: { value: ExperienceLevel; label: string }[] = [
-  { value: "beginner", label: "Beginner" },
-  { value: "intermediate", label: "Intermediate" },
-  { value: "advanced", label: "Advanced" },
+export const GOAL_LABEL: Record<FitnessGoal, string> = {
+  lose_weight: "Lose Weight",
+  gain_muscle: "Build Muscle",
+  maintain: "Maintain & Tone",
+  improve_performance: "Improve Performance",
+  general_health: "General Health",
+};
+
+export const EXPERIENCE_OPTIONS: readonly {
+  value: ExperienceLevel;
+  label: string;
+  desc: string;
+}[] = [
+  { value: "beginner", label: "Beginner", desc: "New to structured training" },
+  {
+    value: "intermediate",
+    label: "Intermediate",
+    desc: "1-3 years of consistent training",
+  },
+  {
+    value: "advanced",
+    label: "Advanced",
+    desc: "3+ years, familiar with programming",
+  },
 ];
 
-export const SEX_OPTIONS: { value: BiologicalSex; label: string }[] = [
+export const SEX_OPTIONS: readonly { value: BiologicalSex; label: string }[] = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
-export const EQUIPMENT_OPTIONS: { value: EquipmentType; label: string }[] = [
+export const EQUIPMENT_OPTIONS: readonly {
+  value: EquipmentType;
+  label: string;
+}[] = [
   { value: "none", label: "None" },
   { value: "dumbbells", label: "Dumbbells" },
   { value: "barbell", label: "Barbell" },
@@ -49,12 +106,91 @@ export const EQUIPMENT_OPTIONS: { value: EquipmentType; label: string }[] = [
   { value: "full_gym", label: "Full Gym" },
 ];
 
+export const TOTAL_STEPS = 5;
+
+export const STEP_TITLES = [
+  "Goals",
+  "About you",
+  "Body & nutrition",
+  "Equipment",
+  "Review",
+] as const;
+
+export const STEP_QUESTIONS: readonly string[] = [
+  "What are you here to do?",
+  "A bit about you",
+  // Web parity (NP-247): the step-3 heading itself reads "Body stats" —
+  // STEP_TITLES[2] ("Body & nutrition") stays as the "Step 3 of 5 ·" chip
+  // label, which the web keeps unchanged too.
+  "Body stats",
+  // Web parity (NP-248): web's step 4 heading reads "Equipment & injuries"
+  // with the copy below about not recommending a barbell program to someone
+  // training in a living room.
+  "Equipment & injuries",
+  "Here's what we heard",
+];
+
+export const DIRECTION_OPTIONS: readonly {
+  value: NutritionDirection;
+  label: string;
+  sub: string;
+}[] = [
+  { value: "lose", label: "Lose Weight", sub: "TDEE − 500" },
+  { value: "maintain", label: "Maintain", sub: "TDEE" },
+  { value: "gain", label: "Gain Weight", sub: "TDEE + 300" },
+];
+
+export const ACTIVITY_BLURBS: Record<ActivityLevel, string> = {
+  sedentary: "Desk job, mostly sitting, little walking",
+  light: "On your feet some of the day, light walking",
+  moderate: "Moving a good part of the day",
+  active: "On your feet most of the day, or a physical job",
+  very_active: "Hard physical work all day",
+};
+
+export const MACRO_PRESET_CHOICES: readonly MacroPreset[] = [
+  "recommended",
+  "balanced",
+  "high_protein",
+  "low_carb",
+];
+
 export interface OnboardingProfile {
+  fitnessGoals?: FitnessGoal[];
   fitnessGoal?: FitnessGoal;
   experienceLevel?: ExperienceLevel;
+  age?: number;
   biologicalSex?: BiologicalSex;
-  birthYear?: number;
+  heightCm?: number;
+  currentWeightKg?: number;
+  targetWeightKg?: number;
+  paceKgPerWeek?: number;
+  activityLevel?: ActivityLevel;
+  macroPreset?: MacroPreset;
+  weeklyAvailability?: number;
   equipmentAccess?: EquipmentType[];
+  /**
+   * Free-text injuries or areas to avoid (web parity, NP-248 — web's step 4
+   * `Injury notes` textarea, saved as `injuryNotes` and shown on the review
+   * step). Optional; sent with the profile exactly as the web sends it.
+   */
+  injuryNotes?: string;
+  nutritionDirection?: NutritionDirection;
+  weightUnit?: "lbs" | "kg";
+  [key: string]: unknown;
 }
 
-export const TOTAL_STEPS = 4;
+/** The default icon for a new user, derived from their primary fitness goal. */
+const GOAL_TO_ICON: Record<FitnessGoal, string> = {
+  lose_weight: "flame",
+  gain_muscle: "strength",
+  improve_performance: "bolt",
+  general_health: "heart",
+  maintain: "focus",
+};
+
+export function defaultIconForGoal(
+  goal: FitnessGoal | undefined | null,
+): string {
+  return (goal && GOAL_TO_ICON[goal]) || "spark";
+}

@@ -43,6 +43,12 @@ export interface UserContext {
   lastWorkout?: { title: string; daysAgo: number }
   workoutsLast7Days?: number
   mood?: { avg7: number; entries7: number }
+  /** Today's dashboard mood check-in (1–5), when there is one. This is the
+   *  member telling us how they feel RIGHT NOW — the Mind session composer
+   *  should open from it rather than the 7-day average. */
+  moodToday?: { value: number; label: string; hoursAgo: number }
+  /** The member's plan (lib/goals): where they stand against their own targets. */
+  goals?: { nutrition?: string; training?: string }
   program?: { name: string; phase?: number; day?: string }
   /** Schedule adherence for the active program — so the AI knows when the user
    *  is behind (missed / overdue) and what their next session actually is. */
@@ -76,6 +82,35 @@ function daysAgo(d: Date | string | undefined, now: number): number | undefined 
  * Build the user-context summary. Never throws — returns at least an empty
  * summary so callers can always proceed.
  */
+/**
+ * Day-key helpers. Become stores two kinds of date: real INSTANTS (loggedAt,
+ * completedAt) and day MARKERS pegged to 00:00Z that mean a calendar day. They
+ * must never be compared to each other directly — that is how "today" becomes
+ * "overdue" and "tomorrow" becomes "today".
+ */
+
+/** The calendar day a MARKER refers to. Read the UTC date part, nothing else. */
+function slotDayKey(value: unknown): string | null {
+  if (typeof value === 'string') return value.slice(0, 10) || null
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
+  const t = typeof value === 'number' ? value : Date.parse(String(value ?? ''))
+  return Number.isFinite(t) && t > 0 ? new Date(t).toISOString().slice(0, 10) : null
+}
+
+/** The calendar day an INSTANT falls on for this member. */
+function userDayKey(atMs: number, tzOffsetMinutes: number | undefined): string {
+  const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
+  return new Date(atMs - offset * 60 * 1000).toISOString().slice(0, 10)
+}
+
+/** Whole days from one key to another. Both are plain dates, so no DST skew. */
+function daysBetweenKeys(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00.000Z`)
+  const b = Date.parse(`${to}T00:00:00.000Z`)
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0
+  return Math.max(0, Math.round((b - a) / DAY))
+}
+
 export async function assembleUserContext(userId: string): Promise<UserContext> {
   const now = Date.now()
   const ctx: UserContext = { summaryText: '' }
@@ -129,6 +164,8 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
   }
 
   // Workouts: last completed + count in last 7 days
+  const tzOffset = typeof progress?.timezoneOffset === 'number' ? progress.timezoneOffset as number : undefined
+
   const logs = Array.isArray(progress?.workoutLogs) ? (progress!.workoutLogs as Array<Record<string, unknown>>) : []
   if (logs.length) {
     const completed = logs.filter((l) => l.completed !== false && l.date)
@@ -148,6 +185,38 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     const avg = recentMoods.reduce((s, m) => s + (m.mood as number), 0) / recentMoods.length
     ctx.mood = { avg7: Math.round(avg * 10) / 10, entries7: recentMoods.length }
   }
+  // Today's check-in specifically. moodHistory rows are UTC-midnight day
+  // markers; the moment it was tapped is the last matching change entry.
+  const todayMarker = moodHist.find((m) => daysAgo(m.date as Date, now) === 0 && typeof m.mood === 'number')
+  if (todayMarker) {
+    const value = todayMarker.mood as number
+    const changes = Array.isArray(progress?.moodChangeHistory) ? (progress!.moodChangeHistory as Array<Record<string, unknown>>) : []
+    const lastChange = [...changes].reverse().find((c) => daysAgo(c.date as Date, now) === 0)
+    const at = lastChange?.timestamp ? new Date(lastChange.timestamp as Date).getTime() : now
+    const labels: Record<number, string> = { 1: 'Bad', 2: 'Not great', 3: 'Okay', 4: 'Pretty good', 5: 'Great' }
+    ctx.moodToday = { value, label: labels[value] ?? String(value), hoursAgo: Math.max(0, Math.round((now - at) / 3_600_000)) }
+  }
+
+  // The plan: pace / ETA / adherence for nutrition, week + consistency for
+  // training, and each pillar's "work on next". Best effort — never blocks.
+  try {
+    const { computeGoalProgress } = await import('@/lib/goals/progress')
+    const gp = await computeGoalProgress(userId, 0)
+    const n = gp.nutrition, t = gp.training
+    const goals: { nutrition?: string; training?: string } = {}
+    if (n.target.weight) {
+      const bits = [`target ${Math.round(n.target.weight)} ${n.unit}${n.direction ? ` (${n.direction})` : ''}`]
+      if (n.now.weight != null) bits.push(`now ${Math.round(n.now.weight)}`)
+      if (n.pace) bits.push(n.pace.status === 'behind' ? `behind pace by ${(n.pace.behindByKg / 0.45359237).toFixed(1)} lb` : n.pace.status === 'ahead' ? 'ahead of pace' : n.pace.status === 'on' ? `on pace, ${n.pace.eta}` : n.pace.status)
+      if (n.adherence) bits.push(`logged ${n.adherence.logDays}/7 days${n.adherence.proteinJudged ? `, protein hit ${n.adherence.proteinDays}/7` : ''}`)
+      bits.push(`next: ${n.suggestion.title}`)
+      goals.nutrition = bits.join('; ')
+    }
+    if (t.target.daysPerWeek) {
+      goals.training = `${t.thisWeek.done}/${t.target.daysPerWeek} this week${t.thisWeek.weekLost ? ' (week off track)' : ''}${t.avgLast4 != null ? `, avg ${t.avgLast4}/wk last 4` : ''}; next: ${t.suggestion.title}`
+    }
+    if (goals.nutrition || goals.training) ctx.goals = goals
+  } catch { /* optional */ }
 
   // Active program: the one the user has actually STARTED and is most recently
   // active in. We must exclude programs whose startDate is in the future (e.g.
@@ -192,17 +261,31 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
       let missed = 0
       let overdue = 0
       let next: { title: string; dayLabel?: string; inDays: number } | undefined
+
+      // Compare CALENDAR DAYS, not instants.
+      //
+      // A slot's date is a day marker pegged to 00:00Z — it means "Aug 12", not
+      // a moment. Comparing it to `now` made today's workout look PAST from
+      // 00:00Z onward, so it was counted as overdue and skipped; then tomorrow's
+      // marker, being under 12h away for the second half of the day, rounded to
+      // inDays 0 and was announced as "today".
+      //
+      // That is how the Mind coach told a member training Legs to go hit their
+      // "Chest and Back workout today" on 2026-08-12. Unlike the notification
+      // version of this bug, this one is not confined to timezones behind UTC —
+      // the rounding flips for everyone once it is past midday UTC.
+      const todayKey = userDayKey(now, tzOffset)
       for (const w of workouts) {
         const status = String(w.status ?? '')
-        const t = ms(w.date)
+        const key = slotDayKey(w.date)
         if (status === 'completed') completed++
         else if (status === 'missed') missed++
-        else if (status === 'scheduled') {
-          if (t && t < now) {
+        else if (status === 'scheduled' && key) {
+          if (key < todayKey) {
             // Past-dated but never completed/marked — the user is silently behind.
             overdue++
-          } else if (t) {
-            const inDays = Math.max(0, Math.round((t - now) / DAY))
+          } else {
+            const inDays = daysBetweenKeys(todayKey, key)
             if (!next || inDays < next.inDays) {
               next = { title: (w.workoutTitle as string) || 'your next workout', dayLabel: w.dayLabel as string, inDays }
             }
@@ -291,7 +374,10 @@ function renderSummary(c: UserContext): string {
   if (c.streak) lines.push(`Streak: ${c.streak.current} day${c.streak.current === 1 ? '' : 's'} (best ${c.streak.longest}).`)
   if (c.lastWorkout) lines.push(`Last workout: ${c.lastWorkout.title}, ${c.lastWorkout.daysAgo === 0 ? 'today' : `${c.lastWorkout.daysAgo}d ago`}.`)
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)
+  if (c.moodToday) lines.push(`Mood check-in TODAY: ${c.moodToday.label} (${c.moodToday.value}/5), ${c.moodToday.hoursAgo === 0 ? 'within the hour' : `${c.moodToday.hoursAgo}h ago`}. Open from this — acknowledge it before anything else.`)
   if (c.mood) lines.push(`Mood (7-day avg): ${c.mood.avg7}/5 over ${c.mood.entries7} check-in${c.mood.entries7 === 1 ? '' : 's'}.`)
+  if (c.goals?.nutrition) lines.push(`Nutrition plan: ${c.goals.nutrition}.`)
+  if (c.goals?.training) lines.push(`Training plan: ${c.goals.training}.`)
   if (c.program) lines.push(`Program: ${c.program.name}${c.program.phase ? `, phase ${c.program.phase}` : ''}${c.program.day ? `, ${c.program.day}` : ''}.`)
   if (c.schedule) {
     const s = c.schedule

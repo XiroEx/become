@@ -16,6 +16,7 @@ import Recipe from '@/models/Recipe'
 import { verifyAuth } from '@/lib/auth'
 import { flattenFoodForResponse } from '@/lib/foodImport'
 import { stemMatch, words, contentWords, coverage } from '@/lib/nutrition/foodMatch'
+import { isFoodOwner } from '@/lib/nutrition/foodOwnership'
 
 type Kind = 'food' | 'meal' | 'recipe'
 
@@ -123,13 +124,23 @@ async function matchOne(
     // food (so "everyday coffee" finds their custom "Coffee" — but we don't
     // loosen against the giant global catalog).
     //
-    // "Own" means the user AUTHORED this food (source 'manual') — not merely that
-    // they were the first to trigger its import. USDA/OFF catalog rows also carry
-    // `createdBy` (whoever imported them), and counting those as owned both
-    // skipped the anti-hijack guards below AND gave them top sort priority. That
-    // is why "cherries" resolved to USDA's "Pie Cherry" — which is actually a
-    // slice of cherry pie (260 cal/100 g) — instead of plain Cherries.
-    const isOwn = f.source === 'manual' && !!f.createdBy && String(f.createdBy) === userId
+    // "Own" means the user AUTHORED this food — not merely that they were the
+    // first to trigger its import. USDA/OFF catalog rows also carry `createdBy`
+    // (whoever imported them), and counting those as owned both skipped the
+    // anti-hijack guards below AND gave them top sort priority. That is why
+    // "cherries" resolved to USDA's "Pie Cherry" — which is actually a slice of
+    // cherry pie (260 cal/100 g) — instead of plain Cherries.
+    //
+    // It asks lib/nutrition/foodOwnership rather than re-deriving the rule,
+    // because there is exactly one answer to "whose food is this" and the PATCH
+    // and DELETE routes already use it. Hand-rolling it here drifted once
+    // already: this was `source === 'manual' && createdBy === userId`, which
+    // misses `authoredBy` — the PRIMARY key, the one the custom-foods allowance
+    // is charged on, and the one that (from the window when it was writable
+    // from the PATCH body) is the only owner some rows have. A member's own
+    // custom food would then rank below the global catalogue and be held to the
+    // brand-evidence guard meant for rows they do not own.
+    const isOwn = isFoodOwner(f, userId)
     if (cov < 1 && !(isOwn && subsetMatch(f.name))) continue
 
     // Don't slap an unrequested brand or extra ingredients onto a plain

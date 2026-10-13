@@ -29,7 +29,7 @@ export default function ContrastScene({ move, onDone }: SceneProps) {
 
   const finish = () => {
     setStep(3)
-    setTimeout(onDone, 1000)
+    setTimeout(() => onDone(obstacle ? { q: 'The obstacle in the way', a: obstacle } : undefined), 1000)
   }
 
   return (

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/clientCache.test.ts
+// Run with: npm run test:file tests/unit/clientCache.test.ts
 //
 // Pure read/write behavior of the localStorage SWR cache helper. Node has no
 // `window`/`localStorage`, so we install a minimal in-memory shim before

@@ -44,7 +44,7 @@ export function suggestActions(opts: {
     const pool = (CATALOG_BY_SYSTEM[sys] ?? []).filter((p) => p.idx === 0)
     if (!pool.length) return
     for (let i = 0; i < pool.length; i++) {
-      const p = pool[(seed + i) % pool.length]
+      const p = pool[(seed + i) % pool.length]!
       const key = `${sys}:${p.id}`
       if (usedKeys.has(key)) continue
       usedKeys.add(key)

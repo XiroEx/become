@@ -1,0 +1,39 @@
+# The local development / test database.
+#
+# `webapp/package.json` has pointed `dev:db` (and therefore `npm run dev`) at
+# this file since the repo was created, but the file itself was never committed.
+# `docker compose -f ../db/compose.yml up -d` against a missing file still exits
+# 0 on some Compose versions, so `npm run dev` printed nothing and started Next
+# against no database at all. Hence `--wait` on the script as well: the command
+# now only returns once mongo reports healthy.
+#
+#   docker compose -f db/compose.yml up -d --wait     # start
+#   docker compose -f db/compose.yml down             # stop, keep the data
+#   docker compose -f db/compose.yml down -v          # stop and wipe
+#
+# No authentication and bound to 127.0.0.1 only: this holds nothing but
+# throwaway development data, and every consumer of it (webapp/.env.local,
+# `npm run test:unit`) connects as mongodb://127.0.0.1:27017/<db>. Production
+# data lives on hosted Atlas and has nothing to do with this file.
+#
+# Standalone, not a replica set — transactions are not used anywhere in the app.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: become-dev-mongo
+    restart: unless-stopped
+    ports:
+      # Loopback only. Never publish this on 0.0.0.0; it has no auth.
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  mongo-data:

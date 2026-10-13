@@ -73,6 +73,13 @@ interface AdminFood {
   externalId?: string
   externalDataType?: string
   needsReview?: boolean
+  reviewFlag?: {
+    owner: 'automatic' | 'manual'
+    issueCodes: string[]
+    ruleVersion: string
+    origin: string
+    updatedAt: string
+  }
   isVerified?: boolean
   isFirstClass?: boolean
   groupKey?: string
@@ -755,7 +762,7 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
         <Card variant="default" accent="danger">
           <div className="pl-2">
             <p className="mb-2 text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">
-              Auto-flag reasons
+              Live rule evidence
             </p>
             <ul className="space-y-1">
               {issues.map((iss, i) => (
@@ -801,6 +808,14 @@ export default function AdminFoodDetailPage({ params }: { params: Promise<{ id: 
             First class
           </label>
         </div>
+        <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Review ownership: {food.reviewFlag?.owner === 'automatic'
+            ? `automatic (${food.reviewFlag.origin}, rules ${food.reviewFlag.ruleVersion})`
+            : food.reviewFlag?.owner === 'manual'
+              ? 'manual admin decision'
+              : 'legacy / unknown — automatic updates are blocked'}.
+          {' '}Saving a changed review toggle records manual ownership.
+        </p>
       </Card>
 
       {/* Top-level fields */}

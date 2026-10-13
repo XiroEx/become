@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/userProgress-dismissedSuggestions-schema.test.ts
+// Run with: npm run test:file tests/unit/suggestions/userProgress-dismissedSuggestions-schema.test.ts
 //
 // Schema-level assertions for the dismissedSuggestions subdocument added to
 // UserProgress. No DB — exercises the Mongoose schema directly so the test

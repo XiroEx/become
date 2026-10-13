@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Dumbbell, Sparkles, Search, Wand2, History, Zap } from "lucide-react";
 import { Program } from "@/lib/data/programs";
 import PageTransition from "@/components/PageTransition";
+import ResumeWorkoutButton from "@/components/ResumeWorkoutButton";
 import UpcomingWorkouts from "@/components/UpcomingWorkouts";
 import QuickSessionModal from "@/components/QuickSessionModal";
 import GenerateModal from "@/components/GenerateModal";
@@ -106,7 +107,7 @@ export default function WorkoutClient() {
       className="flex shrink-0 items-center gap-1.5 rounded-full bg-green-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-green-600 active:bg-green-700"
     >
       <Zap className="h-3.5 w-3.5" />
-      Quick Session
+      Workout Now
     </button>
   );
 
@@ -317,6 +318,17 @@ export default function WorkoutClient() {
       !savedProgramIds.has(program.program_id)
   );
 
+  // `totalPrograms` is /api/programs/search's raw pagination total for the
+  // current page of `allPrograms` — it counts every program the catalog
+  // query matches, including ones `filteredPrograms` hides (already
+  // enrolled or already saved). Subtract exactly what got hidden from THIS
+  // page so the "Browse Programs (N)" heading always matches the number of
+  // cards actually rendered below, instead of drifting from it (NP-378:
+  // native already applies the equivalent fix as `displayTotal` in
+  // ProgramsCatalog.tsx under NP-278).
+  const excludedFromBrowseCount = allPrograms.length - filteredPrograms.length;
+  const displayTotalPrograms = Math.max(totalPrograms - excludedFromBrowseCount, 0);
+
   // ─── Goal-based recommendation matching ──────────────────────────────────
   const GOAL_KEYWORDS: Record<FitnessGoal, string[]> = {
     lose_weight: ["weight loss", "fat loss", "cut", "cutting", "lean", "shred"],
@@ -412,6 +424,10 @@ export default function WorkoutClient() {
           </button>
         </div>
       </div>
+
+      {/* Resume Active Workout — only renders when there's an in-progress
+          workout log for today; quietly disappears once it's completed. */}
+      <ResumeWorkoutButton className="mb-6" />
 
       {/* Schedule / Calendar Widget */}
       <div data-tour="workout-upcoming" className="mb-6">
@@ -690,11 +706,11 @@ export default function WorkoutClient() {
 
                 {/* Content */}
                 <Link href={`/dashboard/workout/${program.program_id}`} className="min-w-0 flex-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-white">
+                  <div>
+                    <h3 className="line-clamp-2 text-base font-semibold leading-snug text-zinc-900 dark:text-white sm:truncate">
                       {program.name}
                     </h3>
-                    <div className="flex shrink-0 gap-2">
+                    <div className="mt-1 flex flex-wrap gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {program.duration_weeks}w
                       </span>
@@ -735,9 +751,9 @@ export default function WorkoutClient() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
             Browse Programs
-            {totalPrograms > 0 && (
+            {displayTotalPrograms > 0 && (
               <span className="ml-2 text-sm font-normal text-zinc-500">
-                ({totalPrograms})
+                ({displayTotalPrograms})
               </span>
             )}
           </h2>

@@ -20,6 +20,7 @@
 import { ExternalLink, VideoOff } from 'lucide-react'
 import FramedVideo from '@/components/FramedVideo'
 import type { VideoFramingOverride } from '@/lib/videoFraming'
+import type { VideoTrimOverride } from '@/lib/videoTrim'
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i
 
@@ -37,6 +38,8 @@ export interface AdminVideoPreviewProps {
   videoHeight?: number | null
   /** Optional manual framing override. */
   videoFraming?: VideoFramingOverride | null
+  /** Optional in/out points so the preview loops the same window users see. */
+  videoTrim?: VideoTrimOverride | null
   /** Called when intrinsic dims first become available — used by the form to
    *  auto-persist via PATCH /api/exercises/[slug]/video/dimensions. */
   onDimensions?: (w: number, h: number) => void
@@ -49,6 +52,7 @@ export default function AdminVideoPreview({
   videoWidth,
   videoHeight,
   videoFraming,
+  videoTrim,
   onDimensions,
 }: AdminVideoPreviewProps) {
   const trimmed = url?.trim() || ''
@@ -84,6 +88,7 @@ export default function AdminVideoPreview({
           videoWidth={videoWidth}
           videoHeight={videoHeight}
           videoFraming={videoFraming}
+          videoTrim={videoTrim}
           onDimensions={onDimensions}
           wrapperOverride={`${wrapperBase} ${dims} ${className ?? ''}`}
         />
@@ -96,6 +101,7 @@ export default function AdminVideoPreview({
         videoWidth={videoWidth}
         videoHeight={videoHeight}
         videoFraming={videoFraming}
+        videoTrim={videoTrim}
         onDimensions={onDimensions}
         className={`${className ?? ''} max-w-sm ring-1 ring-zinc-200 dark:ring-zinc-800`}
       />

@@ -6,8 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import { inferTracking } from '@/lib/workout/tracking'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
+import QuickSessionModal from '@/components/QuickSessionModal'
 import { continueQuickSession } from '@/lib/quickSession/openQuick'
+import { logPlanAvailability } from '@/lib/quickSession/logPlanDate'
 import { BackButton } from '@/components/ui/BackButton'
 import {
     ChevronLeft,
@@ -17,6 +20,7 @@ import {
     Clock,
     Dumbbell,
     Calendar,
+    CalendarClock,
     Settings,
     SkipForward,
     ArrowRightLeft,
@@ -249,15 +253,35 @@ export default function CalendarClient() {
       phase: number
       completed: boolean
       duration?: number
+      // A saved log carries what each set actually measured (seconds, meters,
+      // mph), what the exercise asks for (`prescription.trackingType`) and the
+      // shape it was run in (the group fields). The summary needs all three or
+      // a treadmill comes back as `0×0` with no circuit badge.
       exercises: Array<{
         name: string
-        sets: Array<{ setNumber: number; reps: number; weight: number; completed: boolean }>
+        sets: Array<{
+          setNumber: number
+          reps: number
+          weight: number
+          completed: boolean
+          duration?: number | null
+          distance?: number | null
+          speed?: number | null
+        }>
+        prescription?: { trackingType?: string }
+        groupId?: string
+        groupType?: string
+        groupLabel?: string
+        groupRounds?: number
       }>
     }
     workout: { day: string; title: string }
     exerciseHistory: Record<string, { weight: number; reps: number; duration?: number; date: string }>
   } | null>(null)
   const [logSummaryLoading, setLogSummaryLoading] = useState(false)
+  // Local YYYY-MM-DD of the day a "Log a Workout" / "Schedule a Workout" tap
+  // came from — opens the quick-session builder pre-dated to that day.
+  const [quickSessionDate, setQuickSessionDate] = useState<string | null>(null)
 
   // Build a color map and paused set for programs
   const programColorMap = new Map<string, typeof PROGRAM_COLORS[0]>()
@@ -741,6 +765,27 @@ export default function CalendarClient() {
                 const isSelected = selectedDate && isSameDay(day, selectedDate)
                 const dayWorkouts = workoutsByDate.get(key) || []
                 const dayQuick = quickByDate.get(key) || []
+                // Long-lived and test-heavy accounts can have dozens of sessions
+                // on one date. Rendering every marker turns a calendar cell into
+                // a wall of dots and stretches the month; summarize the overflow.
+                const dayMarkers = [
+                  ...dayWorkouts.map((w, i) => {
+                    const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
+                    const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
+                      isMakeupWorkout(w.date, w.completedAt)
+                    const statusColor = isMakeupDot ? 'bg-green-300' :
+                      w.status === 'completed' ? 'bg-green-700' :
+                      w.status === 'missed' ? 'bg-red-600' :
+                      w.status === 'skipped' ? 'bg-amber-400' :
+                      colors.dot
+                    return { key: `w${i}`, className: statusColor }
+                  }),
+                  ...dayQuick.map((q, i) => ({
+                    key: `q${i}`,
+                    className: `ring-1 ring-purple-400 ${q.status === 'completed' ? 'bg-green-700' : q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'}`,
+                  })),
+                ]
+                const markerLimit = viewMode === 'week' ? 10 : 6
 
                 return (
                   <button
@@ -766,32 +811,23 @@ export default function CalendarClient() {
                     </span>
 
                     {/* Workout dots (program + quick sessions) */}
-                    {(dayWorkouts.length > 0 || dayQuick.length > 0) && (
-                      <div className="mt-0.5 flex flex-wrap justify-center gap-0.5">
-                        {dayWorkouts.map((w, i) => {
-                          const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
-                          const isMakeupDot = w.status === 'completed' && !!w.completedAt &&
-                            isMakeupWorkout(w.date, w.completedAt)
-                          const statusColor = isMakeupDot ? 'bg-green-300' :
-                            w.status === 'completed' ? 'bg-green-700' :
-                            w.status === 'missed' ? 'bg-red-600' :
-                            w.status === 'skipped' ? 'bg-amber-400' :
-                            colors.dot
-                          return <div key={i} className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-                        })}
-                        {dayQuick.map((q, i) => {
-                          // Quick sessions use a ring to distinguish them from program dots.
-                          const c = q.status === 'completed' ? 'bg-green-700' :
-                            q.status === 'planned' ? 'bg-blue-600' : 'bg-red-600'
-                          return <div key={`q${i}`} className={`h-1.5 w-1.5 rounded-full ring-1 ring-purple-400 ${c}`} />
-                        })}
+                    {dayMarkers.length > 0 && (
+                      <div className="mt-0.5 flex max-w-full flex-wrap items-center justify-center gap-0.5">
+                        {dayMarkers.slice(0, markerLimit).map((marker) => (
+                          <div key={marker.key} className={`h-1.5 w-1.5 rounded-full ${marker.className}`} />
+                        ))}
+                        {dayMarkers.length > markerLimit && (
+                          <span className="ml-0.5 text-[8px] font-bold leading-none text-zinc-500 dark:text-zinc-400">
+                            +{dayMarkers.length - markerLimit}
+                          </span>
+                        )}
                       </div>
                     )}
 
                     {/* Workout label in week view */}
                     {viewMode === 'week' && dayWorkouts.length > 0 && (
                       <div className="mt-1 w-full space-y-0.5">
-                        {dayWorkouts.map((w, i) => {
+                        {dayWorkouts.slice(0, 3).map((w, i) => {
                           const colors = programColorMap.get(w.programId) || PROGRAM_COLORS[0]
                           return (
                             <div key={i} className={`rounded px-1 py-0.5 text-[8px] font-medium leading-tight sm:text-[10px] ${colors.bg} ${colors.text}`}>
@@ -799,6 +835,11 @@ export default function CalendarClient() {
                             </div>
                           )
                         })}
+                        {dayWorkouts.length > 3 && (
+                          <div className="px-1 text-[8px] font-semibold text-zinc-500 dark:text-zinc-400 sm:text-[9px]">
+                            +{dayWorkouts.length - 3} more
+                          </div>
+                        )}
                       </div>
                     )}
                   </button>
@@ -913,7 +954,35 @@ export default function CalendarClient() {
                 )}
 
                 {selectedWorkouts.length === 0 && selectedQuick.length === 0 ? (
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
+                  <div>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Rest day — no workouts scheduled.</p>
+                    {(() => {
+                      const dateKey = toDateKey(selectedDate)
+                      const { canLog, canPlan } = logPlanAvailability(dateKey, toDateKey(today))
+                      return (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {canLog && (
+                            <button
+                              onClick={() => setQuickSessionDate(dateKey)}
+                              className="flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                            >
+                              <Dumbbell className="h-3 w-3" />
+                              Log a Workout
+                            </button>
+                          )}
+                          {canPlan && (
+                            <button
+                              onClick={() => setQuickSessionDate(dateKey)}
+                              className="flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                            >
+                              <CalendarClock className="h-3 w-3" />
+                              Schedule a Workout
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                 ) : selectedWorkouts.length === 0 ? null : (
                   <div className="space-y-3">
                     {selectedWorkouts.map((w, idx) => {
@@ -1094,6 +1163,13 @@ export default function CalendarClient() {
         </>
       )}
 
+      {/* Log/Schedule a Workout — quick-session builder pre-dated to the tapped day */}
+      <QuickSessionModal
+        open={!!quickSessionDate}
+        date={quickSessionDate ?? undefined}
+        onClose={() => setQuickSessionDate(null)}
+      />
+
       {/* Workout Log Summary Overlay */}
       <AnimatePresence>
         {summaryId && (
@@ -1108,12 +1184,24 @@ export default function CalendarClient() {
             elapsedTime={logSummary.log.duration ? logSummary.log.duration * 60 : 0}
             exerciseData={logSummary.log.exercises.map((ex) =>
               (ex.sets ?? []).map((s) => ({
-                reps: String(s.reps),
-                weight: String(s.weight),
+                reps: s.reps ?? 0,
+                weight: s.weight ?? 0,
+                duration: s.duration ?? 0,
+                distance: s.distance ?? 0,
+                speed: s.speed ?? 0,
                 completed: s.completed,
               }))
             )}
-            exercises={logSummary.log.exercises.map((ex) => ({ name: ex.name }))}
+            exercises={logSummary.log.exercises.map((ex) => ({
+              name: ex.name,
+              // Logs written before the tracking type was stored with them get
+              // the same best guess every other read path uses.
+              trackingType: ex.prescription?.trackingType ?? inferTracking(ex.sets ?? []),
+              groupId: ex.groupId,
+              groupType: ex.groupType,
+              groupLabel: ex.groupLabel,
+              groupRounds: ex.groupRounds,
+            }))}
             exerciseHistory={logSummary.exerciseHistory}
             summaryStreak={null}
             summaryGoal={null}

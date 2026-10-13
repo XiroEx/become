@@ -9,15 +9,42 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles } from "lucide-react";
+import { Search, Plus, Trash2, Dumbbell, Loader2, CalendarClock, Check, Sparkles, Layers, Unlink, ArrowLeft } from "lucide-react";
+import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import QuickSessionNamePrompt from "@/components/workout/QuickSessionNamePrompt";
 import type { ComplementSuggestion, DraftExercise, DraftSession } from "@/lib/quickSession/types";
 import { stashQuickSession, quickSessionLiveHref } from "@/lib/quickSession/store";
 import { localDateStr, logQuickSession } from "@/lib/quickSession/log";
+import { fallbackQuickSessionName } from "@/lib/quickSession/naming";
+import {
+  addNextIntoGroup,
+  alignCircuitSets,
+  defaultSetsFor,
+  groupIndexes,
+  setGroupKindAt,
+  setSetsAt,
+  ungroupAt,
+  type GroupKind,
+} from "@/lib/workout/buildAsYouGo";
+import { setUnitLabel } from "@/lib/workout/tracking";
+import { implementLabel } from "@/lib/workout/equipmentVariant";
+import { matchesExerciseQuery } from "@/lib/exerciseSearchRanking";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
+
+/** The two kinds a member picks between here. A triset/giant set is just a
+ *  superset with more in it, and the label follows the size on its own. */
+const OFFERED_KINDS: GroupKind[] = ["superset", "circuit"];
 
 interface SearchExercise {
   slug: string;
   name: string;
   trackingType: string;
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[];
+  laterality?: string;
+  movementPatterns?: string[];
 }
 
 interface SearchResponse {
@@ -36,6 +63,14 @@ export interface SessionBuilderProps {
   /** Fired right before navigating to the live session (e.g. close a modal). */
   onLaunch?: () => void;
   className?: string;
+  /** Pre-seeds the draft — e.g. from ImportSessionFlow's paste/upload import.
+   *  Applied once, on mount, same as a fresh initial value. */
+  initialDraft?: {
+    title: string;
+    exercises: DraftExercise[];
+    /** Parsed names that couldn't be matched to a real exercise — surfaced as a dismissible notice. */
+    unresolved?: string[];
+  };
 }
 
 function authHeaders(): HeadersInit {
@@ -45,27 +80,41 @@ function authHeaders(): HeadersInit {
   };
 }
 
-export default function SessionBuilder({ onLaunch, className }: SessionBuilderProps) {
+export default function SessionBuilder({ onLaunch, className, initialDraft }: SessionBuilderProps) {
   const router = useRouter();
 
-  const [title, setTitle] = useState("Quick Session");
+  const [title, setTitle] = useState(() => initialDraft?.title || "Quick Session");
+  const [titleWasEdited, setTitleWasEdited] = useState(() => !!initialDraft?.title);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchExercise[]>([]);
   const [searching, setSearching] = useState(false);
-  const [chosen, setChosen] = useState<DraftExercise[]>([]);
+  // A circuit agrees on sets the moment it is SHOWN, not only when this screen
+  // is the one that made it. An imported session (ImportSessionFlow) can hand
+  // us a circuit whose members disagree — five of one, three of another — and
+  // that is the shape the member reported: a block whose own note says every
+  // exercise runs the same number of rounds, printed over two numbers.
+  const [chosen, setChosen] = useState<DraftExercise[]>(() => alignCircuitSets(initialDraft?.exercises ?? []));
+  const [unresolved, setUnresolved] = useState<string[]>(() => initialDraft?.unresolved ?? []);
   // Your custom exercises — merged into search results; creatable inline below.
   const [customs, setCustoms] = useState<SearchExercise[]>([]);
   const [creating, setCreating] = useState(false);
+  const [creatingError, setCreatingError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — the upgrade sheet, not inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES);
   // Log-or-plan (no playthrough): past/today date → logged done, future → planned.
   const [logOpen, setLogOpen] = useState(false);
   const [logDate, setLogDate] = useState(localDateStr());
   const [logging, setLogging] = useState(false);
   const [logError, setLogError] = useState<string | null>(null);
+  const [showNamePrompt, setShowNamePrompt] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<ComplementSuggestion[]>([]);
   const [completionError, setCompletionError] = useState<string | null>(null);
   const isFutureDate = logDate > localDateStr();
+  const hasChosenName = titleWasEdited && !!title.trim();
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suggestionRequestRef = useRef<AbortController | null>(null);
@@ -78,12 +127,19 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       try {
         const res = await fetch("/api/exercises/custom", { headers: authHeaders() });
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { exercises?: Array<{ slug: string; name: string; trackingType: string }> };
-        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType })));
+        const data = (await res.json()) as { exercises?: SearchExercise[] };
+        if (!cancelled) setCustoms((data.exercises ?? []).map((e) => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })));
       } catch { /* customs stay empty */ }
     })();
     return () => { cancelled = true };
   }, []);
+
+  // A fresh search starts the create form from scratch again.
+  useEffect(() => {
+    setShowCreateForm(false);
+    setCreatingError(null);
+    setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
+  }, [query]);
 
   // Debounced exercise search.
   useEffect(() => {
@@ -176,8 +232,12 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         exerciseSlug: r.slug,
         name: r.name,
         trackingType: r.trackingType,
-        sets: 3,
+        // Agree with the session you are adding to, not a hardcoded 3.
+        sets: defaultSetsFor(prev),
         reps: r.trackingType.startsWith("time") ? "" : "8-12",
+        ...(r.equipment && { equipment: r.equipment }),
+        ...(r.laterality && { laterality: r.laterality }),
+        ...(r.movementPatterns && { movementPatterns: r.movementPatterns }),
       };
       return [...prev, exercise];
     });
@@ -186,12 +246,61 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   }, []);
 
   const removeExercise = useCallback((slug: string) => {
-    setChosen((prev) => prev.filter((e) => e.exerciseSlug !== slug));
+    setChosen((prev) => {
+      const gone = prev.find((e) => e.exerciseSlug === slug);
+      const next = prev.filter((e) => e.exerciseSlug !== slug);
+      // A superset of one is not a superset.
+      if (gone?.groupId && next.filter((e) => e.groupId === gone.groupId).length < 2) {
+        return next.map((e) => {
+          if (e.groupId !== gone.groupId) return e;
+          const cleaned = { ...e };
+          delete cleaned.groupId;
+          delete cleaned.groupType;
+          delete cleaned.groupLabel;
+          delete cleaned.groupRest;
+          delete cleaned.groupRounds;
+          return cleaned;
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  // Group an exercise with the one under it, or break the group apart.
+  // The same gesture exists mid-session in the live and track views.
+  const toggleGroup = useCallback((slug: string) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      if (i === -1) return prev;
+      if (prev[i].groupId) return ungroupAt(prev, i).exercises;
+      if (i + 1 >= prev.length) return prev;
+      return groupIndexes(prev, [i, i + 1], "superset").exercises;
+    });
+  }, []);
+
+  /** Pull the exercise below the group into it — a circuit of three, four, … */
+  const growGroup = useCallback((slug: string) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : addNextIntoGroup(prev, i).exercises;
+    });
+  }, []);
+
+  /** Superset or circuit. A circuit's rounds then agree across the block. */
+  const chooseKind = useCallback((slug: string, kind: GroupKind) => {
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      return i === -1 ? prev : setGroupKindAt(prev, i, kind).exercises;
+    });
   }, []);
 
   const setSets = useCallback((slug: string, sets: number) => {
     const clamped = Math.max(1, Math.min(8, sets));
-    setChosen((prev) => prev.map((e) => (e.exerciseSlug === slug ? { ...e, sets: clamped } : e)));
+    setChosen((prev) => {
+      const i = prev.findIndex((e) => e.exerciseSlug === slug);
+      // Inside a circuit the count belongs to the block, so all of it follows.
+      return i === -1 ? prev : setSetsAt(prev, i, clamped);
+    });
   }, []);
 
   const finish = useCallback(async () => {
@@ -214,7 +323,17 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
       );
       setChosen((current) => {
         const currentSlugs = new Set(current.map((exercise) => exercise.exerciseSlug));
-        return [...current, ...appended.filter((exercise) => !currentSlugs.has(exercise.exerciseSlug))];
+        // Same rule as adding by hand: an exercise this screen appends starts
+        // on the FIRST exercise's count, not on whatever the generator chose,
+        // so "Finish this for me" cannot hand back a session that disagrees
+        // with itself before the member has touched anything.
+        const seeded = defaultSetsFor(current);
+        return alignCircuitSets([
+          ...current,
+          ...appended
+            .filter((exercise) => !currentSlugs.has(exercise.exerciseSlug))
+            .map((exercise) => ({ ...exercise, sets: seeded })),
+        ]);
       });
     } catch (error) {
       setCompletionError(error instanceof Error ? error.message : "Could not finish this session.");
@@ -226,64 +345,131 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
   const start = useCallback(() => {
     if (chosen.length === 0) return;
     const session: DraftSession = { title: title.trim() || "Quick Session", exercises: chosen };
-    const id = stashQuickSession(session);
+    const id = stashQuickSession(session, { needsName: !hasChosenName });
     onLaunch?.();
     router.push(quickSessionLiveHref(id));
-  }, [chosen, title, router, onLaunch]);
+  }, [chosen, title, hasChosenName, router, onLaunch]);
 
-  // Create a custom exercise inline from the current search text and add it
-  // straight to the session (sensible defaults; refine it later in the library).
+  // Create a custom exercise inline — the same detailed fields the program
+  // editor offers (tracking type, primary muscles, category, default
+  // sets/reps), not just a name and a tracking type — and add it straight to
+  // the session.
   const createCustom = useCallback(async () => {
-    const name = query.trim();
-    if (name.length < 2 || creating) return;
+    if (!customForm.name.trim() || creating) return;
     setCreating(true);
+    setCreatingError(null);
     try {
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ name, trackingType: "reps_weight", muscleGroup: "other", category: "strength" }),
+        body: JSON.stringify(customForm),
       });
-      if (!res.ok) return;
-      const data = (await res.json()) as { exercise?: { slug: string; name: string; trackingType: string } };
-      if (data.exercise) {
-        setCustoms((prev) => [...prev, { slug: data.exercise!.slug, name: data.exercise!.name, trackingType: data.exercise!.trackingType }]);
-        addExercise({ slug: data.exercise.slug, name: data.exercise.name, trackingType: data.exercise.trackingType });
+      const data = (await res.json()) as { exercise?: SearchExercise; error?: string };
+      if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setGate(g);
+          return;
+        }
+        setCreatingError(data.error || "Failed to create exercise");
+        return;
       }
-    } catch { /* leave the query for retry */ } finally {
+      setCustoms((prev) => [...prev, data.exercise!]);
+      addExercise(data.exercise);
+      setShowCreateForm(false);
+      setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES);
+    } catch {
+      setCreatingError("Network error");
+    } finally {
       setCreating(false);
     }
-  }, [query, creating, addExercise]);
+  }, [customForm, creating, addExercise]);
 
   // Log (past/today) or plan (future) the built session without playing it —
   // the backfill path for "I worked out yesterday and never logged it".
-  const logOrPlan = useCallback(async () => {
+  const saveLogOrPlan = useCallback(async (sessionTitle: string) => {
     if (chosen.length === 0 || logging) return;
     setLogging(true);
     setLogError(null);
     try {
-      const session: DraftSession = { title: title.trim() || "Quick Session", exercises: chosen };
-      const id = stashQuickSession(session);
-      const { done } = await logQuickSession({ sessionId: id, title: session.title, exercises: chosen, date: logDate });
+      const session: DraftSession = { title: sessionTitle, exercises: chosen };
+      // A future plan can still need its first-completion name. A past/today
+      // log reaches that completion now, after the prompt if one was needed.
+      const needsName = isFutureDate && !hasChosenName;
+      const id = stashQuickSession(session, { needsName });
+      const { done } = await logQuickSession({
+        sessionId: id,
+        title: session.title,
+        needsName,
+        exercises: chosen,
+        date: logDate,
+      });
       onLaunch?.();
       router.push(done ? "/dashboard/history" : "/dashboard/workout/hub?tab=sessions");
     } catch (e) {
-      setLogError(e instanceof Error ? e.message : "Failed to save session");
+      const message = e instanceof Error ? e.message : "Failed to save session";
+      setLogError(message);
+      throw new Error(message);
+    } finally {
       setLogging(false);
     }
-  }, [chosen, title, logDate, logging, router, onLaunch]);
+  }, [chosen, logDate, logging, isFutureDate, hasChosenName, router, onLaunch]);
+
+  const logOrPlan = useCallback(() => {
+    if (!isFutureDate && !hasChosenName) {
+      setShowNamePrompt(true);
+      return;
+    }
+    void saveLogOrPlan(title.trim() || "Quick Session").catch(() => {});
+  }, [hasChosenName, isFutureDate, saveLogOrPlan, title]);
 
   // Search shows catalog matches + your matching customs (deduped by slug).
   const q = query.trim().toLowerCase();
-  const customMatches = q.length >= 2 ? customs.filter((c) => c.name.toLowerCase().includes(q)) : [];
-  const merged = [...results, ...customMatches.filter((c) => !results.some((r) => r.slug === c.slug))];
+  // Shorthand-aware, like the catalog search these rows are merged with:
+  // "RDL" finds your own "Romanian Deadlift" — see lib/exerciseAbbreviations.
+  const customMatches = q.length >= 2 ? customs.filter((c) => matchesExerciseQuery(c, q)) : [];
+  // `isCustom` is attached here, not read off the wire: /api/exercises/search
+  // deliberately excludes customs (they are fetched separately above), so this
+  // merge is the only place that knows which rows are the user's own.
+  const merged = [
+    ...results.map((r) => ({ ...r, isCustom: false })),
+    ...customMatches
+      .filter((c) => !results.some((r) => r.slug === c.slug))
+      .map((c) => ({ ...c, isCustom: true })),
+  ];
 
   return (
     <div className={className}>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
+      {/* Imported exercises that couldn't be matched to the library — the user
+          adds them by hand via the search box below, same as any other exercise. */}
+      {unresolved.length > 0 && (
+        <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-300">
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Couldn&apos;t match {unresolved.length} {unresolved.length === 1 ? "exercise" : "exercises"} to your library</p>
+            <p className="mt-0.5 text-amber-700 dark:text-amber-400">
+              Search above to add: {unresolved.join(", ")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setUnresolved([])}
+            aria-label="Dismiss"
+            className="shrink-0 text-amber-500 hover:text-amber-700 dark:hover:text-amber-200"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* Title */}
       <input
         type="text"
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        onChange={(e) => {
+          setTitle(e.target.value);
+          setTitleWasEdited(true);
+        }}
         placeholder="Session title"
         className="mb-3 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
       />
@@ -302,7 +488,35 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
           <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-zinc-400" />
         )}
 
-        {(merged.length > 0 || (q.length >= 2 && !searching)) && (
+        {showCreateForm ? (
+          <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-[70vh] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateForm(false)}
+                aria-label="Back to search"
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              <p className="text-sm font-semibold text-zinc-800 dark:text-white">Create Custom Exercise</p>
+            </div>
+            <CustomExerciseFields
+              values={customForm}
+              onChange={setCustomForm}
+              namePlaceholder="e.g. Cable Face Pull"
+            />
+            {creatingError && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{creatingError}</p>}
+            <button
+              onClick={createCustom}
+              disabled={creating || !customForm.name.trim()}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            >
+              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {creating ? "Creating…" : "Create & Add"}
+            </button>
+          </div>
+        ) : (merged.length > 0 || (q.length >= 2 && !searching)) && (
           <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
             {merged.map((r) => {
               const already = chosen.some((e) => e.exerciseSlug === r.slug);
@@ -314,25 +528,39 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                   className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-40 dark:hover:bg-zinc-700/50"
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500">{r.trackingType.replace(/_/g, " ")}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{r.name}</p>
+                      {r.isCustom && <CustomExerciseBadge variant="inline" />}
+                    </div>
+                    {/* Which implement this entry is, so "Rear Delt Fly" and
+                        "Rear Delt Fly Machine" are told apart BEFORE the live
+                        screen picks a weight convention off one of them. */}
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      {[implementLabel(r.equipment), r.trackingType.replace(/_/g, " ")].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                   <Plus className="ml-2 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
                 </button>
               );
             })}
-            {/* No exact match? Create it right here and keep building. */}
+            {/* No exact match? Open the full custom-exercise form, pre-filled
+                with what was typed — the same fields the program editor
+                offers, not just a name and a tracking type. */}
             {q.length >= 2 && !merged.some((r) => r.name.toLowerCase() === q) && (
-              <button
-                onClick={createCustom}
-                disabled={creating}
-                className="flex w-full items-center gap-2 border-t border-zinc-100 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-700/50"
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin text-green-600" /> : <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />}
-                <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                  {creating ? "Creating…" : `Create "${query.trim()}" as a new exercise`}
-                </span>
-              </button>
+              <div className="border-t border-zinc-100 px-3 py-2.5 dark:border-zinc-700">
+                <button
+                  onClick={() => {
+                    setCustomForm((prev) => ({ ...prev, name: query.trim() }));
+                    setShowCreateForm(true);
+                  }}
+                  className="flex w-full items-center gap-2 text-left transition-colors"
+                >
+                  <Sparkles className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                    {`Create "${query.trim()}" as a new exercise`}
+                  </span>
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -345,15 +573,27 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
         </p>
       ) : (
         <div className="space-y-1.5">
-          {chosen.map((ex) => (
+          {chosen.map((ex, i) => {
+          // Only the first member of a group carries the kind control, so one
+          // circuit does not offer the same choice three times over; only the
+          // last can swallow the exercise below it.
+          const groupHead = !!ex.groupId && chosen[i - 1]?.groupId !== ex.groupId;
+          const canGrowGroup =
+            !!ex.groupId && i + 1 < chosen.length && chosen[i + 1]?.groupId !== ex.groupId;
+          return (
             <div
               key={ex.exerciseSlug}
-              className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900"
             >
+            <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{ex.name}</p>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                  {implementLabel(ex.equipment) && (
+                    <span className="mr-1">{implementLabel(ex.equipment)} ·</span>
+                  )}
                   {ex.reps ? `${ex.reps} reps` : ex.trackingType.replace(/_/g, " ")}
+                  {ex.groupId && <span className="ml-1 font-semibold text-purple-500 dark:text-purple-400">· {ex.groupLabel || "Superset"}</span>}
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -366,7 +606,7 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                   −
                 </button>
                 <span className="w-10 text-center text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  {ex.sets} set{ex.sets !== 1 ? "s" : ""}
+                  {ex.sets} {setUnitLabel(ex.trackingType, ex.sets).toLowerCase()}
                 </span>
                 <button
                   onClick={() => setSets(ex.exerciseSlug, ex.sets + 1)}
@@ -378,6 +618,24 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                 </button>
               </div>
               <button
+                onClick={() => toggleGroup(ex.exerciseSlug)}
+                aria-label={ex.groupId ? `Break up the group containing ${ex.name}` : `Superset ${ex.name} with the next exercise`}
+                data-testid={`builder-group-toggle-${ex.exerciseSlug}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${ex.groupId ? "text-purple-500 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30" : "text-zinc-400 hover:bg-purple-50 hover:text-purple-500 dark:hover:bg-purple-950/30 dark:hover:text-purple-400"}`}
+              >
+                {ex.groupId ? <Unlink className="h-4 w-4" /> : <Layers className="h-4 w-4" />}
+              </button>
+              {canGrowGroup && (
+                <button
+                  onClick={() => growGroup(ex.exerciseSlug)}
+                  aria-label={`Add the next exercise into the ${(ex.groupLabel || "group").toLowerCase()} containing ${ex.name}`}
+                  data-testid={`builder-group-grow-${ex.exerciseSlug}`}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-purple-500 transition-colors hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/30"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              )}
+              <button
                 onClick={() => removeExercise(ex.exerciseSlug)}
                 aria-label="Remove exercise"
                 className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30 dark:hover:text-red-400"
@@ -385,7 +643,37 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
-          ))}
+
+            {/* Superset or circuit. A circuit is an intent, not a headcount, so
+                it stays an explicit choice — and picking it is what makes the
+                block's rounds agree with its first exercise. */}
+            {groupHead && (
+              <div className="mt-1.5 flex items-center gap-1.5" data-testid={`builder-group-kind-${ex.exerciseSlug}`}>
+                {OFFERED_KINDS.map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => chooseKind(ex.exerciseSlug, k)}
+                    aria-pressed={(ex.groupType || "superset") === k}
+                    data-testid={`builder-group-kind-${k}-${ex.exerciseSlug}`}
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors ${
+                      (ex.groupType || "superset") === k
+                        ? "bg-purple-600 text-white"
+                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                    }`}
+                  >
+                    {k === "superset" ? "Superset" : "Circuit"}
+                  </button>
+                ))}
+                {ex.groupType === "circuit" && (
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    same rounds for every exercise
+                  </span>
+                )}
+              </div>
+            )}
+            </div>
+          );
+          })}
         </div>
       )}
 
@@ -478,6 +766,19 @@ export default function SessionBuilder({ onLaunch, className }: SessionBuilderPr
           </div>
           {logError && <p className="mt-1.5 text-xs text-red-500">{logError}</p>}
         </div>
+      )}
+
+      {showNamePrompt && (
+        <QuickSessionNamePrompt
+          initialName={title}
+          confirmLabel="Save name & log"
+          // The prompt only opens for a past/today log, so logDate is always
+          // the day the work was actually done.
+          fallbackName={fallbackQuickSessionName(logDate)}
+          onConfirm={saveLogOrPlan}
+          onSkip={saveLogOrPlan}
+          onCancel={() => setShowNamePrompt(false)}
+        />
       )}
     </div>
   );

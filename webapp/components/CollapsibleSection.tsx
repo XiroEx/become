@@ -9,6 +9,7 @@
 
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 interface CollapsibleSectionProps<T> {
   title: string;
@@ -69,9 +70,30 @@ export default function CollapsibleSection<T>({
         />
       </button>
 
-      {open && <div className={listClassName}>{shown.map((item, i) => (
-        <div key={keyFor(item, i)}>{renderItem(item, i)}</div>
-      ))}</div>}
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden"
+          >
+            <div className={listClassName}>
+              {shown.map((item, i) => (
+                <motion.div
+                  key={keyFor(item, i)}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: i >= previewCount ? 0 : Math.min(i, 6) * 0.03 }}
+                >
+                  {renderItem(item, i)}
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {(canShowMore || canCollapseList) && (
         <div className="mt-2 flex items-center gap-2">

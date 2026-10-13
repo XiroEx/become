@@ -3,16 +3,33 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLockScroll } from '@/lib/useLockScroll'
+import { formatWeight, formatWeightDelta, holdBand } from '@/lib/dashboard/goalTile'
+import type { GoalReached } from '@/lib/goals/reached'
 
 export type MoodLevel = 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 
 interface DailyCheckInModalProps {
   isOpen: boolean
-  onClose: (data: { mood?: MoodLevel; weight?: number }) => void
+  onClose: (data: { mood?: MoodLevel; weight?: number; goalReached?: GoalReached }) => void
   daysSinceMood?: number
   daysSinceWeight?: number
   lastWeight?: number
   weightUnit?: 'lbs' | 'kg'
+  /** Target weight, already in `weightUnit`. Undefined when no goal is set. */
+  targetWeight?: number
+}
+
+/** What the weight step says about the goal, live as the member types — the
+ *  highest-attention moment for it, and previously the one place that said
+ *  nothing about the goal at all. */
+export function goalLine(typedWeight: string, targetWeight: number | undefined, unit: 'lbs' | 'kg'): string | null {
+  if (targetWeight == null || !(targetWeight > 0)) return null
+  const target = `${formatWeight(targetWeight, unit)} ${unit}`
+  const typed = parseFloat(typedWeight)
+  if (!(typed > 0)) return `Goal: ${target}`
+  const diff = typed - targetWeight
+  if (Math.abs(diff) <= holdBand(unit)) return `Goal: ${target} — right there`
+  return `Goal: ${target} — ${formatWeightDelta(diff, unit)} ${diff > 0 ? 'to go' : 'past it'}`
 }
 
 // Solid color face components - 5 mood levels
@@ -222,8 +239,17 @@ const moodOptions = [
   }
 ]
 
-// Get warning level for days since last entry
-function getWarningInfo(days: number): { level: 'none' | 'mild' | 'moderate' | 'high' | 'critical'; color: string; message: string } {
+/** The mood/weight APIs return this when the member has NO history at all — it
+ *  is a "never logged" sentinel, not a real day count. Rendering it verbatim is
+ *  how a brand-new member's first ever check-in said "999+ days since last log". */
+const NEVER_LOGGED = 999
+
+/** Warning level for days since last entry. `days >= NEVER_LOGGED` means they
+ *  have simply never logged, which is not a lapse — it is their first time. */
+function getWarningInfo(days: number): { level: 'none' | 'mild' | 'moderate' | 'high' | 'critical'; color: string; message: string; firstTime?: boolean } {
+  if (days >= NEVER_LOGGED) {
+    return { level: 'none', color: 'text-zinc-400 dark:text-zinc-500', message: 'First log', firstTime: true }
+  }
   if (days >= 10) {
     return { level: 'critical', color: 'text-red-600 dark:text-red-400', message: `${days}+ days` }
   }
@@ -245,7 +271,8 @@ export default function DailyCheckInModal({
   daysSinceMood = 0,
   daysSinceWeight = 0,
   lastWeight,
-  weightUnit = 'lbs'
+  weightUnit = 'lbs',
+  targetWeight
 }: DailyCheckInModalProps) {
   const [selectedMood, setSelectedMood] = useState<MoodLevel | null>(null)
   const [weight, setWeight] = useState<string>('')
@@ -352,17 +379,23 @@ export default function DailyCheckInModal({
       }
 
       // Submit weight if entered
+      let goalReached: GoalReached | undefined
       if (weight && parseFloat(weight) > 0) {
-        await fetch('/api/weight', {
+        const res = await fetch('/api/weight', {
           method: 'POST',
           headers,
           body: JSON.stringify({ weight: parseFloat(weight), tz: new Date().getTimezoneOffset() })
         })
+        if (res.ok) {
+          const resData = await res.json().catch(() => null)
+          goalReached = resData?.goalReached ?? undefined
+        }
       }
 
-      onClose({ 
-        mood: selectedMood || undefined, 
-        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined 
+      onClose({
+        mood: selectedMood || undefined,
+        weight: weight && parseFloat(weight) > 0 ? parseFloat(weight) : undefined,
+        goalReached,
       })
     } catch (error) {
       console.error('Failed to save check-in:', error)
@@ -390,11 +423,17 @@ export default function DailyCheckInModal({
         headers['Authorization'] = `Bearer ${token}`
       }
 
-      // Record skip for weight tracking
-      await fetch('/api/weight', {
+      // "Skip for Today" has to close the day. It used to POST {skip:true} to
+      // /api/weight, which recorded nothing for mood — so the check-in was still
+      // outstanding and came back after the 8-hour window, on the same day the
+      // member had just dismissed it. That POST also incremented consecutiveSkips
+      // on every press, so skipping three times in a day counted as three skipped
+      // days against the 14-day mandatory weigh-in. /api/checkin records one skip
+      // per local day and suppresses until tomorrow.
+      await fetch('/api/checkin', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ skip: true, tz: new Date().getTimezoneOffset() })
+        body: JSON.stringify({ action: 'skip', tz: new Date().getTimezoneOffset() })
       })
 
       onClose({})
@@ -519,9 +558,9 @@ export default function DailyCheckInModal({
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   How are you feeling?
                 </label>
-                {moodWarning.level !== 'none' && (
+                {(moodWarning.level !== 'none' || moodWarning.firstTime) && (
                   <span className={`text-xs font-medium ${moodWarning.color}`}>
-                    {moodWarning.message} since last log
+                    {moodWarning.firstTime ? 'First log' : `${moodWarning.message} since last log`}
                   </span>
                 )}
               </div>
@@ -566,9 +605,9 @@ export default function DailyCheckInModal({
                 <label htmlFor="weight" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Current Weight ({weightUnit})
                 </label>
-                {weightWarning.level !== 'none' && (
+                {(weightWarning.level !== 'none' || weightWarning.firstTime) && (
                   <span className={`text-xs font-medium ${weightWarning.color}`}>
-                    {weightWarning.message} since last log
+                    {weightWarning.firstTime ? 'First log' : `${weightWarning.message} since last log`}
                   </span>
                 )}
               </div>
@@ -582,6 +621,11 @@ export default function DailyCheckInModal({
                 placeholder="e.g., 185.5"
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-center text-lg font-semibold text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-500 focus:border-blue-500 dark:focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors"
               />
+              {targetWeight != null && (
+                <p className="mt-1.5 text-center text-xs text-zinc-500 dark:text-zinc-400" data-testid="checkin-goal-line">
+                  {goalLine(weight, targetWeight, weightUnit)}
+                </p>
+              )}
             </div>
 
             {/* Action Buttons */}

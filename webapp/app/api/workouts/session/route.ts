@@ -2,17 +2,30 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
+import { trackingBySlug, trackingFor, bellFieldsBySlug, bellFieldsFor } from '@/lib/workout/hydrateTracking'
 
 // GET /api/workouts/session?id=<sessionId> — the full quick (kind:'quick') log
 // for one session: exercises with their logged sets. Powers the calendar/history
 // "summary" (what you did) and "continue" (rebuild + resume) actions.
 
 interface RawSet { setNumber?: number; reps?: number | null; weight?: number | null; duration?: number | null; distance?: number | null; speed?: number | null; completed?: boolean }
-interface RawEx { name: string; exerciseSlug?: string; sets?: RawSet[] }
+interface RawEx {
+  name: string
+  exerciseSlug?: string
+  sets?: RawSet[]
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+}
 interface RawLog {
   kind?: string
   sessionId?: string
   title?: string
+  needsName?: boolean
   focus?: string
   date: Date | string
   completed: boolean
@@ -37,10 +50,16 @@ export async function GET(request: NextRequest) {
     const log = (up?.workoutLogs ?? []).find((l) => l.kind === 'quick' && l.sessionId === id)
     if (!log) return NextResponse.json({ session: null }, { status: 404 })
 
+    // What each exercise asks you to log — from the log itself, else the
+    // catalog. Without it a resumed session came back untyped and unloggable.
+    const bySlug = await trackingBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
+    const bellBySlug = await bellFieldsBySlug((log.exercises ?? []).map((ex) => ex.exerciseSlug))
+
     return NextResponse.json({
       session: {
         sessionId: log.sessionId,
         title: log.title || 'Quick Session',
+        needsName: log.needsName,
         focus: log.focus,
         date: new Date(log.date).toISOString(),
         completed: log.completed,
@@ -48,13 +67,28 @@ export async function GET(request: NextRequest) {
         exercises: (log.exercises ?? []).map((ex) => ({
           name: ex.name,
           exerciseSlug: ex.exerciseSlug || '',
+          trackingType: trackingFor(ex, bySlug),
+          ...bellFieldsFor(ex, bellBySlug),
           sets: (ex.sets ?? []).map((s) => ({
             setNumber: s.setNumber,
             reps: s.reps ?? null,
             weight: s.weight ?? null,
             duration: s.duration ?? null,
+            // Cardio is a distance and a speed, not a load. Leaving these out
+            // meant a resumed treadmill session came back without them.
+            distance: s.distance ?? null,
+            speed: s.speed ?? null,
             completed: !!s.completed,
           })),
+          // Grouping and the prescription come back too: this is what
+          // "continue" rebuilds a session from, and a superset that is dropped
+          // here comes back as two unrelated exercises.
+          ...(ex.groupId ? { groupId: ex.groupId } : {}),
+          ...(ex.groupType ? { groupType: ex.groupType } : {}),
+          ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+          ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+          ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
+          ...(ex.prescription ? { prescription: ex.prescription } : {}),
         })),
       },
     })
@@ -87,16 +121,45 @@ export async function DELETE(request: NextRequest) {
 //   { id, date }            → re-date (date = YYYY-MM-DD or ISO): move to another day
 //   { id, skipped: true }   → mark the planned session skipped
 //   { id, skipped: false }  → un-skip (back to planned)
-// Re-date and skip can be sent together or separately.
+//   { id, title }           → rename without altering the recorded workout
+//   { id, favorite: true }  → star the session for quick access from the list
+//   { id, favorite: false } → unstar
+// Fields can be sent together or separately.
 export async function PATCH(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
     if (!auth.success) return NextResponse.json({ error: auth.error ?? 'Unauthorized' }, { status: 401 })
-    const body = await request.json().catch(() => ({})) as { id?: string; date?: string; skipped?: boolean }
+    const body = await request.json().catch(() => ({})) as {
+      id?: string
+      date?: string
+      skipped?: boolean
+      title?: unknown
+      favorite?: boolean
+    }
     const id = body.id
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    if (body.date === undefined && body.skipped === undefined) {
-      return NextResponse.json({ error: 'date or skipped is required' }, { status: 400 })
+    if (body.date === undefined && body.skipped === undefined && body.title === undefined && body.favorite === undefined) {
+      return NextResponse.json({ error: 'date, skipped, title, or favorite is required' }, { status: 400 })
+    }
+    if (body.title !== undefined && (typeof body.title !== 'string' || !body.title.trim())) {
+      return NextResponse.json({ error: 'title must not be empty' }, { status: 400 })
+    }
+
+    // ONE boolean decides both the gate and the write. `body` is unvalidated
+    // JSON — the `favorite?: boolean` annotation is erased at compile time — so
+    // reading `=== true` for the gate while writing `!!body.favorite` left a
+    // one-character bypass: `{"favorite": 1}` skipped requireQuota and still
+    // starred the session. Derive it once and there is no shape to disagree on.
+    const wantsFavorite = body.favorite !== undefined && !!body.favorite
+
+    // A STARRED quick session is what "custom session" means for the free
+    // allowance: the SessionBuilder's output only becomes a durable, reusable
+    // artifact once it is starred. The workout log itself is history and is
+    // never capped — see handleQuickSessionSave. UNstarring is always free, so
+    // a member at 3/3 always has a way back under the cap.
+    if (wantsFavorite) {
+      const gate = await requireQuota(request, 'custom-sessions')
+      if (!gate.ok) return gate.response
     }
 
     const set: Record<string, unknown> = {}
@@ -105,18 +168,35 @@ export async function PATCH(request: NextRequest) {
       const d = new Date(raw)
       if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'invalid date' }, { status: 400 })
       set['workoutLogs.$[elem].date'] = d
-      set['workoutLogs.$[elem].startedAt'] = d
+      // startedAt is deliberately left untouched: it's the "has this session
+      // actually been engaged" signal GET /api/workouts/in-progress gates on
+      // (see IWorkoutLog.startedAt), and this is a re-date, not an engagement.
+      // Stamping it here would make dragging a never-started planned session
+      // onto today/a past day show it as "in progress" — the same bug this
+      // gate exists to prevent, just reached from the calendar instead of
+      // "Plan it". A log that was already started keeps its real startedAt;
+      // one that wasn't stays that way after moving days.
     }
     if (body.skipped !== undefined) {
       set['workoutLogs.$[elem].skipped'] = !!body.skipped
     }
+    if (typeof body.title === 'string') {
+      set['workoutLogs.$[elem].title'] = body.title.trim()
+    }
+    if (body.favorite !== undefined) {
+      set['workoutLogs.$[elem].favorite'] = wantsFavorite
+    }
+    set.updatedAt = new Date()
 
     await dbConnect()
-    await UserProgress.updateOne(
-      { userId: auth.userId },
+    const result = await UserProgress.updateOne(
+      { userId: auth.userId, workoutLogs: { $elemMatch: { sessionId: id, kind: 'quick' } } },
       { $set: set },
       { arrayFilters: [{ 'elem.sessionId': id, 'elem.kind': 'quick' }] },
     )
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: 'Quick session not found' }, { status: 404 })
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating quick session:', error)

@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Users, HeartHandshake, MessageCircle, UserPlus, TrendingUp } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
@@ -129,7 +130,10 @@ export default function SocialDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps protocols are open.
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(PROTOCOLS, reps)
   const [connections, setConnections] = useState(0)
   const [reachedToday, setReachedToday] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
@@ -219,6 +223,7 @@ export default function SocialDashboard() {
 
   return (
     <div className="space-y-5">
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-pink-500" />
       <SystemHero
         Icon={Users}
         title="Social"
@@ -273,8 +278,8 @@ export default function SocialDashboard() {
               title={p.title}
               blurb={p.blurb}
               color="text-pink-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Social to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in Social to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}

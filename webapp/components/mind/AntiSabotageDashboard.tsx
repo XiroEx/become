@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Shield, Zap, Eye, Search, CircleSlash, RefreshCcw, Hand } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
@@ -126,7 +127,10 @@ export default function AntiSabotageDashboard() {
   const { toast, showToast } = useToast()
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps protocols are open.
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(PROTOCOLS, reps)
   const [caught, setCaught] = useState(0)
   const [flow, setFlow] = useState<{ title: string; kind: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [catching, setCatching] = useState(false)
@@ -223,6 +227,7 @@ export default function AntiSabotageDashboard() {
 
   return (
     <div className="space-y-5">
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-orange-500" />
       <SystemHero
         Icon={Shield}
         title="Anti-Sabotage"
@@ -277,8 +282,8 @@ export default function AntiSabotageDashboard() {
               title={p.title}
               blurb={p.blurb}
               color="text-orange-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Anti-Sabotage to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in Anti-Sabotage to unlock`}
               onClick={() => setFlow({ title: p.title, kind: 'protocol', steps: p.steps })}
             />
           ))}

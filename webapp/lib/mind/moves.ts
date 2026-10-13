@@ -10,6 +10,7 @@
 // pure + client-safe (no server/DOM imports) so both engines and the UI share it.
 
 import type { MindState } from '@/lib/mindContent'
+import type { PathSession } from './sessionPath'
 
 export type MoveKind =
   | 'state-check'
@@ -120,15 +121,15 @@ export const BREATH_PROTOCOLS: Record<string, BreathProtocol> = {
 export function breathForState(state: MindState | null | undefined): BreathProtocol {
   switch (state) {
     case 'stressed':
-      return BREATH_PROTOCOLS.sigh
+      return BREATH_PROTOCOLS.sigh!
     case 'distracted':
-      return BREATH_PROTOCOLS.box
+      return BREATH_PROTOCOLS.box!
     case 'low_energy':
-      return BREATH_PROTOCOLS.energize
+      return BREATH_PROTOCOLS.energize!
     case 'locked_in':
-      return BREATH_PROTOCOLS.coherence
+      return BREATH_PROTOCOLS.coherence!
     default:
-      return BREATH_PROTOCOLS.sigh
+      return BREATH_PROTOCOLS.sigh!
   }
 }
 
@@ -175,14 +176,22 @@ export interface SessionContext {
   /** Most recent logged state (yesterday/today) — seeds the opening; the live
    *  state-check answer overrides downstream moves at play time. */
   recentState?: MindState | null
+  /** The exact word they last tapped ("Grateful", "Drained"). Twenty feelings map
+   *  onto four states, so the composer needs the word, not just the bucket. */
+  recentFeeling?: string | null
+  /** Today's dashboard mood (1–5), if logged recently. The home-screen tile and
+   *  the Mind check-in used to be unconnected; this is how a session opens from
+   *  what the member already said. */
+  moodToday?: { value: 1 | 2 | 3 | 4 | 5; label: string; at: number } | null
   missionAction?: string | null
   identityStatement?: string | null
   /** Effective move kinds from the user's PREVIOUS session — the composer avoids
    *  repeating them so back-to-back sessions feel different. */
   recentKinds?: string[] | null
-  /** The 50-session directed path: the focus this session is FOR (null once the
-   *  path is complete → fully adaptive). Prescribes the composer's spine. */
-  pathFocus?: { n: number; chapter: number; focus: string; directive: string } | null
+  /** The 50-session directed path: the session this day is FOR (null once the
+   *  path is complete → fully adaptive). Its `shape` decides the session BODY;
+   *  the user's state decides the opening. */
+  pathFocus?: PathSession | null
   /** Deterministic rotation seed (day-of-year) so the same day is stable. */
   dayOfYear: number
   /** Optional explicit seed — overrides dayOfYear so replays vary run-to-run. */
@@ -199,6 +208,15 @@ export interface MindSessionPlan {
   moves: Move[]
   /** Flat XP awarded once per day on first completion (gated server-side). */
   rewardXp: number
+  /** Per-session finish line from the blueprint this session was built on — the
+   *  same per-tool uniqueness the arsenal flows have (DONE_TEXT). Falls back to a
+   *  generic line when absent (arsenal one-move/themed plans don't set it). */
+  doneText?: string
+  /** Which shape produced this session, e.g. "open-one-point/commit". Diagnostic. */
+  blueprintId?: string
+  /** Which STATE opening the session is currently running. The live check-in swaps
+   *  this (and only this) so the path body survives a realignment. */
+  openingId?: string
   /** The arsenal segment this session leads into next, chosen by the composer
    *  from what the session actually surfaced (their reflections + its theme), with
    *  a second-person reason. The player prefers this over the deterministic pick,
@@ -230,8 +248,9 @@ export interface SceneProps {
    *  typed answer) pass it so the session can remember it; recitation/structural
    *  scenes just call onDone(). */
   onDone: (answer?: SessionAnswer) => void
-  /** state-check only: report the chosen state up to the player. */
-  onState?: (state: MindState) => void
+  /** state-check only: report the chosen state up to the player, plus the exact
+   *  feeling word they tapped ("Grateful", "Drained") where there is one. */
+  onState?: (state: MindState, feeling?: string) => void
   /** Admin lab preview: scenes that persist (state/win/discipline) skip their
    *  network writes so testing never pollutes the account. */
   preview?: boolean

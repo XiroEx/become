@@ -7,13 +7,16 @@
 // state-check answer (which resolves the breath protocol), and completion (which
 // posts to /api/mind/session to award the daily XP once).
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, ArrowLeft, ArrowRight, Sparkles, Check, Flame, ChevronUp, Share2 } from 'lucide-react'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, SYSTEM_INFO } from '@/lib/mindXP'
 import { recommendSegment, SEGMENT_LABELS } from '@/lib/mind/recommendSegment'
+import { reflectOnAnswers } from '@/lib/mind/reflect'
+import { realignOpening } from '@/lib/mind/blueprints'
+import type { SessionContext } from '@/lib/mind/moves'
 import {
   BREATH_PROTOCOLS,
   breathForState,
@@ -60,6 +63,40 @@ interface CompleteResult {
   featureUnlocks?: string[]
 }
 
+// What each beat is called on the completion recap. Past tense: this is a list of
+// things they DID, which is the point — it turns the wait for the reflection into
+// a reward instead of a spinner.
+const MOVE_RECAP_LABEL: Record<string, string> = {
+  'state-check': 'Checked in honestly',
+  breath: 'Steadied your breathing',
+  identity: 'Affirmed who you are',
+  win: 'Banked a real win',
+  challenge: 'Faced the hard thing',
+  mission: 'Named your one move',
+  vision: 'Saw the future self',
+  antisabotage: 'Caught the pattern',
+  social: 'Pulled someone in',
+  mirror: 'Said it to your own face',
+  choice: 'Answered honestly',
+  type: 'Wrote it out word for word',
+  speak: 'Said it out loud',
+  assemble: 'Rebuilt the line',
+  compose: 'Made the words yours',
+  acknowledge: 'Told yourself the truth',
+  interrogative: 'Asked yourself straight',
+  contrast: 'Planned around the obstacle',
+}
+
+// The completion sequence. Sealing → recap of the beats → score → the reflection.
+// Deliberately unhurried: this is the moment the session is meant to land, and it
+// comfortably outlasts the 2-4s the generated close takes to write. Roughly 4s on
+// a short session, 5s on a long one. Tap anywhere to skip.
+const PAYOFF_SEAL_MS = 1100
+const PAYOFF_RECAP_STEP_MS = 500
+/** Beat of stillness after the last recap line, before the score moves in. */
+const PAYOFF_RECAP_HOLD_MS = 400
+const PAYOFF_SCORE_MS = 1000
+
 const FEATURE_UNLOCK_LABEL: Record<string, string> = {
   coach: 'Your coach is unlocked — talk it through any time.',
   becoming: 'The Becoming is unlocked — your training log is live.',
@@ -89,6 +126,10 @@ export interface SessionPlayerProps {
   /** Systems the user has unlocked — scopes the post-session "next segment" CTA
    *  to what they can actually open. Defaults to all seven. */
   unlockedSystems?: string[]
+  /** The context the plan was composed from. Supplying it lets the session
+   *  REALIGN to whatever the user reports on the live check-in — without it the
+   *  session is stuck on the state they felt last time. */
+  sessionContext?: SessionContext
 }
 
 type Stage = 'intro' | 'move' | 'payoff' | 'levelup'
@@ -100,17 +141,27 @@ function authHeaders(): HeadersInit {
   }
 }
 
-export default function SessionPlayer({ plan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems }: SessionPlayerProps) {
+export default function SessionPlayer({ plan: initialPlan, onExit, preview = false, initialLiveState = null, gated = false, onRequireAuth, unlockedSystems, sessionContext }: SessionPlayerProps) {
   const router = useRouter()
   // Gated (public share) runs are always read-only — never write progress.
   preview = preview || gated
   const [stage, setStage] = useState<Stage>('intro')
   const [index, setIndex] = useState(0)
   const [liveState, setLiveState] = useState<MindState | null>(initialLiveState)
+  // The plan can be REBUILT mid-session by the check-in, so it lives in state.
+  const [plan, setPlan] = useState<MindSessionPlan>(initialPlan)
+  const [realigned, setRealigned] = useState<string | null>(null)
   const [result, setResult] = useState<CompleteResult | null>(null)
   const [levelUp, setLevelUp] = useState<LevelUpResult | null>(null)
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState(false)
+  // Adaptive close — a short reflection written from what they actually answered
+  // this session, replacing a payoff that said the same thing to everyone. Same
+  // mechanism the arsenal flows have used all along (GuidedFlow's onReflect).
+  const [reflection, setReflection] = useState<string | null>(null)
+  const [reflecting, setReflecting] = useState(false)
+  // 0 sealing · 1 recapping the beats · 2 score · 3 everything (incl. reflection)
+  const [payoffPhase, setPayoffPhase] = useState(0)
 
   const total = plan.moves.length
   const rawMove = plan.moves[index]
@@ -120,11 +171,74 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
   const move =
     rawMove?.altPositive && liveState === 'locked_in' ? rawMove.altPositive : rawMove
 
+  // The beats they actually played, in order — the completion recap. Uses the
+  // EFFECTIVE move (post locked-in swap) so the list matches what they saw.
+  const recapItems = useMemo(
+    () =>
+      plan.moves
+        .map((m) => (m.altPositive && liveState === 'locked_in' ? m.altPositive : m))
+        .map((m) => MOVE_RECAP_LABEL[m.kind])
+        .filter(Boolean),
+    [plan.moves, liveState],
+  )
+
+  // Drive the completion sequence. Each phase is a real beat of the animation, and
+  // together they cover the couple of seconds the generated close takes to arrive.
+  useEffect(() => {
+    if (stage !== 'payoff') return
+    const recapMs = PAYOFF_RECAP_STEP_MS * recapItems.length + PAYOFF_RECAP_HOLD_MS
+    const t1 = setTimeout(() => setPayoffPhase(1), PAYOFF_SEAL_MS)
+    const t2 = setTimeout(() => setPayoffPhase(2), PAYOFF_SEAL_MS + recapMs)
+    const t3 = setTimeout(() => setPayoffPhase(3), PAYOFF_SEAL_MS + recapMs + PAYOFF_SCORE_MS)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [stage, recapItems.length])
+
+  /** Tap anywhere to jump to the end of the sequence — never trap someone in an
+   *  animation they have already seen. */
+  const skipPayoff = useCallback(() => setPayoffPhase(3), [])
+
   // The reflective answers the user gave this session (a picked choice, etc.),
   // deduped by question. Persisted to MindJournal on completion so the NEXT
   // session can build on what they actually said — the same memory the arsenal
   // flows use.
   const answersRef = useRef<SessionAnswer[]>([])
+
+  /**
+   * The check-in just told us how they actually feel. Rebuild the rest of the
+   * session around THAT, the way naming your state in the arsenal drops you
+   * straight into the matching reset.
+   *
+   * The plan was composed before it was played (and the AI plan is cached for up
+   * to 8h), so it was built for whatever they felt LAST time. Answering "low
+   * energy" used to change nothing but the breath protocol — the core and close
+   * beats were already locked in. Only the moves AFTER the check-in are replaced,
+   * and only when today's answer actually calls for a different session.
+   */
+  const onLiveState = useCallback((state: MindState, feeling?: string) => {
+    setLiveState(state)
+    // The check-in IS an answer. Recording it guarantees the closing reflection
+    // always has something to read — the state/path split moved the guaranteed
+    // answer-producing beat out of the session, so a breath opening plus a
+    // non-typing body left the close with nothing and it stopped appearing.
+    const arr = answersRef.current
+    const q = 'How I checked in today'
+    const a = feeling || state.replace('_', ' ')
+    const at = arr.findIndex((x) => x.q === q)
+    if (at >= 0) arr[at] = { q, a }
+    else arr.unshift({ q, a })
+    if (!sessionContext) return
+    // Swap ONLY the opening. The body belongs to today's path session, so the
+    // curriculum theme — and every word the AI personalized into it — survives.
+    // Recognise the feeling, then carry on with the path.
+    const next = realignOpening(plan.openingId, state, sessionContext)
+    if (!next) return
+    setPlan((p) => ({
+      ...p,
+      moves: [p.moves[0], next.move, ...p.moves.slice(2)],
+      openingId: next.opening.id,
+    }))
+    setRealigned(next.opening.title)
+  }, [plan.openingId, sessionContext])
 
   const complete = useCallback(async () => {
     setStage('payoff')
@@ -134,7 +248,8 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
       return
     }
     // Remember this session's answers (best-effort) so tomorrow's session builds
-    // on them instead of asking from scratch.
+    // on them instead of asking from scratch — and read them back to the user
+    // right now as the close, so the payoff responds to what they just said.
     if (answersRef.current.length) {
       const lines = answersRef.current.map((x) => ({ prompt: x.q, answer: x.a }))
       void fetch('/api/mind/journal', {
@@ -142,6 +257,11 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         headers: authHeaders(),
         body: JSON.stringify({ system: 'session', kind: 'session', title: plan.intro.title, lines }),
       }).catch(() => {})
+      setReflecting(true)
+      void Promise.resolve(reflectOnAnswers('Mind session', lines))
+        .then((t) => setReflection(t && t.trim() ? t.trim() : null))
+        .catch(() => setReflection(null))
+        .finally(() => setReflecting(false))
     }
     try {
       // Report the EFFECTIVE kinds the player actually showed — so a locked-in
@@ -282,6 +402,19 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
         </div>
       </div>
 
+      {/* Realignment notice — the check-in changed the session, so say so. Being
+          told "we rebuilt this around what you just said" is the whole point of
+          asking. Shown on the first beat after the check-in. */}
+      {realigned && stage === 'move' && index === 1 && (
+        <motion.p
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mx-4 mt-2.5 rounded-full bg-white/10 px-3 py-1.5 text-center text-[11px] font-semibold text-white/70"
+        >
+          Rebuilt around how you just checked in · {realigned}
+        </motion.p>
+      )}
+
       {/* Stage */}
       <div className="relative flex-1 overflow-hidden">
         <AnimatePresence mode="wait">
@@ -291,7 +424,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.55, ease: 'easeOut' }}
               className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
             >
               <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-green-500">
@@ -322,7 +455,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
               className="absolute inset-0"
             >
               {move.kind === 'state-check' && (
-                <StateCheckScene move={move} onState={setLiveState} onDone={next} preview={preview} />
+                <StateCheckScene move={move} onState={onLiveState} onDone={next} preview={preview} />
               )}
               {move.kind === 'breath' && (
                 <BreathScene move={move} protocol={resolvedProtocol} onDone={next} />
@@ -353,40 +486,128 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.35 }}
-              className="flex h-full w-full flex-col items-center justify-center px-6 text-center"
+              onClick={skipPayoff}
+              className="flex h-full w-full flex-col items-center justify-center overflow-y-auto px-6 py-8 text-center"
             >
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 260, damping: 18, delay: 0.1 }}
-                className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-green-500"
-              >
-                <Check className="h-10 w-10" strokeWidth={3} />
-              </motion.span>
+              {/* Seal — the check lands inside expanding rings. The rings keep
+                  moving through the recap so the screen is never static while the
+                  generated close is still being written. */}
+              <span className="relative mb-5 flex h-20 w-20 items-center justify-center">
+                {[0, 1, 2].map((i) => (
+                  <motion.span
+                    key={i}
+                    aria-hidden
+                    className="absolute inset-0 rounded-full border border-violet-300/40"
+                    initial={{ scale: 0.7, opacity: 0 }}
+                    animate={{ scale: [0.7, 1.9], opacity: [0.55, 0] }}
+                    transition={{
+                      duration: 3.4,
+                      repeat: payoffPhase < 3 ? Infinity : 0,
+                      delay: i * 0.9,
+                      ease: 'easeOut',
+                    }}
+                  />
+                ))}
+                <motion.span
+                  initial={{ scale: 0, rotate: -25 }}
+                  animate={{ scale: 1, rotate: 0 }}
+                  transition={{ type: 'spring', stiffness: 150, damping: 17, delay: 0.15 }}
+                  className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-green-500"
+                >
+                  <motion.span
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ delay: 0.5, duration: 0.6 }}
+                  >
+                    <Check className="h-10 w-10" strokeWidth={3} />
+                  </motion.span>
+                </motion.span>
+              </span>
               <h1 className="text-2xl font-extrabold">
-                {result?.leveledUp ? 'Level up.' : result?.trainingMode ? 'Another rep in.' : 'You showed up.'}
+                {result?.leveledUp
+                  ? 'Level up.'
+                  : result?.trainingMode
+                    ? 'Another rep in.'
+                    : /* Per-session finish line from the blueprint, so two sessions
+                         never close on the same words. */
+                      plan.doneText ?? 'You showed up.'}
               </h1>
               <p className="mt-2 text-white/60">
                 {result?.leveledUp
                   ? `You climbed to Level ${result.level}.`
                   : "That's how it's built — one rep at a time."}
               </p>
-              {result && (result.xpAwarded ?? 0) > 0 && (
+
+              {/* Recap — the beats they just played, ticking in one at a time.
+                  This is what fills the couple of seconds the generated close
+                  takes, and it earns the wait: it is a list of things they did. */}
+              {payoffPhase >= 1 && (
+                <motion.ul
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-5 flex w-full max-w-xs flex-col gap-1.5"
+                >
+                  {recapItems.map((label, i) => (
+                    <motion.li
+                      key={`${label}-${i}`}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{
+                        delay: payoffPhase >= 3 ? 0 : (i * PAYOFF_RECAP_STEP_MS) / 1000,
+                        duration: 0.45,
+                        ease: 'easeOut',
+                      }}
+                      className="flex items-center gap-2.5 rounded-xl bg-white/[0.06] px-3 py-2 text-left"
+                    >
+                      <Check className="h-3.5 w-3.5 shrink-0 text-green-400" strokeWidth={3} />
+                      <span className="text-[13px] font-medium text-white/75">{label}</span>
+                    </motion.li>
+                  ))}
+                </motion.ul>
+              )}
+
+              {/* Adaptive close — written from the answers they just gave. Only
+                  appears when the session actually collected a reflection; a
+                  failure quietly leaves the payoff as it was. */}
+              {payoffPhase >= 3 && (reflecting || reflection) && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-5 w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5"
+                >
+                  {reflecting ? (
+                    <div className="flex items-center justify-center gap-2.5 text-white/50">
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      <span className="text-sm">Reading what you said…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Here&apos;s what I see</p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-white/80">{reflection}</p>
+                    </>
+                  )}
+                </motion.div>
+              )}
+              {payoffPhase >= 2 && result && (result.xpAwarded ?? 0) > 0 && (
                 <motion.p
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-5 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-green-300"
                 >
                   +{result.xpAwarded} XP
                 </motion.p>
               )}
               {/* Level bar — the per-user, XP-driven progress. */}
-              {result?.level != null && (
+              {payoffPhase >= 2 && result?.level != null && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-4 w-full max-w-xs"
                 >
                   <div className="flex items-center justify-between text-xs font-semibold">
@@ -398,28 +619,28 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                   </div>
                 </motion.div>
               )}
-              {result?.trainingMode && (
+              {payoffPhase >= 2 && result?.trainingMode && (
                 <p className="mt-3 max-w-xs text-xs text-white/40">
                   You&apos;re in cooldown — this rep leveled you up but didn&apos;t count toward your chapter.
                 </p>
               )}
-              {(result?.featureUnlocks ?? []).map((f) => (
+              {(payoffPhase >= 2 ? result?.featureUnlocks ?? [] : []).map((f) => (
                 <motion.p
                   key={f}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-amber-400/15 px-3.5 py-1.5 text-xs font-semibold text-amber-300"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   {FEATURE_UNLOCK_LABEL[f] ?? f}
                 </motion.p>
               ))}
-              {result && typeof result.streak === 'number' && result.streak > 1 && (
+              {payoffPhase >= 2 && result && typeof result.streak === 'number' && result.streak > 1 && (
                 <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
+                  transition={{ duration: 0.55, ease: 'easeOut' }}
                   className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-300"
                 >
                   <Flame className="h-4 w-4" />
@@ -427,7 +648,7 @@ export default function SessionPlayer({ plan, onExit, preview = false, initialLi
                 </motion.p>
               )}
 
-              {result?.chapterAdvanced ? (
+              {payoffPhase < 3 ? null : result?.chapterAdvanced ? (
                 <>
                   {/* Chapters auto-advance on counted main sessions — the server
                       already unlocked it; this just reveals what's new. */}

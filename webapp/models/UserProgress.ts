@@ -3,6 +3,14 @@ import type { IExercisePR, IPRDimension } from '@/lib/exercisePRs'
 
 export interface IWeightEntry {
   date: Date
+  /**
+   * When the member actually made this entry (an INSTANT — `date` is the
+   * 00:00Z marker for the local DAY it belongs to). Written since back-dated
+   * writes existed; absent on older rows, which any replay may overwrite.
+   * Used to keep the newer value when the same day is delivered twice — see
+   * isStaleReplay in lib/dayWindow.ts.
+   */
+  loggedAt?: Date
   /** Raw number the member typed, in `unit`. */
   weight: number
   /** The unit `weight` was entered in. Absent on entries logged before this
@@ -10,10 +18,25 @@ export interface IWeightEntry {
    *  what they were using at the time. */
   unit?: 'lbs' | 'kg'
   bodyFat?: number // percentage
+  /**
+   * Where this weigh-in came from. Absent means what it has always meant: the
+   * member typed it into Become. `'healthkit'` / `'health-connect'` mean it was
+   * IMPORTED from a Health sample, which is not a member action — see
+   * lib/healthImport.ts (no streak day, no answer to the weight prompt).
+   */
+  source?: 'healthkit' | 'health-connect'
+  /**
+   * The imported sample's own id. Health re-offers the same rows on every sync,
+   * so this is the only thing that says "this is that one again" — a repeat is
+   * ignored rather than re-writing the day (findEntryByExternalId).
+   */
+  externalId?: string
 }
 
 export interface IMoodEntry {
   date: Date
+  /** When the member actually made this entry — see IWeightEntry.loggedAt. */
+  loggedAt?: Date
   mood: 1 | 2 | 3 | 4 | 5 // 1 = bad, 2 = not great, 3 = okay, 4 = pretty good, 5 = great
 }
 
@@ -41,6 +64,23 @@ export interface IExerciseLog {
   // Grouping metadata (mirrors program exercise grouping for analysis)
   groupId?: string
   groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  // Added mid-session ("build as you go") rather than programmed. A program
+  // workout rebuilds its exercise list from the program on every load, so
+  // without this flag anything added during the session would vanish on
+  // resume and leave its logged sets orphaned.
+  addedAdHoc?: boolean
+  // What was prescribed for an added exercise (sets/reps/duration/rest). The
+  // logged sets alone cannot say whether an untouched 3x12 was three sets of
+  // twelve or three sets of nothing.
+  prescription?: {
+    sets?: number
+    reps?: string
+    duration?: string
+    rest?: string
+    trackingType?: string
+  }
   // Exercise swap tracking
   originalExerciseSlug?: string  // If swapped, the originally programmed exercise slug
   swappedFromName?: string       // The original exercise name before swap
@@ -62,18 +102,35 @@ export interface IWorkoutLog {
   kind?: 'program' | 'quick'
   // Display title for quick sessions (e.g. "Push Day", "Quick Legs").
   title?: string
+  // Whether the title is still automatic/default copy. Kept separate from the
+  // text because generated titles can sound like names the member chose.
+  needsName?: boolean
   // Client-generated id used to match-for-update a quick session across
   // incremental saves within the same live session (program logs use
-  // programId+day+today instead).
+  // `attemptId` below, falling back to programId+day+window).
   sessionId?: string
+  // Client-generated id for ONE attempt at a program day, sent on every save
+  // of that attempt (the program-workout analogue of `sessionId`). POST
+  // /api/workouts matches it BEFORE its date windows, so a save replayed from
+  // an offline queue — including after the member's local midnight, where no
+  // window matches any more — updates this log instead of inserting a second
+  // one and running the completion side effects twice. Absent on legacy logs
+  // and on saves from a client that sends no id.
+  attemptId?: string
   // Optional focus tag for quick sessions (e.g. 'push' | 'legs' | 'full').
   focus?: string
   completed: boolean
   // Quick sessions only: a planned session the user deliberately skipped. Never
   // set on program logs (those track skips on the Schedule slot instead).
   skipped?: boolean
+  // Quick sessions only: starred from the Sessions list for quick access.
+  favorite?: boolean
   duration?: number // in minutes (final, set on completion)
-  startedAt?: Date // First time the live view was opened / first set saved
+  // Set once the live view is genuinely engaged (opened, or a later autosave
+  // from it) — absent on a quick session written by "Plan it", which only
+  // records a future/today placeholder nobody has started. Read by
+  // GET /api/workouts/in-progress: no startedAt, no "in progress" pill.
+  startedAt?: Date
   activeSeconds?: number // Accumulated active seconds across all sessions
   notes?: string
   exercises: IExerciseLog[]
@@ -112,6 +169,31 @@ export interface IUserProgress {
     lastWeightDate?: Date // Last date weight was logged
     consecutiveSkips: number // Number of consecutive days skipped
   }
+  // Daily check-in gating. Lives on the server, not in localStorage, so that a
+  // member who checks in from the home-screen PWA is not asked again in Safari
+  // (iOS gives standalone web apps their own storage container).
+  checkIn?: {
+    lastSkippedDate?: Date // Local day on which "Skip for Today" was pressed
+    lastShownAt?: Date // Last time the modal was actually put in front of them
+  }
+  /**
+   * "Start a program?" modal. Lives here rather than in localStorage because an
+   * installed iOS PWA gets its own storage container and Safari evicts the key
+   * anyway — see lib/programNudge.ts for why that broke the permanent opt-out.
+   */
+  programNudge?: {
+    dismissCount?: number
+    lastDismissedAt?: Date
+    dontShowAgain?: boolean
+    /**
+     * Times the modal has actually been put on screen. Dismissals alone were
+     * not enough: leaving the modal any way other than its two buttons counted
+     * for nothing, so the member who never tapped either stayed at zero and
+     * was never offered the opt-out.
+     */
+    shownCount?: number
+    lastShownAt?: Date
+  }
   workoutLogs: IWorkoutLog[]
   activePrograms: IActiveProgram[]
   currentProgram?: {
@@ -122,28 +204,74 @@ export interface IUserProgress {
   }
   streakDays: number
   longestStreak: number
+  /**
+   * Local day keys covered by a super-streak freeze. One freeze at a time,
+   * earned back a month after it is spent (see lib/streaks/freeze).
+   */
+  superFreezeDays?: string[]
   lastActivityDate?: Date
   streakFreezes: number
   milestonesReached: number[]
   lastStreakEmailDate?: Date
   totalWorkouts: number
+  /** Master switch. Undefined/missing reads as ON — same opt-out convention as
+   *  notificationPrefs.<category> below. Only an explicit false, set when the
+   *  user turns notifications off in Settings, blocks new subscriptions. */
+  notificationsEnabled?: boolean
   notificationPrefs?: {
     streakAtRisk?: boolean
     workoutReminder?: boolean
     mealReminder?: boolean
     reEngagement?: boolean
     chatMessage?: boolean
+    /** The daily Mind session nudge — the core ritual, which had no reminder at all. */
+    mindReminder?: boolean
+    goalNudge?: boolean
+    superStreakAtRisk?: boolean
+    /** Daily mood + weight check-in — a push so it reaches members who don't
+     *  happen to open the app during the window the in-app modal relies on. */
+    checkInReminder?: boolean
+    /**
+     * The morning lock-screen glance (lib/widgets/glance.ts).
+     *
+     * OPT-IN, and the ONLY key here that is: every other entry is a nudge that
+     * fires when something is wrong, and undefined reads as ON. This one is a
+     * standing daily card the member asked to see, and it lands in the same
+     * morning as the workout and Mind reminders — so it is sent only on an
+     * explicit `true`. Read it with `=== true`, never `!== false`.
+     */
+    dailyGlance?: boolean
   }
   lastPushSentAt?: {
     streakAtRisk?: Date
     workoutReminder?: Date
     mealReminder?: Date
     reEngagement?: Date
+    mindReminder?: Date
+    /** "Your program has no training days set" nudge. */
+    scheduleSetup?: Date
+    goalNudge?: Date
+    goalNudgeKey?: string
+    goalNudgeKeyAt?: Date
+    superStreakAtRisk?: Date
+    dailyGlance?: Date
+    checkInReminder?: Date
   }
-  // Browser-reported Date.getTimezoneOffset() in minutes — positive when local
-  // is BEHIND UTC (e.g. 300 for EST). Captured opportunistically from tz-aware
-  // requests so the cron can send notifications at a reasonable LOCAL hour.
+  // Client-reported Date.getTimezoneOffset() in minutes — positive when local
+  // is BEHIND UTC (e.g. 300 for EST). Written by POST /api/me/timezone (both
+  // apps, on app open, at most once per local day) and by POST /api/workouts
+  // when a save carries a `tz`, so the cron can send notifications at a
+  // reasonable LOCAL hour. Validated on the way in by lib/captureUserTimezone.ts
+  // — never a stand-in, because a member stored as UTC gets their morning push
+  // in the small hours.
   timezoneOffset?: number
+  /**
+   * IANA zone, e.g. "America/New_York". Preferred over timezoneOffset because a
+   * stored offset is a snapshot: it is wrong for half the year the moment
+   * daylight saving moves, and only self-corrects if the member opens the app.
+   * A zone name stays right forever, including for members who go quiet.
+   */
+  timezone?: string
   // Persisted personal records, kept in lockstep with workoutLogs by the
   // POST /api/workouts save path. Read by GET endpoints instead of recomputing
   // from workoutLogs on every request.
@@ -155,6 +283,10 @@ export interface IUserProgress {
   // Dashboard rotator pins — ids that always appear first in the dashboard
   // tile list, in this exact order. Defaults to [].
   pinnedTiles: string[]
+  // Manual drag order for favorited quick sessions in the Sessions list —
+  // sessionIds in display order. Favorites not listed here (never dragged, or
+  // newly favorited) fall back to newest-first. Defaults to [].
+  favoriteSessionOrder: string[]
   // Dashboard rotator history: per-id last-shown timestamps. Stored as an
   // array of { id, at } subdocs (not a Map) so .lean() queries return plain
   // JSON arrays that downstream code can iterate without Mongoose Map APIs.
@@ -200,13 +332,19 @@ export interface IDashboardTile {
 
 const WeightEntrySchema = new Schema<IWeightEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   weight: { type: Number, required: true },
   unit: { type: String, enum: ['lbs', 'kg'] },
-  bodyFat: { type: Number }
+  bodyFat: { type: Number },
+  // Health-import provenance. Not indexed: weightHistory is an embedded array
+  // read as a whole, so the de-duplication scan happens on the loaded document.
+  source: { type: String, enum: ['healthkit', 'health-connect'] },
+  externalId: { type: String }
 }, { _id: false })
 
 const MoodEntrySchema = new Schema<IMoodEntry>({
   date: { type: Date, required: true },
+  loggedAt: { type: Date },
   mood: { type: Number, required: true, min: 1, max: 5 }
 }, { _id: false })
 
@@ -227,12 +365,24 @@ const SetLogSchema = new Schema<ISetLog>({
   completed: { type: Boolean, default: false }
 }, { _id: false })
 
+const PrescriptionSchema = new Schema({
+  sets: { type: Number },
+  reps: { type: String },
+  duration: { type: String },
+  rest: { type: String },
+  trackingType: { type: String },
+}, { _id: false })
+
 const ExerciseLogSchema = new Schema<IExerciseLog>({
   name: { type: String, required: true },
   exerciseSlug: { type: String },
   sets: [SetLogSchema],
   groupId: { type: String },
   groupType: { type: String },
+  groupLabel: { type: String },
+  groupRounds: { type: Number },
+  addedAdHoc: { type: Boolean },
+  prescription: { type: PrescriptionSchema, default: undefined },
   originalExerciseSlug: { type: String },
   swappedFromName: { type: String }
 }, { _id: false })
@@ -247,10 +397,13 @@ const WorkoutLogSchema = new Schema<IWorkoutLog>({
   scheduledDate: { type: Date },
   kind: { type: String, enum: ['program', 'quick'], default: 'program' },
   title: { type: String },
+  needsName: { type: Boolean },
   sessionId: { type: String },
+  attemptId: { type: String },
   focus: { type: String },
   completed: { type: Boolean, default: false },
   skipped: { type: Boolean },
+  favorite: { type: Boolean },
   duration: { type: Number },
   startedAt: { type: Date },
   activeSeconds: { type: Number, default: 0 },
@@ -341,6 +494,17 @@ const UserProgressSchema = new Schema<IUserProgress>({
     lastWeightDate: { type: Date },
     consecutiveSkips: { type: Number, default: 0 }
   },
+  checkIn: {
+    lastSkippedDate: { type: Date },
+    lastShownAt: { type: Date }
+  },
+  programNudge: {
+    dismissCount: { type: Number, default: 0 },
+    lastDismissedAt: { type: Date },
+    dontShowAgain: { type: Boolean },
+    shownCount: { type: Number, default: 0 },
+    lastShownAt: { type: Date }
+  },
   workoutLogs: [WorkoutLogSchema],
   activePrograms: { type: [ActiveProgramSchema], default: [] },
   currentProgram: {
@@ -350,29 +514,46 @@ const UserProgressSchema = new Schema<IUserProgress>({
     currentWeek: Number
   },
   streakDays: { type: Number, default: 0 },
+  superFreezeDays: { type: [String], default: [] },
   longestStreak: { type: Number, default: 0 },
   lastActivityDate: { type: Date },
   streakFreezes: { type: Number, default: 1 },
   milestonesReached: { type: [Number], default: [] },
   lastStreakEmailDate: { type: Date },
   totalWorkouts: { type: Number, default: 0 },
+  notificationsEnabled: { type: Boolean },
   notificationPrefs: {
     streakAtRisk: { type: Boolean },
     workoutReminder: { type: Boolean },
     mealReminder: { type: Boolean },
     reEngagement: { type: Boolean },
     chatMessage: { type: Boolean },
+    mindReminder: { type: Boolean },
+    goalNudge: { type: Boolean },
+    superStreakAtRisk: { type: Boolean },
+    checkInReminder: { type: Boolean },
+    dailyGlance: { type: Boolean },
   },
   lastPushSentAt: {
     streakAtRisk: { type: Date },
     workoutReminder: { type: Date },
     mealReminder: { type: Date },
     reEngagement: { type: Date },
+    mindReminder: { type: Date },
+    scheduleSetup: { type: Date },
+    goalNudge: { type: Date },
+    goalNudgeKey: { type: String },
+    goalNudgeKeyAt: { type: Date },
+    superStreakAtRisk: { type: Date },
+    checkInReminder: { type: Date },
+    dailyGlance: { type: Date },
   },
   timezoneOffset: { type: Number },
+  timezone: { type: String },
   exercisePRs: { type: [ExercisePRSchema], default: [] },
   dismissedSuggestions: { type: [DismissedSuggestionSchema], default: [] },
   pinnedTiles: { type: [String], default: [] },
+  favoriteSessionOrder: { type: [String], default: [] },
   tileLastShownAt: { type: [TileLastShownSchema], default: [] },
   dashboardLayout: { type: [DashboardTileSchema], default: [] },
   tileEngagement: { type: [TileEngagementSchema], default: [] },

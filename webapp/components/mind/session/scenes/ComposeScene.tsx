@@ -100,6 +100,7 @@ export default function ComposeScene({ move, onDone }: SceneProps) {
             {blanks[current].map((opt) => (
               <button
                 key={opt}
+                data-testid="compose-option"
                 onClick={() => choose(opt)}
                 className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white/90 transition-colors hover:border-violet-400/50 active:scale-95"
               >

@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/neglectedMuscle.test.ts
+// Run with: npm run test:file tests/unit/suggestions/neglectedMuscle.test.ts
 //
 // Covers the neglected-muscle source:
 //   - expectedInterval (program frequency → interval; unknown → 7d baseline)

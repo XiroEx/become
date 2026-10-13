@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/rewardCatalog.test.ts
+// Run with: npm run test:file tests/unit/rewardCatalog.test.ts
 //
 // Static referential-integrity checks for Become's redReward config. These catch
 // a ConfigError BEFORE runtime: createRedReward() throws if any achievement reward

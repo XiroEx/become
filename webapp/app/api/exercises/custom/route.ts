@@ -1,31 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAuth } from "@/lib/auth";
 import { requireFeature } from "@/lib/entitlements";
+import { requireQuota } from "@/lib/entitlementGuards";
 import connectDB from "@/lib/mongodb";
 import Exercise, { IExerciseDefinition } from "@/models/Exercise";
-
-// ─── Muscle group → Exercise model fields ─────────────────────────────────────
-
-const MUSCLE_MAP: Record<string, { primaryMuscles: string[]; bodyRegion: string }> = {
-  chest:      { primaryMuscles: ["chest"],                          bodyRegion: "upper_body" },
-  back:       { primaryMuscles: ["lats", "upper_back"],             bodyRegion: "upper_body" },
-  shoulders:  { primaryMuscles: ["front_delts", "side_delts"],      bodyRegion: "upper_body" },
-  arms:       { primaryMuscles: ["biceps", "triceps"],              bodyRegion: "upper_body" },
-  core:       { primaryMuscles: ["abs", "obliques"],                bodyRegion: "core"       },
-  legs:       { primaryMuscles: ["quads", "hamstrings", "glutes"],  bodyRegion: "lower_body" },
-  full_body:  { primaryMuscles: ["full_body"],                      bodyRegion: "full_body"  },
-};
-
-const CATEGORY_MAP: Record<string, string> = {
-  strength:     "strength",
-  cardio:       "cardio",
-  bodyweight:   "calisthenics",
-  conditioning: "conditioning",
-};
+import { buildCustomExerciseTags } from "@/lib/customExerciseTags";
+import {
+  isValidCustomTrackingType,
+  resolveCustomExerciseMuscles,
+  resolveCustomExerciseCategory,
+  resolveCustomExerciseRole,
+  resolveCustomDifficulty,
+  resolveCustomEquipment,
+  resolveCustomLaterality,
+  resolveCustomMechanics,
+  resolveCustomMovementPatterns,
+  resolveCustomMuscleList,
+} from "@/lib/customExerciseFields";
+import { getBlobStore } from "@/lib/blobStorage";
+import { invalidateExerciseCache } from "@/lib/hydrateExercises";
+import { findDuplicateOf } from "@/lib/exerciseAudit";
 
 type LeanExercise = Pick<IExerciseDefinition,
   "slug" | "name" | "trackingType" | "primaryMuscles" | "bodyRegion" | "category" |
-  "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty"
+  "secondaryMuscles" | "stabilizers" | "mechanics" | "movementPatterns" | "laterality" |
+  "defaultSets" | "defaultReps" | "defaultDuration" | "equipment" | "role" | "difficulty" |
+  "tags" | "videoUrl" | "thumbnailUrl" | "videoWidth" | "videoHeight" | "videoFraming" |
+  "videoTrim" | "createdAt" | "isUniversal" | "reviewStatus" | "submittedAt" | "reviewNote"
 >;
 
 // ─── GET /api/exercises/custom ────────────────────────────────────────────────
@@ -36,10 +37,18 @@ export async function GET(req: NextRequest) {
 
   await connectDB();
 
+  // Media fields are returned so a custom exercise's own demo renders
+  // everywhere a catalog one does — the library card, the swap modal, the
+  // workout view. Without them a user could upload a video and never see it.
+  // createdAt/isUniversal/reviewStatus/submittedAt/reviewNote drive the
+  // library's sort/filter tabs and its "Submit to Universal" status.
   const exercises = await Exercise.find(
     { isCustom: true, createdBy: auth.userId },
-    { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, bodyRegion: 1, category: 1,
-      defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1 }
+    { slug: 1, name: 1, trackingType: 1, primaryMuscles: 1, secondaryMuscles: 1,
+      stabilizers: 1, mechanics: 1, movementPatterns: 1, laterality: 1, bodyRegion: 1, category: 1,
+      defaultSets: 1, defaultReps: 1, defaultDuration: 1, equipment: 1, role: 1, difficulty: 1,
+      tags: 1, videoUrl: 1, thumbnailUrl: 1, videoWidth: 1, videoHeight: 1, videoFraming: 1,
+      videoTrim: 1, createdAt: 1, isUniversal: 1, reviewStatus: 1, submittedAt: 1, reviewNote: 1 }
   ).lean<LeanExercise[]>();
 
   return NextResponse.json({ exercises });
@@ -47,23 +56,39 @@ export async function GET(req: NextRequest) {
 
 // ─── POST /api/exercises/custom ───────────────────────────────────────────────
 
+// CREATE is quota-gated (free tier: 3 owned custom exercises, counted live).
+// Every other verb on a custom exercise — PATCH, DELETE, submit, video, trim —
+// stays on requireFeature so a member sitting at 3/3 can still fix, re-record
+// and delete what they already have. Capping edits would lock them out of
+// their own data with no way back under the cap.
 export async function POST(req: NextRequest) {
-  const gate = await requireFeature(req, "custom-exercises");
+  const gate = await requireQuota(req, "custom-exercises");
   if (!gate.ok) return gate.response;
   const auth = { userId: gate.userId };
 
   const body = await req.json();
-  const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = body;
+  const {
+    name, trackingType, muscleGroup, category, role, defaultSets, defaultReps,
+    primaryMuscles: exactPrimaryMuscles, secondaryMuscles, stabilizers, equipment,
+    mechanics, movementPatterns, laterality, difficulty,
+  } = body;
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-  const validTrackingTypes = ["reps_weight", "reps_bodyweight", "reps_only", "time", "time_distance", "intervals", "none"];
-  if (!validTrackingTypes.includes(trackingType)) {
+  if (!isValidCustomTrackingType(trackingType)) {
     return NextResponse.json({ error: "Invalid tracking type" }, { status: 400 });
   }
 
-  const muscleData = MUSCLE_MAP[muscleGroup] ?? { primaryMuscles: [], bodyRegion: "full_body" };
-  const resolvedCategory = CATEGORY_MAP[category] ?? "strength";
+  const muscleData = resolveCustomExerciseMuscles(exactPrimaryMuscles, muscleGroup);
+  const resolvedSecondaryMuscles = resolveCustomMuscleList(secondaryMuscles);
+  const resolvedStabilizers = resolveCustomMuscleList(stabilizers);
+  const resolvedEquipment = resolveCustomEquipment(equipment);
+  const resolvedMechanics = resolveCustomMechanics(mechanics);
+  const resolvedMovementPatterns = resolveCustomMovementPatterns(movementPatterns);
+  const resolvedLaterality = resolveCustomLaterality(laterality);
+  const resolvedDifficulty = resolveCustomDifficulty(difficulty);
+  const resolvedCategory = resolveCustomExerciseCategory(category);
+  const resolvedRole = resolveCustomExerciseRole(role);
 
   await connectDB();
 
@@ -71,21 +96,34 @@ export async function POST(req: NextRequest) {
   const userPart = auth.userId.toString().slice(-6);
   const slug = `custom-${userPart}-${namePart}-${Date.now()}`;
 
+  // Audit against the shared catalog (canonical + admin-approved universal
+  // exercises) before saving. A member creating a custom exercise almost
+  // always means the real one didn't surface in search — so instead of
+  // waiting on the member to notice and hit "Submit to Universal" (most
+  // won't), a likely duplicate goes straight into the admin review queue
+  // with a note explaining why. Non-duplicate customs are unaffected and
+  // stay owner-private as before.
+  const catalog = await Exercise.find(
+    { isActive: true, $or: [{ isCustom: { $ne: true } }, { isCustom: true, isUniversal: true }] },
+    { slug: 1, name: 1 }
+  ).lean<{ slug: string; name: string }[]>();
+  const duplicateOf = findDuplicateOf(name.trim(), catalog);
+
   const exercise = new Exercise({
     slug,
     name: name.trim(),
     aliases: [],
     description: "",
     category: resolvedCategory,
-    mechanics: "n/a",
-    role: "accessory",
-    movementPatterns: ["n/a"],
-    laterality: "bilateral",
-    difficulty: "intermediate",
+    mechanics: resolvedMechanics,
+    role: resolvedRole,
+    movementPatterns: resolvedMovementPatterns,
+    laterality: resolvedLaterality,
+    difficulty: resolvedDifficulty,
     primaryMuscles: muscleData.primaryMuscles,
-    secondaryMuscles: [],
-    stabilizers: [],
-    equipment: ["none"],
+    secondaryMuscles: resolvedSecondaryMuscles,
+    stabilizers: resolvedStabilizers,
+    equipment: resolvedEquipment,
     optionalEquipment: [],
     trackingType,
     instructions: [],
@@ -94,15 +132,34 @@ export async function POST(req: NextRequest) {
     prerequisites: [],
     variations: [],
     alternatives: [],
-    tags: ["custom"],
+    tags: buildCustomExerciseTags({
+      category,
+      muscleGroup,
+      trackingType,
+      equipment: resolvedEquipment,
+      extra: [
+        ...muscleData.primaryMuscles,
+        ...resolvedMovementPatterns.filter((pattern) => pattern !== "n/a"),
+        ...(Array.isArray(body.tags) ? body.tags.filter((tag: unknown): tag is string => typeof tag === "string") : []),
+      ],
+    }),
     bodyRegion: muscleData.bodyRegion,
     isActive: true,
     isCustom: true,
     createdBy: auth.userId.toString(),
+    isUniversal: false,
+    reviewStatus: duplicateOf ? "pending" : "none",
+    submittedAt: duplicateOf ? new Date() : null,
+    reviewNote: duplicateOf ? `Auto-flagged: possible duplicate of "${duplicateOf.name}" (${duplicateOf.slug})` : null,
     ...(defaultSets && { defaultSets: parseInt(defaultSets) }),
     ...(defaultReps && { defaultReps: String(defaultReps) }),
   });
   await exercise.save();
+
+  // hydrateExercises caches every exercise by slug; without this the new
+  // exercise resolves to its raw slug in any program that references it until
+  // the next cold start.
+  invalidateExerciseCache();
 
   return NextResponse.json({
     exercise: {
@@ -110,13 +167,28 @@ export async function POST(req: NextRequest) {
       name: exercise.name,
       trackingType: exercise.trackingType,
       primaryMuscles: exercise.primaryMuscles,
+      secondaryMuscles: exercise.secondaryMuscles,
+      stabilizers: exercise.stabilizers,
       bodyRegion: exercise.bodyRegion,
       category: exercise.category,
       equipment: exercise.equipment,
+      mechanics: exercise.mechanics,
+      movementPatterns: exercise.movementPatterns,
+      laterality: exercise.laterality,
       role: exercise.role,
       difficulty: exercise.difficulty,
       defaultSets: exercise.defaultSets,
       defaultReps: exercise.defaultReps,
+      tags: exercise.tags,
+      // Always null on create — echoed so callers can hold one shape for a
+      // custom exercise whether it came from POST or GET.
+      videoUrl: exercise.videoUrl ?? null,
+      thumbnailUrl: exercise.thumbnailUrl ?? null,
+      createdAt: exercise.createdAt,
+      isUniversal: exercise.isUniversal ?? false,
+      reviewStatus: exercise.reviewStatus ?? "none",
+      submittedAt: exercise.submittedAt ?? null,
+      reviewNote: exercise.reviewNote ?? null,
     },
   });
 }
@@ -134,10 +206,28 @@ export async function DELETE(req: NextRequest) {
 
   await connectDB();
 
-  const result = await Exercise.deleteOne({ slug, isCustom: true, createdBy: auth.userId.toString() });
-  if (result.deletedCount === 0) {
+  // Read first so we know which blob to reap — deleteOne gives us nothing back,
+  // and without this every custom exercise that had a video leaves its bytes in
+  // the bucket with no remaining reference to them.
+  const doomed = await Exercise.findOneAndDelete({
+    slug,
+    isCustom: true,
+    createdBy: auth.userId.toString(),
+  });
+  if (!doomed) {
     return NextResponse.json({ error: "Not found or not yours" }, { status: 404 });
   }
 
+  if (doomed.videoStorageKey) {
+    // Non-fatal: the exercise is already gone, and failing the request here
+    // would tell the user the delete didn't work when it did.
+    try {
+      await getBlobStore().delete(doomed.videoStorageKey);
+    } catch (err) {
+      console.warn("Failed to delete custom exercise blob (continuing):", err);
+    }
+  }
+
+  invalidateExerciseCache();
   return NextResponse.json({ ok: true });
 }

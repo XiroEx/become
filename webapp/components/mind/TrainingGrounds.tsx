@@ -7,12 +7,16 @@
 // (levels you up) but does NOT count toward chapters — those are main-session
 // gated. Locked segments are shown greyed so the path ahead is visible.
 
+import { useState } from 'react'
 import Link from 'next/link'
 import {
   Wind, Sparkles, Eye, BookOpen, Sword, Shield, Users, Lock, ChevronRight, Dumbbell,
   type LucideIcon,
 } from 'lucide-react'
 import { SYSTEM_INFO } from '@/lib/mindXP'
+import { useEntitlements } from '@/hooks/useEntitlements'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
 
 const ICONS: Record<string, LucideIcon> = { Wind, Sparkles, Eye, BookOpen, Sword, Shield, Users }
 
@@ -41,12 +45,21 @@ export default function TrainingGrounds({
    *  unlocking chapter is (10 main sessions per chapter). */
   mainSessionCount?: number
 }) {
+  const [gate, setGate] = useState<GatePayload | null>(null)
+  const { data: entitlements, feature } = useEntitlements()
+  // Vision is the one system locked by PLAN rather than by chapter. Telling a
+  // free member it is "3 main sessions away" would be a lie — those sessions
+  // are themselves capped — so the tile says Plus and opens the sheet.
+  const visionPlusLocked =
+    entitlements?.enforced === true && feature('vision')?.allowed === false
+
   const allIds = Object.keys(SYSTEM_INFO)
   const unlockedIds = allIds.filter((id) => unlocked.includes(id))
   const lockedIds = allIds.filter((id) => !unlocked.includes(id))
 
   return (
     <div>
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-2xl font-extrabold text-zinc-900 dark:text-white">
@@ -93,19 +106,24 @@ export default function TrainingGrounds({
             // Chapters advance by main sessions (10 per chapter) — tell the user
             // exactly what stands between them and this tool.
             const needed = Math.max(0, (info.chapter - 1) * 10 - mainSessionCount)
+            const planLocked = id === 'vision' && visionPlusLocked
+            const Wrapper = planLocked ? 'button' : 'div'
             return (
-              <div
+              <Wrapper
                 key={id}
-                className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-4 opacity-70 dark:border-zinc-800 dark:bg-zinc-900/40"
+                {...(planLocked ? { type: 'button' as const, onClick: () => setGate(syntheticGate('vision')) } : {})}
+                className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 p-4 text-left opacity-70 dark:border-zinc-800 dark:bg-zinc-900/40"
               >
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-200 dark:bg-zinc-800">
                   <Lock className="h-4 w-4 text-zinc-400" />
                 </span>
                 <p className="mt-3 text-sm font-bold text-zinc-500 dark:text-zinc-400">{info.label}</p>
                 <p className="mt-0.5 text-[11px] leading-snug text-zinc-400 dark:text-zinc-500">
-                  Unlocks in Ch.{info.chapter}{needed > 0 ? ` — ${needed} main session${needed === 1 ? '' : 's'} away` : ''}
+                  {planLocked
+                    ? 'Plus'
+                    : `Unlocks in Ch.${info.chapter}${needed > 0 ? ` — ${needed} main session${needed === 1 ? '' : 's'} away` : ''}`}
                 </p>
-              </div>
+              </Wrapper>
             )
           })}
         </div>

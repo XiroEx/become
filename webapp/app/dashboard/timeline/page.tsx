@@ -32,10 +32,10 @@ import DateOnlyPicker from '@/components/ui/DateOnlyPicker'
 import { BackButton } from '@/components/ui/BackButton'
 import { Toast, SegmentedControl, HeaderPillLink } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
-import FeatureGuard from '@/components/FeatureGuard'
 import type { IMealItem, IMealNutrition } from '@/models/Meal'
 import type { IFoodEntry } from '@/lib/nutritionTypes'
 import { formatQuantity, type Unit } from '@/lib/units'
+import { weeklyChartBarHeightPct } from '@/lib/nutrition/weekChart'
 import MonthView from './MonthView'
 import type { MealPlan } from './planning'
 import { tagDotColors, fetchPlansInRange } from './planning'
@@ -47,6 +47,7 @@ import { CopyDayForwardSheet, ApplyMealToDaysSheet } from './PlanToolsSheets'
 interface MealLog {
   _id: string
   loggedAt: string
+  untimed?: boolean
   items: (IMealItem & { _id?: string })[]
   tags: string[]
   totalNutrition?: IMealNutrition
@@ -303,6 +304,22 @@ function TimelineClient() {
     item: IMealItem & { _id?: string }
     planItems: (IMealItem & { _id?: string })[]
   } | null>(null)
+  const editCurrentTag = useMemo(() => {
+    if (!editEntry) return 'snack'
+    for (const day of days) {
+      const log = day.logs?.find(candidate => candidate._id === editEntry.logId)
+      if (log) return primaryTag(log.tags) ?? 'snack'
+    }
+    return 'snack'
+  }, [days, editEntry])
+  const editLogTime = useMemo(() => {
+    if (!editEntry) return null
+    for (const day of days) {
+      const log = day.logs?.find(candidate => candidate._id === editEntry.logId)
+      if (log) return { loggedAt: log.loggedAt, untimed: log.untimed }
+    }
+    return null
+  }, [days, editEntry])
   const [confirmDelete, setConfirmDelete] = useState<{ logId: string; mealName?: string } | null>(null)
   const [filterChipsOpen, setFilterChipsOpen] = useState(false)
   // Inline add-food: keeps the user on the timeline page instead of redirecting.
@@ -494,7 +511,7 @@ function TimelineClient() {
         return fetch(`/api/meal-plans/${p._id}/promote`, {
           method: 'POST',
           headers: getHeaders(),
-          body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+          body: JSON.stringify({ untimed: true }),
         }).then(async r => {
           if (!r.ok) throw new Error('promote_failed')
           const data = await r.json().catch(() => ({}))
@@ -724,6 +741,7 @@ function TimelineClient() {
     tag?: string,
     loggedAtIso?: string,
     planOptions?: { repeat?: { every: 'day' | 'week'; count: number } },
+    untimed?: boolean,
   ) => {
     if (!addFoodFor) return
     const useTag = tag || addFoodFor.tag
@@ -801,7 +819,7 @@ function TimelineClient() {
       const res = await fetch('/api/meal-logs', {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ items: [item], tags: [useTag], loggedAt: iso }),
+        body: JSON.stringify({ items: [item], tags: [useTag], loggedAt: iso, untimed: untimed === true }),
       })
       if (!res.ok) {
         showErrorToast('Failed to log food.')
@@ -866,17 +884,15 @@ function TimelineClient() {
     }
   }, [getHeaders])
 
-  // Plan promote — POST /api/meal-plans/[id]/promote. Per §6.4 manual mode,
-  // the client passes loggedAt=now (the user is acting now); for back-promote
-  // the server constructs a default loggedAt from the plannedDate + the
-  // tag's default time when body.loggedAt is omitted. We pass it here so the
-  // resulting log is unambiguous in the user's local TZ.
+  // Plan promote — the member confirmed WHAT was eaten, but did not supply a
+  // clock time. Keep it explicitly untimed instead of presenting the moment
+  // they pressed the button as the meal time.
   const handlePromotePlan = useCallback(async (planId: string) => {
     try {
       const res = await fetch(`/api/meal-plans/${planId}/promote`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ loggedAt: new Date().toISOString() }),
+        body: JSON.stringify({ untimed: true }),
       })
       if (!res.ok) throw new Error('promote_failed')
       setPlans(prev => prev.filter(p => p._id !== planId))
@@ -937,11 +953,7 @@ function TimelineClient() {
   }
 
   return (
-    <FeatureGuard
-      feature="Nutrition"
-      description="Precision nutrition tracking and meal planning, built around your goals. Launching soon."
-      icon={<UtensilsCrossed className="h-10 w-10" />}
-    >
+    <>
       <PageTransition className="pb-6">
        <div className="space-y-4 sm:space-y-6" {...swipe.handlers}>
         {/* Header */}
@@ -1315,7 +1327,7 @@ function TimelineClient() {
         viewedDate={addFoodFor?.date}
         mode={pickerMode}
         onClose={() => setAddFoodFor(null)}
-        onSelectFood={(entry, tag, loggedAt, planOptions) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt, planOptions)}
+        onSelectFood={(entry, tag, loggedAt, planOptions, untimed) => handleAddFood(entry as Parameters<typeof handleAddFood>[0], tag, loggedAt, planOptions, untimed)}
       />
 
       {/* Edit Food Modal — log mode */}
@@ -1323,6 +1335,10 @@ function TimelineClient() {
         isOpen={editEntry !== null}
         item={editEntry?.item ?? null}
         logId={editEntry?.logId ?? ''}
+        loggedAt={editLogTime?.loggedAt}
+        untimed={editLogTime?.untimed}
+        currentTag={editCurrentTag}
+        availableTags={tagsResp}
         onClose={() => setEditEntry(null)}
         onSaved={fetchData}
       />
@@ -1459,7 +1475,7 @@ function TimelineClient() {
           }}
         />
       )}
-    </FeatureGuard>
+    </>
   )
 }
 
@@ -1692,10 +1708,9 @@ function WeekView({
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
             Calories per day
           </p>
-          <div className="flex h-24 items-end gap-1.5 sm:gap-2">
+          <div className="flex h-24 gap-1.5 sm:gap-2">
             {[...days].sort((a, b) => a.date.localeCompare(b.date)).map(d => {
               const cal = d.dailyTotals.calories || 0
-              const pct = summary.max > 0 ? (cal / summary.max) * 100 : 0
               const dt = parseDateParam(d.date)
               const isToday = isSameLocalDay(dt, new Date())
               const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'narrow' })
@@ -1707,10 +1722,15 @@ function WeekView({
                   aria-label={`Open ${d.date} in day view`}
                   className="flex flex-1 cursor-pointer flex-col items-center gap-1 rounded-lg transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
                 >
-                  <div className="flex h-full w-full items-end">
+                  {/* flex-1 (not h-full) — the column has no explicit height of
+                      its own, so a percentage height here can't resolve against
+                      it and the bar silently renders at 0px. flex-1 grows this
+                      wrapper to fill the remaining space after the label below,
+                      which gives the bar's height% a real pixel basis. */}
+                  <div className="flex w-full flex-1 items-end">
                     <motion.div
                       initial={{ height: 0 }}
-                      animate={{ height: `${Math.max(pct, cal > 0 ? 4 : 0)}%` }}
+                      animate={{ height: `${weeklyChartBarHeightPct(cal, summary.max)}%` }}
                       transition={{ duration: 0.6, ease: 'easeOut' }}
                       className={`w-full rounded-t-md ${
                         isToday
@@ -2061,17 +2081,15 @@ function WeekDayGroup({
 // ── Unified timeline log card (used in both Day and Week views) ──────────────
 //
 // The card carries:
-//   • Header row — clock + time pill (left, read-only), tag chips (left, after
+//   • Header row — clock + time pill (left), tag chips (left, after
 //     time), and the day-total calorie chip (right). Time and cal never
 //     truncate; tags truncate first if there's no horizontal room.
 //   • Optional "From: <mealName>" badge below the header row.
 //   • Expandable item list. The first card in each list defaults expanded so
 //     users see items without an extra tap; subsequent cards stay collapsed.
 //   • Footer with macros + Delete.
-//   • Time is read-only — the platform no longer surfaces a time picker. The
-//     logged time-of-day is preserved and displayed so users can see at a
-//     glance when an item landed, but cannot be edited inline. (Date editing
-//     happens through re-logging or via the date-only picker on add.)
+//   • Planned promotions say "No time" rather than displaying the moment the
+//     button was pressed. Opening an item exposes the time editor.
 //   • Tag chips are buttons; tapping toggles them in the parent's filter set.
 
 interface TimelineLogCardProps {
@@ -2096,7 +2114,7 @@ function TimelineLogCard({
   activeFilters,
 }: TimelineLogCardProps) {
   const totals = logTotals(log)
-  const time = formatTime(log.loggedAt)
+  const time = log.untimed ? 'No time' : formatTime(log.loggedAt)
   const accent = primaryTag(log.tags)
 
   const [expanded, setExpanded] = useState(defaultExpanded)
@@ -2118,10 +2136,10 @@ function TimelineLogCard({
         aria-expanded={expanded}
         aria-label={expanded ? 'Collapse entry' : 'Expand entry'}
       >
-        {/* Time pill — first child, never truncates. Tap to edit. */}
+        {/* Time pill — first child, never truncates. */}
         <span
           className="inline-flex shrink-0 items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold tabular-nums text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-          aria-label={`Logged at ${time}`}
+          aria-label={log.untimed ? 'Logged with no time' : `Logged at ${time}`}
         >
           <Clock className="h-3 w-3" />
           {time}

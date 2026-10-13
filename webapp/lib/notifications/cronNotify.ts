@@ -3,7 +3,40 @@
  * `tzOffsetMinutes` matches Date.getTimezoneOffset(): positive when local is
  * BEHIND UTC (e.g. 300 for EST). Returns null when the offset is unknown.
  */
-export function localHourForUser(now: Date, tzOffsetMinutes: number | undefined): number | null {
+/**
+ * Local hour/day from an IANA zone when we have one.
+ *
+ * A stored offset is a snapshot. It is wrong for half the year the moment
+ * daylight saving moves, and only self-corrects when the member opens the app —
+ * so the members most likely to drift are the quiet ones we most want to nudge
+ * at a sane hour. A zone name never goes stale.
+ */
+function partsInZone(now: Date, zone: string): { hour: number; dateKey: string } | null {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', hour12: false,
+    })
+    const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value]))
+    const hour = Number(parts.hour)
+    if (!Number.isFinite(hour)) return null
+    // en-CA yields ISO-ordered date parts, so this is already YYYY-MM-DD.
+    return { hour: hour % 24, dateKey: `${parts.year}-${parts.month}-${parts.day}` }
+  } catch {
+    return null
+  }
+}
+
+export function localHourForUser(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): number | null {
+  if (zone) {
+    const p = partsInZone(now, zone)
+    if (p) return p.hour
+  }
   if (!Number.isFinite(tzOffsetMinutes as number)) return null
   const offset = tzOffsetMinutes as number
   const utcMs = now.getTime()
@@ -11,8 +44,40 @@ export function localHourForUser(now: Date, tzOffsetMinutes: number | undefined)
   return new Date(localMs).getUTCHours()
 }
 
+/**
+ * Calendar-date key for a SCHEDULED WORKOUT SLOT.
+ *
+ * A slot's `date` is a day MARKER stored at UTC midnight — it means "Aug 13",
+ * not an instant. Reading it through a timezone offset (as localDateKeyForUser
+ * does, correctly, for real timestamps) shifts it a day earlier for anyone
+ * behind UTC: Aug 13 00:00Z minus 4h is Aug 12 20:00, which keys as Aug 12.
+ *
+ * That is exactly what made the morning push name TOMORROW's workout. On
+ * 2026-08-12 a member in EDT saw "Today: Day 3 · Legs" on the dashboard and got
+ * a push for "Day 4 · Chest, Back", because the dashboard reads the marker as a
+ * plain date (`date.split('T')[0]`) and the cron did not.
+ *
+ * It also fired reminders on rest days, since tomorrow's slot satisfied the
+ * "is there a slot today?" gate.
+ *
+ * Read the marker the way the dashboard does: take the UTC date part, full stop.
+ */
+export function slotDateKey(date: Date | string): string {
+  return typeof date === 'string'
+    ? date.slice(0, 10)
+    : date.toISOString().slice(0, 10)
+}
+
 /** Local-date key (YYYY-MM-DD) for a user given their stored offset. */
-export function localDateKeyForUser(now: Date, tzOffsetMinutes: number | undefined): string {
+export function localDateKeyForUser(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): string {
+  if (zone) {
+    const p = partsInZone(now, zone)
+    if (p) return p.dateKey
+  }
   const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
   const localMs = now.getTime() - offset * 60 * 1000
   return new Date(localMs).toISOString().slice(0, 10)
@@ -50,8 +115,39 @@ export function workoutTitleForDay(phases: any[], phaseNum: number, dayLabel: st
   return typeof t === 'string' && t.trim() ? t.trim() : null
 }
 
+/**
+ * The daily glance (lib/widgets/glance.ts) — the lock-screen card, sent before
+ * the morning's nudges rather than among them. It is a summary of the day, so
+ * it is only useful at the start of one, and going first keeps it from reading
+ * as a fourth reminder about things the other pushes already asked for.
+ *
+ * It is also the only notification here that is OFF until a member turns it on,
+ * which is what makes a third possible morning push acceptable: nobody gets it
+ * without asking. See notificationPrefs.dailyGlance in models/UserProgress.ts.
+ */
+export const DAILY_GLANCE_START_HOUR = 6
+export const DAILY_GLANCE_END_HOUR = 9
 export const WORKOUT_REMINDER_START_HOUR = 7
 export const WORKOUT_REMINDER_END_HOUR = 11
+/** Starts an hour after the workout window so the two morning nudges do not
+ *  land in the same minute; they are separate reminders, not competing ones. */
+export const MIND_REMINDER_START_HOUR = 8
+export const MIND_REMINDER_END_HOUR = 11
+/** Goal nudges (behind pace, protein floor, tight training week) — early evening,
+ *  when the day's logging is mostly done and there is still time to act. */
+export const GOAL_NUDGE_START_HOUR = 17
+export const GOAL_NUDGE_END_HOUR = 20
+/** The same rule is not repeated within this many days. */
+export const GOAL_NUDGE_KEY_COOLDOWN_DAYS = 3
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18
+/** Daily check-in (mood + weight) push. Early afternoon only — never at night,
+ *  which is what the in-app modal alone could not guarantee since it only
+ *  fires whenever a member happens to open the app. */
+export const CHECK_IN_REMINDER_START_HOUR = 12
+export const CHECK_IN_REMINDER_END_HOUR = 16
 export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
+/** A 1- or 2-day streak isn't an "actual streak" yet by product definition —
+ *  the first milestone in STREAK_MILESTONES is 3 days — so nagging a member
+ *  to protect it before then reads as a bug, not motivation. */
+export const MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION = 3

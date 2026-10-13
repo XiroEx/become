@@ -34,15 +34,28 @@ describe("StreakBanner", () => {
 
   it("sets an a11y label that reflects active streak", () => {
     const { getByTestId } = render(<StreakBanner streakDays={12} />);
-    expect(getByTestId("streak-banner").props.accessibilityLabel).toBe(
-      "Streak: 12 consecutive days",
+    const banner = getByTestId("streak-banner");
+    // ONE element, or the label is ignored on iOS and the children are read
+    // instead (NP-124).
+    expect(banner.props.accessible).toBe(true);
+    expect(banner.props.accessibilityLabel).toBe(
+      "Streak: 12 consecutive days. 12-day streak — you're rolling.",
     );
   });
 
   it("sets a11y label for no active streak", () => {
     const { getByTestId } = render(<StreakBanner streakDays={0} />);
     expect(getByTestId("streak-banner").props.accessibilityLabel).toBe(
-      "No active streak",
+      "No active streak. Start a streak today.",
+    );
+  });
+
+  it("announces the freeze, which is otherwise only an icon", () => {
+    const { getByTestId } = render(
+      <StreakBanner streakDays={5} freezeAvailable />,
+    );
+    expect(getByTestId("streak-banner").props.accessibilityLabel).toBe(
+      "Streak: 5 consecutive days. 5 days in a row. Streak freeze available.",
     );
   });
 

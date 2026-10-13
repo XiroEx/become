@@ -23,12 +23,14 @@ import {
   Upload,
   PencilLine,
   Trash2,
+  Check,
 } from 'lucide-react'
 import type { IMealItem } from '@/models/Meal'
 import { Card } from '@/components/ui'
 import { formatQuantity, type Unit } from '@/lib/units'
 import type { MealPlan } from '@/app/dashboard/timeline/planning'
 import FoodItemRow from '@/components/nutrition/FoodItemRow'
+import { formatClockLabel } from '@/lib/nutrition/mealSchedule'
 
 /** The hard-metric amount line for a logged/planned item — the user's actual
  *  logged quantity+unit when present, else the legacy "X servings · size unit". */
@@ -59,10 +61,14 @@ export interface MealLogLite {
   mealName?: string
   source?: 'photo' | 'barcode' | 'upload' | 'describe' | 'search' | 'manual'
   notes?: string
+  /** Logged for the day with no time. Placed by tag anchor, not by the clock. */
+  untimed?: boolean
 }
 
 interface FlattenedItem {
   logId: string
+  loggedAt: string
+  untimed?: boolean
   mealName?: string
   source?: MealLogLite['source']
   item: IMealItem & { _id?: string }
@@ -75,7 +81,22 @@ interface TagSectionProps {
   // Append a food into a specific logged meal group (keeps it under the meal's
   // outline). When omitted, meal groups show no add-to affordance.
   onAddToMeal?: (logId: string, tag: string) => void
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onEditEntry: (
+    logId: string,
+    item: IMealItem & { _id?: string },
+    currentTag: string,
+    loggedAt: string,
+    untimed?: boolean,
+  ) => void
+  // Edit a whole logged meal (tag + time) at once — every item in it moves
+  // together. Omitted where no meal groups render (no-op prop otherwise).
+  onEditMeal?: (
+    logId: string,
+    mealName: string | undefined,
+    currentTag: string,
+    loggedAt: string,
+    untimed?: boolean,
+  ) => void
   onRemoveEntry: (logId: string, itemId: string) => void
   onRemoveTag?: (tag: string) => void
   removable?: boolean
@@ -94,11 +115,28 @@ interface TagSectionProps {
   // with a "Planned" pill. Optional handlers let the parent delete a plan or
   // edit a plan item without re-implementing modal plumbing here.
   plans?: MealPlan[]
+  /** Minutes from local midnight of this SITTING's first log. Rendered next to
+   *  the tag name so two sections of the same tag are tellable apart — without
+   *  it, two "Snack" headers on one day look like a duplicate render rather than
+   *  two separate sittings. Undefined for planned or empty sections, which have
+   *  no real moment of their own. */
+  occurrenceAt?: number
+  /** This sitting was logged for the day with no time. */
+  untimed?: boolean
   onRemovePlan?: (planId: string) => void
   onEditPlanItem?: (planId: string, item: IMealItem & { _id?: string }, planItems: (IMealItem & { _id?: string })[]) => void
   /** "Log it" — promote a plan into a real log (today). When provided, a Log it
    *  button appears in the planned header. */
   onLogPlan?: (planId: string) => void
+  /** Combine items already logged in this section into one grouped entry,
+   *  optionally keeping it as a reusable meal. When omitted, no select mode. */
+  onCombine?: (
+    picks: { logId: string; itemId: string }[],
+    opts: { mealName?: string; saveAsMeal: boolean },
+  ) => Promise<void> | void
+  /** Whether this member may keep the result as a reusable meal (plus tier).
+   *  Combining the day's rows is not gated; only saving the meal is. */
+  canSaveMeals?: boolean
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -185,6 +223,7 @@ export default function TagSection({
   onAddFood,
   onAddToMeal,
   onEditEntry,
+  onEditMeal,
   onRemoveEntry,
   onRemoveTag,
   removable = false,
@@ -192,12 +231,22 @@ export default function TagSection({
   onApplyMeal,
   futureDate = false,
   plans = [],
+  occurrenceAt,
+  untimed = false,
   onRemovePlan,
   onEditPlanItem,
   onLogPlan,
+  onCombine,
+  canSaveMeals = false,
 }: TagSectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
+  // Select mode: pick logged rows, then fold them into one entry.
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [combineName, setCombineName] = useState('')
+  const [saveAsMeal, setSaveAsMeal] = useState(true)
+  const [combining, setCombining] = useState(false)
   const visuals = getVisuals(tag)
   const label = titleCaseTag(tag)
 
@@ -205,7 +254,14 @@ export default function TagSection({
   const flat: FlattenedItem[] = []
   for (const log of logs) {
     for (const item of log.items) {
-      flat.push({ logId: log._id, mealName: log.mealName, source: log.source, item })
+      flat.push({
+        logId: log._id,
+        loggedAt: log.loggedAt,
+        untimed: log.untimed,
+        mealName: log.mealName,
+        source: log.source,
+        item,
+      })
     }
   }
 
@@ -253,6 +309,71 @@ export default function TagSection({
     groups[groups.length - 1].items.push(fi)
   }
 
+  // ── Select mode ────────────────────────────────────────────────────────────
+  const keyOf = (logId: string, itemId: unknown) => `${logId}:${String(itemId)}`
+  const selectableItems = flat.filter(fi => fi.item._id)
+  const canCombine = Boolean(onCombine) && selectableItems.length >= 2
+
+  const toggleSelected = (k: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
+
+  const exitSelect = () => {
+    setSelecting(false)
+    setSelected(new Set())
+    setCombineName('')
+    setSaveAsMeal(true)
+  }
+
+  const pickedItems = selectableItems.filter(fi => selected.has(keyOf(fi.logId, fi.item._id)))
+
+  const pickedTotals = pickedItems.reduce(
+    (acc, fi) => {
+      const n = fi.item.nutrition
+      const q = fi.item.servings ?? 1
+      acc.calories += (n.calories ?? 0) * q
+      acc.protein += (n.protein ?? 0) * q
+      acc.carbs += (n.carbs ?? 0) * q
+      acc.fats += (n.fats ?? 0) * q
+      return acc
+    },
+    { calories: 0, protein: 0, carbs: 0, fats: 0 },
+  )
+
+  // Same shape as the search sheet's basket name, so a meal built either way
+  // reads the same in the list.
+  const defaultCombineName =
+    pickedItems.length === 0
+      ? ''
+      : pickedItems.length <= 3
+        ? pickedItems.map(fi => fi.item.name).join(' + ')
+        : `${pickedItems[0].item.name} + ${pickedItems[1].item.name} +${pickedItems.length - 2} more`
+
+  const handleCombine = async () => {
+    if (!onCombine || pickedItems.length < 2 || combining) return
+    setCombining(true)
+    try {
+      await onCombine(
+        pickedItems.map(fi => ({ logId: fi.logId, itemId: String(fi.item._id) })),
+        {
+          mealName:
+            canSaveMeals && saveAsMeal
+              ? (combineName.trim() || defaultCombineName || 'Meal')
+              : (combineName.trim() || undefined),
+          saveAsMeal: canSaveMeals && saveAsMeal,
+        },
+      )
+      exitSelect()
+    } finally {
+      setCombining(false)
+    }
+  }
+
   return (
     <Card className="!p-0">
       {/* Header */}
@@ -269,6 +390,19 @@ export default function TagSection({
             <span className="text-sm font-semibold text-zinc-900 dark:text-white truncate">
               {label}
             </span>
+            {occurrenceAt != null && (
+              <span className="shrink-0 text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500">
+                {formatClockLabel(occurrenceAt)}
+              </span>
+            )}
+            {untimed && (
+              <span
+                title="Logged for the day, no time set"
+                className="shrink-0 text-[11px] text-zinc-400 dark:text-zinc-500"
+              >
+                no time
+              </span>
+            )}
             {hasContent && (
               <span className="text-xs tabular-nums text-zinc-500 dark:text-zinc-400 shrink-0">
                 {totalCalories} cal
@@ -343,7 +477,22 @@ export default function TagSection({
                             className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                           >
                             <ChefHat className="h-3.5 w-3.5 text-orange-500" />
-                            Apply meal template…
+                            Apply a saved meal…
+                          </button>
+                        )}
+                        {canCombine && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setKebabOpen(false)
+                              setIsCollapsed(false)
+                              setSelecting(true)
+                            }}
+                            data-testid={`combine-start-${tag}`}
+                            className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                          >
+                            <ChefHat className="h-3.5 w-3.5 text-emerald-500" />
+                            Combine into a meal…
                           </button>
                         )}
                         {/* Delete everything logged in this section. Only shown
@@ -386,6 +535,77 @@ export default function TagSection({
         </div>
       </button>
 
+      {/* Select-mode banner + action bar. Sits above the rows so the running
+          count stays visible while scrolling a long section. */}
+      {selecting && (
+        <div
+          data-testid={`combine-bar-${tag}`}
+          className="border-y border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900/40 dark:bg-emerald-900/20"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-emerald-900 dark:text-emerald-100">
+              {pickedItems.length === 0
+                ? 'Tap items to combine'
+                : `${pickedItems.length} selected`}
+              {pickedItems.length > 0 && (
+                <span className="ml-2 font-normal tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {Math.round(pickedTotals.calories)} cal &middot; {Math.round(pickedTotals.protein)}p{' '}
+                  {Math.round(pickedTotals.carbs)}c {Math.round(pickedTotals.fats)}f
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={exitSelect}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/40"
+            >
+              Cancel
+            </button>
+          </div>
+
+          {pickedItems.length >= 2 && (
+            <>
+              {canSaveMeals && (
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSaveAsMeal(v => !v)}
+                    aria-pressed={saveAsMeal}
+                    aria-label="Also save as a reusable meal"
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      saveAsMeal
+                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                        : 'border-emerald-300 dark:border-emerald-700'
+                    }`}
+                  >
+                    {saveAsMeal && <Check className="h-3 w-3" />}
+                  </button>
+                  <input
+                    value={combineName}
+                    onChange={e => setCombineName(e.target.value)}
+                    placeholder={defaultCombineName}
+                    data-testid={`combine-name-${tag}`}
+                    aria-label="Meal name"
+                    className="min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs text-zinc-900 placeholder-zinc-400 dark:border-emerald-900/40 dark:bg-zinc-800 dark:text-white"
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleCombine}
+                disabled={combining}
+                data-testid={`combine-submit-${tag}`}
+                className="mt-2 w-full rounded-xl bg-emerald-600 py-2 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {canSaveMeals && saveAsMeal
+                  ? `Combine ${pickedItems.length} and save as meal`
+                  : `Combine ${pickedItems.length} into one entry`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Items */}
       <AnimatePresence initial={false}>
         {!isCollapsed && (
@@ -417,14 +637,19 @@ export default function TagSection({
                         group={group}
                         tag={tag}
                         onEditEntry={onEditEntry}
+                        onEditMeal={onEditMeal}
                         onRemoveEntry={onRemoveEntry}
                         onAddToMeal={onAddToMeal}
+                        selecting={selecting}
+                        isSelected={(logId, itemId) => selected.has(keyOf(logId, itemId))}
+                        onToggleSelect={(logId, itemId) => toggleSelected(keyOf(logId, itemId))}
                       />
                     ) : group.source && group.source !== 'manual' && group.source !== 'search' && group.items.length > 1 ? (
                       // Multi-food capture that isn't a saved meal — group it under
                       // a source-colored card (camera / barcode / upload / describe).
                       <CaptureGroupCard
                         key={group.key}
+                        tag={tag}
                         source={group.source as 'photo' | 'barcode' | 'upload' | 'describe'}
                         items={group.items}
                         onEditEntry={onEditEntry}
@@ -438,7 +663,10 @@ export default function TagSection({
                               key={`${fi.logId}-${fi.item._id ?? Math.random()}`}
                               logId={fi.logId}
                               item={fi.item}
-                              onEdit={() => onEditEntry(fi.logId, fi.item)}
+                              selectable={selecting && Boolean(fi.item._id)}
+                              selected={selected.has(keyOf(fi.logId, fi.item._id))}
+                              onToggleSelect={() => toggleSelected(keyOf(fi.logId, fi.item._id))}
+                              onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                               onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                             />
                           ))}
@@ -447,40 +675,57 @@ export default function TagSection({
                     )
                   ))}
 
-                  {/* Planned rows — one per item per plan. Visually distinct
-                      via a "Planned" pill on the leading row. */}
+                  {/* Planned block.
+                      A plan made FROM A MEAL keeps its shape here: it renders as
+                      one collapsed card (meal name + total), matching how a
+                      logged meal renders above, instead of spilling its
+                      ingredients into the tag as loose rows. Planning a 3-item
+                      meal used to produce 3 unrelated "Planned" rows with the
+                      meal names collapsed into a comma list in this header, so
+                      nothing tied an item to the meal it came from.
+                      Plans without a mealName are genuinely loose items and
+                      still render as individual rows. */}
                   {plans.length > 0 && (
                     <div className={flat.length > 0 ? 'border-t border-zinc-200 dark:border-zinc-800' : ''}>
                       <div className="flex items-center gap-1.5 bg-blue-50/60 px-3 py-1.5 dark:bg-blue-900/10">
                         <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                           Planned
                         </span>
-                        {plans.some(p => p.mealName) && (
-                          <span className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">
-                            {plans.filter(p => p.mealName).map(p => p.mealName).join(', ')}
-                          </span>
-                        )}
-                        {onLogPlan && (
+                        {/* Only offer a blanket "log everything" when it would do
+                            something a single meal card's own button cannot. */}
+                        {onLogPlan && (plans.length > 1 || plans.some(p => !p.mealName)) && (
                           <button
                             onClick={() => plans.forEach(p => onLogPlan(p._id))}
                             className="ml-auto inline-flex shrink-0 items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
                           >
-                            Log it
+                            {plans.length > 1 ? 'Log all' : 'Log it'}
                           </button>
                         )}
                       </div>
                       <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-                        {plans.map((plan) =>
-                          plan.items.map((item) => (
-                            <PlanItemRow
-                              key={`${plan._id}-${item._id ?? Math.random()}`}
-                              planId={plan._id}
-                              item={item}
-                              onEdit={onEditPlanItem ? () => onEditPlanItem(plan._id, item, plan.items) : undefined}
-                              onDelete={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                        {plans.map((plan) => (
+                          plan.mealName ? (
+                            <PlannedMealCard
+                              key={plan._id}
+                              plan={plan}
+                              onLog={onLogPlan ? () => onLogPlan(plan._id) : undefined}
+                              onRemove={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                              onEditItem={onEditPlanItem
+                                ? (item) => onEditPlanItem(plan._id, item, plan.items)
+                                : undefined}
                             />
-                          )),
-                        )}
+                          ) : (
+                            plan.items.map((item) => (
+                              <PlanItemRow
+                                key={`${plan._id}-${item._id ?? Math.random()}`}
+                                planId={plan._id}
+                                item={item}
+                                onEdit={onEditPlanItem ? () => onEditPlanItem(plan._id, item, plan.items) : undefined}
+                                onDelete={onRemovePlan ? () => onRemovePlan(plan._id) : undefined}
+                              />
+                            ))
+                          )
+                        ))}
                       </div>
                     </div>
                   )}
@@ -513,28 +758,59 @@ export default function TagSection({
 // several meals in one tag from becoming a long flat list. ───────────────────
 
 interface MealGroupCardProps {
-  group: { key: string; mealName?: string; items: { logId: string; item: IMealItem & { _id?: string } }[] }
+  /** Select mode, threaded down from TagSection so items inside a meal group
+   *  can be combined alongside loose ones. */
+  selecting?: boolean
+  isSelected?: (logId: string, itemId: unknown) => boolean
+  onToggleSelect?: (logId: string, itemId: unknown) => void
+  group: { key: string; mealName?: string; items: FlattenedItem[] }
   tag: string
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  onEditEntry: TagSectionProps['onEditEntry']
+  onEditMeal?: TagSectionProps['onEditMeal']
   onRemoveEntry: (logId: string, itemId: string) => void
   onAddToMeal?: (logId: string, tag: string) => void
 }
 
-function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: MealGroupCardProps) {
+function MealGroupCard({
+  group, tag, onEditEntry, onEditMeal, onRemoveEntry, onAddToMeal,
+  selecting, isSelected, onToggleSelect,
+}: MealGroupCardProps) {
   const [open, setOpen] = useState(false)
   const totalCal = Math.round(group.items.reduce((s, fi) => s + (fi.item.nutrition?.calories ?? 0) * (fi.item.servings ?? 1), 0))
+  const first = group.items[0]
   return (
     <div className="mx-3 my-2 overflow-hidden rounded-xl border border-orange-200 bg-orange-50/40 dark:border-orange-900/40 dark:bg-orange-900/10">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`flex w-full items-center gap-1.5 px-3 py-2.5 text-left ${open ? 'border-b border-orange-200/70 dark:border-orange-900/40' : ''}`}
-      >
-        <ChefHat className="h-3.5 w-3.5 shrink-0 text-orange-500" />
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{group.mealName}</span>
-        <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-orange-400 transition-transform ${open ? '' : '-rotate-90'}`} />
-      </button>
+      <div className={`flex items-center gap-1.5 pl-3 pr-1.5 ${open ? 'border-b border-orange-200/70 dark:border-orange-900/40' : ''}`}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-2.5 text-left"
+          aria-expanded={open}
+        >
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-orange-500" />
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-orange-700/70 dark:text-orange-300/70">Meal</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{group.mealName}</span>
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+        </button>
+        {onEditMeal && first && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditMeal(first.logId, group.mealName, tag, first.loggedAt, first.untimed)
+            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-orange-500/80 transition-colors hover:bg-orange-100 hover:text-orange-700 dark:hover:bg-orange-900/30 dark:hover:text-orange-300"
+            aria-label={`Edit ${group.mealName || 'meal'}`}
+          >
+            <PencilLine className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex h-7 w-7 shrink-0 items-center justify-center text-orange-400"
+          aria-label={open ? 'Collapse meal' : 'Expand meal'}
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
+        </button>
+      </div>
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
@@ -550,7 +826,10 @@ function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: 
                   key={`${fi.logId}-${fi.item._id ?? idx}`}
                   logId={fi.logId}
                   item={fi.item}
-                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  selectable={Boolean(selecting) && Boolean(fi.item._id)}
+                  selected={isSelected?.(fi.logId, fi.item._id) ?? false}
+                  onToggleSelect={() => onToggleSelect?.(fi.logId, fi.item._id)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
@@ -571,6 +850,85 @@ function MealGroupCard({ group, tag, onEditEntry, onRemoveEntry, onAddToMeal }: 
   )
 }
 
+// ── Planned meal card ────────────────────────────────────────────────────────
+//
+// The planned twin of MealGroupCard. A plan created from a saved meal is ONE
+// plan document carrying mealId + mealName + every item, so the grouping was
+// always in the data; the tag section just used to flatten it away and render
+// each ingredient as its own "Planned" row.
+//
+// Deliberately mirrors MealGroupCard's shape (collapsed to name + total, tap to
+// expand) so a meal reads the same whether it is planned or already eaten, and
+// only the colour changes: blue for planned, orange for logged.
+interface PlannedMealCardProps {
+  plan: MealPlan
+  /** Promote just this meal. Absent on days where logging makes no sense. */
+  onLog?: () => void
+  onRemove?: () => void
+  onEditItem?: (item: IMealItem & { _id?: string }) => void
+}
+
+function PlannedMealCard({ plan, onLog, onRemove, onEditItem }: PlannedMealCardProps) {
+  const [open, setOpen] = useState(false)
+  // expectedNutrition is authoritative (the server computed it when the plan was
+  // created); fall back to summing items if an older plan predates it.
+  const totalCal = Math.round(
+    plan.expectedNutrition?.calories
+    ?? plan.items.reduce((s, it) => s + (it.nutrition?.calories ?? 0) * (it.servings ?? 1), 0),
+  )
+  return (
+    <div className="mx-3 my-2 overflow-hidden rounded-xl border border-blue-200 bg-blue-50/40 dark:border-blue-900/40 dark:bg-blue-900/10">
+      <div className={`flex items-center gap-1.5 px-3 py-2.5 ${open ? 'border-b border-blue-200/70 dark:border-blue-900/40' : ''}`}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          aria-expanded={open}
+        >
+          <ChefHat className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-blue-700/70 dark:text-blue-300/70">Meal</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{plan.mealName}</span>
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-zinc-600 dark:text-zinc-300">{totalCal} cal</span>
+          <ChevronDown className={`h-4 w-4 shrink-0 text-blue-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+        </button>
+        {onLog && (
+          <button
+            onClick={onLog}
+            className="inline-flex shrink-0 items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            Log it
+          </button>
+        )}
+      </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="divide-y divide-blue-100 dark:divide-blue-900/30">
+              {plan.items.map((item, idx) => (
+                <PlanItemRow
+                  key={`${plan._id}-${item._id ?? idx}`}
+                  planId={plan._id}
+                  item={item}
+                  hideBadge
+                  onEdit={onEditItem ? () => onEditItem(item) : undefined}
+                  // Deleting one ingredient of a planned meal deletes the plan,
+                  // same as the flat rows did — the plan is the unit.
+                  onDelete={onRemove}
+                />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // ── Capture group — a multi-food capture (photo / barcode / upload / describe)
 // that wasn't saved as a Meal. Groups the foods under a source-colored, bordered
 // card with the matching icon + label, so it reads as one capture at a glance. ──
@@ -583,10 +941,11 @@ const captureVisuals: Record<'photo' | 'barcode' | 'upload' | 'describe', {
   describe: { Icon: PencilLine,  label: 'Described',  text: 'text-cyan-600 dark:text-cyan-300',       border: 'border-cyan-200 dark:border-cyan-900/40',      bg: 'bg-cyan-50/40 dark:bg-cyan-900/10',      divide: 'divide-cyan-100 dark:divide-cyan-900/30',      chevron: 'text-cyan-400',    hover: 'hover:bg-cyan-100/50 dark:hover:bg-cyan-900/20' },
 }
 
-function CaptureGroupCard({ source, items, onEditEntry, onRemoveEntry }: {
+function CaptureGroupCard({ tag, source, items, onEditEntry, onRemoveEntry }: {
+  tag: string
   source: 'photo' | 'barcode' | 'upload' | 'describe'
-  items: { logId: string; item: IMealItem & { _id?: string } }[]
-  onEditEntry: (logId: string, item: IMealItem & { _id?: string }) => void
+  items: FlattenedItem[]
+  onEditEntry: TagSectionProps['onEditEntry']
   onRemoveEntry: (logId: string, itemId: string) => void
 }) {
   const [open, setOpen] = useState(true)
@@ -613,7 +972,7 @@ function CaptureGroupCard({ source, items, onEditEntry, onRemoveEntry }: {
                   key={`${fi.logId}-${fi.item._id ?? idx}`}
                   logId={fi.logId}
                   item={fi.item}
-                  onEdit={() => onEditEntry(fi.logId, fi.item)}
+                  onEdit={() => onEditEntry(fi.logId, fi.item, tag, fi.loggedAt, fi.untimed)}
                   onDelete={() => fi.item._id && onRemoveEntry(fi.logId, String(fi.item._id))}
                 />
               ))}
@@ -635,9 +994,13 @@ interface PlanItemRowProps {
   item: IMealItem & { _id?: string }
   onEdit?: () => void
   onDelete?: () => void
+  /** Drop the per-row "Planned" pill. Set inside a PlannedMealCard, where the
+   *  card sits under the PLANNED header already and repeating the word on every
+   *  ingredient is just noise. */
+  hideBadge?: boolean
 }
 
-function PlanItemRow({ item, onEdit, onDelete }: PlanItemRowProps) {
+function PlanItemRow({ item, onEdit, onDelete, hideBadge }: PlanItemRowProps) {
   const showVariant = shouldShowVariantName(item.variantName)
   return (
     <div className="bg-blue-50/30 dark:bg-blue-900/5">
@@ -648,7 +1011,7 @@ function PlanItemRow({ item, onEdit, onDelete }: PlanItemRowProps) {
         brand={item.brand}
         servingLabel={item.servingLabel}
         hardAmount={hardAmountOf(item)}
-        badges={[{ label: 'Planned', tone: 'zinc' }]}
+        badges={hideBadge ? [] : [{ label: 'Planned', tone: 'zinc' }]}
         calories={Math.round((item.nutrition?.calories ?? 0) * (item.servings ?? 1))}
         macros={scaledMacrosOf(item)}
         onEdit={onEdit}
@@ -665,11 +1028,17 @@ interface ItemRowProps {
   item: IMealItem & { _id?: string }
   onEdit: () => void
   onDelete: () => void
+  /** In select mode the row becomes a checkbox target and its edit/delete
+   *  affordances are withheld — tapping to pick must never delete a log. */
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelect?: () => void
 }
 
-function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
+function ItemRow({ item, onEdit, onDelete, selectable, selected, onToggleSelect }: ItemRowProps) {
   const showVariant = shouldShowVariantName(item.variantName)
-  return (
+
+  const row = (
     <FoodItemRow
       layout="log"
       name={item.name}
@@ -679,8 +1048,40 @@ function ItemRow({ item, onEdit, onDelete }: ItemRowProps) {
       hardAmount={hardAmountOf(item)}
       calories={Math.round((item.nutrition.calories ?? 0) * (item.servings ?? 1))}
       macros={scaledMacrosOf(item)}
-      onEdit={onEdit}
-      onRemove={onDelete}
+      onEdit={selectable ? undefined : onEdit}
+      onRemove={selectable ? undefined : onDelete}
     />
+  )
+
+  if (!selectable) return row
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`${selected ? 'Deselect' : 'Select'} ${item.name}`}
+      onClick={onToggleSelect}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggleSelect?.()
+        }
+      }}
+      className={`flex cursor-pointer items-center gap-2 pl-3 transition-colors ${
+        selected ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+          selected
+            ? 'border-emerald-600 bg-emerald-600 text-white'
+            : 'border-zinc-300 dark:border-zinc-600'
+        }`}
+      >
+        {selected && <Check className="h-3 w-3" />}
+      </span>
+      <div className="pointer-events-none min-w-0 flex-1">{row}</div>
+    </div>
   )
 }

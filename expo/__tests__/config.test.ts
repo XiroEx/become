@@ -16,7 +16,7 @@ describe("config", () => {
 
   it("programEditUrl is built from the shared base URL", () => {
     expect(programEditUrl("p1")).toBe(
-      `${WEBAPP_BASE_URL}/dashboard/programming/p1/edit`,
+      `${WEBAPP_BASE_URL}/dashboard/programs/p1/edit`,
     );
   });
 });

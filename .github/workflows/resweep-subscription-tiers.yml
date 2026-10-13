@@ -1,0 +1,139 @@
+name: Resweep subscription tiers
+
+# THE schedule for the tier resweep. There is exactly one, and this is it.
+#
+# A member's tier is stored, not derived per request, and every writer of it is
+# a Stripe webhook handler. Two states change meaning with the CLOCK and emit no
+# event when they do: a cancelled subscription whose paid period ends, and a
+# webhook that was missed for good. Until something re-derives the tier, a
+# cancelled member keeps Plus after the period they paid for.
+# `webapp/app/api/cron/resweep-tiers` is that writer; this is what calls it.
+#
+# WHY HERE, AND WHY ONLY HERE
+#
+# Production (become.redbtn.io, `main`) and beta (become-beta.redbtn.io, `beta`)
+# are two RedRun workspaces over ONE MongoDB. The sweep reads stored
+# subscription state, so whichever channel wrote it — including a test-mode
+# cancellation made on beta — the same run expires it. A second schedule on beta
+# would therefore be a second runner over the same rows, for nothing. So this
+# names the PRODUCTION host explicitly, and it is the only schedule in the repo.
+# If a RedRun workspace schedule is ever added for this, DELETE THIS FILE in the
+# same change — two schedules is the failure this comment exists to prevent.
+#
+# GitHub only runs `schedule:` from the repository's DEFAULT branch, which is a
+# second, structural reason this cannot end up running twice: a copy of this
+# file on `beta` is inert until it reaches `main`. Two consequences worth
+# knowing: the schedule starts when this merges to `main`, not when it merges to
+# `beta`; and GitHub disables scheduled workflows in a repository with 60 days
+# of no activity, so a long-quiet repo needs the schedule re-enabled by hand.
+#
+# CADENCE: every 6 hours, which is what "loses Plus within a day of their period
+# ending" costs when scheduled runs can be delayed or, under load, skipped
+# entirely. A run with nothing to do writes nothing at all — no user write, no
+# record row — so the extra runs are free.
+#
+# The minute is deliberately not :00. GitHub queues every cron in the world at
+# the top of the hour and the delay there is routinely tens of minutes.
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Compute the plan and write nothing'
+        type: boolean
+        default: false
+
+# Never two at once. The sweep is idempotent and takes a re-asserting filter per
+# row, so an overlap would be safe rather than harmful — but it would double the
+# log lines for one event, and "who downgraded this member" should have exactly
+# one answer.
+concurrency:
+  group: resweep-subscription-tiers
+  cancel-in-progress: false
+
+jobs:
+  resweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Call the production resweep
+        env:
+          # Same value as redsecrets `admin.cronSecret` (the CRON_SECRET the
+          # notify cron uses). Set it as a repository secret named
+          # BECOME_CRON_SECRET; without it this job fails loudly rather than
+          # silently doing nothing.
+          CRON_SECRET: ${{ secrets.BECOME_CRON_SECRET }}
+          # Interpolated into env, never into the shell line — an input is
+          # attacker-controllable text and must not be pasted into `run:`.
+          DRY_RUN: ${{ inputs.dryRun }}
+          BASE_URL: https://become.redbtn.io
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::BECOME_CRON_SECRET is missing — the resweep cannot authenticate"
+            exit 1
+          fi
+
+          URL="${BASE_URL}/api/cron/resweep-tiers"
+          if [ "${DRY_RUN}" = "true" ]; then
+            URL="${URL}?dryRun=1"
+          fi
+
+          # The secret travels in a header, so it is never in a URL that could
+          # end up in an access log.
+          code=$(curl -sS --max-time 120 \
+            -o response.json -w '%{http_code}' \
+            -X POST "${URL}" \
+            -H "x-cron-secret: ${CRON_SECRET}")
+
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::resweep endpoint answered HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Report what it changed
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ ! -s response.json ]; then
+            {
+              echo "### Subscription tier resweep"
+              echo
+              echo "No response body — the call failed before the endpoint answered."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Subscription tier resweep"
+            echo
+
+            ran_at=$(jq -r '.ranAt // "unknown"' response.json)
+            applied=$(jq -r '.apply // false' response.json)
+            candidates=$(jq -r '.candidates // 0' response.json)
+            correct=$(jq -r '.alreadyCorrect // 0' response.json)
+            planned=$(jq -r '.planned // 0' response.json)
+            modified=$(jq -r '.modified // 0' response.json)
+
+            echo "| ran at | applied | expired rows | already correct | re-derived | written |"
+            echo "|---|---|---|---|---|---|"
+            echo "| ${ran_at} | ${applied} | ${candidates} | ${correct} | ${planned} | ${modified} |"
+            echo
+
+            if [ "${modified}" = "0" ]; then
+              echo "Nothing changed, so nothing was written."
+            else
+              echo "Members moved (ids only — never emails):"
+              echo
+              jq -r '.changes[] | "- `\(.userId)` \(.status) periodEnd=\(.periodEnd // "none") \(.from // "absent") → \(.to)"' response.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

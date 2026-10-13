@@ -1,0 +1,565 @@
+'use client'
+
+// Add an exercise to a workout that is already underway.
+//
+// One sheet, three homes: the live view, the track view, and the session
+// editor. It searches the catalog and your own custom exercises (and will
+// create a custom one on the spot when the machine you are standing at is not
+// in the catalog), sets a prescription, and decides where the exercise lands —
+// on its own at the end, or straight into the superset you are in the middle
+// of. The caller owns persistence; this hands back a plain exercise plus a
+// placement.
+//
+// `tone="dark"` is for the immersive live view, which is black regardless of
+// the app theme. Everything else uses the app's own light/dark surfaces.
+
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Search, Plus, X, Loader2, Layers, Minus, ArrowLeft } from 'lucide-react'
+import CustomExerciseBadge from '@/components/workout/CustomExerciseBadge'
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from '@/components/workout/CustomExerciseFields'
+import ExerciseVariationPicker, { type ExerciseVariation } from '@/components/ExerciseVariationPicker'
+import type { WorkoutExercise } from '@/lib/workoutUtils'
+import { DEFAULT_SETS, agreesOnSets, type GroupKind } from '@/lib/workout/buildAsYouGo'
+import { setUnitLabel } from '@/lib/workout/tracking'
+import { buildSuggestedExercises } from '@/lib/workout/suggestedExercises'
+import { matchesExerciseQuery } from '@/lib/exerciseSearchRanking'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
+
+export type Placement = 'end' | 'group'
+
+export interface AddExerciseResult {
+  exercise: WorkoutExercise
+  placement: Placement
+  /** Only meaningful for placement 'group'. */
+  groupKind: GroupKind
+}
+
+interface SearchExercise {
+  slug: string
+  name: string
+  trackingType: string
+  /** Drives per-DB/KB weight logging once added — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
+}
+
+export interface AddExerciseSheetProps {
+  open: boolean
+  onClose: () => void
+  onAdd: (result: AddExerciseResult) => void | Promise<void>
+  /** The exercise the member is standing in, if any — the superset anchor. */
+  anchorName?: string
+  /** Slug of the anchor exercise. Drives the "Suggested" list shown before
+   *  the member types anything — omit it and the sheet falls back to the
+   *  plain "search for what you are about to do" empty state. */
+  anchorSlug?: string
+  /** True when the anchor already belongs to a group, so we say "add into it". */
+  anchorInGroup?: boolean
+  /** The anchor's set count. A new exercise defaults to it rather than to a
+   *  flat 3 — adding one exercise to a five-set session should not quietly
+   *  produce a workout that disagrees with itself. */
+  anchorSets?: number
+  /** The anchor's group kind, when it is already in one. A circuit runs every
+   *  member for the same rounds, so joining one is not a free choice. */
+  anchorGroupType?: string
+  /** Exercise slugs already in this workout, so suggestions don't repeat one. */
+  workoutExerciseSlugs?: string[]
+  tone?: 'dark' | 'app'
+  title?: string
+}
+
+function authHeaders(): HeadersInit {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+}
+
+const isTimed = (t?: string) => !!t && (t.startsWith('time') || t === 'intervals')
+
+export default function AddExerciseSheet({
+  open,
+  onClose,
+  onAdd,
+  anchorName,
+  anchorSlug,
+  anchorInGroup = false,
+  anchorSets,
+  anchorGroupType,
+  workoutExerciseSlugs = [],
+  tone = 'app',
+  title = 'Add an exercise',
+}: AddExerciseSheetProps) {
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchExercise[]>([])
+  const [customs, setCustoms] = useState<SearchExercise[]>([])
+  const [suggested, setSuggested] = useState<SearchExercise[]>([])
+  const [loadingSuggested, setLoadingSuggested] = useState(false)
+  const [searching, setSearching] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [creatingError, setCreatingError] = useState<string | null>(null)
+  // Custom-exercise slots are full — a price, not a validation error, so it
+  // gets the upgrade sheet rather than the inline red text.
+  const [gate, setGate] = useState<GatePayload | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [customForm, setCustomForm] = useState<CustomExerciseValues>(DEFAULT_CUSTOM_EXERCISE_VALUES)
+  const [picked, setPicked] = useState<SearchExercise | null>(null)
+  const defaultSets = anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : DEFAULT_SETS
+  const [sets, setSets] = useState(defaultSets)
+  const [reps, setReps] = useState('8-12')
+  const [seconds, setSeconds] = useState(45)
+  const [placement, setPlacement] = useState<Placement>('end')
+  const [groupKind, setGroupKind] = useState<GroupKind>('superset')
+  const [adding, setAdding] = useState(false)
+  const seq = useRef(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const dark = tone === 'dark'
+
+  // Reset every time the sheet opens: it is a one-shot action, and a stale
+  // pick from last time reads as the wrong exercise being added.
+  useEffect(() => {
+    if (!open) return
+    setQuery(''); setResults([]); setPicked(null)
+    setSets(defaultSets); setReps('8-12'); setSeconds(45)
+    setPlacement('end'); setGroupKind('superset')
+    setShowCreateForm(false); setCreatingError(null); setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
+    const t = setTimeout(() => inputRef.current?.focus(), 120)
+    return () => clearTimeout(t)
+  }, [open, defaultSets])
+
+  // What to add next, guessed from the exercise you're standing in — shown
+  // before you type anything, so the sheet isn't just a naked search box.
+  const workoutSlugsKey = workoutExerciseSlugs.join(',')
+  useEffect(() => {
+    if (!open || !anchorSlug) { setSuggested([]); return }
+    let cancelled = false
+    setLoadingSuggested(true)
+    ;(async () => {
+      try {
+        const params = new URLSearchParams({ slug: anchorSlug, limit: '12' })
+        if (workoutSlugsKey) params.set('workoutSlugs', workoutSlugsKey)
+        const res = await fetch(`/api/exercises/alternatives?${params}`, { headers: authHeaders() })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { alternatives?: SearchExercise[] }
+        if (!cancelled) {
+          setSuggested(buildSuggestedExercises(data.alternatives ?? [], workoutSlugsKey ? workoutSlugsKey.split(',') : []))
+        }
+      } catch {
+        if (!cancelled) setSuggested([])
+      } finally {
+        if (!cancelled) setLoadingSuggested(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [open, anchorSlug, workoutSlugsKey])
+
+  // Your custom exercises, so a machine you named yourself is one search away.
+  useEffect(() => {
+    if (!open || customs.length) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/exercises/custom', { headers: authHeaders() })
+        if (!res.ok || cancelled) return
+        const data = (await res.json()) as { exercises?: SearchExercise[] }
+        if (!cancelled) setCustoms((data.exercises ?? []).map(e => ({ slug: e.slug, name: e.name, trackingType: e.trackingType, equipment: e.equipment, laterality: e.laterality, movementPatterns: e.movementPatterns })))
+      } catch { /* customs stay empty */ }
+    })()
+    return () => { cancelled = true }
+  }, [open, customs.length])
+
+  useEffect(() => {
+    setShowCreateForm(false)
+    setCreatingError(null)
+    setCustomForm(DEFAULT_CUSTOM_EXERCISE_VALUES)
+  }, [query])
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) { setResults([]); setSearching(false); return }
+    setSearching(true)
+    const mine = ++seq.current
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=8`, { headers: authHeaders() })
+        if (!res.ok) { if (mine === seq.current) setResults([]); return }
+        const data = (await res.json()) as { exercises?: SearchExercise[] }
+        if (mine === seq.current) setResults(data.exercises ?? [])
+      } catch {
+        if (mine === seq.current) setResults([])
+      } finally {
+        if (mine === seq.current) setSearching(false)
+      }
+    }, 250)
+    return () => clearTimeout(t)
+  }, [query])
+
+  const choose = useCallback((r: SearchExercise) => {
+    setPicked(r)
+    setReps(isTimed(r.trackingType) ? '' : '8-12')
+    setQuery('')
+    setResults([])
+  }, [])
+
+  // Switching to a sibling variation (e.g. Machine Chest Press → Dumbbell
+  // Chest Press) keeps the prescription, only resetting reps/seconds when
+  // the tracking type actually changes category.
+  const selectVariation = useCallback((v: ExerciseVariation) => {
+    setPicked(prev => {
+      if (isTimed(v.trackingType) !== isTimed(prev?.trackingType)) {
+        setReps(isTimed(v.trackingType) ? '' : '8-12')
+      }
+      return { slug: v.slug, name: v.name, trackingType: v.trackingType, equipment: v.equipment, laterality: v.laterality }
+    })
+  }, [])
+
+  // The machine in front of you is not always in the catalog — same detailed
+  // fields the program editor offers, not just a name and a tracking type.
+  const createCustom = useCallback(async () => {
+    if (!customForm.name.trim() || creating) return
+    setCreating(true)
+    setCreatingError(null)
+    try {
+      const res = await fetch('/api/exercises/custom', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(customForm),
+      })
+      const data = (await res.json()) as { exercise?: SearchExercise; error?: string }
+      if (!res.ok || !data.exercise) {
+        const g = gateFrom(res.status, data)
+        if (g) {
+          setGate(g)
+          return
+        }
+        setCreatingError(data.error || 'Failed to create exercise')
+        return
+      }
+      setCustoms(prev => [...prev, data.exercise!])
+      choose(data.exercise)
+      setShowCreateForm(false)
+    } catch {
+      setCreatingError('Network error')
+    } finally {
+      setCreating(false)
+    }
+  }, [customForm, creating, choose])
+
+  // Joining a circuit is not a free choice of set count: a circuit is rounds
+  // of the whole block, so the anchor's count is the count. Reported from the
+  // field — a 3-set exercise added to a 5-set one as a circuit produced five
+  // rounds with the newcomer missing from two of them.
+  const joiningCircuit =
+    placement === 'group' &&
+    !!anchorName &&
+    agreesOnSets(anchorInGroup ? anchorGroupType : groupKind)
+  const lockedSets = joiningCircuit && anchorSets && anchorSets > 0 ? Math.max(1, Math.floor(anchorSets)) : null
+  const effectiveSets = lockedSets ?? sets
+
+  const submit = useCallback(async () => {
+    if (!picked || adding) return
+    setAdding(true)
+    const timed = isTimed(picked.trackingType)
+    const exercise: WorkoutExercise = {
+      name: picked.name,
+      exerciseSlug: picked.slug,
+      trackingType: picked.trackingType,
+      sets: effectiveSets,
+      reps: timed ? '' : reps.trim() || '8-12',
+      ...(timed ? { duration: `${seconds} sec` } : {}),
+      ...(picked.equipment && { equipment: picked.equipment }),
+      ...(picked.laterality && { laterality: picked.laterality }),
+      ...(picked.movementPatterns && { movementPatterns: picked.movementPatterns }),
+    }
+    try {
+      await onAdd({ exercise, placement, groupKind })
+      onClose()
+    } finally {
+      setAdding(false)
+    }
+  }, [picked, adding, effectiveSets, reps, seconds, placement, groupKind, onAdd, onClose])
+
+  if (!open) return null
+
+  const q = query.trim().toLowerCase()
+  // Same match rule as the catalog search this list sits next to, shorthand
+  // included — "RDL" has to find your own "Romanian Deadlift" too.
+  const customMatches = q.length >= 2 ? customs.filter(c => matchesExerciseQuery(c, q)) : []
+  // Tag the merged rows so the list can mark which ones are yours. The catalog
+  // search endpoint excludes customs by design, so `isCustom` has to be
+  // attached here rather than coming off the wire.
+  const merged = [
+    ...results.map(r => ({ ...r, isCustom: false })),
+    ...customMatches
+      .filter(c => !results.some(r => r.slug === c.slug))
+      .map(c => ({ ...c, isCustom: true })),
+  ]
+  const timed = isTimed(picked?.trackingType)
+
+  const surface = dark
+    ? 'bg-zinc-950 text-white ring-1 ring-white/10'
+    : 'bg-white text-zinc-900 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-white dark:ring-zinc-800'
+  const field = dark
+    ? 'bg-white/5 text-white placeholder-white/40 ring-1 ring-white/10 focus:ring-green-500'
+    : 'bg-zinc-50 text-zinc-900 placeholder-zinc-400 ring-1 ring-zinc-200 focus:ring-green-500 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:ring-zinc-700'
+  const rowIdle = dark ? 'hover:bg-white/5' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'
+  const muted = dark ? 'text-white/50' : 'text-zinc-500 dark:text-zinc-400'
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center" data-testid="add-exercise-sheet">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className={`relative min-h-[60vh] max-h-[86vh] w-full overflow-y-auto rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:min-h-0 sm:max-w-md sm:rounded-3xl ${surface}`}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-base font-bold">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className={`rounded-full p-1.5 ${rowIdle}`}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {!picked ? (
+          <>
+            <div className="relative">
+              <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${muted}`} />
+              <input
+                ref={inputRef}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search exercises…"
+                data-testid="add-exercise-search"
+                className={`w-full rounded-xl py-2.5 pl-10 pr-9 text-sm outline-none ${field}`}
+              />
+              {searching && <Loader2 className={`absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin ${muted}`} />}
+            </div>
+
+            <div className="mt-3 space-y-1">
+              {merged.map(r => (
+                <button
+                  key={r.slug}
+                  onClick={() => choose(r)}
+                  data-testid="add-exercise-result"
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
+                >
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate font-medium">{r.name}</span>
+                    {r.isCustom && <CustomExerciseBadge variant="inline" />}
+                  </span>
+                  <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
+                </button>
+              ))}
+              {q.length < 2 && anchorSlug && (
+                <div data-testid="add-exercise-suggested">
+                  {suggested.length > 0 ? (
+                    <>
+                      <p className={`px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Suggested</p>
+                      {suggested.map(s => (
+                        <button
+                          key={s.slug}
+                          onClick={() => choose(s)}
+                          data-testid="add-exercise-suggested-result"
+                          className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm ${rowIdle}`}
+                        >
+                          <span className="truncate font-medium">{s.name}</span>
+                          <Plus className={`h-4 w-4 shrink-0 ${muted}`} />
+                        </button>
+                      ))}
+                    </>
+                  ) : loadingSuggested ? (
+                    <div className="flex justify-center py-6">
+                      <Loader2 className={`h-4 w-4 animate-spin ${muted}`} />
+                    </div>
+                  ) : (
+                    <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>
+                  )}
+                </div>
+              )}
+              {q.length < 2 && !anchorSlug && <p className={`px-1 py-6 text-center text-xs ${muted}`}>Search for what you are about to do.</p>}
+              {/* Always available, not just when a search comes up empty — a
+                  misspelling shouldn't be the only way to reach this. */}
+              {!showCreateForm && (
+                <button
+                  onClick={() => {
+                    setCustomForm(prev => ({ ...prev, name: query.trim() }))
+                    setShowCreateForm(true)
+                  }}
+                  data-testid="add-exercise-create-open"
+                  className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}
+                >
+                  <Plus className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                    {query.trim() ? <>Create &ldquo;{query.trim()}&rdquo; as a new exercise</> : 'Create an exercise'}
+                  </span>
+                </button>
+              )}
+              {showCreateForm && (
+                <div className={`rounded-xl px-3 py-3 ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}>
+                  <div className="mb-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateForm(false)}
+                      aria-label="Back to search"
+                      className={muted}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </button>
+                    <p className="text-sm font-semibold">Create Custom Exercise</p>
+                  </div>
+                  <CustomExerciseFields
+                    values={customForm}
+                    onChange={setCustomForm}
+                    namePlaceholder="e.g. Cable Face Pull"
+                    dark={dark}
+                  />
+                  {creatingError && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{creatingError}</p>}
+                  <button
+                    onClick={createCustom}
+                    disabled={creating || !customForm.name.trim()}
+                    data-testid="add-exercise-create-confirm"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-600 disabled:opacity-60"
+                  >
+                    {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Create & Add
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={`mb-3 rounded-xl px-3 py-2.5 ${dark ? 'bg-white/5' : 'bg-zinc-50 dark:bg-zinc-800'}`}>
+              <p className="text-sm font-semibold">{picked.name}</p>
+              <button onClick={() => setPicked(null)} className={`mt-0.5 text-xs underline ${muted}`}>pick a different one</button>
+            </div>
+
+            <ExerciseVariationPicker
+              slug={picked.slug}
+              selectedSlug={picked.slug}
+              onSelect={selectVariation}
+              dark={dark}
+              className="mb-4"
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+              <Stepper
+                label={setUnitLabel(picked?.trackingType, effectiveSets)}
+                value={effectiveSets}
+                onChange={v => setSets(Math.max(1, Math.min(10, v)))}
+                dark={dark}
+                testid="add-exercise-sets"
+                disabled={lockedSets !== null}
+              />
+              {timed ? (
+                <Stepper label="Seconds" value={seconds} step={15} onChange={v => setSeconds(Math.max(5, Math.min(600, v)))} dark={dark} testid="add-exercise-seconds" />
+              ) : (
+                <label className="block">
+                  <span className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Reps</span>
+                  <input
+                    value={reps}
+                    onChange={e => setReps(e.target.value)}
+                    inputMode="numeric"
+                    data-testid="add-exercise-reps"
+                    className={`w-full rounded-xl px-3 py-2 text-sm outline-none ${field}`}
+                  />
+                </label>
+              )}
+            </div>
+
+            {anchorName && (
+              <div className="mt-4">
+                <p className={`mb-1.5 text-[11px] font-semibold uppercase tracking-wide ${muted}`}>Where it goes</p>
+                <div className="space-y-1.5">
+                  <PlaceOption
+                    active={placement === 'end'}
+                    dark={dark}
+                    onClick={() => setPlacement('end')}
+                    testid="add-exercise-place-end"
+                    title="On its own"
+                    sub="Runs after everything else"
+                  />
+                  <PlaceOption
+                    active={placement === 'group'}
+                    dark={dark}
+                    onClick={() => setPlacement('group')}
+                    testid="add-exercise-place-group"
+                    icon={<Layers className="h-4 w-4" />}
+                    title={anchorInGroup ? 'Into this group' : `Superset with ${anchorName}`}
+                    sub={anchorInGroup ? 'Same rounds, straight after it' : 'Alternate sets, back to back'}
+                  />
+                </div>
+                {placement === 'group' && !anchorInGroup && (
+                  <div className="mt-2 flex gap-1.5">
+                    {(['superset', 'circuit'] as GroupKind[]).map(k => (
+                      <button
+                        key={k}
+                        onClick={() => setGroupKind(k)}
+                        data-testid={`add-exercise-kind-${k}`}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                          groupKind === k
+                            ? 'bg-green-500 text-white'
+                            : dark ? 'bg-white/10 text-white/70' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                      >
+                        {k === 'superset' ? 'Superset' : 'Circuit'}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {lockedSets !== null && (
+                  <p className={`mt-2 text-xs ${muted}`} data-testid="add-exercise-circuit-note">
+                    A circuit runs every exercise the same number of rounds, so this one follows {anchorName} at {lockedSets}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={adding}
+              data-testid="add-exercise-confirm"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-green-500 py-3 text-sm font-bold text-white transition-colors hover:bg-green-600 disabled:opacity-60"
+            >
+              {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Add to this workout
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Stepper({ label, value, onChange, dark, step = 1, testid, disabled = false }: { label: string; value: number; onChange: (v: number) => void; dark: boolean; step?: number; testid?: string; disabled?: boolean }) {
+  const btn = dark ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200'
+  const muted = dark ? 'text-white/50' : 'text-zinc-500 dark:text-zinc-400'
+  return (
+    <div>
+      <span className={`mb-1 block text-[11px] font-semibold uppercase tracking-wide ${muted}`}>{label}</span>
+      <div className="flex items-center gap-2">
+        <button onClick={() => onChange(value - step)} disabled={disabled} aria-label={`Fewer ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl disabled:opacity-40 ${btn}`}>
+          <Minus className="h-4 w-4" />
+        </button>
+        <span data-testid={testid} className="min-w-[2ch] flex-1 text-center text-sm font-bold">{value}</span>
+        <button onClick={() => onChange(value + step)} disabled={disabled} aria-label={`More ${label}`} className={`flex h-9 w-9 items-center justify-center rounded-xl disabled:opacity-40 ${btn}`}>
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PlaceOption({ active, onClick, title, sub, icon, dark, testid }: { active: boolean; onClick: () => void; title: string; sub: string; icon?: React.ReactNode; dark: boolean; testid?: string }) {
+  const base = active
+    ? 'ring-2 ring-green-500 ' + (dark ? 'bg-green-500/10' : 'bg-green-50 dark:bg-green-900/20')
+    : dark ? 'ring-1 ring-white/10 hover:bg-white/5' : 'ring-1 ring-zinc-200 hover:bg-zinc-50 dark:ring-zinc-700 dark:hover:bg-zinc-800'
+  const muted = dark ? 'text-white/50' : 'text-zinc-500 dark:text-zinc-400'
+  return (
+    <button onClick={onClick} data-testid={testid} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${base}`}>
+      {icon && <span className={active ? 'text-green-500' : muted}>{icon}</span>}
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold">{title}</span>
+        <span className={`block truncate text-xs ${muted}`}>{sub}</span>
+      </span>
+    </button>
+  )
+}

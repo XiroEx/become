@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/suggestions/plateauWarning.test.ts
+// Run with: npm run test:file tests/unit/suggestions/plateauWarning.test.ts
 //
 // Covers the plateau-warning source:
 //   - prAdvanceDate (latest of maxWeight/maxE1RM; tied-PR date used)

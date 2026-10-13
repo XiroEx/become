@@ -27,8 +27,8 @@ jest.mock("@become/api-client", () => {
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { toProgramSummary } from "@/lib/programs/programSummary";
-import ProgrammingIndexRoute from "../app/(tabs)/programming/index";
-import ProgramsSearchRoute from "../app/(tabs)/programming/search";
+import ProgramsBrowseRoute from "../app/(app)/(tabs)/programming/browse";
+import ProgramsSearchRoute from "../app/(app)/(tabs)/programming/search";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -67,15 +67,55 @@ describe("toProgramSummary", () => {
     expect(s.targetUser).toBeUndefined();
     expect(s.description).toBe("");
   });
+
+  // NP-278: narrowTargetUser only recognised 3 of the 5 web levels, so the
+  // level line vanished for every "Beginner to Intermediate" /
+  // "Intermediate to Advanced" program (e.g. the three BECOME programs
+  // targeted "Beginner to Intermediate").
+  it("(NP-278) keeps a 'Beginner to Intermediate' / 'Intermediate to Advanced' target_user instead of dropping it", () => {
+    expect(
+      toProgramSummary({
+        program_id: "p3",
+        name: "12 Week Fat-Loss Foundation Program",
+        target_user: "Beginner to Intermediate",
+      }).targetUser,
+    ).toBe("Beginner to Intermediate");
+
+    expect(
+      toProgramSummary({
+        program_id: "p4",
+        name: "Hybrid Strength",
+        target_user: "Intermediate to Advanced",
+      }).targetUser,
+    ).toBe("Intermediate to Advanced");
+  });
+
+  // NP-278: the browse catalog must be able to tell a member's own custom
+  // program apart from the shared catalog so it can exclude it.
+  it("(NP-278) carries isCustom through so Browse can exclude the member's own programs", () => {
+    expect(
+      toProgramSummary({
+        program_id: "custom-abc-my-split",
+        name: "My Split",
+        isCustom: true,
+        createdBy: "user-1",
+      }).isCustom,
+    ).toBe(true);
+
+    expect(
+      toProgramSummary({ program_id: "p5", name: "Catalog Program" })
+        .isCustom,
+    ).toBeUndefined();
+  });
 });
 
-describe("ProgrammingIndexRoute", () => {
+describe("ProgramsBrowseRoute", () => {
   beforeEach(() => {
     mockApiFetch.mockReset();
     mockPush.mockReset();
   });
 
-  it("GETs /api/programs with baseUrl + token and renders the mapped list", async () => {
+  it("GETs /api/programs/search with baseUrl + token and renders the mapped list", async () => {
     mockApiFetch.mockResolvedValue([
       {
         program_id: "p1",
@@ -86,13 +126,13 @@ describe("ProgrammingIndexRoute", () => {
       { program_id: "p2", name: "Hypertrophy", description: "d2" },
     ]);
 
-    const { getByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId } = render(<ProgramsBrowseRoute />);
 
     await waitFor(() => {
-      expect(callsTo("/api/programs").length).toBeGreaterThan(0);
+      expect(callsTo("/api/programs/search").length).toBeGreaterThan(0);
     });
-    const call = callsTo("/api/programs")[0]!;
-    expect(call[0]).toBe("/api/programs");
+    const call = callsTo("/api/programs/search")[0]!;
+    expect(String(call[0])).toMatch(/^\/api\/programs\/search/);
     const opts = call[2] as {
       baseUrl?: string;
       getToken?: () => string | undefined;
@@ -110,9 +150,9 @@ describe("ProgrammingIndexRoute", () => {
   it("shows the loading skeleton while the fetch is in flight (not the empty state)", async () => {
     // Never-resolving fetch keeps the route in its initial-loading state.
     mockApiFetch.mockReturnValue(new Promise(() => {}));
-    const { getByTestId, queryByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId, queryByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
-      expect(getByTestId("programming-index-loading")).toBeTruthy();
+      expect(getByTestId("programming-browse-loading")).toBeTruthy();
     });
     // The "No programs yet" empty message must NOT show during loading.
     expect(queryByTestId("programs-list-empty")).toBeNull();
@@ -120,18 +160,73 @@ describe("ProgrammingIndexRoute", () => {
 
   it("renders the empty state when the catalog is empty", async () => {
     mockApiFetch.mockResolvedValue([]);
-    const { getByTestId, queryByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId, queryByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
       expect(getByTestId("programs-list-empty")).toBeTruthy();
     });
-    expect(queryByTestId("programming-index-loading")).toBeNull();
+    expect(queryByTestId("programming-browse-loading")).toBeNull();
   });
 
   it("surfaces an error when the fetch fails", async () => {
     mockApiFetch.mockRejectedValue(new Error("boom"));
-    const { getByTestId } = render(<ProgrammingIndexRoute />);
+    const { getByTestId } = render(<ProgramsBrowseRoute />);
     await waitFor(() => {
-      expect(getByTestId("programming-index-error")).toBeTruthy();
+      expect(getByTestId("programming-browse-error")).toBeTruthy();
+    });
+  });
+
+  // THE ENTRY POINTS. `programming/search`, `programming/saved` and the hidden
+  // `calendar` tab were pushed from nowhere: three finished screens that no
+  // member could open. The header is the web's Workout page in native form —
+  // search and saved live on that page, and the week strip links the calendar.
+  describe("the header entry points", () => {
+    beforeEach(() => {
+      mockApiFetch.mockResolvedValue([]);
+    });
+
+    it.each([
+      ["programming-open-search", "/(tabs)/programming/search"],
+      ["programming-open-saved", "/(tabs)/programming/saved"],
+      ["programming-open-calendar", "/(tabs)/calendar"],
+    ])("%s pushes %s", async (testID, href) => {
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
+      await waitFor(() => {
+        expect(getByTestId(testID)).toBeTruthy();
+      });
+
+      fireEvent.press(getByTestId(testID));
+
+      expect(mockPush).toHaveBeenCalledWith(href);
+    });
+
+    it("labels all three for a screen reader", async () => {
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
+      await waitFor(() => {
+        expect(getByTestId("programming-open-search")).toBeTruthy();
+      });
+      expect(
+        getByTestId("programming-open-search").props.accessibilityLabel,
+      ).toBe("Search programs");
+      expect(
+        getByTestId("programming-open-saved").props.accessibilityLabel,
+      ).toBe("Saved programs");
+      expect(
+        getByTestId("programming-open-calendar").props.accessibilityLabel,
+      ).toBe("Calendar");
+    });
+
+    it("keeps them on screen while the catalog is still loading", async () => {
+      // The entry points are the header, not part of the list: a slow or
+      // failed programs fetch must not take Search, Saved and the calendar
+      // with it.
+      mockApiFetch.mockReturnValue(new Promise(() => {}));
+      const { getByTestId } = render(<ProgramsBrowseRoute />);
+      await waitFor(() => {
+        expect(getByTestId("programming-browse-loading")).toBeTruthy();
+      });
+      expect(getByTestId("programming-open-search")).toBeTruthy();
+      expect(getByTestId("programming-open-saved")).toBeTruthy();
+      expect(getByTestId("programming-open-calendar")).toBeTruthy();
     });
   });
 });

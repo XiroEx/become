@@ -68,6 +68,8 @@ export interface USDAFood {
   servingSizeUnit?: string
   foodCategory?: string
   householdServingFullText?: string
+  /** Branded only. Zero-padded to 14 digits, so compare it stripped. */
+  gtinUpc?: string
   /**
    * Detail-only — the search endpoint omits this. When present (Foundation /
    * SR Legacy / Survey, sometimes Branded), gives rich household-portion data
@@ -197,33 +199,74 @@ function deriveUsdaBridges(food: USDAFood): {
   return { gramsPerServing, mlPerServing }
 }
 
+/** Leading zeros are padding, not data — 051000269348 and 00051000269348 are
+ *  the same barcode. Compare on the stripped form. */
+function normalizeGtin(code: string): string {
+  return String(code ?? '').trim().replace(/\D/g, '').replace(/^0+/, '')
+}
+
+/**
+ * The forms to search USDA for, most likely first.
+ *
+ * USDA stores `gtinUpc` zero-padded to 14 digits, and its search matches the
+ * stored string — so a scanned 12-digit UPC-A finds NOTHING. Swanson Sipping
+ * Bone Broth is the case that exposed this: USDA has it (with the correct label,
+ * 16 kcal/100 g) under 00051000269348, we searched 051000269348, got zero hits,
+ * fell through to OpenFoodFacts, and served its corrupt 89 kcal/100 g — 271 cal
+ * for a cup of broth that is really about 50.
+ */
+export function usdaGtinCandidates(code: string): string[] {
+  const digits = String(code ?? '').trim().replace(/\D/g, '')
+  if (!digits) return []
+  const stripped = digits.replace(/^0+/, '') || digits
+  const candidates = [
+    stripped.padStart(14, '0'), // USDA's canonical storage form
+    digits,                     // exactly as scanned
+    stripped.padStart(13, '0'), // EAN-13
+    stripped,                   // unpadded
+  ]
+  return [...new Set(candidates)]
+}
+
 export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResult | null> {
   const apiKey = (await getRuntimeConfig()).external.usdaApiKey || 'DEMO_KEY'
+  const wanted = normalizeGtin(code)
 
   try {
-    // USDA Branded foods are indexed by gtinUpc — searching the barcode as a
-    // query term returns the exact product when the UPC matches.
-    const params = new URLSearchParams({
-      query: code,
-      api_key: apiKey,
-      pageSize: '5',
-      dataType: 'Branded',
-    })
+    // USDA Branded foods are indexed by gtinUpc. Try each padding form and stop
+    // at the first response that actually contains our barcode.
+    let data: USDASearchResponse | null = null
+    for (const candidate of usdaGtinCandidates(code)) {
+      const params = new URLSearchParams({
+        query: candidate,
+        api_key: apiKey,
+        pageSize: '5',
+        dataType: 'Branded',
+      })
 
-    const res = await fetch(`${API_BASE}/foods/search?${params}`, {
-      signal: AbortSignal.timeout(12000),
-      cache: 'no-store',  // Next.js 16 caches fetch by default — opt out so live rate limits don't get stuck
-    })
-    if (!res.ok) {
-      console.warn(`USDA barcode lookup failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'})`)
-      return null
+      const res = await fetch(`${API_BASE}/foods/search?${params}`, {
+        signal: AbortSignal.timeout(12000),
+        cache: 'no-store',  // Next.js 16 caches fetch by default — opt out so live rate limits don't get stuck
+      })
+      if (!res.ok) {
+        console.warn(`USDA barcode lookup failed: ${res.status} ${res.statusText} (key=${apiKey === 'DEMO_KEY' ? 'DEMO_KEY' : 'set'})`)
+        return null
+      }
+
+      const body: USDASearchResponse = await res.json()
+      if (body.foods?.some((f) => normalizeGtin(f.gtinUpc ?? '') === wanted)) {
+        data = body
+        break
+      }
     }
 
-    const data: USDASearchResponse = await res.json()
-    if (!data.foods?.length) return null
+    if (!data?.foods?.length) return null
 
-    // Pick the first result whose gtinUpc matches any candidate code
+    // Keep ONLY exact barcode matches. USDA search is full-text, so an unmatched
+    // barcode still returns arbitrary products; taking the first would attach a
+    // stranger's nutrition to the scan.
     const mapped = data.foods
+      .filter((food) => normalizeGtin(food.gtinUpc ?? '') === wanted)
       .map((food): MappedFoodResult | null => {
         const cal = getNutrient(food.foodNutrients, NUTRIENT_IDS.calories)
         if (cal == null || cal <= 0) return null
@@ -232,13 +275,15 @@ export async function lookupUSDAByBarcode(code: string): Promise<MappedFoodResul
         const servingUnit = (typeof food.servingSizeUnit === 'string' ? food.servingSizeUnit : 'g').toLowerCase()
         const scale = servingSize / 100
 
+        // See the note on scaling above: these are stored and multiplied later,
+        // so they are kept exact rather than rounded into the record.
         const nutrition = {
-          calories: Math.round(cal * scale),
-          protein: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.protein) ?? 0)) * scale * 10) / 10,
-          carbs: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs) ?? 0)) * scale * 10) / 10,
-          fats: Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.fat) ?? 0)) * scale * 10) / 10,
+          calories: cal * scale,
+          protein: (getNutrient(food.foodNutrients, NUTRIENT_IDS.protein) ?? 0) * scale,
+          carbs: (getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs) ?? 0) * scale,
+          fats: (getNutrient(food.foodNutrients, NUTRIENT_IDS.fat) ?? 0) * scale,
           fiber: getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber) != null
-            ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)!) * scale * 10) / 10
+            ? getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)! * scale
             : undefined,
           sugar: getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar) != null
             ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.sugar)!) * scale * 10) / 10
@@ -297,14 +342,19 @@ export function mapUSDAFood(food: USDAFood): MappedFoodResult | null {
   const servingSize = food.servingSize || 100
   const servingUnit = (food.servingSizeUnit || 'g').toLowerCase()
 
+// USDA nutrients are per 100 g and get scaled to the serving below. The scaled
+// values are STORED and later multiplied by a serving count, so rounding them
+// here compounds: a low-calorie food in a small serving (scale 0.05) rounded to
+// a whole number lands on 0 and stays 0 forever. Keep the exact figure; round
+// only where it is displayed.
   // USDA nutrients are per 100g. Scale to actual serving size.
   const scale = servingSize / 100
 
   const nutrition = {
-    calories: Math.round(cal * scale),
-    protein:  Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.protein)  ?? 0)) * scale * 10) / 10,
-    carbs:    Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs)    ?? 0)) * scale * 10) / 10,
-    fats:     Math.round(((getNutrient(food.foodNutrients, NUTRIENT_IDS.fat)      ?? 0)) * scale * 10) / 10,
+    calories: cal * scale,
+    protein:  (getNutrient(food.foodNutrients, NUTRIENT_IDS.protein)  ?? 0) * scale,
+    carbs:    (getNutrient(food.foodNutrients, NUTRIENT_IDS.carbs)    ?? 0) * scale,
+    fats:     (getNutrient(food.foodNutrients, NUTRIENT_IDS.fat)      ?? 0) * scale,
     fiber: getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber) != null
       ? Math.round((getNutrient(food.foodNutrients, NUTRIENT_IDS.fiber)!) * scale * 10) / 10
       : undefined,

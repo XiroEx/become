@@ -3,10 +3,12 @@ import dbConnect from '@/lib/mongodb'
 import Meal, { IMealItem } from '@/models/Meal'
 import MealLog from '@/models/MealLog'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { recordStreakActivity } from '@/lib/streak'
+import { bustTilesCache } from '@/lib/redis'
 
 // POST: apply this meal as a MealLog for the current user.
-// Body: { loggedAt?, tags?, notes?, portion? }
+// Body: { loggedAt?, untimed?, tags?, notes?, portion? }
 //
 // Tag-merge policy: client-supplied `tags` are MERGED with the meal's own
 // tags (deduped). Pass an explicit empty array `[]` to omit the meal's tags
@@ -40,7 +42,10 @@ export async function POST(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Only reached for a meal that is neither public nor verified nor the
+    // caller's, so it is an admin-only widening — confirmed against the
+    // database. Ordinary members never get here and never pay for the read.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!meal.isPublic && !meal.isVerified && !isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Meal not found' }, { status: 404 })
     }
@@ -90,6 +95,10 @@ export async function POST(
     }))
 
     const log = await MealLog.create({
+      // Logged for the day with no clock — the day view places it by the tag's
+      // anchor. Meals could not express this at all: this route had no time
+      // picker in front of it, so every meal landed at the current minute.
+      untimed: body.untimed === true,
       user: authResult.userId,
       loggedAt,
       items,
@@ -100,6 +109,13 @@ export async function POST(
     })
 
     await Meal.updateOne({ _id: meal._id }, { $inc: { usageCount: 1 } })
+
+    // This creates a MealLog same as every other logging route — the
+    // nutrition suggestion tiles on the dashboard are served from a 60s
+    // cache keyed off MealLog data, so this write has to bust it too or
+    // "log this meal" is the one path that still reads as "leave the page
+    // and come back before it's reflected."
+    await bustTilesCache(authResult.userId!)
 
     const streakResult = await recordStreakActivity(authResult.userId!, authResult.email).catch(() => null)
 

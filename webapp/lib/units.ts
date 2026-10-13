@@ -433,19 +433,20 @@ export function parseQuantityString(input: string): { value: number; unit: Unit 
   function tryRead(s: string): Parsed | null {
     // 1. Whole number followed by unicode glyph: "1½"
     const wholeGlyph = s.match(/^(\d+)([½¼¾⅓⅔⅛⅜⅝⅞])(.*)$/)
-    if (wholeGlyph) {
+    if (wholeGlyph && wholeGlyph[1] && wholeGlyph[2] && wholeGlyph[3] !== undefined) {
       const w = parseInt(wholeGlyph[1], 10)
-      const f = UNICODE_FRACTIONS[wholeGlyph[2]]
+      const f = UNICODE_FRACTIONS[wholeGlyph[2]] ?? 0
       return { value: w + f, rest: wholeGlyph[3] }
     }
     // 2. Bare unicode glyph: "½ cup"
     const glyphOnly = s.match(/^([½¼¾⅓⅔⅛⅜⅝⅞])(.*)$/)
-    if (glyphOnly) {
-      return { value: UNICODE_FRACTIONS[glyphOnly[1]], rest: glyphOnly[2] }
+    if (glyphOnly && glyphOnly[1] && glyphOnly[2] !== undefined) {
+      const f = UNICODE_FRACTIONS[glyphOnly[1]] ?? 0
+      return { value: f, rest: glyphOnly[2] }
     }
     // 3. Mixed ascii fraction "1 1/2": leading whole + space + fraction
     const mixed = s.match(/^(\d+)\s+(\d+)\s*\/\s*(\d+)(.*)$/)
-    if (mixed) {
+    if (mixed && mixed[1] && mixed[2] && mixed[3] && mixed[4] !== undefined) {
       const w = parseInt(mixed[1], 10)
       const num = parseInt(mixed[2], 10)
       const den = parseInt(mixed[3], 10)
@@ -454,7 +455,7 @@ export function parseQuantityString(input: string): { value: number; unit: Unit 
     }
     // 4. Plain ascii fraction "1/2"
     const frac = s.match(/^(\d+)\s*\/\s*(\d+)(.*)$/)
-    if (frac) {
+    if (frac && frac[1] && frac[2] && frac[3] !== undefined) {
       const num = parseInt(frac[1], 10)
       const den = parseInt(frac[2], 10)
       if (den === 0) return null
@@ -462,7 +463,7 @@ export function parseQuantityString(input: string): { value: number; unit: Unit 
     }
     // 5. Decimal or integer "1.5", "100", ".5"
     const dec = s.match(/^(\d*\.?\d+)(.*)$/)
-    if (dec) {
+    if (dec && dec[1] && dec[2] !== undefined) {
       return { value: parseFloat(dec[1]), rest: dec[2] }
     }
     return null

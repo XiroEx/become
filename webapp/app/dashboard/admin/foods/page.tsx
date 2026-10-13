@@ -22,6 +22,7 @@ interface AdminFood {
   source?: 'manual' | 'usda' | 'openfoodfacts'
   externalDataType?: string
   needsReview?: boolean
+  reviewFlag?: { owner: 'automatic' | 'manual' }
   groupKey?: string
   servingSize: number
   servingUnit: string
@@ -270,7 +271,11 @@ export default function AdminFoodsPage() {
                     {food.needsReview && (
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <AlertCircle className="h-2.5 w-2.5" />
-                        Review
+                        Review · {food.reviewFlag?.owner === 'automatic'
+                          ? 'Auto'
+                          : food.reviewFlag?.owner === 'manual'
+                            ? 'Manual'
+                            : 'Legacy'}
                       </span>
                     )}
                   </div>

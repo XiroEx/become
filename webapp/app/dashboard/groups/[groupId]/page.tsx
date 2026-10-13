@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, Users } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card, EmptyState } from '@/components/ui'
 import { BackButton } from '@/components/ui/BackButton'
 import { CommunityEvent, CommunityGroup, formatEventTime, getToken } from '@/components/community/types'
+import FeatureGuard from '@/components/FeatureGuard'
 
 export default function GroupDetailPage() {
   const params = useParams<{ groupId: string }>()
@@ -46,10 +47,11 @@ export default function GroupDetailPage() {
     if (res.ok) load()
   }
 
-  if (loading) return <PageTransition><div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" /></PageTransition>
-  if (!group) return <PageTransition><EmptyState title="Group not found" description="This group is unavailable or has been archived." /></PageTransition>
-
-  return (
+  const content = loading ? (
+    <PageTransition><div className="h-40 animate-pulse rounded-xl bg-zinc-100 dark:bg-zinc-900" /></PageTransition>
+  ) : !group ? (
+    <PageTransition><EmptyState title="Group not found" description="This group is unavailable or has been archived." /></PageTransition>
+  ) : (
     <PageTransition>
       <div className="mb-5">
         <Link href="/dashboard/groups" className="text-sm font-medium text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">Groups</Link>
@@ -85,5 +87,15 @@ export default function GroupDetailPage() {
         )}
       </section>
     </PageTransition>
+  )
+
+  return (
+    <FeatureGuard
+      feature="Groups"
+      description="Focused community spaces for shared goals and accountability. Coming soon."
+      icon={<Users className="h-10 w-10" />}
+    >
+      {content}
+    </FeatureGuard>
   )
 }

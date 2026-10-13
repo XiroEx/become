@@ -1,3 +1,5 @@
+const colors = require("tailwindcss/colors");
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: [
@@ -8,12 +10,33 @@ module.exports = {
   darkMode: "class",
   theme: {
     extend: {
+      // The web's two families (`webapp/app/globals.css` maps
+      // `--font-geist-sans` / `--font-geist-mono` onto Tailwind's `--font-sans`
+      // / `--font-mono`), named here as the faces `expo-font` registers.
+      //
+      // A class can only name a FAMILY, and React Native's `fontFamily` names a
+      // FACE, so `font-sans` / `font-mono` are the regular weights. The face for
+      // a weight is picked by `lib/theme/fonts.ts` and applied inline by
+      // `components/Text.tsx`, which outranks these (NativeWind: inline beats
+      // className) — that is how `font-mono font-bold` resolves to one face.
+      fontFamily: {
+        sans: ["Geist-Regular"],
+        mono: ["GeistMono-Regular"],
+      },
       colors: {
         background: "rgb(var(--background) / <alpha-value>)",
         foreground: "rgb(var(--foreground) / <alpha-value>)",
         primary: {
           DEFAULT: "rgb(var(--primary) / <alpha-value>)",
           foreground: "rgb(var(--primary-foreground) / <alpha-value>)",
+        },
+        // The web's red, which is an EXCEPTION and not the base colour
+        // (NP-313): the unread notification badge and the other `bg-red-500` /
+        // `text-red-600` accents. Error text and destructive surfaces keep
+        // using `destructive`.
+        brand: {
+          DEFAULT: "rgb(var(--brand) / <alpha-value>)",
+          foreground: "rgb(var(--brand-foreground) / <alpha-value>)",
         },
         muted: {
           DEFAULT: "rgb(var(--muted) / <alpha-value>)",
@@ -29,6 +52,45 @@ module.exports = {
         },
         card: "rgb(var(--card) / <alpha-value>)",
         border: "rgb(var(--border) / <alpha-value>)",
+        success: "rgb(var(--success) / <alpha-value>)",
+        teal: {
+          DEFAULT: "rgb(var(--teal) / <alpha-value>)",
+          ...colors.teal,
+        },
+        info: "rgb(var(--info) / <alpha-value>)",
+        mindset: "rgb(var(--mindset) / <alpha-value>)",
+        "mood-bad": "rgb(var(--mood-bad) / <alpha-value>)",
+        "mood-low": "rgb(var(--mood-low) / <alpha-value>)",
+        "mood-okay": "rgb(var(--mood-okay) / <alpha-value>)",
+        "mood-good": "rgb(var(--mood-good) / <alpha-value>)",
+        "mood-great": "rgb(var(--mood-great) / <alpha-value>)",
+        "mind-violet": "rgb(var(--mind-violet) / <alpha-value>)",
+        "mind-green": "rgb(var(--mind-green) / <alpha-value>)",
+        "mind-ink": "rgb(var(--mind-ink) / <alpha-value>)",
+        "mind-cyan": "rgb(var(--mind-cyan) / <alpha-value>)",
+        "mind-blue": "rgb(var(--mind-blue) / <alpha-value>)",
+        "mind-emerald": "rgb(var(--mind-emerald) / <alpha-value>)",
+        "mind-pink": "rgb(var(--mind-pink) / <alpha-value>)",
+        orange: {
+          DEFAULT: "rgb(var(--orange) / <alpha-value>)",
+          ...colors.orange,
+        },
+        indigo: {
+          DEFAULT: "rgb(var(--indigo) / <alpha-value>)",
+          ...colors.indigo,
+        },
+        rose: {
+          DEFAULT: "rgb(var(--rose) / <alpha-value>)",
+          ...colors.rose,
+        },
+        amber: {
+          DEFAULT: "rgb(var(--amber) / <alpha-value>)",
+          ...colors.amber,
+        },
+        purple: {
+          DEFAULT: "rgb(var(--purple) / <alpha-value>)",
+          ...colors.purple,
+        },
       },
     },
   },

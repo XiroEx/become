@@ -210,8 +210,15 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
 
   // VIEW MODE: Show existing schedule summary
   if (mode === 'view' && existingSchedule) {
+    // Compare CALENDAR DAYS, not instants. A slot's date is a marker pegged to
+    // 00:00Z meaning "Aug 12", so `new Date(w.date) >= new Date()` is false for
+    // the whole of today — today's workout silently dropped out of Upcoming.
+    const nowLocal = new Date()
+    const todayKey = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`
+    const slotKey = (d: string | Date) =>
+      typeof d === 'string' ? d.slice(0, 10) : new Date(d).toISOString().slice(0, 10)
     const upcoming = existingSchedule.scheduledWorkouts
-      .filter((w) => new Date(w.date) >= new Date() && w.status === 'scheduled')
+      .filter((w) => slotKey(w.date) >= todayKey && w.status === 'scheduled')
       .slice(0, 5)
     const completed = existingSchedule.scheduledWorkouts.filter((w) => w.status === 'completed').length
     const total = existingSchedule.scheduledWorkouts.length
@@ -257,15 +264,19 @@ export default function ScheduleSetupClient({ programId, programName, trainingDa
           <div className="mb-6">
             <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-white">Upcoming Workouts</h2>
             <div className="space-y-2">
+              {/* Rendered in UTC on purpose. A slot's date is a marker pegged to
+                  00:00Z meaning a calendar day; formatting it in local time
+                  shows the PREVIOUS day west of UTC — a Wednesday slot read
+                  "Tuesday, Aug 11" in Eastern. */}
               {upcoming.map((w, idx) => (
                 <div key={idx} className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    {new Date(w.date).getDate()}
+                    {new Date(w.date).getUTCDate()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{w.dayLabel}</p>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      {new Date(w.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                      {new Date(w.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' })}
                     </p>
                   </div>
                 </div>

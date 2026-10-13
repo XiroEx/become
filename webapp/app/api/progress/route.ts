@@ -3,16 +3,18 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
-import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
-import { verifyAuth } from '@/lib/auth'
+import { formatProgressData, calculateNextWorkout, resolveProgramWeek } from '@/lib/data/userProgress'
+import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
-    const authResult = await verifyAuth(request)
-    
+    // Verify authentication. Read-only, so the become-ai graph's short-lived
+    // ai-tools token may reach it — this is the `become_get_progress` tool
+    // surface (GET /api/progress?detailed=1). The POST below does NOT opt in.
+    const authResult = await verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
+
     if (!authResult.success) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -197,15 +199,43 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // NP-377: reconcile the week/phase/total-weeks trio through one function
+    // so they can never disagree (the dashboard was showing "Phase 1 • Week
+    // 5 of 4" when the schedule/completion-derived week walked past the
+    // program's own length). `totalWeeksForResolve` prefers the schedule's
+    // real duration_weeks read above; the legacy (no-activeProgram) fallback
+    // path never populates that, so fall back to programDetails directly.
+    const totalWeeksForResolve = scheduleTotalWeeks
+      ?? (programDetails && 'duration_weeks' in programDetails
+        ? (programDetails as { duration_weeks: number }).duration_weeks
+        : undefined)
+    const phasesForResolve = (programDetails as { phases?: Array<{ weeks?: string }> } | null)?.phases
+    const rawCurrentWeek = activeProgram
+      ? (scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1))
+      : (progress.currentProgram?.currentWeek ?? 1)
+    const rawCurrentPhase = activeProgram
+      ? (activeProgram.currentPhase || 1)
+      : (progress.currentProgram?.currentPhase || 1)
+    const resolvedWeek = resolveProgramWeek({
+      rawWeek: rawCurrentWeek,
+      totalWeeks: totalWeeksForResolve,
+      phases: phasesForResolve,
+      fallbackPhase: rawCurrentPhase,
+    })
+
     // Build current program from real data only (never use mock programId)
     const currentProgramData = activeProgram ? {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
-      currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      currentPhase: resolvedWeek.currentPhase,
+      currentWeek: resolvedWeek.currentWeek,
       completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
       totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
-    } : progress.currentProgram?.programId ? progress.currentProgram : null
+    } : progress.currentProgram?.programId ? {
+      ...progress.currentProgram,
+      currentPhase: resolvedWeek.currentPhase,
+      currentWeek: resolvedWeek.currentWeek,
+    } : null
 
     // Format and return progress data
     const formattedData = formatProgressData(
@@ -220,19 +250,69 @@ export async function GET(request: NextRequest) {
       },
       programName,
       nextWorkout,
-      { totalWeeks: scheduleTotalWeeks, nextWorkoutDay: scheduleNextWorkoutDay }
+      {
+        totalWeeks: resolvedWeek.totalWeeks,
+        nextWorkoutDay: scheduleNextWorkoutDay,
+        tzOffsetMinutes: readTzOffset(request.nextUrl.searchParams),
+      }
     )
 
+    // The member's goals, read once and returned on BOTH the summary and the
+    // detailed shape. The dashboard fetches the summary, and until now the
+    // profile fields were only attached to `?detailed=1` — so the Goal and This
+    // Week tiles never saw a target weight or a weekly target even when the
+    // member had set them at onboarding.
+    const UserModel = (await import('@/models/User')).default
+    const user = await UserModel.findById(authResult.userId, 'profile').lean() as {
+      profile?: {
+        fitnessGoal?: string
+        nutritionDirection?: string
+        targetWeightKg?: number
+        currentWeightKg?: number
+        weeklyAvailability?: number
+        weightUnit?: string
+      }
+    } | null
+    const targetWeightKg = user?.profile?.targetWeightKg
+    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
+    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
+    // The dated goal (lib/goals): the plan's baseline and pace. Cheap read of the
+    // active document; ensureGoals runs only when there is a target and no goal
+    // yet (first load after this shipped, or right after onboarding).
+    const nutritionGoal = await readNutritionGoalForTile(authResult.userId!, {
+      targetWeightKg: targetWeightKg ?? null,
+      weightUnit: user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+      latestWeightEntry: (progress.weightHistory as Array<{ weight: number; unit?: 'lbs' | 'kg'; date: Date }> | undefined)?.slice(-1)[0] ?? null,
+    })
+    const goal = {
+      fitnessGoal: user?.profile?.fitnessGoal ?? null,
+      nutritionDirection: user?.profile?.nutritionDirection ?? null,
+      targetWeightKg: targetWeightKg ?? null,
+      // Where the plan started — the goal's baseline (NOT profile.currentWeightKg,
+      // which every weigh-in overwrites).
+      startWeightKg: nutritionGoal?.baselineKg ?? null,
+      weeklyAvailability,
+      weightUnit: user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs',
+      pace: nutritionGoal?.pace ?? null,
+    }
+
     const detailed = request.nextUrl.searchParams.get('detailed') === '1'
-    if (!detailed) return NextResponse.json(formattedData)
+    if (!detailed) {
+      return NextResponse.json({
+        ...formattedData,
+        goal,
+        longestStreak: (progress.longestStreak as number) || 0,
+      })
+    }
 
     // ── Detailed extras: PBs, recent workouts, profile data ──────────────────
     // Personal bests — read from the persisted `exercisePRs` subdoc populated
     // by the POST /api/workouts save path. No on-the-fly recomputation.
     const pbsRaw = formatPRsForProgressDetail((progress as { exercisePRs?: IExercisePR[] }).exercisePRs)
-    const pbs: Record<string, { name: string; weight: number; reps: number; date: string }> = {}
+    const pbs: Record<string, { slug: string; name: string; weight: number; reps: number; date: string }> = {}
     for (const [key, rec] of Object.entries(pbsRaw)) {
       pbs[key] = {
+        slug: key,
         name: rec.name,
         weight: rec.weight,
         reps: rec.reps,
@@ -242,8 +322,16 @@ export async function GET(request: NextRequest) {
 
     // Typed workout log for detailed processing
     type RawLogDetailed = {
-      completed: boolean; date: Date; programId: string; day: string; duration?: number; notes?: string
-      exercises?: Array<{ name: string; exerciseSlug?: string; sets?: Array<{ completed: boolean; weight?: number; reps?: number }> }>
+      completed: boolean; date: Date; programId?: string; day?: string; kind?: 'program' | 'quick'
+      sessionId?: string; title?: string; duration?: number; notes?: string
+      exercises?: Array<{
+        name: string
+        exerciseSlug?: string
+        sets?: Array<{
+          setNumber?: number; completed: boolean; weight?: number; reps?: number
+          duration?: number; distance?: number; speed?: number
+        }>
+      }>
     }
     const allLogs = (progress.workoutLogs || []) as RawLogDetailed[]
 
@@ -255,7 +343,7 @@ export async function GET(request: NextRequest) {
       .map((l) => ({
         date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
         programId: l.programId,
-        day: l.day,
+        day: l.day || l.title || (l.kind === 'quick' || !l.programId ? 'Quick Session' : 'Workout'),
         duration: l.duration,
         exerciseCount: l.exercises?.length ?? 0,
       }))
@@ -281,13 +369,32 @@ export async function GET(request: NextRequest) {
           const key = ex.exerciseSlug || ex.name
           const pb = pbs[key]
           const isPR = !!(pb && bestSet && (bestSet as { weight: number; reps: number }).weight >= pb.weight)
-          return { name: ex.name, slug: ex.exerciseSlug, bestSet, volume: Math.round(exVol), isPR }
-        }).filter((ex) => ex.volume > 0 || ex.bestSet !== null)
+          return {
+            name: ex.name,
+            slug: ex.exerciseSlug,
+            bestSet,
+            volume: Math.round(exVol),
+            isPR,
+            sets: (ex.sets || []).map((set, index) => ({
+              setNumber: set.setNumber ?? index + 1,
+              reps: set.reps ?? null,
+              weight: set.weight ?? null,
+              duration: set.duration ?? null,
+              distance: set.distance ?? null,
+              speed: set.speed ?? null,
+              completed: !!set.completed,
+            })),
+          }
+        })
+        const kind: 'program' | 'quick' = l.kind === 'quick' || !l.programId ? 'quick' : 'program'
         return {
           date: new Date(l.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          rawDate: (l.date as Date).toISOString(),
+          rawDate: new Date(l.date).toISOString(),
+          kind,
+          sessionId: l.sessionId,
+          title: l.title,
           programId: l.programId,
-          day: l.day,
+          day: l.day || l.title || (kind === 'quick' ? 'Quick Session' : 'Workout'),
           duration: l.duration,
           notes: l.notes,
           totalVolume: Math.round(totalVol),
@@ -327,15 +434,9 @@ export async function GET(request: NextRequest) {
       .map(([, data]) => ({ week: data.display, volume: data.volume, workouts: data.workouts }))
     totalVolumeLbs = Math.round(totalVolumeLbs)
 
-    // Profile — target weight and weekly availability
-    const UserModel = (await import('@/models/User')).default
-    const user = await UserModel.findById(authResult.userId, 'profile').lean() as { profile?: { targetWeightKg?: number; weeklyAvailability?: number } } | null
-    const targetWeightKg = user?.profile?.targetWeightKg
-    const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
-    const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
-
     return NextResponse.json({
       ...formattedData,
+      goal,
       longestStreak: (progress.longestStreak as number) || 0,
       pbs: Object.values(pbs).sort((a, b) => b.weight - a.weight),
       recentWorkouts,
@@ -409,5 +510,42 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error updating progress:', error)
     return NextResponse.json({ error: 'Failed to update progress' }, { status: 500 })
+  }
+}
+
+
+/**
+ * The plan behind the Goal tile: baseline weight/date and the pace read.
+ * Returns null when the member has no target weight.
+ */
+async function readNutritionGoalForTile(
+  userId: string,
+  ctx: { targetWeightKg: number | null; weightUnit: 'lbs' | 'kg'; latestWeightEntry: { weight: number; unit?: 'lbs' | 'kg'; date: Date } | null },
+): Promise<{ baselineKg: number | null; pace: { kgPerWeek: number | null; status: string; etaWeeks: number | null; eta: string; behindByKg: number } | null } | null> {
+  if (!ctx.targetWeightKg) return null
+  try {
+    const { default: Goal } = await import('@/models/Goal')
+    let g = await Goal.findOne({ userId, pillar: 'nutrition', status: 'active' })
+      .select('baseline target').lean() as { baseline?: { weightKg?: number; date?: Date }; target?: { weightKg?: number; direction?: 'lose' | 'maintain' | 'gain'; paceKgPerWeek?: number } } | null
+    if (!g) {
+      const { ensureGoals } = await import('@/lib/goals/ensure')
+      g = (await ensureGoals(userId)).nutrition as typeof g
+    }
+    if (!g) return null
+    const { paceRead, formatEta, unitToKg } = await import('@/lib/goals/pace')
+    const baselineKg = g.baseline?.weightKg ?? null
+    const latest = ctx.latestWeightEntry
+    if (!baselineKg || !g.baseline?.date || !latest || !g.target?.weightKg || !g.target.direction) {
+      return { baselineKg, pace: null }
+    }
+    const r = paceRead({
+      baselineKg, baselineDate: new Date(g.baseline.date),
+      latestKg: unitToKg(latest.weight, latest.unit ?? ctx.weightUnit),
+      targetKg: g.target.weightKg, paceKg: g.target.paceKgPerWeek ?? 0, direction: g.target.direction, now: new Date(),
+    })
+    return { baselineKg, pace: { kgPerWeek: g.target.paceKgPerWeek ?? null, status: r.status, etaWeeks: r.etaWeeks, eta: formatEta(r.etaWeeks), behindByKg: r.behindByKg } }
+  } catch (err) {
+    console.error('goal tile read failed:', err)
+    return null
   }
 }

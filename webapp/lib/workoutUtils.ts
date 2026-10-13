@@ -17,6 +17,9 @@ export interface WorkoutExercise {
   thumbnailUrl?: string;
   primaryMuscles?: string[];  // hydrated from exercise DB
   difficulty?: string;        // hydrated from exercise DB
+  equipment?: string[];       // hydrated from exercise DB — drives per-DB/KB weight logging
+  laterality?: string;        // hydrated from exercise DB
+  movementPatterns?: string[]; // hydrated from exercise DB
   groupId?: string;
   groupType?: string;
   groupLabel?: string;

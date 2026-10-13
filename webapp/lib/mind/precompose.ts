@@ -55,6 +55,7 @@ export async function precomposeMindSession(): Promise<void> {
     if (!progressRes.ok) return
     const p = await progressRes.json()
     let recentState: MindState | null = null
+    let recentFeeling: string | null = null
     let lastBreathAt: number | null = null
     let recentKinds: string[] = []
     let missionAction: string | null = null
@@ -67,6 +68,7 @@ export async function precomposeMindSession(): Promise<void> {
       const st = await stateRes.json()
       const last = Array.isArray(st.logs) && st.logs.length > 0 ? st.logs[0] : null
       if (last?.state) recentState = last.state as MindState
+      if (typeof last?.feeling === 'string') recentFeeling = last.feeling
     }
     if (missionRes.ok) {
       const m = await missionRes.json()
@@ -76,6 +78,7 @@ export async function precomposeMindSession(): Promise<void> {
       chapter: p.chapter ?? 1,
       unlockedSystems: p.unlockedSystems ?? getUnlockedSystems(p.chapter ?? 1),
       recentState,
+      recentFeeling,
       missionAction,
       identityStatement: p.vision?.identityStatement ?? null,
       recentKinds,

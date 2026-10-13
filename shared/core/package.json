@@ -1,0 +1,221 @@
+{
+  "name": "@become/core",
+  "version": "0.2.12",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
+    },
+    "./bodyUnits": {
+      "types": "./dist/types/bodyUnits.d.ts",
+      "import": "./dist/esm/bodyUnits.js",
+      "require": "./dist/cjs/bodyUnits.js"
+    },
+    "./goals/pace": {
+      "types": "./dist/types/goals/pace.d.ts",
+      "import": "./dist/esm/goals/pace.js",
+      "require": "./dist/cjs/goals/pace.js"
+    },
+    "./goals/status": {
+      "types": "./dist/types/goals/status.d.ts",
+      "import": "./dist/esm/goals/status.js",
+      "require": "./dist/cjs/goals/status.js"
+    },
+    "./nutrition/tdee": {
+      "types": "./dist/types/nutrition/tdee.d.ts",
+      "import": "./dist/esm/nutrition/tdee.js",
+      "require": "./dist/cjs/nutrition/tdee.js"
+    },
+    "./nutrition/macroExplain": {
+      "types": "./dist/types/nutrition/macroExplain.d.ts",
+      "import": "./dist/esm/nutrition/macroExplain.js",
+      "require": "./dist/cjs/nutrition/macroExplain.js"
+    },
+    "./entitlements": {
+      "types": "./dist/types/entitlements.d.ts",
+      "import": "./dist/esm/entitlements.js",
+      "require": "./dist/cjs/entitlements.js"
+    },
+    "./legal": {
+      "types": "./dist/types/legal/index.d.ts",
+      "import": "./dist/esm/legal/index.js",
+      "require": "./dist/cjs/legal/index.js"
+    },
+    "./legal/terms": {
+      "types": "./dist/types/legal/terms.d.ts",
+      "import": "./dist/esm/legal/terms.js",
+      "require": "./dist/cjs/legal/terms.js"
+    },
+    "./legal/privacy": {
+      "types": "./dist/types/legal/privacy.d.ts",
+      "import": "./dist/esm/legal/privacy.js",
+      "require": "./dist/cjs/legal/privacy.js"
+    },
+    "./legal/healthData": {
+      "types": "./dist/types/legal/healthData.d.ts",
+      "import": "./dist/esm/legal/healthData.js",
+      "require": "./dist/cjs/legal/healthData.js"
+    },
+    "./legal/support": {
+      "types": "./dist/types/legal/support.d.ts",
+      "import": "./dist/esm/legal/support.js",
+      "require": "./dist/cjs/legal/support.js"
+    },
+    "./legal/deleteAccount": {
+      "types": "./dist/types/legal/deleteAccount.d.ts",
+      "import": "./dist/esm/legal/deleteAccount.js",
+      "require": "./dist/cjs/legal/deleteAccount.js"
+    },
+    "./planCopy": {
+      "types": "./dist/types/planCopy.d.ts",
+      "import": "./dist/esm/planCopy.js",
+      "require": "./dist/cjs/planCopy.js"
+    },
+    "./accountDeletion": {
+      "types": "./dist/types/accountDeletion.d.ts",
+      "import": "./dist/esm/accountDeletion.js",
+      "require": "./dist/cjs/accountDeletion.js"
+    },
+    "./units": {
+      "types": "./dist/types/units.d.ts",
+      "import": "./dist/esm/units.js",
+      "require": "./dist/cjs/units.js"
+    },
+    "./foodMath": {
+      "types": "./dist/types/foodMath.d.ts",
+      "import": "./dist/esm/foodMath.js",
+      "require": "./dist/cjs/foodMath.js"
+    },
+    "./mealPlanTimes": {
+      "types": "./dist/types/mealPlanTimes.d.ts",
+      "import": "./dist/esm/mealPlanTimes.js",
+      "require": "./dist/cjs/mealPlanTimes.js"
+    },
+    "./mealPlanDates": {
+      "types": "./dist/types/mealPlanDates.d.ts",
+      "import": "./dist/esm/mealPlanDates.js",
+      "require": "./dist/cjs/mealPlanDates.js"
+    },
+    "./nutrition/servingOptions": {
+      "types": "./dist/types/nutrition/servingOptions.d.ts",
+      "import": "./dist/esm/nutrition/servingOptions.js",
+      "require": "./dist/cjs/nutrition/servingOptions.js"
+    },
+    "./nutrition/servingQuantityStep": {
+      "types": "./dist/types/nutrition/servingQuantityStep.d.ts",
+      "import": "./dist/esm/nutrition/servingQuantityStep.js",
+      "require": "./dist/cjs/nutrition/servingQuantityStep.js"
+    },
+    "./nutrition/dayOrder": {
+      "types": "./dist/types/nutrition/dayOrder.d.ts",
+      "import": "./dist/esm/nutrition/dayOrder.js",
+      "require": "./dist/cjs/nutrition/dayOrder.js"
+    },
+    "./nutrition/mealSchedule": {
+      "types": "./dist/types/nutrition/mealSchedule.d.ts",
+      "import": "./dist/esm/nutrition/mealSchedule.js",
+      "require": "./dist/cjs/nutrition/mealSchedule.js"
+    },
+    "./nutrition/logTagMatch": {
+      "types": "./dist/types/nutrition/logTagMatch.d.ts",
+      "import": "./dist/esm/nutrition/logTagMatch.js",
+      "require": "./dist/cjs/nutrition/logTagMatch.js"
+    },
+    "./nutrition/goalLine": {
+      "types": "./dist/types/nutrition/goalLine.d.ts",
+      "import": "./dist/esm/nutrition/goalLine.js",
+      "require": "./dist/cjs/nutrition/goalLine.js"
+    },
+    "./nutrition/plateReview": {
+      "types": "./dist/types/nutrition/plateReview.d.ts",
+      "import": "./dist/esm/nutrition/plateReview.js",
+      "require": "./dist/cjs/nutrition/plateReview.js"
+    },
+    "./nutrition/types": {
+      "types": "./dist/types/nutrition/types.d.ts",
+      "import": "./dist/esm/nutrition/types.js",
+      "require": "./dist/cjs/nutrition/types.js"
+    },
+    "./nutrition": {
+      "types": "./dist/types/nutrition/index.d.ts",
+      "import": "./dist/esm/nutrition/index.js",
+      "require": "./dist/cjs/nutrition/index.js"
+    },
+    "./mindXP": {
+      "types": "./dist/types/mindXP.d.ts",
+      "import": "./dist/esm/mindXP.js",
+      "require": "./dist/cjs/mindXP.js"
+    },
+    "./mindContent": {
+      "types": "./dist/types/mindContent.d.ts",
+      "import": "./dist/esm/mindContent.js",
+      "require": "./dist/cjs/mindContent.js"
+    },
+    "./ai/sanitize": {
+      "types": "./dist/types/ai/sanitize.d.ts",
+      "import": "./dist/esm/ai/sanitize.js",
+      "require": "./dist/cjs/ai/sanitize.js"
+    },
+    "./mind": {
+      "types": "./dist/types/mind/index.d.ts",
+      "import": "./dist/esm/mind/index.js",
+      "require": "./dist/cjs/mind/index.js"
+    },
+    "./mind/*": {
+      "types": "./dist/types/mind/*.d.ts",
+      "import": "./dist/esm/mind/*.js",
+      "require": "./dist/cjs/mind/*.js"
+    },
+    "./training": {
+      "types": "./dist/types/training/index.d.ts",
+      "import": "./dist/esm/training/index.js",
+      "require": "./dist/cjs/training/index.js"
+    },
+    "./becoming": {
+      "types": "./dist/types/becoming/index.d.ts",
+      "import": "./dist/esm/becoming/index.js",
+      "require": "./dist/cjs/becoming/index.js"
+    },
+    "./becoming/layout": {
+      "types": "./dist/types/becoming/layout.d.ts",
+      "import": "./dist/esm/becoming/layout.js",
+      "require": "./dist/cjs/becoming/layout.js"
+    },
+    "./profileIcons": {
+      "types": "./dist/types/profileIcons.d.ts",
+      "import": "./dist/esm/profileIcons.js",
+      "require": "./dist/cjs/profileIcons.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "registry": "https://registry.redbtn.io/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XiroEx/become.git",
+    "directory": "shared/core"
+  },
+  "scripts": {
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node -e \"fs.writeFileSync('dist/cjs/package.json', JSON.stringify({type: 'commonjs'}))\"",
+    "build": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\" && npm run build:esm && npm run build:cjs",
+    "prepack": "npm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.2"
+  }
+}

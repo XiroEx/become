@@ -3,10 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Play, ArrowLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, Play, ArrowLeft, Share2, Lock } from "lucide-react";
 import PageTransition from "@/components/PageTransition";
 import { Card, EmptyState } from "@/components/ui";
 import NewProgramClient from "@/app/dashboard/programs/new/NewProgramClient";
+import ShareProgramModal from "./ShareProgramModal";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { syntheticGate, type GatePayload } from "@/lib/entitlementsClient";
 
 interface CustomProgramSummary {
   program_id: string;
@@ -17,6 +21,10 @@ interface CustomProgramSummary {
   goal: string;
   target_user: string;
   tags?: string[];
+  // Set server-side (see GET /api/programs/custom): false when this program
+  // was shared with the viewer by a trainer/admin rather than owned by them.
+  isOwner?: boolean;
+  sharedByName?: string;
 }
 
 interface MyProgramsClientProps {
@@ -32,6 +40,17 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
   // Embedded (hub) only: reveal the program creator inline instead of navigating.
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareTarget, setShareTarget] = useState<CustomProgramSummary | null>(null);
+  const [gate, setGate] = useState<GatePayload | null>(null);
+
+  // One shared entitlements snapshot (this used to be a bespoke fetch of the
+  // same endpoint). Sharing is still a ROLE question, not a tier one.
+  const { data: entitlements, feature, refresh: refreshEntitlements } = useEntitlements();
+  const canShare = entitlements?.role === "trainer" || entitlements?.role === "admin";
+  const canCreate =
+    !entitlements ||
+    entitlements.enforced === false ||
+    feature("custom-programs")?.canCreate !== false;
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +95,10 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
         throw new Error(data.error || 'Failed to delete');
       }
       setPrograms(prev => prev.filter(p => p.program_id !== programId));
+      // The slot is free the moment the row is gone. Re-read now, or the 60s
+      // snapshot keeps the Create button locked at a cap the member just
+      // cleared — and deleting is the only way back under an inventory limit.
+      void refreshEntitlements();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to delete');
     }
@@ -111,11 +134,15 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
       {embedded ? (
         <div className="mb-4 flex justify-end">
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() =>
+              canCreate
+                ? setShowCreate(true)
+                : setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))
+            }
             data-tour="programs-create"
             className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            {canCreate ? <Plus className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
             Create
           </button>
         </div>
@@ -135,14 +162,25 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
               Programs you’ve built yourself.
             </p>
           </div>
-          <Link
-            href="/dashboard/programs/new"
-            data-tour="programs-create"
-            className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Link>
+          {canCreate ? (
+            <Link
+              href="/dashboard/programs/new"
+              data-tour="programs-create"
+              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Link>
+          ) : (
+            <button
+              onClick={() => setGate(syntheticGate("custom-programs", "plus", feature("custom-programs")))}
+              data-tour="programs-create"
+              className="flex h-9 items-center gap-1.5 rounded-full bg-green-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-green-700 active:bg-green-800 transition-colors"
+            >
+              <Lock className="h-4 w-4" />
+              Add
+            </button>
+          )}
         </div>
       )}
 
@@ -199,9 +237,15 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
                     <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       {p.training_days_per_week}x/wk
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                      Custom
-                    </span>
+                    {p.isOwner === false ? (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        Shared{p.sharedByName ? ` by ${p.sharedByName}` : ''}
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+                        Custom
+                      </span>
+                    )}
                   </div>
                 </Link>
               </div>
@@ -215,26 +259,49 @@ export default function MyProgramsClient({ embedded }: MyProgramsClientProps = {
                   <Play className="h-3.5 w-3.5" />
                   {enrollingId === p.program_id ? 'Enrolling…' : 'Enroll'}
                 </button>
-                <Link
-                  href={`/dashboard/programs/${p.program_id}/edit`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </Link>
-                <button
-                  onClick={() => handleDelete(p.program_id)}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete
-                </button>
+                {p.isOwner !== false && (
+                  <>
+                    <Link
+                      href={`/dashboard/programs/${p.program_id}/edit`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </Link>
+                    {canShare && (
+                      <button
+                        onClick={() => setShareTarget(p)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                        Share
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDelete(p.program_id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
+                  </>
+                )}
               </div>
             </Card>
           ))}
         </div>
       )}
       </div>
+
+      {shareTarget && (
+        <ShareProgramModal
+          programId={shareTarget.program_id}
+          programName={shareTarget.name}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
+
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
     </>
   );
 

@@ -27,7 +27,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import ChatThreadRoute from "../app/(tabs)/chat/[id]";
+import ChatThreadRoute from "../app/(app)/(tabs)/chat/[id]";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

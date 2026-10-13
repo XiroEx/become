@@ -31,6 +31,20 @@ export function buildLoggedExercises(exercises: DraftExercise[], done: boolean) 
         ...(durSec != null && { duration: durSec }),
         completed: done,
       })),
+      // A superset planned here is still a superset when the session is
+      // started later — the log is what the planned session is rebuilt from.
+      ...(ex.groupId && { groupId: ex.groupId }),
+      ...(ex.groupType && { groupType: ex.groupType }),
+      ...(ex.groupLabel && { groupLabel: ex.groupLabel }),
+      ...(ex.groupRounds && { groupRounds: ex.groupRounds }),
+      ...(ex.addedAdHoc && { addedAdHoc: true }),
+      prescription: {
+        sets: nSets,
+        ...(ex.reps ? { reps: ex.reps } : {}),
+        ...(ex.duration ? { duration: ex.duration } : {}),
+        ...(ex.rest ? { rest: ex.rest } : {}),
+        ...(ex.trackingType ? { trackingType: ex.trackingType } : {}),
+      },
     }
   })
 }
@@ -38,6 +52,7 @@ export function buildLoggedExercises(exercises: DraftExercise[], done: boolean) 
 export interface QuickLogInput {
   sessionId: string
   title: string
+  needsName?: boolean
   focus?: string
   exercises: DraftExercise[]
   /** YYYY-MM-DD. Past/today → logged done; future → planned. */
@@ -58,11 +73,16 @@ export async function logQuickSession(input: QuickLogInput): Promise<{ done: boo
       kind: 'quick',
       sessionId: input.sessionId,
       title: input.title,
+      ...(input.needsName !== undefined && { needsName: input.needsName }),
       ...(input.focus && { focus: input.focus }),
       exercises,
       completed: done,
       ...(done && { duration: Math.max(1, Math.round(totalSets * 1.5)) }),
       performedAt: input.date,
+      // Backfilling a past/today session (`done`) is real activity; planning
+      // a future one is not — it must not appear "in progress" the moment
+      // that date arrives (see IWorkoutLog.startedAt).
+      started: done,
       tz: new Date().getTimezoneOffset(),
     }),
   })

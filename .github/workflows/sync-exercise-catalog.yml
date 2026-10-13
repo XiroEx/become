@@ -1,0 +1,159 @@
+name: Sync exercise catalog
+
+# THE thing that makes shipping a catalog change the same as applying one.
+#
+# Card: "We need to have support for our dumbbell only program … dumbbell
+# overhead tricep press and all of the exercises needs to appear on admin
+# portal." The first round of that card shipped the reviewed table
+# (webapp/lib/dumbbellCatalog.ts), the repo's snapshot of the catalog (data/)
+# and a migration script for a human to run against production. Nobody ran it.
+# The admin portal reads MongoDB, so the coach's verdict was exactly right:
+# "You didn't change anything. The exercises still read with a DB. The
+# exercises still don't exist in the admin portal."
+#
+# A migration that depends on somebody remembering is not a migration. This
+# calls `webapp/app/api/cron/sync-exercise-catalog`, which reconciles the live
+# `exercises` and `programs` collections with the table — convergent and
+# idempotent, so a run with nothing to do writes nothing at all.
+#
+# WHEN IT RUNS
+#
+#   push to `main`  — the deploy branch. beta merges are promoted to main, so
+#                     this fires on the promotion and the catalog is correct
+#                     within seconds of the code that describes it going live.
+#                     A `push` workflow runs the file from the pushed commit,
+#                     so this starts working on the promotion that brings it.
+#   schedule        — daily, as the backstop. A push made with a token that
+#                     does not trigger workflows (and a workflow that GitHub
+#                     disabled for inactivity) both fail silently; a schedule
+#                     converges anyway. GitHub runs `schedule:` only from the
+#                     DEFAULT branch, so a copy on a feature branch is inert.
+#   workflow_dispatch — with a dry-run input, for reading the plan.
+#
+# WHY PRODUCTION ONLY. Production (become.redbtn.io, `main`) and beta
+# (become-beta.redbtn.io, `beta`) are two RedRun workspaces over ONE MongoDB,
+# exactly like the tier resweep and the deletion purge. A second schedule on
+# beta would be a second runner over the same rows. This names the production
+# host explicitly, and it is the only schedule for this job in the repo.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # 23 5 * * * — off the hour, and not sharing a minute with the deletion
+    # purge (40 4) or the tier resweep (17 */6).
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Compute the plan and write nothing'
+        type: boolean
+        default: false
+
+# Never two at once. The reconciliation is idempotent and re-plans after
+# writing, so an overlap would be safe rather than harmful — but "what created
+# this exercise" should have exactly one answer.
+concurrency:
+  group: sync-exercise-catalog
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Call the production sync
+        env:
+          # Same value as redsecrets `admin.cronSecret` (the CRON_SECRET the
+          # notify cron, the tier resweep and the deletion purge use).
+          # Repository secret BECOME_CRON_SECRET; without it this job fails
+          # loudly rather than silently reconciling nothing.
+          CRON_SECRET: ${{ secrets.BECOME_CRON_SECRET }}
+          # Interpolated into env, never into the shell line — an input is
+          # attacker-controllable text and must not be pasted into `run:`.
+          DRY_RUN: ${{ inputs.dryRun }}
+          BASE_URL: https://become.redbtn.io
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::BECOME_CRON_SECRET is missing — the sync cannot authenticate"
+            exit 1
+          fi
+
+          URL="${BASE_URL}/api/cron/sync-exercise-catalog"
+          if [ "${DRY_RUN}" = "true" ]; then
+            URL="${URL}?dryRun=1"
+          fi
+
+          # POST, always: the route's GET is a dry run by construction, so a
+          # link in a log can never rewrite the catalog. The secret travels in a
+          # header so it is never in a URL that ends up in an access log.
+          code=$(curl -sS --max-time 300 \
+            -o response.json -w '%{http_code}' \
+            -X POST "${URL}" \
+            -H "x-cron-secret: ${CRON_SECRET}")
+
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::sync endpoint answered HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Report what it changed
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ ! -s response.json ]; then
+            {
+              echo "### Exercise catalog sync"
+              echo
+              echo "No response body — the call failed before the endpoint answered."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Exercise catalog sync"
+            echo
+
+            ran_at=$(jq -r '.ranAt // "unknown"' response.json)
+            dry=$(jq -r '.dryRun // false' response.json)
+            exercises=$(jq -r '.exercises // 0' response.json)
+            wrote=$(jq -r '.wroteCount // 0' response.json)
+            settled=$(jq -r '.settled // false' response.json)
+
+            echo "| ran at | dry run | catalog rows | writes | settled |"
+            echo "|---|---|---|---|---|"
+            echo "| ${ran_at} | ${dry} | ${exercises} | ${wrote} | ${settled} |"
+            echo
+
+            pending=$(jq -r '(.plan // []) | length' response.json)
+            if [ "${pending}" = "0" ]; then
+              echo "The live catalog already says what the table decided. That is the healthy state."
+            else
+              echo "Outstanding when the run started:"
+              echo
+              jq -r '(.plan // [])[] | "- `\(.)`"' response.json
+              jq -r '(.repoints // [])[] | "- repoint \(.)"' response.json
+              jq -r '(.programText // [])[] | "- text \(.)"' response.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          missing=$(jq -r '(.missingSlugs // []) | length' response.json)
+          if [ "${missing}" != "0" ]; then
+            echo "::error::the table names slugs the live catalog does not hold: $(jq -r '.missingSlugs | join(", ")' response.json)"
+            exit 1
+          fi
+
+          settled=$(jq -r '.settled // false' response.json)
+          dry=$(jq -r '.dryRun // false' response.json)
+          if [ "${settled}" != "true" ] && [ "${dry}" != "true" ]; then
+            echo "::error::the sync applied its plan and a second pass still finds work — read the plan above"
+            exit 1
+          fi

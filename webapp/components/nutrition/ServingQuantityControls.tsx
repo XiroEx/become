@@ -26,6 +26,7 @@ import { useMemo, useState } from 'react'
 import { ChevronDown, Minus, Plus } from 'lucide-react'
 import {
   buildServingChoiceGroups,
+  servingChoiceDisplayLabel,
   type ServingChoice,
 } from '@/lib/nutrition/servingOptions'
 import { formatQuantity } from '@/lib/units'
@@ -33,12 +34,18 @@ import type { QuantityPickerVariant } from '@/components/nutrition/QuantityPicke
 
 /** A weight/volume choice is stored at quantity 1 with a bare unit label ("g").
  *  Render it as "1 g" so the dropdown reads like the reference design; named
- *  servings keep their friendly label as-is. */
+ *  servings keep their friendly label as-is — except a serving collapsed from
+ *  a measurable unit ("3/4 cup" -> quantity 1, unit 'serving'), where the
+ *  label's own count no longer matches the quantity box next to it. That case
+ *  shows the generic word "serving" — with the real amount named in parens,
+ *  e.g. "serving (3/4 cup)" — instead of a bare noun that could be mistaken
+ *  for a literal amount (see `measurableAsServing` on ServingChoice). */
 function optionLabel(c: ServingChoice): string {
-  return c.group === 'servings' ? c.label : formatQuantity(c.quantity, c.unit)
+  if (c.group !== 'servings') return formatQuantity(c.quantity, c.unit)
+  return servingChoiceDisplayLabel(c)
 }
 
-function round(n: number, dp = 2): number {
+function round(n: number, dp = 3): number {
   const f = 10 ** dp
   return Math.round((n ?? 0) * f) / f
 }
@@ -105,7 +112,7 @@ export default function ServingQuantityControls({
                   Then the measurable units grouped by Weight / Volume. */}
               <optgroup label="Servings">
                 {groups!.servings.map((c) => (
-                  <option key={c.id} value={c.id}>{c.label}</option>
+                  <option key={c.id} value={c.id}>{optionLabel(c)}</option>
                 ))}
               </optgroup>
               {/* Unit group matching the food's own dimension comes first. */}

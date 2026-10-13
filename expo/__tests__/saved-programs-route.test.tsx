@@ -26,7 +26,7 @@ jest.mock("@become/api-client", () => {
 
 import { apiFetch } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
-import SavedProgramsRoute from "../app/(tabs)/programming/saved";
+import SavedProgramsRoute from "../app/(app)/(tabs)/programming/saved";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;

@@ -17,7 +17,7 @@
 // so there's no async-server-component-in-client-tree problem.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Card } from '@/components/ui'
+import { Card, FitText } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { readCache, writeCache } from '@/lib/clientCache'
 import {
@@ -75,6 +75,7 @@ export interface TileGridProps {
 
 const STAT_IDS = new Set<DashboardTileId>([
   'streak', 'mood', 'weekly', 'goal', 'calories', 'water', 'weight', 'workouts',
+  'mindset', 'nutrition', 'workoutNow',
 ])
 
 function isStatId(id: string): id is DashboardTileId {
@@ -164,7 +165,7 @@ function MetricTileCard({ metric, size }: { metric: MetricSummary; size: Dashboa
           {metric.label}
         </div>
         <div className="text-2xl font-extrabold tracking-tight leading-none text-zinc-900 dark:text-white">
-          {latestText}
+          <FitText>{latestText}</FitText>
         </div>
       </div>
     </Card>

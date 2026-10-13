@@ -158,10 +158,17 @@ export async function recordStreakActivity(
     const emailedToday = lastEmailDate && daysDiff(lastEmailDate, today) === 0
     if (!emailedToday) {
       const confirmedEmail = email // capture for closure — already narrowed above
-      import('@/lib/email')
-        .then(({ sendStreakMilestoneEmail }) =>
-          sendStreakMilestoneEmail(confirmedEmail!, newMilestone, newStreak)
-        )
+      // Engagement mail honours the opt-out (the unsubscribe link in every
+      // such email, and the Settings toggle). Absent = on. Read at send time,
+      // not from a cached user, so an unsubscribe takes effect immediately.
+      Promise.all([import('@/lib/email'), import('@/models/User')])
+        .then(async ([{ sendStreakMilestoneEmail }, { default: User }]) => {
+          const row = await User.findById(userId)
+            .select('emailPreferences')
+            .lean<{ emailPreferences?: { engagement?: boolean } } | null>()
+          if (row?.emailPreferences?.engagement === false) return
+          await sendStreakMilestoneEmail(confirmedEmail!, newMilestone, newStreak, userId)
+        })
         .catch(() => {})
       UserProgress.updateOne({ userId }, { $set: { lastStreakEmailDate: today } }).catch(() => {})
     }

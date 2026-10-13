@@ -9,6 +9,10 @@ export interface IOpenFoodFact {
   countries_tags?: string
   nutriments: {
     energy_kcal_100g: number
+    /** OFF's kJ energy. Kept alongside kcal as an independent witness — when
+     *  the two disagree and the macros side with kJ, the kcal field is wrong.
+     *  See lib/offEnergy.ts. */
+    energy_kj_100g?: number
     proteins_100g?: number
     carbohydrates_100g?: number
     fat_100g?: number
@@ -16,6 +20,9 @@ export interface IOpenFoodFact {
     sugars_100g?: number
     sodium_100g?: number
     saturated_fat_100g?: number
+    /** Ethanol, 7 kcal/g and in neither macro — without it every spirit looks
+     *  like an over-stated calorie count. */
+    alcohol_100g?: number
   }
   serving_size?: string
   serving_quantity?: number
@@ -26,13 +33,15 @@ export interface IOpenFoodFact {
 
 const NutrimentsSchema = new Schema({
   energy_kcal_100g: { type: Number, required: true },
+  energy_kj_100g: { type: Number },
   proteins_100g: { type: Number },
   carbohydrates_100g: { type: Number },
   fat_100g: { type: Number },
   fiber_100g: { type: Number },
   sugars_100g: { type: Number },
   sodium_100g: { type: Number },
-  saturated_fat_100g: { type: Number }
+  saturated_fat_100g: { type: Number },
+  alcohol_100g: { type: Number }
 }, { _id: false })
 
 const OpenFoodFactSchema = new Schema<IOpenFoodFact>({

@@ -175,23 +175,31 @@ export function regenerateSchedule(
 /**
  * Catch-up reflow for a "stuck" schedule.
  *
- * A program still in progress can run out of upcoming slots when the user falls
- * behind: every remaining dated slot lapses into the past, so the calendar looks
- * "finished" even though the dashboard/hub (which track completion, not dates)
- * still say "continue". This re-offers the outstanding work on upcoming training
- * days so every surface agrees.
+ * A program can gain sessions that were never given a calendar slot — a phase
+ * or week added after the schedule was first generated, or a training-days
+ * change that left new occurrences undated. When that happens the calendar can
+ * look "finished" (no upcoming slot to show) even though the dashboard/hub
+ * (which track completion, not dates) still say "continue". This lays the
+ * genuinely-undated sessions onto upcoming training days from `fromDate` so
+ * every surface agrees.
  *
- * Skips are respected as firm decisions: COMPLETED and SKIPPED slots are both kept
- * as immutable history and are NOT re-offered. Only genuinely-unresolved sessions
- * (fell-behind / missed — never done, never deliberately skipped) are re-scheduled
- * onto upcoming training days from `fromDate`. This keeps a deliberate skip from
- * being resurrected in a jumbled order, and keeps the total session count equal to
- * the program length (no double-counting).
+ * Every EXISTING slot — completed, skipped, missed, or still scheduled — is
+ * kept exactly as-is: date, status, completedAt untouched. In particular a
+ * `missed` slot is never re-dated onto today and reset to `scheduled`: this
+ * function used to only preserve completed/skipped and treated `missed` as
+ * "remaining", so once nothing was left in the future it re-laid every missed
+ * session onto `fromDate` — and because that same "nothing in the future"
+ * condition re-evaluates on every read (the moment the newly-laid date itself
+ * lapses), the same overdue workout kept sliding forward one day at a time,
+ * forever, always showing as "Scheduled" for today no matter how long it had
+ * actually been missed. A missed session now just stays missed at its true
+ * date; it can still be trained and credited later via the oldest-missed-first
+ * completion resolver, or explicitly skipped.
  *
  * Returns the new full slot array, or null when there's nothing to reflow — i.e.
- * every session is already completed or skipped (the program is effectively done),
- * or no training days are configured. A null return signals the caller that the
- * program is resolved and should be marked complete rather than left "in progress".
+ * every program-defined session already has a slot of some kind, or no training
+ * days are configured. A null return is the common case; it does NOT mean the
+ * program is done (that's decided separately from completed+skipped counts).
  */
 export function reflowStuckSchedule(
   existingWorkouts: IScheduledWorkout[],
@@ -203,17 +211,13 @@ export function reflowStuckSchedule(
   const sortedDays = [...trainingDays].sort((a, b) => a - b)
   if (sortedDays.length === 0) return null
 
-  // Completed + skipped are history — preserve them (dates, status, completedAt)
-  // untouched. A skip is a firm "not doing this session", so it is never re-offered.
-  const resolvedPast = existingWorkouts.filter(
-    (w) => w.status === 'completed' || w.status === 'skipped'
-  )
+  const preserved = existingWorkouts
 
-  // Remaining = every program workout minus the ones already resolved (done or skipped).
-  const resolvedCounts = new Map<string, number>()
-  for (const w of resolvedPast) {
+  // Remaining = program-defined sessions with NO existing slot at all.
+  const existingCounts = new Map<string, number>()
+  for (const w of preserved) {
     const key = `${w.phase}-${w.dayLabel}`
-    resolvedCounts.set(key, (resolvedCounts.get(key) || 0) + 1)
+    existingCounts.set(key, (existingCounts.get(key) || 0) + 1)
   }
   const remaining: { phase: number; dayLabel: string; title: string }[] = []
   const usedCounts = new Map<string, number>()
@@ -224,8 +228,8 @@ export function reflowStuckSchedule(
       for (const w of workouts) {
         const key = `${i + 1}-${w.day}`
         const used = usedCounts.get(key) || 0
-        const resolved = resolvedCounts.get(key) || 0
-        if (used < resolved) usedCounts.set(key, used + 1)
+        const existing = existingCounts.get(key) || 0
+        if (used < existing) usedCounts.set(key, used + 1)
         else remaining.push({ phase: i + 1, dayLabel: w.day, title: w.title })
       }
     }
@@ -255,5 +259,5 @@ export function reflowStuckSchedule(
     current.setUTCDate(current.getUTCDate() + 1)
   }
 
-  return [...resolvedPast, ...future] as IScheduledWorkout[]
+  return [...preserved, ...future] as IScheduledWorkout[]
 }

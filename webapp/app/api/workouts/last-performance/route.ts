@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 
 interface PerformanceEntry {
   reps?: number
@@ -77,7 +78,7 @@ export async function GET(request: NextRequest) {
     // We only need the workoutLogs to compute this. lean() skips Mongoose
     // doc instantiation overhead.
     const progress = await UserProgress.findOne({ userId: auth.userId })
-      .select('workoutLogs')
+      .select('workoutLogs exercisePRs')
       .lean<{ workoutLogs?: LeanWorkoutLog[] } | null>()
 
     const logs = progress?.workoutLogs ?? []
@@ -128,7 +129,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ performances })
+    // Personal records travel with the same request. A quick session has no
+    // program to hang a history call off, so without these it could never say
+    // "last session" or "beat your PR" — real lifting that the app pretended
+    // not to recognise.
+    const prs = formatPRsForLiveWorkout(
+      (progress as unknown as { exercisePRs?: IExercisePR[] } | null)?.exercisePRs,
+    )
+
+    return NextResponse.json({ performances, prs })
   } catch (err) {
     console.error('Error fetching last-performance:', err)
     return NextResponse.json({ error: 'Failed to fetch last performance' }, { status: 500 })

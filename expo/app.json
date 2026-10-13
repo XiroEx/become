@@ -6,23 +6,88 @@
     "orientation": "portrait",
     "scheme": "become",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#0a0a0a",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.redbtn.become",
-      "associatedDomains": ["applinks:become.redbtn.io"]
+      "buildNumber": "1",
+      "associatedDomains": ["applinks:become.redbtn.io"],
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Become uses Face ID to unlock the app when you reopen it, instead of emailing you a new sign-in link.",
+        "NSCameraUsageDescription": "Become uses the camera to photograph a meal for its estimate, scan a food barcode, photograph a food label you report, and mirror you in a Mind session.",
+        "NSPhotoLibraryUsageDescription": "Become opens your photo library only when you pick a photo — a meal, a food label, an avatar or a feedback screenshot — and reads nothing else from it.",
+        "NSMicrophoneUsageDescription": "Become uses the microphone only to follow along as you speak your affirmation out loud.",
+        "NSSpeechRecognitionUsageDescription": "Become uses speech recognition only to follow along as you speak your affirmation out loud."
+      },
+      "privacyManifests": {
+        "NSPrivacyTracking": false,
+        "NSPrivacyTrackingDomains": [],
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+            "NSPrivacyAccessedAPITypeReasons": ["C617.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+            "NSPrivacyAccessedAPITypeReasons": ["35F9.1"]
+          },
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+            "NSPrivacyAccessedAPITypeReasons": ["E174.1"]
+          }
+        ],
+        "NSPrivacyCollectedDataTypes": [
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeUserID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          },
+          {
+            "NSPrivacyCollectedDataType": "NSPrivacyCollectedDataTypeDeviceID",
+            "NSPrivacyCollectedDataTypeLinked": true,
+            "NSPrivacyCollectedDataTypeTracking": false,
+            "NSPrivacyCollectedDataTypePurposes": [
+              "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+            ]
+          }
+        ]
+      }
     },
     "androidStatusBar": {
       "translucent": true,
       "barStyle": "light-content"
     },
-    "androidNavigationBar": {
-      "barStyle": "light-content"
-    },
     "android": {
       "package": "io.redbtn.become",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.health.READ_WEIGHT",
+        "android.permission.health.WRITE_WEIGHT",
+        "android.permission.health.WRITE_EXERCISE",
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0a"
       },
       "intentFilters": [
@@ -37,20 +102,162 @@
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "become.redbtn.io",
+              "pathPrefix": "/account/restore"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-font",
+      "expo-apple-authentication",
+      "expo-local-authentication",
+      "expo-video",
+      "react-native-health-connect",
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false
+        }
+      ],
+      "expo-image-picker",
+      "expo-speech-recognition",
+      "./plugins/withAndroidxWorkAlignment",
+      "./plugins/withAndroidFontScaleConfigChanges",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          },
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#0a0a0a",
-          "image": "./assets/icon.png",
-          "imageWidth": 200
+          "backgroundColor": "#fafafa",
+          "image": "./assets/splash-icon-light.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#0a0a0a",
+            "image": "./assets/splash-icon.png"
+          }
         }
-      ]
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "fonts": [
+            "./assets/fonts/Geist-Regular.ttf",
+            "./assets/fonts/Geist-Medium.ttf",
+            "./assets/fonts/Geist-Bold.ttf"
+          ],
+          "widgets": [
+            {
+              "name": "Streak",
+              "label": "Become · Streak",
+              "description": "Your streak, and whether today still needs something logged.",
+              "minWidth": "160dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Nutrition",
+              "label": "Become · Nutrition",
+              "description": "Calories left today, with protein, carbs and fat.",
+              "minWidth": "160dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Mind",
+              "label": "Become · Mind",
+              "description": "Today's Mind session, and where you are in the chapter.",
+              "minWidth": "160dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Becoming",
+              "label": "Become · Becoming",
+              "description": "The week you are on, and who you are becoming.",
+              "minWidth": "160dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "io.redbtn.become.widgets",
+          "groupIdentifier": "group.io.redbtn.become",
+          "enableAndroid": false,
+          "widgets": [
+            {
+              "name": "StreakWidget",
+              "displayName": "Become · Streak",
+              "description": "Your streak, and whether today still needs something logged.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
+            },
+            {
+              "name": "NutritionWidget",
+              "displayName": "Become · Nutrition",
+              "description": "Calories left today, with protein, carbs and fat.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
+            },
+            {
+              "name": "MindWidget",
+              "displayName": "Become · Mind",
+              "description": "Today's Mind session, and where you are in the chapter.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
+            },
+            {
+              "name": "BecomingWidget",
+              "displayName": "Become · Becoming",
+              "description": "The week you are on, and who you are becoming.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
+            },
+            {
+              "name": "TrainingWidget",
+              "displayName": "Become · Training",
+              "description": "Today's session, and whether it is done.",
+              "supportedFamilies": ["systemSmall", "systemMedium", "accessoryCircular", "accessoryRectangular", "accessoryInline"]
+            }
+          ]
+        }
+      ],
+      "expo-background-task",
+      "expo-notifications",
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

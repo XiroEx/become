@@ -1,0 +1,7 @@
+node_modules/
+.remotion/
+out/
+!out/.gitkeep
+inspo/
+reviews/
+6-page-grid/

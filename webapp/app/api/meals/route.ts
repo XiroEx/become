@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import Meal, { computeTotalNutrition } from '@/models/Meal'
 import { verifyAuth } from '@/lib/auth'
-import { requireFeature } from '@/lib/entitlements'
+import { requireQuota } from '@/lib/entitlementGuards'
 import { resolveItemsFromInput, MealItemInput } from '@/lib/mealItems'
+import { createStrict } from '@/lib/strictCreate'
 
 // GET: list user's own meals + public/verified meals.
 // Query params: q, tag, mine=true, limit, offset
@@ -87,12 +88,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST: create a meal template
+// POST: create a meal template. Quota-gated (free tier: 3 saved meals, counted
+// live so deleting one frees a slot). PATCH on an existing meal stays on
+// requireFeature and DELETE stays ungated.
 export async function POST(request: NextRequest) {
   try {
-    const gate = await requireFeature(request, 'custom-meals')
+    const gate = await requireQuota(request, 'custom-meals')
     if (!gate.ok) return gate.response
-    const authResult = { success: true as const, userId: gate.userId, role: gate.role }
 
     const body = await request.json()
     if (!body.name || typeof body.name !== 'string') {
@@ -108,9 +110,13 @@ export async function POST(request: NextRequest) {
     const itemsInput: MealItemInput[] = body.items
     const items = await resolveItemsFromInput(itemsInput)
 
-    const isAdmin = authResult.role === 'admin'
+    // gate.role is loaded from the User row by loadUserEntitlement(), not read
+    // off the token claim, so a demoted admin cannot mint a verified meal.
+    const isAdmin = gate.role === 'admin'
 
-    const meal = await Meal.create({
+    // createStrict, not Model.create: an unknown top-level key is a dropped
+    // field, and the field this route pins is ownership. See lib/strictCreate.ts.
+    const meal = await createStrict(Meal, {
       name: body.name,
       description: body.description,
       imageUrl: body.imageUrl,
@@ -118,7 +124,7 @@ export async function POST(request: NextRequest) {
       recipe: body.recipe,
       tags: Array.isArray(body.tags) ? body.tags : [],
       defaultTag: typeof body.defaultTag === 'string' && body.defaultTag ? body.defaultTag.toLowerCase() : undefined,
-      createdBy: authResult.userId,
+      createdBy: gate.userId,
       isPublic: !!body.isPublic,
       // Only admins may mark meals verified at creation time.
       isVerified: isAdmin && !!body.isVerified,

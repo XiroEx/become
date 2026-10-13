@@ -1,34 +1,30 @@
 "use client"
 
 import { motion, AnimatePresence } from "framer-motion"
-import { Dumbbell, ArrowRight, Compass } from "lucide-react"
+import { Dumbbell, ArrowRight, Compass, BellOff } from "lucide-react"
 import Link from "next/link"
 import { useLockScroll } from "@/lib/useLockScroll"
+import { offersDontShowAgain } from "@/lib/programNudge"
 
-// ── Backoff helpers (exported so DashboardClient can use them) ─────────────────
+// ── Backoff helpers ────────────────────────────────────────────────────────────
+//
+// The rules themselves live in lib/programNudge so the API route that now owns
+// this state can share them; a route may not import a "use client" module.
+// Re-exported here because DashboardClient and the tests import them by this
+// path.
 
-export const NUDGE_KEY = "become_program_nudge"
-
-export interface NudgeState {
-  dismissCount: number
-  lastDismissedAt: string
-}
-
-export function shouldShowNudge(state: NudgeState | null): boolean {
-  if (!state) return true
-  const daysSince =
-    (Date.now() - new Date(state.lastDismissedAt).getTime()) / 86_400_000
-  // 1 day → 2 days → 4 days → 8 days → 16 days (capped)
-  const daysToWait = Math.min(Math.pow(2, state.dismissCount - 1), 16)
-  return daysSince >= daysToWait
-}
-
-export function recordNudgeDismiss(current: NudgeState | null): NudgeState {
-  return {
-    dismissCount: (current?.dismissCount ?? 0) + 1,
-    lastDismissedAt: new Date().toISOString(),
-  }
-}
+export {
+  NUDGE_KEY,
+  DONT_SHOW_AGAIN_THRESHOLD,
+  nudgeShowings,
+  shouldShowNudge,
+  offersDontShowAgain,
+  recordNudgeShown,
+  recordNudgeDismiss,
+  recordNudgeDismissForever,
+  parseLegacyNudgeState,
+} from "@/lib/programNudge"
+export type { NudgeState } from "@/lib/programNudge"
 
 // ── Goal-specific copy ─────────────────────────────────────────────────────────
 
@@ -72,10 +68,19 @@ const DEFAULT_COPY = {
 interface Props {
   open: boolean
   fitnessGoal?: FitnessGoal | null
+  /** Times this member has already been shown the nudge, NOT counting this one. */
+  priorShowings?: number
   onExplore: () => void  // "Explore first" — dismiss with backoff
+  onDismissForever: () => void  // "Don't show this again" — permanent opt-out
 }
 
-export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Props) {
+export default function ProgramNudgeModal({
+  open,
+  fitnessGoal,
+  priorShowings = 0,
+  onExplore,
+  onDismissForever,
+}: Props) {
   useLockScroll(open)
 
   const copy = fitnessGoal ? (GOAL_COPY[fitnessGoal] ?? DEFAULT_COPY) : DEFAULT_COPY
@@ -143,6 +148,22 @@ export default function ProgramNudgeModal({ open, fitnessGoal, onExplore }: Prop
             <p className="mt-4 text-center text-xs text-zinc-400 dark:text-zinc-600">
               You can always start a program later from Workout
             </p>
+
+            {/* Permanent opt-out — offered from the SECOND showing onward, so a
+                first-time member isn't invited to suppress something they
+                haven't seen yet but anyone who has seen it once can say "not
+                ever". A real button, the same size as the CTAs above it: it was
+                a line of faint underlined text, which on this sheet reads as a
+                caption rather than the way out the member is looking for. */}
+            {offersDontShowAgain(priorShowings) && (
+              <button
+                onClick={onDismissForever}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 py-3 text-sm font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white"
+              >
+                <BellOff className="h-4 w-4" />
+                Don’t show this again
+              </button>
+            )}
           </motion.div>
         </motion.div>
       )}

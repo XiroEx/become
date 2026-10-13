@@ -14,11 +14,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Wind, Timer, Play, Pause, RotateCcw, X, Check, Waves, Focus, Zap, Activity, VolumeX } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
 import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
+import { recentFeelingLabel } from '@/lib/mind/recentFeeling'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
 
@@ -286,6 +288,12 @@ const RESET_FLOWS: { id: string; title: string; blurb: string; Icon: typeof Wind
 
 // ── Current-state check-in → matched reset (the signature mechanic) ────────────
 // `state` maps to the StateLog enum; `reset` is either an animated breath session
+// The progressively-unlocked list. "Protect the State" is reached from the
+// locked-in state tile rather than the protocol list, so it is excluded here —
+// and the unlock indices must be read off THIS array, not RESET_FLOWS, or the
+// celebration names a different protocol than the one that actually opened.
+const UNLOCKABLE_RESETS = RESET_FLOWS.filter((f) => f.id !== 'protect-the-state')
+
 // or one of the guided reset flows above.
 type MindState = 'stressed' | 'distracted' | 'low_energy' | 'locked_in'
 const STATES: { state: MindState; label: string; Icon: typeof Wind; reset: { breath: string } | { flow: string } }[] = [
@@ -307,9 +315,13 @@ export default function StateShiftDashboard() {
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps reset protocols are open (breathwork
   // stays open; it's the foundation).
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(UNLOCKABLE_RESETS, reps)
   const [shifts, setShifts] = useState(0)
   const [lastState, setLastState] = useState<MindState | null>(null)
+  const [lastFeeling, setLastFeeling] = useState<string | null>(null)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [breath, setBreath] = useState<BreathProtocol | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
@@ -321,9 +333,16 @@ export default function StateShiftDashboard() {
         fetch('/api/mind/journal?system=state-shift&limit=8', { headers: authHeaders() }),
       ])
       if (sr.ok) {
-        const logs: Array<{ state: MindState }> = (await sr.json()).logs ?? []
+        const logs: Array<{ state: MindState; feeling?: string }> = (await sr.json()).logs ?? []
         setShifts(logs.length)
-        if (logs[0]) setLastState(logs[0].state)
+        if (logs[0]) {
+          setLastState(logs[0].state)
+          // A check-in made in the Mind session names one of 20 feelings; this
+          // tab only has 4 tiles. Show what they actually said rather than the
+          // tile their answer happens to fall under, or someone who picked
+          // "Foggy" is told their last state was "Scattered".
+          setLastFeeling(logs[0].feeling?.trim() || null)
+        }
       }
       if (jr.ok) {
         const jd = await jr.json()
@@ -362,9 +381,17 @@ export default function StateShiftDashboard() {
     setShifts((n) => n + 1) // optimistic
     const previous = lastState
     setLastState(s.state)
+    setLastFeeling(s.label)
     fetch('/api/mind/state', {
       method: 'POST', headers: authHeaders(),
-      body: JSON.stringify({ state: s.state, ...(previous ? { previousState: previous } : {}) }),
+      body: JSON.stringify({
+        state: s.state,
+        // Send the tile's own wording ("Dialed in", "Drained") as the feeling.
+        // Without it this surface stored only the bucket, so its own "last: …"
+        // line had nothing to read back but the canonical state name.
+        feeling: s.label,
+        ...(previous ? { previousState: previous } : {}),
+      }),
     }).catch(() => {})
     openReset(s.reset)
   }
@@ -417,10 +444,13 @@ export default function StateShiftDashboard() {
     )
   }
 
-  const lastLabel = STATES.find((s) => s.state === lastState)?.label
+  const lastLabel = lastState
+    ? recentFeelingLabel(lastState, lastFeeling)
+    : undefined
 
   return (
     <div className="space-y-5">
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-cyan-500" />
       <SystemHero
         Icon={Wind}
         title="State Shift"
@@ -487,15 +517,15 @@ export default function StateShiftDashboard() {
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-zinc-400">Reset protocols</p>
         <div className="space-y-2">
-          {RESET_FLOWS.filter((f) => f.id !== 'protect-the-state').map((f, i) => (
+          {UNLOCKABLE_RESETS.map((f, i) => (
             <ToolkitCard
               key={f.id}
               Icon={f.Icon}
               title={f.title}
               blurb={f.blurb}
               color="text-cyan-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in State Shift to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in State Shift to unlock`}
               onClick={() => setFlow({ title: f.title, steps: f.steps })}
             />
           ))}

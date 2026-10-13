@@ -1,19 +1,5 @@
-import type { ScheduleApiResponse } from "@become/api-client";
-import type { ScheduledSlot, SlotStatus } from "@/lib/schedule/slotStatus";
-
-const SLOT_STATUSES: ReadonlyArray<SlotStatus> = [
-  "scheduled",
-  "completed",
-  "missed",
-  "skipped",
-  "rest",
-];
-
-function narrowStatus(value: string): SlotStatus {
-  return (SLOT_STATUSES as readonly string[]).includes(value)
-    ? (value as SlotStatus)
-    : "scheduled";
-}
+import { slotDateKey, type ScheduleApiResponse } from "@become/api-client";
+import type { ScheduledSlot } from "@/lib/schedule/slotStatus";
 
 /** "Day 1" → 0, "Day 12" → 11, anything without a trailing number → 0. */
 export function workoutIndexFromDayLabel(dayLabel: string | undefined): number {
@@ -26,7 +12,17 @@ export function workoutIndexFromDayLabel(dayLabel: string | undefined): number {
 /**
  * Flatten the nested GET /api/schedule response into the presentational
  * ScheduledSlot list: one slot per scheduledWorkout, with the date reduced to
- * a YYYY-MM-DD key, phase → 0-based phaseIndex, and dayLabel → workoutIndex.
+ * its YYYY-MM-DD day key, `phase` (1-based on the wire) → 0-based phaseIndex,
+ * and `dayLabel` → workoutIndex.
+ *
+ * The date goes through `slotDateKey`, never through a timezone offset: a slot
+ * date is a DAY MARKER stored at 00:00Z, so reading it as a local instant moves
+ * it a day backwards for every member west of UTC. Same rule, same name, as the
+ * web's `slotDateKey` (webapp/lib/notifications/cronNotify.ts).
+ *
+ * `status` arrives already narrowed to the five the server can send: the shared
+ * schema absorbs an unrecognised value as `scheduled` rather than dropping the
+ * whole response, which is what the hand-rolled narrowing here used to do.
  */
 export function toScheduledSlots(
   response: ScheduleApiResponse | null | undefined,
@@ -35,13 +31,20 @@ export function toScheduledSlots(
   const slots: ScheduledSlot[] = [];
   for (const schedule of response.schedules) {
     for (const w of schedule.scheduledWorkouts ?? []) {
-      slots.push({
-        date: w.date.slice(0, 10),
+      const slot: ScheduledSlot = {
+        date: slotDateKey(w.date),
         programId: w.programId ?? schedule.programId,
         phaseIndex: Math.max(0, (w.phase ?? 1) - 1),
         workoutIndex: workoutIndexFromDayLabel(w.dayLabel),
-        status: narrowStatus(w.status),
-      });
+        status: w.status,
+      };
+      if (w.phase !== undefined) slot.phase = w.phase;
+      if (w.dayLabel !== undefined) slot.dayLabel = w.dayLabel;
+      if (w.workoutTitle !== undefined) slot.workoutTitle = w.workoutTitle;
+      if (schedule.programName !== undefined) slot.programName = schedule.programName;
+      if (schedule.programStatus !== undefined) slot.programStatus = schedule.programStatus;
+      if (w.completedAt !== undefined) slot.completedAt = w.completedAt;
+      slots.push(slot);
     }
   }
   return slots;

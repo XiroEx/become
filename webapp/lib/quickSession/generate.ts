@@ -161,6 +161,9 @@ export function toDraftExercise(ex: CandidateExercise): DraftExercise {
     ...(p.rest && { rest: p.rest }),
     ...(p.duration && { duration: p.duration }),
     primaryMuscles: ex.primaryMuscles,
+    equipment: ex.equipment,
+    laterality: ex.laterality,
+    movementPatterns: ex.movementPatterns,
   }
 }
 

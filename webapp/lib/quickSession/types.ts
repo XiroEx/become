@@ -17,6 +17,7 @@ export type FocusKey =
   | 'push'
   | 'pull'
   | 'legs'
+  | 'glutes'
   | 'core'
   | 'arms'
   | 'chest'
@@ -54,13 +55,34 @@ export interface DraftExercise {
   rest?: string
   duration?: string // timed prescription for time-based tracking
   primaryMuscles?: string[]
+  /** Catalog fields needed to log weight per-dumbbell/kettlebell rather than
+   *  a barbell total — see lib/workout/dumbbellWeight.ts. */
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
+  // Grouping — a superset or circuit, which can now be made mid-session
+  // (see lib/workout/buildAsYouGo). Consecutive exercises sharing a groupId
+  // are interleaved by the live flow builder.
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRest?: string
+  groupRounds?: number
+  /** Added while the session was already running. */
+  addedAdHoc?: boolean
 }
+
+/** Where a draft came from. Drives the overview's label — a session reopened
+ *  from history is not a "generated" one, and saying so reads as the old bug
+ *  where tapping a saved session handed back something else. */
+export type DraftSource = 'generated' | 'saved'
 
 /** An in-flight, program-less session. */
 export interface DraftSession {
   title: string
   focus?: FocusKey
   exercises: DraftExercise[]
+  source?: DraftSource
 }
 
 /** Minimal exercise shape the pure generator consumes (decoupled from Mongo). */
@@ -73,6 +95,7 @@ export interface CandidateExercise {
   movementPatterns: string[]
   primaryMuscles: string[]
   equipment: string[]
+  laterality?: string
   difficulty: string
   trackingType: string
   bodyRegion: string
@@ -226,6 +249,19 @@ export const FOCUS_DEFS: Record<FocusKey, FocusDef> = {
     movementPatterns: ['squat', 'hinge', 'lunge', 'knee_extension', 'knee_flexion', 'hip_extension', 'ankle_flexion'],
     categories: STRENGTH_CATS,
   },
+  glutes: {
+    key: 'glutes',
+    label: 'Glutes',
+    blurb: 'Glutes, hips & posterior chain',
+    // Keep this focus deliberately narrower than generic lower body. The
+    // movement patterns still admit useful compounds where glutes are a
+    // secondary mover (RDLs, squats, lunges), while quad/calf isolation work
+    // does not qualify just because it shares the lower_body region.
+    bodyRegions: [],
+    muscles: ['glutes', 'abductors'],
+    movementPatterns: ['hip_extension', 'hinge', 'lunge', 'squat'],
+    categories: STRENGTH_CATS,
+  },
   core: {
     key: 'core',
     label: 'Core',
@@ -288,6 +324,7 @@ export const QUICK_FOCUS_ORDER: FocusKey[] = [
   'push',
   'pull',
   'legs',
+  'glutes',
   'upper',
   'lower',
   'core',

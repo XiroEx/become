@@ -4,6 +4,7 @@ import ExerciseVideo from '@/models/ExerciseVideo';
 import Exercise from '@/models/Exercise';
 import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
+import { upsertRetryingStaleIndex } from '@/lib/exerciseVideoIndex';
 
 // GET /api/exercise-videos
 //   ?name=Bench Press   — return single video by exact-then-CI name (back-compat)
@@ -101,16 +102,23 @@ export async function POST(request: NextRequest) {
     // name (legacy behavior) so this endpoint stays usable for un-linked
     // seed data.
     const filter = slug ? { slug } : { exerciseName, slug: null };
-    const video = await ExerciseVideo.findOneAndUpdate(
-      filter,
-      {
-        slug,
-        exerciseName,
-        videoUrl,
-        thumbnailUrl: thumbnailUrl ?? null,
-        isPlaceholder: isPlaceholder ?? true,
-      },
-      { upsert: true, new: true }
+    // Wrapped in `upsertRetryingStaleIndex`: some environments still carry a
+    // stale UNIQUE index on `exerciseName` from before this route switched to
+    // slug-keying (see lib/exerciseVideoIndex.ts) — two exercises sharing a
+    // display name hit E11000 here on every attempt. The wrapper self-heals
+    // that index on first collision and retries once.
+    const video = await upsertRetryingStaleIndex(() =>
+      ExerciseVideo.findOneAndUpdate(
+        filter,
+        {
+          slug,
+          exerciseName,
+          videoUrl,
+          thumbnailUrl: thumbnailUrl ?? null,
+          isPlaceholder: isPlaceholder ?? true,
+        },
+        { upsert: true, new: true }
+      )
     );
 
     return NextResponse.json({ video, created: true });

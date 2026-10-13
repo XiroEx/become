@@ -4,13 +4,29 @@
 
 import { stashQuickSessionWithId, quickSessionOverviewHref } from './store'
 import { isFocusKey, type DraftExercise } from './types'
+import { normalizeTracking } from '@/lib/workout/tracking'
 
 interface SessionSet { reps?: number | null; duration?: number | null }
-interface SessionExercise { name: string; exerciseSlug?: string; sets?: SessionSet[] }
+interface SessionExercise {
+  name: string
+  exerciseSlug?: string
+  trackingType?: string
+  equipment?: string[]
+  laterality?: string
+  movementPatterns?: string[]
+  sets?: SessionSet[]
+  groupId?: string
+  groupType?: string
+  groupLabel?: string
+  groupRounds?: number
+  addedAdHoc?: boolean
+  prescription?: { sets?: number; reps?: string; duration?: string; rest?: string; trackingType?: string }
+}
 interface QuickSessionResponse {
   session?: {
     sessionId?: string
     title?: string
+    needsName?: boolean
     focus?: string
     exercises?: SessionExercise[]
   }
@@ -29,20 +45,38 @@ export async function continueQuickSession(sessionId: string): Promise<string | 
     const exercises: DraftExercise[] = (s.exercises ?? []).map((ex) => {
       const first = ex.sets?.[0]
       const isTime = !!first && first.duration != null && first.reps == null
+      const p = ex.prescription
       return {
         exerciseSlug: ex.exerciseSlug || '',
         name: ex.name,
-        trackingType: isTime ? 'time' : 'reps',
-        sets: ex.sets?.length || 1,
-        reps: first?.reps != null ? String(first.reps) : '',
-        ...(first?.duration != null ? { duration: String(first.duration) } : {}),
+        // The endpoint resolves this now (prescription, else the catalog, else
+        // what the sets imply) — inventing 'reps' here is what left a resumed
+        // session with no weight box.
+        trackingType: normalizeTracking(ex.trackingType || p?.trackingType || (isTime ? 'time' : undefined)),
+        sets: p?.sets ?? (ex.sets?.length || 1),
+        reps: p?.reps ?? (first?.reps != null ? String(first.reps) : ''),
+        ...(p?.duration ? { duration: p.duration } : first?.duration != null ? { duration: String(first.duration) } : {}),
+        ...(p?.rest ? { rest: p.rest } : {}),
+        ...(ex.equipment ? { equipment: ex.equipment } : {}),
+        ...(ex.laterality ? { laterality: ex.laterality } : {}),
+        ...(ex.movementPatterns ? { movementPatterns: ex.movementPatterns } : {}),
+        // A superset built mid-session is part of the session, not a detail of
+        // one run of it — reopening has to bring it back.
+        ...(ex.groupId ? { groupId: ex.groupId } : {}),
+        ...(ex.groupType ? { groupType: ex.groupType } : {}),
+        ...(ex.groupLabel ? { groupLabel: ex.groupLabel } : {}),
+        ...(ex.groupRounds ? { groupRounds: ex.groupRounds } : {}),
+        ...(ex.addedAdHoc ? { addedAdHoc: true } : {}),
       }
     })
     stashQuickSessionWithId(
       { title: s.title || 'Quick Session', ...(isFocusKey(s.focus) ? { focus: s.focus } : {}), exercises },
       sessionId,
+      { needsName: s.needsName },
     )
-    return quickSessionOverviewHref(sessionId)
+    // The draft uses the same id as this in-progress server log, so edits must
+    // write back instead of stopping at localStorage.
+    return quickSessionOverviewHref(sessionId, { saved: true, started: true })
   } catch {
     return null
   }

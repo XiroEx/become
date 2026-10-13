@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyAuth } from '@/lib/auth'
+import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindProgress from '@/models/MindProgress'
 import IdentityProfile from '@/models/IdentityProfile'
@@ -12,7 +12,9 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await verifyAuth(request)
+    // Read-only, so the become-ai graph's short-lived ai-tools token may reach
+    // it — half of the `become_get_mind` tool surface.
+    const auth = await verifyAuth(request, { allowScopes: AI_TOOL_SCOPES })
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     await dbConnect()
@@ -41,17 +43,19 @@ export async function GET(request: NextRequest) {
       ).lean()
     }
 
-    // One-time XP seeding: if user has evolution activity but zero XP, seed from evolutionScore
-    if (progress && progress.xp === 0) {
+    // One-time XP seeding: if a user has evolution activity but zero XP, seed from
+    // evolutionScore. `xpSeeded` makes it genuinely one-time — the condition used
+    // to be "xp === 0", so it re-fired every time XP returned to zero. That meant
+    // an admin reset was partly undone on the very next page load: xp came back,
+    // levelXp was re-derived from it below, and the level climbed straight off 1.
+    if (progress && !progress.xpSeeded) {
       const evolutionScore = (identity as Record<string, unknown> | null)?.evolutionScore as number | undefined
-      if (evolutionScore && evolutionScore > 0) {
-        const seedXp = Math.min(evolutionScore, 100)
-        progress = await MindProgress.findOneAndUpdate(
-          { userId: auth.userId },
-          { $inc: { xp: seedXp } },
-          { new: true }
-        ).lean()
-      }
+      const seedXp = progress.xp === 0 && evolutionScore && evolutionScore > 0 ? Math.min(evolutionScore, 100) : 0
+      progress = await MindProgress.findOneAndUpdate(
+        { userId: auth.userId },
+        { ...(seedXp > 0 && { $inc: { xp: seedXp } }), $set: { xpSeeded: true } },
+        { new: true }
+      ).lean()
     }
 
     const storedChapter = (progress?.chapter as number) ?? 1
@@ -62,6 +66,15 @@ export async function GET(request: NextRequest) {
     // levelXp = cumulative XP that drives the LEVEL (uncapped). Seed it once from
     // the user's existing xp + xpBank so they don't drop to level 1. mainSessionCount
     // gates chapters (10 per) — seed it so an existing chapter is preserved.
+    //
+    // THAT SEED IS WHY mainSessionCount IS NOT A SESSION COUNT. The intake maps
+    // 'building' → chapter 2 and 'leveling_up' → chapter 3, and a self-declared
+    // level-up advances one more, so this line writes 10, 20 or 30 for a member
+    // who has completed nothing. It is correct for the chapter arc (the head
+    // start is the intended product) and catastrophic for anything metering
+    // sessions: the free-tier allowance read it and refused brand-new members
+    // their FIRST session. The allowance now reads completedMainSessions, which
+    // only POST /api/mind/session increments — see lib/allowances.ts.
     const rawLevelXp = (progress?.levelXp as number) ?? 0
     const rawCount = (progress?.mainSessionCount as number) ?? 0
     const levelXp = rawLevelXp > 0 ? rawLevelXp : xp + xpBank

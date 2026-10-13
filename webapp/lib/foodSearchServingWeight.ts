@@ -10,6 +10,8 @@
 // only reorders results that are otherwise equally relevant — it never lets a
 // less-relevant food outrank a more-relevant one, and it leaves normal foods at 0.
 
+import { displayServingCalories } from '@/lib/nutrition/rowServing'
+
 export interface ServingWeightInput {
   servingSize?: number
   servingUnit?: string
@@ -27,22 +29,16 @@ const BULK_AMOUNT = 1500          // g or ml — catches ~2 L bottles / family b
 const AMOUNT_DIVISOR = 100
 const AMOUNT_CAP = 20
 
-/** Calories for the food's displayed single serving. Mirrors `rowCalories` in
- *  FoodSearchModal: our DB foods store per-serving calories (scale 1 for
- *  non-mass/volume units like cup/oz/each); OFF/USDA store per-100 with a
- *  gramsPerServing/mlPerServing bridge that scales up to the real serving. */
+/** Calories for the food's displayed single serving.
+ *
+ *  Shares one implementation with the search row (lib/nutrition/rowServing).
+ *  These were two hand-rolled copies that "mirrored" each other and then drifted
+ *  in the same direction: both understood the gram/ml bridge and neither
+ *  understood alternateServings, which is the ONLY serving signal Open Food
+ *  Facts provides. That skewed the bulk-serving penalty here by the same factor
+ *  it mis-rendered the row by. */
 export function servingCalories(item: ServingWeightInput): number {
-  const per = Number(item?.nutrition?.calories) || 0
-  const size = Number(item?.servingSize) || 0
-  let scale = 1
-  if (item?.servingUnit === 'g' && Number(item.gramsPerServing) > 0 && size > 0
-      && Math.abs(Number(item.gramsPerServing) - size) > 0.001) {
-    scale = Number(item.gramsPerServing) / size
-  } else if (item?.servingUnit === 'ml' && Number(item.mlPerServing) > 0 && size > 0
-      && Math.abs(Number(item.mlPerServing) - size) > 0.001) {
-    scale = Number(item.mlPerServing) / size
-  }
-  return per * scale
+  return displayServingCalories(item)
 }
 
 /** Effective single-serving mass/volume (g or ml), best-effort across sources. */

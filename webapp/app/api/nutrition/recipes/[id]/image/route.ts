@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Recipe from '@/models/Recipe'
 import RecipeImage from '@/models/RecipeImage'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 
 const MAX_RAW_BYTES = 25 * 1024 * 1024
 
@@ -79,7 +80,9 @@ export async function POST(
     }
 
     const isOwner = recipe.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Writing to a recipe that is not yours is admin-only, so the token's admin
+    // claim is confirmed against the database rather than trusted.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to update this recipe' }, { status: 403 })
     }
@@ -167,7 +170,9 @@ export async function DELETE(
     }
 
     const isOwner = recipe.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Writing to a recipe that is not yours is admin-only, so the token's admin
+    // claim is confirmed against the database rather than trusted.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to update this recipe' }, { status: 403 })
     }

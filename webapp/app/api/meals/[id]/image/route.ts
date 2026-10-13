@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Meal from '@/models/Meal'
 import MealImage from '@/models/MealImage'
 import { verifyAuth } from '@/lib/auth'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 
 const MAX_RAW_BYTES = 25 * 1024 * 1024 // 25MB hard cap on incoming payload
 
@@ -92,7 +93,9 @@ export async function POST(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Writing to a meal that is not yours is admin-only, so the token's admin
+    // claim is confirmed against the database rather than trusted.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to update this meal' }, { status: 403 })
     }
@@ -179,7 +182,9 @@ export async function DELETE(
     }
 
     const isOwner = meal.createdBy?.toString() === authResult.userId
-    const isAdmin = authResult.role === 'admin'
+    // Writing to a meal that is not yours is admin-only, so the token's admin
+    // claim is confirmed against the database rather than trusted.
+    const isAdmin = isOwner ? false : await isVerifiedAdmin(authResult)
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ error: 'Not authorized to update this meal' }, { status: 403 })
     }

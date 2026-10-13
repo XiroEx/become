@@ -1,6 +1,7 @@
-import { View, Text } from "react-native";
+import { View } from "react-native";
+import { Text } from "@/components/Text";
 import { Flame, Snowflake } from "lucide-react-native";
-import { resolveToken } from "@/lib/theme/tokens";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface StreakBannerProps {
   streakDays: number;
@@ -17,25 +18,46 @@ export function streakMessage(days: number): string {
   return `${days} days — legendary`;
 }
 
+/**
+ * THE BANNER AS ONE SENTENCE.
+ *
+ * The count, the message under it and the snowflake are three separate things
+ * on screen and one fact to a member: "twelve days, keep showing up, and you
+ * have a freeze in hand". The label used to carry the count alone, so the
+ * message was read as an unrelated fragment afterwards and the freeze — which
+ * is only ever an icon — was not announced at all.
+ */
+export function streakAccessibilityLabel(
+  streakDays: number,
+  freezeAvailable: boolean,
+): string {
+  const head =
+    streakDays > 0
+      ? `Streak: ${streakDays} consecutive days`
+      : "No active streak";
+  const freeze = freezeAvailable ? " Streak freeze available." : "";
+  return `${head}. ${streakMessage(streakDays)}.${freeze}`;
+}
+
 export function StreakBanner({
   streakDays,
   freezeAvailable = false,
   testID = "streak-banner",
 }: StreakBannerProps) {
+  const { colors } = useThemeTokens();
   const isActive = streakDays > 0;
   return (
     <View
       testID={testID}
+      // `accessible` is what makes the group ONE element: without it the label
+      // below is ignored on iOS and VoiceOver reads the children instead.
+      accessible
       accessibilityRole="text"
-      accessibilityLabel={
-        isActive
-          ? `Streak: ${streakDays} consecutive days`
-          : "No active streak"
-      }
+      accessibilityLabel={streakAccessibilityLabel(streakDays, freezeAvailable)}
       className="bg-card border border-border rounded-2xl p-4 flex-row items-center"
     >
       <Flame
-        color={isActive ? resolveToken("primary", "dark") : resolveToken("muted-foreground", "dark")}
+        color={isActive ? colors.primary : colors["muted-foreground"]}
         size={28}
         strokeWidth={1.5}
       />
@@ -56,7 +78,7 @@ export function StreakBanner({
       {freezeAvailable ? (
         <View testID={`${testID}-freeze`} className="ml-2">
           <Snowflake
-            color={resolveToken("accent", "dark")}
+            color={colors.accent}
             size={20}
             strokeWidth={1.5}
           />

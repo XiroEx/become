@@ -2,11 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { z } from 'zod';
-import {
-  ApiError,
-  SchemaValidationError,
-  mapStatusToErrorKind,
-} from '../src/errors';
+import { ApiError, SchemaValidationError } from '../src/errors';
 
 test('ApiError: stores status and body', () => {
   const err = new ApiError(401, { message: 'Unauthorized' });
@@ -32,30 +28,17 @@ test('SchemaValidationError: wraps ZodError', () => {
   }
 });
 
-test('mapStatusToErrorKind: 401 → auth', () => {
-  assert.equal(mapStatusToErrorKind(401), 'auth');
+test('ApiError: carries the Retry-After header when the response had one', () => {
+  const err = new ApiError(429, { message: 'A link was just sent.' }, undefined, '42');
+  assert.equal(err.retryAfter, '42');
 });
 
-test('mapStatusToErrorKind: 403 → auth', () => {
-  assert.equal(mapStatusToErrorKind(403), 'auth');
+test('ApiError: retryAfter is null when no header was passed', () => {
+  assert.equal(new ApiError(403, { error: 'Nope' }).retryAfter, null);
 });
 
-test('mapStatusToErrorKind: 404 → client', () => {
-  assert.equal(mapStatusToErrorKind(404), 'client');
-});
-
-test('mapStatusToErrorKind: 429 → client', () => {
-  assert.equal(mapStatusToErrorKind(429), 'client');
-});
-
-test('mapStatusToErrorKind: 500 → server', () => {
-  assert.equal(mapStatusToErrorKind(500), 'server');
-});
-
-test('mapStatusToErrorKind: 503 → server', () => {
-  assert.equal(mapStatusToErrorKind(503), 'server');
-});
-
-test('mapStatusToErrorKind: 200 → network (no-error edge classified as network)', () => {
-  assert.equal(mapStatusToErrorKind(200), 'network');
-});
+// What a status MEANS is classifyApiError's job now, and it is tested against
+// the bodies the web routes actually return — see tests/classifyApiError.test.ts.
+// `mapStatusToErrorKind` was deleted with NP-010: it filed every 403 under
+// 'auth' next to 401, which on this API would sign a member out for a plan gate
+// or an AI-consent refusal.

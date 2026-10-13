@@ -9,11 +9,50 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import MindSession from '@/models/MindSession'
 import MindProgress from '@/models/MindProgress'
-import { readTzOffset, readTzOffsetFromBody, localDateKey } from '@/lib/dayWindow'
+import UserProgress from '@/models/UserProgress'
+import MealLog from '@/models/MealLog'
+import { staleReason, type ActiveSessionStamp } from '@/lib/mind/activeSession'
+import { readTzOffset, readTzOffsetFromBody, readTzOffsetFromBodyCompat, localDateKey } from '@/lib/dayWindow'
 import {
   getLevelProgress, chapterFromSessions, sessionsIntoChapter,
   mainSessionAvailable, MAIN_SESSION_COOLDOWN_MS, CHAPTERS, getUnlockedSystems,
 } from '@/lib/mindXP'
+import {
+  loadUserEntitlement, featureAccess, entitlementsEnforced, gateResponse,
+  FREE_LIMITS,
+} from '@/lib/entitlements'
+import { peekQuota } from '@/lib/entitlementGuards'
+
+// Free tier gets main sessions 1-10; session 11 is locked. The count is the
+// EXISTING milestone MindProgress.completedMainSessions, so nothing new is
+// written and the check is naturally idempotent. 10 is also
+// SESSIONS_PER_CHAPTER, so the wall lands exactly on the Chapter 1 → Chapter 2
+// boundary — the same moment Vision would unlock.
+//
+// It counts COMPLETED sessions, never mainSessionCount: that one is chapter
+// progress and carries the intake / self-declare / admin head start, which put
+// a brand-new free member at 10/10 before their first session. See
+// lib/allowances.ts#MILESTONE_COUNTS.
+const MIND_FREE_SESSIONS = FREE_LIMITS['mind-sessions'].limit
+
+/**
+ * Has this member run out of free Mind sessions? Returns the 403 to send, or
+ * null to continue. Cheap enough to run on both the PUT (session start) and the
+ * POST (completion): blocking only at the payoff would walk someone through a
+ * whole session before refusing it.
+ *
+ * Goes through peekQuota so the milestone count, the admin/plus bypass and the
+ * 403 body are defined in exactly one place — a second hand-rolled copy is how
+ * this gate came to read a different number from the one
+ * GET /api/me/entitlements reports.
+ */
+async function mindSessionGate(userId: string): Promise<NextResponse | null> {
+  // Switch check first: with enforcement off this costs nothing at all, which
+  // is what makes shipping it dark free.
+  if (!entitlementsEnforced()) return null
+  const { allowed, gate } = await peekQuota(userId, 'mind-sessions')
+  return allowed || !gate ? null : gateResponse(gate)
+}
 
 // A completed MAIN session grants this much LEVEL XP (level is uncapped, fed by
 // main + arsenal). Main sessions are gated to one per 20h and each counts toward
@@ -60,6 +99,21 @@ async function streakFor(userId: string, todayKey: string): Promise<number> {
   return computeStreak(docs.map((d) => d.dateKey), todayKey)
 }
 
+/** Watermarks the active session is judged against. */
+async function activityNow(userId: string) {
+  const [progress, meal] = await Promise.all([
+    UserProgress.findOne({ userId }).select('workoutLogs.date').lean<{ workoutLogs?: { date: Date }[] } | null>(),
+    MealLog.findOne({ user: userId }).sort({ loggedAt: -1 }).select('loggedAt').lean<{ loggedAt?: Date } | null>(),
+  ])
+  const workouts = (progress?.workoutLogs ?? [])
+    .map(w => new Date(w.date).getTime())
+    .filter(t => Number.isFinite(t))
+  return {
+    lastWorkoutAt: workouts.length ? new Date(Math.max(...workouts)) : null,
+    lastMealAt: meal?.loggedAt ? new Date(meal.loggedAt) : null,
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAuth(request)
@@ -72,12 +126,45 @@ export async function GET(request: NextRequest) {
     await dbConnect()
     const doc = await MindSession.findOne({ userId: auth.userId, dateKey }).lean()
     const streak = await streakFor(auth.userId!, dateKey)
+
+    // Plan state, so the hub can draw the lock BEFORE Begin rather than letting
+    // the member start a session the POST will refuse. Always reported (the
+    // fields are just null/false when unenforced or uncapped) so the client has
+    // one shape to read, and the entitlement is not even loaded while the
+    // switch is off.
+    let mindCapped = false
+    if (entitlementsEnforced()) {
+      const ent = await loadUserEntitlement(auth.userId!)
+      mindCapped = featureAccess(ent.role, ent.tier, 'mind-sessions') !== 'full'
+    }
     // Recency for session spacing (breath cooldown + modality variety) + the 20h
     // main-session cooldown that decides whether the hub shows the main session
     // or Training Grounds.
     const prog = await MindProgress.findOne({ userId: auth.userId })
-      .select('lastBreathAt recentKinds lastMainSessionAt')
-      .lean<{ lastBreathAt?: Date; recentKinds?: string[]; lastMainSessionAt?: Date } | null>()
+      .select('lastBreathAt recentKinds lastMainSessionAt activeSession completedMainSessions')
+      .lean<{
+        lastBreathAt?: Date
+        recentKinds?: string[]
+        lastMainSessionAt?: Date
+        completedMainSessions?: number
+        activeSession?: ActiveSessionStamp & { seed: number; plan: unknown }
+      } | null>()
+
+    // The meter the hub draws, and the same number the gate decides on. Clamped
+    // to the limit for the same reason GET /api/me/entitlements clamps it: this
+    // is rendered as used/limit, and a long-time member is legitimately past it.
+    const sessionsUsed = Math.min(prog?.completedMainSessions ?? 0, MIND_FREE_SESSIONS)
+    const mindLocked = mindCapped && sessionsUsed >= MIND_FREE_SESSIONS
+
+    // Hand back the unfinished session rather than composing a new one, unless
+    // the day rolled over or the member logged something it was built from.
+    const stored = prog?.activeSession
+    const stale = stored ? staleReason(stored, dateKey, await activityNow(auth.userId!)) : null
+    if (stored && stale) {
+      // Drop it now so the next Begin composes cleanly instead of racing this.
+      await MindProgress.updateOne({ userId: auth.userId }, { $unset: { activeSession: 1 } }).catch(() => {})
+    }
+    const resume = stored && !stale ? { seed: stored.seed, plan: stored.plan } : null
 
     const available = mainSessionAvailable(prog?.lastMainSessionAt)
     const nextMainSessionAt = prog?.lastMainSessionAt
@@ -94,6 +181,16 @@ export async function GET(request: NextRequest) {
       mainSessionAvailable: available,
       lastMainSessionAt: prog?.lastMainSessionAt ? new Date(prog.lastMainSessionAt).getTime() : null,
       nextMainSessionAt: available ? null : nextMainSessionAt,
+      // Non-null when there is a session in progress to pick up where it left off.
+      resume,
+      resumeDropped: stale ?? null,
+      // Plan lock. Orthogonal to mainSessionAvailable (the 20h cooldown):
+      // `locked` never lifts on its own, the cooldown always does.
+      locked: mindLocked,
+      lockReason: mindLocked ? ('tier' as const) : null,
+      requiresTier: mindLocked ? ('plus' as const) : null,
+      sessionsUsed,
+      sessionsLimit: mindCapped ? MIND_FREE_SESSIONS : null,
     })
   } catch (err) {
     console.error('GET /api/mind/session error:', err)
@@ -114,13 +211,17 @@ export async function POST(request: NextRequest) {
       : []
 
     await dbConnect()
+
+    const locked = await mindSessionGate(auth.userId!)
+    if (locked) return locked
+
     const now = Date.now()
 
     // Read progress BEFORE the write so we can detect the 20h cooldown, the
     // level-up crossing, and the chapter advance.
     const before = await MindProgress.findOne({ userId: auth.userId })
-      .select('levelXp mainSessionCount lastMainSessionAt chapter xpBank chapterHistory')
-      .lean<{ levelXp?: number; mainSessionCount?: number; lastMainSessionAt?: Date; chapter?: number; xpBank?: number } | null>()
+      .select('levelXp mainSessionCount completedMainSessions lastMainSessionAt chapter xpBank chapterHistory')
+      .lean<{ levelXp?: number; mainSessionCount?: number; completedMainSessions?: number; lastMainSessionAt?: Date; chapter?: number; xpBank?: number } | null>()
 
     const prevLevelXp = before?.levelXp ?? 0
     const prevCount = before?.mainSessionCount ?? 0
@@ -152,7 +253,12 @@ export async function POST(request: NextRequest) {
     // Grant LEVEL xp (and bank toward the Becoming score). A counted main session
     // also increments the chapter-gating session count + stamps the cooldown.
     const inc: Record<string, number> = { levelXp: grantXp, xpBank: grantXp }
+    // TWO counters, deliberately. mainSessionCount is chapter progress and may
+    // legitimately be seeded from a chapter head start; completedMainSessions is
+    // the count of sessions that actually happened, and is the ONLY one the
+    // free-tier allowance reads. This line is the only thing that increments it.
     if (counted) inc.mainSessionCount = 1
+    if (counted) inc.completedMainSessions = 1
     if (counted) recencySet.lastMainSessionAt = new Date(now)
 
     const newCount = counted ? prevCount + 1 : prevCount
@@ -170,9 +276,16 @@ export async function POST(request: NextRequest) {
     if (chapterAdvanced) {
       update.$push = { chapterHistory: { chapter: newChapter, unlockedAt: new Date(now) } }
     }
+    // The session is finished, so the stored copy has done its job. Leaving it
+    // would hand the same completed session back at the next Begin.
+    const updateWithClear = {
+      ...update,
+      $unset: { ...(update as { $unset?: Record<string, 1> }).$unset, activeSession: 1 as const },
+    }
+
     await MindProgress.findOneAndUpdate(
       { userId: auth.userId },
-      update,
+      updateWithClear,
       { upsert: true, setDefaultsOnInsert: true },
     ).catch(() => {})
 
@@ -213,11 +326,73 @@ export async function POST(request: NextRequest) {
       // sessions, The Becoming after 5) — surfaced on the payoff.
       featureUnlocks: [
         ...(counted && newCount === 3 ? ['coach'] : []),
-        ...(counted && newCount === 5 ? ['becoming'] : []),
+        // The Becoming is open to everyone now (it led the dashboard from
+        // 2026-08-18); nothing to unlock at session 5 any more.
       ],
     })
   } catch (err) {
     console.error('POST /api/mind/session error:', err)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+
+/**
+ * PUT: remember the session that was just composed, so leaving mid-way and
+ * coming back returns the SAME session. Cleared by POST on completion, by a new
+ * local day, or by a workout/meal log that changes what it was built from.
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = await verifyAuth(request)
+    if (!auth.success || !auth.userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const seed = Number(body?.seed)
+    const plan = body?.plan
+    if (!Number.isFinite(seed) || !plan || typeof plan !== 'object') {
+      return NextResponse.json({ error: 'seed and plan are required' }, { status: 400 })
+    }
+
+    await dbConnect()
+
+    // Gate the START, not just the completion — this PUT is the first write of
+    // a composed session (MindJourney), so refusing here is what stops a locked
+    // member being walked through a whole session for nothing.
+    const locked = await mindSessionGate(auth.userId)
+    if (locked) return locked
+
+    // The member's LOCAL day, computed exactly as GET computes it — the two
+    // keys are compared on the next load and any disagreement reads as
+    // `new_day`, which throws the session away. `tz` is the contract; the
+    // `tzOffset` fallback covers a browser still running the bundle that
+    // spelled it that way, whose session would otherwise be stamped with the
+    // UTC day and lost from 8pm in New York.
+    const dateKey = localDateKey(null, readTzOffsetFromBodyCompat(body))
+    const now = await activityNow(auth.userId)
+
+    await MindProgress.updateOne(
+      { userId: auth.userId },
+      {
+        $set: {
+          activeSession: {
+            dateKey,
+            seed,
+            plan,
+            generatedAt: new Date(),
+            lastWorkoutAt: now.lastWorkoutAt,
+            lastMealAt: now.lastMealAt,
+          },
+        },
+      },
+      { upsert: true },
+    )
+
+    return NextResponse.json({ ok: true, dateKey })
+  } catch (err) {
+    console.error('PUT /api/mind/session error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }

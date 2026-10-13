@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/metrics/tiles.test.tsx
+// Run with: npm run test:file tests/unit/metrics/tiles.test.tsx
 //
 // Tile rendering tests. Each tile is an async server component, so we
 // `await` it to get JSX, then renderToStaticMarkup walks the tree

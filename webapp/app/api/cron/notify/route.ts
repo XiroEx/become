@@ -4,7 +4,14 @@ import UserProgress from '@/models/UserProgress'
 import Schedule from '@/models/Schedule'
 import ProgramModel from '@/models/Program'
 import MealLog from '@/models/MealLog'
-import { sendPushToUser } from '@/lib/pushNotification'
+import { sendPushToUser, type PushPayload } from '@/lib/pushNotification'
+import { computeGoalProgress } from '@/lib/goals/progress'
+import { pickGoalNudge } from '@/lib/goals/suggestions'
+import { computeStreaks } from '@/lib/streaks/compute'
+import { superAtRisk, SUPER_AT_RISK_START_HOUR, SUPER_AT_RISK_END_HOUR, type StreaksLite } from '@/lib/streaks/tile'
+import MindProgress from '@/models/MindProgress'
+import MindSession from '@/models/MindSession'
+import { mainSessionAvailable } from '@/lib/mindXP'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import {
   REENGAGEMENT_END_HOUR,
@@ -16,9 +23,72 @@ import {
   localDateKeyForUser,
   localHourForUser,
   workoutTitleForDay,
+  MIND_REMINDER_START_HOUR,
+  GOAL_NUDGE_START_HOUR,
+  GOAL_NUDGE_END_HOUR,
+  GOAL_NUDGE_KEY_COOLDOWN_DAYS,
+  slotDateKey,
+  MIND_REMINDER_END_HOUR,
+  CHECK_IN_REMINDER_START_HOUR,
+  CHECK_IN_REMINDER_END_HOUR,
+  MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION,
+  DAILY_GLANCE_START_HOUR,
+  DAILY_GLANCE_END_HOUR,
 } from '@/lib/notifications/cronNotify'
+import { checkInFactsForToday } from '@/lib/checkin/todayFacts'
+import { loadWidgetFeed } from '@/lib/widgets/load'
+import { buildDailyGlance } from '@/lib/widgets/glance'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Per-notification outcome counters.
+ *
+ * The old route counted only successful sends, so "19 users qualified but none of
+ * them has ever enabled push" and "nobody qualified" both reported `0` — with
+ * `errors: 0` as well, because a user with no subscription never even attempts a
+ * send. The cron looked perfectly healthy while delivering nothing. Splitting
+ * `qualified` from `delivered` makes that visible at a glance.
+ */
+interface Tally {
+  /** Passed every filter and we tried to reach them. */
+  qualified: number
+  /** A push service accepted it. */
+  delivered: number
+  /** Qualified, but the user has no usable push subscription. */
+  noSubscription: number
+  /** A push service rejected it, or the send threw. */
+  failed: number
+}
+
+const tally = (): Tally => ({ qualified: 0, delivered: 0, noSubscription: 0, failed: 0 })
+
+/**
+ * Send one notification and record the real outcome. `onDelivered` only runs on a
+ * genuine delivery — stamping a failure would suppress tomorrow's retry and the
+ * user would never hear from us.
+ */
+async function deliver(
+  t: Tally,
+  userId: string,
+  payload: PushPayload,
+  onDelivered: () => void,
+): Promise<void> {
+  t.qualified++
+  try {
+    const sent = await sendPushToUser(userId, payload)
+    if (sent.delivered > 0) {
+      t.delivered++
+      onDelivered()
+    } else if (sent.attempted > 0) {
+      t.failed++
+    } else {
+      t.noSubscription++
+    }
+  } catch {
+    t.failed++
+  }
+}
 
 // ── Route ─────────────────────────────────────────────────────────────────────
 
@@ -36,13 +106,24 @@ export async function GET(request: NextRequest) {
 
   const now = new Date()
 
+  const t = {
+    streakAtRisk: tally(),
+    workoutReminder: tally(),
+    mealReminder: tally(),
+    reEngagement: tally(),
+    mindReminder: tally(),
+    scheduleSetup: tally(),
+    goalNudge: tally(),
+    superStreakAtRisk: tally(),
+    checkInReminder: tally(),
+    dailyGlance: tally(),
+  }
   const results = {
-    streakAtRisk: 0,
-    workoutReminder: 0,
-    mealReminder: 0,
-    reEngagement: 0,
     missedSlotsSynced: 0,
     skippedByWindow: 0,
+    /** Users with an in-progress program but NO schedule document — they can
+     *  never receive a workout reminder, and their calendar is empty. */
+    activeProgramsWithoutSchedule: 0,
     errors: 0,
   }
 
@@ -67,6 +148,72 @@ export async function GET(request: NextRequest) {
     results.errors++
   }
 
+  // ── 0.5 Daily glance (6am-9am LOCAL, OPT-IN) ─────────────────────────────
+  // The lock-screen half of the widgets Jon asked for. A web app cannot draw a
+  // lock-screen widget — that is a WidgetKit / App Widget surface and only
+  // expo/ can ship one — but it can put one card there, so this renders the
+  // widget feed as a notification: streak, today's session, calories left, and
+  // whether the Mind session is waiting.
+  //
+  // Three things make it different from every other push in this route:
+  //
+  //  - **It is opt-in.** `dailyGlance: true`, not `{ $ne: false }`. Everything
+  //    else here fires because something is wrong or owed and reasonably
+  //    defaults on; this is a standing daily card, in a morning that already
+  //    has the workout and Mind nudges in it. Nobody gets a third push without
+  //    asking for one.
+  //  - **It goes first**, in an earlier window, so it reads as the day's
+  //    summary rather than a fourth reminder.
+  //  - **It carries `badgeCount`**, which is what lights the app-icon badge on
+  //    a phone that has not opened Become since yesterday (see
+  //    lib/widgets/badge.ts — on iOS the service worker applies it, and on
+  //    Android the unread notification badges the icon by itself).
+  //
+  // This is the heaviest section (one widget-feed load per qualifying member),
+  // which is exactly why the window is narrow, the gate is opt-in and the whole
+  // thing is wrapped: a slow or throwing glance must not cost anyone a nudge.
+  try {
+    const glanceCandidates = await UserProgress.find({
+      'notificationPrefs.dailyGlance': true,
+      // Either clock will do. `localHourForUser` prefers the IANA zone, so a
+      // member who has one but no captured offset can still be placed in their
+      // own morning — the other sweeps' `timezoneOffset`-only filter would
+      // drop them.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of glanceCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < DAILY_GLANCE_START_HOUR || userLocalHour > DAILY_GLANCE_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.dailyGlance
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      // No requested offset: the member's stored zone decides their day, which
+      // is the same resolution an installed widget with no clock of its own gets.
+      const feed = await loadWidgetFeed(String(progress.userId), null, now)
+      const glance = buildDailyGlance(feed)
+
+      await deliver(t.dailyGlance, String(progress.userId), {
+        title: glance.title,
+        body: glance.body,
+        url: '/dashboard',
+        tag: 'daily-glance',
+        badgeCount: glance.badgeCount,
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.dailyGlance': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('daily-glance sweep failed:', err)
+    results.errors++
+  }
+
   // ── 1. Streak at-risk (any hour — urgent) ─────────────────────────────────
   // lastActivityDate 23-47h ago means their streak expires within the next 24h.
   // Gate: skip if we already sent this notification within the last 20h (prevents
@@ -77,7 +224,7 @@ export async function GET(request: NextRequest) {
   const streakRateLimitCutoff = new Date(now.getTime() - 20 * 60 * 60 * 1000)
 
   const atRiskUsers = await UserProgress.find({
-    streakDays: { $gte: 1 },
+    streakDays: { $gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION },
     lastActivityDate: { $gte: atRiskExpiry, $lte: atRiskCutoff },
     'notificationPrefs.streakAtRisk': { $ne: false },
     $or: [
@@ -88,27 +235,17 @@ export async function GET(request: NextRequest) {
   }).select('userId streakDays').lean()
 
   for (const u of atRiskUsers) {
-    try {
-      const sent = await sendPushToUser(String(u.userId), {
-        title: `Don't break your ${u.streakDays}-day streak 🔥`,
-        body: 'Log a workout, mood, or weight to keep it alive.',
-        url: '/dashboard',
-        tag: 'streak-at-risk',
-      })
-      // Only stamp when something actually reached a push service — a stamped
-      // failure suppresses tomorrow's retry and the user never hears from us.
-      if (sent.delivered > 0) {
-        UserProgress.updateOne(
-          { userId: u.userId },
-          { $set: { 'lastPushSentAt.streakAtRisk': now } },
-        ).catch(() => {})
-        results.streakAtRisk++
-      } else if (sent.attempted > 0) {
-        results.errors++
-      }
-    } catch {
-      results.errors++
-    }
+    await deliver(t.streakAtRisk, String(u.userId), {
+      title: `Don't break your ${u.streakDays}-day streak 🔥`,
+      body: 'Log a workout, mood, or weight to keep it alive.',
+      url: '/dashboard',
+      tag: 'streak-at-risk',
+    }, () => {
+      UserProgress.updateOne(
+        { userId: u.userId },
+        { $set: { 'lastPushSentAt.streakAtRisk': now } },
+      ).catch(() => {})
+    })
   }
 
   // ── 2. Workout reminder (7am–11am LOCAL per user) ─────────────────────────
@@ -134,7 +271,7 @@ export async function GET(request: NextRequest) {
   if (schedulesWithRecent.length > 0) {
     const userIds = schedulesWithRecent.map((s) => s.userId)
     const progressDocs = await UserProgress.find({ userId: { $in: userIds } })
-      .select('userId notificationPrefs lastPushSentAt timezoneOffset activePrograms')
+      .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone activePrograms')
       .lean()
 
     const progressByUserId = new Map(
@@ -183,64 +320,66 @@ export async function GET(request: NextRequest) {
 
       // Skip when we don't know the user's timezone — otherwise the UTC
       // fallback fires reminders in the small hours of their local day.
-      const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
       if (userLocalHour === null) continue
       if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
 
-      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
       const lastSent = progress?.lastPushSentAt?.workoutReminder
-      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) {
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) {
         continue
       }
 
-      // Each slot's date is UTC midnight of its local day → bucket by local key.
-      const keyed = slots.map((s) => ({ ...s, key: localDateKeyForUser(new Date(s.date), progress?.timezoneOffset) }))
+      // A slot's date is a day MARKER, not an instant — read it as a plain
+      // calendar date, exactly as the dashboard does. Putting it through the
+      // user's offset shifted every slot a day earlier for anyone behind UTC,
+      // which is what made this push name tomorrow's workout.
+      const keyed = slots.map((s) => ({ ...s, key: slotDateKey(s.date) }))
 
       // Only nudge on a training day: there must be a slot scheduled for TODAY.
-      const hasTodaySlot = keyed.some((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
-      if (!hasTodaySlot) continue
+      const todaySlots = keyed.filter((s) => s.status === 'scheduled' && s.key === userLocalDateKey)
+      if (todaySlots.length === 0) continue
 
-      // The workout to surface = the earliest UNCOMPLETED slot that's due (today
-      // or overdue), within a 7-day catch-up window so we don't nag about
-      // ancient misses. This makes a behind user's reminder name the workout
-      // they still owe (missed Day 3 Legs) rather than today's calendar slot.
+      // Name TODAY's workout — the same one the dashboard's "Up Next" shows.
+      //
+      // This used to name the oldest workout still owed instead. That rule was
+      // added to stop the push naming "the next calendar day" (c7f03c0), but
+      // that symptom WAS the date-marker shift above: with the dates read
+      // correctly there is no next-day drift to work around, and telling
+      // someone whose calendar says Legs that their workout is Chest is simply
+      // wrong. The backlog is still worth mentioning, so it rides along as a
+      // count rather than replacing what today actually is.
+      const best = todaySlots.sort((a, b) => a.date.getTime() - b.date.getTime())[0]
+
+      // Overdue, within a 7-day window so we don't nag about ancient misses.
       const CATCHUP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
       const cutoffMs = now.getTime() - CATCHUP_WINDOW_MS
-      const due = keyed
-        .filter((s) => s.key <= userLocalDateKey && new Date(s.date).getTime() >= cutoffMs)
-        .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.date.getTime() - b.date.getTime()))
-      const best = due[0]
-      if (!best) continue
+      const overdue = keyed.filter(
+        (s) => s.key < userLocalDateKey && new Date(s.date).getTime() >= cutoffMs,
+      ).length
 
       // Resolve the title from the LIVE program (the slot's cached title can be
       // stale after a program edit — this is the "wrong workout name" bug).
       const program = await getProgram(best.programId)
       const liveTitle = program ? workoutTitleForDay(program.phases ?? [], best.phase ?? 1, best.dayLabel ?? '') : null
       const titleText = liveTitle || best.workoutTitle || best.dayLabel || 'Tap to start your session.'
-      const body =
+      const named =
         best.dayLabel && !titleText.toLowerCase().includes(best.dayLabel.toLowerCase())
           ? `${best.dayLabel} · ${titleText}`
           : titleText
+      const body = overdue > 0 ? `${named} · ${overdue} to catch up` : named
 
-      try {
-        const sent = await sendPushToUser(userId, {
-          title: "Today's workout is ready 💪",
-          body,
-          url: '/dashboard/calendar',
-          tag: 'workout-reminder',
-        })
-        if (sent.delivered > 0) {
-          UserProgress.updateOne(
-            { userId },
-            { $set: { 'lastPushSentAt.workoutReminder': now } },
-          ).catch(() => {})
-          results.workoutReminder++
-        } else if (sent.attempted > 0) {
-          results.errors++
-        }
-      } catch {
-        results.errors++
-      }
+      await deliver(t.workoutReminder, userId, {
+        title: "Today's workout is ready 💪",
+        body,
+        url: '/dashboard/calendar',
+        tag: 'workout-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId },
+          { $set: { 'lastPushSentAt.workoutReminder': now } },
+        ).catch(() => {})
+      })
     }
   }
 
@@ -258,17 +397,17 @@ export async function GET(request: NextRequest) {
     if (activeLoggers.length > 0) {
       const loggerIds = activeLoggers.map((u) => u._id)
       const loggerProgress = await UserProgress.find({ userId: { $in: loggerIds } })
-        .select('userId notificationPrefs lastPushSentAt timezoneOffset')
+        .select('userId notificationPrefs lastPushSentAt timezoneOffset timezone')
         .lean()
       for (const progress of loggerProgress) {
         if (progress?.notificationPrefs?.mealReminder === false) continue
-        const userLocalHour = localHourForUser(now, progress?.timezoneOffset)
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
         if (userLocalHour === null) continue
         if (userLocalHour < 17 || userLocalHour > 20) continue
 
-        const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset)
+        const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
         const lastSent = progress?.lastPushSentAt?.mealReminder
-        if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset) === userLocalDateKey) continue
+        if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
 
         // Anything logged in the user's local today? Local midnight in UTC =
         // dateKey 00:00Z + tz offset minutes.
@@ -281,29 +420,284 @@ export async function GET(request: NextRequest) {
         })
         if (loggedToday) continue
 
-        try {
-          const sent = await sendPushToUser(String(progress.userId), {
-            title: 'Log today\'s food 🍽️',
-            body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
-            url: '/dashboard/nutrition',
-            tag: 'meal-reminder',
-          })
-          if (sent.delivered > 0) {
-            UserProgress.updateOne(
-              { userId: progress.userId },
-              { $set: { 'lastPushSentAt.mealReminder': now } },
-            ).catch(() => {})
-            results.mealReminder++
-          } else if (sent.attempted > 0) {
-            results.errors++
-          }
-        } catch {
-          results.errors++
-        }
+        await deliver(t.mealReminder, String(progress.userId), {
+          title: 'Log today\'s food 🍽️',
+          body: 'A quick log keeps your nutrition picture honest. It takes 30 seconds.',
+          url: '/dashboard/nutrition',
+          tag: 'meal-reminder',
+        }, () => {
+          UserProgress.updateOne(
+            { userId: progress.userId },
+            { $set: { 'lastPushSentAt.mealReminder': now } },
+          ).catch(() => {})
+        })
       }
     }
   } catch (err) {
     console.error('meal-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.6 Daily Mind session (7am-11am LOCAL) ──────────────────────────────
+  // The main Mind session is the app's core daily ritual and had NO reminder at
+  // all — the cron only ever nudged workouts, meals, streaks and lapses. Fires
+  // when their main session is off its 20h cooldown and they have not completed
+  // one today.
+  //
+  // At most ONE morning push per user: if a workout reminder already went out
+  // today, we stay quiet rather than stacking two notifications in one morning.
+  try {
+    const mindCandidates = await UserProgress.find({
+      'notificationPrefs.mindReminder': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of mindCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < MIND_REMINDER_START_HOUR || userLocalHour > MIND_REMINDER_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+
+      // One per local day.
+      const lastSent = progress?.lastPushSentAt?.mindReminder
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      // The workout reminder no longer suppresses this one. It used to, to avoid
+      // stacking two pushes in one morning — but training days are most days,
+      // so in practice the mindset nudge almost never fired at all. They are
+      // separate rituals and each deserves its own reminder; the windows are
+      // staggered (workout 7am, mind 8am) so they don't arrive together.
+
+      // Already did today's session? Nothing to nudge.
+      const doneToday = await MindSession.exists({ userId: progress.userId, dateKey: userLocalDateKey })
+      if (doneToday) continue
+
+      // Respect the 20h main-session cooldown — nudging toward a locked session
+      // would send them to Training Grounds, not the session.
+      const mind = await MindProgress.findOne({ userId: progress.userId })
+        .select('lastMainSessionAt completedMainSessions')
+        .lean<{ lastMainSessionAt?: Date; completedMainSessions?: number } | null>()
+      if (!mainSessionAvailable(mind?.lastMainSessionAt, now.getTime())) continue
+
+      // "Have they ever done one?" is a question about sessions, so it reads the
+      // session counter. mainSessionCount is chapter progress and is seeded from
+      // the intake answer, so it told someone who had never opened a session
+      // that "today's module is ready".
+      const started = (mind?.completedMainSessions ?? 0) > 0
+      await deliver(t.mindReminder, String(progress.userId), {
+        title: started ? "Today's mindset module is ready 🧠" : 'Start your first session 🧠',
+        body: started
+          ? 'A few minutes on your mindset before the day takes over.'
+          : 'Five minutes to set how today goes. Begin the path.',
+        url: '/dashboard/mind',
+        tag: 'mind-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.mindReminder': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('mind-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.6b Super streak at risk (4pm-9pm LOCAL) ─────────────────────────────
+  // The super streak (food + mindset + trained, every day) is the hardest thing
+  // to hold, and it is lost silently at midnight. Late afternoon, while there is
+  // still time to act, tell the member exactly which piece is missing. Only for
+  // streaks long enough to be worth protecting, once per local day.
+  try {
+    const superCandidates = await UserProgress.find({
+      'notificationPrefs.superStreakAtRisk': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of superCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < SUPER_AT_RISK_START_HOUR || userLocalHour > SUPER_AT_RISK_END_HOUR) continue
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.superStreakAtRisk
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      let streaks: StreaksLite
+      try {
+        streaks = await computeStreaks(String(progress.userId), progress.timezoneOffset ?? 0, now) as unknown as StreaksLite
+      } catch { continue }
+      const risk = superAtRisk(streaks, userLocalHour)
+      if (!risk.atRisk) continue
+
+      await deliver(t.superStreakAtRisk, String(progress.userId), {
+        title: risk.title,
+        body: risk.body,
+        url: '/dashboard/streaks',
+        tag: 'super-streak-at-risk',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.superStreakAtRisk': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('super-streak sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.65 Goal nudges (5pm-8pm LOCAL) ──────────────────────────────────────
+  // "Where to work on next" per pillar (lib/goals/suggestions) — the SAME rules
+  // the Becoming page shows, delivered as a push when they are actionable:
+  // behind pace, protein floor missed, logging thin, tight training week, a
+  // lift within reach. One goal nudge per member per local day, and the same
+  // rule is not repeated within GOAL_NUDGE_KEY_COOLDOWN_DAYS. Never fires for
+  // 'good' or 'info' reads — those are the page's job, not a notification's.
+  try {
+    const goalCandidates = await UserProgress.find({
+      'notificationPrefs.goalNudge': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt').lean()
+
+    for (const progress of goalCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < GOAL_NUDGE_START_HOUR || userLocalHour > GOAL_NUDGE_END_HOUR) continue
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.goalNudge
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      let read
+      try {
+        read = await computeGoalProgress(String(progress.userId), progress.timezoneOffset ?? 0, now)
+      } catch { continue }
+      // Actionable only; warnings first; no repeat of the same rule inside the cooldown.
+      const pick = pickGoalNudge(
+        [read.nutrition.suggestion, read.training.suggestion],
+        { key: progress?.lastPushSentAt?.goalNudgeKey, at: progress?.lastPushSentAt?.goalNudgeKeyAt ? new Date(progress.lastPushSentAt.goalNudgeKeyAt).getTime() : null },
+        now.getTime(),
+        GOAL_NUDGE_KEY_COOLDOWN_DAYS * 86_400_000,
+      )
+      if (!pick) continue
+
+      await deliver(t.goalNudge, String(progress.userId), {
+        title: pick.title,
+        body: pick.sub,
+        url: pick.url,
+        tag: 'goal-nudge',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.goalNudge': now, 'lastPushSentAt.goalNudgeKey': pick.key, 'lastPushSentAt.goalNudgeKeyAt': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('goal-nudge sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.66 Daily check-in reminder (12pm-4pm LOCAL) ─────────────────────────
+  // The mood + weight check-in used to be reachable ONLY through the in-app
+  // modal, which fires whenever a member happens to open the app — never at a
+  // scheduled time. That is exactly why some members reported never seeing it
+  // (they simply didn't open the app while it was due) and others reported
+  // getting it late at night (whenever they happened to open the app). A
+  // dedicated push, restricted to a daytime window like every other reminder
+  // here, closes both gaps. Uses the SAME "logged today" / "skipped today"
+  // rule as the modal (lib/checkin/todayFacts) so the two channels never
+  // disagree about whether today's check-in is done.
+  try {
+    const checkInCandidates = await UserProgress.find({
+      'notificationPrefs.checkInReminder': { $ne: false },
+      timezoneOffset: { $exists: true },
+    }).select('userId timezoneOffset timezone lastPushSentAt moodHistory weightHistory checkIn').lean()
+
+    for (const progress of checkInCandidates) {
+      const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+      if (userLocalHour === null) continue
+      if (userLocalHour < CHECK_IN_REMINDER_START_HOUR || userLocalHour > CHECK_IN_REMINDER_END_HOUR) continue
+
+      const userLocalDateKey = localDateKeyForUser(now, progress?.timezoneOffset, progress?.timezone)
+      const lastSent = progress?.lastPushSentAt?.checkInReminder
+      if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
+
+      const { moodLoggedToday, weightLoggedToday, skippedToday } = checkInFactsForToday(
+        progress,
+        userLocalDateKey,
+        progress?.timezoneOffset ?? 0,
+      )
+      if (skippedToday || (moodLoggedToday && weightLoggedToday)) continue
+
+      const body = !moodLoggedToday && !weightLoggedToday
+        ? 'A quick mood + weight check-in — takes 10 seconds.'
+        : !moodLoggedToday
+          ? "You logged your weight — just your mood left for today."
+          : "You logged your mood — just today's weight left."
+
+      await deliver(t.checkInReminder, String(progress.userId), {
+        title: 'Time for your check-in 📝',
+        body,
+        url: '/dashboard',
+        tag: 'checkin-reminder',
+      }, () => {
+        UserProgress.updateOne(
+          { userId: progress.userId },
+          { $set: { 'lastPushSentAt.checkInReminder': now } },
+        ).catch(() => {})
+      })
+    }
+  } catch (err) {
+    console.error('checkin-reminder sweep failed:', err)
+    results.errors++
+  }
+
+  // ── 2.7 Program with no schedule (7am-11am LOCAL, weekly) ────────────────
+  // An in-progress program with no Schedule document can NEVER produce a workout
+  // reminder, and the user's calendar is empty. This was silently true for a real
+  // account for three weeks. Count it, and nudge them to pick training days.
+  try {
+    const withPrograms = await UserProgress.find({
+      activePrograms: { $elemMatch: { status: { $in: ['active', 'in-progress'] } } },
+    }).select('userId timezoneOffset lastPushSentAt notificationPrefs activePrograms').lean()
+
+    if (withPrograms.length > 0) {
+      const scheduledUserIds = new Set(
+        (await Schedule.find({ userId: { $in: withPrograms.map((p) => p.userId) } })
+          .select('userId')
+          .lean()).map((s) => String(s.userId)),
+      )
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+      for (const progress of withPrograms) {
+        if (scheduledUserIds.has(String(progress.userId))) continue
+        results.activeProgramsWithoutSchedule++
+
+        if (progress?.notificationPrefs?.workoutReminder === false) continue
+        const userLocalHour = localHourForUser(now, progress?.timezoneOffset, progress?.timezone)
+        if (userLocalHour === null) continue
+        if (userLocalHour < WORKOUT_REMINDER_START_HOUR || userLocalHour > WORKOUT_REMINDER_END_HOUR) continue
+
+        // Weekly at most — this is a setup nudge, not a daily nag.
+        const lastSent = progress?.lastPushSentAt?.scheduleSetup
+        if (lastSent && new Date(lastSent) > weekAgo) continue
+
+        await deliver(t.scheduleSetup, String(progress.userId), {
+          title: 'Your program has no training days yet 📅',
+          body: 'Pick the days you train and we will keep you on track from there.',
+          url: '/dashboard/calendar',
+          tag: 'schedule-setup',
+        }, () => {
+          UserProgress.updateOne(
+            { userId: progress.userId },
+            { $set: { 'lastPushSentAt.scheduleSetup': now } },
+          ).catch(() => {})
+        })
+      }
+    }
+  } catch (err) {
+    console.error('schedule-setup sweep failed:', err)
     results.errors++
   }
 
@@ -342,26 +736,22 @@ export async function GET(request: NextRequest) {
       results.skippedByWindow++
       continue
     }
-    try {
-      const sent = await sendPushToUser(String(u.userId), {
-        title: 'We miss you 👋',
-        body: 'Come back and keep building your best self.',
-        url: '/dashboard',
-        tag: 're-engagement',
-      })
-      if (sent.delivered > 0) {
-        UserProgress.updateOne(
-          { userId: u.userId },
-          { $set: { 'lastPushSentAt.reEngagement': now } },
-        ).catch(() => {})
-        results.reEngagement++
-      } else if (sent.attempted > 0) {
-        results.errors++
-      }
-    } catch {
-      results.errors++
-    }
+    await deliver(t.reEngagement, String(u.userId), {
+      title: 'We miss you 👋',
+      body: 'Come back and keep building your best self.',
+      url: '/dashboard',
+      tag: 're-engagement',
+    }, () => {
+      UserProgress.updateOne(
+        { userId: u.userId },
+        { $set: { 'lastPushSentAt.reEngagement': now } },
+      ).catch(() => {})
+    })
   }
 
-  return NextResponse.json({ success: true, ...results })
+  // Report qualified/delivered/noSubscription per type. A row that reads
+  // `qualified: 19, delivered: 0, noSubscription: 19` is the signal that the
+  // pipeline is fine and nobody has push enabled — previously indistinguishable
+  // from "nobody qualified".
+  return NextResponse.json({ success: true, notifications: t, ...results })
 }

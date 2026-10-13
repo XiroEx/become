@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getExerciseVideoUrl, getExerciseThumbnail } from "@/lib/data/exerciseVideos";
+import { getExerciseVideoDisplay, resolveExerciseVideo } from "@/lib/data/exerciseVideos";
+import CustomExerciseBadge from "@/components/workout/CustomExerciseBadge";
 import CollapsibleSection from "@/components/CollapsibleSection";
 import { useLockScroll } from "@/lib/useLockScroll";
 import FramedVideo from "@/components/FramedVideo";
+import CustomExerciseFields, { DEFAULT_CUSTOM_EXERCISE_VALUES, type CustomExerciseValues } from "@/components/workout/CustomExerciseFields";
+import UpgradeSheet from "@/components/UpgradeSheet";
+import { gateFrom, type GatePayload } from "@/lib/entitlementsClient";
 
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
@@ -33,6 +37,26 @@ interface AlternativeExercise {
   role: string;
   trackingType: string;
   isExplicitAlternative: boolean;
+  /** True for the caller's own exercises — drives the badge and the video. */
+  isCustom?: boolean;
+  /** A custom exercise keeps its demo on the Exercise doc, not in
+   *  exercise_videos, so it has to travel with the row. */
+  videoUrl?: string | null;
+}
+
+interface CatalogSearchResult {
+  slug: string;
+  name: string;
+  trackingType: string;
+  equipment?: string[];
+  primaryMuscles?: string[];
+  movementPatterns?: string[];
+  category?: string;
+  bodyRegion?: string;
+  role?: string;
+  difficulty?: string;
+  videoUrl?: string | null;
+  isCustom?: boolean;
 }
 
 interface SourceExercise {
@@ -155,43 +179,10 @@ interface Filters {
 
 // ─── Custom exercise create form state ──────────────────────────────────────
 
-interface CustomFormState {
-  name: string;
-  trackingType: string;
-  muscleGroup: string;
-  category: string;
-  defaultSets: string;
-  defaultReps: string;
+interface CustomFormState extends CustomExerciseValues {
   submitting: boolean;
   error: string | null;
 }
-
-const TRACKING_TYPE_OPTIONS = [
-  { value: "reps_weight",     label: "Sets × Reps + Weight",    hint: "e.g. Bench Press"       },
-  { value: "reps_bodyweight", label: "Sets × Reps (bodyweight)", hint: "e.g. Push-Ups"          },
-  { value: "reps_only",       label: "Reps Only",                hint: "e.g. Jumps"             },
-  { value: "time",            label: "Time / Duration",          hint: "e.g. Plank"             },
-  { value: "time_distance",   label: "Time + Distance",          hint: "e.g. Run, Row"          },
-  { value: "intervals",       label: "Intervals",                hint: "e.g. HIIT, EMOM"        },
-  { value: "none",            label: "No Tracking",              hint: "e.g. Rest, Cool-down"   },
-];
-
-const MUSCLE_GROUP_OPTIONS = [
-  { value: "chest",     label: "Chest"     },
-  { value: "back",      label: "Back"      },
-  { value: "shoulders", label: "Shoulders" },
-  { value: "arms",      label: "Arms"      },
-  { value: "core",      label: "Core"      },
-  { value: "legs",      label: "Legs"      },
-  { value: "full_body", label: "Full Body" },
-];
-
-const CATEGORY_OPTIONS = [
-  { value: "strength",     label: "Strength"     },
-  { value: "cardio",       label: "Cardio"       },
-  { value: "bodyweight",   label: "Bodyweight"   },
-  { value: "conditioning", label: "Conditioning" },
-];
 
 export default function ExerciseSwapModal({
   isOpen,
@@ -208,12 +199,13 @@ export default function ExerciseSwapModal({
   const [customExercises, setCustomExercises] = useState<AlternativeExercise[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [customForm, setCustomForm] = useState<CustomFormState>({
-    name: "", trackingType: "reps_weight", muscleGroup: "chest",
-    category: "strength", defaultSets: "3", defaultReps: "8-12",
+    ...DEFAULT_CUSTOM_EXERCISE_VALUES,
     submitting: false, error: null,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Out of free custom-exercise slots — shown as an upsell, not a form error.
+  const [gate, setGate] = useState<GatePayload | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState<Filters>({
     equipment: null,
@@ -304,7 +296,7 @@ export default function ExerciseSwapModal({
       setVariationsCache({});
       setSelectedVariants({});
       setShowCreateForm(false);
-      setCustomForm({ name: "", trackingType: "reps_weight", muscleGroup: "chest", category: "strength", defaultSets: "3", defaultReps: "8-12", submitting: false, error: null });
+      setCustomForm({ ...DEFAULT_CUSTOM_EXERCISE_VALUES, submitting: false, error: null });
 
       // Load user's custom exercises
       const token = localStorage.getItem("token");
@@ -313,13 +305,15 @@ export default function ExerciseSwapModal({
           .then(r => r.ok ? r.json() : null)
           .then(data => {
             if (data?.exercises) {
-              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; }) => ({
+              setCustomExercises(data.exercises.map((e: { slug: string; name: string; trackingType: string; primaryMuscles: string[]; bodyRegion: string; category: string; equipment: string[]; movementPatterns?: string[]; difficulty?: string; role?: string; videoUrl?: string | null; }) => ({
                 slug: e.slug, name: e.name, score: 100, reasons: ["Your custom exercise"],
                 equipment: e.equipment || [], primaryMuscles: e.primaryMuscles || [],
-                movementPatterns: [], difficulty: "intermediate",
+                movementPatterns: e.movementPatterns || [], difficulty: e.difficulty || "intermediate",
                 category: e.category, bodyRegion: e.bodyRegion,
-                role: "accessory", trackingType: e.trackingType,
+                role: e.role || "accessory", trackingType: e.trackingType,
                 isExplicitAlternative: true,
+                isCustom: true,
+                videoUrl: e.videoUrl ?? null,
               })));
             }
           })
@@ -330,6 +324,64 @@ export default function ExerciseSwapModal({
       hasFetchedRef.current = false;
     }
   }, [isOpen, fetchAlternatives, exerciseSlug]);
+
+  // Full-catalog name search, merged into the scored alternatives below. The
+  // alternatives list is a similarity-scored shortlist relative to the
+  // exercise being replaced (movement pattern, muscles, equipment, etc.) — an
+  // exact-name match that scores too low (or was never fetched at all)
+  // couldn't be found by typing its name, which is exactly what pushed
+  // members to create duplicate custom exercises the real one already
+  // covered. This fetches the same full-catalog endpoint the "Add exercise"
+  // flow already uses, so a search here can never come up empty just because
+  // a candidate wasn't "similar enough".
+  const [catalogMatches, setCatalogMatches] = useState<AlternativeExercise[] | null>(null);
+  const catalogSeq = useRef(0);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setCatalogMatches(null);
+      return;
+    }
+    const mySeq = ++catalogSeq.current;
+    const timer = setTimeout(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+        const res = await fetch(`/api/exercises/search?q=${encodeURIComponent(q)}&limit=30`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (mySeq !== catalogSeq.current) return;
+        if (!res.ok) { setCatalogMatches([]); return; }
+        const data = (await res.json()) as { exercises?: CatalogSearchResult[] };
+        if (mySeq !== catalogSeq.current) return;
+        const excluded = new Set([exerciseSlugRef.current, ...workoutSlugsRef.current]);
+        const mapped: AlternativeExercise[] = (data.exercises ?? [])
+          .filter((e) => !excluded.has(e.slug))
+          .map((e) => ({
+            slug: e.slug,
+            name: e.name,
+            score: 0,
+            reasons: ["Matches your search"],
+            equipment: e.equipment ?? [],
+            primaryMuscles: e.primaryMuscles ?? [],
+            movementPatterns: e.movementPatterns ?? [],
+            difficulty: e.difficulty ?? "intermediate",
+            category: e.category ?? "strength",
+            bodyRegion: e.bodyRegion ?? "full_body",
+            role: e.role ?? "accessory",
+            trackingType: e.trackingType,
+            isExplicitAlternative: false,
+            isCustom: e.isCustom ?? false,
+            videoUrl: e.videoUrl ?? null,
+          }));
+        setCatalogMatches(mapped);
+      } catch {
+        if (mySeq === catalogSeq.current) setCatalogMatches([]);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Fetch variations when a card is expanded (cached per slug)
   useEffect(() => {
@@ -366,12 +418,29 @@ export default function ExerciseSwapModal({
     }
   }, [searchQuery, filters]);
 
+  // Merge the similarity-scored shortlist with any full-catalog name match
+  // not already in it, so a search never comes up empty just because the
+  // target exercise wasn't "similar enough" to score into the top 30.
+  const searchCandidates = useMemo(() => {
+    if (!catalogMatches) return alternatives;
+    const bySlug = new Map(alternatives.map((alt) => [alt.slug, alt]));
+    for (const match of catalogMatches) {
+      if (!bySlug.has(match.slug)) bySlug.set(match.slug, match);
+    }
+    return [...bySlug.values()];
+  }, [alternatives, catalogMatches]);
+
   // Filter & search
-  const filteredAlternatives = alternatives.filter((alt) => {
+  const filteredAlternatives = searchCandidates.filter((alt) => {
     // Search query
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      // A full-catalog match was already matched server-side (name or
+      // alias) — don't re-run the client substring check against it, since
+      // an alias match wouldn't necessarily contain `q` in the name field.
+      const isCatalogMatch = catalogMatches?.some((m) => m.slug === alt.slug) ?? false;
       if (
+        !isCatalogMatch &&
         !alt.name.toLowerCase().includes(q) &&
         !alt.equipment.some((e) => formatEquipment(e).toLowerCase().includes(q)) &&
         !alt.primaryMuscles.some((m) => formatMuscle(m).toLowerCase().includes(q))
@@ -404,10 +473,10 @@ export default function ExerciseSwapModal({
   });
 
   // Collect unique values for filter options
-  const equipmentOptions = [...new Set(alternatives.flatMap((a) => a.equipment))].sort();
-  const bodyRegionOptions = [...new Set(alternatives.map((a) => a.bodyRegion))].sort();
-  const difficultyOptions = [...new Set(alternatives.map((a) => a.difficulty))].sort();
-  const categoryOptions = [...new Set(alternatives.map((a) => a.category))].sort();
+  const equipmentOptions = [...new Set(searchCandidates.flatMap((a) => a.equipment))].sort();
+  const bodyRegionOptions = [...new Set(searchCandidates.map((a) => a.bodyRegion))].sort();
+  const difficultyOptions = [...new Set(searchCandidates.map((a) => a.difficulty))].sort();
+  const categoryOptions = [...new Set(searchCandidates.map((a) => a.category))].sort();
 
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
@@ -437,7 +506,7 @@ export default function ExerciseSwapModal({
 
 
   const handleCreateCustom = async () => {
-    const { name, trackingType, muscleGroup, category, defaultSets, defaultReps } = customForm;
+    const { name } = customForm;
     if (!name.trim()) {
       setCustomForm(p => ({ ...p, error: "Name is required" }));
       return;
@@ -448,10 +517,16 @@ export default function ExerciseSwapModal({
       const res = await fetch("/api/exercises/custom", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name, trackingType, muscleGroup, category, defaultSets, defaultReps }),
+        body: JSON.stringify(customForm),
       });
       const data = await res.json();
       if (!res.ok) {
+        const g = gateFrom(res.status, data);
+        if (g) {
+          setCustomForm(p => ({ ...p, submitting: false }));
+          setGate(g);
+          return;
+        }
         setCustomForm(p => ({ ...p, submitting: false, error: data.error || "Failed to create" }));
         return;
       }
@@ -459,7 +534,7 @@ export default function ExerciseSwapModal({
       onSwap({
         slug: ex.slug, name: ex.name, score: 100, reasons: ["Custom exercise"],
         equipment: ex.equipment || [], primaryMuscles: ex.primaryMuscles || [],
-        movementPatterns: [], difficulty: ex.difficulty,
+        movementPatterns: ex.movementPatterns || [], difficulty: ex.difficulty,
         category: ex.category, bodyRegion: ex.bodyRegion,
         role: ex.role, trackingType: ex.trackingType,
         isExplicitAlternative: true,
@@ -474,6 +549,7 @@ export default function ExerciseSwapModal({
 
   return (
     <AnimatePresence>
+      <UpgradeSheet key="swap-upgrade" open={!!gate} gate={gate} onClose={() => setGate(null)} />
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -646,106 +722,11 @@ export default function ExerciseSwapModal({
                     <p className="text-sm font-semibold text-zinc-800 dark:text-white">Create Custom Exercise</p>
                   </div>
 
-                  {/* Name */}
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Cable Face Pull"
-                      value={customForm.name}
-                      onChange={e => setCustomForm(p => ({ ...p, name: e.target.value }))}
-                      className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
-                    />
-                  </div>
-
-                  {/* Tracking Type */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Tracking Type</label>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {TRACKING_TYPE_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, trackingType: opt.value }))}
-                          className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                            customForm.trackingType === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                          }`}
-                        >
-                          <span className="font-medium">{opt.label}</span>
-                          <span className="text-zinc-400 dark:text-zinc-500">{opt.hint}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Muscle Group */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Primary Muscles</label>
-                    <div className="flex flex-wrap gap-2">
-                      {MUSCLE_GROUP_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, muscleGroup: opt.value }))}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            customForm.muscleGroup === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Category */}
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Category</label>
-                    <div className="flex flex-wrap gap-2">
-                      {CATEGORY_OPTIONS.map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setCustomForm(p => ({ ...p, category: opt.value }))}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                            customForm.category === opt.value
-                              ? "border-green-500 bg-green-50 text-green-700 dark:border-green-500 dark:bg-green-950/30 dark:text-green-300"
-                              : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Sets + Reps/Duration */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Default Sets</label>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="1"
-                        max="10"
-                        value={customForm.defaultSets}
-                        onChange={e => setCustomForm(p => ({ ...p, defaultSets: e.target.value }))}
-                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                        {["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "Duration (e.g. 30s)" : "Reps (e.g. 8-12)"}
-                      </label>
-                      <input
-                        type="text"
-                        placeholder={["time", "time_distance", "intervals"].includes(customForm.trackingType) ? "30s" : "8-12"}
-                        value={customForm.defaultReps}
-                        onChange={e => setCustomForm(p => ({ ...p, defaultReps: e.target.value }))}
-                        className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-center text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                      />
-                    </div>
-                  </div>
+                  <CustomExerciseFields
+                    values={customForm}
+                    onChange={(next) => setCustomForm(p => ({ ...p, ...next }))}
+                    nameAutoFocus
+                  />
 
                   {customForm.error && (
                     <p className="text-xs text-red-500 dark:text-red-400">{customForm.error}</p>
@@ -823,7 +804,7 @@ export default function ExerciseSwapModal({
 
                 {!loading && !error && (
                   <CollapsibleSection
-                    title="Top Suggestions"
+                    title={searchQuery.trim().length >= 2 ? "Results" : "Top Suggestions"}
                     items={filteredAlternatives}
                     key={sectionResetKey}
                     keyFor={(alt) => alt.slug}
@@ -969,7 +950,11 @@ function AlternativeCard({
               <h3 className="font-semibold text-zinc-900 dark:text-white truncate text-sm">
                 {displayName}
               </h3>
-              {alt.isExplicitAlternative && (
+              {alt.isCustom && <CustomExerciseBadge variant="inline" />}
+              {/* "Recommended" is meaningless on your own exercise — every
+                  custom row is flagged as an explicit alternative so it sorts
+                  to the top, which would badge all of them. */}
+              {alt.isExplicitAlternative && !alt.isCustom && (
                 <span className="shrink-0 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                   Recommended
                 </span>
@@ -1016,7 +1001,7 @@ function AlternativeCard({
           >
             <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
               {/* Exercise video */}
-              <ExerciseVideoPreview exerciseName={displayName} />
+              <ExerciseVideoPreview exerciseName={displayName} exerciseVideoUrl={alt.videoUrl} />
 
               {/* Match reasons */}
               <div className="flex flex-wrap gap-1.5 mb-3">
@@ -1153,17 +1138,37 @@ function AlternativeCard({
 
 // ─── Exercise Video Preview ──────────────────────────────────────────────────
 
-function ExerciseVideoPreview({ exerciseName }: { exerciseName: string }) {
-  const videoUrl = getExerciseVideoUrl(exerciseName);
-  const thumbnailUrl = getExerciseThumbnail(exerciseName);
+function ExerciseVideoPreview({
+  exerciseName,
+  exerciseVideoUrl,
+}: {
+  exerciseName: string;
+  /** The video denormalized onto the exercise — authoritative when present. */
+  exerciseVideoUrl?: string | null;
+}) {
+  const resolved = resolveExerciseVideo(
+    { videoUrl: exerciseVideoUrl },
+    getExerciseVideoDisplay(exerciseName)
+  );
+  const { videoUrl, thumbnailUrl } = resolved;
+
+  // Nothing to show. Previously a hash-picked placeholder clip played here, so
+  // every swap candidate looked like it had a demo.
+  if (!videoUrl) return null;
+
   // Direct = any local or remote URL ending in a known video extension (the
   // old `startsWith('/')` check excluded /api/blob proxy URLs).
-  const isDirectVideo = DIRECT_VIDEO_FILE.test(videoUrl);
-
-  if (isDirectVideo) {
+  if (DIRECT_VIDEO_FILE.test(videoUrl)) {
     return (
       <div className="mb-3">
-        <FramedVideo src={videoUrl} surface="preview" />
+        <FramedVideo
+          src={videoUrl}
+          surface="preview"
+          videoWidth={resolved.videoWidth}
+          videoHeight={resolved.videoHeight}
+          videoFraming={resolved.videoFraming}
+          videoTrim={resolved.videoTrim}
+        />
       </div>
     );
   }
@@ -1178,7 +1183,7 @@ function YouTubePreview({
   exerciseName,
 }: {
   videoUrl: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string | null;
   exerciseName: string;
 }) {
   const [playing, setPlaying] = useState(false);

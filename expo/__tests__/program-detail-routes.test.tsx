@@ -2,10 +2,15 @@
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
+const mockOpenWebSignedIn = jest.fn();
 let mockParams: Record<string, string | undefined> = {};
 jest.mock("expo-router", () => ({
   useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
   useLocalSearchParams: () => mockParams,
+}));
+
+jest.mock("@/lib/web/openWebSignedIn", () => ({
+  openWebSignedIn: (path: string) => mockOpenWebSignedIn(path),
 }));
 
 const mockToken = "test-jwt";
@@ -33,9 +38,9 @@ import {
   toProgramDetailViewModel,
   toWorkoutOverview,
 } from "@/lib/programs/programDetail";
-import ProgramDetailRoute from "../app/(tabs)/programming/[id]/index";
-import PhaseRoute from "../app/(tabs)/programming/[id]/phase/[phase]";
-import WorkoutOverviewRoute from "../app/(tabs)/programming/[id]/workout/[idx]/index";
+import ProgramDetailRoute from "../app/(app)/(tabs)/programming/[id]/index";
+import PhaseRoute from "../app/(app)/(tabs)/programming/[id]/phase/[phase]";
+import WorkoutOverviewRoute from "../app/(app)/(tabs)/programming/[id]/workout/[idx]/index";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
@@ -117,11 +122,14 @@ describe("programDetail mappers", () => {
         weekEnd: 4,
       }),
     );
-    expect(vm.phases[0]!.workouts[0]).toEqual({
-      workoutIndex: 0,
-      title: "Push A",
-      exerciseCount: 2,
-    });
+    expect(vm.phases[0]!.workouts[0]).toEqual(
+      expect.objectContaining({
+        workoutIndex: 0,
+        day: "Day 1",
+        title: "Push A",
+        exerciseCount: 2,
+      }),
+    );
   });
 
   it("toWorkoutOverview slices the right workout", () => {
@@ -166,6 +174,177 @@ describe("ProgramDetailRoute", () => {
     expect(getByTestId("program-detail-phase-0")).toBeTruthy();
     expect(getByTestId("program-detail-phase-1")).toBeTruthy();
   });
+
+  it("(id: e015c83f) An enrolled member sees Continue, completed days checked and the first incomplete day selected, matching the web", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+            },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts/logs?programId=prog-1")) {
+        return Promise.resolve({
+          logs: [
+            { day: "Day 1", completed: true, date: "2026-09-29T10:00:00Z" },
+            { day: "Day 2", completed: false, date: "2026-09-30T10:00:00Z" },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts?")) {
+        return Promise.resolve({ isResume: false, workout: null });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, queryByTestId, getByText } = render(
+      <ProgramDetailRoute />,
+    );
+
+    // 1. Enrolled member sees Continue (not Enroll / Start Program)
+    await waitFor(() => {
+      expect(getByTestId("program-detail-continue")).toBeTruthy();
+    });
+    expect(getByText("Continue")).toBeTruthy();
+    expect(queryByTestId("program-detail-start")).toBeNull();
+
+    // 2. Completed day is checked (Day 1 completed: true)
+    await waitFor(() => {
+      expect(getByTestId("program-detail-day-check-Day 1")).toBeTruthy();
+    });
+    // Incomplete day is NOT checked (Day 2 completed: false)
+    expect(queryByTestId("program-detail-day-check-Day 2")).toBeNull();
+
+    // 3. First incomplete day in active phase is selected by default (Day 2)
+    // Workout title shows Day 2 workout: "Pull A"
+    expect(getByTestId("program-detail-workout-title").props.children).toBe(
+      "Pull A",
+    );
+
+    // 4. Pressing Continue routes to the TRACK VIEW on the day the schedule
+    //    says is next (NP-087): every set on one screen, with Live on the
+    //    toggle, as `/dashboard/workout/{id}/workout?day=Day 1` is on the web.
+    fireEvent.press(getByTestId("program-detail-continue"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=0&day=Day%201",
+    );
+  });
+
+  it("(id: e015c840) A member with a workout in progress sees the in-progress state and resumes it", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+            },
+          ],
+        });
+      }
+      if (path.startsWith("/api/workouts/logs?programId=prog-1")) {
+        return Promise.resolve({ logs: [] });
+      }
+      if (path.startsWith("/api/workouts?")) {
+        return Promise.resolve({
+          isResume: true,
+          workout: {
+            kind: "program",
+            programId: "prog-1",
+            day: "Day 1",
+            phase: 1,
+          },
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, getByText, queryByTestId } = render(
+      <ProgramDetailRoute />,
+    );
+
+    // In-progress workout is displayed as "Resume"
+    await waitFor(() => {
+      expect(getByTestId("program-detail-resume")).toBeTruthy();
+    });
+    expect(getByText("Resume")).toBeTruthy();
+    expect(queryByTestId("program-detail-workout-live")).toBeNull();
+
+    // Resuming opens live workout route directly
+    fireEvent.press(getByTestId("program-detail-resume"));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=0&day=Day%201",
+    );
+  });
+
+  it("(id: e015c841) No native screen links to /dashboard/programming/*", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { queryByTestId, queryByText } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-edit-in-browser")).toBeNull();
+    });
+    expect(queryByText("Edit in browser")).toBeNull();
+    expect(queryByText("Edit on web")).toBeNull();
+  });
+
+  it("(id: e015c9b9) Custom owned program shows Edit and opens the native builder", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") {
+        return Promise.resolve({
+          ...PROGRAM,
+          isCustom: true,
+          isOwner: true,
+        });
+      }
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { getByTestId } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(getByTestId("program-detail-edit")).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId("program-detail-edit"));
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/prog-1/edit");
+    expect(mockOpenWebSignedIn).not.toHaveBeenCalled();
+  });
+
+  it("Custom program shared by trainer does not show Edit button", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") {
+        return Promise.resolve({
+          ...PROGRAM,
+          isCustom: true,
+          isOwner: false,
+        });
+      }
+      return Promise.resolve({ activePrograms: [] });
+    });
+
+    const { queryByTestId } = render(<ProgramDetailRoute />);
+
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-edit")).toBeNull();
+    });
+  });
 });
 
 describe("ProgramDetailRoute mutations", () => {
@@ -182,13 +361,19 @@ describe("ProgramDetailRoute mutations", () => {
     });
   });
 
-  it("enroll POSTs /api/programs/enroll {programId} and refetches active", async () => {
+  it("enroll opens dialog, POSTs /api/programs/enroll {programId, startDate}, refetches active and routes to schedule", async () => {
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() => expect(getByTestId("program-detail-start")).toBeTruthy());
     const activeBefore = getsTo("/api/programs/active").length;
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-start"));
+    });
+
+    await waitFor(() => expect(getByTestId("enroll-modal-confirm")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("enroll-modal-confirm"));
     });
 
     await waitFor(() => {
@@ -198,16 +383,43 @@ describe("ProgramDetailRoute mutations", () => {
     expect(call[2]).toEqual(
       expect.objectContaining({
         method: "POST",
-        body: { programId: "prog-1" },
+        body: expect.objectContaining({
+          programId: "prog-1",
+          startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        }),
         baseUrl: WEBAPP_BASE_URL,
       }),
     );
     await waitFor(() => {
       expect(getsTo("/api/programs/active").length).toBeGreaterThan(activeBefore);
     });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming/prog-1/schedule");
   });
 
-  it("start-date PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
+  it("start-date opens dialog, PUTs /api/programs/start-date {programId, startDate} and refetches active", async () => {
+    // The start-date link only renders inside the enrolled block (NP-284
+    // gates it on `activeProgram`, matching the web), so this needs an
+    // actual enrollment mocked — not the describe block's default `[]`.
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() =>
       expect(getByTestId("program-detail-set-start-date")).toBeTruthy(),
@@ -216,6 +428,14 @@ describe("ProgramDetailRoute mutations", () => {
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-set-start-date"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("change-start-date-save")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("change-start-date-save"));
     });
 
     await waitFor(() => {
@@ -236,13 +456,54 @@ describe("ProgramDetailRoute mutations", () => {
     });
   });
 
-  it("abandon POSTs /api/programs/abandon {programId} and refetches active", async () => {
+  it("(id: e015c92f) Abandon asks for confirmation, requires typing 'abandon' when progress exists, POSTs /api/programs/abandon and routes to workout tab", async () => {
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
     const { getByTestId } = render(<ProgramDetailRoute />);
     await waitFor(() => expect(getByTestId("program-detail-abandon")).toBeTruthy());
     const activeBefore = getsTo("/api/programs/active").length;
 
     await act(async () => {
       fireEvent.press(getByTestId("program-detail-abandon"));
+    });
+
+    // Confirmation dialog opens and requires typing "abandon" because completedWorkouts: 1
+    await waitFor(() => {
+      expect(getByTestId("abandon-confirm-input")).toBeTruthy();
+    });
+
+    // Trying to press confirm before typing should not trigger POST
+    const initialPostCount = callsByPathMethod("/api/programs/abandon", "POST").length;
+    await act(async () => {
+      fireEvent.press(getByTestId("abandon-confirm"));
+    });
+    expect(callsByPathMethod("/api/programs/abandon", "POST").length).toBe(initialPostCount);
+
+    // Type "abandon" to enable confirmation
+    await act(async () => {
+      fireEvent.changeText(getByTestId("abandon-confirm-input"), "abandon");
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("abandon-confirm"));
     });
 
     await waitFor(() => {
@@ -259,6 +520,142 @@ describe("ProgramDetailRoute mutations", () => {
     await waitFor(() => {
       expect(getsTo("/api/programs/active").length).toBeGreaterThan(activeBefore);
     });
+    expect(mockPush).toHaveBeenCalledWith("/(tabs)/programming");
+  });
+
+  it("(id: e015c930) Pausing natively calls PATCH /api/schedule {action: 'pause'}, shows paused state, and resuming reverses it", async () => {
+    let programStatus: "in-progress" | "paused" = "in-progress";
+    mockApiFetch.mockImplementation((path: string, schema: unknown, opts: { method?: string; body?: { action?: string } }) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: programStatus,
+            },
+          ],
+        });
+      }
+      if (path === "/api/schedule" && opts?.method === "PATCH") {
+        if (opts.body?.action === "pause") {
+          programStatus = "paused";
+          return Promise.resolve({ message: "Program paused", programId: "prog-1" });
+        }
+        if (opts.body?.action === "resume") {
+          programStatus = "in-progress";
+          return Promise.resolve({ message: "Program resumed", programId: "prog-1" });
+        }
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId, queryByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-pause-resume")).toBeTruthy());
+    expect(queryByTestId("program-detail-paused-banner")).toBeNull();
+
+    // 1. Pause
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-pause-resume"));
+    });
+
+    await waitFor(() => {
+      const pauseCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "pause",
+      );
+      expect(pauseCalls.length).toBeGreaterThan(0);
+    });
+
+    // Now paused: paused banner visible
+    await waitFor(() => {
+      expect(getByTestId("program-detail-paused-banner")).toBeTruthy();
+    });
+
+    // 2. Resume
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-pause-resume"));
+    });
+
+    await waitFor(() => {
+      const resumeCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "resume",
+      );
+      expect(resumeCalls.length).toBeGreaterThan(0);
+    });
+
+    // Resumed: paused banner gone
+    await waitFor(() => {
+      expect(queryByTestId("program-detail-paused-banner")).toBeNull();
+    });
+  });
+
+  it("(id: e015c931) Shifting by 3 days opens dialog, calls PATCH /api/schedule with action: 'shift' and days: 3, and refetches active", async () => {
+    // The Delay Schedule link only renders inside the enrolled block
+    // (NP-284 gates it on `activeProgram`, matching the web).
+    mockApiFetch.mockImplementation((path: string) => {
+      if (path === "/api/programs/prog-1") return Promise.resolve(PROGRAM);
+      if (path === "/api/programs/active") {
+        return Promise.resolve({
+          activePrograms: [
+            {
+              programId: "prog-1",
+              programName: "Strength Foundation",
+              currentPhase: 1,
+              currentDay: "Day 1",
+              completedWorkouts: 1,
+              totalWorkouts: 4,
+              status: "in-progress",
+            },
+          ],
+        });
+      }
+      return Promise.resolve({ success: true });
+    });
+
+    const { getByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(getByTestId("program-detail-shift")).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(getByTestId("program-detail-shift"));
+    });
+
+    await waitFor(() => {
+      expect(getByTestId("shift-confirm")).toBeTruthy();
+      expect(getByTestId("shift-days-input").props.value).toBe("3");
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("shift-confirm"));
+    });
+
+    await waitFor(() => {
+      const shiftCalls = callsByPathMethod("/api/schedule", "PATCH").filter(
+        (c) => (c[2] as { body?: { action?: string } })?.body?.action === "shift",
+      );
+      expect(shiftCalls.length).toBeGreaterThan(0);
+      const call = shiftCalls[0]!;
+      const opts = call[2] as { body?: { programId?: string; action?: string; days?: number } };
+      expect(opts.body?.programId).toBe("prog-1");
+      expect(opts.body?.action).toBe("shift");
+      expect(opts.body?.days).toBe(3);
+    });
+  });
+
+  // NP-382: visual QA found a heart/favourite control on this header that the
+  // web's program detail page never has (the web's save toggle lives only on
+  // the programs list). The route no longer renders the control or calls
+  // /api/programs/saved from this screen.
+  it("renders no save/favourite heart, and never calls /api/programs/saved from this screen", async () => {
+    const { queryByTestId } = render(<ProgramDetailRoute />);
+    await waitFor(() => expect(queryByTestId("program-detail-name")).toBeTruthy());
+
+    expect(queryByTestId("program-detail-toggle-save")).toBeNull();
+    expect(getsTo("/api/programs/saved").length).toBe(0);
   });
 });
 
@@ -311,5 +708,41 @@ describe("WorkoutOverviewRoute", () => {
         "Push B",
       );
     });
+  });
+
+  // THE BUTTON THAT DID NOTHING: WorkoutOverview shipped with
+  // `onPress={onStartLive ?? (() => {})}` and this route rendered it without
+  // one, so the only control on the screen was inert. The prop is required
+  // now, and it opens the live screen for the SAME program, phase and index.
+  it("Start live workout opens the live screen for this program, phase and index", async () => {
+    mockParams = { id: "prog-1", idx: "1", phase: "0" };
+    const { getByTestId } = render(<WorkoutOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("workout-overview-title").props.children).toBe(
+        "Pull A",
+      );
+    });
+
+    fireEvent.press(getByTestId("workout-overview-start-live"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/1/live?phase=0&day=Day%202",
+    );
+  });
+
+  it("carries a non-zero phase through to the live screen", async () => {
+    mockParams = { id: "prog-1", idx: "0", phase: "1" };
+    const { getByTestId } = render(<WorkoutOverviewRoute />);
+    await waitFor(() => {
+      expect(getByTestId("workout-overview-title").props.children).toBe(
+        "Push B",
+      );
+    });
+
+    fireEvent.press(getByTestId("workout-overview-start-live"));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      "/(tabs)/programming/prog-1/workout/0/live?phase=1&day=Day%201",
+    );
   });
 });

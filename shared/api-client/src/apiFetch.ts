@@ -1,11 +1,31 @@
 import { z } from 'zod';
 import { ApiError, SchemaValidationError } from './errors';
-import { appendTz, detectTimezone } from './tz';
+import {
+  appendTz,
+  currentTzOffsetMinutes,
+  detectTimezone,
+  isDateScopedPath,
+  mergeTzIntoBody,
+  sendsTzInBody,
+} from './tz';
 
 export interface ApiFetchOptions {
   baseUrl?: string;
   getToken?: () => string | undefined | Promise<string | undefined>;
-  tz?: string | undefined;
+  /**
+   * `tz` override in MINUTES WEST OF UTC (`Date.getTimezoneOffset()` units, so
+   * New York in summer is 240). Leave unset in the app: the offset is read from
+   * the device clock on every request, because DST moves it. Injectable so a
+   * test does not depend on the machine's zone.
+   */
+  tz?: number | undefined;
+  /**
+   * IANA zone override, travelling as `tzZone` in write bodies only. Defaults
+   * to the device zone. Never sent as `tz` — the server reads that as a number.
+   */
+  tzZone?: string | undefined;
+  /** Clock injection point for tests. Defaults to `() => new Date()`. */
+  now?: () => Date;
   fetchImpl?: typeof fetch;
 }
 
@@ -32,7 +52,11 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
   const fetchImpl: typeof fetch = fetchCandidate;
 
   async function raw(path: string, init: ApiCallInit = {}): Promise<Response> {
-    const tz = options.tz ?? detectTimezone();
+    // Per request, never cached: a client left open across a DST transition
+    // would otherwise keep reporting the offset it started with.
+    const now = options.now ? options.now() : new Date();
+    const tz = options.tz ?? currentTzOffsetMinutes(now);
+    const tzZone = options.tzZone ?? detectTimezone();
     const pathWithTz = appendTz(path, tz);
     const fullUrl = options.baseUrl
       ? `${options.baseUrl.replace(/\/$/, '')}${pathWithTz}`
@@ -43,6 +67,7 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
       ...(init.headers ?? {}),
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    const method = init.method ?? (init.body !== undefined ? 'POST' : 'GET');
     let body: BodyInit | undefined;
     if (init.body !== undefined) {
       const raw = init.body;
@@ -54,13 +79,19 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
       ) {
         body = raw as BodyInit;
       } else {
-        body = JSON.stringify(raw);
+        // Write routes read `tz` (and the verifiable `tzZone`) from the JSON
+        // BODY, not the query — see webapp/lib/dayWindow.ts#readTzOffsetFromBody
+        // and captureUserTimezone. A caller who set either one keeps it.
+        const payload =
+          sendsTzInBody(method) && isDateScopedPath(path)
+            ? mergeTzIntoBody(raw, tz, tzZone)
+            : raw;
+        body = JSON.stringify(payload);
         if (!('Content-Type' in headers)) {
           headers['Content-Type'] = 'application/json';
         }
       }
     }
-    const method = init.method ?? (init.body !== undefined ? 'POST' : 'GET');
     const requestInit: RequestInit = { method, headers };
     if (body !== undefined) requestInit.body = body;
     if (init.signal) requestInit.signal = init.signal;
@@ -83,7 +114,9 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
       }
     }
     if (!response.ok) {
-      throw new ApiError(response.status, body);
+      // `Retry-After` travels with the error because a 429 is the one refusal
+      // that can say WHEN — see classifyApiError's `rate-limited`.
+      throw new ApiError(response.status, body, undefined, retryAfterOf(response));
     }
     const parsed = schema.safeParse(body);
     if (!parsed.success) {
@@ -93,6 +126,18 @@ export function createApiClient(options: ApiFetchOptions = {}): ApiClient {
   }
 
   return { call, raw };
+}
+
+/**
+ * The `Retry-After` header, or null. Defensive about `headers` because a test
+ * double is a plain object cast to `Response` and does not always have one.
+ */
+function retryAfterOf(response: Response): string | null {
+  try {
+    return response.headers?.get('Retry-After') ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function apiFetch<T>(

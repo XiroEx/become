@@ -337,7 +337,7 @@ export function getDailyPiece(state: MindState, offsetSeed = 0): ContentPiece {
   const dayOfYear = Math.floor(
     (Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24)
   )
-  return pool[(dayOfYear + offsetSeed) % pool.length]
+  return pool[(dayOfYear + offsetSeed) % pool.length]!
 }
 
 // Get all pieces for a section

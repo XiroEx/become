@@ -1,0 +1,285 @@
+// Dashboard fixes — verified against a LOCAL dev server pointed at the real DB
+// as jondon27500@gmail.com. Read-only for Jon: POST /api/checkin and POST
+// /api/mood are stubbed so nothing is written to his record.
+//
+//   PLAYWRIGHT_BASE_URL=http://localhost:3210 PLAYWRIGHT_AUTH_TOKEN=<jwt> \
+//     npx playwright test tests/e2e/dashboard-fixes.spec.ts
+
+import { test, expect, type Page } from '@playwright/test'
+import { readFileSync } from 'fs'
+
+const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3210'
+const TOKEN = process.env.PLAYWRIGHT_AUTH_TOKEN || readFileSync('/tmp/hb/local.token', 'utf8').trim()
+
+async function signIn(page: Page) {
+  const errs: string[] = []
+  // middleware.ts gates /dashboard on the auth_token COOKIE; the app itself
+  // reads the token from localStorage. Set both.
+  const u = new URL(BASE)
+  await page.context().addCookies([{ name: 'auth_token', value: TOKEN, domain: u.hostname, path: '/', httpOnly: false, secure: u.protocol === 'https:', sameSite: 'Lax' }])
+  page.on('pageerror', e => errs.push('PAGEERR ' + String(e).slice(0, 160)))
+  page.on('response', r => { if (r.status() >= 500) errs.push(`HTTP ${r.status()} ${r.url()}`) })
+  // Never write to Jon's real record from a test.
+  await page.route('**/api/checkin', route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
+    : route.continue())
+  await page.route('**/api/mood', route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 200, contentType: 'application/json', body: '{"success":true}' })
+    : route.continue())
+  await page.goto(`${BASE}/login`)
+  await page.evaluate((t) => localStorage.setItem('token', t), TOKEN)
+  await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {})
+  return errs
+}
+
+async function settle(page: Page) {
+  await page.locator('button[aria-label="Skip tour"]').first().click({ force: true }).catch(() => {})
+  await page.waitForTimeout(400)
+  // Daily check-in may pop; dismiss without writing (POST is stubbed).
+  const skip = page.locator('button:has-text("Skip for today"), button:has-text("Skip")').first()
+  if (await skip.isVisible().catch(() => false)) await skip.click({ force: true }).catch(() => {})
+  // The check-in asks "are you sure?" when nothing was logged today — confirm the skip (POST is stubbed).
+  const sure = page.locator('button:has-text("Continue Anyway")').first()
+  if (await sure.isVisible({ timeout: 800 }).catch(() => false)) await sure.click({ force: true }).catch(() => {})
+  await page.waitForTimeout(300)
+  await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {})
+}
+
+test.use({ viewport: { width: 390, height: 844 } })
+
+test('tiles tell the truth: This Week, Goal, Streak', async ({ page }) => {
+  const errs = await signIn(page)
+  await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' })
+  await page.waitForResponse(r => r.url().includes('/api/progress') && r.ok(), { timeout: 30_000 })
+  await settle(page)
+  await page.waitForTimeout(1500)
+
+  // The Becoming doorway is the first thing on the page.
+  const door = page.locator('[data-testid="becoming-door"]')
+  await expect(door).toBeVisible()
+  const doorText = (await door.innerText()).replace(/\s+/g, ' ')
+  console.log('DOOR  :', doorText)
+  expect(doorText).toMatch(/THE BECOMING/i)
+  expect(doorText).toMatch(/MIND/i); expect(doorText).toMatch(/NUTRITION/i); expect(doorText).toMatch(/TRAINING/i)
+  const doorBox = await door.boundingBox(); const tilesBox = await page.locator('[data-testid="tilegrid"]').boundingBox()
+  expect(doorBox!.y).toBeLessThan(tilesBox!.y)
+  expect(await door.getAttribute('href')).toBe('/dashboard/mind/becoming')
+
+  const weekly = page.locator('[data-tour="tile-weekly"]')
+  const goal = page.locator('[data-tour="tile-goal"]')
+  const streak = page.locator('[data-tour="tile-streak"]')
+  const weeklyText = (await weekly.innerText()).replace(/\s+/g, ' ')
+  const goalText = (await goal.innerText()).replace(/\s+/g, ' ')
+  const streakText = (await streak.innerText()).replace(/\s+/g, ' ')
+  console.log('WEEKLY:', weeklyText)
+  console.log('GOAL  :', goalText)
+  console.log('STREAK:', streakText)
+
+  // The tile has to agree with the endpoint it reads, not with a number written
+  // down here — this used to pin Jon's live week and broke every time he
+  // trained. (Deliberately /api/progress, not /api/streaks: the streak pillars
+  // also count admin-granted credits, so the two legitimately differ.)
+  const prog = await page.evaluate(async () => {
+    const res = await fetch(`/api/progress?tz=${new Date().getTimezoneOffset()}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+    })
+    return res.ok ? await res.json() : null
+  })
+  const doneThisWeek = prog?.stats?.thisWeekWorkouts
+  const target = prog?.weeklyAvailability ?? prog?.goal?.weeklyAvailability
+  expect(doneThisWeek, 'the progress endpoint answers').not.toBeUndefined()
+  expect(weeklyText).toContain(`${doneThisWeek}/${target}`)
+  expect(weeklyText).toContain(`${Math.max(0, target - doneThisWeek)} to weekly target`)
+  // Goal: build muscle, 3 lbs to 205.
+  expect(goalText).toMatch(/Goal · Build muscle/)
+  expect(goalText).toMatch(/3 lbs to go/)
+  expect(goalText).toMatch(/→ 205 lbs · (~\d wks?|\d+(\.\d)? lbs? behind)|208 → 205 lbs/)
+  expect(goalText).not.toMatch(/Annual/)
+  // The tile pages through every streak: a super streak leads (pulsing orange),
+  // otherwise the day streak does — "Building n/3" until it reaches three.
+  const sr = await page.request.get(`${BASE}/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streaks = sr.ok() ? await sr.json() : null
+  const superDays = Number(streaks?.pillars?.super?.current ?? 0)
+  const streakDays = Number(streaks?.overall?.current ?? 0)
+  expect(await page.locator('[data-testid="streak-tile"]').getAttribute('data-page')).toBe(superDays >= 3 ? 'super' : 'overall')
+  if (superDays >= 3) {
+    expect(streakText).toMatch(/Super Streak/)
+    expect(await page.locator('[data-testid="streak-super-value"]').innerText()).toBe(String(superDays))
+
+    // The fire has to be alight the moment the app opens. It is CSS, not JS,
+    // precisely so it does not wait for hydration — people on a cold start were
+    // seeing a photograph of a fire. Assert the browser is RUNNING the
+    // keyframes, and that a flame is in a different place a moment later.
+    const fire = await page.evaluate(() => {
+      const host = document.querySelector('[data-testid="fire-number"]')
+      const lick = host?.querySelector('.fire-lick')
+      const digits = host?.querySelector('.fire-digits')
+      const l = lick ? getComputedStyle(lick) : null
+      const d = digits ? getComputedStyle(digits) : null
+      return { flames: host?.querySelectorAll('.fire-lick').length ?? 0, name: l?.animationName, state: l?.animationPlayState, digits: d?.animationName }
+    })
+    console.log('FIRE:', JSON.stringify(fire))
+    expect(fire.flames, 'the number has flames').toBeGreaterThan(2)
+    expect(fire.name, 'the flames run a CSS animation').toBe('fire-lick')
+    expect(fire.state).toBe('running')
+    expect(fire.digits, 'the fire travels through the digits').toBe('fire-through')
+    const flameY = async () => (await page.locator('.fire-lick').first().boundingBox())?.y ?? 0
+    const y1 = await flameY(); await page.waitForTimeout(320); const y2 = await flameY()
+    expect(Math.abs(y2 - y1), 'the flame actually moves').toBeGreaterThan(0.5)
+  } else if (streakDays < 3) {
+    expect(streakText).toMatch(/Building/); expect(streakText).toMatch(new RegExp(`${streakDays}\\/3`))
+  } else {
+    expect(streakText).toMatch(new RegExp(`Day Streak ${streakDays}`))
+  }
+  // Paging: the dots move it to another streak without navigating away.
+  const dots = page.locator('[data-testid="streak-tile-dots"] button')
+  if (await dots.count() > 1) {
+    await dots.nth(1).click()
+    await page.waitForTimeout(500)
+    expect(page.url()).toContain('/dashboard')
+    expect(await page.locator('[data-testid="streak-tile"]').getAttribute('data-page')).not.toBe(superDays >= 3 ? 'super' : 'overall')
+  }
+
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-tiles.png' })
+  expect(errs, errs.join('\n')).toEqual([])
+})
+
+test('mood tile opens a sheet (not a clipped dropdown) and gateways to Mindset', async ({ page }) => {
+  const errs = await signIn(page)
+  await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' })
+  await page.waitForResponse(r => r.url().includes('/api/progress') && r.ok(), { timeout: 30_000 })
+  await settle(page)
+  await page.waitForTimeout(800)
+
+  await page.locator('[data-testid="mood-tile"]').click()
+  const sheet = page.locator('[data-testid="mood-sheet"]')
+  await expect(sheet).toBeVisible()
+  await page.waitForTimeout(700) // let the slide-up spring settle before measuring
+  // The whole sheet is on-screen (this is the bug: it used to be clipped away).
+  const box = await sheet.boundingBox()
+  expect(box).not.toBeNull()
+  expect(box!.y + box!.height).toBeLessThanOrEqual(844 + 1)
+  expect(box!.height).toBeGreaterThan(80)
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-mood-sheet.png' })
+
+  await page.locator('[data-testid="mood-option-1"]').click()
+  const gateway = page.locator('[data-testid="mood-gateway"]')
+  await expect(gateway).toBeVisible()
+  const gtext = (await gateway.innerText()).replace(/\s+/g, ' ')
+  console.log('GATEWAY:', gtext)
+  expect(gtext).toMatch(/Rough one/)
+  expect(gtext).toMatch(/Mindset/)
+  const cta = gateway.locator('a[href="/dashboard/mind"]')
+  await expect(cta).toBeVisible()
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-mood-gateway.png' })
+  expect(errs, errs.join('\n')).toEqual([])
+})
+
+test('mindset card shows real content, nutrition shows a trend, chart mood tab works, links compact', async ({ page }) => {
+  const errs = await signIn(page)
+  await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' })
+  await page.waitForResponse(r => r.url().includes('/api/mind/summary') && r.ok(), { timeout: 30_000 })
+  await settle(page)
+  await page.waitForTimeout(1200)
+
+  const mind = page.locator('[data-testid="mindset-card"]')
+  await mind.scrollIntoViewIfNeeded()
+  const mtext = (await mind.innerText()).replace(/\s+/g, ' ')
+  console.log('MINDSET:', mtext)
+  expect(mtext).toMatch(/Level \d+ · Chapter \d+/)
+  expect(mtext).toMatch(/\d+\/10 sessions/)
+  expect(mtext).toMatch(/mood check-in/)
+  expect(mtext).not.toMatch(/110 mood entries/)
+  expect(mtext).not.toMatch(/Track your mental wellness journey/)
+
+  const trend = page.locator('[data-testid="nutrition-trend"]')
+  await trend.scrollIntoViewIfNeeded()
+  const ttext = await trend.innerText()
+  console.log('NUTRITION TREND:', ttext)
+  expect(ttext).toMatch(/Last 7 days:/)
+  expect(ttext).toMatch(/logged \d of 7 days|Nothing logged/)
+
+  // Progress chart mood tab actually switches.
+  const chart = page.locator('[data-tour="progress-chart"]')
+  await chart.scrollIntoViewIfNeeded()
+  await chart.locator('button:has-text("Mood")').click()
+  await page.waitForTimeout(400)
+  const moodTabActive = await chart.locator('button:has-text("Mood")').evaluate(el => el.className.includes('bg-zinc-900') || el.className.includes('dark:bg-white'))
+  expect(moodTabActive).toBe(true)
+  const barCount = await chart.locator('.recharts-bar-rectangle').count()
+  console.log('MOOD BARS:', barCount)
+  expect(barCount).toBeGreaterThan(0)
+  // Weight tab has the target line.
+  await chart.locator('button:has-text("Weight")').click()
+  await page.waitForTimeout(400)
+  const goalLine = await chart.locator('text=/Goal 205 lbs/').count()
+  console.log('GOAL LINE on chart:', goalLine)
+  expect(goalLine).toBeGreaterThan(0)
+
+  // Quick links: 4 links, two per row.
+  const links = page.locator('a[href="/dashboard/workout"]:has-text("All Programs"), a[href="/dashboard/nutrition"]:has-text("Nutrition"), a[href="/dashboard/progress"]:has-text("Progress"), a[href="/dashboard/chat"]:has-text("Connect")')
+  expect(await links.count()).toBe(4)
+  const b1 = await links.nth(0).boundingBox(); const b2 = await links.nth(1).boundingBox()
+  expect(Math.abs(b1!.y - b2!.y)).toBeLessThan(4)
+
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-full.png', fullPage: true })
+  const h = await page.evaluate(() => document.documentElement.scrollHeight)
+  console.log('PAGE HEIGHT:', h)
+  expect(errs, errs.join('\n')).toEqual([])
+})
+
+test('streaks page renders every pillar with the 3-day rule', async ({ page }) => {
+  const errs = await signIn(page)
+  await page.goto(`${BASE}/dashboard/streaks`, { waitUntil: 'domcontentloaded' })
+  await page.waitForResponse(r => r.url().includes('/api/streaks') && r.ok(), { timeout: 30_000 })
+  await settle(page)
+  await page.waitForTimeout(600)
+  for (const id of ['streak-overall', 'streak-workout', 'streak-nutrition', 'streak-mindset', 'streak-super']) {
+    const t = (await page.locator(`[data-testid="${id}"]`).innerText()).replace(/\s+/g, ' ')
+    console.log(id.toUpperCase() + ':', t)
+    expect(t.length).toBeGreaterThan(10)
+  }
+  const overall = (await page.locator('[data-testid="streak-overall"]').innerText()).replace(/\s+/g, ' ')
+  const sr = await page.request.get(`${BASE}/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const streaks = sr.ok() ? await sr.json() : null
+  const streakDays = Number(streaks?.overall?.current ?? 0)
+  if (streakDays < 3) expect(overall).toMatch(/Building/); else expect(overall).toMatch(new RegExp(`${streakDays}\\s*days`))
+  const mindset = (await page.locator('[data-testid="streak-mindset"]').innerText()).replace(/\s+/g, ' ')
+  expect(mindset).toMatch(/\d+\s*days|Building/)
+  const workout = (await page.locator('[data-testid="streak-workout"]').innerText()).replace(/\s+/g, ' ')
+  const sw = streaks?.pillars?.workout
+  if (sw?.target) expect(workout).toMatch(new RegExp(`This week ${sw.thisWeek}\\/${sw.target}`))
+  else expect(workout).toMatch(/Set how many days a week/)
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-streaks.png', fullPage: true })
+  expect(errs, errs.join('\n')).toEqual([])
+})
+
+test('a mind session opener reads today\'s mood', async ({ page }) => {
+  const errs = await signIn(page)
+  await page.goto(`${BASE}/dashboard/mind`, { waitUntil: 'domcontentloaded' })
+  await settle(page)
+  await page.waitForTimeout(2500)
+  const begin = page.locator('button:has-text("Begin")').first()
+  if (!(await begin.isVisible().catch(() => false))) {
+    console.log('No Begin button visible (session done / training grounds) — opener check skipped')
+    return
+  }
+  await begin.click()
+  await page.waitForTimeout(2500)
+  // The player opens on its own title card with a second Begin.
+  const inner = page.locator('button:has-text("Begin")').first()
+  if (await inner.isVisible().catch(() => false)) { await inner.click(); await page.waitForTimeout(2500) }
+  const body = (await page.locator('body').innerText()).replace(/\s+/g, ' ')
+  const readsMood = /You checked in feeling|Welcome back/.test(body)
+  // Only expected when a mood was logged today (or a Mind check-in within 4h) — otherwise the plain grid is right.
+  const st = await page.request.get(`${BASE}/api/mind/state?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${TOKEN}` } })
+  const stJson = st.ok() ? await st.json() : {}
+  const recent = Array.isArray(stJson.logs) && stJson.logs[0] && Date.now() - new Date(stJson.logs[0].timestamp).getTime() < 4 * 3_600_000
+  const expectMood = !!stJson.todayMood || !!recent
+  console.log('OPENER reads mood/recent:', readsMood, '| expected:', expectMood, '|', body.slice(0, 160))
+  await page.screenshot({ path: 'tests/e2e/screenshots/dash-fixes-opener.png' })
+  if (expectMood) expect(readsMood).toBe(true)
+  else expect(body).toMatch(/Where are you right now/)
+  await page.goto(`${BASE}/dashboard`) // leave without completing anything
+  expect(errs.filter(e => !e.includes('/api/ai/')), errs.join('\n')).toEqual([])
+})

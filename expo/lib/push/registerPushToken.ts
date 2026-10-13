@@ -1,3 +1,5 @@
+import { setStoredPushToken } from "./pushTokenStore";
+
 export interface RegisterPushTokenOptions {
   token: string;
   jwt: string;
@@ -54,6 +56,7 @@ export async function registerPushToken(
     if (res) {
       lastStatus = res.status;
       if (res.ok) {
+        await setStoredPushToken(options.token);
         const result: RegisterPushTokenResult = { ok: true, attempts: attempt };
         if (lastStatus !== undefined) result.lastStatus = lastStatus;
         return result;

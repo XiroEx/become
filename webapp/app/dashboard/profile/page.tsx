@@ -11,6 +11,7 @@ import PageTransition from '@/components/PageTransition'
 import { BackButton } from '@/components/ui/BackButton'
 import Avatar from '@/components/Avatar'
 import IconPicker from '@/components/profile/IconPicker'
+import PlanRow from '@/components/profile/PlanRow'
 import { getToken } from '@/lib/clientAuth'
 import { Settings, ChevronRight, Sparkles, Loader2 } from 'lucide-react'
 import type { FitnessGoal } from '@/models/User'
@@ -144,6 +145,9 @@ export default function ProfilePage() {
 
       {/* Icon customizer */}
       <IconPicker />
+
+      {/* Plan — renders nothing until enforcement is on. */}
+      <PlanRow />
 
       {/* Settings link */}
       <Link

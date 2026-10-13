@@ -61,7 +61,19 @@ describe("useMutation", () => {
     });
     expect(spy.calls).toHaveLength(1);
     expect(spy.calls[0]!.init.method).toBe("POST");
-    expect(spy.calls[0]!.init.body).toBe(JSON.stringify({ weight: 175 }));
+    // /api/weight is date-scoped, so the shared client additionally merges
+    // `{ tz, tzZone }` into the write body (shared/api-client/src/tz.ts —
+    // writes carry tz in the body, reads on the query string). The caller's own
+    // fields travel untouched, which is what this assertion is about; asserting
+    // the exact serialisation instead made this test fail on a correct client.
+    const sent = JSON.parse(String(spy.calls[0]!.init.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(sent.weight).toBe(175);
+    expect(Object.keys(sent).sort()).toEqual(["tz", "tzZone", "weight"]);
+    expect(typeof sent.tz).toBe("number");
+    expect(typeof sent.tzZone).toBe("string");
   });
 
   it("error path: rejects, sets error, fires onError, rolls back optimistic data", async () => {

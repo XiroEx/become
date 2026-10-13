@@ -4,6 +4,8 @@ import dbConnect from '@/lib/mongodb'
 import Food, { IFood } from '@/models/Food'
 import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { requireQuota } from '@/lib/entitlementGuards'
+import { isVerifiedAdmin } from '@/lib/adminAuth'
 import { searchUSDA } from '@/lib/usda'
 import { stemMatch } from '@/lib/nutrition/foodMatch'
 import {
@@ -140,6 +142,10 @@ export async function GET(request: NextRequest) {
     const q = searchParams.get('q')
     const category = searchParams.get('category')
     const customOnly = searchParams.get('custom') === 'true'
+    // "Verified" = a food WE curated, not one mirrored from USDA/OpenFoodFacts.
+    // Those upstream records are where the bad servings and self-contradicting
+    // calories come from, so this is the escape hatch to a trusted subset.
+    const verifiedOnly = searchParams.get('verifiedOnly') === 'true'
     const limit = Math.min(parseInt(searchParams.get('limit') || '25', 10), 100)
     const offset = parseInt(searchParams.get('offset') || '0', 10)
 
@@ -150,6 +156,7 @@ export async function GET(request: NextRequest) {
     // on thousands of otherwise-fine foods. Spread into every query via baseFilter.
     const baseFilter: Record<string, unknown> = { hiddenFromSearch: { $ne: true } }
     if (category) baseFilter.category = category
+    if (verifiedOnly) baseFilter.isVerified = true
 
     // Fetch the user's saved-food id set once per request — used to flag results
     // and to bump them above other "from our DB" foods in the combined ranking.
@@ -167,7 +174,7 @@ export async function GET(request: NextRequest) {
 
     if (!q) {
       const foods = await Food.find(baseFilter)
-        .sort({ isFirstClass: -1, usageCount: -1 })
+        .sort({ isFirstClass: -1, usageCount: -1, _id: 1 })
         .skip(offset)
         .limit(limit)
         .lean<FoodLean[]>()
@@ -196,7 +203,7 @@ export async function GET(request: NextRequest) {
 
     const textFilter = { ...baseFilter, $text: { $search: q } }
     const textResults = await Food.find(textFilter, { score: { $meta: 'textScore' } })
-      .sort({ score: { $meta: 'textScore' }, isFirstClass: -1, usageCount: -1 })
+      .sort({ score: { $meta: 'textScore' }, isFirstClass: -1, usageCount: -1, _id: 1 })
       .limit(customLimit)
       .lean<FoodLean[]>()
 
@@ -209,7 +216,7 @@ export async function GET(request: NextRequest) {
       ],
     }
     const regexResults = await Food.find(regexFilter)
-      .sort({ isFirstClass: -1, usageCount: -1 })
+      .sort({ isFirstClass: -1, usageCount: -1, _id: 1 })
       .limit(customLimit)
       .lean<FoodLean[]>()
 
@@ -272,26 +279,30 @@ export async function GET(request: NextRequest) {
     }
 
     // --- 2. USDA (primary external source) ---
+    // Skipped entirely under verifiedOnly — nothing upstream is ours, so
+    // querying it would only cost latency and then be filtered away.
 
-    const usdaResults = await searchUSDA(q, 15)
+    const usdaResults = verifiedOnly ? [] : await searchUSDA(q, 15)
 
     // --- 3. Open Food Facts (supplemental for packaged goods) ---
 
     let offFoods: ReturnType<typeof mapOffToFoodResult>[] = []
-    try {
-      const offCollection = mongoose.connection.db!.collection('openfoodfacts')
-      const offFilter: Record<string, unknown> = { $text: { $search: q } }
-      if (category) offFilter.category = category
+    if (!verifiedOnly) {
+      try {
+        const offCollection = mongoose.connection.db!.collection('openfoodfacts')
+        const offFilter: Record<string, unknown> = { $text: { $search: q } }
+        if (category) offFilter.category = category
 
-      const offResults = await offCollection
-        .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
-        .sort({ score: { $meta: 'textScore' } })
-        .limit(15)
-        .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
+        const offResults = await offCollection
+          .find(offFilter, { projection: { score: { $meta: 'textScore' } } })
+          .sort({ score: { $meta: 'textScore' } })
+          .limit(15)
+          .toArray() as unknown as (IOpenFoodFact & { _id: mongoose.Types.ObjectId })[]
 
-      offFoods = offResults.map(mapOffToFoodResult)
-    } catch {
-      // OFF collection might not exist — fail gracefully
+        offFoods = offResults.map(mapOffToFoodResult)
+      } catch {
+        // OFF collection might not exist — fail gracefully
+      }
     }
 
     // Combine: our DB → USDA → OFF
@@ -441,6 +452,22 @@ export async function GET(request: NextRequest) {
     const scored = combined.map(item => ({
       item,
       covered: coveredCount(item.name, item.brand),
+      // Hard tier, ABOVE relevance: a food we curated and verified outranks any
+      // mirrored USDA/OFF record, always. The old `src` rank expressed this
+      // intent but only as a tie-break on EXACT relevance equality, which a
+      // continuous score essentially never produces — so in practice an
+      // upstream record with a shorter name beat our own entry every time
+      // ("Chicken" over "Chicken Breast"). The -500 isFirstClass bonus had the
+      // same weakness: a bonus competes with relevance, a tier does not.
+      //
+      // Safe because the precision filter runs FIRST: when the query fully
+      // matches something, non-matching results are already gone, so this can
+      // only reorder genuine candidates. It never lifts an unrelated verified
+      // food above a precise brand match.
+      // Saved ("My Foods") outranks even verified, per user: a food you
+      // deliberately saved is the one you meant, so it belongs at the top of
+      // YOUR results. Verified is the floor under everything else.
+      tier: item.isSaved === true ? 0 : item.isVerified === true ? 1 : 2,
       rel: relevanceScore(item.name, item.brand, item.dataType)
         - (item.isFirstClass ? 500 : 0)
         + groupServingPenalty(item),
@@ -469,10 +496,28 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Relevance-dominant ordering: full-coverage, simplest-name results first;
-    // source (saved → our DB → USDA → OFF) only breaks ties within the same
-    // relevance.
-    kept.sort((a, b) => (a.rel !== b.rel ? a.rel - b.rel : a.src - b.src))
+    // Saved first, then verified, then relevance-dominant ordering within each
+    // tier, with
+    // source (saved → our DB → USDA → OFF) breaking remaining ties.
+    //
+    // The last two keys exist because relevance does NOT separate a set of
+    // equally-shaped names: "Chicken Breast", "Chicken Thigh", "Chicken
+    // Nuggets" and "Fried Chicken" all cover the query "chicken" with the same
+    // word count, so they scored identically and the order came out ARBITRARY —
+    // literally a different chicken on top between two runs of the same query.
+    // Falling through to usage and then to the name makes it deterministic, and
+    // prefers the food people actually log over an incidental one.
+    kept.sort((a, b) =>
+      a.tier !== b.tier
+        ? a.tier - b.tier
+        : a.rel !== b.rel
+          ? a.rel - b.rel
+          : a.src !== b.src
+            ? a.src - b.src
+            : (b.item.usageCount ?? 0) !== (a.item.usageCount ?? 0)
+              ? (b.item.usageCount ?? 0) - (a.item.usageCount ?? 0)
+              : String(a.item.name ?? '').localeCompare(String(b.item.name ?? '')),
+    )
 
     const sortedFoods = kept.map(s => s.item)
     const paged = sortedFoods.slice(offset, offset + limit)
@@ -634,6 +679,17 @@ async function backgroundImportExternals(
 
 // ---------------------------------------------------------------------------
 // POST: Create a custom food in our DB
+//
+// Quota-gated (free tier: 3 authored foods, counted live). The count reads
+// `Food.authoredBy`, which ONLY the gated create surfaces stamp — this route
+// and the two save-as-food routes.
+//
+// It cannot read `{ source: 'manual', createdBy }` instead: POST
+// /api/nutrition/foods/import also accepts `source: 'manual'`, and it plus the
+// barcode scanner's live-OpenFoodFacts path materialise a search hit through
+// importManualFood so it can be LOGGED. Both must stay ungated or free members
+// lose food logging entirely, so both would otherwise be a way around this
+// quota AND a way to burn it on rows the member never authored.
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
@@ -643,6 +699,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const quota = await requireQuota(request, 'custom-foods')
+    if (!quota.ok) return quota.response
+
     const body = await request.json()
 
     if (!body.name || !body.category) {
@@ -651,10 +710,26 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
-    const { food, created } = await importManualFood(body, authResult.userId)
+    // Confirmed against the database: the token claim alone would let a demoted
+    // admin keep minting first-class catalog rows for the life of their
+    // session. Resolved before the import because it also decides whether
+    // `body.barcode` is honoured.
+    const isAdmin = await isVerifiedAdmin(authResult)
 
-    // Admins may upgrade isVerified / isFirstClass / usageCount
-    const isAdmin = authResult.role === 'admin'
+    // `authored: true` is what makes the row count against the quota checked
+    // above. It is passed here, never read from `body` — a client that could
+    // omit it would create uncounted foods forever.
+    //
+    // `trustedBarcode` is the same idea for `body.barcode`: the barcode is a
+    // unique global key that GET /api/nutrition/foods/barcode resolves ahead of
+    // OpenFoodFacts and USDA, so a member who could set it here would own every
+    // scan of that real product. Dropped for members, kept for admins.
+    const { food, created } = await importManualFood(body, authResult.userId, {
+      authored: true,
+      trustedBarcode: isAdmin,
+    })
+
+    // Admins may upgrade isVerified / isFirstClass / usageCount.
     if (isAdmin) {
       const updates: Record<string, unknown> = {}
       if (typeof body.isVerified === 'boolean') updates.isVerified = body.isVerified

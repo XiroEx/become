@@ -6,8 +6,9 @@
 // route exists so the seam is complete when the vision neuron lands.)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { triggerBecomeTask } from '@/lib/ai/becomeGraph'
-import { requireAiUser, asText } from '@/lib/ai/routeHelpers'
+import { requireAiUser, triggerOwnedRun, asText } from '@/lib/ai/routeHelpers'
+import { requireAiAllowance, withAllowance } from '@/lib/ai/allowance'
+import { requireAiConsent } from '@/lib/aiConsent'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 180
@@ -25,15 +26,37 @@ export async function POST(request: NextRequest) {
 
   const text = asText(body.text, 300)
   const image = typeof body.image === 'string' ? body.image : ''
+  // What was wrong with the last read of this label. Only a request carrying
+  // one can spend a follow-up rather than a fresh scan.
+  const note = asText(body.note, 500)
   if (!text.trim() && !image) return NextResponse.json({ error: 'Missing query' }, { status: 400 })
 
+  // EXPLICIT PERMISSION, BEFORE ANYTHING LEAVES THE APP (App Store 5.1.2(i)).
+  // Asked before the charge below, so a member who has not agreed never pays an
+  // allowance unit to be told so — and asked HERE, on the route that actually
+  // dispatches, because the dispatch is what shares the data.
+  // lib/aiConsent.ts fails CLOSED: no record, no send.
+  const consent = await requireAiConsent(gate.user)
+  if (!consent.ok) return consent.response
+
+  // Label-photo lookup is a vision call on the same daily allowance as the
+  // plate scan — the member sees one "scan something" feature, so it is priced
+  // as one.
+  const allow = await requireAiAllowance(gate.user, 'ai-food-estimate', {
+    followUpTicket: body.allowanceTicket,
+    refines: Boolean(note.trim()),
+  })
+  if (!allow.ok) return allow.response
+
   const grounding = (body.grounding && typeof body.grounding === 'object' ? body.grounding : {}) as Record<string, unknown>
-  const trig = await triggerBecomeTask(
+  const trig = await triggerOwnedRun(
+    gate.user,
     'nutrition.productFind',
-    { text, user: grounding },
+    { text, ...(note.trim() ? { note } : {}), user: grounding },
     image ? { image } : {},
   )
 
-  if (trig.ok) return NextResponse.json({ ok: true, runId: trig.runId })
+  if (trig.ok) return NextResponse.json(await withAllowance({ ok: true, runId: trig.runId }, allow))
+  await allow.refund()
   return NextResponse.json({ ok: false, unavailable: true })
 }

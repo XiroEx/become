@@ -1,5 +1,13 @@
 import mongoose, { Schema, Document, Model } from 'mongoose';
 
+/**
+ * Where a custom exercise's "Submit to Universal" request sits.
+ * 'none' = never submitted (owner-private, the default for every custom
+ * exercise). 'pending' = awaiting admin review. 'approved'/'rejected' are
+ * terminal until the owner edits and resubmits.
+ */
+export type ExerciseReviewStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
 // ─── Classification Enums ────────────────────────────────────────────────────
 
 /**
@@ -202,6 +210,7 @@ export type Equipment =
   | 'rowing_machine'
   | 'assault_bike'
   | 'elliptical'
+  | 'stair_climber'
   // Misc
   | 'jump_rope'
   | 'backpack'
@@ -229,6 +238,22 @@ export interface IVideoFraming {
   positionY?: number;
   /** Scale percentage applied via CSS transform. 100 = no zoom, 200 = 2×. */
   zoom?: number;
+}
+
+/**
+ * Non-destructive trim. We never re-encode the file (no ffmpeg in the runtime
+ * image) — instead we store in/out points in seconds and every player seeks to
+ * `start` and loops back once it passes `end`. That keeps the trim reversible:
+ * the original bytes stay in the bucket, so a bad in/out is one edit away from
+ * being fixed rather than a re-upload.
+ *
+ * `undefined` on either field means "no bound on that side".
+ */
+export interface IVideoTrim {
+  /** Seconds from the start of the file where playback begins. */
+  start?: number;
+  /** Seconds from the start of the file where playback loops back to `start`. */
+  end?: number;
 }
 
 // ─── Cardio Metrics Sub-document ─────────────────────────────────────────────
@@ -300,6 +325,8 @@ export interface IExerciseDefinition extends Document {
   videoHeight?: number | null;
   /** Optional per-video framing overrides. Absence = use auto rules. */
   videoFraming?: IVideoFraming | null;
+  /** Optional in/out points, in seconds. Absence = play the whole file. */
+  videoTrim?: IVideoTrim | null;
 
   // Tags & search
   tags: string[];
@@ -311,6 +338,19 @@ export interface IExerciseDefinition extends Document {
   // Custom exercise (user-created)
   isCustom?: boolean;
   createdBy?: string; // userId
+
+  // Universal submission — a custom exercise the owner has asked admins to
+  // publish into the shared catalog. `isUniversal` is the actual visibility
+  // gate everyone else's queries check; `reviewStatus` just tracks where a
+  // submission sits in the pipeline. Editing the exercise (or its video)
+  // after approval resets both, so a live "verified" exercise can never
+  // silently drift from what an admin actually reviewed.
+  isUniversal?: boolean;
+  reviewStatus?: ExerciseReviewStatus;
+  submittedAt?: Date | null;
+  reviewedBy?: string | null; // admin userId
+  reviewedAt?: Date | null;
+  reviewNote?: string | null; // admin's reason, mainly on rejection
 
   // Timestamps
   createdAt: Date;
@@ -324,6 +364,11 @@ const VideoFramingSchema = new Schema<IVideoFraming>({
   positionX: { type: Number, default: undefined, min: 0, max: 100 },
   positionY: { type: Number, default: undefined, min: 0, max: 100 },
   zoom:      { type: Number, default: undefined, min: 50, max: 400 },
+}, { _id: false });
+
+const VideoTrimSchema = new Schema<IVideoTrim>({
+  start: { type: Number, default: undefined, min: 0 },
+  end:   { type: Number, default: undefined, min: 0 },
 }, { _id: false });
 
 const CardioMetricsSchema = new Schema<ICardioMetrics>({
@@ -470,7 +515,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
         'flat_bench', 'incline_bench', 'decline_bench', 'squat_rack',
         'pull_up_bar', 'dip_station', 'resistance_band', 'foam_roller',
         'exercise_mat', 'box', 'chair', 'ab_wheel', 'medicine_ball',
-        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical',
+        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber',
         'jump_rope', 'backpack', 'towel', 'bodyweight', 'none',
       ],
     }],
@@ -488,7 +533,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
         'flat_bench', 'incline_bench', 'decline_bench', 'squat_rack',
         'pull_up_bar', 'dip_station', 'resistance_band', 'foam_roller',
         'exercise_mat', 'box', 'chair', 'ab_wheel', 'medicine_ball',
-        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical',
+        'treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber',
         'jump_rope', 'backpack', 'towel', 'bodyweight', 'none',
       ],
     }],
@@ -529,6 +574,7 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     videoWidth:      { type: Number, default: null },
     videoHeight:     { type: Number, default: null },
     videoFraming:    { type: VideoFramingSchema, default: undefined },
+    videoTrim:       { type: VideoTrimSchema, default: undefined },
 
     // Tags & search
     tags: [{ type: String, index: true }],
@@ -549,6 +595,14 @@ const ExerciseDefinitionSchema = new Schema<IExerciseDefinition>(
     // Custom exercise (user-created)
     isCustom: { type: Boolean, default: false, index: true },
     createdBy: { type: String, default: null },
+
+    // Universal submission
+    isUniversal: { type: Boolean, default: false, index: true },
+    reviewStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none', index: true },
+    submittedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewNote: { type: String, default: null },
   },
   {
     timestamps: true,

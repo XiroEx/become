@@ -18,7 +18,13 @@ import Food, { IFoodVariant } from '@/models/Food'
 import { verifyAdmin } from '@/lib/adminAuth'
 import { flattenFoodForResponse, coerceServingUnit } from '@/lib/foodImport'
 import { fetchUSDAById, mapUSDAFood } from '@/lib/usda'
-import { computeReviewIssues, type FoodForReview } from '@/lib/foodReview'
+import {
+  computeAutomaticReviewState,
+  computeReviewIssues,
+  isAutomaticReviewOwned,
+  manualReviewState,
+  type FoodForReview,
+} from '@/lib/foodReview'
 import { baseGroupKey } from '@/lib/foodGrouping'
 
 // Field whitelist — anything outside this set is silently ignored on PATCH.
@@ -188,8 +194,16 @@ export async function PATCH(
         mlPerServing: baseMapped.mlPerServing,
       }
       food.variants[idx] = replacement
-      // Re-evaluate review status against the freshly imported data.
-      food.needsReview = computeReviewIssues(food.toObject() as unknown as FoodForReview).length > 0
+      // Re-evaluate only an automatic-owned decision. Explicit admin choices
+      // and legacy/unknown ownership survive the import unchanged.
+      if (isAutomaticReviewOwned(food.reviewFlag)) {
+        const automaticReview = computeAutomaticReviewState(
+          food.toObject() as unknown as FoodForReview,
+          { origin: 'import' },
+        )
+        food.needsReview = automaticReview.needsReview
+        food.reviewFlag = automaticReview.reviewFlag
+      }
       await food.save()
       const fresh = await Food.findById(id).lean<(import('@/models/Food').IFood & { _id: mongoose.Types.ObjectId }) | null>()
       const issues = fresh ? computeReviewIssues(fresh as unknown as FoodForReview) : []
@@ -238,18 +252,38 @@ export async function PATCH(
       update.groupKey = baseGroupKey(update.name as string) || undefined
     }
 
+    // The toggle is an explicit admin decision, including when false. Store
+    // the value and its ownership atomically so rules cannot later undo it.
+    if (typeof body.needsReview === 'boolean') {
+      Object.assign(update, manualReviewState(body.needsReview, {
+        updatedBy: adminResult.userId,
+      }))
+    }
+
     await Food.updateOne({ _id: id }, { $set: update })
 
-    // If the admin didn't explicitly set needsReview but variants changed,
-    // recompute the auto-flag against the fresh state. We never auto-clear
-    // an admin-set flag — only re-evaluate when the admin didn't touch it.
+    // If variants changed without an explicit decision, refresh only an
+    // automatic-owned flag. Manual and legacy/unknown values are preserved.
     if (update.variants && body.needsReview === undefined) {
       const fresh = await Food.findById(id).lean<(import('@/models/Food').IFood & { _id: mongoose.Types.ObjectId }) | null>()
-      if (fresh) {
-        const flag = computeReviewIssues(fresh as unknown as FoodForReview).length > 0
-        if (flag !== fresh.needsReview) {
-          await Food.updateOne({ _id: id }, { $set: { needsReview: flag } })
-        }
+      if (fresh && isAutomaticReviewOwned(fresh.reviewFlag)) {
+        const automaticReview = computeAutomaticReviewState(
+          fresh as unknown as FoodForReview,
+          { origin: 'rules' },
+        )
+        await Food.updateOne(
+          {
+            _id: id,
+            'reviewFlag.owner': 'automatic',
+            updatedAt: fresh.updatedAt,
+          },
+          {
+            $set: {
+              needsReview: automaticReview.needsReview,
+              reviewFlag: automaticReview.reviewFlag,
+            },
+          },
+        )
       }
     }
 

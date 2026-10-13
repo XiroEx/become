@@ -27,11 +27,11 @@ function levenshtein(a: string, b: string): number {
     curr[0] = i
     for (let j = 1; j <= n; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+      curr[j] = Math.min(prev[j]! + 1, curr[j - 1]! + 1, prev[j - 1]! + cost)
     }
     ;[prev, curr] = [curr, prev]
   }
-  return prev[n]
+  return prev[n]!
 }
 
 /** Two words count as the same: exact; one a prefix of the other (≥3 chars — catches
@@ -64,7 +64,7 @@ export function matchSpeech(target: string, spoken: string): MatchResult {
   let si = 0
   for (let ti = 0; ti < t.length; ti++) {
     for (let k = si; k < s.length; k++) {
-      if (wordsClose(t[ti], s[k])) {
+      if (wordsClose(t[ti]!, s[k]!)) {
         matched[ti] = true
         si = k + 1
         break

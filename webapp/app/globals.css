@@ -45,9 +45,76 @@
   to   { transform: rotate(-360deg); }
 }
 
+/* UA widgets (scrollbars, form controls) and the pre-paint canvas follow the
+   active theme class set by the layout's colorScheme script. Without this, dark
+   mode renders a light scrollbar and flashes a white canvas before first paint. */
+html.light { color-scheme: light; }
+html.dark { color-scheme: dark; }
+
 body {
   font-family: Arial, Helvetica, sans-serif;
   margin: 0;
   padding: 0;
 }
 
+
+/* ── The super streak's number, on fire ───────────────────────────────────────
+   CSS, not JS, on purpose: these run from first paint. The flames used to be
+   framer-motion, and on a cold open — slow hydration, a throttled phone, a PWA
+   waking up — people saw a still picture of a fire. A stylesheet does not wait
+   for hydration. */
+
+/* A tongue of flame: rises, narrows, fades out. */
+@keyframes fire-lick {
+  0%   { transform: translateY(3px)  scaleY(0.7) scaleX(1);    opacity: 0.95; }
+  35%  { transform: translateY(-4px) scaleY(1.5) scaleX(0.8);  opacity: 0.8; }
+  70%  { transform: translateY(-8px)  scaleY(1.2) scaleX(0.5); opacity: 0.4; }
+  100% { transform: translateY(-12px) scaleY(0.8) scaleX(0.25); opacity: 0; }
+}
+
+/* The fire running THROUGH the numerals: the gradient itself travels. */
+@keyframes fire-through {
+  0%   { background-position: 50% 100%; }
+  50%  { background-position: 50% 55%; }
+  100% { background-position: 50% 100%; }
+}
+
+/* The bed of embers under the digits, breathing. */
+@keyframes ember-breathe {
+  0%, 100% { opacity: 0.55; transform: scaleX(1); }
+  50%      { opacity: 0.9;  transform: scaleX(1.08); }
+}
+
+.fire-lick   { animation: fire-lick 1.1s ease-out infinite; will-change: transform, opacity; }
+.fire-digits { background-size: 100% 260%; animation: fire-through 2.4s ease-in-out infinite; }
+.fire-ember  { animation: ember-breathe 1.9s ease-in-out infinite; will-change: opacity, transform; }
+
+/* Reduced motion keeps the fire alive without anything travelling: the colour
+   still moves through the digits, slowly, and nothing translates. */
+@media (prefers-reduced-motion: reduce) {
+  .fire-lick   { animation: none; opacity: 0.5; }
+  .fire-ember  { animation: none; opacity: 0.7; }
+  .fire-digits { animation-duration: 8s; }
+}
+
+/* ── The Becoming doorway: an unread new week pulses to draw the eye ──────── */
+@keyframes becoming-door-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.55); }
+  50%      { box-shadow: 0 0 0 8px rgba(139, 92, 246, 0); }
+}
+.becoming-door-pulse { animation: becoming-door-pulse 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .becoming-door-pulse { animation: none; }
+}
+
+/* ── A deep-linked settings field pulses a few times, then settles ────────── */
+@keyframes settings-highlight-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.55); }
+  50%      { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+}
+.settings-highlight-pulse { animation: settings-highlight-pulse 1s ease-in-out 3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-highlight-pulse { animation: none; }
+}

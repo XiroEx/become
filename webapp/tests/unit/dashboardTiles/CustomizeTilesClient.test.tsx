@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/CustomizeTilesClient.test.tsx
+// Run with: npm run test:file tests/unit/dashboardTiles/CustomizeTilesClient.test.tsx
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToStaticMarkup } from 'react-dom/server'

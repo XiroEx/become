@@ -2,7 +2,9 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { LogOut, MessageSquareText, Settings, ShieldCheck, UserRound, Bell } from 'lucide-react'
+import FoodReportsPanel from './nutrition/FoodReportsPanel'
 import FeedbackModal from './FeedbackModal'
 import Avatar from './Avatar'
 import { getToken } from '@/lib/clientAuth'
@@ -17,6 +19,11 @@ export default function TopNav() {
   const [profileIcon, setProfileIcon] = useState<string | null>(null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
+  // Unread food-report outcomes. A report that came back "no change" used to end
+  // silently on our side; the member is the only one holding the packet, so they
+  // need to know it landed and that they can push back with better photos.
+  const [unread, setUnread] = useState(0)
+  const [reportsOpen, setReportsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -56,6 +63,32 @@ export default function TopNav() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      try {
+        const res = await fetch('/api/nutrition/flags/mine', {
+          headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        setUnread(data.unreadCount ?? 0)
+      } catch {
+        // A badge is not worth an error state.
+      }
+    }
+    load()
+    const clear = () => setUnread(0)
+    window.addEventListener('become:reports-read', clear)
+    // Reviews finish out of band, so poll gently rather than only on mount.
+    const t = setInterval(load, 5 * 60 * 1000)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+      window.removeEventListener('become:reports-read', clear)
+    }
+  }, [])
+
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     localStorage.removeItem('token')
@@ -66,8 +99,15 @@ export default function TopNav() {
 
   return (
     <>
+      {/* z-40 is the app-chrome tier, the same one BottomNav claims: above every
+          page-level sticky (those top out at z-30) and below every overlay (those
+          start at z-50). The profile dropdown hangs out of this header into the
+          page, and an `absolute` child can never outrank its own stacking context
+          — so at the old z-10 any in-page `sticky top-0` painted straight over
+          the top of the open menu. The workout Track header (z-20) hid everything
+          down to "Food reports"; the six z-10 stickies tie and win on DOM order. */}
       <header
-        className="relative z-10 shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
+        className="relative z-40 shrink-0 border-b border-zinc-200 bg-white/80 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/80"
       >
         <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-2 sm:px-6 sm:py-2.5">
           <h1 className="text-base font-bold text-zinc-900 dark:text-white sm:text-lg">{appName}</h1>
@@ -75,14 +115,29 @@ export default function TopNav() {
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-transparent transition-all hover:ring-zinc-200 dark:hover:ring-zinc-700"
-              aria-label="User menu"
+              className="relative flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-transparent transition-all hover:ring-zinc-200 dark:hover:ring-zinc-700"
+              aria-label={unread > 0 ? `User menu, ${unread} unread report update${unread === 1 ? '' : 's'}` : 'User menu'}
             >
               <Avatar icon={profileIcon} imageUrl={avatarUrl} size={32} />
+              {unread > 0 && (
+                <span
+                  data-testid="reports-badge"
+                  className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-zinc-900"
+                >
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
             </button>
 
+            <AnimatePresence>
             {isOpen && (
-              <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 mt-2 w-48 origin-top-right rounded-xl border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+              >
                 {userName && (
                   <div className="border-b border-zinc-100 px-4 py-2 dark:border-zinc-700">
                     <p className="text-sm font-medium text-zinc-900 dark:text-white">{userName}</p>
@@ -115,6 +170,17 @@ export default function TopNav() {
                   Settings
                 </Link>
                 <button
+                  onClick={() => { setIsOpen(false); setReportsOpen(true) }}
+                  data-testid="open-food-reports"
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <Bell className="h-4 w-4" />
+                  Food reports
+                  {unread > 0 && (
+                    <span className="ml-auto rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">{unread}</span>
+                  )}
+                </button>
+                <button
                   onClick={() => {
                     setIsOpen(false)
                     setFeedbackOpen(true)
@@ -131,12 +197,14 @@ export default function TopNav() {
                   <LogOut className="h-4 w-4" />
                   Logout
                 </button>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
 
+      <FoodReportsPanel open={reportsOpen} onClose={() => setReportsOpen(false)} />
       <FeedbackModal isOpen={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
     </>
   )

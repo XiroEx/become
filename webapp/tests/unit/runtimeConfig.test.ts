@@ -38,3 +38,35 @@ test('runtime config fails closed when JWT secret is missing', async () => {
 
   assert.equal(result.status, 0, result.stderr)
 })
+
+test('runtime config leaves app version fields undefined when unset without failing', async () => {
+  const result = runIsolatedRuntimeConfig(
+    "import { getRuntimeConfig } from './lib/runtimeConfig.ts'; (async () => { const config = await getRuntimeConfig(); if (config.app.ios.minVersion !== undefined || config.app.android.minVersion !== undefined) process.exitCode = 1 })()",
+    {
+      NODE_ENV: 'test',
+      MONGODB_URI: 'mongodb://127.0.0.1:27017/become-test',
+      JWT_SECRET: 'test-only-secret-that-is-not-a-default',
+    },
+  )
+
+  assert.equal(result.status, 0, result.stderr)
+})
+
+test('runtime config resolves app version fields from env', async () => {
+  const result = runIsolatedRuntimeConfig(
+    "import { getRuntimeConfig } from './lib/runtimeConfig.ts'; (async () => { const config = await getRuntimeConfig(); if (config.app.ios.minVersion !== '1.0.0' || config.app.ios.latestVersion !== '1.2.0' || config.app.ios.storeUrl !== 'https://example.com/ios' || config.app.android.minVersion !== '0.9.0' || config.app.android.latestVersion !== '1.1.0' || config.app.android.storeUrl !== 'https://example.com/android') process.exitCode = 1 })()",
+    {
+      NODE_ENV: 'test',
+      MONGODB_URI: 'mongodb://127.0.0.1:27017/become-test',
+      JWT_SECRET: 'test-only-secret-that-is-not-a-default',
+      APP_IOS_MIN_VERSION: '1.0.0',
+      APP_IOS_LATEST_VERSION: '1.2.0',
+      APP_IOS_STORE_URL: 'https://example.com/ios',
+      APP_ANDROID_MIN_VERSION: '0.9.0',
+      APP_ANDROID_LATEST_VERSION: '1.1.0',
+      APP_ANDROID_STORE_URL: 'https://example.com/android',
+    },
+  )
+
+  assert.equal(result.status, 0, result.stderr)
+})

@@ -3,6 +3,16 @@
 > **Status:** Draft (claimed 2026-05-27 by claude-worker as part of the `native-app-port` strategic).
 > **Scope:** Build a React Native (Expo) sibling app to `webapp/`, sharing the same backend at `become.redbtn.io`.
 > **Source-of-truth:** This document. Every concrete phase ID referenced below has a 1:1 entry in the working batch — see [Phase index](#phase-index).
+>
+> **Superseded on distribution (2026-10-01, NP-040).** Everything below that says
+> **EAS** — P21 "EAS distribution", `eas.json`, "Production EAS Build", "EAS
+> account ownership" — is void. George decided on 2026-09-30 that **no
+> Expo-hosted service is used, ever**: no EAS Build, EAS Submit, EAS Update,
+> Expo Push Service or expo.dev project, and therefore **no over-the-air
+> updates in v1**. Store builds are produced locally (`expo prebuild` → Xcode
+> archive / `./gradlew bundleRelease`) and uploaded by hand; the
+> minimum-version gate (NP-041) is what forces an urgent upgrade. See
+> `expo/RELEASE.md` and the native section of `AGENTS.md`.
 
 ---
 

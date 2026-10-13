@@ -21,7 +21,7 @@ export default function SocialScene({ move, onDone }: SceneProps) {
   const commit = () => {
     if (committed) return
     setCommitted(true)
-    setTimeout(onDone, 900)
+    setTimeout(() => onDone({ q: 'Who I am pulling in', a: action }), 900)
   }
 
   return (

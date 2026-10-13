@@ -13,11 +13,13 @@ import { useFoodLog } from "@/lib/nutrition/useFoodLog";
 /* eslint-enable import/first */
 
 const mockApiFetch = apiFetch as unknown as jest.Mock;
+const tz = new Date().getTimezoneOffset();
 
 function Harness() {
   const log = useFoodLog({ getToken: () => "test-jwt" });
   return (
     <>
+      <Text testID="ops">{Object.keys(log).sort().join(",")}</Text>
       <Pressable
         testID="add"
         onPress={() =>
@@ -42,19 +44,6 @@ function Harness() {
       >
         <Text>remove</Text>
       </Pressable>
-      <Pressable
-        testID="save"
-        onPress={() =>
-          log.saveFood({
-            name: "Banana",
-            category: "fruit",
-            nutrition: { calories: 89, protein: 1, carbs: 23, fats: 0 },
-            source: "usda",
-          })
-        }
-      >
-        <Text>save</Text>
-      </Pressable>
     </>
   );
 }
@@ -73,7 +62,7 @@ describe("useFoodLog", () => {
     mockApiFetch.mockResolvedValue({ success: true });
   });
 
-  it("addToLog POSTs /api/nutrition/log with the entry body", async () => {
+  it("addToLog POSTs /api/nutrition/log with the entry body and the device tz", async () => {
     const { getByTestId } = render(<Harness />);
     await act(async () => {
       fireEvent.press(getByTestId("add"));
@@ -87,6 +76,8 @@ describe("useFoodLog", () => {
         body: {
           mealType: "lunch",
           date: "2026-06-01",
+          // The POST reads its offset from the body (readTzOffsetFromBody).
+          tz,
           food: {
             name: "Banana",
             servings: 1,
@@ -100,36 +91,29 @@ describe("useFoodLog", () => {
     ).toBe("test-jwt");
   });
 
-  it("removeFromLog DELETEs /api/nutrition/log with foodEntryId + date query", async () => {
+  it("removeFromLog DELETEs /api/nutrition/log with foodEntryId + date + tz", async () => {
     const { getByTestId } = render(<Harness />);
     await act(async () => {
       fireEvent.press(getByTestId("remove"));
     });
     const call = findCall("/api/nutrition/log", "DELETE")!;
     expect(String(call[0])).toBe(
-      "/api/nutrition/log?foodEntryId=e1&date=2026-06-01",
+      `/api/nutrition/log?foodEntryId=e1&date=2026-06-01&tz=${tz}`,
     );
     expect((call[2] as { method?: string }).method).toBe("DELETE");
   });
 
-  it("saveFood POSTs /api/nutrition/foods with name + category + nutrition", async () => {
+  it("exposes no saveFood — logging never posts the quota-gated create", async () => {
     const { getByTestId } = render(<Harness />);
+    expect(getByTestId("ops").props.children).toBe("addToLog,removeFromLog");
     await act(async () => {
-      fireEvent.press(getByTestId("save"));
+      fireEvent.press(getByTestId("add"));
     });
-    const call = findCall("/api/nutrition/foods", "POST")!;
-    expect(call[0]).toBe("/api/nutrition/foods");
-    expect(call[2]).toEqual(
-      expect.objectContaining({
-        method: "POST",
-        baseUrl: WEBAPP_BASE_URL,
-        body: {
-          name: "Banana",
-          category: "fruit",
-          nutrition: { calories: 89, protein: 1, carbs: 23, fats: 0 },
-          source: "usda",
-        },
-      }),
-    );
+    // POST /api/nutrition/foods is requireQuota('custom-foods') + authoredBy.
+    expect(
+      mockApiFetch.mock.calls.some(
+        (c) => String(c[0]).split("?")[0] === "/api/nutrition/foods",
+      ),
+    ).toBe(false);
   });
 });

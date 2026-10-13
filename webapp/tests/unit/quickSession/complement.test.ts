@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/quickSession/complement.test.ts
+// Run with: npm run test:file tests/unit/quickSession/complement.test.ts
 //
 // Covers draft criteria inference, complement coverage/deduplication,
 // deterministic seeded selection, auto-finish target sizing, and suggestion

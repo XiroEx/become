@@ -1,0 +1,536 @@
+import React, { useRef, useState } from "react";
+import {
+  View,
+  Pressable,
+  StyleSheet,
+  type GestureResponderEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { Text } from "@/components/Text";
+import { useRouter } from "expo-router";
+import {
+  Flame,
+  Dumbbell,
+  UtensilsCrossed,
+  Brain,
+  ChevronRight,
+} from "lucide-react-native";
+import type { DashboardTile } from "@become/api-client";
+import {
+  streakPages,
+  type StreakPageId,
+  type StreaksLite,
+} from "@become/core";
+import { FireNumber } from "@/components/streaks/FireNumber";
+import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import type { DashboardStatData } from "@/lib/dashboard/types";
+
+export interface StreakTileProps {
+  tile?: DashboardTile;
+  streaks?: StreaksLite | null;
+  statData?: DashboardStatData | null;
+  size?: "1x1" | "2x1";
+  loading?: boolean;
+  onPress?: () => void;
+  onOpenStreaks?: () => void;
+  testID?: string;
+  style?: StyleProp<ViewStyle>;
+}
+
+const ICON: Record<StreakPageId, typeof Flame> = {
+  super: Flame,
+  overall: Flame,
+  workout: Dumbbell,
+  nutrition: UtensilsCrossed,
+  mindset: Brain,
+};
+
+export function StreakTile({
+  tile,
+  streaks,
+  statData,
+  size = "1x1",
+  loading = false,
+  onPress,
+  onOpenStreaks,
+  testID,
+  style,
+}: StreakTileProps) {
+  const { colors, tint } = useThemeTokens();
+  const router = useRouter();
+
+  const inkMap: Record<
+    StreakPageId,
+    { icon: string; badge: string; bar: string }
+  > = {
+    super: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+    overall: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+    workout: {
+      icon: colors.success,
+      badge: tint("success", 0.15),
+      bar: colors.success,
+    },
+    nutrition: {
+      icon: colors.primary,
+      badge: tint("primary", 0.15),
+      bar: colors.primary,
+    },
+    mindset: {
+      icon: colors.accent,
+      badge: tint("accent", 0.15),
+      bar: colors.accent,
+    },
+  };
+
+  // Every streak, one page at a time — super first when there is one. Falls
+  // back to the day streak alone while /api/streaks is still in flight.
+  const sourceStreaks: StreaksLite | null =
+    (streaks && streaks.pillars ? streaks : null) ??
+    (statData?.streaksLite && statData.streaksLite.pillars ? statData.streaksLite : null);
+
+  const fallback: StreaksLite | null =
+    sourceStreaks ??
+    (statData
+      ? {
+          overall: {
+            current: statData.streakDays ?? 0,
+            best: statData.longestStreak ?? statData.streakDays ?? 0,
+            nextMilestone: statData.nextMilestone ?? null,
+            activeToday: statData.activityToday ?? false,
+            freezes: 0,
+          },
+          pillars: {
+            workout: {
+              unit: "days",
+              current: 0,
+              best: 0,
+              thisWeek: statData.thisWeekWorkouts ?? 0,
+              target: statData.weeklyTarget ?? null,
+              weekLost: false,
+            },
+            nutrition: { current: 0, best: 0, activeToday: false },
+            mindset: { current: 0, best: 0, activeToday: false },
+            super: {
+              current: 0,
+              best: 0,
+              activeToday: false,
+              today: {
+                nutrition: false,
+                mindset: false,
+                trained: false,
+                restDay: false,
+                weekOnTrack: true,
+              },
+            },
+          },
+        }
+      : null);
+
+  const pages = streakPages(fallback);
+  const leadId = pages[0]?.id;
+  const [nav, setNav] = useState<{ lead: string | undefined; i: number }>({
+    lead: leadId,
+    i: 0,
+  });
+  const i =
+    nav.lead === leadId
+      ? Math.min(nav.i, Math.max(0, pages.length - 1))
+      : 0;
+
+  const goTo = (next: number) => {
+    if (!pages.length) return;
+    setNav({
+      lead: leadId,
+      i: ((next % pages.length) + pages.length) % pages.length,
+    });
+  };
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const onTouchStart = (e: GestureResponderEvent) => {
+    touchStartRef.current = {
+      x: e.nativeEvent.pageX,
+      y: e.nativeEvent.pageY,
+    };
+  };
+
+  const onTouchEnd = (e: GestureResponderEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.nativeEvent.pageX - touchStartRef.current.x;
+    const dy = e.nativeEvent.pageY - touchStartRef.current.y;
+    touchStartRef.current = null;
+    if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+      goTo(i + (dx < 0 ? 1 : -1));
+    }
+  };
+
+  const handlePress = () => {
+    if (onPress) {
+      onPress();
+    } else if (onOpenStreaks) {
+      onOpenStreaks();
+    } else {
+      router.push("/(tabs)/dashboard/streaks" as never);
+    }
+  };
+
+  const wide = size === "2x1" || tile?.size === "2x1";
+  const effectiveTestId = testID ?? (tile ? `tile-${tile.id}` : "streak-tile");
+
+  if (loading || !fallback || pages.length === 0) {
+    return (
+      <View
+        testID={effectiveTestId}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+          },
+          style,
+        ]}
+      >
+        <View style={styles.squareContent}>
+          <View style={styles.topRow}>
+            <View
+              style={[styles.circleBadge, { backgroundColor: colors.muted, opacity: 0.6 }]}
+            />
+            <View style={styles.topMeta}>
+              <View
+                style={{
+                  height: 10,
+                  width: "60%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                }}
+              />
+              <View
+                style={{
+                  height: 22,
+                  width: "50%",
+                  backgroundColor: colors.muted,
+                  opacity: 0.6,
+                  borderRadius: 4,
+                  marginTop: 4,
+                }}
+              />
+            </View>
+          </View>
+          <View
+            style={[
+              styles.barTrack,
+              { backgroundColor: colors.muted, opacity: 0.6 },
+            ]}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const p = pages[i]!;
+  const IconComponent = ICON[p.id] ?? Flame;
+  const ink = inkMap[p.id] ?? inkMap.overall;
+
+  const accessibilityLabel = `${p.fullLabel}: ${p.value} ${p.unit ?? ""}. ${p.footer}`;
+
+  const renderValue = () => {
+    if (p.emphasis) {
+      return (
+        <Text
+          testID="streak-super-value"
+          className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
+          numberOfLines={1}
+        >
+          <FireNumber>{p.value}</FireNumber>
+          {p.unit ? (
+            <Text className="text-xs font-semibold text-muted-foreground">
+              {" "}{p.unit}
+            </Text>
+          ) : null}
+        </Text>
+      );
+    }
+    // Formatted value matching both full unit display and building label
+    const formattedVal = p.unit ? `${p.value} ${p.unit}` : p.value;
+    return (
+      <Text
+        testID="tile-streak-value"
+        className="text-foreground text-2xl font-extrabold tracking-tight leading-none"
+        numberOfLines={1}
+      >
+        {formattedVal}
+      </Text>
+    );
+  };
+
+  return (
+    <Pressable
+      testID={effectiveTestId}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={handlePress}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+        style,
+      ]}
+    >
+      {wide ? (
+        <View style={styles.wideRow}>
+          <View style={styles.wideLeft}>
+            <View style={[styles.badge, { backgroundColor: ink.badge }]}>
+              <IconComponent size={20} color={ink.icon} />
+            </View>
+            <View style={styles.wideMeta}>
+              <Text
+                className="text-muted-foreground text-xs font-medium"
+                numberOfLines={1}
+              >
+                {p.label}
+              </Text>
+              {renderValue()}
+              {p.footer ? (
+                <Text
+                  testID="tile-streak-footer"
+                  className="text-muted-foreground text-[11px] mt-0.5"
+                  numberOfLines={1}
+                >
+                  {p.footer}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+          <View style={styles.wideRight}>
+            <View
+              style={[
+                styles.barTrack,
+                { backgroundColor: colors.muted, width: 80 },
+              ]}
+            >
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    backgroundColor: ink.bar,
+                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
+                  },
+                ]}
+              />
+            </View>
+            {pages.length > 1 ? (
+              <View
+                testID="streak-tile-dots"
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+              >
+                {pages.map((pg, idx) => (
+                  <Pressable
+                    key={pg.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={pg.fullLabel}
+                    accessibilityState={{ selected: idx === i }}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      goTo(idx);
+                    }}
+                    hitSlop={6}
+                    style={{
+                      height: 4,
+                      width: idx === i ? 10 : 4,
+                      borderRadius: 2,
+                      backgroundColor:
+                        idx === i
+                          ? pg.id === "super"
+                            ? colors.accent
+                            : colors["muted-foreground"]
+                          : colors.border,
+                    }}
+                  />
+                ))}
+              </View>
+            ) : (
+              <ChevronRight size={16} color={colors["muted-foreground"]} />
+            )}
+          </View>
+        </View>
+      ) : (
+        // Horizontal 1x1 layout, matching the web's `StatTile.tsx` (NP-352):
+        // a circular badge on the LEFT with label + value stacked beside it,
+        // not the old vertically-stacked badge-above-label shape.
+        <View style={styles.squareContent}>
+          <View style={styles.topRow}>
+            <View style={[styles.circleBadge, { backgroundColor: ink.badge }]}>
+              <IconComponent size={18} color={ink.icon} />
+            </View>
+            <View style={styles.topMeta}>
+              <Text
+                className="text-muted-foreground text-xs"
+                numberOfLines={1}
+              >
+                {p.label}
+              </Text>
+              {renderValue()}
+            </View>
+          </View>
+          <View style={styles.bottomCol}>
+            {/* Progress bar */}
+            <View style={[styles.barTrack, { backgroundColor: colors.muted }]}>
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    backgroundColor: ink.bar,
+                    width: `${Math.max(0, Math.min(100, p.pct))}%`,
+                  },
+                ]}
+              />
+            </View>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              {p.footer ? (
+                <Text
+                  testID="tile-streak-footer"
+                  className="text-muted-foreground text-[11px] flex-1 mr-2"
+                  numberOfLines={1}
+                >
+                  {p.footer}
+                </Text>
+              ) : null}
+              {pages.length > 1 ? (
+                <View
+                  testID="streak-tile-dots"
+                  style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                >
+                  {pages.map((pg, idx) => (
+                    <Pressable
+                      key={pg.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={pg.fullLabel}
+                      accessibilityState={{ selected: idx === i }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        goTo(idx);
+                      }}
+                      hitSlop={6}
+                      style={{
+                        height: 4,
+                        width: idx === i ? 10 : 4,
+                        borderRadius: 2,
+                        backgroundColor:
+                          idx === i
+                            ? pg.id === "super"
+                              ? colors.accent
+                              : colors["muted-foreground"]
+                            : colors.border,
+                      }}
+                    />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    // Fills the grid's fixed 96px cell (NP-352) instead of growing to
+    // content — a `minHeight` here is how Super Streak ended up visibly
+    // taller than its row-mates.
+    height: "100%",
+    minWidth: 44,
+    justifyContent: "center",
+  },
+  wideRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  wideLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 1,
+  },
+  wideMeta: {
+    justifyContent: "center",
+    flexShrink: 1,
+  },
+  wideRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  badge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  squareContent: {
+    flex: 1,
+    justifyContent: "center",
+    gap: 6,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  // The web's circular badge on the left of the 1x1 layout (`h-9 w-9
+  // rounded-full`) — the old `badgeSmall` was a rounded SQUARE sitting
+  // above the label (NP-352).
+  circleBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  topMeta: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: "center",
+  },
+  bottomCol: {
+    gap: 2,
+  },
+  barTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+});
+
+export default StreakTile;

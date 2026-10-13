@@ -1,19 +1,38 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import NotificationOptIn from '@/components/NotificationOptIn'
+import LegalLinks from '@/components/legal/LegalLinks'
 import Link from 'next/link'
 import PageTransition from '@/components/PageTransition'
 import ProgressChart from '@/components/ProgressChart'
+import { useTutorialMaybe } from '@redbtn/redtutorial'
+import { onboardingSettled } from '@/lib/tutorials/onboardingSettled'
 import DailyCheckInModal, { MoodLevel } from '@/components/DailyCheckInModal'
+import WeightLogSheet from '@/components/WeightLogSheet'
+import QuickSessionModal from '@/components/QuickSessionModal'
 import StreakMilestoneModal from '@/components/StreakMilestoneModal'
+import GoalAchievedModal from '@/components/GoalAchievedModal'
+import type { GoalReached } from '@/lib/goals/reached'
 import ProgramNudgeModal, {
   NUDGE_KEY,
-  type NudgeState,
+  nudgeShowings,
   shouldShowNudge,
+  recordNudgeShown,
   recordNudgeDismiss,
+  recordNudgeDismissForever,
+  parseLegacyNudgeState,
 } from '@/components/ProgramNudgeModal'
 import { ClipboardList, TrendingUp, UtensilsCrossed, Dumbbell, ArrowRight, MessageCircle, Sliders } from 'lucide-react'
+import MindsetCard, { type MindSummary } from '@/components/dashboard/MindsetCard'
+import PlanCard from '@/components/dashboard/PlanCard'
+import MoodGatewayBanner from '@/components/dashboard/MoodGatewayBanner'
+import BecomingDoor from '@/components/dashboard/BecomingDoor'
+import type { GoalProgress } from '@/lib/goals/progress'
+import type { StreaksLite } from '@/lib/streaks/tile'
+import { AnimatePresence } from 'framer-motion'
+import { kgToUnit } from '@/lib/dashboard/goalTile'
+import { describeNutritionTrend, type NutritionTrend } from '@/lib/dashboard/nutritionTrend'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import ResumeWorkoutButton from '@/components/ResumeWorkoutButton'
 import NutritionSummaryCard from '@/components/nutrition/NutritionSummaryCard'
@@ -58,6 +77,10 @@ export default function DashboardClient() {
     () => readCache<UserProgressData>(PROGRESS_CACHE_KEY) === null,
   )
   const [showCheckInModal, setShowCheckInModal] = useState(false)
+  // The check-in is DUE but must wait its turn: a brand-new member lands here
+  // with the onboarding tour running, and the modal was rendering straight over
+  // it — the tour card sat behind a dialog the member had to dismiss first.
+  const [checkInDue, setCheckInDue] = useState(false)
   const [todaysMood, setTodaysMood] = useState<MoodLevel | null>(null)
   const [isMoodUpdating, setIsMoodUpdating] = useState(false)
   const [checkInInfo, setCheckInInfo] = useState({
@@ -81,14 +104,40 @@ export default function DashboardClient() {
     nextMilestone: number | null
   } | null>(null)
   const [milestoneCelebration, setMilestoneCelebration] = useState<number | null>(null)
+  const [goalCelebration, setGoalCelebration] = useState<GoalReached | null>(null)
   const [fitnessGoal, setFitnessGoal] = useState<FitnessGoal | undefined>(undefined)
-  const [weeklyAvailability, setWeeklyAvailability] = useState<number>(4)
+  // No invented default. Until the profile answers, "This Week" shows the count
+  // alone rather than a fraction against a target nobody set.
+  const [weeklyAvailability, setWeeklyAvailability] = useState<number | null>(null)
+  const [mindSummary, setMindSummary] = useState<MindSummary | null>(null)
+  const [goalProgress, setGoalProgress] = useState<GoalProgress | null>(null)
+  // Every streak (day / workout / nutrition / mindset / super) — the streak tile pages through them.
+  const [streaksData, setStreaksData] = useState<StreaksLite | null>(null)
+  // Set when the daily check-in just logged a mood → the one-line gateway to
+  // Mindset shows under the tiles until dismissed or the next load.
+  const [gatewayMood, setGatewayMood] = useState<MoodLevel | null>(null)
+  const [nutritionTrend, setNutritionTrend] = useState<NutritionTrend | null>(null)
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs')
   const [showNudge, setShowNudge] = useState(false)
+  // Queued like the check-in — waits its turn behind the onboarding tour.
+  const [nudgeDue, setNudgeDue] = useState(false)
+  // How many times the nudge has already been SHOWN, not counting this one —
+  // drives whether the "don't show this again" opt-out is offered. Showings,
+  // because a member who leaves the modal without pressing either button has
+  // still been asked, and counting only dismissals left them at zero forever.
+  const [nudgeShowingsSoFar, setNudgeShowingsSoFar] = useState(0)
+  // One recorded showing per page load, however many times the effect below
+  // re-runs while the tour settles.
+  const nudgeShowingRecorded = useRef(false)
   const [layout, setLayout] = useState<DashboardTile[] | null>(
     () => readCache<DashboardTile[]>(LAYOUT_CACHE_KEY),
   )
   const [showCustomize, setShowCustomize] = useState(false)
+  // The Weight tile opens this in place instead of navigating to Progress.
+  const [weightSheetOpen, setWeightSheetOpen] = useState(false)
+  // The Workout Now tile opens this in place instead of navigating to the
+  // Workout hub first.
+  const [quickSessionOpen, setQuickSessionOpen] = useState(false)
 
   useEffect(() => {
     // Check days since last mood and weight entries
@@ -103,44 +152,30 @@ export default function DashboardClient() {
           'Authorization': `Bearer ${token}`
         }
 
-        // Fetch mood status
-        const moodRes = await fetch(`/api/mood?tz=${new Date().getTimezoneOffset()}`, { headers })
-        let daysSinceMood = 0
-        if (moodRes.ok) {
-          const { daysSinceLastEntry, todaysMood: moodFromApi } = await moodRes.json()
-          daysSinceMood = daysSinceLastEntry || 0
-          if (moodFromApi) {
-            setTodaysMood(moodFromApi as MoodLevel)
-          }
+        // One authoritative answer from the server. This used to be two calls
+        // whose day-counters were OR'd together on the client, which meant
+        // logging only your weight left the mood counter above zero and the
+        // check-in came straight back — the complaint members were raising.
+        // /api/checkin owns the rule now: both halves closes the day, "Skip for
+        // Today" closes the day, and only a genuinely partial check-in gets the
+        // 8-hour window.
+        const res = await fetch(`/api/checkin?tz=${new Date().getTimezoneOffset()}`, { headers })
+        if (!res.ok) return
+
+        const status = await res.json()
+
+        if (status.todaysMood) {
+          setTodaysMood(status.todaysMood as MoodLevel)
         }
 
-        // Fetch weight status
-        const weightRes = await fetch(`/api/weight?tz=${new Date().getTimezoneOffset()}`, { headers })
-        let daysSinceWeight = 0
-        let lastWeight: number | undefined = undefined
-        if (weightRes.ok) {
-          const { daysSinceLastEntry, lastWeight: lastWeightFromApi } = await weightRes.json()
-          daysSinceWeight = daysSinceLastEntry || 0
-          lastWeight = lastWeightFromApi || undefined
-        }
+        setCheckInInfo({
+          daysSinceMood: status.daysSinceMood ?? 0,
+          daysSinceWeight: status.daysSinceWeight ?? 0,
+          lastWeight: status.lastWeight ?? undefined,
+        })
 
-        setCheckInInfo({ daysSinceMood, daysSinceWeight, lastWeight })
-
-        // Show check-in modal if mood or weight is due, but at most once per 8 hours.
-        // This prevents the modal from appearing on every tab open / refresh.
-        if (daysSinceMood > 0 || daysSinceWeight > 0) {
-          const CHECKIN_KEY = 'checkin_last_dismissed'
-          const SUPPRESS_HOURS = 8
-          try {
-            const raw = localStorage.getItem(CHECKIN_KEY)
-            const lastDismissed = raw ? parseInt(raw, 10) : 0
-            const hoursSince = (Date.now() - lastDismissed) / (1000 * 60 * 60)
-            if (hoursSince >= SUPPRESS_HOURS) {
-              setShowCheckInModal(true)
-            }
-          } catch {
-            setShowCheckInModal(true)
-          }
+        if (status.due) {
+          setCheckInDue(true)
         }
       } catch (error) {
         console.error('Failed to check check-in status:', error)
@@ -182,14 +217,28 @@ export default function DashboardClient() {
         }
 
         const tz = new Date().getTimezoneOffset()
-        const [logRes, goalsRes] = await Promise.all([
+        const [logRes, goalsRes, weekRes] = await Promise.all([
           fetch(`/api/nutrition/log?tz=${tz}`, { headers }),
-          fetch('/api/nutrition/goals', { headers })
+          fetch('/api/nutrition/goals', { headers }),
+          fetch(`/api/nutrition/summary?period=week&tz=${tz}`, { headers }),
         ])
 
         if (logRes.ok && goalsRes.ok) {
           const logData = await logRes.json()
           const goalsData = await goalsRes.json()
+
+          // Last 7 days → the one-line trend under today's numbers ("logged 5
+          // of 7 days · protein hit 4"). Today's card was accurate but flat: it
+          // said nothing about whether logging is going anywhere.
+          if (weekRes.ok) {
+            try {
+              const week = await weekRes.json()
+              setNutritionTrend(describeNutritionTrend(week.days ?? [], {
+                calories: goalsData.calories || 0,
+                protein: goalsData.protein || 0,
+              }))
+            } catch { /* trend is optional */ }
+          }
 
           // logData.water may be an object {current, goal} or a number
           const waterCurrent = typeof logData.water === 'object' ? logData.water?.current ?? 0 : logData.water ?? 0
@@ -224,6 +273,18 @@ export default function DashboardClient() {
       }
     }
 
+    // Every streak, for the paging streak tile.
+    async function fetchStreaks() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/streaks?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setStreaksData(await res.json())
+      } catch {
+        // non-critical
+      }
+    }
+
     // Fetch user profile for goal-aware UI framing
     async function fetchProfile() {
       try {
@@ -242,6 +303,32 @@ export default function DashboardClient() {
             setWeightUnit(profileData.profile.weightUnit)
           }
         }
+      } catch {
+        // non-critical
+      }
+    }
+
+    // Fetch the little the Mindset card needs (level, today's session, mood
+    // this week). Read-only endpoint — the full /api/mind/progress runs
+    // migrations and is for the Mind hub itself.
+    async function fetchMind() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/mind/summary?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setMindSummary(await res.json())
+      } catch {
+        // non-critical
+      }
+    }
+
+    // The plan per pillar (lib/goals) — feeds the Becoming doorway at the top.
+    async function fetchGoals() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const res = await fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) setGoalProgress(await res.json())
       } catch {
         // non-critical
       }
@@ -271,15 +358,58 @@ export default function DashboardClient() {
       }
     }
 
-    // Check whether to show the program nudge modal
-    function checkProgramNudge(hasProgram: boolean) {
+    // Check whether the program nudge is DUE. Like the check-in it only gets
+    // queued here — a brand-new member has no program, so this fires on exactly
+    // the load where the onboarding tour is also starting, and an ungated open
+    // covers the tour the same way the check-in did.
+    //
+    // The dismissal record is the ACCOUNT's, not this browser's. It used to be
+    // read straight out of localStorage, which is why the permanent opt-out
+    // never worked — see lib/programNudge.ts. localStorage is still read once,
+    // to carry a pre-existing record onto the account, and is still the
+    // fallback if the request fails so a network blip cannot start the backoff
+    // over.
+    async function checkProgramNudge(hasProgram: boolean) {
       if (hasProgram) return // already enrolled — never show
+
+      const local = (() => {
+        try {
+          return parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+        } catch {
+          return null
+        }
+      })()
+
       try {
-        const raw = localStorage.getItem(NUDGE_KEY)
-        const state: NudgeState | null = raw ? JSON.parse(raw) : null
-        if (shouldShowNudge(state)) setShowNudge(true)
+        const token = localStorage.getItem('token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+        const res = await fetch('/api/program-nudge', { headers })
+        if (!res.ok) throw new Error('program nudge status failed')
+        let status = await res.json()
+
+        // First load since this moved server-side: adopt whatever this browser
+        // already knew, so a member who has been dismissing it for weeks keeps
+        // that credit (and an existing "don't show again" is never undone).
+        if (!status.hasServerState && local) {
+          const adopt = await fetch('/api/program-nudge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
+            body: JSON.stringify({ action: 'adopt', ...local }),
+          })
+          if (adopt.ok) status = await adopt.json()
+        }
+
+        if (status.due) {
+          setNudgeDue(true)
+          setNudgeShowingsSoFar(status.showings ?? status.dismissCount ?? 0)
+        }
       } catch {
-        setShowNudge(true) // on parse error, just show it
+        // Offline or the route is unhappy — fall back to this browser's copy
+        // rather than either spamming the modal or suppressing it outright.
+        if (shouldShowNudge(local)) {
+          setNudgeDue(true)
+          setNudgeShowingsSoFar(nudgeShowings(local))
+        }
       }
     }
 
@@ -290,32 +420,154 @@ export default function DashboardClient() {
         fetchProgress(),
         fetchNutrition(),
         fetchStreak(),
+        fetchStreaks(),
         fetchProfile(),
         fetchLayout(),
+        fetchMind(),
+        fetchGoals(),
       ])
-      checkProgramNudge(!!progressData?.currentProgram)
+      await checkProgramNudge(!!progressData?.currentProgram)
     }
 
     init()
   }, [])
 
-  function handleNudgeDismiss() {
-    setShowNudge(false)
+  // Record a showing or a dismissal on the ACCOUNT, and mirror it locally so
+  // the fallback path above still throttles the modal if the member is offline.
+  function recordNudgeAction(action: 'shown' | 'dismiss' | 'dismiss_forever') {
     try {
-      const raw = localStorage.getItem(NUDGE_KEY)
-      const current: NudgeState | null = raw ? JSON.parse(raw) : null
-      localStorage.setItem(NUDGE_KEY, JSON.stringify(recordNudgeDismiss(current)))
+      const current = parseLegacyNudgeState(localStorage.getItem(NUDGE_KEY))
+      const next =
+        action === 'dismiss_forever'
+          ? recordNudgeDismissForever(current)
+          : action === 'dismiss'
+            ? recordNudgeDismiss(current)
+            : recordNudgeShown(current)
+      localStorage.setItem(NUDGE_KEY, JSON.stringify(next))
+      // The next showing is days away, so this does not need to be awaited —
+      // but it does need to be sent, and a failure must not throw into the
+      // click handler and leave the modal open.
+      const token = localStorage.getItem('token')
+      fetch('/api/program-nudge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      }).catch(() => {})
     } catch {}
   }
 
-  const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number }) => {
+  function handleNudgeDismiss() {
+    setShowNudge(false)
+    recordNudgeAction('dismiss')
+  }
+
+  function handleNudgeDismissForever() {
+    setShowNudge(false)
+    recordNudgeAction('dismiss_forever')
+  }
+
+  // Hold the daily check-in behind the onboarding tour.
+  //
+  // Gating on `tutorial.active` alone lost a race: the tour triggers 800ms after
+  // landing on /dashboard (core.ts `home` segment), so for that first beat there
+  // is no active tutorial to detect. A fresh account whose /api/checkin call came
+  // back inside that window got the check-in opened, and then the tour drew its
+  // coach-marks on top of it — both on screen at once.
+  //
+  // So the question isn't "is a tour running right now", it's "has this member
+  // finished onboarding at all". That is sampled ONCE per page load: a member who
+  // runs the tour during this visit is not handed the check-in the instant they
+  // tap "Got it" — it waits for their next visit, which is also what makes the
+  // first session read as one clean sequence instead of a modal ambush.
+  const tutorial = useTutorialMaybe()
+  const [tourWasSettled, setTourWasSettled] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (tourWasSettled !== null) return // already sampled for this page load
+    if (!tutorial) { setTourWasSettled(true); return } // no provider — nothing to wait for
+    if (!tutorial.ready) return // progress still loading; a verdict now would be a guess
+    setTourWasSettled(onboardingSettled(tutorial))
+  }, [tutorial, tourWasSettled])
+
+  // Fail-safe. "Onboarding unfinished" must not mean "no check-in, ever".
+  //
+  // Two ways that could happen, both seen while testing this: the tour never
+  // triggers on a given load, or the tutorial provider never reports `ready` at
+  // all (a stored progress blob it can't parse wedges it, and `ready` stays false
+  // forever). Either would silently lock a member out of the daily check-in
+  // permanently. So an unresolved OR negative verdict only holds the queue while
+  // the tour still might appear — or while it actually is on screen.
+  const TOUR_GRACE_MS = 6000 // well past the tour's 800ms route trigger + anchor resolution
+  const [tourGraceOver, setTourGraceOver] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setTourGraceOver(true), TOUR_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Once a tour has been seen this session, the queue stays shut until the next
+  // load even after it finishes — tapping "Got it" should not immediately
+  // summon a modal, which is the other half of what was asked for.
+  const sawTour = useRef(false)
+  if (tutorial?.active) sawTour.current = true
+
+  const tutorialBusy =
+    !!tutorial?.active || // tour on screen right now — always yield
+    (tourWasSettled !== true && (sawTour.current || !tourGraceOver))
+
+  // The program nudge is the other first-run modal that used to open straight
+  // over the tour: a brand-new member has no program, so it fires on exactly the
+  // load where onboarding is starting.
+  //
+  // Opening it is itself the thing worth recording. Until it was, the only way
+  // to count a sighting was for the member to press one of the two buttons — so
+  // anyone who backgrounded the PWA or reloaded instead stayed at zero
+  // showings, got the modal again on the very next load, and was never offered
+  // the way out. A ref keeps one page load to one recorded showing.
+  useEffect(() => {
+    if (nudgeDue && !tutorialBusy) {
+      setShowNudge(true)
+      setNudgeDue(false)
+      if (!nudgeShowingRecorded.current) {
+        nudgeShowingRecorded.current = true
+        recordNudgeAction('shown')
+      }
+    }
+  }, [nudgeDue, tutorialBusy])
+
+  useEffect(() => {
+    // Don't stack on the nudge either — two modals at once is the same problem
+    // in a different costume.
+    if (checkInDue && !tutorialBusy && !showNudge && !nudgeDue) {
+      setShowCheckInModal(true)
+      setCheckInDue(false)
+
+      // Stamp "we asked" on the SERVER, not in localStorage. iOS gives a
+      // home-screen PWA its own storage container, so the old local stamp meant
+      // checking in from the installed app still re-prompted in Safari.
+      const token = localStorage.getItem('token')
+      fetch('/api/checkin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action: 'shown', tz: new Date().getTimezoneOffset() }),
+      }).catch(() => {})
+    }
+  }, [checkInDue, tutorialBusy, showNudge, nudgeDue])
+
+  const handleCheckInClose = (checkInData: { mood?: MoodLevel; weight?: number; goalReached?: GoalReached }) => {
     setShowCheckInModal(false)
-    try { localStorage.setItem('checkin_last_dismissed', String(Date.now())) } catch {}
-    
+    setCheckInDue(false)
+
     const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     
     if (checkInData.mood) {
       setTodaysMood(checkInData.mood)
+      setGatewayMood(checkInData.mood)
       // Update mood data in state for chart
       setData(prev => ({
         ...prev,
@@ -329,6 +581,22 @@ export default function DashboardClient() {
         ...prev,
         weightData: [...prev.weightData, { date: todayFormatted, value: checkInData.weight! }]
       }))
+    }
+
+    if (checkInData.goalReached) {
+      setGoalCelebration(checkInData.goalReached)
+      // goalProgress otherwise stays the pre-check-in read until the next full
+      // load — the Becoming door and dashboard tile that just changed under a
+      // goal reached today would still show yesterday's "3 lbs to go" until a
+      // navigate-away-and-back forced a refetch. Refresh it now so the rest of
+      // the dashboard agrees with the modal that just opened.
+      const token = localStorage.getItem('token')
+      if (token) {
+        fetch(`/api/goals?tz=${new Date().getTimezoneOffset()}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => (res.ok ? res.json() : null))
+          .then(g => { if (g) setGoalProgress(g) })
+          .catch(() => {})
+      }
     }
   }
 
@@ -388,11 +656,23 @@ export default function DashboardClient() {
     }
   }, [])
 
+  // Weight tile logs here — same pattern as the daily check-in's weight
+  // update (handleCheckInClose above): patch today's point into the chart
+  // data rather than waiting on a full refetch.
+  const handleWeightLogged = useCallback((weight: number) => {
+    const todayFormatted = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    setData(prev => {
+      const filtered = prev.weightData.filter(d => d.date !== todayFormatted)
+      return { ...prev, weightData: [...filtered, { date: todayFormatted, value: weight }] }
+    })
+  }, [])
+
   // Build the context object passed to each tile's render fn. Memoized so
   // tiles don't re-render on unrelated state changes.
   const tileCtx = useMemo<DashboardTileContext>(() => ({
     data,
     streakData,
+    streaks: streaksData,
     nutritionData: nutritionData
       ? {
           calories: nutritionData.calories,
@@ -407,11 +687,13 @@ export default function DashboardClient() {
     todaysMood,
     isMoodUpdating,
     onMoodChange: handleMoodCardChange,
+    onOpenWeightSheet: () => setWeightSheetOpen(true),
+    onOpenQuickSession: () => setQuickSessionOpen(true),
     // Stat tiles render a shimmer instead of zeros/dashes while the first
     // progress load is in flight. A cache hit clears `loading` synchronously on
     // mount, so reopens never show the skeleton.
     loading,
-  }), [data, streakData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange, loading])
+  }), [data, streakData, streaksData, nutritionData, weeklyAvailability, weightUnit, todaysMood, isMoodUpdating, handleMoodCardChange, loading])
 
   return (
     <>
@@ -432,6 +714,7 @@ export default function DashboardClient() {
         daysSinceWeight={checkInInfo.daysSinceWeight}
         lastWeight={checkInInfo.lastWeight}
         weightUnit={weightUnit}
+        targetWeight={goalProgress?.nutrition?.target?.weight ?? undefined}
       />
 
       <StreakMilestoneModal
@@ -440,18 +723,41 @@ export default function DashboardClient() {
         onClose={() => setMilestoneCelebration(null)}
       />
 
+      <GoalAchievedModal
+        reached={goalCelebration}
+        onClose={() => setGoalCelebration(null)}
+      />
+
       <ProgramNudgeModal
         open={showNudge}
         fitnessGoal={fitnessGoal ?? null}
+        priorShowings={nudgeShowingsSoFar}
         onExplore={handleNudgeDismiss}
+        onDismissForever={handleNudgeDismissForever}
       />
-      
+
+      <WeightLogSheet
+        isOpen={weightSheetOpen}
+        onClose={() => setWeightSheetOpen(false)}
+        onLogged={handleWeightLogged}
+        lastWeight={data.weightData.length ? data.weightData[data.weightData.length - 1].value : undefined}
+        targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+      />
+
+      <QuickSessionModal
+        open={quickSessionOpen}
+        onClose={() => setQuickSessionOpen(false)}
+      />
+
       <PageTransition className="space-y-4 sm:space-y-6">
       {/* Header */}
       <header className="mb-2 sm:mb-4">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">Dashboard</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 sm:text-base">Track your fitness journey</p>
       </header>
+
+      {/* The Becoming — the doorway, first thing on the page. */}
+      <BecomingDoor goals={goalProgress} mind={mindSummary} />
 
       {/* Unified tile grid — one themed grid rendering stat + metric +
           smart-rotating tiles (and dashboard-surface suggestion cards) from
@@ -472,6 +778,13 @@ export default function DashboardClient() {
         </div>
       </div>
 
+      {/* Mood → Mindset gateway, once, right after the daily check-in */}
+      <AnimatePresence>
+        {gatewayMood && !mindSummary?.sessionDoneToday && (
+          <MoodGatewayBanner mood={gatewayMood} onDismiss={() => setGatewayMood(null)} />
+        )}
+      </AnimatePresence>
+
       {/* Resume Active Workout — only renders when there's an in-progress
           workout log for today; quietly disappears once it's completed. */}
       <ResumeWorkoutButton />
@@ -487,6 +800,8 @@ export default function DashboardClient() {
         leanMassData={data.leanMassData}
         moodData={data.moodData}
         fitnessGoal={fitnessGoal}
+        targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+        weightUnit={data.goal?.weightUnit ?? weightUnit}
       />
 
       {/* Nutrition Summary */}
@@ -497,6 +812,7 @@ export default function DashboardClient() {
           carbs={nutritionData.carbs}
           fats={nutritionData.fats}
           water={nutritionData.water}
+          trend={nutritionTrend}
         />
       )}
 
@@ -582,87 +898,27 @@ export default function DashboardClient() {
           </Card>
         )}
 
-        {/* Mindset Card */}
-        <Card>
-          <div className="mb-3 flex items-center justify-between sm:mb-4">
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-white sm:text-lg">Mindset</h2>
-            <Link
-              href="/dashboard/mind"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
-            >
-              View
-            </Link>
-          </div>
-
-          <div className="mb-3 sm:mb-4">
-            <h3 className="font-medium text-zinc-900 dark:text-white">Daily Reflection</h3>
-            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-              Track your mental wellness journey
-            </p>
-          </div>
-
-          {/* Mood Summary — flat tinted nested block (no border). Padding
-              tightened from p-3 to p-2.5 so it doesn't read as another card. */}
-          <div className="mb-3 flex items-center gap-3 rounded-lg bg-zinc-50 p-2.5 dark:bg-zinc-800/50 sm:mb-4">
-            <div className="flex -space-x-1">
-              {data.moodData.slice(-3).map((mood, idx) => {
-                const moodColors: Record<number, string> = {
-                  1: 'bg-red-400',
-                  2: 'bg-orange-400',
-                  3: 'bg-amber-400',
-                  4: 'bg-lime-400',
-                  5: 'bg-emerald-400'
-                }
-                const moodEmojis: Record<number, string> = {
-                  1: '😞',
-                  2: '😕',
-                  3: '😐',
-                  4: '🙂',
-                  5: '😊'
-                }
-                return (
-                  <div
-                    key={idx}
-                    className={`flex h-8 w-8 items-center justify-center rounded-full ring-2 ring-white dark:ring-zinc-900 ${
-                      moodColors[mood.value] || 'bg-zinc-400'
-                    }`}
-                  >
-                    <span className="text-sm">
-                      {moodEmojis[mood.value] || '😐'}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {data.moodData.length > 0 ? `${data.moodData.length} mood entries` : 'No entries yet'}
-              </p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Last 7 days</p>
-            </div>
-          </div>
-
-          <Link
-            href="/dashboard/mind"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-black dark:bg-white dark:text-black dark:hover:bg-zinc-200 sm:py-3"
-          >
-            <span>Explore Mindset</span>
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </Link>
-        </Card>
+        {/* Mindset Card — real content (level, today's session, this week's
+            check-ins) and a mood-aware CTA. Replaced a static blurb that
+            claimed "110 mood entries · Last 7 days" (110 was all-time). */}
+        <MindsetCard summary={mindSummary} todaysMood={todaysMood} />
       </div>
 
-      {/* Quick Links — 4-tile grid. Visually identical except icon + label.
-          Card primitive, hover swap on border (not shadow elevation). */}
-      <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+      {/* Plan + remaining allowances. Renders NOTHING while
+          ENTITLEMENTS_ENFORCED is off, which is what keeps launch day a
+          zero-change deploy — see components/dashboard/PlanCard.tsx. */}
+      <PlanCard />
+
+      {/* Quick Links — 2×2 on every width so the row costs half the height it
+          used to (four stacked full-width cards). Card primitive, hover swap on
+          border (not shadow elevation). */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {[
           {
             href: '/dashboard/workout',
             icon: <ClipboardList className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
             title: 'All Programs',
-            description: 'Browse training plans',
+            description: 'Training plans',
           },
           {
             href: '/dashboard/nutrition',
@@ -676,7 +932,7 @@ export default function DashboardClient() {
             href: '/dashboard/progress',
             icon: <TrendingUp className="h-5 w-5 text-zinc-600 dark:text-zinc-400" />,
             title: 'Progress',
-            description: 'Log weight & measurements',
+            description: 'Weight & PRs',
           },
           {
             href: '/dashboard/chat',
@@ -689,21 +945,24 @@ export default function DashboardClient() {
             key={link.href}
             as={Link}
             href={link.href}
-            className="flex items-center gap-3 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
+            variant="compact"
+            className="flex items-center gap-2.5 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
               {link.icon}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-zinc-900 dark:text-white">{link.title}</h3>
-              <p className="truncate text-sm text-zinc-500 dark:text-zinc-400">{link.description}</p>
+              <h3 className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{link.title}</h3>
+              <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{link.description}</p>
             </div>
-            <svg className="h-5 w-5 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
           </Card>
         ))}
       </div>
+
+      {/* The in-app footer. Apple wants the privacy policy reachable from
+          inside the app, not only from a marketing page a member installing to
+          the home screen never returns to. */}
+      <LegalLinks className="pt-2" showCopyright />
     </PageTransition>
     <NotificationOptIn />
     </>

@@ -29,11 +29,54 @@ export interface IMindProgress extends Document {
    *  drives the user's LEVEL (uncapped). Separate from `xp` (legacy progression)
    *  and from `chapter`. Seeded from xp+xpBank for pre-existing users. */
   levelXp: number
-  /** Count of completed MAIN sessions — gates chapters (10 per chapter). */
+  /** CHAPTER PROGRESS, in units of main sessions — gates chapters (10 per
+   *  chapter). It is NOT a session count and must never be read as one: it
+   *  legitimately carries a head start nobody sat through. The Mind intake maps
+   *  "I'm building momentum" to chapter 2 and "I'm ready for the next level" to
+   *  chapter 3, an admin can set a chapter outright, and a self-declared
+   *  level-up advances one — and /api/mind/progress then back-fills this to
+   *  (chapter - 1) * SESSIONS_PER_CHAPTER so the chapter survives the round
+   *  trip. Read `completedMainSessions` for "how many sessions has this member
+   *  actually done". */
   mainSessionCount: number
+  /** Main sessions this member has ACTUALLY completed.
+   *
+   *  Only ever incremented by a counted completion in POST /api/mind/session,
+   *  never seeded from a chapter, so it is the one number a paywall may read.
+   *  The 'mind-sessions' free allowance counts exactly this (lib/allowances.ts).
+   *
+   *  It used to read `mainSessionCount`, and the head start above made that
+   *  catastrophic: a brand-new free member who answered "I'm building momentum"
+   *  at intake was 10/10 before their first session and was refused it with
+   *  "You've finished your first 10 Mind sessions." */
+  completedMainSessions: number
+  /** True once the one-time evolutionScore → xp seeding has been considered.
+   *  Without this the seeding re-fired every time `xp` hit 0, which meant an
+   *  admin reset was partly undone on the very next page load (xp came back,
+   *  levelXp was re-derived from it, and the level climbed off 1 again). */
+  xpSeeded?: boolean
   /** When the last MAIN session was completed — enforces the 20h cooldown so a
    *  main session (and its chapter progress) can only happen once every 20h. */
   lastMainSessionAt?: Date
+  /**
+   * The session that was composed and not yet finished.
+   *
+   * A session used to be rolled fresh on every Begin, so walking away and coming
+   * back handed you a DIFFERENT session — you could not lose your place because
+   * there was no place to lose. It stays now until it is completed, the local
+   * day rolls over, or the member logs something that changes the picture the
+   * session was built from.
+   */
+  activeSession?: {
+    dateKey: string
+    seed: number
+    plan: unknown
+    generatedAt: Date
+    /** Logged-activity watermarks at composition time. A newer workout or meal
+     *  than these means the session was built on stale context. */
+    lastWorkoutAt?: Date | null
+    lastMealAt?: Date | null
+  }
   /** Tools whose one-time onboarding intro the user has completed. A tool can be
    *  UNLOCKED (chapter) but not yet INTRODUCED — the intro flow runs on first
    *  open. Legacy docs (field absent) are grandfathered to their unlocked set. */
@@ -85,7 +128,20 @@ const MindProgressSchema = new Schema<IMindProgress>(
     xpBank: { type: Number, default: 0, min: 0 },
     levelXp: { type: Number, default: 0, min: 0 },
     mainSessionCount: { type: Number, default: 0, min: 0 },
+    completedMainSessions: { type: Number, default: 0, min: 0 },
+    xpSeeded: { type: Boolean },
     lastMainSessionAt: { type: Date },
+    activeSession: {
+      type: new Schema({
+        dateKey: { type: String, required: true },
+        seed: { type: Number, required: true },
+        plan: { type: Schema.Types.Mixed, required: true },
+        generatedAt: { type: Date, required: true },
+        lastWorkoutAt: { type: Date, default: null },
+        lastMealAt: { type: Date, default: null },
+      }, { _id: false }),
+      default: undefined,
+    },
     introducedSystems: { type: [String], default: undefined },
     lastGrowthAt: { type: Date },
     vision: { type: VisionSchema },

@@ -4,6 +4,7 @@ import ProgramModel from '@/models/Program';
 import { hydrateProgram, dehydrateProgram } from '@/lib/hydrateExercises';
 import { verifyAuth } from '@/lib/auth';
 import { requireAdmin } from '@/lib/adminAuth';
+import { canMemberOpenProgram } from '@/lib/programVisibility';
 
 interface RouteParams {
   params: Promise<{ programId: string }>;
@@ -29,15 +30,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // Custom programs are owner-private. Deny enumeration by other users.
-    if (program.isCustom) {
-      const ownerId = program.createdBy?.toString();
-      if (ownerId !== authResult.userId) {
-        return NextResponse.json(
-          { error: 'Program not found' },
-          { status: 404 }
-        );
-      }
+    // Custom programs are owner-private, unless a trainer/admin shared this
+    // one with the requesting user. Deny enumeration by everyone else. The rule
+    // lives in lib/programVisibility.ts because POST /api/share needs the same
+    // answer — a member can share only what they can open.
+    if (!canMemberOpenProgram(program, authResult.userId)) {
+      return NextResponse.json(
+        { error: 'Program not found' },
+        { status: 404 }
+      );
     }
 
     const hydrated = await hydrateProgram(program);

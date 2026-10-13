@@ -3,6 +3,7 @@ import {
   liveCacheKey,
   createLiveWorkoutCache,
   createMemoryKeyValueStore,
+  clearAllLiveWorkoutDrafts,
   type LiveSetSnapshot,
   type LiveWorkoutSnapshot,
 } from "@/lib/live/liveWorkoutCache";
@@ -84,5 +85,20 @@ describe("createLiveWorkoutCache", () => {
     await cache.save(key, snap);
     await cache.clear(key);
     expect(await cache.load(key)).toBeNull();
+  });
+
+  it("tracks saved live workout keys and clearAllLiveWorkoutDrafts wipes all drafts", async () => {
+    const store = createMemoryKeyValueStore();
+    const cache = createLiveWorkoutCache(store);
+    const key1 = liveCacheKey("prog-1", 0, 0);
+    const key2 = liveCacheKey("prog-2", 1, 1);
+    await cache.save(key1, snap);
+    await cache.save(key2, snap);
+    expect(await cache.load(key1)).toEqual(snap);
+    expect(await cache.load(key2)).toEqual(snap);
+
+    await clearAllLiveWorkoutDrafts(store);
+    expect(await cache.load(key1)).toBeNull();
+    expect(await cache.load(key2)).toBeNull();
   });
 });

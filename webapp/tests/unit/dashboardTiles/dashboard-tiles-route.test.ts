@@ -1,4 +1,4 @@
-// Run with: npx tsx --test tests/unit/dashboardTiles/dashboard-tiles-route.test.ts
+// Run with: npm run test:file tests/unit/dashboardTiles/dashboard-tiles-route.test.ts
 //
 // Tests the auth gate on GET /api/dashboard/tiles. The 200 path touches
 // MongoDB (and the rotator's persistence side-effect) and is covered by

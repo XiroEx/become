@@ -29,8 +29,13 @@ export interface BiometricsCapability {
 }
 
 export interface ColdOpenInput {
+  /** The session JWT — `sessionStore` (`become.session`). */
   tokenStore: TokenStore;
-  /** SecureStore-backed boolean opt-in for biometrics — same shape as health. */
+  /**
+   * The boolean biometrics opt-in — `biometricsOptInSecureStore`
+   * (`become.optin.biometrics`). A DIFFERENT key from the session: this flow
+   * clears `tokenStore` on a failed unlock, so the two must never collide.
+   */
   optInStore: TokenStore;
   biometrics: BiometricsCapability;
 }
@@ -72,6 +77,12 @@ export interface BiometricsOptInStore {
   setOptedIn: (value: boolean) => Promise<void>;
 }
 
+/**
+ * `inner` is REQUIRED and must be the store for the biometrics opt-in key —
+ * `biometricsOptInSecureStore` (`become.optin.biometrics`). It must never be
+ * the session store: writing "yes" there would overwrite the JWT and opting
+ * out would delete it.
+ */
 export function createBiometricsOptInStore(
   inner: TokenStore,
 ): BiometricsOptInStore {

@@ -1,6 +1,11 @@
 import { render, fireEvent } from "@testing-library/react-native";
 import { LiveSetRow } from "@/components/live/LiveSetRow";
 
+// `bell` is what `getBellWeightInfo` (@become/core ← webapp/lib/workout/
+// dumbbellWeight.ts) returns: the implement, and whether it is one of a
+// loaded PAIR. It replaces the old `bellStyle` string, which came from a
+// name regex the web retired on 2026-09-09.
+
 describe("LiveSetRow", () => {
   const baseState = { weight: null, reps: null, completed: false };
 
@@ -8,7 +13,7 @@ describe("LiveSetRow", () => {
     const { getByTestId } = render(
       <LiveSetRow
         setIndex={0}
-        bellStyle="dumbbell"
+        bell={{ style: "dumbbell", showTotal: true }}
         state={baseState}
         onChange={() => {}}
       />,
@@ -22,7 +27,7 @@ describe("LiveSetRow", () => {
     const { getByTestId } = render(
       <LiveSetRow
         setIndex={1}
-        bellStyle="barbell"
+        bell={{ style: null, showTotal: false }}
         state={baseState}
         prefill={{ weight: 185, reps: 5, completed: true }}
         onChange={() => {}}
@@ -33,11 +38,11 @@ describe("LiveSetRow", () => {
     expect(JSON.stringify(prefillText)).toContain("5");
   });
 
-  it("shows the '= X lbs total' helper only for dumbbell with a positive weight", () => {
+  it("shows the '= X lbs total' helper only when the bell is a loaded pair", () => {
     const { getByTestId, queryByTestId, rerender } = render(
       <LiveSetRow
         setIndex={0}
-        bellStyle="dumbbell"
+        bell={{ style: "dumbbell", showTotal: true }}
         state={{ weight: 50, reps: null, completed: false }}
         onChange={() => {}}
       />,
@@ -48,7 +53,7 @@ describe("LiveSetRow", () => {
     rerender(
       <LiveSetRow
         setIndex={0}
-        bellStyle="kettlebell"
+        bell={{ style: "kettlebell", showTotal: false }}
         state={{ weight: 50, reps: null, completed: false }}
         onChange={() => {}}
       />,
@@ -61,7 +66,7 @@ describe("LiveSetRow", () => {
     const { getByTestId } = render(
       <LiveSetRow
         setIndex={0}
-        bellStyle="barbell"
+        bell={{ style: null, showTotal: false }}
         state={baseState}
         onChange={onChange}
       />,
@@ -77,7 +82,7 @@ describe("LiveSetRow", () => {
     const { getByTestId } = render(
       <LiveSetRow
         setIndex={0}
-        bellStyle="barbell"
+        bell={{ style: null, showTotal: false }}
         state={baseState}
         onChange={onChange}
       />,
@@ -93,7 +98,7 @@ describe("LiveSetRow", () => {
     const { getByTestId } = render(
       <LiveSetRow
         setIndex={0}
-        bellStyle="barbell"
+        bell={{ style: null, showTotal: false }}
         state={baseState}
         onChange={onChange}
       />,

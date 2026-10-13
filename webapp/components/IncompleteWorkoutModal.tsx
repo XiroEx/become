@@ -50,6 +50,7 @@ export default function IncompleteWorkoutModal({ stale, programId, onResolve, on
           phase: stale.phase,
           action,
           tz: new Date().getTimezoneOffset(),
+          tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       });
 

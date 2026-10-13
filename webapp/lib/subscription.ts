@@ -1,0 +1,75 @@
+import type { Tier } from '@/lib/entitlements'
+import type { IUserSubscription } from '@/models/User'
+import type { UserRole } from '@/lib/roles'
+
+/**
+ * Grace on a stale currentPeriodEnd, so ONE missed webhook does not downgrade a
+ * paying member mid-session. Applies to active/trialing only — a genuinely
+ * lapsed sub keeps Plus for at most this long if Stripe never sends the event.
+ */
+export const SUBSCRIPTION_GRACE_MS = 3 * 24 * 60 * 60 * 1000
+
+export interface DeriveTierInput {
+  subscription?: IUserSubscription | null
+  grandfathered?: boolean
+  /** Admin override. role:'admin' pins plus so admin tooling never self-locks. */
+  role?: UserRole
+  now?: Date
+}
+
+/**
+ * PURE. The single definition of "what tier does this billing state mean".
+ *
+ * WRITERS ONLY — the billing webhook, admin tooling, and
+ * scripts/migrate-tiers.mjs call this and persist the result into User.tier.
+ * Request-path readers use loadUserEntitlement(), which reads the stored tier.
+ * Deriving on read would grandfather people automatically, which is forbidden;
+ * lib/entitlements.ts deliberately does not import this module.
+ *
+ * THE CLOCK IS THE GAP. Two branches below change their answer with time alone
+ * — a `canceled` sub once its period end passes, an `active` one once the grace
+ * expires — and no Stripe event fires at that instant. A subscription cancelled
+ * immediately (no `cancel_at_period_end`) is the sharp case: `deleted` is the
+ * LAST event Stripe will ever send for it, so nothing re-runs this and the
+ * member holds Plus indefinitely, unpaid.
+ *
+ * `lib/billing/tierResweep.ts` is that missing writer: idempotent, calls THIS
+ * function rather than restating its rules, and writes only the rows whose
+ * stored tier disagrees with it. It runs unattended every six hours through
+ * `app/api/cron/resweep-tiers` (scheduled from
+ * `.github/workflows/resweep-subscription-tiers.yml`, production only — beta
+ * shares the same database), and by hand through
+ * `scripts/resweep-subscription-tiers.mjs`, which is the same engine with a CLI
+ * on it.
+ */
+export function deriveTier(input: DeriveTierInput): Tier {
+  const now = (input.now ?? new Date()).getTime()
+  if (input.role === 'admin') return 'plus'
+  if (input.grandfathered === true) return 'plus'
+
+  const sub = input.subscription
+  if (!sub) return 'free'
+  const end = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd).getTime() : null
+
+  switch (sub.status) {
+    case 'active':
+    case 'trialing':
+      // A period that lapsed well past the grace means the webhook never came.
+      if (end !== null && Number.isFinite(end) && end + SUBSCRIPTION_GRACE_MS < now) return 'free'
+      return 'plus'
+    case 'canceled':
+      // They paid through the period; honor it, with no grace past the end.
+      return end !== null && Number.isFinite(end) && end > now ? 'plus' : 'free'
+    case 'past_due': // explicitly NOT plus — a lapsed payment is not access
+    case 'incomplete':
+    case 'unpaid':
+    case 'none':
+    default:
+      return 'free'
+  }
+}
+
+/** Convenience for the billing webhook: what to $set on the user document. */
+export function tierUpdateFor(input: DeriveTierInput): { tier: Tier } {
+  return { tier: deriveTier(input) }
+}

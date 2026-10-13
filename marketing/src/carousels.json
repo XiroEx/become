@@ -1,0 +1,536 @@
+[
+  {
+    "id": "CarouselFuel1",
+    "deck": "fuel",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 5,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "Nutrition",
+    "headline": [
+      "FUEL",
+      "THE",
+      "WORK"
+    ],
+    "lead": "Tracking food is this easy: a whole day logged, protein goal hit.",
+    "steps": [
+      "Snap the plate",
+      "Say it in words",
+      "Find it in search"
+    ],
+    "image": "carousel/fuel/day.png",
+    "stats": [
+      {
+        "value": "2,131",
+        "label": "Calories"
+      },
+      {
+        "value": "235g",
+        "label": "Protein"
+      },
+      {
+        "value": "180 lbs",
+        "label": "On track"
+      }
+    ]
+  },
+  {
+    "id": "CarouselFuel2",
+    "deck": "fuel",
+    "slug": "02-snap",
+    "index": 2,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "One · Photo",
+    "headline": [
+      "SNAP IT."
+    ],
+    "lead": "One photo of the plate comes back itemized, and nothing is logged until you say so.",
+    "bullets": [
+      "Eight foods, each on its own line with its own calories.",
+      "A confidence read on every row: High or Medium.",
+      "Not right? Type the fix: \"it was 6 tacos.\""
+    ],
+    "image": "carousel/fuel/snap.png"
+  },
+  {
+    "id": "CarouselFuel3",
+    "deck": "fuel",
+    "slug": "03-say",
+    "index": 3,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Words",
+    "headline": [
+      "SAY IT."
+    ],
+    "lead": "No photo, no problem. Describe the meal in your own words instead.",
+    "bullets": [
+      "\"grilled chicken, rice and broccoli\" is enough to start.",
+      "Works from your words alone. A photo is optional.",
+      "Then the same review: check every line, then log it."
+    ],
+    "image": "carousel/fuel/describe.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselFuel4",
+    "deck": "fuel",
+    "slug": "04-find",
+    "index": 4,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Three · Everything else",
+    "headline": [
+      "FIND IT."
+    ],
+    "lead": "When you already know what it was, the whole database is one field away.",
+    "bullets": [
+      "Search foods and saved meals, brands and calories included.",
+      "Barcode, snap and upload, all on the same sheet.",
+      "Your foods, recents and frequents, one tap each."
+    ],
+    "image": "carousel/fuel/find.png"
+  },
+  {
+    "id": "CarouselFuel5",
+    "deck": "fuel",
+    "slug": "05-cta",
+    "index": 5,
+    "total": 5,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START",
+      "TONIGHT'S",
+      "LOG."
+    ],
+    "lead": "Tonight's dinner is one photo and a tap away.",
+    "image": "carousel/fuel/itemized.png",
+    "steps": [
+      "Snap the plate",
+      "Say it in words",
+      "Find it in search"
+    ]
+  },
+  {
+    "id": "CarouselPractice1",
+    "deck": "practice",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 6,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "The Practice",
+    "headline": [
+      "TRAIN. EAT.",
+      "REFLECT.",
+      "REPEAT."
+    ],
+    "lead": "Body, mind, and routine working together, every day.",
+    "steps": [
+      "Train your body",
+      "Eat and track it",
+      "Reflect on who you become",
+      "Repeat tomorrow"
+    ],
+    "image": "carousel/practice/log.png",
+    "stats": [
+      {
+        "value": "28",
+        "label": "Workouts"
+      },
+      {
+        "value": "395.3K",
+        "label": "Lbs lifted"
+      },
+      {
+        "value": "21.4K",
+        "label": "Last session"
+      }
+    ],
+    "image2": "carousel/practice/live.png"
+  },
+  {
+    "id": "CarouselPractice2",
+    "deck": "practice",
+    "slug": "02-train",
+    "index": 2,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "training",
+    "kicker": "One · Train",
+    "headline": [
+      "TRAIN."
+    ],
+    "lead": "The work is written before you walk in: sets, reps, and the rest between them.",
+    "bullets": [
+      "Coach-built programs in phases, a named day for every session.",
+      "Generate a session from your focus, level and equipment.",
+      "Log set by set, last time's weight in view, new PRs flagged."
+    ],
+    "image": "carousel/practice/program.png"
+  },
+  {
+    "id": "CarouselPractice3",
+    "deck": "practice",
+    "slug": "03-eat",
+    "index": 3,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Eat",
+    "headline": [
+      "EAT."
+    ],
+    "lead": "Eat whatever you want. Track it however you want.",
+    "bullets": [
+      "Snap the plate and it comes back itemized, line by line.",
+      "No photo? Describe the meal in your own words instead.",
+      "Barcode, search, saved foods and recents, one tap each."
+    ],
+    "image": "carousel/practice/find.png"
+  },
+  {
+    "id": "CarouselPractice4",
+    "deck": "practice",
+    "slug": "04-reflect",
+    "index": 4,
+    "total": 6,
+    "variant": "trio",
+    "pillar": "mindset",
+    "kicker": "Three · Reflect",
+    "headline": [
+      "REFLECT."
+    ],
+    "lead": "A few minutes a day on the part of this that actually decides it.",
+    "bullets": [
+      "One short session a day: check in, name a win, lock it in.",
+      "Finish it, bank the XP, and the next chapter opens.",
+      "Then the Training Grounds: State Shift, Vision, Discipline."
+    ],
+    "image": "carousel/practice/decided.png",
+    "images": [
+      "carousel/practice/mind.png",
+      "carousel/practice/decided.png",
+      "carousel/practice/grounds.png"
+    ]
+  },
+  {
+    "id": "CarouselPractice5",
+    "deck": "practice",
+    "slug": "05-repeat",
+    "index": 5,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Four · Repeat",
+    "headline": [
+      "REPEAT."
+    ],
+    "lead": "Perfect weeks are not the point. Coming back the next day is.",
+    "bullets": [
+      "Any activity keeps the day streak alive: a workout, a meal, a check-in.",
+      "A workout streak counts rest days, as long as the week stays on track.",
+      "Three in a row makes a streak, and a freeze covers the day you miss."
+    ],
+    "image": "carousel/practice/streaks.png"
+  },
+  {
+    "id": "CarouselPractice6",
+    "deck": "practice",
+    "slug": "06-cta",
+    "index": 6,
+    "total": 6,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START THE",
+      "PRACTICE."
+    ],
+    "lead": "One loop a day, and it takes far less work than you think.",
+    "image": "carousel/practice/hub.png",
+    "steps": [
+      "Train your body",
+      "Eat and track it",
+      "Reflect on who you become",
+      "Repeat tomorrow"
+    ]
+  },
+  {
+    "id": "CarouselNext1",
+    "deck": "next",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 5,
+    "variant": "cover",
+    "pillar": "nutrition",
+    "kicker": "Live September 1",
+    "headline": [
+      "BECOME",
+      "WHAT'S",
+      "NEXT."
+    ],
+    "lead": "The strongest version of you is built, not found.",
+    "steps": [
+      "Coach-built programs",
+      "Photo plate logging",
+      "A weekly recap"
+    ],
+    "image": "carousel/next/dash.png",
+    "stats": [
+      {
+        "value": "25",
+        "label": "Day streak"
+      },
+      {
+        "value": "2/4",
+        "label": "This week"
+      },
+      {
+        "value": "Lv 3",
+        "label": "Mind"
+      }
+    ]
+  },
+  {
+    "id": "CarouselNext2",
+    "deck": "next",
+    "slug": "02-programs",
+    "index": 2,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "training",
+    "kicker": "One · Programs",
+    "headline": [
+      "PROGRAMS."
+    ],
+    "lead": "Pick a coach-built program and the week arrives already written.",
+    "bullets": [
+      "Programs run in phases, with a named day for each session.",
+      "Your week fills in: training days, rest days, today's work.",
+      "Generate a session from your focus, level and equipment."
+    ],
+    "image": "carousel/next/programs.png"
+  },
+  {
+    "id": "CarouselNext3",
+    "deck": "next",
+    "slug": "03-plate",
+    "index": 3,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "nutrition",
+    "kicker": "Two · Plate",
+    "headline": [
+      "SNAP IT."
+    ],
+    "lead": "The plate comes back itemized, and nothing logs until you add it.",
+    "bullets": [
+      "One plate, eight items, 977 calories, line by line.",
+      "Every line is marked High or Medium confidence.",
+      "Wrong count? Say it in words: \"it was 6 tacos.\""
+    ],
+    "image": "carousel/fuel/snap.png"
+  },
+  {
+    "id": "CarouselNext4",
+    "deck": "next",
+    "slug": "04-recap",
+    "index": 4,
+    "total": 5,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Three · Recap",
+    "headline": [
+      "RECAP."
+    ],
+    "lead": "Each week comes back as one card, written from what you did.",
+    "bullets": [
+      "Mind, Fuel and Training on one strip, a dot per day.",
+      "The week gets a headline: 8 personal records, a new high.",
+      "Mind 5 sessions, food 7 of 7, training 6 against 4."
+    ],
+    "image": "carousel/next/recap.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselNext5",
+    "deck": "next",
+    "slug": "05-cta",
+    "index": 5,
+    "total": 5,
+    "variant": "cta",
+    "pillar": "nutrition",
+    "kicker": "Free today",
+    "headline": [
+      "START",
+      "TODAY."
+    ],
+    "lead": "Day one is one workout, one meal, one check-in.",
+    "image": "carousel/practice/streaks.png",
+    "steps": [
+      "Coach-built programs",
+      "Photo plate logging",
+      "A weekly recap"
+    ]
+  },
+  {
+    "id": "CarouselMind1",
+    "deck": "mind",
+    "slug": "01-cover",
+    "index": 1,
+    "total": 6,
+    "variant": "cover",
+    "pillar": "mindset",
+    "kicker": "Mindset",
+    "headline": [
+      "THE MIND IS",
+      "THE MUSCLE."
+    ],
+    "lead": "Train the part of you that decides whether to keep going.",
+    "steps": [
+      "Fifty sessions, five chapters",
+      "Three minutes a day",
+      "Seven tools in the Grounds",
+      "One mindset across all three"
+    ],
+    "image": "carousel/mind/checkin.png",
+    "stats": [
+      {
+        "value": "9/50",
+        "label": "Sessions"
+      },
+      {
+        "value": "Lv 3",
+        "label": "Mind"
+      },
+      {
+        "value": "Ch.1",
+        "label": "Reset"
+      }
+    ],
+    "image2": "carousel/practice/mind.png"
+  },
+  {
+    "id": "CarouselMind2",
+    "deck": "mind",
+    "slug": "02-path",
+    "index": 2,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "mindset",
+    "kicker": "One · The path",
+    "headline": [
+      "THE PATH."
+    ],
+    "lead": "Fifty sessions in five chapters. Ten to a chapter, one a day.",
+    "bullets": [
+      "Reset, then Foundation: get out of your own way, then see where you're going.",
+      "Edge, then Defense: build the habits, then protect them.",
+      "Architect: design the world around you."
+    ],
+    "image": "carousel/mind/path.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselMind3",
+    "deck": "mind",
+    "slug": "03-session",
+    "index": 3,
+    "total": 6,
+    "variant": "trio",
+    "pillar": "mindset",
+    "kicker": "Two · The session",
+    "headline": [
+      "THE SESSION."
+    ],
+    "lead": "Three minutes a day, shaped by how you actually feel.",
+    "bullets": [
+      "It opens with one honest tap on where you really are.",
+      "Four moves, about three minutes, built around that tap.",
+      "It writes back what it saw, and banks 20 XP."
+    ],
+    "image": "carousel/practice/decided.png",
+    "images": [
+      "carousel/mind/checkin.png",
+      "carousel/mind/win.png",
+      "carousel/practice/decided.png"
+    ]
+  },
+  {
+    "id": "CarouselMind4",
+    "deck": "mind",
+    "slug": "04-grounds",
+    "index": 4,
+    "total": 6,
+    "variant": "trio",
+    "pillar": "mindset",
+    "kicker": "Three · Training Grounds",
+    "headline": [
+      "TRAINING",
+      "GROUNDS."
+    ],
+    "lead": "Seven tools that open chapter by chapter, after the session.",
+    "bullets": [
+      "State Shift resets you in under three minutes.",
+      "Self-Image and Mission: who you're becoming, and why.",
+      "Vision, Discipline, Anti-Sabotage and Social follow by chapter."
+    ],
+    "image": "carousel/mind/grounds.png",
+    "images": [
+      "carousel/mind/state-shift.png",
+      "carousel/mind/grounds.png",
+      "carousel/mind/self-image.png"
+    ]
+  },
+  {
+    "id": "CarouselMind5",
+    "deck": "mind",
+    "slug": "05-everything",
+    "index": 5,
+    "total": 6,
+    "variant": "detail",
+    "pillar": "progress",
+    "kicker": "Four · Everything",
+    "headline": [
+      "EVERYTHING."
+    ],
+    "lead": "Mindset is not a tab. It runs through the whole app.",
+    "bullets": [
+      "Your mood check-in seeds the session. A rough day opens differently.",
+      "The Becoming reads Mind, Fuel and Training as one story: then, now, next.",
+      "Mind is one of the three pillars of the super streak."
+    ],
+    "image": "carousel/next/dash.png",
+    "phoneWidth": 470
+  },
+  {
+    "id": "CarouselMind6",
+    "deck": "mind",
+    "slug": "06-cta",
+    "index": 6,
+    "total": 6,
+    "variant": "cta",
+    "pillar": "mindset",
+    "kicker": "Free today",
+    "headline": [
+      "TRAIN",
+      "THE MIND."
+    ],
+    "lead": "Session one is one honest tap and three minutes away.",
+    "image": "carousel/practice/mind.png",
+    "steps": [
+      "Fifty sessions, five chapters",
+      "Three minutes a day",
+      "Seven tools in the Grounds",
+      "One mindset across all three"
+    ]
+  }
+]

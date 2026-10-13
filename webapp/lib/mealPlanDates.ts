@@ -51,11 +51,11 @@ export function plannedDateKey(d: Date): string {
  * comparisons against local "today" work in non-UTC zones.
  */
 export function localDateFromPlannedIso(iso: string): Date {
-  const datePart = typeof iso === 'string'
+  const datePart = (typeof iso === 'string'
     ? iso.split('T')[0]
-    : new Date(iso).toISOString().split('T')[0]
+    : new Date(iso).toISOString().split('T')[0]) ?? ''
   const m = YYYY_MM_DD.exec(datePart)
-  if (!m) {
+  if (!m || m[1] == null || m[2] == null || m[3] == null) {
     // Fall back to a permissive parse — should never happen with server-shaped responses.
     const fallback = new Date(datePart)
     return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate())
@@ -160,4 +160,31 @@ export function combineDateWithNowTime(dateKey: string, now: Date = new Date()):
     now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds(),
   )
   return combined.toISOString()
+}
+
+/**
+ * Build the `loggedAt` for a manually-timed entry.
+ *
+ * `dateKey` null means today; `timeHHMM` null means the current wall clock (the
+ * long-standing behaviour of combineDateWithNowTime). Supplying a time matters
+ * now that the day view sorts by clock: three foods backdated to yesterday used
+ * to all receive the same current minute, so they stacked in entry order rather
+ * than in the order they were eaten.
+ */
+export function buildLoggedAt(
+  dateKey: string | null,
+  timeHHMM: string | null,
+  fallbackDate?: Date,
+  now: Date = new Date(),
+): string {
+  const base = dateKey ?? todayLocalKey(fallbackDate ?? now)
+  if (!timeHHMM) return combineDateWithNowTime(base, now)
+  const m = /^(\d{1,2}):(\d{2})$/.exec(timeHHMM.trim())
+  if (!m) return combineDateWithNowTime(base, now)
+  const dm = YYYY_MM_DD.exec(base)
+  if (!dm) throw new Error(`Invalid date key: ${base} (expected YYYY-MM-DD)`)
+  return new Date(
+    Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]),
+    Number(m[1]), Number(m[2]), 0, 0,
+  ).toISOString()
 }

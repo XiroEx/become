@@ -1,34 +1,55 @@
+import { convert, familyOf, type Unit } from './units'
+
 // ---------------------------------------------------------------------------
 // foodReview — auto-flag rules for the Food collection.
 //
-// Used in two places:
-//   1. Import time (lib/foodImport.ts): if `computeReviewIssues` returns any
-//      issues, the new Food doc is created with `needsReview: true`.
-//   2. Admin detail page (/dashboard/admin/foods/[id]): re-runs at render
-//      time so the admin sees a live list of WHY a food was flagged. We
-//      don't store the reasons separately because the underlying data may
-//      have changed between flag-time and review-time.
+// Import and reconciliation writers persist both the materialized boolean and
+// provenance (ownership, rule version, issue codes). The admin detail page
+// also re-runs these rules so it can distinguish stored evidence from the live
+// result after underlying food data or the rule set changes.
 //
 // Tolerances are deliberately permissive — we only want to flag genuinely
 // suspect entries, not borderline ones. Better to under-flag than over-flag.
 // ---------------------------------------------------------------------------
 
-export type ReviewIssueCode =
-  | 'slug_collision'
-  | 'calories_out_of_range'
-  | 'negative_nutrition'
-  | 'macros_inconsistent'
-  | 'no_nutrition'
-  | 'bridge_conflict'
+export const REVIEW_ISSUE_CODES = [
+  'slug_collision',
+  'calories_out_of_range',
+  'negative_nutrition',
+  'macros_inconsistent',
+  'no_nutrition',
+  'bridge_conflict',
+] as const
+
+export type ReviewIssueCode = (typeof REVIEW_ISSUE_CODES)[number]
 
 export interface ReviewIssue {
   code: ReviewIssueCode
   message: string
 }
 
+/**
+ * Bump whenever the automatic rules change in a way that may change a stored
+ * flag. Reconciliation reports the version that produced its decision.
+ */
+export const FOOD_REVIEW_RULE_VERSION = '2026-08-23.1'
+
+export type FoodReviewOwner = 'automatic' | 'manual'
+export type FoodReviewOrigin = 'import' | 'rules' | 'admin' | 'reconcile' | 'legacy-created-flag'
+
+export interface FoodReviewFlagState {
+  owner: FoodReviewOwner
+  issueCodes: ReviewIssueCode[]
+  ruleVersion: string
+  origin: FoodReviewOrigin
+  updatedAt: Date
+  updatedBy?: string
+}
+
 export interface FoodForReview {
   slug?: string
   variants: Array<{
+    isDefault?: boolean
     servingSize?: number
     servingUnit?: string
     gramsPerServing?: number
@@ -52,6 +73,59 @@ export interface FoodForReview {
  */
 const CALORIE_UPPER = 1000 // per 100g; oils ~900, butter ~717 — anything above 1000 is suspect
 const MACRO_TOLERANCE = 0.30 // |4P + 4C + 9F - cal| / cal must be <= 30%
+
+type CalorieDensityBasis = {
+  amount: number
+  unit: 'g' | 'ml'
+}
+
+/**
+ * Resolve the mass/volume amount that the stored nutrition describes.
+ *
+ * Native mass and volume units use servingSize converted to g/ml. A discrete
+ * serving (each/slice/scoop/serving) has no density unless its bridge declares
+ * the weight or volume of that serving. gramsPerServing/mlPerServing are NOT
+ * used for a native mass/volume food because there they may describe a handy
+ * household portion rather than the storage basis (the normal per-100 import
+ * shape).
+ */
+function calorieDensityBasis(
+  variant: FoodForReview['variants'][number],
+): CalorieDensityBasis | null {
+  const servingSize = variant.servingSize
+  const servingUnit = (variant.servingUnit ?? '').toLowerCase() as Unit
+
+  if (servingSize != null && Number.isFinite(servingSize) && servingSize > 0) {
+    const family = familyOf(servingUnit)
+    try {
+      if (family === 'mass') {
+        return { amount: convert(servingSize, servingUnit, 'g'), unit: 'g' }
+      }
+      if (family === 'volume') {
+        return { amount: convert(servingSize, servingUnit, 'ml'), unit: 'ml' }
+      }
+    } catch {
+      // Invalid/legacy unit: fall through to an explicit bridge if one exists.
+    }
+  }
+
+  if (
+    variant.gramsPerServing != null
+    && Number.isFinite(variant.gramsPerServing)
+    && variant.gramsPerServing > 0
+  ) {
+    return { amount: variant.gramsPerServing, unit: 'g' }
+  }
+  if (
+    variant.mlPerServing != null
+    && Number.isFinite(variant.mlPerServing)
+    && variant.mlPerServing > 0
+  ) {
+    return { amount: variant.mlPerServing, unit: 'ml' }
+  }
+
+  return null
+}
 
 /**
  * Return all auto-flag issues for a Food. Empty array means the food is
@@ -80,7 +154,7 @@ export function computeReviewIssues(food: FoodForReview): ReviewIssue[] {
     }
   }
 
-  const variant = food.variants?.[0]
+  const variant = food.variants?.find(v => v.isDefault) ?? food.variants?.[0]
   if (!variant) return issues
   const n = variant.nutrition
 
@@ -107,16 +181,18 @@ export function computeReviewIssues(food: FoodForReview): ReviewIssue[] {
     })
   }
 
-  // 4. Calories out of range. Computed PER 100g/100ml — i.e. on a normalized
-  // basis so package-size differences don't trip the check. We use the
-  // variant's servingSize as the denominator: a Branded "1 cookie 30g" food
-  // with 200 cal would normalize to 666 per 100g, well within range.
-  const servingSize = variant.servingSize && variant.servingSize > 0 ? variant.servingSize : 100
-  const per100Cals = ((n.calories ?? 0) / servingSize) * 100
-  if (per100Cals > CALORIE_UPPER) {
+  // 4. Calories out of range. Computed per 100g/100ml so package size and
+  // native unit do not change the result. For discrete foods, only run this
+  // check when a grams/ml bridge makes density knowable. Treating "1 serving"
+  // as one gram used to flag essentially every saved recipe above 10 calories.
+  const densityBasis = calorieDensityBasis(variant)
+  const per100Cals = densityBasis
+    ? ((n.calories ?? 0) / densityBasis.amount) * 100
+    : null
+  if (densityBasis && per100Cals != null && per100Cals > CALORIE_UPPER) {
     issues.push({
       code: 'calories_out_of_range',
-      message: `Calories per 100${(variant.servingUnit ?? 'g').toLowerCase()} = ${Math.round(per100Cals)}, above ${CALORIE_UPPER} threshold`,
+      message: `Calories per 100${densityBasis.unit} = ${Math.round(per100Cals)}, above ${CALORIE_UPPER} threshold`,
     })
   }
 
@@ -144,8 +220,24 @@ function runBridgeCheck(
   issues: ReviewIssue[],
 ): ReviewIssue[] {
   const su = (variant.servingUnit ?? '').toLowerCase()
+
+  // A servingSize of exactly 100 is the per-100 MATH REFERENCE, not a claim
+  // about the serving — that is how every OpenFoodFacts/USDA import is stored,
+  // with the real serving weight carried in gramsPerServing/mlPerServing.
+  // Cinnamon Toast Crunch is servingSize=100 g with gramsPerServing=40 and a
+  // "40g" label, and it is completely correct. QuantityPicker and
+  // servingOptions both read that shape as normal and rely on the two
+  // differing; only this rule called it a conflict, and it did so for 2543 of
+  // the 3656 OFF imports, burying ~700 real issues under false positives.
+  //
+  // A genuine conflict is when servingSize is NOT the per-100 reference and the
+  // bridge still disagrees with it — then the two really are describing the
+  // same serving with different numbers.
+  const isPer100Reference = variant.servingSize === 100
+
   if (
-    variant.gramsPerServing != null
+    !isPer100Reference
+    && variant.gramsPerServing != null
     && (su === 'g')
     && Math.abs(variant.gramsPerServing - (variant.servingSize ?? 0)) > 0.5
   ) {
@@ -155,7 +247,8 @@ function runBridgeCheck(
     })
   }
   if (
-    variant.mlPerServing != null
+    !isPer100Reference
+    && variant.mlPerServing != null
     && (su === 'ml')
     && Math.abs(variant.mlPerServing - (variant.servingSize ?? 0)) > 0.5
   ) {
@@ -165,4 +258,51 @@ function runBridgeCheck(
     })
   }
   return issues
+}
+
+function sortedIssueCodes(issues: ReviewIssue[]): ReviewIssueCode[] {
+  return [...new Set(issues.map(issue => issue.code))].sort()
+}
+
+/** The complete pair an automatic writer must persist together. */
+export function computeAutomaticReviewState(
+  food: FoodForReview,
+  options: { at?: Date; origin?: Extract<FoodReviewOrigin, 'import' | 'rules' | 'reconcile' | 'legacy-created-flag'> } = {},
+): { needsReview: boolean; reviewFlag: FoodReviewFlagState; issues: ReviewIssue[] } {
+  const issues = computeReviewIssues(food)
+  return {
+    needsReview: issues.length > 0,
+    reviewFlag: {
+      owner: 'automatic',
+      issueCodes: sortedIssueCodes(issues),
+      ruleVersion: FOOD_REVIEW_RULE_VERSION,
+      origin: options.origin ?? 'rules',
+      updatedAt: options.at ?? new Date(),
+    },
+    issues,
+  }
+}
+
+/** An explicit admin choice owns the flag even when that choice is `false`. */
+export function manualReviewState(
+  needsReview: boolean,
+  options: { at?: Date; updatedBy?: string } = {},
+): { needsReview: boolean; reviewFlag: FoodReviewFlagState } {
+  return {
+    needsReview,
+    reviewFlag: {
+      owner: 'manual',
+      issueCodes: [],
+      ruleVersion: FOOD_REVIEW_RULE_VERSION,
+      origin: 'admin',
+      updatedAt: options.at ?? new Date(),
+      ...(options.updatedBy ? { updatedBy: options.updatedBy } : {}),
+    },
+  }
+}
+
+export function isAutomaticReviewOwned(
+  flag: Pick<FoodReviewFlagState, 'owner'> | null | undefined,
+): boolean {
+  return flag?.owner === 'automatic'
 }

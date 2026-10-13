@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import Exercise from '@/models/Exercise'
 import type { IExerciseDefinition, Equipment } from '@/models/Exercise'
 import { findAlternatives, type ScoringContext } from '@/lib/exerciseAlternatives'
+import { visibleExerciseFilter } from '@/lib/exerciseVisibility'
 
 /**
  * GET /api/exercises/alternatives?slug=barbell-back-squat
@@ -44,8 +45,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Exercise not found' }, { status: 404 })
     }
 
-    // Load all active exercises (cached by Mongoose connection pooling in practice)
-    const allExercises = await Exercise.find({ isActive: true }).lean() as IExerciseDefinition[]
+    // Load all active exercises this user can see (cached by Mongoose
+    // connection pooling in practice) — catalog + their own customs + any
+    // custom exercise an admin has approved as universal. Without this a
+    // private custom exercise from any user would show up as a swap
+    // candidate for everyone, since findAlternatives itself does no
+    // ownership filtering.
+    const allExercises = await Exercise.find({
+      isActive: true,
+      ...visibleExerciseFilter(payload.userId),
+    }).lean() as IExerciseDefinition[]
 
     const context: ScoringContext = {
       availableEquipment: equipmentParam

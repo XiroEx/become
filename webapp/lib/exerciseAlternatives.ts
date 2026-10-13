@@ -20,7 +20,7 @@
  * 14. Stabilizer overlap (bonus for similar stabilizer demands)
  */
 
-import type { IExerciseDefinition, Equipment, MovementPattern, MuscleGroup } from '@/models/Exercise';
+import type { IExerciseDefinition, Equipment, Laterality, MovementPattern, MuscleGroup } from '@/models/Exercise';
 
 export interface AlternativeCandidate {
   slug: string;
@@ -35,7 +35,20 @@ export interface AlternativeCandidate {
   bodyRegion: string;
   role: string;
   trackingType: string;
+  /** Scored on (rule 9) and now REPORTED: swapping a bilateral lift for a
+   *  unilateral one changes how the replacement is logged (per side vs both),
+   *  so a picker row that omits laterality cannot log what it offers. The
+   *  shared contract types it — see `AlternativeCandidateSchema` in
+   *  shared/api-client/src/schemas/exercises.ts. */
+  laterality: Laterality;
   isExplicitAlternative: boolean;
+  /** True for the caller's own custom exercise — drives the badge. */
+  isCustom: boolean;
+  /** A custom exercise keeps its demo on its own document rather than in
+   *  `exercise_videos`, so the URL has to travel with the row for a client
+   *  that has no second list to merge it from (the native picker). `null`
+   *  when nothing has been uploaded. */
+  videoUrl: string | null;
 }
 
 export interface ScoringContext {
@@ -114,7 +127,7 @@ const EQUIPMENT_CLASSES: Record<string, string[]> = {
   bench: ['flat_bench', 'incline_bench', 'decline_bench'],
   rack: ['squat_rack'],
   band: ['resistance_band'],
-  cardio_machine: ['treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical'],
+  cardio_machine: ['treadmill', 'stationary_bike', 'rowing_machine', 'assault_bike', 'elliptical', 'stair_climber'],
 };
 
 function getEquipmentClass(eq: string): string {
@@ -370,9 +383,12 @@ export function findAlternatives(
       bodyRegion: candidate.bodyRegion,
       role: candidate.role,
       trackingType: candidate.trackingType,
+      laterality: candidate.laterality as Laterality,
       isExplicitAlternative:
         ((source.alternatives as string[]) || []).includes(candidate.slug) ||
         ((source.variations as string[]) || []).includes(candidate.slug),
+      isCustom: candidate.isCustom === true,
+      videoUrl: candidate.videoUrl ?? null,
     });
   }
 

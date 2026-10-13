@@ -99,7 +99,10 @@ export default function VisionScene({ move, onDone }: SceneProps) {
   const lockIn = () => {
     if (locked) return
     setLocked(true)
-    setTimeout(onDone, 900)
+    // Report the vision they locked in. Every other core beat reports something;
+    // without this, an `envision` day could collect nothing at all and the closing
+    // reflection had nothing to read, so it silently did not render.
+    setTimeout(() => onDone(statement ? { q: 'The future self I locked in on', a: statement } : undefined), 900)
   }
 
   return (

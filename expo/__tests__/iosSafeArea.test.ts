@@ -4,28 +4,26 @@ import * as path from "path";
 // Top-level screens that own their SafeAreaView directly in the route file.
 const DIRECT_SCREENS = [
   "app/index.tsx",
-  "app/login.tsx",
-  "app/verify.tsx",
-  "app/(tabs)/programming/index.tsx",
-  "app/(tabs)/programming/search.tsx",
-  "app/(tabs)/programming/saved.tsx",
-  "app/(tabs)/programming/[id]/index.tsx",
-  "app/(tabs)/programming/[id]/phase/[phase].tsx",
-  "app/(tabs)/programming/[id]/workout/[idx]/index.tsx",
-  "app/(tabs)/mind/index.tsx",
-  "app/(tabs)/nutrition/index.tsx",
-  "app/(tabs)/nutrition/search.tsx",
-  "app/(tabs)/nutrition/food/[id].tsx",
-  "app/(tabs)/nutrition/log/[date].tsx",
-  "app/(tabs)/nutrition/recipes/index.tsx",
-  "app/(tabs)/nutrition/recipes/[id].tsx",
-  "app/(tabs)/chat/index.tsx",
-  "app/(tabs)/chat/[id].tsx",
-  "app/(tabs)/calendar/index.tsx",
-  "app/(tabs)/calendar/settings.tsx",
-  "app/(tabs)/profile/health.tsx",
-  "app/admin/foods/index.tsx",
-  "app/admin/exercises/index.tsx",
+  "app/(auth)/login.tsx",
+  "app/(auth)/verify.tsx",
+  "app/(app)/(tabs)/programming/index.tsx",
+  "app/(app)/(tabs)/programming/browse.tsx",
+  "app/(app)/(tabs)/programming/search.tsx",
+  "app/(app)/(tabs)/programming/saved.tsx",
+  "app/(app)/(tabs)/programming/[id]/index.tsx",
+  "app/(app)/(tabs)/programming/[id]/phase/[phase].tsx",
+  "app/(app)/(tabs)/programming/[id]/workout/[idx]/index.tsx",
+  "app/(app)/(tabs)/mind/index.tsx",
+  "app/(app)/(tabs)/nutrition/index.tsx",
+  "app/(app)/(tabs)/nutrition/search.tsx",
+  "app/(app)/(tabs)/nutrition/food/[id].tsx",
+  "app/(app)/(tabs)/nutrition/recipes/index.tsx",
+  "app/(app)/(tabs)/nutrition/recipes/[id].tsx",
+  "app/(app)/(tabs)/chat/index.tsx",
+  "app/(app)/(tabs)/chat/[id].tsx",
+  "app/(app)/(tabs)/calendar/index.tsx",
+  "app/(app)/(tabs)/calendar/settings.tsx",
+  "app/(app)/settings.tsx",
 ];
 
 // Routes that delegate the SafeAreaView responsibility to a component they
@@ -33,12 +31,26 @@ const DIRECT_SCREENS = [
 // contains the SafeAreaView wrapper.
 const DELEGATING_SCREENS: { route: string; delegate: string }[] = [
   {
-    route: "app/(tabs)/dashboard/index.tsx",
+    route: "app/(app)/(tabs)/dashboard/index.tsx",
     delegate: "components/DashboardScreen.tsx",
   },
   {
-    route: "app/(tabs)/programming/[id]/workout/[idx]/live.tsx",
+    route: "app/(app)/(tabs)/dashboard/streaks.tsx",
+    delegate: "components/streaks/StreaksScreen.tsx",
+  },
+  {
+    route: "app/(app)/(tabs)/programming/[id]/workout/[idx]/live.tsx",
     delegate: "components/live/LiveWorkoutClient.tsx",
+  },
+  {
+    route: "app/(app)/(tabs)/profile/index.tsx",
+    delegate: "components/profile/ProfileScreen.tsx",
+  },
+  {
+    // NP-302: health.tsx now just renders ProfileSettingsScreen, which also
+    // backs Settings > Profile (embedded, no SafeAreaView of its own there).
+    route: "app/(app)/(tabs)/profile/health.tsx",
+    delegate: "components/profile/ProfileSettingsScreen.tsx",
   },
 ];
 

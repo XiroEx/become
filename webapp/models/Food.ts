@@ -1,4 +1,8 @@
 import mongoose, { Schema, Types } from 'mongoose'
+import {
+  REVIEW_ISSUE_CODES,
+  type FoodReviewFlagState,
+} from '@/lib/foodReview'
 
 // ---------------------------------------------------------------------------
 // Food — replaces FoodItem.
@@ -121,24 +125,91 @@ export interface IFood {
   isFirstClass: boolean
   isVerified: boolean
 
+  /**
+   * Verification pipeline state. Supersedes the bare `isVerified` boolean,
+   * which recorded THAT something was trusted but never why, by whom, against
+   * what evidence, or when it should be rechecked.
+   *
+   * `claimedAt` is the concurrency guard: two users flagging the same food at
+   * once must produce one run, not two. It carries a TTL rather than being a
+   * permanent lock, because runs die mid-flight and a permanent lock would
+   * wedge a food as unverifiable forever. See lib/nutrition/flagPolicy.ts.
+   */
+  verification?: {
+    state: 'unverified' | 'queued' | 'running' | 'verified' | 'insufficient'
+    /** How strong the verification is, not merely whether it happened. */
+    tier?: 'self-consistent' | 'corroborated' | 'label-verified'
+    evidence?: Array<{
+      url?: string
+      source?: string
+      extractedValues?: Record<string, number | string>
+      model?: string
+      at?: Date
+    }>
+    runId?: string
+    claimedAt?: Date
+    verifiedAt?: Date
+    /** Branded products get reformulated; a verification is not forever. */
+    expiresAt?: Date
+    /** A flag arrived mid-run — re-run ONCE on completion, never a loop. */
+    recheckRequested?: boolean
+    /** Distinct users who have flagged this. Corroboration, not a spam count. */
+    flagCount?: number
+    lastOutcome?: string
+  }
+
   barcode?: string
   imageUrl?: string
 
   usageCount: number
+  /**
+   * Whoever first caused this row to exist — INCLUDING a USDA/OpenFoodFacts
+   * catalogue row materialised on their behalf. Provenance, not ownership of
+   * an authored item. Do not count allowances on this: see `authoredBy`.
+   */
   createdBy?: Types.ObjectId
+
+  /**
+   * The member who DELIBERATELY authored this food, set only by the three
+   * gated create surfaces (POST /api/nutrition/foods, meal save-as-food,
+   * recipe save-as-food) via `importManualFood(..., { authored: true })`.
+   *
+   * It exists because `{ source: 'manual', createdBy }` is not ownership.
+   * `importManualFood` hardcodes `source: 'manual'` and is also how
+   * POST /api/nutrition/foods/import and the barcode scanner materialise a
+   * live OpenFoodFacts hit so it can be LOGGED — both ungated, both
+   * attributing `createdBy` to the caller. Counting those made the free
+   * custom-foods allowance fail in both directions at once: a member at 3/3
+   * could mint a fourth row through /foods/import, while ordinary food logging
+   * silently ate the whole 3-slot cap with rows they never knowingly created
+   * and could not find to delete — and "delete one to free a slot" is the only
+   * escape hatch an inventory cap has.
+   *
+   * Rows written before this field existed have none, so they read as
+   * un-authored. That is the safe direction and costs nothing real: every
+   * pre-launch member is grandfathered to Plus (uncapped) by
+   * scripts/migrate-tiers.mjs, so the cap only ever applies to accounts
+   * created after this shipped, which have no legacy rows.
+   */
+  authoredBy?: Types.ObjectId
 
   /** When this Food was minted from a Recipe (recipe → "save as food"), the
    *  source recipe id — so the Food links back to the recipe it came from. */
   recipeId?: Types.ObjectId
 
   /**
-   * When true, this Food has been auto-flagged (or admin-flagged) for review
-   * — typically because nutrition values are suspect, the slug had to be
-   * collision-suffixed past -2, or the food has no usable nutrition. Surfaced
-   * in the admin Foods section. See `lib/foodReview.ts` for the auto-flag
-   * rules.
+   * Materialized review-queue flag. Keep this indexed boolean in sync with
+   * `reviewFlag`; the latter records who owns the decision and why.
    */
   needsReview?: boolean
+
+  /**
+   * Provenance for `needsReview`. Automatic writers may update only
+   * automatic-owned decisions. An explicit admin choice is manual-owned even
+   * when it clears the flag, so later imports cannot silently undo it.
+   * Missing means legacy/unknown ownership and must be preserved.
+   */
+  reviewFlag?: FoodReviewFlagState
 
   /**
    * Hard-hidden from all user-facing search. Set only on entries whose source
@@ -200,6 +271,19 @@ const VariantSchema = new Schema<IFoodVariant>({
   externalDataType: { type: String },
 }, { _id: true })
 
+const ReviewFlagSchema = new Schema<FoodReviewFlagState>({
+  owner: { type: String, required: true, enum: ['automatic', 'manual'] },
+  issueCodes: { type: [String], enum: REVIEW_ISSUE_CODES, default: [] },
+  ruleVersion: { type: String, required: true },
+  origin: {
+    type: String,
+    required: true,
+    enum: ['import', 'rules', 'admin', 'reconcile', 'legacy-created-flag'],
+  },
+  updatedAt: { type: Date, required: true },
+  updatedBy: { type: String },
+}, { _id: false })
+
 const FoodSchema = new Schema<IFood>({
   name: { type: String, required: true },
   slug: { type: String, required: true },
@@ -227,15 +311,39 @@ const FoodSchema = new Schema<IFood>({
 
   isFirstClass: { type: Boolean, default: false },
   isVerified: { type: Boolean, default: false },
+  verification: {
+    state: {
+      type: String,
+      enum: ['unverified', 'queued', 'running', 'verified', 'insufficient'],
+      default: 'unverified',
+    },
+    tier: { type: String, enum: ['self-consistent', 'corroborated', 'label-verified'] },
+    evidence: [{
+      url: { type: String },
+      source: { type: String },
+      extractedValues: { type: Schema.Types.Mixed },
+      model: { type: String },
+      at: { type: Date },
+    }],
+    runId: { type: String },
+    claimedAt: { type: Date },
+    verifiedAt: { type: Date },
+    expiresAt: { type: Date },
+    recheckRequested: { type: Boolean },
+    flagCount: { type: Number },
+    lastOutcome: { type: String },
+  },
 
   barcode: { type: String },
   imageUrl: { type: String },
 
   usageCount: { type: Number, default: 0 },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  authoredBy: { type: Schema.Types.ObjectId, ref: 'User' },
   recipeId: { type: Schema.Types.ObjectId, ref: 'Recipe' },
 
   needsReview: { type: Boolean, default: false },
+  reviewFlag: { type: ReviewFlagSchema },
   hiddenFromSearch: { type: Boolean, default: false },
   groupKey: { type: String },
 }, {
@@ -272,9 +380,16 @@ FoodSchema.index({ category: 1, isFirstClass: -1 })
 FoodSchema.index({ source: 1, externalId: 1 }, { unique: true, sparse: true })
 // Admin reviews: surface flagged foods quickly without a full collection scan.
 FoodSchema.index({ needsReview: 1, updatedAt: -1 })
+// Reconciliation scans automatic-owned rows without touching manual/legacy
+// decisions. Keep the existing needsReview index for the admin list query.
+FoodSchema.index({ 'reviewFlag.owner': 1, needsReview: 1, updatedAt: -1 })
 // Variant-merging passes filter by groupKey; sparse so manual foods
 // without a groupKey don't bloat the index.
 FoodSchema.index({ groupKey: 1 }, { sparse: true })
+// The free-tier custom-foods allowance is a live count of this field
+// (lib/allowances.ts). Sparse — only deliberately authored foods carry it, so
+// the index stays a rounding error next to the global catalogue.
+FoodSchema.index({ authoredBy: 1 }, { sparse: true })
 // Variant-level externalId: when merging USDA Foundation/SR Legacy variants
 // into a single Food doc, each variant carries its own fdcId so re-imports
 // can find the parent quickly. Sparse — only USDA-source variants populate it.

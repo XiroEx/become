@@ -5,13 +5,15 @@
 // ritual) is THE thing on screen; a quiet "More →" leads to the Arsenal of
 // unlocked tools. Begin → launches the immersive SessionPlayer.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Brain, ArrowRight, Check, ChevronRight, Flame, Lock } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import IdentityOnboarding from '@/components/mind/IdentityOnboarding'
 import SessionPlayer from '@/components/mind/session/SessionPlayer'
+import { isMoodLevel, seedStateForMood, type TodayMood } from '@/lib/mind/moodBridge'
 import MindCoachTeaser from '@/components/mind/MindCoachTeaser'
 import TrainingGrounds from '@/components/mind/TrainingGrounds'
 import SuggestedActions from '@/components/mind/SuggestedActions'
@@ -21,10 +23,13 @@ import { precomposeMindSession } from '@/lib/mind/precompose'
 import { suggestActions } from '@/lib/mind/suggestActions'
 import { getPathSession } from '@/lib/mind/sessionPath'
 import { findProtocol, type SuggestedAction } from '@/lib/mind/suggestedProtocols'
+import { shouldAutoStartMindSession } from '@/lib/mind/autoStart'
 import { runAiTask } from '@/lib/ai/runClient'
-import type { MindSessionPlan, MoveKind } from '@/lib/mind/moves'
+import type { MindSessionPlan, MoveKind, SessionContext } from '@/lib/mind/moves'
 import type { MindState } from '@/lib/mindContent'
 import { CHAPTERS, getUnlockedSystems } from '@/lib/mindXP'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { syntheticGate, type GatePayload } from '@/lib/entitlementsClient'
 
 interface LevelProgress { level: number; intoLevel: number; span: number; pct: number; xpToNext: number }
 
@@ -90,17 +95,29 @@ const SUGG_CACHE_KEY = 'mind-suggested-next'
 const SUGG_CACHE_TTL = 12 * 60 * 60 * 1000
 
 export default function MindJourney() {
+  // The home dashboard's Mindset tile links here with ?start=1 to jump
+  // straight into today's session instead of just onto this page.
+  const searchParams = useSearchParams()
+  const autoStart = searchParams?.get('start') === '1'
+  const autoStartedRef = useRef(false)
+
   const [loading, setLoading] = useState(true)
   const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const [progress, setProgress] = useState<ProgressData | null>(null)
   const [streak, setStreak] = useState(0)
   const [recentState, setRecentState] = useState<MindState | null>(null)
+  const [recentFeeling, setRecentFeeling] = useState<string | null>(null)
+  const [moodToday, setMoodToday] = useState<TodayMood | null>(null)
   const [missionAction, setMissionAction] = useState<string | null>(null)
   const [lastBreathAt, setLastBreathAt] = useState<number | null>(null)
   const [recentKinds, setRecentKinds] = useState<string[]>([])
   const [playing, setPlaying] = useState(false)
   // Fresh seed per launch so replays compose a varied set (not the same items).
   const [sessionSeed, setSessionSeed] = useState<number | null>(null)
+  // An unfinished session from an earlier visit. Begin picks this up verbatim
+  // rather than composing something new, so walking away does not silently swap
+  // your session for a different one.
+  const [resumable, setResumable] = useState<{ seed: number; plan: MindSessionPlan } | null>(null)
   // AI-composed session (become-ai graph). Pre-composed in the background after
   // the page loads so there's NO added wait at Begin: if it's ready we play it,
   // otherwise we fall back to the instant deterministic plan.
@@ -110,6 +127,10 @@ export default function MindJourney() {
   // refetch; suggFetching drives the "tuning…" hint ONLY during a real fetch.
   const [aiSuggestions, setAiSuggestions] = useState<SuggestedAction[] | null>(null)
   const [suggFetching, setSuggFetching] = useState(false)
+  // Free members get main sessions 1-10; the server reports the wall on GET so
+  // the lock is drawn BEFORE Begin rather than after a whole session.
+  const [sessionLock, setSessionLock] = useState<{ limit: number } | null>(null)
+  const [gate, setGate] = useState<GatePayload | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -118,7 +139,7 @@ export default function MindJourney() {
         fetch('/api/mind/identity', { headers: h }),
         fetch('/api/mind/progress', { headers: h }),
         fetch(`/api/mind/session?tz=${new Date().getTimezoneOffset()}`, { headers: h }),
-        fetch('/api/mind/state', { headers: h }),
+        fetch(`/api/mind/state?tz=${new Date().getTimezoneOffset()}`, { headers: h }),
         fetch('/api/mind/mission', { headers: h }),
       ])
       const identity = identityRes.ok ? await identityRes.json() : null
@@ -145,11 +166,37 @@ export default function MindJourney() {
         setStreak(s.streak ?? 0)
         setLastBreathAt(typeof s.lastBreathAt === 'number' ? s.lastBreathAt : null)
         setRecentKinds(Array.isArray(s.recentKinds) ? s.recentKinds : [])
+        // A session composed earlier and never finished. The server already
+        // decided it is still valid — it drops it on a new day, or once a
+        // workout or meal changes what it was built from.
+        if (s.resume?.plan && typeof s.resume?.seed === 'number') {
+          setResumable({ seed: s.resume.seed, plan: s.resume.plan as MindSessionPlan })
+        }
+        setSessionLock(
+          s.locked === true && typeof s.sessionsLimit === 'number' ? { limit: s.sessionsLimit } : null,
+        )
       }
       if (stateRes.ok) {
         const st = await stateRes.json()
         const last = Array.isArray(st.logs) && st.logs.length > 0 ? st.logs[0] : null
         if (last?.state) setRecentState(last.state as MindState)
+        if (typeof last?.feeling === 'string') setRecentFeeling(last.feeling)
+        // The dashboard mood, when it is newer than the last Mind check-in,
+        // seeds the session instead: "Bad" on the home screen an hour ago says
+        // more about right now than "Locked in" from yesterday. The live
+        // check-in still overrides at play time.
+        const mood = st.todayMood as TodayMood | null | undefined
+        if (mood && isMoodLevel(mood.value)) {
+          setMoodToday(mood)
+          const lastAt = last?.timestamp ? new Date(last.timestamp).getTime() : 0
+          if (mood.at > lastAt) {
+            const seeded = seedStateForMood(mood.value)
+            if (seeded) {
+              setRecentState(seeded)
+              setRecentFeeling(mood.label)
+            }
+          }
+        }
       }
       if (missionRes.ok) {
         const m = await missionRes.json()
@@ -166,12 +213,16 @@ export default function MindJourney() {
     load()
   }, [load])
 
-  const plan = useMemo<MindSessionPlan | null>(() => {
+  // The context the session is composed from. Also handed to the player so the
+  // live check-in can REBUILD the session around what the user actually reports.
+  const sessionContext = useMemo<SessionContext | null>(() => {
     if (!progress) return null
-    return composeSession({
+    return {
       chapter: progress.chapter,
       unlockedSystems: progress.unlockedSystems,
       recentState,
+      recentFeeling,
+      moodToday,
       missionAction,
       identityStatement: progress.vision?.identityStatement ?? null,
       recentKinds,
@@ -180,8 +231,13 @@ export default function MindJourney() {
       seed: sessionSeed ?? undefined,
       now: Date.now(),
       lastBreathAt,
-    })
-  }, [progress, recentState, missionAction, sessionSeed, lastBreathAt, recentKinds])
+    }
+  }, [progress, recentState, recentFeeling, moodToday, missionAction, sessionSeed, lastBreathAt, recentKinds])
+
+  const plan = useMemo<MindSessionPlan | null>(
+    () => (sessionContext ? composeSession(sessionContext) : null),
+    [sessionContext],
+  )
 
   // Adopt the AI-composed session if one is cached. Generation itself runs in
   // the background on APP OPEN (lib/mind/precompose, mounted in the shell) — we
@@ -205,9 +261,49 @@ export default function MindJourney() {
   const effectivePlan = aiPlan ?? plan
 
   const begin = useCallback(() => {
-    setSessionSeed(Date.now())
+    if (resumable) {
+      setSessionSeed(resumable.seed)
+      setAiPlan(resumable.plan)
+      setPlaying(true)
+      return
+    }
+    const seed = Date.now()
+    setSessionSeed(seed)
     setPlaying(true)
-  }, [])
+    // Remember what we just committed to, so a refresh or a walk-away returns
+    // THIS session. Best effort: failing to persist costs continuity, never the
+    // session itself.
+    const planToStore = aiPlan ?? plan
+    if (planToStore) {
+      fetch('/api/mind/session', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        // `tz`, not `tzOffset`: the route (and every other date-scoped route)
+        // reads `tz`. Sending the other spelling dated the stored session with
+        // the UTC day, and the next GET dropped it as a new day — an evening
+        // session in New York never survived the walk away.
+        body: JSON.stringify({ seed, plan: planToStore, tz: new Date().getTimezoneOffset() }),
+      }).catch(() => {})
+    }
+  }, [resumable, aiPlan, plan])
+
+  // Auto-begin for the dashboard tile's ?start=1. Fires at most once, and
+  // only once there's an actual session to jump into — during onboarding or
+  // the post-session cooldown it silently no-ops and the page renders as
+  // normal instead of forcing a session that doesn't exist.
+  useEffect(() => {
+    if (!shouldAutoStartMindSession({
+      autoStart,
+      alreadyStarted: autoStartedRef.current,
+      loading,
+      playing,
+      onboarded,
+      available: progress?.mainSessionAvailable ?? true,
+      hasPlan: !!effectivePlan,
+    })) return
+    autoStartedRef.current = true
+    begin()
+  }, [autoStart, loading, playing, onboarded, progress, effectivePlan, begin])
 
   // Deterministic suggested actions — shown instantly (and the fallback if the AI
   // drifts). The AI upgrade replaces them when it resolves.
@@ -263,9 +359,11 @@ export default function MindJourney() {
     return (
       <SessionPlayer
         plan={effectivePlan}
+        sessionContext={sessionContext ?? undefined}
         unlockedSystems={progress?.unlockedSystems ?? getUnlockedSystems(progress?.chapter ?? 1)}
         onExit={() => {
           setPlaying(false)
+          setResumable(null)
           // Finished a session → drop the cache and warm a fresh one in the
           // background (non-blocking), so the next view shows a new AI session.
           invalidateMindSession()
@@ -399,7 +497,47 @@ export default function MindJourney() {
       {/* The next move — always the instant (deterministic) session; if an
           AI-composed plan is cached it's used transparently. Never blocks on
           generation (that happens in the background on app open). */}
-      {available && effectivePlan ? (
+      {sessionLock ? (
+        // Out of free main sessions. Distinct from the 20h cooldown below,
+        // which lifts on its own — this one never does, so it says so and
+        // offers the only thing that changes it.
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <button
+            onClick={() =>
+              // sessionLock IS the server's own answer (locked + sessionsLimit
+              // off GET /api/mind/session), so the sheet can state the cap
+              // instead of refusing with no number. mind-sessions is a
+              // milestone: at the cap, remaining is 0 and stays 0.
+              setGate(
+                syntheticGate('mind-sessions', 'plus', {
+                  limit: sessionLock.limit,
+                  remaining: 0,
+                  resetsAt: null,
+                  window: 'lifetime',
+                }),
+              )
+            }
+            className="group w-full rounded-3xl border border-dashed border-zinc-200 bg-zinc-50 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-zinc-400" />
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                Session {sessionLock.limit + 1}
+              </p>
+            </div>
+            <h2 className="mt-2 text-2xl font-extrabold text-zinc-700 dark:text-zinc-200">
+              You&apos;ve finished your first {sessionLock.limit} sessions
+            </h2>
+            <p className="mt-2 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+              Every chapter after this one, plus Vision, comes with Plus.
+            </p>
+            <span className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-900 py-3.5 text-base font-bold text-white transition-transform group-active:scale-95 dark:bg-white dark:text-zinc-900">
+              See Plus
+              <ArrowRight className="h-5 w-5" />
+            </span>
+          </button>
+        </motion.div>
+      ) : available && effectivePlan ? (
         // Main session available (first ever, or 20h since the last one).
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <button
@@ -433,33 +571,22 @@ export default function MindJourney() {
         </motion.div>
       )}
 
-      {/* The Becoming — progression / training log. Unlocks after 5 main
-          sessions; until then it shows locked so the path ahead is visible. */}
-      {(progress?.mainSessionCount ?? 0) >= 5 ? (
-        <Link
-          href="/dashboard/mind/becoming"
-          data-tour="mind-becoming-link"
-          className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-        >
-          <div>
-            <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Where you started, where you are, what&apos;s next
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-zinc-400" />
-        </Link>
-      ) : (
-        <div className="mt-3 flex items-center justify-between rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3.5 opacity-80 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <div>
-            <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400">The Becoming</p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500">
-              Your training log — unlocks after your 5th main session ({progress?.mainSessionCount ?? 0}/5 done)
-            </p>
-          </div>
-          <Lock className="h-4 w-4 text-zinc-400" />
+      {/* The Becoming — where you started, where you are, what's next, for
+          all three pillars. Open to everyone (it used to unlock after the 5th
+          main session; the dashboard now leads with it). */}
+      <Link
+        href="/dashboard/mind/becoming"
+        data-tour="mind-becoming-link"
+        className="mt-3 flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3.5 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
+      >
+        <div>
+          <p className="text-sm font-semibold text-zinc-900 dark:text-white">The Becoming</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Where you started, where you are, what&apos;s next
+          </p>
         </div>
-      )}
+        <ChevronRight className="h-5 w-5 text-zinc-400" />
+      </Link>
 
       {/* AI coach — unlocks after 3 main sessions. */}
       {(progress?.mainSessionCount ?? 0) >= 3 ? (
@@ -476,6 +603,8 @@ export default function MindJourney() {
         </div>
       )}
       </div>
+
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
     </PageTransition>
   )
 }

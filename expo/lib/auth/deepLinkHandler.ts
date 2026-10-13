@@ -7,15 +7,20 @@
  *   - `https://become.redbtn.io/verify?token=ABC&mode=login` (Universal Link)
  *
  * Returns `null` for any URL that is not a recognisable verify link.
+ *
+ * WHERE A LINK ACTUALLY GOES is `lib/navigation/webPathToRoute.ts` (the one
+ * resolver every entry point reads) — this stays as the shape-checker for a
+ * verify link, and it shares that module's host list so a link on the second
+ * domain can never be accepted by one parser and refused by another.
  */
+import { isBecomeWebHost } from "@/lib/navigation/webPathToRoute";
+
 export type VerifyMode = "login" | "register";
 
 export interface VerifyDeepLink {
   token: string;
   mode: VerifyMode;
 }
-
-const ALLOWED_HOSTS = new Set(["become.redbtn.io"]);
 
 export function parseVerifyDeepLink(url: string): VerifyDeepLink | null {
   if (!url || typeof url !== "string") return null;
@@ -31,7 +36,7 @@ export function parseVerifyDeepLink(url: string): VerifyDeepLink | null {
   if (scheme === "become") {
     if (parsed.hostname !== "verify" && parsed.pathname !== "/verify") return null;
   } else if (scheme === "https") {
-    if (!ALLOWED_HOSTS.has(parsed.hostname)) return null;
+    if (!isBecomeWebHost(parsed.hostname)) return null;
     if (parsed.pathname !== "/verify") return null;
   } else {
     return null;

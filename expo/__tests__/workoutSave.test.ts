@@ -1,4 +1,7 @@
-import { buildWorkoutSaveRequest } from "@/lib/live/workoutSave";
+import {
+  buildWorkoutSaveRequest,
+  newWorkoutAttemptId,
+} from "@/lib/live/workoutSave";
 import type { LiveWorkoutExercise, LiveGrid } from "@/components/live/LiveWorkoutClient";
 
 const exercises: LiveWorkoutExercise[] = [
@@ -37,6 +40,7 @@ describe("buildWorkoutSaveRequest", () => {
     expect(req.exercises[0]).toEqual({
       name: "Bench",
       exerciseSlug: "bench",
+      prescription: { sets: 2 },
       sets: [
         { setNumber: 1, reps: 5, weight: 135, completed: true },
         { setNumber: 2, reps: 5, weight: 135, completed: false },
@@ -107,6 +111,36 @@ describe("buildWorkoutSaveRequest", () => {
     });
   });
 
+  // The save has to be safe to send twice: the offline queue replays writes,
+  // and a completing save replayed after local midnight used to be logged as a
+  // second completed workout (the program day advanced twice and another
+  // schedule slot of the same label was marked done). The attempt id is what
+  // the server matches a replay by, so it has to travel on the payload.
+  it("carries the attempt id when the caller has one", () => {
+    const req = buildWorkoutSaveRequest({
+      programId: "p",
+      phase: 1,
+      day: "Day 1",
+      exercises: [{ slug: "bench", name: "Bench", sets: 1 }],
+      grid: { bench: [{ reps: 5, weight: 135, completed: true }] },
+      completed: true,
+      attemptId: "attempt-1",
+    });
+    expect(req.attemptId).toBe("attempt-1");
+  });
+
+  it("omits the attempt id entirely when there is none (server falls back to its window rules)", () => {
+    const req = buildWorkoutSaveRequest({
+      programId: "p",
+      phase: 1,
+      day: "Day 1",
+      exercises: [{ slug: "bench", name: "Bench", sets: 1 }],
+      grid: { bench: [{ reps: 5, weight: 135, completed: true }] },
+      completed: true,
+    });
+    expect(req).not.toHaveProperty("attemptId");
+  });
+
   it("omits duration/distance for plain strength sets", () => {
     const req = buildWorkoutSaveRequest({
       programId: "p",
@@ -118,5 +152,63 @@ describe("buildWorkoutSaveRequest", () => {
     });
     expect(req.exercises[0]!.sets[0]).not.toHaveProperty("duration");
     expect(req.exercises[0]!.sets[0]).not.toHaveProperty("distance");
+  });
+
+  it("carries scheduledDate, tz, performedAt and swap metadata into the save request", () => {
+    const req = buildWorkoutSaveRequest({
+      programId: "p",
+      phase: 1,
+      day: "Day 1",
+      scheduledDate: "2026-10-01",
+      performedAt: "2026-09-30",
+      tz: 300,
+      tzZone: "America/Chicago",
+      exercises: [
+        {
+          slug: "db-press",
+          name: "DB Press",
+          sets: 1,
+          groupId: "g1",
+          groupType: "superset",
+          groupLabel: "Chest Block",
+          groupRounds: 3,
+          addedAdHoc: true,
+        },
+      ],
+      grid: { "db-press": [{ reps: 10, weight: 50, completed: true }] },
+      completed: true,
+      activeSeconds: 1200,
+      swappedExercises: {
+        0: { originalSlug: "bench", originalName: "Barbell Bench Press" },
+      },
+    });
+
+    expect(req.scheduledDate).toBe("2026-10-01");
+    expect(req.performedAt).toBe("2026-09-30");
+    expect(req.tz).toBe(300);
+    expect(req.tzZone).toBe("America/Chicago");
+    expect(req.duration).toBe(20);
+    expect(req.exercises[0]).toEqual({
+      name: "DB Press",
+      exerciseSlug: "db-press",
+      groupId: "g1",
+      groupType: "superset",
+      groupLabel: "Chest Block",
+      groupRounds: 3,
+      addedAdHoc: true,
+      originalExerciseSlug: "bench",
+      swappedFromName: "Barbell Bench Press",
+      prescription: { sets: 1 },
+      sets: [{ setNumber: 1, reps: 10, weight: 50, completed: true }],
+    });
+  });
+});
+
+describe("newWorkoutAttemptId", () => {
+  it("mints a distinct, non-empty id per attempt", () => {
+    const a = newWorkoutAttemptId();
+    const b = newWorkoutAttemptId();
+    expect(a.length).toBeGreaterThan(0);
+    expect(b).not.toBe(a);
   });
 });

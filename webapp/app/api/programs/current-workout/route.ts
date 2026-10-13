@@ -5,87 +5,15 @@ import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { hydrateWorkout } from '@/lib/hydrateExercises'
-
-interface Workout {
-  day: string
-  title: string
-  exercises: Array<{
-    exerciseSlug?: string
-    name?: string
-    type?: string
-    sets?: number
-    reps?: string
-    rest?: string
-    details?: string
-  }>
-}
-
-interface Phase {
-  phase: string
-  weeks: string
-  focus: string
-  workouts: Workout[] | Record<string, Omit<Workout, 'day'>>
-}
-
-// Helper to normalize workouts from object format to array format
-function normalizeWorkouts(workouts: Workout[] | Record<string, Omit<Workout, 'day'>> | undefined | null): Workout[] {
-  if (!workouts) {
-    return []
-  }
-  if (Array.isArray(workouts)) {
-    return workouts
-  }
-  // Convert object format { "Day 1": {...}, "Day 2": {...} } to array format
-  return Object.entries(workouts).map(([day, workout]) => ({
-    day,
-    ...workout,
-  }))
-}
-
-// Calculate the next workout day based on current progress
-export function calculateNextDay(
-  currentDay: string,
-  currentPhase: number,
-  phases: Phase[]
-): { nextDay: string; nextPhase: number } {
-  if (!phases || phases.length === 0) {
-    return { nextDay: 'Day 1', nextPhase: 1 }
-  }
-
-  const phaseIdx = Math.max(0, currentPhase - 1)
-  const phase = phases[phaseIdx]
-  
-  if (!phase?.workouts) {
-    return { nextDay: 'Day 1', nextPhase: 1 }
-  }
-
-  const workouts = normalizeWorkouts(phase.workouts)
-  const currentDayIdx = workouts.findIndex(w => w.day === currentDay)
-
-  if (currentDayIdx === -1) {
-    // Current day not found, start at Day 1
-    return { nextDay: workouts[0]?.day || 'Day 1', nextPhase: currentPhase }
-  }
-
-  const nextDayIdx = currentDayIdx + 1
-
-  if (nextDayIdx >= workouts.length) {
-    // End of phase - check if there's another phase
-    const nextPhaseIdx = phaseIdx + 1
-    if (nextPhaseIdx < phases.length) {
-      const nextPhase = phases[nextPhaseIdx]
-      const nextPhaseWorkouts = normalizeWorkouts(nextPhase.workouts)
-      return { 
-        nextDay: nextPhaseWorkouts[0]?.day || 'Day 1', 
-        nextPhase: nextPhaseIdx + 1 
-      }
-    }
-    // Restart from beginning of current phase (program repeating)
-    return { nextDay: workouts[0]?.day || 'Day 1', nextPhase: currentPhase }
-  }
-
-  return { nextDay: workouts[nextDayIdx].day, nextPhase: currentPhase }
-}
+// calculateNextDay and the Workout/Phase shapes used to be declared (and
+// exported) here. An App Router route.ts may only export route handlers and
+// config, so they live in lib/workout/dayOrder.ts — see the note there.
+import {
+  calculateNextDay,
+  normalizeWorkouts,
+  type ProgramPhase as Phase,
+  type ProgramWorkout as Workout,
+} from '@/lib/workout/dayOrder'
 
 // GET: Get the current workout for a user's active program
 export async function GET(request: NextRequest) {

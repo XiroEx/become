@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Telescope, Repeat, Brain, Dumbbell, Users, Home, Eye, Target, Check, Pencil, ArrowRight, type LucideIcon } from 'lucide-react'
 import GuidedFlow, { type GuidedStep } from '@/components/mind/system/GuidedFlow'
+import ProtocolUnlockModal, { useProtocolUnlocks } from '@/components/mind/system/ProtocolUnlock'
 import { runAiTask } from '@/lib/ai/runClient'
 import { validateGuidedSteps } from '@/lib/ai/sanitize'
 import { SystemHero, ToolkitCard, TrackRecord, AdaptiveSession, type TrackRecordEntry } from '@/components/mind/system/SystemDashboard'
@@ -21,6 +22,8 @@ import { reflectOnAnswers } from '@/lib/mind/reflect'
 import { dailyPick } from '@/lib/mind/rotation'
 import { Toast } from '@/components/ui'
 import { useToast } from '@/hooks/useToast'
+import UpgradeSheet from '@/components/UpgradeSheet'
+import { gateFrom, type GatePayload } from '@/lib/entitlementsClient'
 
 const ACCENT = '#10b981' // emerald — vision / future-self system color
 const DONE_TEXT = 'The future, coming into focus.'
@@ -123,9 +126,13 @@ export default function VisionDashboard() {
   const [align, setAlign] = useState<AlignData>({ avg7: 0, entries7: 0, todayScore: null, checkedToday: false })
   const [entries, setEntries] = useState<TrackRecordEntry[]>([])
   // Lifetime reps in this tool — 1 + reps protocols are open.
-  const [reps, setReps] = useState(0)
+  const [reps, setReps] = useState<number | null>(null)
+  // Celebrate the protocol a rep just opened — the unlock used to happen
+  // silently and members only noticed by scrolling the list.
+  const { unlocked: justUnlocked, dismiss: dismissUnlock } = useProtocolUnlocks(PROTOCOLS, reps)
   const [aiLoading, setAiLoading] = useState(false)
   const [aligning, setAligning] = useState(false)
+  const [gate, setGate] = useState<GatePayload | null>(null)
   const [flow, setFlow] = useState<{ title: string; steps: GuidedStep[]; aiGenerated?: boolean } | null>(null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VisionForm>(EMPTY_FORM)
@@ -184,7 +191,13 @@ export default function VisionDashboard() {
     try {
       const res = await fetch('/api/mind/vision', { method: 'POST', headers: authHeaders(), body: JSON.stringify(payload) })
       if (res.ok) { showToast('That’s your vision. Now live toward it. 🔭', 'success'); setEditing(false); load() }
-      else showToast('Could not save', 'error')
+      else {
+        // Belt and braces: TierGate already keeps a locked member out of this
+        // screen, but the server is the gate and this is what it says.
+        const g = gateFrom(res.status, await res.json().catch(() => null))
+        if (g) setGate(g)
+        else showToast('Could not save', 'error')
+      }
     } catch { showToast('Could not save', 'error') }
   }
 
@@ -196,7 +209,12 @@ export default function VisionDashboard() {
     try {
       const tz = new Date().getTimezoneOffset()
       const r = await fetch('/api/mind/vision', { method: 'PATCH', headers: authHeaders(), body: JSON.stringify({ action: 'align', score, tz }) })
-      if (r.ok) { const d = await r.json(); if (d.alignment) setAlign(d.alignment) }
+      if (r.ok) {
+        const d = await r.json(); if (d.alignment) setAlign(d.alignment)
+      } else {
+        const g = gateFrom(r.status, await r.json().catch(() => null))
+        if (g) { setGate(g); setAligning(false); return }
+      }
       showToast(score >= 4 ? 'Aligned. Keep pointing at it. 🔭' : 'Noted. Tomorrow, aim one hour at the vision.', 'success')
     } catch { /* ignore */ }
     setAligning(false)
@@ -237,6 +255,8 @@ export default function VisionDashboard() {
 
   return (
     <div className="space-y-5">
+      <UpgradeSheet open={!!gate} gate={gate} onClose={() => setGate(null)} />
+      <ProtocolUnlockModal unlocked={justUnlocked} onDismiss={dismissUnlock} accent="text-emerald-500" />
       <SystemHero
         Icon={Telescope}
         title="Vision"
@@ -354,8 +374,8 @@ export default function VisionDashboard() {
               title={p.title}
               blurb={p.blurb}
               color="text-emerald-500"
-              locked={i >= 1 + reps}
-              lockedHint={`Locked — do ${i - reps} more rep${i - reps === 1 ? '' : 's'} in Vision to unlock`}
+              locked={i >= 1 + (reps ?? 0)}
+              lockedHint={`Locked — do ${i - (reps ?? 0)} more rep${i - (reps ?? 0) === 1 ? '' : 's'} in Vision to unlock`}
               onClick={() => setFlow({ title: p.title, steps: p.steps })}
             />
           ))}
