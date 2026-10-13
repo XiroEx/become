@@ -70,6 +70,7 @@ test('the allow-listed shapes are accepted, with a real id in the slot', () => {
     '/dashboard/admin/exercises/barbell-back-squat/edit',
     '/dashboard/admin/users',
     '/dashboard/admin/users/68f1b2c3d4e5f60718293a4b',
+    '/dashboard/settings',
   ]
   for (const p of accepted) {
     assert.equal(isHandoffPathAllowed(p), true, `${p} should be allow-listed`)
@@ -82,7 +83,6 @@ test('the allow-listed shapes are accepted, with a real id in the slot', () => {
 test('a path outside the allow-list is refused', () => {
   const refused = [
     // Not on the list.
-    '/dashboard/settings',
     '/dashboard/admin/users/abc/delete',
     '/login',
     '/',
@@ -188,7 +188,7 @@ test('the allow-list is checked again at redemption, on the stored path', () => 
   // A code minted while a path was allow-listed must stop working the moment
   // the path leaves the list — the codes already in flight are the ones that
   // matter when a target is removed because it was a mistake.
-  assert.deepEqual(decideRedemption({ userId: 'u1', path: '/dashboard/settings', expiresAt }, now), {
+  assert.deepEqual(decideRedemption({ userId: 'u1', path: '/dashboard/progress', expiresAt }, now), {
     ok: false,
     reason: 'path_not_allowed',
   })
@@ -231,7 +231,7 @@ test('minting refuses a path outside the allow-list, before it touches the datab
     undefined,
     '',
     '/login',
-    '/dashboard/settings',
+    '/dashboard/progress',
     'https://evil.example/dashboard',
     '//evil.example/dashboard',
     '/dashboard/programs/new?x=1',

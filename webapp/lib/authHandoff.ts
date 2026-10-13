@@ -68,6 +68,10 @@ export const HANDOFF_ALLOWED_PATHS = [
   '/dashboard/admin/exercises/:slug/edit',
   '/dashboard/admin/users',
   '/dashboard/admin/users/:userId',
+  // Passkey (card 6acdcae0433f8772a69adf8c). Native cannot run a WebAuthn
+  // registration ceremony on-device yet (NP-161), so its "Add a passkey"
+  // row hands the member to the real web Settings page instead.
+  '/dashboard/settings',
 ] as const
 
 export type HandoffAllowedPath = (typeof HANDOFF_ALLOWED_PATHS)[number]
