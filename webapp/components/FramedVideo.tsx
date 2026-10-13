@@ -23,8 +23,19 @@ import { forcedPreviewSeekTarget, resolveTrim, type VideoTrimOverride } from '@/
 // self-contained when imported by anything that already imports the regex.
 const DIRECT_VIDEO_FILE = /\.(mp4|mov|webm|mkv|m4v)(\?.*)?$/i;
 
-function mimeForVideoUrl(u: string): string {
-  if (/\.mov(\?.*)?$/i.test(u)) return 'video/quicktime';
+/**
+ * MIME type for the `<source type>` attribute.
+ *
+ * `.mov` deliberately maps to `video/mp4`, NOT `video/quicktime`: our exercise
+ * demo `.mov` files are H.264/AAC in a QuickTime container, the server already
+ * serves them with `Content-Type: video/mp4`, and they decode fine everywhere.
+ * But Chromium and Firefox answer `canPlayType('video/quicktime') === ''`, so
+ * advertising that type made the browser skip the only <source> we give it and
+ * the demo rendered as a black panel on desktop/Android Chrome (it worked on
+ * iOS/Safari, which does claim support). Exported for unit tests.
+ */
+export function mimeForVideoUrl(u: string): string {
+  if (/\.mov(\?.*)?$/i.test(u)) return 'video/mp4';
   if (/\.webm(\?.*)?$/i.test(u)) return 'video/webm';
   if (/\.mkv(\?.*)?$/i.test(u)) return 'video/x-matroska';
   return 'video/mp4';
