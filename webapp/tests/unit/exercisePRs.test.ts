@@ -497,3 +497,60 @@ test('computeExercisePRsFromLogs tolerates logs with null exercises field', () =
   assert.equal(prs.length, 1)
   assert.equal(prs[0].exerciseSlug, 'squat')
 })
+
+// ── NP-209: raw + unit on a PR dimension ────────────────────────────────────
+
+test('a set carrying weightUnit stamps it onto every dimension it breaks', () => {
+  const { pr, newPRsAchieved } = updatePRsForSet(
+    null,
+    { weight: 100, reps: 8, completed: true, weightUnit: 'kg' },
+    baseCtx,
+  )
+  assert.deepEqual(newPRsAchieved.sort(), ['maxE1RM', 'maxReps', 'maxWeight'])
+  assert.equal(pr.maxWeight?.unit, 'kg')
+  assert.equal(pr.maxReps?.unit, 'kg')
+  assert.equal(pr.maxE1RM?.unit, 'kg')
+})
+
+test('a set with no weightUnit leaves the PR dimension with no unit (grandfathered lbs at display time)', () => {
+  const { pr } = updatePRsForSet(null, { weight: 100, reps: 8, completed: true }, baseCtx)
+  assert.equal(pr.maxWeight?.unit, undefined)
+  assert.equal('unit' in (pr.maxWeight ?? {}), false)
+})
+
+test('a kg PR is not retroactively converted when a later lbs set is logged for the same lift', () => {
+  const first = updatePRsForSet(null, { weight: 100, reps: 5, completed: true, weightUnit: 'kg' }, baseCtx)
+  // A lighter lbs set does not beat the kg PR — raw numbers compare as-is,
+  // never converted (the storage decision this whole card is about).
+  const second = updatePRsForSet(
+    first.pr,
+    { weight: 90, reps: 5, completed: true, weightUnit: 'lbs' },
+    baseCtx,
+  )
+  assert.equal(second.pr.maxWeight?.weight, 100)
+  assert.equal(second.pr.maxWeight?.unit, 'kg')
+  assert.deepEqual(second.newPRsAchieved, [])
+})
+
+test('formatPRsForLiveWorkout carries the unit through for a kg PR, omits it for an unstamped one', () => {
+  const persisted: IExercisePR[] = [
+    {
+      exerciseSlug: 'bench-press',
+      exerciseName: 'Bench Press',
+      maxWeight: { weight: 100, reps: 5, date: new Date('2026-04-01'), unit: 'kg' },
+      maxReps: null,
+      maxE1RM: null,
+    },
+    {
+      exerciseSlug: 'squat',
+      exerciseName: 'Back Squat',
+      maxWeight: { weight: 315, reps: 3, date: new Date('2026-04-01') },
+      maxReps: null,
+      maxE1RM: null,
+    },
+  ]
+  const result = formatPRsForLiveWorkout(persisted)
+  assert.deepEqual(result['Bench Press'], { weight: 100, reps: 5, unit: 'kg' })
+  assert.deepEqual(result['Back Squat'], { weight: 315, reps: 3 })
+  assert.equal('unit' in result['Back Squat'], false)
+})

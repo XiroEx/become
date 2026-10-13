@@ -80,6 +80,9 @@ export interface SummaryProps {
    * with no save response to read from (e.g. reviewing a past log).
    */
   newPRsAchieved?: SummaryNewPR[]
+  /** The member's chosen lifting-load unit (profile.weightUnit ?? 'lbs') —
+   *  NP-209. Defaults to 'lbs' for callers that haven't threaded it through. */
+  weightUnit?: 'lbs' | 'kg'
   summaryStreak: { streakDays: number; nextMilestone: number | null } | null
   summaryGoal: string | null
   formatTime: (s: number) => string
@@ -162,7 +165,7 @@ export function ConfettiBurst() {
 export default function WorkoutSummary({
   programCompleted, completedProgramName, programId, workout,
   elapsedTime, exerciseData, exercises, exerciseHistory, newPRsAchieved,
-  summaryStreak, summaryGoal, formatTime, onDone,
+  weightUnit = 'lbs', summaryStreak, summaryGoal, formatTime, onDone,
 }: SummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length]
 
@@ -172,7 +175,7 @@ export default function WorkoutSummary({
   // alone (NP-208); exerciseHistory only still supplies the cosmetic "prev"
   // readout beside it.
   const newPRs = computeSummaryPRs(exercises, exerciseData, newPRsAchieved, exerciseHistory)
-  const metricTiles = summaryMetricTiles(exercises, exerciseData)
+  const metricTiles = summaryMetricTiles(exercises, exerciseData, weightUnit)
   const groupBlocks = summaryGroupBlocks(exercises, exerciseData)
 
   const statTiles = [

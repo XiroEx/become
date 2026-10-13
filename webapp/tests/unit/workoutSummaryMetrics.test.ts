@@ -224,6 +224,12 @@ describe('summaryMetricTiles', () => {
     assert.equal(tiles.length, 3)
   })
 
+  // NP-209: a kg member sees "Volume kg", not a hardcoded lbs.
+  it('reads the member\'s chosen weight unit in the volume label', () => {
+    const tiles = summaryMetricTiles([BENCH], [[set({ reps: 5, weight: 135 })]], 'kg')
+    assert.deepEqual(tiles.map(t => t.label), ['Sets', 'Volume kg'])
+  })
+
   it('falls back to a volume tile when nothing measurable was logged', () => {
     const tiles = summaryMetricTiles([STRETCH], [[set({})]])
     assert.deepEqual(tiles.map(t => t.label), ['Sets', 'Volume lbs'])

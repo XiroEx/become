@@ -10,6 +10,7 @@ import AppBadgeSync from '../../components/AppBadgeSync'
 import TimezoneSync from '../../components/TimezoneSync'
 import ConsentGate from '../../components/ConsentGate'
 import AiConsentPrompt from '../../components/AiConsentPrompt'
+import WeightUnitGate from '../../components/WeightUnitGate'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,6 +38,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           it — the one listener for the event lib/ai/runStore.ts fires. Here so
           every AI surface, including the background ones, is covered. */}
       <AiConsentPrompt />
+      {/* NP-209: asks a member with no stored lb/kg preference, once, and
+          persists the choice. Here so it covers every protected route, same
+          as ConsentGate above. */}
+      <WeightUnitGate />
       {/* Shell: full viewport height, flex column, no page-level scroll */}
       <div
         className="flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950"

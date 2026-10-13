@@ -23,6 +23,7 @@
 // open, a barbell or a cable answers it. See lib/workout/equipmentVariant.ts.
 
 import { loadStyleOf } from './equipmentVariant'
+import type { WeightUnit } from '@/models/User'
 
 export type BellStyle = 'dumbbell' | 'kettlebell' | null
 
@@ -86,11 +87,19 @@ export function getBellWeightInfo(exercise: BellExerciseInput | null | undefined
   return { style, showTotal }
 }
 
-/** The input label for this style, e.g. "Weight per DB (lbs)". */
-export function bellWeightLabel(style: BellStyle): string {
-  if (style === 'dumbbell') return 'Weight per DB (lbs)'
-  if (style === 'kettlebell') return 'Weight per KB (lbs)'
-  return 'Weight (lbs)'
+/**
+ * The input label for this style, e.g. "Weight per DB (lbs)".
+ *
+ * `unit` is the member's chosen lifting-load unit (NP-209:
+ * `profile.weightUnit ?? 'lbs'` — the house grandfather rule for a member who
+ * has never chosen). Defaults to 'lbs' so every pre-existing call site (and
+ * the native copy in expo/lib/live/bellStyle.ts, not yet ported) keeps
+ * reading exactly as before.
+ */
+export function bellWeightLabel(style: BellStyle, unit: WeightUnit = 'lbs'): string {
+  if (style === 'dumbbell') return `Weight per DB (${unit})`
+  if (style === 'kettlebell') return `Weight per KB (${unit})`
+  return `Weight (${unit})`
 }
 
 /**

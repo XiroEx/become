@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import PageTransition from '@/components/PageTransition'
 import { useSwipeNav } from '@/hooks/useSwipeNav'
 import WorkoutSummary from '@/components/WorkoutSummary'
+import { useMemberWeightUnit } from '@/lib/useMemberWeightUnit'
 import { inferTracking } from '@/lib/workout/tracking'
 import QuickSessionSummary from '@/components/QuickSessionSummary'
 import QuickSessionModal from '@/components/QuickSessionModal'
@@ -216,6 +217,9 @@ function StatusBadge({ status }: { status: string }) {
 export default function CalendarClient() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // NP-209: lb/kg is the member's choice (profile.weightUnit), not a
+  // hardcoded 'lbs' — see lib/useMemberWeightUnit.ts.
+  const { weightUnit: memberWeightUnit } = useMemberWeightUnit()
   const [viewMode, setViewMode] = useState<ViewMode>('month')
   const [direction, setDirection] = useState(0)
   const [currentDate, setCurrentDate] = useState(() => {
@@ -1203,6 +1207,7 @@ export default function CalendarClient() {
               groupRounds: ex.groupRounds,
             }))}
             exerciseHistory={logSummary.exerciseHistory}
+            weightUnit={memberWeightUnit}
             summaryStreak={null}
             summaryGoal={null}
             formatTime={(s) => {
