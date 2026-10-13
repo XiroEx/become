@@ -9,6 +9,7 @@
  * This keeps the client layer unchanged — it still reads `exercise.name`.
  */
 import ExerciseModel from '@/models/Exercise';
+import { demoVideoUrl } from '@/lib/exerciseDemoVideo';
 import { buildExerciseNameIndex, resolveExerciseSlug, type ExerciseNameIndex } from '@/lib/exerciseNameMatch';
 import { autoCatalogSlug, ensureCatalogExercise, exerciseNameFromSlug } from '@/lib/exerciseAutoCatalog';
 import { repairFor } from '@/lib/programExerciseRepairs';
@@ -71,7 +72,12 @@ async function loadCatalog(): Promise<Catalog> {
       name: ex.name,
       category: ex.category,
       trackingType: ex.trackingType || undefined,
-      videoUrl: ex.videoUrl || undefined,
+      // A stored stock clip is footage of one specific lift that an old seed
+      // script handed out as filler — a barbell bench press under Jumping
+      // Jacks (lib/exerciseDemoVideo.ts). It is dropped here so no API
+      // response ever denormalizes it onto an exercise, which is what put it
+      // on the live workout screen on web and native alike.
+      videoUrl: demoVideoUrl(ex.videoUrl) ?? undefined,
       thumbnailUrl: ex.thumbnailUrl || undefined,
       primaryMuscles: ex.primaryMuscles?.length ? ex.primaryMuscles : undefined,
       difficulty: ex.difficulty || undefined,

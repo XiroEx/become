@@ -10,6 +10,7 @@
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import { demoVideoUrl, isStockDemoClip } from "@/lib/data/exerciseDemoVideo";
 
 // Videos an admin has explicitly taken off an exercise are excluded from the
 // cache — see the `retired` status on models/ExerciseVideo.ts.
@@ -60,6 +61,9 @@ export async function initializeCache(): Promise<void> {
         for (const video of data.videos || []) {
           if (!video.exerciseName || !video.videoUrl) continue;
           if (video.status === RETIRED_STATUS) continue;
+          // A stock clip is not this exercise's demo, whatever row it sits on
+          // (lib/data/exerciseDemoVideo.ts).
+          if (isStockDemoClip(video.videoUrl)) continue;
           videoCache.set(video.exerciseName.toLowerCase(), {
             videoUrl: video.videoUrl,
             thumbnailUrl: video.thumbnailUrl || null,
@@ -153,16 +157,21 @@ export interface ResolvedExerciseVideo {
  *  1. The exercise's own `videoUrl` wins.
  *  2. Dimensions, framing and trim describe one specific FILE, so they are
  *     taken from the legacy row ONLY when that row is the file being played.
+ *  3. A shared stock clip is not a demo of anything it is attached to, so it
+ *     resolves to no video however it got here — the native half of the
+ *     "Jumping Jacks shows a barbell bench-press image" fix. Every player
+ *     goes through this function, so this is where it stops.
  */
 export function resolveExerciseVideo(
   own: OwnExerciseVideoFields,
   legacy: ExerciseVideoDisplay | null,
 ): ResolvedExerciseVideo {
-  const ownVideoUrl = own.videoUrl?.trim() || null;
-  const source = ownVideoUrl ? null : legacy;
+  const ownVideoUrl = demoVideoUrl(own.videoUrl);
+  const legacyVideoUrl = demoVideoUrl(legacy?.videoUrl);
+  const source = ownVideoUrl || !legacyVideoUrl ? null : legacy;
 
   return {
-    videoUrl: ownVideoUrl ?? legacy?.videoUrl ?? null,
+    videoUrl: ownVideoUrl ?? legacyVideoUrl,
     thumbnailUrl: own.thumbnailUrl?.trim() || legacy?.thumbnailUrl || null,
     videoWidth: own.videoWidth ?? source?.videoWidth ?? null,
     videoHeight: own.videoHeight ?? source?.videoHeight ?? null,

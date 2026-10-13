@@ -37,6 +37,7 @@ import dbConnect from '@/lib/mongodb'
 import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import { invalidateExerciseCache } from '@/lib/hydrateExercises'
 import { syncDumbbellCatalog } from '@/lib/dumbbellCatalogSync'
+import { syncStockDemoVideos } from '@/lib/stockDemoVideoSync'
 
 function isTruthyFlag(value: string | null): boolean {
   if (!value) return false
@@ -56,12 +57,22 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
   await dbConnect()
   const report = await syncDumbbellCatalog({ apply: !dryRun })
 
+  // Second engine, same door. Card: "Jumping Jacks shows a barbell bench-press
+  // image" — 21 catalog rows store one of the two shared stock clips as their
+  // demo. Every player already refuses them (lib/exerciseDemoVideo.ts); this
+  // takes them off the rows, so the admin editor and anything reading
+  // `Exercise.videoUrl` directly see the same truth. Convergent and
+  // idempotent, like the sync above, so it is safe on the same schedule.
+  const stockDemoVideos = await syncStockDemoVideos({ apply: !dryRun })
+
   const wrote =
     report.wrote.created.length
     + report.wrote.hostEdits.length
     + report.wrote.renames.length
     + report.wrote.spellOuts.length
     + report.wrote.programs.length
+    + stockDemoVideos.wrote.exercises.length
+    + stockDemoVideos.wrote.videos.length
 
   // The hydrated-exercise cache in this process is now stale for every row the
   // run touched. Other instances pick the change up on their own TTL; this is
@@ -71,7 +82,9 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
   console.log(
     `[exercise-catalog-sync] ranAt=${report.ranAt} dryRun=${dryRun} `
     + `pending=${report.plan.length} repoints=${report.repoints.length} `
-    + `text=${report.programText.length} wrote=${wrote} settled=${report.settled}`,
+    + `text=${report.programText.length} `
+    + `stockClips=${stockDemoVideos.exercises.length}/${stockDemoVideos.videos.length} `
+    + `wrote=${wrote} settled=${report.settled && stockDemoVideos.settled}`,
   )
   if (report.missingSlugs.length > 0) {
     console.error(
@@ -79,7 +92,15 @@ async function handle(request: NextRequest, forceDryRun = false): Promise<NextRe
     )
   }
 
-  return NextResponse.json({ ...report, dryRun, wroteCount: wrote })
+  // `settled` is the AND of both engines: the workflow fails the run when an
+  // apply leaves work behind, and "half of it converged" is not converged.
+  return NextResponse.json({
+    ...report,
+    settled: report.settled && stockDemoVideos.settled,
+    stockDemoVideos,
+    dryRun,
+    wroteCount: wrote,
+  })
 }
 
 export async function POST(request: NextRequest) {

@@ -230,7 +230,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799306",
@@ -281,7 +281,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799307",
@@ -382,7 +382,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799309",
@@ -549,7 +549,7 @@
       "romanian-deadlift",
       "trap-bar-deadlift"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c079930c",
@@ -1159,7 +1159,7 @@
     "variations": [
       "seated-leg-curl"
     ],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799317",
@@ -1210,7 +1210,7 @@
     "variations": [
       "lying-leg-curl"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799318",
@@ -1437,7 +1437,7 @@
     "variations": [
       "reverse-lunge"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c079931c",
@@ -1555,7 +1555,7 @@
     "variations": [
       "dumbbell-step-up"
     ],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c079931e",
@@ -2512,7 +2512,7 @@
       "dumbbell-row",
       "cable-row"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c079932f",
@@ -2628,7 +2628,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c0799331",
@@ -3297,7 +3297,7 @@
     "variations": [
       "dumbbell-shoulder-press"
     ],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd44751d9854c079933d",
@@ -4028,7 +4028,7 @@
     "variations": [
       "dumbbell-russian-twist"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c079934a",
@@ -4086,7 +4086,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "time",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c079934b",
@@ -4140,7 +4140,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "time",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c079934c",
@@ -4194,7 +4194,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_bodyweight",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c079934d",
@@ -4787,7 +4787,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_bodyweight",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c0799359",
@@ -5386,7 +5386,7 @@
       "overhead-tricep-extension",
       "dumbbell-skull-crusher"
     ],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c0799364",
@@ -5907,7 +5907,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_weight",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c079936e",
@@ -6467,7 +6467,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "reps_bodyweight",
     "variations": [],
-    "videoUrl": "/placeholder.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c0799378",
@@ -6521,7 +6521,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "time",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c0799379",
@@ -6936,7 +6936,7 @@
     "thumbnailUrl": "/icons/icon-192.png",
     "trackingType": "time",
     "variations": [],
-    "videoUrl": "/placeholder2.mp4"
+    "videoUrl": null
   },
   {
     "_id": "699fbd45751d9854c0799381",

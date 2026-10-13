@@ -1499,12 +1499,32 @@ async function main() {
     console.log(`  Found ${videos.length} exercise videos to merge.`);
 
     // Build video lookup: lowercase name → { videoUrl, thumbnailUrl }
+    //
+    // `/placeholder.mp4` and `/placeholder2.mp4` are NOT placeholders: they are
+    // real footage of a barbell bench press and a goblet squat (see
+    // webapp/lib/exerciseDemoVideo.ts). This merge is how they got copied onto
+    // `Exercise.videoUrl` in the first place, which is the card "Jumping Jacks
+    // shows a barbell bench-press image". An exercise with no demo of its own
+    // keeps `videoUrl: null` and shows up in the admin "No Video" queue.
+    const STOCK_DEMO_CLIPS = ['/placeholder.mp4', '/placeholder2.mp4'];
+    const isStockDemoClip = (url) =>
+      typeof url === 'string'
+      && STOCK_DEMO_CLIPS.includes(`/${url.split(/[?#]/)[0].split('/').pop().toLowerCase()}`);
+
     const videoMap = {};
+    let stockSkipped = 0;
     for (const v of videos) {
+      if (isStockDemoClip(v.videoUrl)) {
+        stockSkipped++;
+        continue;
+      }
       videoMap[v.exerciseName.toLowerCase()] = {
         videoUrl: v.videoUrl || null,
         thumbnailUrl: v.thumbnailUrl || null,
       };
+    }
+    if (stockSkipped > 0) {
+      console.log(`  Skipped ${stockSkipped} rows pointing at a shared stock clip.`);
     }
 
     // Merge: match by exercise name or aliases

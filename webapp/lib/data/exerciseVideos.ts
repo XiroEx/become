@@ -21,6 +21,13 @@
 //
 // Both now resolve to `null`, and callers render an explicit empty state.
 //
+// What that removal could not reach is the URLs the hash-bucketed version had
+// already WRITTEN into the database: `/placeholder.mp4` is real footage of a
+// barbell bench press and `/placeholder2.mp4` of a goblet squat, and rows
+// still store them. Those are dropped here and in `resolveExerciseVideo` —
+// see lib/exerciseDemoVideo.ts for the whole story (card: "Jumping Jacks
+// shows a barbell bench-press image").
+//
 // What this module resolves is the whole DISPLAY record, not just a URL. An
 // `exercise_videos` row mirrors the admin's framing and trim (see the PATCH in
 // app/api/exercises/[slug]/trim/route.ts), so a video reached through this
@@ -30,6 +37,7 @@
 
 import type { VideoFramingOverride } from '@/lib/videoFraming';
 import type { VideoTrimOverride } from '@/lib/videoTrim';
+import { demoVideoUrl, isStockDemoClip } from '@/lib/exerciseDemoVideo';
 
 // Videos an admin has explicitly taken off an exercise are excluded from the
 // cache — see the `retired` status on models/ExerciseVideo.ts.
@@ -82,6 +90,8 @@ async function initializeCache(): Promise<void> {
         for (const video of data.videos || []) {
           if (!video.exerciseName || !video.videoUrl) continue;
           if (video.status === RETIRED_STATUS) continue;
+          // A stock clip is not this exercise's demo, whatever row it sits on.
+          if (isStockDemoClip(video.videoUrl)) continue;
           videoCache.set(video.exerciseName.toLowerCase(), {
             videoUrl: video.videoUrl,
             thumbnailUrl: video.thumbnailUrl || null,
@@ -179,17 +189,22 @@ export interface ResolvedExerciseVideo {
  * from the exercise falls THROUGH to the legacy row. That is what a swapped-in
  * exercise looks like — the swap nulls the programmed exercise's video fields
  * so the replacement resolves by name, trim included.
+ *
+ * And because EVERY player goes through here, this is also where a stock clip
+ * stops: an exercise carrying `/placeholder.mp4` reads as having no demo,
+ * however the URL reached this call (lib/exerciseDemoVideo.ts).
  */
 export function resolveExerciseVideo(
   own: OwnExerciseVideoFields,
   legacy: ExerciseVideoDisplay | null
 ): ResolvedExerciseVideo {
-  const ownVideoUrl = own.videoUrl?.trim() || null;
+  const ownVideoUrl = demoVideoUrl(own.videoUrl);
+  const legacyVideoUrl = demoVideoUrl(legacy?.videoUrl);
   // The row the played file actually came from — see rule 2.
-  const source = ownVideoUrl ? null : legacy;
+  const source = ownVideoUrl || !legacyVideoUrl ? null : legacy;
 
   return {
-    videoUrl: ownVideoUrl ?? legacy?.videoUrl ?? null,
+    videoUrl: ownVideoUrl ?? legacyVideoUrl,
     thumbnailUrl: own.thumbnailUrl?.trim() || legacy?.thumbnailUrl || null,
     videoWidth: own.videoWidth ?? source?.videoWidth ?? null,
     videoHeight: own.videoHeight ?? source?.videoHeight ?? null,

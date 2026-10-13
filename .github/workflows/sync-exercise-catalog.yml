@@ -143,6 +143,18 @@ jobs:
               jq -r '(.repoints // [])[] | "- repoint \(.)"' response.json
               jq -r '(.programText // [])[] | "- text \(.)"' response.json
             fi
+
+            # The second engine behind this door: rows still storing one of the
+            # two shared stock clips as their demo — a barbell bench press
+            # under Jumping Jacks (webapp/lib/stockDemoVideoSync.ts).
+            stock=$(jq -r '((.stockDemoVideos.exercises // []) + (.stockDemoVideos.videos // [])) | length' response.json)
+            if [ "${stock}" != "0" ]; then
+              echo
+              echo "Stock clips found on ${stock} row(s):"
+              echo
+              jq -r '(.stockDemoVideos.exercises // [])[] | "- exercise \(.)"' response.json
+              jq -r '(.stockDemoVideos.videos // [])[] | "- video \(.)"' response.json
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           missing=$(jq -r '(.missingSlugs // []) | length' response.json)
