@@ -475,7 +475,10 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
       title="Generate"
       testID={testID}
       accessibilityLabel="Generate a workout"
-      sheetStyle={{ maxHeight: "90%" }}
+      // NP-369: the web dialog's container padding is 24px (`p-6`) on every
+      // side; the shared `BottomSheet` primitive's own `p-5` is 20px, so this
+      // sheet overrides it rather than widening every other sheet in the app.
+      sheetStyle={{ maxHeight: "90%", paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}
       // The web header is a purple wand-icon badge plus a ✕ close button
       // beside the title (NP-295); the sheet had neither.
       headerLeading={
@@ -510,11 +513,21 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 8, gap: 16 }}
       >
-        {/* Tab control */}
+        {/* Tab control — the web's segmented pill (NP-369):
+            `rounded-2xl bg-zinc-100 p-1` container with each option
+            `rounded-xl py-2 text-sm font-semibold`, the selected one lifted
+            onto a `bg-white`/`bg-zinc-900` chip in `mindset` purple rather
+            than a solid fill across the whole tab. */}
         <View
           testID={`${testID}-tabs`}
           accessibilityRole="tablist"
-          style={{ flexDirection: "row", gap: 8 }}
+          style={{
+            flexDirection: "row",
+            gap: 4,
+            borderRadius: 16,
+            backgroundColor: colors.muted,
+            padding: 4,
+          }}
         >
           {(["session", "program"] as GenerateTab[]).map((tab) => {
             const selected = activeTab === tab;
@@ -535,21 +548,30 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                     justifyContent: "center",
                     gap: 6,
                     borderRadius: 12,
-                    paddingVertical: 10,
-                    backgroundColor: selected ? colors.primary : colors.muted,
+                    paddingVertical: 8,
+                    backgroundColor: selected ? colors.card : "transparent",
                   },
+                  selected
+                    ? {
+                        shadowColor: colors.foreground,
+                        shadowOpacity: 0.08,
+                        shadowRadius: 2,
+                        shadowOffset: { width: 0, height: 1 },
+                        elevation: 1,
+                      }
+                    : null,
                 ]}
               >
                 {tab === "session" ? (
-                  <Dumbbell size={16} color={selected ? colors["primary-foreground"] : colors.foreground} />
+                  <Dumbbell size={16} color={selected ? colors.mindset : colors["muted-foreground"]} />
                 ) : (
-                  <Calendar size={16} color={selected ? colors["primary-foreground"] : colors.foreground} />
+                  <Calendar size={16} color={selected ? colors.mindset : colors["muted-foreground"]} />
                 )}
                 <Text
                   style={{
                     fontSize: 14,
                     fontWeight: "600",
-                    color: selected ? colors["primary-foreground"] : colors.foreground,
+                    color: selected ? colors.mindset : colors["muted-foreground"],
                   }}
                 >
                   {tab === "session" ? "Session" : "Program"}
@@ -581,9 +603,12 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   style={[
                     minTouchTarget,
                     {
+                      // NP-369: the web's `chipBase` is `rounded-full px-3
+                      // py-1.5 text-sm font-medium border` — py-1.5 (6px),
+                      // not the 8px this carried before.
                       borderRadius: 999,
                       paddingHorizontal: 12,
-                      paddingVertical: 8,
+                      paddingVertical: 6,
                       justifyContent: "center",
                       borderWidth: 1,
                       borderColor: selected ? colors.mindset : colors.border,
@@ -593,7 +618,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                 >
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: "500",
                       color: selected ? colors["primary-foreground"] : colors.foreground,
                     }}
@@ -674,9 +699,12 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                   style={[
                     minTouchTarget,
                     {
+                      // NP-369: the web's `chipBase` is `rounded-full px-3
+                      // py-1.5 text-sm font-medium border` — py-1.5 (6px),
+                      // not the 8px this carried before.
                       borderRadius: 999,
                       paddingHorizontal: 12,
-                      paddingVertical: 8,
+                      paddingVertical: 6,
                       justifyContent: "center",
                       borderWidth: 1,
                       borderColor: selected ? colors.mindset : colors.border,
@@ -686,7 +714,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
                 >
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 14,
                       fontWeight: "500",
                       color: selected ? colors["primary-foreground"] : colors.foreground,
                     }}
@@ -1021,21 +1049,25 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
         ) : null}
 
         {/* ── AI toggle + prompt ── */}
+        {/* NP-369: the web draws this card in its own purple tint
+            (`border-purple-200 bg-purple-50/60`, `text-purple-700` title,
+            `text-purple-600` icon) rather than the neutral border/card this
+            carried before. */}
         <View
           testID={`${testID}-ai-section`}
           style={{
             borderRadius: 16,
             borderWidth: 1,
-            borderColor: colors.border,
-            backgroundColor: colors.card,
-            padding: 12,
-            gap: 8,
+            borderColor: tint("mindset", 0.3),
+            backgroundColor: tint("mindset", 0.08),
+            padding: 16,
+            gap: 10,
           }}
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Sparkles size={16} color={colors.primary} />
-              <Text className="text-foreground text-sm font-semibold">
+              <Sparkles size={16} color={colors.mindset} />
+              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.mindset }}>
                 Generate with AI
               </Text>
             </View>
@@ -1061,7 +1093,7 @@ export function GenerateSheet({ visible, onClose, testID = "generate-sheet" }: G
             numberOfLines={2}
           />
           {useAi ? (
-            <Text className="text-muted-foreground text-[11px]">
+            <Text style={{ fontSize: 11, color: colors.mindset }}>
               AI generates first (~30-40 s); falls back to the standard builder automatically.
             </Text>
           ) : null}

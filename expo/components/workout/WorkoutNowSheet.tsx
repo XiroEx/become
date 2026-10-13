@@ -305,6 +305,10 @@ export function WorkoutNowSheet({
       visible={visible}
       onClose={handleClose}
       title={workoutNowTitle(date, today)}
+      // NP-369: the web dialog's container padding is 24px (`p-6`) on every
+      // side; the shared `BottomSheet` primitive's own `p-5` is 20px, so this
+      // sheet overrides it rather than widening every other sheet in the app.
+      sheetStyle={{ paddingLeft: 24, paddingRight: 24, paddingTop: 24 }}
       // The web header is a green→purple gradient sparkle avatar and a ✕
       // close button beside the title; the sheet had neither.
       headerLeading={
@@ -623,7 +627,9 @@ function WorkoutNowBody({
 
   return (
       <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 24, gap: 20 }}
+        // Horizontal/top padding now comes from the sheet's own 24px
+        // (`sheetStyle` above) rather than a second, stacked 16px here.
+        contentContainerStyle={{ paddingBottom: 24, gap: 20 }}
         showsVerticalScrollIndicator={false}
       >
         {error ? (
