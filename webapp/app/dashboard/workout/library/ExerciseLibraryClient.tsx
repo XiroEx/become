@@ -720,9 +720,16 @@ export default function ExerciseLibraryClient({ embedded }: ExerciseLibraryClien
                 <div className="space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
                   {editingSlug === ex.slug ? (
                     <div className="space-y-4">
+                      {/* The saved exercise already has a tracking type the
+                          owner answered for — including a deliberate
+                          "Bodyweight + weight" (weighted pull-ups). Editing
+                          anything else must not rewrite it, so the bodyweight
+                          inference is off here; re-picking a tracking type by
+                          hand is how an older mis-tracked exercise gets fixed. */}
                       <CustomExerciseFields
                         values={editForm}
                         onChange={(next) => setEditForm(p => ({ ...p, ...next }))}
+                        trackingTypeExplicit
                       />
                       {editForm.error && <p className="text-xs text-red-500 dark:text-red-400">{editForm.error}</p>}
                       <div className="flex gap-3">
