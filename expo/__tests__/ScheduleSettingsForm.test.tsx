@@ -132,4 +132,48 @@ describe("ScheduleSettingsForm", () => {
       /border-primary|bg-primary/,
     );
   });
+
+  // NP-368: web's card header is a 2-column `flex items-start
+  // justify-between` row — program name + subtitle left, a bordered "Edit
+  // Days" pill top-right — not the button stacked below the chips.
+  it("renders the program name + subtitle beside a top-right Edit Days pill, and hides the pill while editing", () => {
+    const { getByTestId, queryByTestId } = render(
+      <ScheduleSettingsForm
+        initial={initial}
+        onSubmit={() => {}}
+        programName="Strength A"
+        subtitle="2/8 workouts completed · Started Jan 1, 2026"
+      />,
+    );
+    expect(getByTestId("schedule-settings-title").props.children).toBe(
+      "Strength A",
+    );
+    expect(getByTestId("schedule-settings-program-subtitle").props.children).toBe(
+      "2/8 workouts completed · Started Jan 1, 2026",
+    );
+    expect(getByTestId("schedule-settings-edit-days")).toBeTruthy();
+
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
+    // The title/subtitle stay visible while editing, the pill does not.
+    expect(getByTestId("schedule-settings-title")).toBeTruthy();
+    expect(queryByTestId("schedule-settings-edit-days")).toBeNull();
+  });
+
+  // NP-368: the read-only chips are a rectangular pill (`rounded-lg px-3
+  // py-1.5 text-xs font-semibold`), not the fixed `w-9 h-9` square the
+  // edit-mode chips still use.
+  it("read-only day chips use the web's pill dimensions, distinct from the edit-mode square chips", () => {
+    const { getByTestId, getByText } = render(
+      <ScheduleSettingsForm initial={initial} onSubmit={() => {}} />,
+    );
+    const readOnlyClassName = getByTestId("schedule-settings-day-1").props.className;
+    expect(readOnlyClassName).toMatch(/px-3 py-1\.5/);
+    expect(readOnlyClassName).not.toMatch(/w-9|h-9/);
+    expect(getByText("Mon").props.className).toMatch(/font-semibold/);
+
+    fireEvent.press(getByTestId("schedule-settings-edit-days"));
+    const editingClassName = getByTestId("schedule-settings-day-1").props.className;
+    expect(editingClassName).toMatch(/w-9/);
+    expect(editingClassName).toMatch(/h-9/);
+  });
 });
