@@ -6,6 +6,7 @@ import Exercise from '@/models/Exercise';
 import { invalidateExerciseCache } from '@/lib/hydrateExercises';
 import { visibleExerciseFilter } from '@/lib/exerciseVisibility';
 import { escapeRegExp, findDuplicateSlugs, isBrokenExercise, isMissingVideo, matchesAuditSearch, type AuditableExercise } from '@/lib/exerciseAudit';
+import { withoutStockDemoVideo } from '@/lib/exerciseDemoVideo';
 import { expandQueryVariants } from '@/lib/exerciseAbbreviations';
 
 interface AuditRow extends AuditableExercise {
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       const exercises = flagged.slice(skip, skip + limit);
 
       return NextResponse.json({
-        exercises,
+        exercises: exercises.map(withoutStockDemoVideo),
         total,
         page,
         pages: Math.max(1, Math.ceil(total / limit)),
@@ -116,7 +117,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      exercises,
+      // A row still storing one of the two shared stock clips has no demo, and
+      // the library must not play a barbell bench press under Jumping Jacks
+      // (lib/exerciseDemoVideo.ts).
+      exercises: exercises.map(withoutStockDemoVideo),
       total,
       page,
       pages: Math.ceil(total / limit),
