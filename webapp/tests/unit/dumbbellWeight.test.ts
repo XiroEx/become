@@ -137,6 +137,15 @@ test('labels are per-implement, not a generic "Weight"', () => {
   assert.equal(bellWeightLabel(null), 'Weight (lbs)')
 })
 
+test('NP-209: a kg member sees kg, not lbs, on every bell label', () => {
+  assert.equal(bellWeightLabel('dumbbell', 'kg'), 'Weight per DB (kg)')
+  assert.equal(bellWeightLabel('kettlebell', 'kg'), 'Weight per KB (kg)')
+  assert.equal(bellWeightLabel(null, 'kg'), 'Weight (kg)')
+  // Omitting the unit (every call site before this card, and the native copy
+  // this is parity-tested against) still defaults to lbs.
+  assert.equal(bellWeightLabel('dumbbell'), 'Weight per DB (lbs)')
+})
+
 test('quick-pick weights are sane for the implement, not barbell plate math', () => {
   assert.deepEqual(weightQuickPicks('dumbbell'), [10, 20, 30, 40, 50])
   assert.deepEqual(weightQuickPicks('kettlebell'), [18, 26, 35, 44, 53])

@@ -33,6 +33,7 @@ import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
 import { getRestDuration, restGroupContext } from "@/lib/workout/restDuration";
+import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 import { fireRestAlert } from "@/lib/workout/restAlert";
 
 // Match a direct video file URL by extension, with optional query string.
@@ -315,6 +316,10 @@ export default function WorkoutFormPage() {
   // stashed draft and progress is shared with the Live view via localStorage.
   const quickSessionId = searchParams.get("session") || "";
   const isQuick = programId === QUICK_PROGRAM_ID || !!quickSessionId;
+  // NP-209: the member's lifting-load unit (ask-once gate lives in the
+  // dashboard layout). Drives every "lbs"/"kg" label below — defaults to
+  // 'lbs' while it loads, the same read-time fallback as everywhere else.
+  const memberWeightUnit = useMemberWeightUnit();
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [currentPhase, setCurrentPhase] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -1756,7 +1761,7 @@ export default function WorkoutFormPage() {
                                     ? (lastSeconds
                                         ? (durationUnit === "min" ? `${secondsToUnitDisplay(lastSeconds, "min")}m` : `${lastSeconds}s`)
                                         : 'completed')
-                                    : h.weight > 0 ? `${h.weight} lbs${bellSuffix} × ${h.reps} reps`
+                                    : h.weight > 0 ? `${h.weight} ${memberWeightUnit}${bellSuffix} × ${h.reps} reps`
                                     : h.reps > 0 ? `${h.reps} reps` : null
                                   return label ? (
                                     <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -2122,7 +2127,7 @@ export default function WorkoutFormPage() {
                                     }
                                     const gBell = getBellWeightInfo(exercise).style
                                     const fields: Array<{ key: keyof SetData; label: string; placeholder: string; span: string }> = []
-                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? "lbs/DB" : gBell === 'kettlebell' ? "lbs/KB" : "lbs", placeholder: "0", span: "col-span-4" })
+                                    if (gWeight) fields.push({ key: "weight", label: gBell === 'dumbbell' ? `${memberWeightUnit}/DB` : gBell === 'kettlebell' ? `${memberWeightUnit}/KB` : memberWeightUnit, placeholder: "0", span: "col-span-4" })
                                     fields.push(
                                       gTimed
                                         ? { key: "duration", label: "sec", placeholder: exercise.duration?.replace(/[^0-9]/g, "") || "30", span: gWeight ? "col-span-4" : gSpeed ? "col-span-3" : "col-span-8" }
@@ -2289,6 +2294,7 @@ export default function WorkoutFormPage() {
             summaryStreak={summaryStreak}
             summaryGoal={summaryGoal}
             formatTime={formatTime}
+            weightUnit={memberWeightUnit}
             onDone={() => router.push("/dashboard/workout")}
           />
         )}

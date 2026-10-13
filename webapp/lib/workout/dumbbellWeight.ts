@@ -86,11 +86,16 @@ export function getBellWeightInfo(exercise: BellExerciseInput | null | undefined
   return { style, showTotal }
 }
 
-/** The input label for this style, e.g. "Weight per DB (lbs)". */
-export function bellWeightLabel(style: BellStyle): string {
-  if (style === 'dumbbell') return 'Weight per DB (lbs)'
-  if (style === 'kettlebell') return 'Weight per KB (lbs)'
-  return 'Weight (lbs)'
+/**
+ * The input label for this style, e.g. "Weight per DB (lbs)". `unit` is the
+ * member's weightUnit preference (NP-209: ask once, read everywhere) —
+ * defaults to 'lbs' so every existing call site (and the native copy this is
+ * parity-tested against) is unaffected until it passes one explicitly.
+ */
+export function bellWeightLabel(style: BellStyle, unit: 'lbs' | 'kg' = 'lbs'): string {
+  if (style === 'dumbbell') return `Weight per DB (${unit})`
+  if (style === 'kettlebell') return `Weight per KB (${unit})`
+  return `Weight (${unit})`
 }
 
 /**
