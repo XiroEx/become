@@ -836,63 +836,57 @@ export function EstimateSheet({
           )}
 
           {phase === "describe" && (
+            // NP-372: the sheet header above already carries "Describe your
+            // meal" / "Add a photo too, or just use your words" for this
+            // phase (the web's single SnapPlateModal header) — a second
+            // hero icon/title/subtitle block here duplicated it within
+            // 100px of vertical space. Removed rather than re-worded.
             <View testID={`${testID}-describe`} style={{ gap: 12, paddingTop: 4 }}>
-              <View style={{ alignItems: "center", gap: 4 }}>
-                <View
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: 16,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: tint("success", 0.15),
-                    marginBottom: 4,
-                  }}
-                >
-                  <PencilLine size={28} color={colors.success} />
-                </View>
-                <Text className="text-foreground text-base font-bold text-center">
-                  Describe your meal
-                </Text>
-                <Text className="text-muted-foreground text-sm text-center">
-                  In your words — add a photo too, or just estimate from the text.
-                </Text>
-              </View>
               <Input
                 testID={`${testID}-describe-input`}
-                placeholder="e.g. chicken burrito bowl with rice, black beans, guac and salsa"
+                placeholder="Describe your whole meal — the food and portions, plus any sauces, dressings, sides and drinks. e.g. chicken burrito bowl with rice, black beans, guac and salsa, and a large iced tea"
                 value={describeText}
                 onChangeText={setDescribeText}
                 multiline
                 numberOfLines={4}
+                // Web's textarea: min-h-[110px] p-3.5 (14px) — the generic
+                // Input otherwise only carries its default px-3 py-2.5.
+                style={{ minHeight: 110, padding: 14 }}
               />
               {/* Optional photo — carries the typed text forward as the
                   compose note, the way the web's "Add photo"/"Upload photo"
                   do from this same step. */}
+              {/* NP-372: web's photo action buttons are the bordered
+                  card-filled `outline` token (border-zinc-200/bg-white,
+                  dark:border-zinc-700/bg-zinc-900) at the `footer` size
+                  (px-4 py-2.5 text-sm, rounded-xl) — not the borderless
+                  `secondary` fill used here before. */}
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <View style={{ flex: 1 }}>
                   <Button
                     testID={`${testID}-describe-add-photo`}
-                    variant="secondary"
+                    variant="outline"
+                    size="footer"
                     onPress={() => void captureFrom("camera", describeText)}
                     disabled={capturing}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <Camera size={14} color={colors.foreground} />
-                      <Text className="text-foreground text-sm font-medium">Add photo</Text>
+                      <Camera size={16} color={colors.foreground} />
+                      <Text className="text-foreground text-sm font-semibold">Add photo</Text>
                     </View>
                   </Button>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Button
                     testID={`${testID}-describe-upload-photo`}
-                    variant="secondary"
+                    variant="outline"
+                    size="footer"
                     onPress={() => void captureFrom("library", describeText)}
                     disabled={capturing}
                   >
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <ImagePlus size={14} color={colors.foreground} />
-                      <Text className="text-foreground text-sm font-medium">Upload photo</Text>
+                      <ImagePlus size={16} color={colors.foreground} />
+                      <Text className="text-foreground text-sm font-semibold">Upload photo</Text>
                     </View>
                   </Button>
                 </View>
@@ -901,7 +895,8 @@ export function EstimateSheet({
                 <View style={{ flex: 1 }}>
                   <Button
                     testID={`${testID}-describe-back`}
-                    variant="secondary"
+                    variant="outline"
+                    size="footer"
                     onPress={() => setPhase("chooser")}
                   >
                     Back
@@ -911,6 +906,7 @@ export function EstimateSheet({
                   <Button
                     testID={`${testID}-describe-estimate`}
                     variant="success"
+                    size="footer"
                     onPress={() => void runDescribeEstimate(describeText)}
                     disabled={!describeText.trim()}
                   >
