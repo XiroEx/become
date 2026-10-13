@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react'
 import { setUnitLabel } from '@/lib/workout/tracking'
+import { applyBodyweightTracking, BODYWEIGHT_TRACKING, saysBodyweight } from '@/lib/workout/bodyweightTracking'
 import {
   VALID_CUSTOM_DIFFICULTIES,
   VALID_CUSTOM_EQUIPMENT,
@@ -189,6 +190,14 @@ export interface CustomExerciseFieldsProps {
   namePlaceholder?: string
   /** Force the "always-dark" chrome used by the immersive live workout view. */
   dark?: boolean
+  /**
+   * The tracking type in `values` is already the member's own answer, so
+   * nothing may infer over it. The edit form passes this: an exercise opened
+   * for edit carries a SAVED tracking type, and "Bodyweight + weight" is a
+   * real combination (weighted pull-ups) that a later unrelated edit must not
+   * quietly rewrite. See lib/workout/bodyweightTracking.ts.
+   */
+  trackingTypeExplicit?: boolean
 }
 
 export default function CustomExerciseFields({
@@ -197,11 +206,26 @@ export default function CustomExerciseFields({
   nameAutoFocus,
   namePlaceholder = 'e.g. Cable Face Pull',
   dark = false,
+  trackingTypeExplicit = false,
 }: CustomExerciseFieldsProps) {
   const advancedId = useId()
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  // Picking a tracking type is the member saying it themselves — from then on
+  // the Bodyweight category/equipment never touches it again.
+  const [trackingPicked, setTrackingPicked] = useState(false)
+  const trackingIsExplicit = trackingTypeExplicit || trackingPicked
+
+  // Every change but a tracking pick goes through here, so the Bodyweight
+  // category chip, the Advanced "Detailed Category" select and the Equipment
+  // list all reach the same rule instead of three of them missing it.
+  const emit = (next: CustomExerciseValues) =>
+    onChange(applyBodyweightTracking(next, { trackingTypeExplicit: trackingIsExplicit }))
   const set = <K extends keyof CustomExerciseValues>(key: K, value: CustomExerciseValues[K]) =>
-    onChange({ ...values, [key]: value })
+    emit({ ...values, [key]: value })
+
+  const bodyweightInferred = !trackingIsExplicit
+    && saysBodyweight(values)
+    && values.trackingType === BODYWEIGHT_TRACKING
 
   const isTimeBased = TIME_BASED_TRACKING_TYPES.has(values.trackingType)
 
@@ -253,7 +277,12 @@ export default function CustomExerciseFields({
             <button
               key={opt.value}
               type="button"
-              onClick={() => set('trackingType', opt.value)}
+              onClick={() => {
+                setTrackingPicked(true)
+                // Deliberately NOT through `emit` — this is the explicit choice
+                // the inference must never overrule.
+                onChange({ ...values, trackingType: opt.value })
+              }}
               className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
                 values.trackingType === opt.value ? chipActive : chipIdle
               }`}
@@ -273,7 +302,7 @@ export default function CustomExerciseFields({
             <button
               key={opt.value}
               type="button"
-              onClick={() => onChange({ ...values, muscleGroup: opt.value, primaryMuscles: [] })}
+              onClick={() => emit({ ...values, muscleGroup: opt.value, primaryMuscles: [] })}
               className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
                 values.muscleGroup === opt.value ? chipActive : chipIdle
               }`}
@@ -306,6 +335,11 @@ export default function CustomExerciseFields({
             </button>
           ))}
         </div>
+        {bodyweightInferred && (
+          <p className={dark ? 'mt-1.5 text-[11px] text-white/45' : 'mt-1.5 text-[11px] text-zinc-500 dark:text-zinc-400'}>
+            Bodyweight exercises track reps only. Pick a tracking type above to log a load too.
+          </p>
+        )}
       </div>
 
       {/* Role */}
