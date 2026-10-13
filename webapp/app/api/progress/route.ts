@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
-import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
+import { formatProgressData, calculateNextWorkout, resolveProgramWeek } from '@/lib/data/userProgress'
 import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
@@ -199,15 +199,43 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // NP-377: reconcile the week/phase/total-weeks trio through one function
+    // so they can never disagree (the dashboard was showing "Phase 1 • Week
+    // 5 of 4" when the schedule/completion-derived week walked past the
+    // program's own length). `totalWeeksForResolve` prefers the schedule's
+    // real duration_weeks read above; the legacy (no-activeProgram) fallback
+    // path never populates that, so fall back to programDetails directly.
+    const totalWeeksForResolve = scheduleTotalWeeks
+      ?? (programDetails && 'duration_weeks' in programDetails
+        ? (programDetails as { duration_weeks: number }).duration_weeks
+        : undefined)
+    const phasesForResolve = (programDetails as { phases?: Array<{ weeks?: string }> } | null)?.phases
+    const rawCurrentWeek = activeProgram
+      ? (scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1))
+      : (progress.currentProgram?.currentWeek ?? 1)
+    const rawCurrentPhase = activeProgram
+      ? (activeProgram.currentPhase || 1)
+      : (progress.currentProgram?.currentPhase || 1)
+    const resolvedWeek = resolveProgramWeek({
+      rawWeek: rawCurrentWeek,
+      totalWeeks: totalWeeksForResolve,
+      phases: phasesForResolve,
+      fallbackPhase: rawCurrentPhase,
+    })
+
     // Build current program from real data only (never use mock programId)
     const currentProgramData = activeProgram ? {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
-      currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      currentPhase: resolvedWeek.currentPhase,
+      currentWeek: resolvedWeek.currentWeek,
       completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
       totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
-    } : progress.currentProgram?.programId ? progress.currentProgram : null
+    } : progress.currentProgram?.programId ? {
+      ...progress.currentProgram,
+      currentPhase: resolvedWeek.currentPhase,
+      currentWeek: resolvedWeek.currentWeek,
+    } : null
 
     // Format and return progress data
     const formattedData = formatProgressData(
@@ -223,7 +251,7 @@ export async function GET(request: NextRequest) {
       programName,
       nextWorkout,
       {
-        totalWeeks: scheduleTotalWeeks,
+        totalWeeks: resolvedWeek.totalWeeks,
         nextWorkoutDay: scheduleNextWorkoutDay,
         tzOffsetMinutes: readTzOffset(request.nextUrl.searchParams),
       }
