@@ -515,10 +515,15 @@ export function Calendar({
                   className={`border-r border-b border-border ${cellTintClass}`}
                   style={{
                     flex: 1,
-                    minHeight: activeViewMode === "week" ? 80 : 44,
+                    // The web's month cell is `min-h-[52px] sm:min-h-16` with
+                    // `p-1 sm:p-2` (CalendarClient.tsx) — native previously
+                    // used a 44px cell with only 3px of vertical padding,
+                    // noticeably shorter and tighter than the web grid
+                    // (NP-367).
+                    minHeight: activeViewMode === "week" ? 80 : 52,
                     alignItems: "center",
                     justifyContent: "flex-start",
-                    paddingVertical: 3,
+                    paddingVertical: 4,
                     opacity: outside ? 0.4 : 1,
                   }}
                 >
@@ -589,12 +594,16 @@ export function Calendar({
                         <View
                           key={si}
                           testID={`${testID}-pill-${date}-${si}`}
-                          className="bg-primary/15 rounded px-0.5 py-0.5"
+                          // The web's week-view workout chip is `rounded
+                          // px-1 py-0.5 text-[8px] font-medium leading-tight
+                          // sm:text-[10px]` (CalendarClient.tsx) — native
+                          // previously used a tighter `px-0.5` and a fixed
+                          // 9px label (NP-367).
+                          className="bg-primary/15 rounded px-1 py-0.5"
                         >
                           <Text
                             numberOfLines={1}
-                            style={{ fontSize: 9, fontWeight: "500" }}
-                            className="text-primary text-center"
+                            className="text-primary text-center text-[8px] font-medium sm:text-[10px]"
                           >
                             {slot.dayLabel || `Day ${slot.workoutIndex + 1}`}
                           </Text>

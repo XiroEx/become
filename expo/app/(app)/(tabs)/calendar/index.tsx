@@ -627,7 +627,12 @@ export default function CalendarIndexRoute() {
         {selectedDate ? (
           <View
             testID="calendar-day-detail"
-            className="bg-card border border-border rounded-2xl p-4"
+            // The web's selected-day panel is `rounded-xl border
+            // border-zinc-200 bg-white p-4 dark:border-zinc-800
+            // dark:bg-zinc-900` (CalendarClient.tsx) and the card asks the
+            // padding to track its `sm:p-6` scale-up — native previously
+            // stayed at a flat `p-4` regardless of width (NP-367).
+            className="bg-card border border-border rounded-2xl p-4 sm:p-6"
           >
             <Text
               testID="day-detail-header"
@@ -740,9 +745,17 @@ export default function CalendarIndexRoute() {
                       {q.status === "completed" ? (
                         <Button
                           testID={`day-detail-quick-summary-${q.sessionId ?? idx}`}
-                          variant="secondary"
+                          // The web renders this quick-session "View
+                          // Summary" button with the SAME outlined green
+                          // treatment as the program-workout one
+                          // (`border-green-200 text-green-600`,
+                          // CalendarClient.tsx) — native was rendering it
+                          // neutral grey (`secondary`), which read as a
+                          // lower-priority action than its program-workout
+                          // sibling just below (NP-367).
+                          variant="success-outline"
                           size="sm"
-                          icon={<BarChart2 size={14} color={colors.foreground} />}
+                          icon={<BarChart2 size={14} color={colors.success} />}
                           disabled={!q.sessionId}
                           onPress={() => setSummaryQuick(q)}
                         >
