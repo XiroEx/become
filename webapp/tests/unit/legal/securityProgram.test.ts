@@ -142,6 +142,8 @@ const REQUIRED_SYSTEMS = [
   'Stripe',
   'Gmail',
   'MinIO',
+  'Apple Push Notification service',
+  'Firebase Cloud Messaging',
 ] as const
 
 test('it lists where member data lives, by system', () => {
