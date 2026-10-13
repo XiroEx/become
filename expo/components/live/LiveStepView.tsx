@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus, Repeat, X } from "lucide-react-native";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Dumbbell,
+  Plus,
+  Repeat,
+  X,
+} from "lucide-react-native";
 import { Text } from "@/components/Text";
-import { Button } from "@/components/Button";
-import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
-import { LiveSetReference } from "@/components/live/LiveSetReference";
+import { type LiveSetState } from "@/components/live/LiveSetRow";
+import { LiveStepInputs } from "@/components/live/LiveStepInputs";
+import { LiveSetReference, isNewPR } from "@/components/live/LiveSetReference";
 import { LiveExerciseDetails } from "@/components/live/LiveExerciseDetails";
 import { ExerciseHint } from "@/components/live/ExerciseHint";
 import { KeyboardDoneBar } from "@/components/live/KeyboardDoneBar";
@@ -14,6 +23,7 @@ import {
   type ExerciseGroupType,
 } from "@/components/live/ExerciseGroupNav";
 import {
+  equipmentAssumption,
   getBellWeightInfo,
   normalizeTracking,
   setUnitLabel,
@@ -165,6 +175,13 @@ export function lastSetLine(
  * because the flow it steps through is `buildWorkoutFlow` — the same one the
  * Track view labels its rows with.
  *
+ * The SET INPUTS are the web's own input group (`LiveStepInputs`), not the
+ * Track row: boxes side by side under fixed-height labels, the quick-pick
+ * loads as one sideways strip, `🔥 NEW PR!` in the weight label row and the
+ * equipment disclosure beside the exercise name. Rendering `LiveSetRow` here
+ * is what left Live with a set-number column, a bordered card, a wrapping
+ * pick grid and a second `Last:` line the web never shows.
+ *
  * Colours are theme tokens, never the web's white-on-black literals: the web
  * live page is a dark page in both modes, native is not, so a light phone
  * reads this screen in light mode (NP-288 checked both).
@@ -291,6 +308,58 @@ export function LiveStepView({
     step.setIndex,
   );
   const overall = overallProgressPercent(grid);
+  // The web's equipment disclosure, in the web's place (under the pills):
+  // shown only when the app applies an implement the displayed name does not
+  // state — "Dumbbell Bench Press" needs no chip, "Rear Delt Fly" does.
+  const assumption = equipmentAssumption({
+    name: exercise.name,
+    equipment: exercise.equipment,
+  });
+  const assumptionLabel =
+    assumption.assumed && assumption.label
+      ? `Logging as ${assumption.label}`
+      : null;
+  // `🔥 NEW PR!` belongs in the weight LABEL ROW on the web, beside the label
+  // — the reference block above keeps saying it too, as it already did.
+  const beatingPR = isNewPR(
+    exercise.trackingType,
+    current.weight,
+    exercisePRs?.[exercise.name] ?? null,
+  );
+
+  /** One of the web's small translucent pills under the exercise name. */
+  const pill = (
+    id: string,
+    accessibilityLabel: string,
+    icon: ReactNode,
+    text: string,
+    onPress: () => void,
+  ) => (
+    <Pressable
+      testID={id}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      hitSlop={hitSlopToMinTarget(120, 30)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        borderRadius: 999,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: colors.muted,
+      }}
+    >
+      {icon}
+      <Text
+        style={WRAPPABLE_TEXT}
+        className="text-foreground text-xs font-medium"
+      >
+        {text}
+      </Text>
+    </Pressable>
+  );
 
   /** One circular icon control of the bottom bar (the web's 14x14 pills). */
   const iconButton = (
@@ -366,21 +435,44 @@ export function LiveStepView({
           <View style={{ flex: 1 }} />
         )}
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {/* The web's resume indicator is a PILL with a clock face
+              (`rounded-full bg-yellow-500/20 px-3 py-1.5 text-sm font-medium
+              text-yellow-400`), the same chrome Track's one already has. */}
           {resumed ? (
-            <Text
-              testID={`${testID}-resume-indicator`}
-              className="text-accent text-xs font-semibold"
+            <View
+              testID={`${testID}-live-resume-pill`}
+              style={{
+                borderRadius: 999,
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                backgroundColor: tint("accent", 0.2),
+              }}
             >
-              Resuming
-            </Text>
+              <Text
+                testID={`${testID}-resume-indicator`}
+                className="text-accent text-xs font-medium"
+              >
+                Resuming
+              </Text>
+            </View>
           ) : null}
           {typeof activeSeconds === "number" ? (
-            // The web's `flex items-center gap-1.5 text-xs font-mono
-            // text-zinc-400` — no pill chrome around the dot and the time,
-            // just the two sitting directly in the top bar.
+            // The web's elapsed timer is a translucent PILL — `flex
+            // items-center gap-1.5 rounded-full bg-black/40 px-3 py-1.5
+            // backdrop-blur-sm` with a pulsing red dot and `font-mono text-sm
+            // tabular-nums` — the same chrome as the ✕ beside it, drawn with a
+            // theme tint rather than the web's literal black (NP-288's rule).
             <View
               testID={`${testID}-live-timer`}
-              style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 999,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: tint("foreground", 0.1),
+              }}
             >
               <Animated.View
                 testID={`${testID}-live-timer-dot`}
@@ -394,7 +486,7 @@ export function LiveStepView({
               />
               <Text
                 testID={`${testID}-elapsed`}
-                className="text-muted-foreground font-mono text-xs tabular-nums"
+                className="text-foreground font-mono text-sm tabular-nums"
               >
                 {formatElapsed(activeSeconds)}
               </Text>
@@ -516,25 +608,28 @@ export function LiveStepView({
             <View
               style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}
             >
+              {/* The web's line is `text-sm text-white/60` with the group
+                  label in purple — one size, no bold (NP-365's device pass
+                  left it a size small and semibold). */}
               <Text
                 testID={`${testID}-live-step`}
-                className="text-muted-foreground text-xs font-semibold"
+                className="text-muted-foreground text-sm"
               >
                 {`Exercise ${step.exerciseIndex + 1}/${exercises.length}`}
               </Text>
-              <Text className="text-muted-foreground text-xs">•</Text>
+              <Text className="text-muted-foreground text-sm">•</Text>
               <Text
                 testID={`${testID}-live-set-label`}
-                className="text-muted-foreground text-xs font-semibold"
+                className="text-muted-foreground text-sm"
               >
                 {`${unit} ${step.setIndex + 1}/${totalSets}`}
               </Text>
               {groupLabel ? (
                 <>
-                  <Text className="text-muted-foreground text-xs">•</Text>
+                  <Text className="text-muted-foreground text-sm">•</Text>
                   <Text
                     testID={`${testID}-live-group-label`}
-                    className="text-mindset text-xs font-semibold"
+                    className="text-mindset text-sm"
                   >
                     {groupLabel}
                   </Text>
@@ -549,41 +644,82 @@ export function LiveStepView({
               >
                 {exercise.name}
               </Text>
+              {/* The web's badge is a CHIP beside the name (`rounded
+                  bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-medium
+                  text-blue-400`), not a bare word. */}
               {exercise.swappedFromName ? (
-                <Text
-                  testID={`${testID}-live-swapped-badge`}
-                  className="text-info text-[10px] font-medium"
+                <View
+                  style={{
+                    borderRadius: 4,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                    backgroundColor: tint("info", 0.2),
+                  }}
                 >
-                  Swapped
-                </Text>
+                  <Text
+                    testID={`${testID}-live-swapped-badge`}
+                    className="text-info text-[10px] font-medium"
+                  >
+                    Swapped
+                  </Text>
+                </View>
               ) : null}
             </View>
 
             {/* The web's pills: change what you are doing, or add to it,
-                without leaving the set. */}
+                without leaving the set. They are PILLS — `rounded-full
+                bg-white/10 px-3 py-1.5 text-xs font-medium` — not the shared
+                `Button`'s `rounded-xl` block, for the same reason the CTA
+                below is drawn by hand (NP-365): this screen's chrome is the
+                web's floating pill chrome. The slop keeps the 44-point target
+                a pill that small would otherwise miss. */}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <Button
-                testID={`${testID}-live-swap`}
-                variant="secondary"
-                size="sm"
-                icon={<Repeat size={14} color={colors.foreground} />}
-                onPress={() => onRequestSwap?.(exercise.slug)}
-                accessibilityLabel={`Swap ${exercise.name}`}
-              >
-                Swap Exercise
-              </Button>
-              {onAddExercise ? (
-                <Button
-                  testID={`${testID}-live-add`}
-                  variant="secondary"
-                  size="sm"
-                  icon={<Plus size={14} color={colors.foreground} />}
-                  onPress={onAddExercise}
-                >
-                  Add Exercise
-                </Button>
-              ) : null}
+              {pill(
+                `${testID}-live-swap`,
+                `Swap ${exercise.name}`,
+                <Repeat size={14} color={colors.foreground} />,
+                "Swap Exercise",
+                () => onRequestSwap?.(exercise.slug),
+              )}
+              {onAddExercise
+                ? pill(
+                    `${testID}-live-add`,
+                    "Add Exercise",
+                    <Plus size={14} color={colors.foreground} />,
+                    "Add Exercise",
+                    onAddExercise,
+                  )
+                : null}
             </View>
+
+            {/* "This is being logged as a Dumbbell." The web renders this
+                disclosure HERE — under the pills, above the inputs
+                (`EquipmentAssumptionRow dark`) — and only when the exercise's
+                own name does not already state the implement. It used to sit
+                under the weight box as part of the Track row. */}
+            {assumptionLabel ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  alignSelf: "flex-start",
+                  gap: 4,
+                  borderRadius: 999,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  backgroundColor: colors.muted,
+                }}
+              >
+                <Dumbbell size={12} color={colors["muted-foreground"]} />
+                <Text
+                  testID={`${testID}-live-${exercise.slug}-assumption`}
+                  style={WRAPPABLE_TEXT}
+                  className="text-muted-foreground text-[11px] font-medium"
+                >
+                  {assumptionLabel}
+                </Text>
+              </View>
+            ) : null}
 
             {exercise.notes ? (
               <Text
@@ -656,22 +792,25 @@ export function LiveStepView({
                 }}
               />
             </View>
-            <Text className="text-muted-foreground text-xs font-medium tabular-nums">
+            {/* The web's `text-sm font-medium text-white/70 tabular-nums`. */}
+            <Text className="text-muted-foreground text-sm font-medium tabular-nums">
               {`${overall}%`}
             </Text>
           </View>
 
+          {/* THE WEB'S OWN INPUT GROUP (not the Track row): boxes side by
+              side under fixed-height labels, the quick picks as one scrolling
+              strip beneath them. */}
           {inputsOpen ? (
-            <LiveSetRow
+            <LiveStepInputs
               setIndex={step.setIndex}
               bell={bell}
               exerciseName={exercise.name}
-              equipment={exercise.equipment}
-              showQuickPicks
-              hideComplete
               state={current}
-              prefill={exercise.prefill?.[step.setIndex] ?? null}
               trackingType={exercise.trackingType}
+              targetReps={exercise.repsLabel ?? null}
+              targetDuration={exercise.durationLabel ?? null}
+              newPR={beatingPR}
               testID={`${testID}-live-${exercise.slug}-set-${step.setIndex}`}
               onChange={(next) => onSetChange(step.exerciseIndex, step.setIndex, next)}
             />
