@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -23,6 +23,7 @@ import {
   Bookmark,
   Camera,
   ChefHat,
+  ChevronDown,
   Clock,
   Globe,
   PencilLine,
@@ -38,6 +39,11 @@ import {
   rowCalories,
 } from "@/lib/nutrition/foodRowDisplay";
 import { titleCase } from "@/lib/nutrition/mealSchedule";
+import {
+  mealTagOptions,
+  normalizeCustomTag,
+  titleCaseMealTag,
+} from "@/lib/nutrition/savedMeals";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { BottomSheet } from "@/components/BottomSheet";
@@ -68,6 +74,12 @@ import {
 
 export type FoodSearchTabId = "all" | "mine" | "meals" | "recent" | "frequent";
 
+// NP-371: the web's app-wide default tags (`FoodSearchModal.tsx`'s
+// `allTagOptions` fallback) — the four meal-time basics plus the two
+// workout-adjacent ones, before the caller's own `availableTags.defaults`
+// (`/api/tags`) is known.
+const TAG_FALLBACK = ["breakfast", "lunch", "dinner", "snack", "pre-workout", "post-workout"];
+
 const TABS: { id: Exclude<FoodSearchTabId, "all">; label: string; Icon: typeof Bookmark; testID: string }[] = [
   { id: "mine", label: "Foods", Icon: Bookmark, testID: "food-filter-mine" },
   { id: "meals", label: "Meals", Icon: ChefHat, testID: "food-filter-meals" },
@@ -89,6 +101,12 @@ export interface FoodSearchSheetProps {
   visible: boolean;
   onClose: () => void;
   currentTag?: string;
+  /**
+   * NP-371: tag choices offered by the interactive "ADDING TO" dropdown —
+   * the web's `availableTags` (`/api/tags` defaults ∪ userTags). Falls back
+   * to `TAG_FALLBACK` when the caller has not fetched them yet.
+   */
+  availableTags?: { defaults: string[]; userTags: string[] };
   onPickFood?: (food: Food) => void;
   onPickMeal?: (meal: Meal) => void;
   /**
@@ -145,6 +163,7 @@ export function FoodSearchSheet({
   visible,
   onClose,
   currentTag,
+  availableTags,
   onPickFood,
   onPickMeal,
   basketMode = false,
@@ -170,6 +189,14 @@ export function FoodSearchSheet({
   const [query, setQuery] = useState<string>("");
   const [activeTab, setActiveTab] = useState<FoodSearchTabId>("all");
   const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
+
+  // NP-371: the interactive "ADDING TO" tag dropdown — web parity for the
+  // tag picker that used to be a non-interactive pill. `activeTag` starts at
+  // the caller's `currentTag` and can be changed here for THIS log only; it
+  // never writes back to the caller's own tag state.
+  const [activeTag, setActiveTag] = useState<string>(currentTag ?? "snack");
+  const [tagPickerOpen, setTagPickerOpen] = useState<boolean>(false);
+  const [customTagInput, setCustomTagInput] = useState<string>("");
 
   const [overview, setOverview] = useState<FoodOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState<boolean>(false);
@@ -208,6 +235,37 @@ export function FoodSearchSheet({
       setQuery("");
     }
   }, [visible]);
+
+  // NP-371: "ADDING TO" resets to the CALLER's tag every time the sheet is
+  // freshly opened — never whatever was left selected from a previous open
+  // (`MealLogSheet.tsx`'s own reset-on-open effect is the same shape).
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (!visible || wasVisible) return;
+    setActiveTag(currentTag ?? "snack");
+    setTagPickerOpen(false);
+    setCustomTagInput("");
+  }, [visible, currentTag]);
+
+  const tagOptions = useMemo(
+    () => mealTagOptions([...(availableTags?.defaults ?? TAG_FALLBACK), activeTag], availableTags?.userTags ?? []),
+    [availableTags, activeTag],
+  );
+
+  const handleSelectTag = useCallback((tag: string) => {
+    setActiveTag(tag);
+    setTagPickerOpen(false);
+  }, []);
+
+  const handleAddCustomTag = useCallback(() => {
+    const norm = normalizeCustomTag(customTagInput);
+    if (!norm) return;
+    setActiveTag(norm);
+    setCustomTagInput("");
+    setTagPickerOpen(false);
+  }, [customTagInput]);
 
   // Barcode scan (NP-088): the web's `handleBarcodeDetected` — look the code
   // up on the server and open the quantity picker on a real food. A miss or
@@ -562,7 +620,7 @@ export function FoodSearchSheet({
           getToken: () => token ?? undefined,
           body: {
             portion: 1,
-            tags: [(currentTag ?? "snack").toLowerCase()],
+            tags: [activeTag.toLowerCase()],
             untimed: false,
           },
         },
@@ -581,7 +639,7 @@ export function FoodSearchSheet({
   // meal". With no `onLogItem` (the meal/recipe editors' ingredient
   // picker) `onAddToBasket` is the sheet's only action and takes the
   // primary slot, still labelled "Build a meal".
-  const effectiveLogTag = currentTag ?? "snack";
+  const effectiveLogTag = activeTag;
   const quantityPickerPrimaryLabel = onLogItem
     ? `Add to ${titleCase(effectiveLogTag)}`
     : onAddToBasket
@@ -826,6 +884,10 @@ export function FoodSearchSheet({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
+        {/* NP-371: a single header bar — title + a circular ✕, matching the
+            web's `h-8 w-8 rounded-full` close button. The web's two-row
+            header (title+close, then a second "ADDING TO" row with its own
+            close) is now one row; tag/custom-food shortcuts moved below. */}
         <View
           style={{
             paddingHorizontal: 16,
@@ -843,9 +905,41 @@ export function FoodSearchSheet({
           >
             Find a food
           </Text>
-          {/* NP-261/NP-321: the web's "Custom Food" shortcut beside the
-              title — a bare barcode icon and search box left no way to
-              create a custom food from here at all. */}
+          <Pressable
+            testID="food-search-close"
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            onPress={onClose}
+            hitSlop={8}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: colors.muted,
+            }}
+          >
+            <X size={18} color={colors["muted-foreground"]} />
+          </Pressable>
+        </View>
+
+        {/* NP-371: Custom Food shortcut + the interactive "ADDING TO" tag
+            dropdown (web parity — `FoodSearchModal.tsx`'s row 2). The web's
+            close X used to live in this row; it moved up to the title bar
+            above. */}
+        <View
+          style={{
+            paddingHorizontal: 16,
+            marginBottom: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          {/* NP-261/NP-321: the web's "Custom Food" shortcut — a bare
+              barcode icon and search box left no way to create a custom
+              food from here at all. */}
           <Pressable
             testID="food-search-custom-food"
             accessibilityRole="button"
@@ -856,6 +950,7 @@ export function FoodSearchSheet({
             }}
             hitSlop={8}
             style={{
+              flexShrink: 0,
               flexDirection: "row",
               alignItems: "center",
               gap: 4,
@@ -871,58 +966,112 @@ export function FoodSearchSheet({
               Custom
             </Text>
           </Pressable>
-        </View>
-
-        {/* NP-261: the web header's "ADDING TO <tag>" picker + close X.
-            `BottomSheet` already offers a swipe-to-dismiss and a backdrop
-            tap; this is the explicit, visible affordance the web always
-            shows next to its tag picker. */}
-        <View
-          style={{
-            paddingHorizontal: 16,
-            marginBottom: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
           {currentTag ? (
-            <View
+            <Pressable
               testID="food-search-adding-to"
+              accessibilityRole="button"
+              accessibilityLabel={`Adding to ${titleCaseMealTag(activeTag)}, tap to change`}
+              accessibilityState={{ expanded: tagPickerOpen }}
+              onPress={() => setTagPickerOpen((v) => !v)}
               style={{
+                flex: 1,
+                minWidth: 0,
                 flexDirection: "row",
                 alignItems: "center",
+                gap: 6,
                 backgroundColor: colors.muted,
                 borderRadius: 8,
                 paddingHorizontal: 10,
-                paddingVertical: 4,
+                paddingVertical: 8,
               }}
             >
               <Text
+                numberOfLines={1}
                 style={{
+                  flexShrink: 1,
                   fontSize: 11,
                   fontWeight: "700",
                   letterSpacing: 0.5,
                   color: colors["muted-foreground"],
                 }}
               >
-                ADDING TO {currentTag.toUpperCase()}
+                ADDING TO {activeTag.toUpperCase()}
               </Text>
-            </View>
-          ) : (
-            <View />
-          )}
-          <Pressable
-            testID="food-search-close"
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            onPress={onClose}
-            hitSlop={8}
-            style={{ padding: 4 }}
-          >
-            <X size={20} color={colors.foreground} />
-          </Pressable>
+              <ChevronDown
+                size={14}
+                color={colors["muted-foreground"]}
+                style={{ marginLeft: "auto" }}
+              />
+            </Pressable>
+          ) : null}
         </View>
+
+        {/* NP-371: the tag picker grid + inline "+ New tag" — web parity for
+            `FoodSearchModal.tsx`'s dropdown (`tagDropdownOpen`). */}
+        {currentTag && tagPickerOpen ? (
+          <View
+            testID="food-search-tag-picker"
+            style={{ paddingHorizontal: 16, marginBottom: 8, gap: 8 }}
+          >
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {tagOptions.map((tag) => {
+                const active = tag === activeTag;
+                return (
+                  <Pressable
+                    key={tag}
+                    testID={`food-search-tag-${tag}`}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add to ${titleCaseMealTag(tag)}`}
+                    accessibilityState={{ selected: active }}
+                    onPress={() => handleSelectTag(tag)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 16,
+                      backgroundColor: active ? colors.foreground : colors.card,
+                      borderWidth: 1,
+                      borderColor: active ? colors.foreground : colors.border,
+                    }}
+                  >
+                    <Text
+                      className={`text-xs font-medium ${active ? "text-background" : "text-foreground"}`}
+                    >
+                      {titleCaseMealTag(tag)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <Input
+                  testID="food-search-new-tag-input"
+                  placeholder="e.g. brunch"
+                  autoCapitalize="none"
+                  value={customTagInput}
+                  onChangeText={setCustomTagInput}
+                  onSubmitEditing={handleAddCustomTag}
+                />
+              </View>
+              <Pressable
+                testID="food-search-new-tag-add"
+                accessibilityRole="button"
+                accessibilityLabel="Add new tag"
+                disabled={!customTagInput.trim()}
+                onPress={handleAddCustomTag}
+                style={{
+                  paddingHorizontal: 14,
+                  justifyContent: "center",
+                  borderRadius: 8,
+                  backgroundColor: colors.foreground,
+                  opacity: customTagInput.trim() ? 1 : 0.4,
+                }}
+              >
+                <Text className="text-background text-xs font-semibold">Add</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
 
         {/* Search / describe box (NP-321/NP-261): the web's placeholder
             covers both search and the describe flow; a green send button
@@ -1006,10 +1155,10 @@ export function FoodSearchSheet({
                 justifyContent: "center",
                 gap: 6,
                 height: 40,
-                borderRadius: 10,
+                borderRadius: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: colors.card,
+                backgroundColor: colors.muted,
               }}
             >
               <ScanBarcode size={16} color={colors.foreground} />
@@ -1035,10 +1184,10 @@ export function FoodSearchSheet({
                 justifyContent: "center",
                 gap: 6,
                 height: 40,
-                borderRadius: 10,
+                borderRadius: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: colors.card,
+                backgroundColor: colors.muted,
                 opacity: onSnapPhoto ? 1 : 0.4,
               }}
             >
@@ -1065,10 +1214,10 @@ export function FoodSearchSheet({
                 justifyContent: "center",
                 gap: 6,
                 height: 40,
-                borderRadius: 10,
+                borderRadius: 12,
                 borderWidth: 1,
                 borderColor: colors.border,
-                backgroundColor: colors.card,
+                backgroundColor: colors.muted,
                 opacity: onUpload ? 1 : 0.4,
               }}
             >
@@ -1167,7 +1316,7 @@ export function FoodSearchSheet({
                   }}
                 >
                   <BadgeCheck
-                    size={14}
+                    size={12}
                     color={verifiedOnly ? colors["primary-foreground"] : colors["muted-foreground"]}
                   />
                   <Text
@@ -1219,7 +1368,7 @@ export function FoodSearchSheet({
                   }}
                 >
                   <Icon
-                    size={14}
+                    size={12}
                     color={active ? colors.background : colors["muted-foreground"]}
                   />
                   <Text
@@ -1297,16 +1446,10 @@ export function FoodSearchSheet({
               ) : null}
               {overview?.foods && overview.foods.length > 0 ? (
                 <View>
-                  <View
-                    style={{
-                      backgroundColor: colors.muted,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                    }}
-                  >
+                  <View className="bg-muted/90 px-4 py-1.5">
                     <Text
                       testID="overview-header-your-foods"
-                      className="text-xs font-bold uppercase text-muted-foreground"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Your foods
                     </Text>
@@ -1317,16 +1460,10 @@ export function FoodSearchSheet({
 
               {overview?.recent && overview.recent.length > 0 ? (
                 <View>
-                  <View
-                    style={{
-                      backgroundColor: colors.muted,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                    }}
-                  >
+                  <View className="bg-muted/90 px-4 py-1.5">
                     <Text
                       testID="overview-header-recent"
-                      className="text-xs font-bold uppercase text-muted-foreground"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Recent
                     </Text>
@@ -1337,16 +1474,10 @@ export function FoodSearchSheet({
 
               {overview?.frequent && overview.frequent.length > 0 ? (
                 <View>
-                  <View
-                    style={{
-                      backgroundColor: colors.muted,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                    }}
-                  >
+                  <View className="bg-muted/90 px-4 py-1.5">
                     <Text
                       testID="overview-header-frequent"
-                      className="text-xs font-bold uppercase text-muted-foreground"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Frequent
                     </Text>
@@ -1357,16 +1488,10 @@ export function FoodSearchSheet({
 
               {mealResults && mealResults.length > 0 ? (
                 <View>
-                  <View
-                    style={{
-                      backgroundColor: colors.muted,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                    }}
-                  >
+                  <View className="bg-muted/90 px-4 py-1.5">
                     <Text
                       testID="overview-header-meals"
-                      className="text-xs font-bold uppercase text-muted-foreground"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Meals
                     </Text>
@@ -1395,16 +1520,10 @@ export function FoodSearchSheet({
             <View testID="food-search-results">
               {mealResults.length > 0 ? (
                 <View>
-                  <View
-                    style={{
-                      backgroundColor: colors.muted,
-                      paddingHorizontal: 16,
-                      paddingVertical: 6,
-                    }}
-                  >
+                  <View className="bg-muted/90 px-4 py-1.5">
                     <Text
                       testID="search-header-meals"
-                      className="text-xs font-bold uppercase text-muted-foreground"
+                      className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                     >
                       Meals
                     </Text>
@@ -1417,16 +1536,10 @@ export function FoodSearchSheet({
                 <View>
                   {results.some((f) => savedFoodIds.has(String(f._id ?? f.id)) || f.isSaved) ? (
                     <>
-                      <View
-                        style={{
-                          backgroundColor: colors.muted,
-                          paddingHorizontal: 16,
-                          paddingVertical: 6,
-                        }}
-                      >
+                      <View className="bg-muted/90 px-4 py-1.5">
                         <Text
                           testID="search-header-foods"
-                          className="text-xs font-bold uppercase text-muted-foreground"
+                          className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                         >
                           Foods
                         </Text>
@@ -1434,16 +1547,10 @@ export function FoodSearchSheet({
                       {results
                         .filter((f) => savedFoodIds.has(String(f._id ?? f.id)) || f.isSaved)
                         .map(renderFoodRow)}
-                      <View
-                        style={{
-                          backgroundColor: colors.muted,
-                          paddingHorizontal: 16,
-                          paddingVertical: 6,
-                        }}
-                      >
+                      <View className="bg-muted/90 px-4 py-1.5">
                         <Text
                           testID="search-header-other"
-                          className="text-xs font-bold uppercase text-muted-foreground"
+                          className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
                         >
                           Other Results
                         </Text>
