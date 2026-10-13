@@ -1179,6 +1179,65 @@ and the onboarding input carries the same `min`.
 have to be configured tax-inclusive (`tax_behavior: inclusive`) on Become LLC's
 account — a dashboard step, not code.
 
+#### Stripe Tax at checkout (`automatic_tax`, shipped 2026-10-13)
+
+`POST /api/billing/checkout` sends three params it did not before, all from
+`lib/billing/automaticTax.ts` (never literals in the route):
+
+| param | why |
+|---|---|
+| `automatic_tax: { enabled: true }` | Stripe calculates the tax |
+| `billing_address_collection: 'required'` | it is calculated FROM the buyer's address; `'auto'` would let a session through with none and tax it at the Westbury NY origin |
+| `customer_update: { address: 'auto', name: 'auto' }` | the session always names an EXISTING customer (`ensureStripeCustomer`), and Stripe refuses automatic tax on one unless it may write the collected address back |
+
+Because both prices are `tax_behavior: inclusive`, **this changes no total**:
+$14.99 stays $14.99, $119.99 stays $119.99, and Stripe splits the tax portion
+out of that same amount on the invoice and the receipt. What changes is that the
+portion is computed and reportable instead of silently absorbed — and the tax is
+owed from the first sale whether or not it was collected, which is why this did
+not wait for volume.
+
+**Automatic tax depends on dashboard state, and registrations are PER MODE.**
+Stripe Tax has to be active with an origin address and a default tax code, and
+a jurisdiction is only actually collected once it is REGISTERED — in that mode.
+The live account's New York registration does nothing for the test-mode account
+the beta channel checks out against, so the switch can be perfectly correct on
+production and still refuse every beta rehearsal.
+
+So the refusal is survived, exactly like `consent_collection`'s missing Terms
+URL above: `isTaxNotConfiguredError` (narrow — `automatic_tax` /
+`customer_update` params, `customer_tax_location_invalid`, or a message about
+Stripe Tax itself; **not** "No such price") drops `automatic_tax` and
+`customer_update`, retries ONCE under `…:notax`, and logs
+`taxNotConfiguredLog(mode)`, which names the dashboard step for that mode. Both
+steps can be missing at once — Stripe names one param per refusal — so the
+second refusal surfaces only on the retry and the last attempt drops both under
+`…:noconsent:notax`. **Every retry needs its own idempotency key**: Stripe
+replays a key's ERROR regardless of the new params. Address collection SURVIVES
+the fallback; it is valid with no tax calculation at all. A degraded session
+therefore costs the tax REPORT, never the sale, and the member pays the same
+tax-inclusive price either way. Anything that is not one of those two refusals
+still throws and still answers 502.
+
+What this code CANNOT do, and what therefore has to be true in the dashboard
+before collection is real (both accounts, in this order):
+
+1. **Live**: Tax → Registrations shows **New York**, active, with a start date.
+   Nothing is collected for a jurisdiction with no registration, however the
+   session is configured. A CPA's answer on how New York treats Become (SaaS
+   for personal use is generally taxable in NY) is what fixes that start date
+   and the filing cadence; it belongs on the card, not in this file.
+2. **Test mode**: the same Tax setup on the test-mode account — origin address,
+   default tax code, and a New York registration. Without it a beta checkout
+   takes the `…:notax` fallback (it completes, and the log says why).
+3. Then walk one LIVE checkout: the address step must appear, and the receipt
+   must show a tax line INSIDE the $14.99 / $119.99 — not added to it. If it is
+   added on top, the PRICE is not inclusive and that is the thing to fix.
+
+Tests: `tests/unit/billing/automaticTax.test.ts` (the params, the detector's
+positives and negatives, the log, the strippers, and the route's wiring,
+including both retry keys).
+
 **Email (CAN-SPAM).** `emailFooter()` in `lib/email.ts` puts the postal address
 (`LEGAL_ADDRESS_LINES`) on every outbound email. Engagement mail (streak
 milestone / at-risk) also carries an HMAC unsubscribe link

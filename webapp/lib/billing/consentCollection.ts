@@ -36,5 +36,17 @@ export function isTermsUrlMissingError(err: unknown): boolean {
   return param.startsWith('consent_collection') || /terms of service url/i.test(message)
 }
 
+/**
+ * The same session, minus Stripe's consent box. Pure; the input is never
+ * mutated. Shaped like `withoutAutomaticTax` in lib/billing/automaticTax.ts so
+ * the two fallbacks compose — a dashboard missing BOTH the Terms URL and Stripe
+ * Tax refuses one param at a time, and the checkout route has to survive both.
+ */
+export function withoutConsentCollection(params: CheckoutSessionParams): CheckoutSessionParams {
+  const { consent_collection: _consent, ...rest } = params
+  void _consent
+  return rest
+}
+
 export const TERMS_URL_MISSING_LOG =
   '[billing] Stripe refused consent_collection: no Terms of Service URL is saved in the Stripe Dashboard (Settings → Business → Public details). Retrying this checkout WITHOUT Stripe-side consent; the in-app agreement (User.consent) is still recorded. Save the URL to stop this.'
