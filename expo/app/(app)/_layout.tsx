@@ -6,6 +6,7 @@ import { HealthSyncBridge } from "@/components/health/HealthSyncBridge";
 import { MindSessionWarmer } from "@/components/mind/MindSessionWarmer";
 import { PushSyncBridge } from "@/components/push/PushSyncBridge";
 import { OnboardingGuard } from "@/components/auth/OnboardingGuard";
+import { NativeTourOverlay } from "@/components/tour/NativeTourOverlay";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useStackAnimation } from "@/lib/navigation/screenAnimation";
@@ -79,6 +80,11 @@ export default function AppGroupLayout() {
               revoked (NP-065). Renders nothing; background registration never
               re-enables. */}
           <PushSyncBridge />
+          {/* The short native coach-mark tour over the five main hubs
+              (NP-207 / NP-164). Renders nothing on the first tick — see
+              components/tour/NativeTourOverlay.tsx for why the Stack below
+              never waits on it. */}
+          <NativeTourOverlay />
           <Stack
             screenOptions={{
               headerShown: false,

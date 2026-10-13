@@ -60,6 +60,8 @@ import { getOfflineWrites } from "@/lib/offline/writes";
 import { HEALTH_DISCLAIMER_SHORT, LEGAL_CONTACT_EMAIL } from "@become/core";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SettingsScreen from "../app/(app)/settings";
+import { NATIVE_TOUR_PROGRESS_KEY, WEB_TOUR_PROGRESS_KEY } from "../lib/tour/tourConfig";
+import { subscribeNativeTourReplayRequests } from "../lib/tour/nativeTourRequest";
 /* eslint-enable import/first */
 
 function jsonResponse(status: number, body?: unknown): Response {
@@ -254,6 +256,40 @@ describe("SettingsScreen", () => {
       fireEvent.press(el);
       expect(mockOpenBrowserAsync).toHaveBeenCalledWith(link.expectedUrl);
     }
+  });
+
+  it("(NP-207) \"Take the app tour\" resets native tour progress and asks for a replay, never touching the web's key", async () => {
+    await AsyncStorage.setItem(
+      NATIVE_TOUR_PROGRESS_KEY,
+      JSON.stringify({ status: "completed", updatedAt: Date.now() }),
+    );
+    await AsyncStorage.setItem(WEB_TOUR_PROGRESS_KEY, "do-not-touch");
+
+    let replayRequests = 0;
+    const unsubscribe = subscribeNativeTourReplayRequests(() => {
+      replayRequests += 1;
+    });
+
+    const { getByTestId } = renderScreen();
+    await waitFor(() => {
+      expect(getByTestId("settings-help-section")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(getByTestId("settings-replay-tour-button"));
+    });
+
+    unsubscribe();
+
+    expect(mockRouterBack).toHaveBeenCalled();
+    expect(replayRequests).toBeGreaterThan(0);
+    await waitFor(async () => {
+      expect(await AsyncStorage.getItem(NATIVE_TOUR_PROGRESS_KEY)).toBeNull();
+    });
+    // The web's progress key is never written, mutated or cleared by native.
+    expect(await AsyncStorage.getItem(WEB_TOUR_PROGRESS_KEY)).toBe(
+      "do-not-touch",
+    );
   });
 
   it("(e015c7a8) The agreement record and the health disclaimer are shown", async () => {
