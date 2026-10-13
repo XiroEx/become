@@ -155,7 +155,7 @@ export function ProgramJourney({
             style={{
               width: 36,
               height: 36,
-              borderRadius: 10,
+              borderRadius: 8,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: colors.card,
@@ -240,99 +240,104 @@ export function ProgramJourney({
           </LinearGradient>
         </View>
 
-        {/* Key stats grid — coloured like the web's: green sessions, blue
-            volume, violet length, success/amber weight change (never
-            neutral `text-foreground`). */}
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          <View style={{ flex: 1 }}>
-            <Card testID={`${testID}-stat-sessions`} style={{ alignItems: "center" }}>
-              <Text
-                testID={`${testID}-sessions`}
-                className="text-success text-2xl font-black text-center"
-              >
-                {String(journey.totalSessions)}
-              </Text>
-              <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
-                Sessions Completed
-              </Text>
-            </Card>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Card testID={`${testID}-stat-volume`} style={{ alignItems: "center" }}>
-              <Text
-                testID={`${testID}-volume`}
-                className="text-info text-2xl font-black text-center"
-              >
-                {volumeLabel}
-              </Text>
-              {journey.totalVolumeLbs > 0 ? (
-                <Text className="text-muted-foreground text-xs mt-0.5 text-center">
-                  lbs lifted
-                </Text>
-              ) : null}
-              <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
-                Total Volume
-              </Text>
-            </Card>
-          </View>
-        </View>
-        <View style={{ flexDirection: "row", gap: 8 }}>
-          {journey.durationWeeks > 0 ? (
+        {/* Key stats grid (NP-363) — a unified 2x2 grid, 12px gap between
+            rows AND columns, matching the web's `grid grid-cols-2 gap-3`
+            (native used to split this into two row blocks with an 8px gap).
+            Coloured like the web's: green sessions, blue volume, violet
+            length, success/amber weight change (never neutral
+            `text-foreground`). */}
+        <View testID={`${testID}-stats-grid`} style={{ gap: 12 }}>
+          <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1 }}>
-              <Card testID={`${testID}-stat-length`} style={{ alignItems: "center" }}>
+              <Card testID={`${testID}-stat-sessions`} style={{ alignItems: "center" }}>
                 <Text
-                  testID={`${testID}-length`}
-                  className="text-mind-violet text-2xl font-black text-center"
+                  testID={`${testID}-sessions`}
+                  className="text-success text-2xl font-black text-center"
                 >
-                  {`${journey.durationWeeks}w`}
+                  {String(journey.totalSessions)}
                 </Text>
                 <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
-                  Program Length
+                  Sessions Completed
                 </Text>
               </Card>
             </View>
-          ) : null}
-          <View style={{ flex: 1 }}>
-            {journey.weightChange ? (
-              <Card testID={`${testID}-stat-weight`} style={{ alignItems: "center" }}>
-                <View
-                  style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            <View style={{ flex: 1 }}>
+              <Card testID={`${testID}-stat-volume`} style={{ alignItems: "center" }}>
+                <Text
+                  testID={`${testID}-volume`}
+                  className="text-info text-2xl font-black text-center"
                 >
-                  <WeightGlyph change={journey.weightChange} />
+                  {volumeLabel}
+                </Text>
+                {journey.totalVolumeLbs > 0 ? (
+                  <Text className="text-muted-foreground text-xs mt-0.5 text-center">
+                    lbs lifted
+                  </Text>
+                ) : null}
+                <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
+                  Total Volume
+                </Text>
+              </Card>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            {journey.durationWeeks > 0 ? (
+              <View style={{ flex: 1 }}>
+                <Card testID={`${testID}-stat-length`} style={{ alignItems: "center" }}>
+                  <Text
+                    testID={`${testID}-length`}
+                    className="text-mind-violet text-2xl font-black text-center"
+                  >
+                    {`${journey.durationWeeks}w`}
+                  </Text>
+                  <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
+                    Program Length
+                  </Text>
+                </Card>
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              {journey.weightChange ? (
+                <Card testID={`${testID}-stat-weight`} style={{ alignItems: "center" }}>
+                  <View
+                    style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+                  >
+                    <WeightGlyph change={journey.weightChange} />
+                    <Text
+                      testID={`${testID}-weight-change`}
+                      style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
+                      className={`${journeyWeightToneClass(journey.weightChange)} text-2xl font-black`}
+                    >
+                      {formatJourneyWeightChange(journey.weightChange)}
+                    </Text>
+                  </View>
+                  <Text
+                    testID={`${testID}-weight-range`}
+                    className="text-muted-foreground text-xs mt-0.5 text-center"
+                  >
+                    {journeyWeightSub(journey.weightChange)}
+                  </Text>
+                  <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
+                    Weight Change
+                  </Text>
+                </Card>
+              ) : (
+                <Card testID={`${testID}-stat-weight`} style={{ alignItems: "center" }}>
                   <Text
                     testID={`${testID}-weight-change`}
-                    style={[WRAPPABLE_TEXT, { textAlign: "center" }]}
-                    className={`${journeyWeightToneClass(journey.weightChange)} text-2xl font-black`}
+                    className="text-foreground text-2xl font-black text-center"
                   >
-                    {formatJourneyWeightChange(journey.weightChange)}
+                    —
                   </Text>
-                </View>
-                <Text
-                  testID={`${testID}-weight-range`}
-                  className="text-muted-foreground text-xs mt-0.5 text-center"
-                >
-                  {journeyWeightSub(journey.weightChange)}
-                </Text>
-                <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
-                  Weight Change
-                </Text>
-              </Card>
-            ) : (
-              <Card testID={`${testID}-stat-weight`} style={{ alignItems: "center" }}>
-                <Text
-                  testID={`${testID}-weight-change`}
-                  className="text-foreground text-2xl font-black text-center"
-                >
-                  —
-                </Text>
-                <Text className="text-muted-foreground text-xs mt-0.5 text-center">
-                  no data
-                </Text>
-                <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
-                  Weight Change
-                </Text>
-              </Card>
-            )}
+                  <Text className="text-muted-foreground text-xs mt-0.5 text-center">
+                    no data
+                  </Text>
+                  <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
+                    Weight Change
+                  </Text>
+                </Card>
+              )}
+            </View>
           </View>
         </View>
 
@@ -429,6 +434,13 @@ export function ProgramJourney({
             onPress={onViewLog}
             accessibilityHint="Opens the training log"
             icon={<Calendar size={16} color={colors.foreground} />}
+            // NP-363: the web's secondary CTA is explicitly bordered
+            // (`border border-yellow-500/40 dark:border-zinc-800`), not the
+            // borderless ghost button native rendered. `ghost`'s own
+            // className already draws `border-border`, which resolves to
+            // the same zinc-800 in dark mode — this makes it explicit and
+            // keeps it regardless of future variant changes.
+            style={{ borderWidth: 1, borderColor: colors.border }}
           >
             View Full Training Log
           </Button>
