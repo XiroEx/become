@@ -312,3 +312,71 @@ export function programCompletionPct(
   }
   return Math.min(100, Math.round((program.currentWeek || 0) / (totalWeeks || 12) * 100))
 }
+
+/** A program phase's week span, e.g. `{ weeks: '1-4' }` (Program model's `IPhase`). */
+export interface ProgramPhaseRange {
+  weeks?: string
+}
+
+export interface ResolveProgramWeekInput {
+  /** Program-wide week number before clamping (schedule- or completion-derived). */
+  rawWeek: number
+  /** The program's total length in weeks (`duration_weeks`). Falls back to 12 when unknown, matching formatProgressData's default. */
+  totalWeeks?: number | null
+  /** Phase definitions in program order, each with a `weeks` range like "1-4". */
+  phases?: ProgramPhaseRange[] | null
+  /** Stored phase to fall back to when no phase range resolves one (e.g. program has no phase data at all). */
+  fallbackPhase?: number | null
+}
+
+export interface ResolvedProgramWeek {
+  currentWeek: number
+  totalWeeks: number
+  currentPhase: number
+  /** True when rawWeek ran past totalWeeks — the program has finished its run (NP-377: never show "Week 5 of 4"). */
+  isComplete: boolean
+}
+
+/**
+ * Reconciles the program's current week against its phase, so the two can
+ * never disagree (NP-377, "Phase 1 • Week 5 of 4"). `rawWeek` is clamped into
+ * `[1, totalWeeks]` — a program past its last week clamps to the final week
+ * and reports `isComplete: true` instead of overshooting — and the phase is
+ * re-derived from that (possibly clamped) week against each phase's `weeks`
+ * range, so a stale stored `currentPhase` can't drift from the week next to
+ * it on screen.
+ */
+export function resolveProgramWeek(input: ResolveProgramWeekInput): ResolvedProgramWeek {
+  const totalWeeks = input.totalWeeks && input.totalWeeks > 0 ? input.totalWeeks : 12
+  const rawWeek = Number.isFinite(input.rawWeek) && input.rawWeek > 0 ? input.rawWeek : 1
+  const isComplete = rawWeek > totalWeeks
+  const currentWeek = Math.min(Math.max(1, rawWeek), totalWeeks)
+  const resolvedPhase = phaseForWeek(currentWeek, input.phases)
+  const currentPhase = resolvedPhase ?? (input.fallbackPhase && input.fallbackPhase > 0 ? input.fallbackPhase : 1)
+  return { currentWeek, totalWeeks, currentPhase, isComplete }
+}
+
+function parseWeekRange(weeks: string | undefined): { start: number; end: number } | null {
+  if (!weeks) return null
+  const match = weeks.match(/(\d+)\s*-?\s*(\d+)?/)
+  if (!match) return null
+  const start = parseInt(match[1], 10)
+  if (!Number.isFinite(start)) return null
+  const end = match[2] ? parseInt(match[2], 10) : start
+  return { start, end: Number.isFinite(end) ? end : start }
+}
+
+/**
+ * Which 1-based phase number a week falls into, by each phase's `weeks`
+ * range. A week past every range (the program's ranges don't reach
+ * `totalWeeks`, or `week` was already clamped past the last one) lands in
+ * the last phase — the program's final stretch, not back at phase 1.
+ */
+function phaseForWeek(week: number, phases?: ProgramPhaseRange[] | null): number | null {
+  if (!phases || phases.length === 0) return null
+  for (let i = 0; i < phases.length; i++) {
+    const range = parseWeekRange(phases[i]?.weeks)
+    if (range && week >= range.start && week <= range.end) return i + 1
+  }
+  return phases.length
+}

@@ -3,7 +3,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
-import { formatProgressData, calculateNextWorkout } from '@/lib/data/userProgress'
+import { formatProgressData, calculateNextWorkout, resolveProgramWeek } from '@/lib/data/userProgress'
 import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
 import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
@@ -200,11 +200,26 @@ export async function GET(request: NextRequest) {
     }
 
     // Build current program from real data only (never use mock programId)
+    //
+    // currentWeek and currentPhase must agree (NP-377: "Phase 1 • Week 5 of
+    // 4" — the week had run past the 4-week program while the stale stored
+    // phase stayed at 1). resolveProgramWeek clamps the week into
+    // [1, totalWeeks] and re-derives the phase from each phase's `weeks`
+    // range against that clamped week, so a program past its last week
+    // reads as finished (clamped to its final week/phase) instead of
+    // overshooting.
+    const rawCurrentWeek = scheduleCurrentWeek ?? (activeProgram?.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1)
+    const resolvedWeek = activeProgram ? resolveProgramWeek({
+      rawWeek: rawCurrentWeek,
+      totalWeeks: scheduleTotalWeeks,
+      phases: (programDetails as { phases?: Array<{ weeks?: string }> } | null)?.phases,
+      fallbackPhase: activeProgram.currentPhase || 1,
+    }) : null
     const currentProgramData = activeProgram ? {
       programId: activeProgram.programId,
       startDate: activeProgram.startDate,
-      currentPhase: activeProgram.currentPhase || 1,
-      currentWeek: scheduleCurrentWeek ?? (activeProgram.completedWorkouts ? Math.ceil(activeProgram.completedWorkouts / 4) : 1),
+      currentPhase: resolvedWeek!.currentPhase,
+      currentWeek: resolvedWeek!.currentWeek,
       completedWorkouts: scheduleCompleted ?? activeProgram.completedWorkouts ?? 0,
       totalWorkouts: scheduleTotal ?? activeProgram.totalWorkouts ?? 0,
     } : progress.currentProgram?.programId ? progress.currentProgram : null
@@ -223,7 +238,10 @@ export async function GET(request: NextRequest) {
       programName,
       nextWorkout,
       {
-        totalWeeks: scheduleTotalWeeks,
+        // Use the clamped totalWeeks resolveProgramWeek settled on (defaults
+        // to 12 the same way this did before) so the ratio behind
+        // goalProgress/pct agrees with the Phase/Week line above.
+        totalWeeks: resolvedWeek?.totalWeeks ?? scheduleTotalWeeks,
         nextWorkoutDay: scheduleNextWorkoutDay,
         tzOffsetMinutes: readTzOffset(request.nextUrl.searchParams),
       }
