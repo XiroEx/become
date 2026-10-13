@@ -142,10 +142,25 @@ export function validateCompose(raw: unknown): { template: string; blanks: strin
   return blanks.length >= 1 ? { template, blanks } : null
 }
 
+/**
+ * A headline never ends in a period in this product — every authored title
+ * (library.ts's INTROS, openings.ts's STATE_OPENINGS, sessionPath.ts's
+ * SESSION_PATH focuses) is a short fragment, never a full stop. A model's
+ * title is the one source that reliably adds one ("Let's lock in." instead of
+ * "Let's lock in"), which is how the session card ends up reading differently
+ * from every other entry point into the same screen (NP-379). Leaves "?" and
+ * "!" alone — an OPTION_KINDS title IS a question ("How are you walking into
+ * this?") and must keep its mark — and leaves "…" alone so a genuinely
+ * trailed-off line is not left dangling on a lone unmatched character.
+ */
+function stripTrailingFullStop(s: string): string {
+  return /[^.]\.$/.test(s) ? s.slice(0, -1) : s
+}
+
 /** Title = the headline (and, for option kinds, the question itself). */
 export function validateTitle(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
-  const t = stripMarkdown(raw).trim()
+  const t = stripTrailingFullStop(stripMarkdown(raw).trim())
   if (!t) return null
   return clampTitle(clampLen(t, 200), 30)
 }
