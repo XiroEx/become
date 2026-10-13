@@ -17,10 +17,23 @@
 //      `FoodSearchSheet`→`PlanFoodSheet` / `ApplyMealSheet`, reappearing
 //      once the sub-flow closes.
 
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
+import { colorScheme } from "nativewind";
 
 const TODAY = "2026-06-15";
 const YESTERDAY = "2026-06-14";
+
+/** One flat style object out of RN's nested style arrays (same helper the
+ * NP-344 acceptance test uses). */
+function flatStyle(node: { props: { style?: unknown } }): Record<string, unknown> {
+  return Object.assign({}, ...[node.props.style].flat(Infinity).filter(Boolean));
+}
+
+function setSystemScheme(mode: "light" | "dark"): void {
+  act(() => {
+    colorScheme.set(mode);
+  });
+}
 
 jest.mock("@/lib/auth/useAuth", () => ({
   useAuth: () => ({ token: "test-jwt" }),
@@ -337,6 +350,81 @@ describe("ScheduleMealsDrawer (NP-265)", () => {
       });
     });
     expect(onApplied).toHaveBeenCalledWith("1 meal plan created");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── NP-374 — header border, segmented tabs, fixed footer ─────────────────────
+//
+// Spacing/type parity with the web drawer: a border-b under the header, the
+// segmented tabs sized `borderRadius: 12, borderWidth: 1, padding: 2` with
+// the active pill INVERTED (`bg-foreground`/`text-background`, not the brand
+// `primary`/`primary-foreground` pair), and a fixed bottom footer — a
+// border-t above a full-width `height: 44, borderRadius: 12,
+// backgroundColor: colors.foreground` Done CTA.
+describe("ScheduleMealsDrawer spacing/type parity (NP-374)", () => {
+  afterEach(() => {
+    setSystemScheme("dark");
+  });
+
+  it("draws a full-bleed border-b divider under the header", async () => {
+    const { getByTestId } = render(
+      <ScheduleMealsDrawer visible defaultDate={TODAY} onClose={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("schedule-meals-drawer")).toBeTruthy());
+
+    const divider = flatStyle(getByTestId("schedule-meals-drawer-header-divider"));
+    expect(divider.borderBottomWidth).toBe(1);
+    expect(divider.marginHorizontal).toBeLessThan(0); // bleeds past the sheet's own padding
+  });
+
+  it("sizes the segmented tabs container borderRadius:12/borderWidth:1/padding:2", async () => {
+    const { getByTestId } = render(
+      <ScheduleMealsDrawer visible defaultDate={TODAY} onClose={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("schedule-meals-drawer")).toBeTruthy());
+
+    const tabs = flatStyle(getByTestId("schedule-meals-tabs"));
+    expect(tabs.borderRadius).toBe(12);
+    expect(tabs.borderWidth).toBe(1);
+    expect(tabs.padding).toBe(2);
+  });
+
+  it("gives the active tab pill the inverted foreground/background pair, not the brand primary pair", async () => {
+    setSystemScheme("light");
+    const { getByTestId } = render(
+      <ScheduleMealsDrawer visible defaultDate={TODAY} onClose={() => {}} />,
+    );
+    await waitFor(() => expect(getByTestId("schedule-meals-drawer")).toBeTruthy());
+
+    // "By day" is the active tab by default.
+    const activePill = flatStyle(getByTestId("schedule-meals-tab-by-day"));
+    const inactivePill = flatStyle(getByTestId("schedule-meals-tab-from-meals"));
+    expect(activePill.backgroundColor).toBe("rgb(24 24 27)"); // colors.foreground (light)
+    expect(inactivePill.backgroundColor).toBe("transparent");
+
+    const activeLabel = flatStyle(within(getByTestId("schedule-meals-tab-by-day")).getByText("By day"));
+    // colors.background (light) — NOT colors["primary-foreground"] ("rgb(255 255 255)"),
+    // which happens to share the exact same value as `primary` already does in light mode.
+    expect(activeLabel.color).toBe("rgb(250 250 250)");
+  });
+
+  it("wraps the Done CTA in a bordered fixed footer, sized height:44/borderRadius:12/bg-foreground", async () => {
+    setSystemScheme("light");
+    const onClose = jest.fn();
+    const { getByTestId } = render(
+      <ScheduleMealsDrawer visible defaultDate={TODAY} onClose={onClose} />,
+    );
+    await waitFor(() => expect(getByTestId("schedule-meals-drawer")).toBeTruthy());
+
+    const footer = flatStyle(getByTestId("schedule-meals-footer"));
+    expect(footer.borderTopWidth).toBe(1);
+
+    const done = flatStyle(getByTestId("schedule-meals-done"));
+    expect(done.height).toBe(44);
+    expect(done.borderRadius).toBe(12);
+
+    fireEvent.press(getByTestId("schedule-meals-done"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
