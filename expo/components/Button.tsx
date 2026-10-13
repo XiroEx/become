@@ -15,13 +15,14 @@ export type ButtonVariant =
   | "destructive"
   | "destructive-outline"
   | "ghost"
+  | "outline"
   | "inverted"
   | "success"
   | "success-outline"
   | "info"
   | "accent"
   | "mindset";
-export type ButtonSize = "sm" | "md" | "lg";
+export type ButtonSize = "sm" | "md" | "lg" | "footer";
 
 export interface ButtonProps {
   onPress?: () => void;
@@ -70,6 +71,10 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // uses, so it stays legible in both modes without a new colour literal.
   "destructive-outline": "bg-transparent border border-destructive",
   ghost: "bg-transparent border border-border",
+  // NP-373: the web's nutrition sheet "Cancel" footer button — a bordered,
+  // CARD-coloured outline (not transparent like `ghost`, which would blend
+  // into a bottom sheet's own `bg-card` body with no visible fill at all).
+  outline: "bg-card border border-border",
   // The web's `bg-zinc-900 dark:bg-white` submit button on the sign-in /
   // sign-up screen (NP-251): foreground on background, which is already the
   // light/dark-inverted pair every other token follows, so no new colour
@@ -111,6 +116,7 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   destructive: "text-destructive-foreground",
   "destructive-outline": "text-destructive",
   ghost: "text-foreground",
+  outline: "text-foreground",
   inverted: "text-background",
   success: "text-primary-foreground",
   "success-outline": "text-success",
@@ -123,12 +129,17 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: "px-3 py-1.5",
   md: "px-4 py-2.5",
   lg: "px-5 py-3.5",
+  // NP-373: the web's nutrition sheet footer row (Cancel / Save, Add to
+  // Log) — `px-4 py-2.5` with `text-sm font-semibold`, distinct from `md`'s
+  // `text-base` everywhere else these two buttons previously drew.
+  footer: "px-4 py-2.5",
 };
 
 const SIZE_TEXT_CLASSES: Record<ButtonSize, string> = {
   sm: "text-sm",
   md: "text-base",
   lg: "text-lg",
+  footer: "text-sm",
 };
 
 /**

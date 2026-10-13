@@ -169,16 +169,7 @@ export function EditLoggedMealSheet({
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-              <View
-                className="bg-orange-100 dark:bg-orange-900/30"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+              <View className="h-9 w-9 rounded-lg items-center justify-center bg-orange-100 dark:bg-orange-900/30">
                 <ChefHat size={18} color={colors.orange} />
               </View>
               <View style={{ flex: 1 }}>
@@ -327,11 +318,15 @@ export function EditLoggedMealSheet({
             </Text>
           ) : null}
 
-          <View style={{ flexDirection: "row", gap: 10 }}>
+          {/* NP-373: standardized side-by-side Cancel (outlined, card-
+              coloured) + Save (inverted/foreground) footer, matching the
+              other two nutrition sheets. */}
+          <View style={{ flexDirection: "row", gap: 12 }}>
             <View style={{ flex: 1 }}>
               <Button
                 testID={`${testID}-cancel`}
-                variant="secondary"
+                variant="outline"
+                size="footer"
                 disabled={saving}
                 onPress={handleClose}
               >
@@ -342,6 +337,7 @@ export function EditLoggedMealSheet({
               <Button
                 testID={`${testID}-save`}
                 variant="inverted"
+                size="footer"
                 disabled={saving || !hasChanges}
                 loading={saving}
                 onPress={() => void handleSave()}

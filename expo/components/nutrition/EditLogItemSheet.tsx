@@ -598,12 +598,8 @@ export function EditLogItemSheet({
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
                 <View
+                  className="h-9 w-9 rounded-lg items-center justify-center"
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    alignItems: "center",
-                    justifyContent: "center",
                     backgroundColor: colors.card,
                     borderWidth: 1,
                     borderColor: colors.border,
@@ -925,11 +921,15 @@ export function EditLogItemSheet({
               </Text>
             ) : null}
 
-            <View style={{ flexDirection: "row", gap: 10 }}>
+            {/* NP-373: standardized side-by-side Cancel (outlined, card-
+                coloured) + Save (inverted/foreground) footer, matching the
+                other two nutrition sheets. */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Button
                   testID={`${testID}-cancel`}
-                  variant="secondary"
+                  variant="outline"
+                  size="footer"
                   disabled={saving}
                   onPress={handleClose}
                 >
@@ -940,6 +940,7 @@ export function EditLogItemSheet({
                 <Button
                   testID={`${testID}-save`}
                   variant="inverted"
+                  size="footer"
                   disabled={
                     saving || !effectiveSelection || effectiveSelection.quantity <= 0
                   }

@@ -11,6 +11,14 @@ export interface InputProps extends TextInputProps {
   error?: string;
   testID?: string;
   leftIcon?: ReactNode;
+  /**
+   * NP-373: the web's Quick Add "Calories" field is visually prominent —
+   * `text-lg font-bold` in a `px-4 py-3` well — not the compact look every
+   * other optional macro field gets, which previously gave Calories the
+   * exact same visual weight as Protein/Carbs/Fats. "prominent" is for that
+   * one field; every other call site stays "default".
+   */
+  variant?: "default" | "prominent";
 }
 
 export function Input({
@@ -21,16 +29,20 @@ export function Input({
   accessibilityHint,
   leftIcon,
   style,
+  variant = "default",
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
   const labelId = testID ? `${testID}-label` : undefined;
   const errorId = testID ? `${testID}-error` : undefined;
+  const isProminent = variant === "prominent";
   // The field itself is the one TextInput in the app, and a TextInput is not a
   // Text: `components/Text.tsx` never sees it, so it carries the family here.
   const inputClassName = `bg-card border rounded-xl ${
-    leftIcon ? "pl-10 pr-4" : "px-3"
-  } py-2.5 text-foreground ${
+    leftIcon ? "pl-10 pr-4" : isProminent ? "px-4" : "px-3"
+  } ${isProminent ? "py-3" : "py-2.5"} text-foreground ${
+    isProminent ? "text-lg font-bold" : ""
+  } ${
     error ? "border-destructive" : "border-border"
   }`;
   // THE ERROR IS PART OF THE FIELD, to a screen reader. The red line underneath
@@ -56,7 +68,9 @@ export function Input({
       {label ? (
         <Text
           testID={labelId}
-          className="text-foreground text-sm font-medium mb-1"
+          className={`text-foreground text-sm mb-1 ${
+            isProminent ? "font-semibold" : "font-medium"
+          }`}
         >
           {label}
         </Text>
