@@ -10,5 +10,18 @@
         "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
       ]
     }
+  },
+  {
+    "relation": [
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.redbtn.become",
+      "sha256_cert_fingerprints": [
+        "REPLACE_WITH_PLAY_APP_SIGNING_SHA256"
+      ]
+    },
+    "comment": "NP-161: lets Android's Credential Manager offer this app's passkeys for become.redbtn.io — needed alongside the matching android:apk-key-hash origin in PASSKEY_ANDROID_ORIGIN."
   }
 ]

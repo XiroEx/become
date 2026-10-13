@@ -3,13 +3,13 @@
 // omitted, it allows a usernameless / discoverable-credential flow.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { getRedAuth } from '@/lib/redauth'
+import { getRedAuth, passkeyOriginFromRequest } from '@/lib/redauth'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
     const email = typeof body?.email === 'string' && body.email.trim() ? body.email.trim() : undefined
-    const redauth = await getRedAuth()
+    const redauth = await getRedAuth(passkeyOriginFromRequest(req))
     const { options, challengeId } = await redauth.createPasskeyAuthenticationOptions(email)
     return NextResponse.json({ options, challengeId })
   } catch (err) {

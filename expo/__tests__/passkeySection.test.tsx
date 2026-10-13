@@ -1,14 +1,11 @@
 /**
- * Passkey Section (card 6acdcae0433f8772a69adf8c) — Visual QA 2026-10-12
- * found native Settings missing the Passkey section the web shows.
+ * Passkey Section (card 6acdcae0433f8772a69adf8c, NP-161).
  *
- * What the web actually offers, confirmed by reading
- * `webapp/components/PasskeySetupButton.tsx` and every route under
- * `webapp/app/api/auth/passkey/`, is exactly one affordance — "Add a
- * passkey" — with no list, rename or remove anywhere in the product. This
- * section mirrors that: a single "Add a passkey" row that hands the member
- * to the real web Settings page (`openWebSignedIn`), because native has no
- * WebAuthn module to run the ceremony on-device yet (NP-161, open).
+ * NP-161 replaced the web hand-off with the real on-device ceremony, run
+ * through `@/lib/auth/passkey.ts` (`react-native-passkey`). A device too old
+ * to run it (`passkeySupported()` false) keeps the ORIGINAL hand-off —
+ * `openWebSignedIn` to the real web Settings page — which is the only case
+ * left where this still defers to web.
  */
 /* eslint-disable import/first */
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
@@ -30,7 +27,7 @@ describe("PasskeySection", () => {
   });
 
   it("renders a Passkey section styled like its Security neighbour", async () => {
-    const { getByTestId, getByText } = render(<PasskeySection />);
+    const { getByTestId, getByText } = render(<PasskeySection supported={false} />);
     await waitFor(() => {
       expect(getByTestId("settings-passkey-section")).toBeTruthy();
     });
@@ -40,28 +37,99 @@ describe("PasskeySection", () => {
     ).toBeTruthy();
   });
 
-  it("(a69adf8d/a69adf8e) 'Add a passkey' hands off to the real web Settings page, signed in", async () => {
-    const { getByTestId } = render(<PasskeySection />);
-    const addRow = getByTestId("passkey-add-button");
-    expect(addRow.props.accessibilityRole).toBe("link");
-    expect(addRow.props.accessibilityLabel).toBe("Add a passkey");
+  describe("on a device that cannot run the ceremony", () => {
+    it("(a69adf8d/a69adf8e) 'Add a passkey' hands off to the real web Settings page, signed in", async () => {
+      const { getByTestId } = render(<PasskeySection supported={false} />);
+      const addRow = getByTestId("passkey-add-button");
+      expect(addRow.props.accessibilityRole).toBe("link");
+      expect(addRow.props.accessibilityLabel).toBe("Add a passkey");
 
-    fireEvent.press(addRow);
+      fireEvent.press(addRow);
 
-    await waitFor(() => {
-      expect(mockOpenWebSignedIn).toHaveBeenCalledWith(PASSKEY_SETTINGS_PATH);
+      await waitFor(() => {
+        expect(mockOpenWebSignedIn).toHaveBeenCalledWith(PASSKEY_SETTINGS_PATH);
+      });
+      expect(PASSKEY_SETTINGS_PATH).toBe("/dashboard/settings");
     });
-    expect(PASSKEY_SETTINGS_PATH).toBe("/dashboard/settings");
+  });
+
+  describe("on a device that can run the ceremony (NP-161)", () => {
+    function fakeDeps(overrides: Partial<{ create: jest.Mock; get: jest.Mock }> = {}) {
+      return {
+        passkey: {
+          isSupported: () => true,
+          create:
+            overrides.create ??
+            jest.fn(async () => ({
+              id: "cred-1",
+              rawId: "cred-1",
+              response: { clientDataJSON: "c", attestationObject: "a" },
+            })),
+          get: overrides.get ?? jest.fn(),
+        },
+        fetchJson: jest.fn(async (path: string) => {
+          if (path.endsWith("/options")) return { challengeId: "chal-1", options: {} };
+          return { ok: true };
+        }),
+      };
+    }
+
+    it("'Add a passkey' is a button, not a link, and never leaves the app", async () => {
+      const { getByTestId } = render(
+        <PasskeySection supported token="jwt" deps={fakeDeps()} />,
+      );
+      const addRow = getByTestId("passkey-add-button");
+      expect(addRow.props.accessibilityRole).toBe("button");
+      expect(addRow.props.accessibilityLabel).toBe("Add a passkey");
+
+      fireEvent.press(addRow);
+
+      await waitFor(() => {
+        expect(getByTestId("passkey-add-status")).toBeTruthy();
+      });
+      expect(mockOpenWebSignedIn).not.toHaveBeenCalled();
+    });
+
+    it("confirms success inline", async () => {
+      const deps = fakeDeps();
+      const { getByTestId, findByText } = render(
+        <PasskeySection supported token="jwt" deps={deps} />,
+      );
+      fireEvent.press(getByTestId("passkey-add-button"));
+      expect(
+        await findByText("Passkey added. You can use it to sign in next time."),
+      ).toBeTruthy();
+    });
+
+    it("surfaces a native ceremony failure inline", async () => {
+      const deps = fakeDeps({
+        create: jest.fn(async () => {
+          throw { error: "CredentialAlreadyExists", message: "exists" };
+        }),
+      });
+      const { getByTestId, findByText } = render(
+        <PasskeySection supported token="jwt" deps={deps} />,
+      );
+      fireEvent.press(getByTestId("passkey-add-button"));
+      expect(
+        await findByText("A passkey for this account already exists on this device."),
+      ).toBeTruthy();
+    });
+
+    it("does nothing without a signed-in session", () => {
+      const deps = fakeDeps();
+      const { getByTestId } = render(<PasskeySection supported deps={deps} />);
+      fireEvent.press(getByTestId("passkey-add-button"));
+      expect(deps.fetchJson).not.toHaveBeenCalled();
+    });
   });
 
   it("(a69adf8e) calls out, rather than hiding, that list/remove stay on web for now", async () => {
-    const { getByText } = render(<PasskeySection />);
+    const { getByText } = render(<PasskeySection supported={false} />);
     // No list/rename/remove UI is rendered — there is nothing to list,
     // because the web Settings page itself does not expose one either.
     expect(
-      getByText(
-        /Managing or removing an existing passkey also stays\s+on web for now/,
-      ),
+      getByText(/Managing or removing an existing passkey/),
     ).toBeTruthy();
   });
 });
