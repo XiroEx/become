@@ -19,7 +19,7 @@ import path from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 import WorkoutSummary from '@/components/WorkoutSummary'
-import type { SummaryExercise, SummaryHistoryEntry, SummarySet } from '@/lib/workout/summaryMetrics'
+import type { SummaryExercise, SummaryHistoryEntry, SummaryNewPR, SummarySet } from '@/lib/workout/summaryMetrics'
 
 const ROOT = path.join(__dirname, '../..')
 const readSource = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8')
@@ -30,6 +30,7 @@ function render(
   exercises: SummaryExercise[],
   exerciseData: SummarySet[][],
   exerciseHistory: Record<string, SummaryHistoryEntry> = {},
+  newPRsAchieved?: SummaryNewPR[],
 ): string {
   return renderToStaticMarkup(
     <WorkoutSummary
@@ -40,6 +41,7 @@ function render(
       exerciseData={exerciseData}
       exercises={exercises}
       exerciseHistory={exerciseHistory}
+      newPRsAchieved={newPRsAchieved}
       summaryStreak={null}
       summaryGoal={null}
       formatTime={mmss}
@@ -132,16 +134,49 @@ describe('WorkoutSummary: metrics that are not reps × weight', () => {
     assert.match(html, /1\/2 sets \(1 skipped\)/)
   })
 
-  it('awards a record for a longer hold, with the previous duration beside it', () => {
+  it('awards a record for a longer hold the server flagged, with the previous duration beside it', () => {
     const html = render(
       [{ name: 'Plank', trackingType: 'time' }],
       [[{ duration: 60, completed: true }]],
       { Plank: { weight: 0, reps: 0, duration: 45, date: '2026-10-01' } },
+      [{ exerciseName: 'Plank', dimensions: ['maxReps'] }],
     )
     assert.match(html, /New Personal Records/)
     assert.match(html, /1:00/)
     assert.match(html, /prev 45s/)
     assert.match(html, /1 new personal record/)
+  })
+
+  it('does NOT show a record the server never flagged, even if the set beat the previous session', () => {
+    const html = render(
+      [{ name: 'Plank', trackingType: 'time' }],
+      [[{ duration: 60, completed: true }]],
+      { Plank: { weight: 0, reps: 0, duration: 45, date: '2026-10-01' } },
+      // No newPRsAchieved at all — the server found nothing to celebrate.
+    )
+    assert.doesNotMatch(html, /New Personal Records/)
+    assert.doesNotMatch(html, /new personal record/)
+  })
+
+  // NP-208: "new personal record" means the server's ALL-TIME record, never
+  // a session-over-session beat. This member's set is LOWER than the literal
+  // previous session on record (150×5, shown as "prev 150 × 5" below) — the
+  // old rule, which only ever compared against that one previous session,
+  // would have called this no record at all. The server, which watched the
+  // member's whole history, knows an older, non-adjacent session is what
+  // actually stood between this set and the all-time best, and that this set
+  // beat it — so it still reads "new personal record".
+  it('still says "new personal record" for a set that beat an earlier non-adjacent session but not the literal previous one', () => {
+    const html = render(
+      [{ name: 'Bench Press', trackingType: 'reps_weight' }],
+      [[{ reps: 5, weight: 140, completed: true }]],
+      { 'Bench Press': { weight: 150, reps: 5, date: '2026-10-10' } }, // literal previous session: heavier
+      [{ exerciseSlug: 'bench-press', exerciseName: 'Bench Press', dimensions: ['maxReps'] }], // server's all-time call
+    )
+    assert.match(html, /new personal record/)
+    assert.match(html, /New Personal Records/)
+    assert.match(html, /140 × 5/)
+    assert.match(html, /PR/) // the per-exercise badge
   })
 })
 

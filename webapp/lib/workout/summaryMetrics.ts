@@ -321,27 +321,61 @@ export interface SummaryPR {
 }
 
 /**
- * New records: each exercise's best set of the session, beaten against the
- * PREVIOUS session (`exerciseHistory`, keyed by exercise name).
+ * One exercise/metric the server's save flagged as a new ALL-TIME record —
+ * the shape `newPRsAchieved` comes back as on the workout-save response
+ * (`shared/api-client/src/schemas/workouts.ts#NewPRSchema`,
+ * `webapp/lib/exercisePRs.ts#WorkoutPRUpdateResult`). `dimensions` is which of
+ * maxWeight / maxReps / maxE1RM were newly broken; the summary only needs to
+ * know THAT one broke, not which.
+ */
+export interface SummaryNewPR {
+  exerciseSlug?: string
+  exerciseName: string
+  dimensions?: string[]
+}
+
+/**
+ * New records: which exercises the member sees a "new personal record" badge
+ * for on the finish screen.
  *
- * Which dimension counts depends on what the exercise tracks. Loaded and
- * counted work compares weight then reps, as it always has. Timed work
- * compares DURATION — it used to be compared on a weight of 0 against a
- * history weight of 0, so a member who held a plank twice as long was told
- * nothing. No history, or no work done, is never a record.
+ * Decided 10/13 (Jon, NP-028): "the PR is a personal record for all time" —
+ * so the ONLY thing that decides whether an exercise gets the badge is
+ * whether the server's save response named it in `newPRsAchieved` (NP-208).
+ * This function used to also compare the session's best set against
+ * `exerciseHistory` (the member's PREVIOUS session only) and award a record
+ * on THAT beat; that rule is gone — a set can lose to the literal previous
+ * session and still be an all-time PR (an older, non-adjacent session may
+ * have been even lower), and a set that beats the previous session is not
+ * automatically an all-time PR either. Only the server, which has the whole
+ * history, gets to call it.
+ *
+ * `exerciseHistory` survives as an optional, PURELY COSMETIC "prev" readout
+ * next to the record (`prev 135 × 5`) — it does not gate whether the badge
+ * shows. Callers with no all-time signal to hand over (e.g. a past-log
+ * review that never saved anything) simply pass nothing and no exercise is
+ * flagged, which is correct: there is nothing to re-litigate.
  */
 export function computeSummaryPRs(
   exercises: SummaryExercise[],
   setsByExercise: SummarySet[][],
-  exerciseHistory: Record<string, SummaryHistoryEntry>,
+  newPRsAchieved?: SummaryNewPR[] | null,
+  exerciseHistory?: Record<string, SummaryHistoryEntry> | null,
 ): SummaryPR[] {
+  const flagged = new Set<string>()
+  for (const pr of newPRsAchieved ?? []) {
+    if (pr?.exerciseName) flagged.add(pr.exerciseName)
+  }
+  if (flagged.size === 0) return []
+
   const out: SummaryPR[] = []
   ;(exercises ?? []).forEach((exercise, exIdx) => {
+    if (!exercise?.name || !flagged.has(exercise.name)) return
     const sets = setsByExercise?.[exIdx] ?? []
     const active = sets.filter((s) => isActiveSummarySet(s, exercise?.trackingType))
-    const history = exerciseHistory?.[exercise?.name]
     const first = active[0]
-    if (!history || !first) return
+    if (!first) return // the server flagged it, but this screen has no set to show for it
+
+    const history = exerciseHistory?.[exercise.name]
 
     if (tracksTime(exercise.trackingType)) {
       let best = first
@@ -350,14 +384,12 @@ export function computeSummaryPRs(
         const c = measuresOf(s)
         if (c.duration > b.duration || (c.duration === b.duration && c.distance > b.distance)) best = s
       }
-      const prev = history.duration ?? 0
-      if (measuresOf(best).duration > prev) {
-        out.push({
-          name: exercise.name,
-          bestLabel: formatSummarySet(best, exercise.trackingType, exercise.name),
-          prevLabel: prev > 0 ? formatDurationSec(prev) : '—',
-        })
-      }
+      const prevDuration = history?.duration ?? 0
+      out.push({
+        name: exercise.name,
+        bestLabel: formatSummarySet(best, exercise.trackingType, exercise.name),
+        prevLabel: prevDuration > 0 ? formatDurationSec(prevDuration) : '—',
+      })
       return
     }
 
@@ -368,13 +400,11 @@ export function computeSummaryPRs(
       if (c.weight > b.weight || (c.weight === b.weight && c.reps > b.reps)) best = s
     }
     const m = measuresOf(best)
-    if (m.weight > history.weight || (m.weight === history.weight && m.reps > history.reps)) {
-      out.push({
-        name: exercise.name,
-        bestLabel: m.weight > 0 ? `${trimNumber(m.weight)} × ${trimNumber(m.reps)}` : `${trimNumber(m.reps)} reps`,
-        prevLabel: history.weight > 0 ? `${history.weight} × ${history.reps}` : `${history.reps} reps`,
-      })
-    }
+    out.push({
+      name: exercise.name,
+      bestLabel: m.weight > 0 ? `${trimNumber(m.weight)} × ${trimNumber(m.reps)}` : `${trimNumber(m.reps)} reps`,
+      prevLabel: !history ? '—' : history.weight > 0 ? `${history.weight} × ${history.reps}` : `${history.reps} reps`,
+    })
   })
   return out
 }
