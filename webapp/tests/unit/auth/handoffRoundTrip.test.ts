@@ -127,10 +127,10 @@ test('an expired code is refused', async () => {
 
 test('a target outside the allow-list is refused — at minting and at redemption', async () => {
   // The door in.
-  const res = await MINT(mintRequest('/dashboard/settings'))
+  const res = await MINT(mintRequest('/dashboard/progress'))
   assert.equal(res.status, 400)
   assert.equal((await res.json()).error, 'path_not_allowed')
-  assert.equal(await HandoffCode.countDocuments({ userId, path: '/dashboard/settings' }), 0)
+  assert.equal(await HandoffCode.countDocuments({ userId, path: '/dashboard/progress' }), 0)
 
   // And the door out, for a row written while the target WAS allow-listed.
   const { code } = await createHandoffCode({ userId, path: 'https://evil.example/' })
