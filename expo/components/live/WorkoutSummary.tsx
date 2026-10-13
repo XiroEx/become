@@ -241,6 +241,20 @@ const GROUP_KIND_TOKENS: Record<string, TokenName> = {
   amrap: "orange",
 };
 
+/**
+ * The emoji each group kind's badge carries — the web's `GROUP_TONES.icon`
+ * (`⇄` superset/triset/giant set, `🔄` circuit, `⏱` EMOM, `🔥` AMRAP),
+ * verbatim. Native drew a plain accent dot here with no icon at all.
+ */
+const GROUP_KIND_EMOJI: Record<string, string> = {
+  superset: "⇄",
+  circuit: "🔄",
+  triset: "⇄",
+  giant_set: "⇄",
+  emom: "⏱",
+  amrap: "🔥",
+};
+
 export interface WorkoutSummarySet {
   reps: number | null;
   weight: number | null;
@@ -740,7 +754,7 @@ export function WorkoutSummary({
             <>
               <Text
                 testID={`${testID}-title`}
-                className="text-foreground text-3xl font-black text-center"
+                className="text-foreground text-4xl font-black tracking-tight text-center"
               >
                 PROGRAM COMPLETE
               </Text>
@@ -784,7 +798,7 @@ export function WorkoutSummary({
               </View>
               <Text
                 testID={`${testID}-title`}
-                className="text-foreground text-3xl font-black text-center"
+                className="text-foreground text-4xl font-black tracking-tight text-center"
               >
                 {newPRs.length > 0 ? "YOU CRUSHED IT" : "WORKOUT DONE"}
               </Text>
@@ -951,6 +965,7 @@ export function WorkoutSummary({
               return <View key={`solo-${blockIdx}`}>{cards}</View>;
             }
             const token = GROUP_KIND_TOKENS[block.kind ?? "superset"] ?? "mind-violet";
+            const emoji = GROUP_KIND_EMOJI[block.kind ?? "superset"] ?? "⇄";
             return (
               <View
                 key={`group-${blockIdx}`}
@@ -973,17 +988,26 @@ export function WorkoutSummary({
                     flexWrap: "wrap",
                   }}
                 >
+                  {/* Rounded square badge carrying the group kind's emoji —
+                      the web's `flex h-6 w-6 items-center justify-center
+                      rounded-lg text-xs text-white` badge span. Native used
+                      to draw a plain accent dot here with no icon. */}
                   <View
+                    testID={`${testID}-group-${blockIdx}-badge`}
                     style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 8,
+                      alignItems: "center",
+                      justifyContent: "center",
                       backgroundColor: colors[token],
                     }}
-                  />
+                  >
+                    <Text className="text-xs text-white">{emoji}</Text>
+                  </View>
                   <Text
                     testID={`${testID}-group-${blockIdx}-label`}
-                    className="text-foreground text-xs font-bold uppercase"
+                    className="text-foreground text-xs font-bold uppercase tracking-wide"
                   >
                     {block.label}
                   </Text>
@@ -1042,6 +1066,15 @@ export function WorkoutSummary({
               variant="ghost"
               onPress={onViewLog}
               icon={<TrendingUp color={colors.foreground} size={16} />}
+              // The web's `border border-zinc-200 … py-3.5` card container
+              // (`dark:border-zinc-800`) — explicit here so the button keeps
+              // its bordered card look and 14px vertical padding regardless
+              // of what a future "ghost" restyle does to the default size.
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                paddingVertical: 14,
+              }}
             >
               View Training Log
             </Button>
