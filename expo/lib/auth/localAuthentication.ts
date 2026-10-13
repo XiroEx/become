@@ -34,7 +34,25 @@ export interface LocalAuthenticationModule {
     | { success: true }
     | { success: false; error?: string; warning?: string }
   >;
+  /**
+   * Optional: older module shapes (and any DI fake that only implements the
+   * three methods above) omit it. `getSupportedAuthenticationTypes` below
+   * treats a missing function the same as a missing module — an empty list,
+   * which is the generic-wording answer.
+   */
+  supportedAuthenticationTypesAsync?: () => Promise<number[]>;
 }
+
+/**
+ * The hardware's enum values from `expo-local-authentication`'s
+ * `AuthenticationType`, inlined so this file never has to import the module
+ * at the type level (it is loaded lazily, by design, above).
+ */
+export const AUTHENTICATION_TYPE = {
+  FINGERPRINT: 1,
+  FACIAL_RECOGNITION: 2,
+  IRIS: 3,
+} as const;
 
 export function loadLocalAuthenticationModule(): LocalAuthenticationModule | null {
   try {
@@ -112,3 +130,70 @@ export function createRealBiometricsCapability(
 /** The capability the app runs against. Null-module → no-hardware answers. */
 export const realBiometricsCapability: BiometricsCapability =
   createRealBiometricsCapability();
+
+/**
+ * The hardware's supported authentication kinds (Face ID / Touch ID /
+ * fingerprint / iris), queried directly from the module rather than through
+ * `BiometricsCapability` — picking platform wording is a UI concern, not
+ * part of the cold-open contract. A missing module, a missing method
+ * (`supportedAuthenticationTypesAsync` is optional on the interface above)
+ * or a throw all degrade to an empty list, same as the capability's own
+ * no-hardware answers (George's 2026-10-06 QA note on Android wording).
+ */
+export async function getSupportedAuthenticationTypes(
+  loadModule: () => LocalAuthenticationModule | null = loadLocalAuthenticationModule,
+): Promise<number[]> {
+  try {
+    const mod = loadModule();
+    if (!mod || typeof mod.supportedAuthenticationTypesAsync !== "function") {
+      return [];
+    }
+    return await mod.supportedAuthenticationTypesAsync();
+  } catch {
+    return [];
+  }
+}
+
+/** The label the Settings row and its accessibility strings use. */
+export interface BiometricWording {
+  /** Title-cased for the row label, e.g. "Face ID", "Touch ID", "fingerprint". */
+  label: string;
+  /** Same word, used mid-sentence ("Ask for {noun} or your passcode…"). */
+  noun: string;
+}
+
+/**
+ * Platform-appropriate wording for the Security row (George, 2026-10-06 QA):
+ * Android showed "Face ID" copy even when the device only has a fingerprint
+ * sensor. iOS keeps Apple's own vocabulary — Face ID when the hardware
+ * reports facial recognition, Touch ID for fingerprint-only iPhones, and
+ * "Face ID" as the steady-state default before the probe resolves (matches
+ * the overwhelming majority of current iPhones and this file's prior
+ * behaviour). Android prefers "fingerprint" (the common case), falls back to
+ * "face unlock" when that is the only kind reported, and "biometrics" when
+ * neither is known yet (e.g. the probe hasn't resolved, or the module is
+ * absent).
+ */
+export function describeBiometricWording(
+  supportedTypes: number[],
+  platformOS: string,
+): BiometricWording {
+  const hasFingerprint = supportedTypes.includes(
+    AUTHENTICATION_TYPE.FINGERPRINT,
+  );
+  const hasFacial = supportedTypes.includes(
+    AUTHENTICATION_TYPE.FACIAL_RECOGNITION,
+  );
+
+  if (platformOS === "android") {
+    if (hasFingerprint) return { label: "fingerprint", noun: "fingerprint" };
+    if (hasFacial) return { label: "face unlock", noun: "face unlock" };
+    return { label: "biometrics", noun: "biometrics" };
+  }
+
+  // iOS (and any other platform): Apple's own vocabulary.
+  if (hasFingerprint && !hasFacial) {
+    return { label: "Touch ID", noun: "Touch ID" };
+  }
+  return { label: "Face ID", noun: "Face ID" };
+}
