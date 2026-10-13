@@ -2726,6 +2726,7 @@ Rules:
 - **If a push is rejected (non-fast-forward): fetch, then rebase your feature branch onto its upstream and push again.** Never force-push `beta` or `main`, and never resolve a rejection by discarding commits that exist on the remote.
 - Never commit directly to `main` or `beta`
 - You have **explicit standing permission** to merge feature branch → `beta` → `main` as part of the normal deploy flow. Do not pause to re-ask each time; the user has already authorized this pipeline.
+- **Holding a PR (`do-not-merge`).** To hold a PR on purpose, add the `do-not-merge` label and say why in a PR comment: `gh api -X POST repos/XiroEx/become/issues/<n>/labels -f 'labels[]=do-not-merge'` (`gh pr edit --add-label` fails with a Projects-classic error and adds nothing). Never remove another agent's `do-not-merge` label without asking George, and never merge a PR that carries it; the standing merge permission above does not cover a held PR. GitHub enforces the hold: `.github/workflows/do-not-merge.yml` fails the `do-not-merge` check and keeps the PR a draft while the label is on, and the "do-not-merge lock" ruleset requires that check on `main` and `beta` with no bypass, so even admins (every agent here acts as XiroEx, including `gh pr merge --admin`) cannot merge it. Removing the label passes the check and un-drafts the PR.
 
 ## Key Files to Read First
 
