@@ -19,8 +19,17 @@ import {
   CHECKOUT_CONSENT_COLLECTION,
   TERMS_URL_MISSING_LOG,
   isTermsUrlMissingError,
+  withoutConsentCollection,
   type CheckoutSessionParams,
 } from '@/lib/billing/consentCollection'
+import {
+  CHECKOUT_AUTOMATIC_TAX,
+  CHECKOUT_BILLING_ADDRESS_COLLECTION,
+  CHECKOUT_CUSTOMER_UPDATE,
+  isTaxNotConfiguredError,
+  taxNotConfiguredLog,
+  withoutAutomaticTax,
+} from '@/lib/billing/automaticTax'
 import { reportedGrandfathered } from '@/lib/entitlements'
 import type { IUserConsent, IUserSubscription, UserRole } from '@/models/User'
 
@@ -44,6 +53,13 @@ export const dynamic = 'force-dynamic'
  * time, so this route is the one place that remembers. A returning buyer who
  * asks for a trial still gets a normal paid checkout; `trialApplied: false`
  * is the signal, not a refusal, because the purchase itself is still wanted.
+ *
+ * SALES TAX is calculated by Stripe (`automatic_tax`), which is also why the
+ * session now collects a billing address — tax is calculated from it. The
+ * prices are tax-INCLUSIVE (George, 2026-09-13), so this changes no total: the
+ * tax comes OUT of the same $14.99 / $119.99 rather than being added to it.
+ * Stripe Tax is dashboard state per MODE, so a refusal degrades to a session
+ * without tax instead of a 502 — see lib/billing/automaticTax.ts.
  *
  * `returnTo` is the NATIVE app's flag and defaults to 'web', so every browser
  * caller keeps returning to /dashboard/plan exactly as before. 'app' swaps the
@@ -200,6 +216,15 @@ export async function POST(request: NextRequest) {
         // Stripe's own "I agree to the terms" box, stored on the session.
         // See lib/billing/consentCollection.ts for why it may be retried off.
         consent_collection: CHECKOUT_CONSENT_COLLECTION,
+        // Sales tax. The prices are TAX-INCLUSIVE (George, 2026-09-13), so this
+        // changes no total: Stripe splits the tax out of the same $14.99 or
+        // $119.99 instead of it being absorbed unreported. The address is what
+        // it is calculated from, and customer_update is what Stripe requires to
+        // use that address on a session that names an existing customer.
+        // See lib/billing/automaticTax.ts, including why it may be retried off.
+        automatic_tax: CHECKOUT_AUTOMATIC_TAX,
+        billing_address_collection: CHECKOUT_BILLING_ADDRESS_COLLECTION,
+        customer_update: CHECKOUT_CUSTOMER_UPDATE,
         // Copied onto the subscription, so every later subscription event and
         // every invoice snapshot can attribute itself without a customer lookup.
         // `trial_period_days` only ever comes from `applyTrial`, never from the
@@ -231,19 +256,49 @@ export async function POST(request: NextRequest) {
       Date.now() / 60_000,
     )}`
 
+    // Two of the params above depend on DASHBOARD state this code cannot see:
+    // `consent_collection` needs a Terms of Service URL, and `automatic_tax`
+    // needs Stripe Tax active with a registration ON THAT MODE'S account — the
+    // live New York registration does nothing for the test-mode account beta
+    // rehearses against. Either refusal is a configuration problem, never a
+    // buyer problem, so each is dropped and retried ONCE rather than served as
+    // a 502; a 502 here loses the sale, and the tax is owed on sales.
+    //
+    // Every retry gets its OWN idempotency key: Stripe replays an idempotent
+    // request's ERROR for the same key regardless of the new params, so reusing
+    // one would replay the refusal forever. Both can be missing at the same
+    // time — Stripe names one param per refusal — hence the combined third key.
     let session: { id: string; url: string | null }
     try {
       session = await stripe.checkout.sessions.create(params, { idempotencyKey })
     } catch (err) {
-      if (!isTermsUrlMissingError(err)) throw err
-      console.error(TERMS_URL_MISSING_LOG)
-      // A different key: Stripe replays an idempotent request's ERROR for the
-      // same key regardless of the new params, so the retry needs its own.
-      const { consent_collection: _dropped, ...withoutConsent } = params
-      void _dropped
-      session = await stripe.checkout.sessions.create(withoutConsent, {
-        idempotencyKey: `${idempotencyKey}:noconsent`,
-      })
+      const termsRefused = isTermsUrlMissingError(err)
+      const taxRefused = isTaxNotConfiguredError(err)
+      if (!termsRefused && !taxRefused) throw err
+      if (termsRefused) console.error(TERMS_URL_MISSING_LOG)
+      if (taxRefused) console.error(taxNotConfiguredLog(cfg.mode))
+
+      try {
+        session = termsRefused
+          ? await stripe.checkout.sessions.create(withoutConsentCollection(params), {
+              idempotencyKey: `${idempotencyKey}:noconsent`,
+            })
+          : await stripe.checkout.sessions.create(withoutAutomaticTax(params), {
+              idempotencyKey: `${idempotencyKey}:notax`,
+            })
+      } catch (retryErr) {
+        // The first refusal hid the second. Drop both and try once more; if
+        // THIS fails the catch below answers 502, as it always did.
+        const alsoRefused = termsRefused
+          ? isTaxNotConfiguredError(retryErr)
+          : isTermsUrlMissingError(retryErr)
+        if (!alsoRefused) throw retryErr
+        console.error(termsRefused ? taxNotConfiguredLog(cfg.mode) : TERMS_URL_MISSING_LOG)
+        session = await stripe.checkout.sessions.create(
+          withoutAutomaticTax(withoutConsentCollection(params)),
+          { idempotencyKey: `${idempotencyKey}:noconsent:notax` },
+        )
+      }
     }
 
     if (!session.url) {
