@@ -318,6 +318,15 @@ export default function WorkoutClient() {
       !savedProgramIds.has(program.program_id)
   );
 
+  // `totalPrograms` is the server's raw search match count — it has no idea
+  // which of those matches are already enrolled or saved, so it counts
+  // programs the "Browse Programs" list above intentionally hides. Subtract
+  // that overlap (found on the currently loaded page, same approach the
+  // native catalog uses in ProgramsCatalog.tsx for NP-278) so the heading
+  // count always equals what's actually rendered (NP-378).
+  const excludedFromBrowseCount = allPrograms.length - filteredPrograms.length;
+  const displayTotalPrograms = Math.max(totalPrograms - excludedFromBrowseCount, 0);
+
   // ─── Goal-based recommendation matching ──────────────────────────────────
   const GOAL_KEYWORDS: Record<FitnessGoal, string[]> = {
     lose_weight: ["weight loss", "fat loss", "cut", "cutting", "lean", "shred"],
@@ -740,9 +749,9 @@ export default function WorkoutClient() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
             Browse Programs
-            {totalPrograms > 0 && (
+            {displayTotalPrograms > 0 && (
               <span className="ml-2 text-sm font-normal text-zinc-500">
-                ({totalPrograms})
+                ({displayTotalPrograms})
               </span>
             )}
           </h2>
