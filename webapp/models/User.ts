@@ -311,7 +311,13 @@ const UserProfileSchema = new Schema({
   equipmentAccess: [{ type: String, enum: ['none', 'dumbbells', 'barbell', 'cables', 'full_gym'] }],
   injuryNotes: { type: String },
   weeklyAvailability: { type: Number, min: 1, max: 7 },
-  weightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
+  // NP-209: no default — absent means "never asked" (Jon's rule: a member is
+  // asked once if they haven't picked lb or kg). The 'lbs' default used to
+  // make a real choice and a never-asked member byte-identical. Same pattern
+  // as aiConsent/consent/deletion/apple below: default: undefined on purpose.
+  // Display code must still fall back to 'lbs' at READ time
+  // (`weightUnit ?? 'lbs'`) — nothing changes on screen for existing members.
+  weightUnit: { type: String, enum: ['lbs', 'kg'], default: undefined },
   planPromoteMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
 }, { _id: false });
 

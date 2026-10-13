@@ -51,6 +51,12 @@ export interface ISetLog {
   setNumber: number
   reps?: number       // null for time-only exercises (planks, holds, intervals)
   weight?: number     // null for bodyweight / cardio exercises
+  // NP-209: raw + unit, the same shape IWeightEntry (body weigh-ins) already
+  // uses. The unit `weight` was entered in — the member's weightUnit
+  // preference at save time. Absent on every set logged before this field
+  // existed (and on bodyweight/cardio sets with no weight) = lbs,
+  // grandfathered; do not convert stored numbers. See models/User.ts#weightUnit.
+  weightUnit?: 'lbs' | 'kg'
   duration?: number   // seconds — for time / time_distance / intervals tracking types
   distance?: number   // meters — for time_distance tracking type
   speed?: number      // mph — for time_distance / intervals tracking types
@@ -359,6 +365,9 @@ const SetLogSchema = new Schema<ISetLog>({
   setNumber: { type: Number, required: true },
   reps:     { type: Number, default: null },    // null for time-only exercises
   weight:   { type: Number, default: null },    // null for bodyweight/cardio
+  // NP-209: no default — absent means grandfathered lbs (sets logged before
+  // this field existed), not "unset kg". See ISetLog above.
+  weightUnit: { type: String, enum: ['lbs', 'kg'], default: undefined },
   duration: { type: Number, default: null },    // seconds (time / intervals / time_distance)
   distance: { type: Number, default: null },    // meters (time_distance)
   speed:    { type: Number, default: null },    // mph (time_distance / intervals)
@@ -417,6 +426,9 @@ const PRDimensionSchema = new Schema<IPRDimension>({
   e1rm:   { type: Number },
   date:   { type: Date, required: true },
   programId: { type: String },
+  // NP-209: no default — absent means grandfathered lbs (PRs persisted before
+  // this field existed). See lib/exercisePRs.ts#IPRDimension.
+  unit: { type: String, enum: ['lbs', 'kg'], default: undefined },
 }, { _id: false })
 
 const ExercisePRSchema = new Schema<IExercisePR>({

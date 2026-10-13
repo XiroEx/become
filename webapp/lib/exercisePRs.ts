@@ -12,12 +12,20 @@
 
 export type PRDimensionName = 'maxWeight' | 'maxReps' | 'maxE1RM'
 
+/** NP-209: raw + unit, same shape IWeightEntry (body weigh-ins) already uses.
+ *  Absent — every PR persisted before this field existed — is lbs,
+ *  grandfathered; do not convert stored numbers. See models/User.ts#weightUnit
+ *  and the NP-209 card for the storage decision. */
+export type PRWeightUnit = 'lbs' | 'kg'
+
 export interface IPRDimension {
   weight: number
   reps: number
   e1rm?: number
   date: Date
   programId?: string
+  /** The unit `weight` (and `e1rm`) were entered in. Absent = lbs (grandfathered). */
+  unit?: PRWeightUnit
 }
 
 export interface IExercisePR {
@@ -32,6 +40,9 @@ export interface IPRSetCandidate {
   weight?: number | null
   reps?: number | null
   completed?: boolean
+  /** The unit `weight` was entered in — the member's current preference at
+   *  save time (NP-209). Stamped onto any PR dimension this set breaks. */
+  unit?: PRWeightUnit
 }
 
 export interface IPRSetContext {
@@ -103,6 +114,11 @@ export function updatePRsForSet(
 
   const w = Number(set.weight ?? 0) || 0
   const r = Number(set.reps ?? 0) || 0
+  // Absent unit stays absent (grandfathered lbs on read) rather than being
+  // forced to 'lbs' here — a caller that knows no unit (legacy/replay paths)
+  // must not stamp one onto a PR that didn't have one before.
+  const unit = set.unit
+
   const newPRs: PRDimensionName[] = []
 
   // maxWeight — only valid for weight > 0 AND reps > 0 (a weighted set with
@@ -115,6 +131,7 @@ export function updatePRsForSet(
         reps: r,
         date: context.date,
         ...(context.programId ? { programId: context.programId } : {}),
+        ...(unit ? { unit } : {}),
       }
       newPRs.push('maxWeight')
     }
@@ -129,6 +146,7 @@ export function updatePRsForSet(
         reps: r,
         date: context.date,
         ...(context.programId ? { programId: context.programId } : {}),
+        ...(unit ? { unit } : {}),
       }
       newPRs.push('maxReps')
     }
@@ -145,6 +163,7 @@ export function updatePRsForSet(
         e1rm: e,
         date: context.date,
         ...(context.programId ? { programId: context.programId } : {}),
+        ...(unit ? { unit } : {}),
       }
       newPRs.push('maxE1RM')
     }
@@ -191,11 +210,15 @@ export function computeExercisePRsFromLogs(logs: IWorkoutLogForReplay[]): IExerc
 // maxWeight is emitted — that is what the live-workout UI surfaces today.
 export function formatPRsForLiveWorkout(
   prs: IExercisePR[] | null | undefined,
-): Record<string, { weight: number; reps: number }> {
-  const out: Record<string, { weight: number; reps: number }> = {}
+): Record<string, { weight: number; reps: number; unit?: PRWeightUnit }> {
+  const out: Record<string, { weight: number; reps: number; unit?: PRWeightUnit }> = {}
   for (const pr of prs ?? []) {
     if (!pr?.maxWeight || !pr.exerciseName) continue
-    out[pr.exerciseName] = { weight: pr.maxWeight.weight, reps: pr.maxWeight.reps }
+    out[pr.exerciseName] = {
+      weight: pr.maxWeight.weight,
+      reps: pr.maxWeight.reps,
+      ...(pr.maxWeight.unit ? { unit: pr.maxWeight.unit } : {}),
+    }
   }
   return out
 }
@@ -205,8 +228,8 @@ export function formatPRsForLiveWorkout(
 // any cosmetic date formatting — we return the raw Date.
 export function formatPRsForProgressDetail(
   prs: IExercisePR[] | null | undefined,
-): Record<string, { name: string; weight: number; reps: number; date: Date }> {
-  const out: Record<string, { name: string; weight: number; reps: number; date: Date }> = {}
+): Record<string, { name: string; weight: number; reps: number; date: Date; unit?: PRWeightUnit }> {
+  const out: Record<string, { name: string; weight: number; reps: number; date: Date; unit?: PRWeightUnit }> = {}
   for (const pr of prs ?? []) {
     if (!pr?.maxWeight || !pr.exerciseSlug || !pr.exerciseName) continue
     out[pr.exerciseSlug] = {
@@ -214,6 +237,7 @@ export function formatPRsForProgressDetail(
       weight: pr.maxWeight.weight,
       reps: pr.maxWeight.reps,
       date: pr.maxWeight.date,
+      ...(pr.maxWeight.unit ? { unit: pr.maxWeight.unit } : {}),
     }
   }
   return out

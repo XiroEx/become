@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth'
 import { peekQuota, type GatePayload } from '@/lib/entitlementGuards'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
+import User from '@/models/User'
 import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { calculateNextDay } from '@/lib/workout/dayOrder'
@@ -13,11 +14,26 @@ import { slotDateKey } from '@/lib/notifications/cronNotify'
 import { captureUserTimezone } from '@/lib/captureUserTimezone'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
+import { stampSetWeightUnit } from '@/lib/workout/stampWeightUnit'
+
+// NP-209: the number a member types is their current weightUnit preference,
+// stamped on the way in rather than trusted from the client — see
+// lib/workout/stampWeightUnit.ts. `profile.weightUnit` carries no default any
+// more (models/User.ts), so absent is the display fallback, 'lbs', same as
+// everywhere else that reads it.
+async function memberWeightUnit(userId: string): Promise<'lbs' | 'kg'> {
+  const user = await User.findById(userId).select('profile.weightUnit').lean<{ profile?: { weightUnit?: string } } | null>()
+  return user?.profile?.weightUnit === 'kg' ? 'kg' : 'lbs'
+}
 
 interface SetData {
   setNumber: number
   reps?: number       // null for time-only exercises
   weight?: number     // null for bodyweight/cardio
+  // NP-209: stamped server-side from the member's current profile.weightUnit
+  // (stampSetWeightUnit) — the client never sends this, and anything it did
+  // send here would be overwritten. See models/UserProgress.ts#ISetLog.
+  weightUnit?: 'lbs' | 'kg'
   duration?: number   // seconds — for time / intervals / time_distance
   distance?: number   // meters — for time_distance
   speed?: number      // mph — for time_distance / intervals
@@ -423,13 +439,17 @@ export async function POST(request: NextRequest) {
     }
 
     const body: WorkoutSaveRequest = rawBody
-    const { programId, phase, day, exercises, completed, duration, activeSeconds, notes, scheduledDate } = body
+    const { programId, phase, day, exercises: rawExercises, completed, duration, activeSeconds, notes, scheduledDate } = body
 
     if (!programId || phase === undefined || !day) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     await dbConnect()
+
+    // NP-209: stamp the member's current weightUnit onto every set before it
+    // touches a log OR a PR — see lib/workout/stampWeightUnit.ts.
+    const exercises = stampSetWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
 
     let programCompleted = false
     let programName = ''
@@ -840,13 +860,17 @@ async function handleQuickSessionSave(
   body: QuickSessionSaveRequest,
   payload: { userId: string; email: string },
 ) {
-  const { sessionId, title, needsName, focus, exercises, completed, duration, activeSeconds, notes, started, favorite } = body
+  const { sessionId, title, needsName, focus, exercises: rawExercises, completed, duration, activeSeconds, notes, started, favorite } = body
 
-  if (!sessionId || !Array.isArray(exercises)) {
+  if (!sessionId || !Array.isArray(rawExercises)) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   await dbConnect()
+
+  // NP-209: stamp the member's current weightUnit onto every set before it
+  // touches a log OR a PR — see lib/workout/stampWeightUnit.ts.
+  const exercises = stampSetWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
 
   // Only PERSIST a genuinely-reported offset — a MISSING `tz` must not be stored
   // as UTC (that poisons the cron into sending the morning reminder at ~3am the

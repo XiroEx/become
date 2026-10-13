@@ -84,6 +84,10 @@ export interface SummaryProps {
   summaryGoal: string | null
   formatTime: (s: number) => string
   onDone: () => void
+  /** The member's weightUnit preference (NP-209) — drives the "Volume lbs"/
+   *  "Volume kg" stat tile label. Defaults to 'lbs', the display fallback for
+   *  a member who never chose (models/User.ts#weightUnit). */
+  weightUnit?: 'lbs' | 'kg'
 }
 
 /** The colour each stat tile wears. Duration keeps the emerald it always had. */
@@ -162,7 +166,7 @@ export function ConfettiBurst() {
 export default function WorkoutSummary({
   programCompleted, completedProgramName, programId, workout,
   elapsedTime, exerciseData, exercises, exerciseHistory, newPRsAchieved,
-  summaryStreak, summaryGoal, formatTime, onDone,
+  summaryStreak, summaryGoal, formatTime, onDone, weightUnit = 'lbs',
 }: SummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length]
 
@@ -172,7 +176,7 @@ export default function WorkoutSummary({
   // alone (NP-208); exerciseHistory only still supplies the cosmetic "prev"
   // readout beside it.
   const newPRs = computeSummaryPRs(exercises, exerciseData, newPRsAchieved, exerciseHistory)
-  const metricTiles = summaryMetricTiles(exercises, exerciseData)
+  const metricTiles = summaryMetricTiles(exercises, exerciseData, weightUnit)
   const groupBlocks = summaryGroupBlocks(exercises, exerciseData)
 
   const statTiles = [
