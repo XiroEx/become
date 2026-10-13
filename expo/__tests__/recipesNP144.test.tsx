@@ -610,6 +610,34 @@ describe("(id: e015c9ed) A recipe created natively opens and edits on the web", 
     expect(callsTo("/api/nutrition/recipes", "POST").length).toBe(1);
   });
 
+  it("create sends isPublic: false, so a new recipe is private", async () => {
+    let sent: Record<string, unknown> | null = null;
+    routeFetch((p, init) => {
+      if (p === "/api/nutrition/recipes") {
+        sent = (init as { body: Record<string, unknown> }).body;
+        return { success: true, recipe: { _id: "r9" } };
+      }
+      if (p === "/api/me/entitlements") return entitlementsBody;
+      throw new Error(`unexpected ${p}`);
+    });
+    await createRecipe(input, { apiFetch, token: MEMBER_JWT });
+    expect(sent).toMatchObject({ isPublic: false });
+  });
+
+  it("edit never sends isPublic, so saving keeps the recipe's visibility", async () => {
+    let sent: Record<string, unknown> | null = null;
+    routeFetch((p, init) => {
+      if (p === "/api/nutrition/recipes/r1") {
+        sent = (init as { body: Record<string, unknown> }).body;
+        return { success: true, recipe: { _id: "r1" } };
+      }
+      throw new Error(`unexpected ${p}`);
+    });
+    await updateRecipe("r1", input, { apiFetch, token: MEMBER_JWT });
+    expect(sent).not.toBeNull();
+    expect(sent).not.toHaveProperty("isPublic");
+  });
+
   it("edit is PUT with the same body — never quota-gated", async () => {
     expect(UPDATE_SRC).not.toContain("requireQuota");
     routeFetch((p) => {
