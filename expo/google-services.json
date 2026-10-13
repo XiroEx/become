@@ -1,0 +1,30 @@
+{
+  "_comment": "NP-338 placeholder. Replace this entire file with the real export from the Firebase console (Project settings → Your apps → io.redbtn.become → google-services.json) before any build that needs Android push to reach a device. See expo/RELEASE.md prerequisites — same category as the Play upload keystore: required to ship, not safe to fabricate, and not committed here for real.",
+  "project_info": {
+    "project_number": "REPLACE_WITH_REAL_FIREBASE_PROJECT_NUMBER",
+    "project_id": "REPLACE_WITH_REAL_FIREBASE_PROJECT_ID",
+    "storage_bucket": "REPLACE_WITH_REAL_FIREBASE_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "REPLACE_WITH_REAL_FIREBASE_ANDROID_APP_ID",
+        "android_client_info": {
+          "package_name": "io.redbtn.become"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_REAL_FIREBASE_ANDROID_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

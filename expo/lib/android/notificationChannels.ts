@@ -147,7 +147,13 @@ export function getNotificationChannels(): NotificationChannel[] {
 export interface ChannelCreator {
   setChannel: (
     id: string,
-    config: { name: string; importance: number; sound: boolean; vibrate: boolean },
+    config: {
+      name: string;
+      description: string;
+      importance: number;
+      sound: boolean;
+      vibrate: boolean;
+    },
   ) => Promise<unknown>;
 }
 
@@ -171,9 +177,19 @@ export async function ensureAndroidChannels(
     const create: ChannelCreator =
       deps.create ??
       (await import("expo-notifications").then((Notifications) => ({
-        setChannel: (id: string, config: { name: string; importance: number; sound: boolean; vibrate: boolean }) =>
+        setChannel: (
+          id: string,
+          config: {
+            name: string;
+            description: string;
+            importance: number;
+            sound: boolean;
+            vibrate: boolean;
+          },
+        ) =>
           Notifications.setNotificationChannelAsync(id, {
             name: config.name,
+            description: config.description,
             importance: config.importance as never,
             sound: config.sound ? "default" : undefined,
             vibrationPattern: config.vibrate ? [0, 250, 250, 250] : null,
@@ -195,6 +211,7 @@ export async function ensureAndroidChannels(
     for (const channel of channels) {
       await create.setChannel(channel.id, {
         name: channel.name,
+        description: channel.description,
         importance: importanceFor(channel.importance),
         sound: channel.sound,
         vibrate: channel.vibrate,
