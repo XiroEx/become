@@ -312,3 +312,81 @@ export function programCompletionPct(
   }
   return Math.min(100, Math.round((program.currentWeek || 0) / (totalWeeks || 12) * 100))
 }
+
+/**
+ * NP-377: the Current Program card was showing "Phase 1 • Week 5 of 4" —
+ * a schedule/completion-derived week that had walked past the program's
+ * `duration_weeks`, paired with a stale `currentPhase` that never agreed
+ * with it.
+ *
+ * `resolveProgramWeek` is the single place that reconciles the three
+ * numbers: it clamps the raw week into `[1, totalWeeks]` (so the UI never
+ * reads "Week 5 of 4" — a program past its end reads "Week <totalWeeks> of
+ * <totalWeeks>", i.e. finished) and re-derives `currentPhase` from the
+ * program's own phase definitions (`phase.weeks`, a "start-end" week range)
+ * against that clamped week, so the phase number always agrees with the
+ * week shown next to it.
+ */
+export interface ProgramPhaseWeeksRange {
+  /** Same shape as `IPhase.weeks` — e.g. "1-4", "5-8", or a single "9". */
+  weeks?: string
+}
+
+export interface ResolveProgramWeekInput {
+  /** Schedule- or completion-derived week, before any clamping. */
+  rawWeek: number
+  /** The program's total length. Falls back to 12 (the dashboard's long-standing default) when missing or non-positive. */
+  totalWeeks?: number | null
+  /** The program's phase list, in order, each with its `weeks` range. */
+  phases?: ProgramPhaseWeeksRange[] | null
+  /** currentPhase to fall back to when no phase's range matches (e.g. no phase data at all). */
+  fallbackPhase?: number | null
+}
+
+export interface ResolveProgramWeekResult {
+  /** Clamped into [1, totalWeeks]. */
+  currentWeek: number
+  /** Re-derived from `phases` against the clamped week; falls back to `fallbackPhase` (or 1). */
+  currentPhase: number
+  /** The totalWeeks actually used (after the missing/non-positive fallback). */
+  totalWeeks: number
+  /** True when the raw week had walked past totalWeeks — the program ran its full length. */
+  isComplete: boolean
+}
+
+/** Parses a phase's "weeks" range ("1-4" → [1,4], "9" → [9,9]). Returns null when unparseable. */
+function parsePhaseWeeksRange(weeks: string | undefined): [number, number] | null {
+  if (!weeks) return null
+  const range = weeks.match(/(\d+)\s*-\s*(\d+)/)
+  if (range) return [Number(range[1]), Number(range[2])]
+  const single = weeks.match(/(\d+)/)
+  if (single) return [Number(single[1]), Number(single[1])]
+  return null
+}
+
+export function resolveProgramWeek(input: ResolveProgramWeekInput): ResolveProgramWeekResult {
+  const totalWeeks = input.totalWeeks && input.totalWeeks > 0 ? input.totalWeeks : 12
+  const rawWeek = Number.isFinite(input.rawWeek) ? input.rawWeek : 1
+  const isComplete = rawWeek > totalWeeks
+  const currentWeek = Math.min(Math.max(1, rawWeek), totalWeeks)
+
+  const fallbackPhase = input.fallbackPhase && input.fallbackPhase > 0 ? input.fallbackPhase : 1
+  let currentPhase = fallbackPhase
+  const phases = input.phases || []
+  if (phases.length > 0) {
+    const matchIdx = phases.findIndex(p => {
+      const range = parsePhaseWeeksRange(p.weeks)
+      return !!range && currentWeek >= range[0] && currentWeek <= range[1]
+    })
+    if (matchIdx !== -1) {
+      currentPhase = matchIdx + 1
+    } else {
+      // No phase range covers the clamped week (e.g. the raw week overshot
+      // every phase, or the phase data has gaps) — the last phase is the
+      // honest answer once the week is clamped to the program's own length.
+      currentPhase = phases.length
+    }
+  }
+
+  return { currentWeek, currentPhase, totalWeeks, isComplete }
+}
