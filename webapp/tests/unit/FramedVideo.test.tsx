@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { renderToStaticMarkup } from 'react-dom/server'
-import FramedVideo from '../../components/FramedVideo'
+import FramedVideo, { mimeForVideoUrl } from '../../components/FramedVideo'
 
 test('renders muted for a plain form video', () => {
   const html = renderToStaticMarkup(
@@ -85,4 +85,55 @@ test('a null trim is the same as no trim', () => {
     <FramedVideo src="/videos/leg-press.mp4" surface="form" videoTrim={null} />,
   )
   assert.match(html, /<video[^>]*\bloop\b/)
+})
+
+// ─── <source type> MIME mapping ──────────────────────────────────────────────
+//
+// Most exercise demos in webapp/public/exercises/ are `.mov` (H.264 in a
+// QuickTime container) and the server serves them as `Content-Type: video/mp4`.
+// Advertising `type="video/quicktime"` on the one <source> we render made
+// Chromium and Firefox skip it outright (`canPlayType('video/quicktime') === ''`)
+// and the demo showed as a black panel on desktop/Android Chrome while playing
+// on iOS/Safari. These pin the mapping so that cannot come back.
+
+test('a .mov url is advertised as video/mp4, never video/quicktime', () => {
+  assert.equal(mimeForVideoUrl('/exercises/back-squat.mov'), 'video/mp4')
+})
+
+test('an uppercase .MOV url maps the same way', () => {
+  assert.equal(mimeForVideoUrl('/exercises/BACK-SQUAT.MOV'), 'video/mp4')
+})
+
+test('a .mp4 url maps to video/mp4', () => {
+  assert.equal(mimeForVideoUrl('/exercises/bench-press.mp4'), 'video/mp4')
+})
+
+test('a .webm url maps to video/webm', () => {
+  assert.equal(mimeForVideoUrl('/exercises/cable-row.webm'), 'video/webm')
+})
+
+test('a .mkv url maps to video/x-matroska', () => {
+  assert.equal(mimeForVideoUrl('/exercises/deadlift.mkv'), 'video/x-matroska')
+})
+
+test('a query string does not defeat the extension match', () => {
+  // Blob/CDN urls arrive with cache-busting and signature params.
+  assert.equal(mimeForVideoUrl('/exercises/back-squat.mov?v=3'), 'video/mp4')
+  assert.equal(
+    mimeForVideoUrl('https://cdn.example.com/x/clip.webm?token=abc&exp=123'),
+    'video/webm',
+  )
+  assert.equal(mimeForVideoUrl('https://cdn.example.com/x/clip.mkv?token=abc'), 'video/x-matroska')
+})
+
+test('an unknown extension falls back to video/mp4', () => {
+  assert.equal(mimeForVideoUrl('/exercises/hip-thrust.m4v'), 'video/mp4')
+})
+
+test('a .mov source renders type="video/mp4" in the markup', () => {
+  const html = renderToStaticMarkup(
+    <FramedVideo src="/exercises/back-squat.mov" surface="live" />,
+  )
+  assert.match(html, /<source[^>]*type="video\/mp4"/)
+  assert.doesNotMatch(html, /quicktime/)
 })
