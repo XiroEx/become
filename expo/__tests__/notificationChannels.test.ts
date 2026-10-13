@@ -107,6 +107,29 @@ describe("ensureAndroidChannels", () => {
     expect(ids).toContain("re-engagement");
   });
 
+  // NP-338: `getNotificationChannels()` always carried a `description`, but
+  // it never reached the native call — every channel showed up in Android
+  // system settings with no description. Pin that it is forwarded, not just
+  // modeled.
+  it("forwards each channel's description to the native call", async () => {
+    const setChannel = jest.fn(async () => null);
+    await ensureAndroidChannels({
+      platform: "android",
+      create: { setChannel },
+    });
+    const calls = setChannel.mock.calls as unknown as [
+      string,
+      { description: string },
+    ][];
+    const descriptionById = new Map(
+      calls.map(([id, config]) => [id, config.description]),
+    );
+    for (const channel of getNotificationChannels()) {
+      expect(descriptionById.get(channel.id)).toBe(channel.description);
+      expect(descriptionById.get(channel.id)?.length).toBeGreaterThan(0);
+    }
+  });
+
   it("a channel failure is caught, never a crash", async () => {
     const result = await ensureAndroidChannels({
       platform: "android",
