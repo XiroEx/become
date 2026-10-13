@@ -3,11 +3,16 @@ import { useRouter } from "expo-router";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   View,
 } from "react-native";
-import { Calendar } from "lucide-react-native";
+import { Calendar, ChevronLeft } from "lucide-react-native";
 import { Text } from "@/components/Text";
+import {
+  MIN_TOUCH_TARGET,
+  hitSlopToMinTarget,
+} from "@/lib/a11y/touchTarget";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ScheduleApiResponseSchema } from "@become/api-client";
 import { Card } from "@/components/Card";
@@ -49,30 +54,46 @@ export default function CalendarSettingsRoute() {
         testID="calendar-settings-route-kav"
       >
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View
-              testID="calendar-settings-icon"
-              className="bg-blue-100 dark:bg-blue-900/30"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+          <View style={{ gap: 12 }}>
+            {/* NP-368: web's header leads with a `< Back` link above the
+                icon + title row (`mb-3 flex items-center gap-1 ...`);
+                native used to rely on system back alone. */}
+            <Pressable
+              testID="calendar-settings-back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={() => router.back()}
+              hitSlop={hitSlopToMinTarget(MIN_TOUCH_TARGET, MIN_TOUCH_TARGET)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" }}
             >
-              <Calendar size={20} color={colors.info} />
-            </View>
-            <View>
-              <Text className="text-foreground text-2xl font-bold">
-                Schedule Settings
-              </Text>
-              <Text
-                testID="calendar-settings-subtitle"
-                className="text-muted-foreground text-sm"
+              <ChevronLeft size={16} color={colors["muted-foreground"]} />
+              <Text className="text-muted-foreground text-sm">Back</Text>
+            </Pressable>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View
+                testID="calendar-settings-icon"
+                className="bg-blue-100 dark:bg-blue-900/30"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                Manage your training schedules
-              </Text>
+                <Calendar size={20} color={colors.info} />
+              </View>
+              <View>
+                <Text className="text-foreground text-2xl font-bold">
+                  Schedule Settings
+                </Text>
+                <Text
+                  testID="calendar-settings-subtitle"
+                  className="text-muted-foreground text-sm"
+                >
+                  Manage your training schedules
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -126,13 +147,13 @@ export default function CalendarSettingsRoute() {
               <Card
                 key={schedule.programId || `schedule-${index}`}
                 testID={`schedule-card-${schedule.programId || index}`}
-                title={schedule.programName || schedule.programId}
-                subtitle={subtitle}
               >
                 <ScheduleSettingsForm
                   key={`${schedule.programId}-${initial.trainingDays.join("-")}`}
                   initial={initial}
                   testID={formTestId}
+                  programName={schedule.programName || schedule.programId}
+                  subtitle={subtitle}
                   saving={savingProgramId === schedule.programId}
                   onSubmit={async (next: ScheduleSettings) => {
                     if (schedule.programId) {
