@@ -6,6 +6,9 @@
 // glance and the single most useful "work on next" line, tapping through to
 // the full page. Reads what the dashboard already fetched (mind summary) plus
 // /api/goals.
+//
+// It breathes while it has something to work on (see doorClassName) — the one
+// animated tile on Home, and reduced-motion turns it off in globals.css.
 
 import Link from 'next/link'
 import { useSyncExternalStore } from 'react'
@@ -19,11 +22,20 @@ import { readReached } from '@/lib/goals/status'
 
 const RANK: Record<Suggestion['severity'], number> = { warn: 0, nudge: 1, info: 2, good: 3 }
 
-/** The card's own classes: purple + pulsing while a new week sits unread, calm once opened. */
-export function doorClassName(loud: boolean): string {
+/**
+ * The card's own classes: purple + pulsing while a new week sits unread, calm
+ * once opened.
+ *
+ * `nudge` is the calm state's own quieter pulse, on whenever the tile is
+ * carrying a "what to work on" line — that line is the whole point of the
+ * tile, and a still card on a busy dashboard was being read straight past.
+ * One pulse at a time: an unread week already has the loud one, so the two
+ * never stack.
+ */
+export function doorClassName(loud: boolean, nudge = false): string {
   const tone = loud
     ? 'bg-gradient-to-br from-violet-600 to-violet-500 text-white shadow-md shadow-violet-500/20 becoming-door-pulse'
-    : 'border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-violet-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:border-violet-700'
+    : `border border-zinc-200 bg-white text-zinc-900 shadow-sm hover:border-violet-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white dark:hover:border-violet-700${nudge ? ' becoming-door-nudge' : ''}`
   return `block overflow-hidden rounded-2xl p-3.5 transition-transform active:scale-[0.99] ${tone}`
 }
 
@@ -103,7 +115,7 @@ export default function BecomingDoor({ goals, mind }: { goals: GoalProgress | nu
       href="/dashboard/mind/becoming"
       data-testid="becoming-door"
       data-unread={loud ? 'true' : 'false'}
-      className={doorClassName(loud)}
+      className={doorClassName(loud, !!top)}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
