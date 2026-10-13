@@ -11,21 +11,28 @@ import Svg, {
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 /**
- * The Weight tab's chart (NP-266/NP-323) — a 1:1 port of the web's PLAIN
- * weight line in `webapp/app/dashboard/nutrition/goals/page.tsx` (a Recharts
- * `AreaChart`): one series, a "niced" y-domain/ticks, and up to five x-axis
- * date labels with a dashed vertical grid behind them. Nothing else — no
- * BMI/Mood tabs, no change pill, no second series — those belong to the
- * dashboard's `ProgressChart`, which this screen no longer embeds.
+ * The Weight tab's chart (NP-266/NP-323/NP-375) — a 1:1 port of the web's
+ * PLAIN weight line in `webapp/app/dashboard/nutrition/goals/page.tsx` (a
+ * Recharts `AreaChart`): one series, a "niced" y-domain/ticks, up to five
+ * x-axis date labels with a dashed vertical grid behind them, and the
+ * web's green dashed `ReferenceLine y={targetWeightLbs}` with a right-hand
+ * "Goal N" label. Nothing else — no BMI/Mood tabs, no change pill, no
+ * second series — those belong to the dashboard's `ProgressChart`, which
+ * this screen no longer embeds.
  *
- * NP-323: the web's `ReferenceLine` for the goal only ever appears when the
- * goal falls inside the chart's own DATA-only `domain={['auto','auto']}` —
- * it is never folded into that domain the way this component used to fold
- * it in, which is why native's version was always visible and had its
- * right-aligned label (`Goal 180.8`) cropped to `Goal18` on Android. Rather
- * than re-fight that edge-anchored label, this draws no goal line at all —
- * the "Goal: 180.8 lbs" text in the header above IS the goal, on both
- * clients.
+ * The web's `ReferenceLine` only ever appears when the goal falls inside
+ * the chart's own DATA-only y-domain (`domain={['auto','auto']}`, computed
+ * from `yTicks`/`lo`/`hi` below) — it is never folded into that domain, so
+ * a goal far outside the visible range draws no line, same as the web's
+ * default (non-`extendDomain`) `ReferenceLine` behaviour.
+ *
+ * NP-323 removed this line entirely because its right-aligned label used
+ * to clip to `Goal18` on Android — that was a `textAnchor="start"` label
+ * placed near the right edge, which react-native-svg's Android (Skia)
+ * renderer clips hard at the `<Svg>` canvas bounds. NP-375 restores the
+ * line with `textAnchor="end"` anchored at `width - PAD_RIGHT` instead: the
+ * anchor point itself is already inside the canvas, so the text draws
+ * LEFTWARD from it and never crosses the right edge, on either platform.
  *
  * `data[].date` is already a display string (`"Sep 9"`), formatted server
  * side by `/api/progress` — the same string the web receives — so there is
@@ -33,10 +40,11 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  */
 export interface GoalsWeightChartProps {
   data: { date: string; value: number }[];
-  /** Unused since NP-323 — the goal is shown in the "Goal: X lbs" header,
-   *  never as a reference line on this chart (see the module doc above).
-   *  Kept so existing callers (`nutrition/goals.tsx`) don't need to change
-   *  their own prop. */
+  /** The weight goal, in the same unit as `data[].value`. Drawn as a green
+   *  dashed reference line (NP-375) when it falls inside the chart's own
+   *  data-derived y range — never expands that range, matching the web's
+   *  `ReferenceLine` (see the module doc above). `null`/`undefined` draws
+   *  no line, same as the web when there is no target weight. */
   targetWeight?: number | null;
   height?: number;
   testID?: string;
@@ -105,6 +113,7 @@ export function weightChartXTickIndices(count: number, maxTicks = MAX_X_LABELS):
 
 export function GoalsWeightChart({
   data,
+  targetWeight,
   height = 180,
   testID = "goals-weight-chart",
 }: GoalsWeightChartProps) {
@@ -132,6 +141,26 @@ export function GoalsWeightChart({
       : "";
 
   const xTickIndices = weightChartXTickIndices(data.length);
+
+  // NP-375: the goal reference line — green, dashed, with a right-hand
+  // "Goal N" label — drawn ONLY when the target falls inside the chart's
+  // own data-derived [lo, hi], matching the web's `ReferenceLine` (its
+  // default `ifOverflow` hides it outside the auto y-domain rather than
+  // stretching the domain to fit it). Colour is `colors["mind-green"]`
+  // (green-500, `34 197 94` — see `lib/theme/tokens.ts`), the SAME raw
+  // value the web's `stroke="#22c55e"` is (NP-123 bans a new hex literal
+  // here; this reuses the existing mode-invariant token for that hue
+  // rather than adding a duplicate one, same as `mind-violet`/`orange`
+  // already get reused across unrelated screens for their hue).
+  const hasGoalLine =
+    typeof targetWeight === "number" && Number.isFinite(targetWeight) && targetWeight >= lo && targetWeight <= hi;
+  const goalY = hasGoalLine ? y(targetWeight) : 0;
+  // The label sits above the line, UNLESS the line is close enough to the
+  // top of the plot that an above label would run past PAD_TOP — then it
+  // drops below instead. Either way `textAnchor="end"` keeps its right
+  // edge at `width - PAD_RIGHT`, inside the canvas, so it can never clip
+  // past the right edge the way the pre-NP-375 label used to on Android.
+  const goalLabelY = hasGoalLine ? (goalY - PAD_TOP >= 12 ? goalY - 4 : goalY + 12) : 0;
 
   return (
     <View
@@ -204,6 +233,36 @@ export function GoalsWeightChart({
             strokeLinecap="round"
             strokeLinejoin="round"
           />
+        ) : null}
+
+        {/* NP-375: the goal reference line — web's green dashed
+            `ReferenceLine y={targetWeightLbs}` with a "Goal N" label,
+            drawn on top of the area/line so it stays visible over the
+            gradient fill. */}
+        {hasGoalLine ? (
+          <>
+            <Line
+              testID={`${testID}-goal-line`}
+              x1={PAD_LEFT}
+              y1={goalY}
+              x2={width - PAD_RIGHT}
+              y2={goalY}
+              stroke={colors["mind-green"]}
+              strokeWidth={1.5}
+              strokeDasharray="4,4"
+            />
+            <SvgText
+              testID={`${testID}-goal-label`}
+              x={width - PAD_RIGHT}
+              y={goalLabelY}
+              fontSize={10}
+              fontWeight="600"
+              fill={colors["mind-green"]}
+              textAnchor="end"
+            >
+              {`Goal ${targetWeight}`}
+            </SvgText>
+          </>
         ) : null}
 
         {xTickIndices.map((i, pos) => {

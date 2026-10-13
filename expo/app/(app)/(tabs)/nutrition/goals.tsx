@@ -64,7 +64,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useLocalDay, withTz } from "@/lib/time/localDay";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { minTouchTarget, hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 import { NutritionPlanCard } from "@/components/goals/NutritionPlanCard";
 import { PacePicker } from "@/components/goals/PacePicker";
 import { MacroExplainSheet } from "@/components/nutrition/MacroExplainSheet";
@@ -739,28 +739,31 @@ export default function NutritionGoalsRoute({
             keyboardShouldPersistTaps="handled"
             testID="nutrition-goals-scroll"
           >
-            {/* Header */}
+            {/* Header — NP-375: the web's back button is `h-9 w-9` (36px)
+                `rounded-lg` (8px), not the 40px `rounded-xl` box native drew.
+                The visual box stays 36x36; `hitSlopToMinTarget` grows only
+                the touchable area out to the 44pt a11y minimum instead of
+                growing the box itself (see lib/a11y/touchTarget.ts), the
+                same idiom this app's other 36px icon buttons use. */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Back to nutrition"
                 testID="nutrition-goals-back-button"
                 onPress={handleBack}
-                style={[
-                  minTouchTarget,
-                  {
-                    width: 40,
-                    height: 40,
-                    borderRadius: 12,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: colors.card,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                  },
-                ]}
+                hitSlop={hitSlopToMinTarget(36, 36)}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 8,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
               >
-                <ChevronLeft size={20} color={colors.foreground} />
+                <ChevronLeft size={18} color={colors.foreground} />
               </Pressable>
               <View style={{ flex: 1 }}>
                 <Text className="text-foreground text-2xl font-bold">Nutrition Goals</Text>
@@ -770,11 +773,16 @@ export default function NutritionGoalsRoute({
               </View>
             </View>
 
-            {/* Goals / Weight tabs */}
+            {/* Goals / Weight tabs — NP-375: one `rounded-xl` bordered
+                container (web's `SegmentedControl`, `components/ui/
+                SegmentedControl.tsx`: `rounded-xl border ... p-0.5`) holding
+                both tabs, with a `rounded-lg` active pill inset inside it —
+                not two separate bordered buttons side by side with a gap. */}
             <View
               testID="nutrition-goals-tabs"
               accessibilityRole="tablist"
-              style={{ flexDirection: "row", gap: 8 }}
+              className="flex-row rounded-xl border border-border bg-card"
+              style={{ padding: 2, gap: 2 }}
             >
               {(["goals", "weight"] as const).map((tab) => {
                 const on = activeTab === tab;
@@ -785,14 +793,14 @@ export default function NutritionGoalsRoute({
                     accessibilityRole="tab"
                     accessibilityState={{ selected: on }}
                     onPress={() => setActiveTab(tab)}
-                    style={minTouchTarget}
-                    className={`flex-1 items-center justify-center rounded-xl border py-2.5 ${
-                      on ? "border-foreground bg-foreground" : "border-border bg-card"
+                    style={[minTouchTarget, { flex: 1 }]}
+                    className={`items-center justify-center rounded-lg py-2 ${
+                      on ? "bg-foreground" : "bg-transparent"
                     }`}
                   >
                     <Text
                       className={`text-sm font-semibold capitalize ${
-                        on ? "text-background" : "text-foreground"
+                        on ? "text-background" : "text-muted-foreground"
                       }`}
                     >
                       {tab}
@@ -852,6 +860,14 @@ export default function NutritionGoalsRoute({
                         testID="nutrition-goals-log-weight"
                         variant="inverted"
                         size="sm"
+                        // NP-375: the web's Log Weight CTA is `rounded-xl
+                        // bg-foreground px-4 py-2 text-sm font-semibold
+                        // text-background` — `size="sm"` already gives the
+                        // rounded-xl/text-sm/bg-foreground/text-background
+                        // shape, but its px-3/py-1.5 padding is tighter than
+                        // the web's px-4/py-2, so the exact padding is
+                        // overridden here (style wins over the size class).
+                        style={{ paddingHorizontal: 16, paddingVertical: 8 }}
                         onPress={() => setWeightSheetOpen(true)}
                       >
                         <Scale size={16} color={colors.background} /> Log Weight
@@ -865,6 +881,7 @@ export default function NutritionGoalsRoute({
                       testID="nutrition-goals-log-weight"
                       variant="inverted"
                       size="sm"
+                      style={{ paddingHorizontal: 16, paddingVertical: 8 }}
                       onPress={() => setWeightSheetOpen(true)}
                     >
                       <Scale size={16} color={colors.background} /> Log Weight
@@ -991,7 +1008,10 @@ export default function NutritionGoalsRoute({
                   )}
                 </Card>
 
-                {/* Goal Type */}
+                {/* Goal Type — NP-375: the web's active direction card is an
+                    emerald highlight (`border-emerald-500 bg-emerald-50/50
+                    dark:bg-emerald-950/20`), not the solid foreground/
+                    background invert native drew before. */}
                 <View testID="nutrition-goals-direction-group">
                   <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wide mb-3">
                     Goal
@@ -1008,16 +1028,22 @@ export default function NutritionGoalsRoute({
                           onPress={() => handleGoalTypeChange(card.type)}
                           style={minTouchTarget}
                           className={`flex-1 rounded-xl border p-3 ${
-                            on ? "border-foreground bg-foreground" : "border-border bg-card"
+                            on
+                              ? "border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20"
+                              : "border-border bg-card"
                           }`}
                         >
                           <Text
-                            className={`text-sm font-semibold ${on ? "text-background" : "text-foreground"}`}
+                            className={`text-sm font-semibold ${
+                              on ? "text-emerald-700 dark:text-emerald-300" : "text-foreground"
+                            }`}
                           >
                             {card.label}
                           </Text>
                           <Text
-                            className={`text-xs mt-0.5 ${on ? "text-background/70" : "text-muted-foreground"}`}
+                            className={`text-xs mt-0.5 ${
+                              on ? "text-emerald-700/70 dark:text-emerald-300/70" : "text-muted-foreground"
+                            }`}
                           >
                             {card.adjustment}
                           </Text>

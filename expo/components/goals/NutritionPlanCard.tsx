@@ -107,9 +107,17 @@ export function NutritionPlanCard({
     }
   };
 
+  // NP-375: the web's PlanCard renders inside the shared `<Card>` shell at
+  // `p-5 sm:p-6` (20px, 24px at `sm:`) — 4px roomier than this component's
+  // own `p-4` default (`Card.tsx`). `style` wins over the className-derived
+  // padding (same override idiom the Button variants use), so every branch
+  // below sets it explicitly rather than widening the shared Card default,
+  // which other, unrelated callers rely on staying at 16px.
+  const cardPaddingStyle = { padding: 20 };
+
   if (loading) {
     return (
-      <Card testID={testID}>
+      <Card testID={testID} style={cardPaddingStyle}>
         <View
           testID={`${testID}-loading`}
           style={{ height: 64, borderRadius: 12, backgroundColor: colors.border, opacity: 0.5 }}
@@ -120,7 +128,7 @@ export function NutritionPlanCard({
 
   if (!data) {
     return (
-      <Card testID={testID}>
+      <Card testID={testID} style={cardPaddingStyle}>
         <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
           Your plan
         </Text>
@@ -147,7 +155,7 @@ export function NutritionPlanCard({
   const n = data.nutrition;
   if (!n || n.status === "none" || !n.target.weight) {
     return (
-      <Card testID={testID}>
+      <Card testID={testID} style={cardPaddingStyle}>
         <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
           Your plan
         </Text>
@@ -179,7 +187,7 @@ export function NutritionPlanCard({
               : null;
 
   return (
-    <Card testID={testID}>
+    <Card testID={testID} style={cardPaddingStyle}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <Text className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
           Your plan
