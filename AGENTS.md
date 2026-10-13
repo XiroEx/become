@@ -2547,6 +2547,36 @@ two programs, an alias left on the host that would make the new name resolve to
 nothing), the plan being settled against `data/`, and the wiring — the route,
 the sync, and the fact that exactly one workflow calls it.
 
+### `/placeholder.mp4` is a bench press, not a placeholder
+
+`webapp/public/placeholder.mp4` is CrossFit's "The Bench Press" and
+`placeholder2.mp4` is "HOW TO DO A GOBLET SQUAT" — their own mp4 metadata says
+so. `scripts/seed-atlas-videos.mjs` once handed them out by index parity
+(`i % 2 === 0 ? …`) to every exercise with no footage and `scripts/
+seed_exercises.mjs` copied the result onto `Exercise.videoUrl`, so 21 catalog
+rows prescribed one of those two lifts as their demo. That is the card
+"Jumping Jacks shows a barbell bench-press image", found while capturing store
+screenshots.
+
+**A stock clip reads as NO VIDEO.** `webapp/lib/exerciseDemoVideo.ts` holds the
+list and the predicate; `expo/lib/data/exerciseDemoVideo.ts` mirrors it because
+expo cannot import from webapp, and a parity test keeps the two lists equal. It
+is applied in hydration (so no API response carries one), in the legacy
+name-keyed lookup on both platforms, and in `resolveExerciseVideo` — the one
+function every player goes through. `isMissingVideo` counts one as missing, so
+the row joins the admin portal's "No Video" queue instead of looking done.
+
+Do not invent a demo to fill the gap: the honest empty state ("No video
+available" on web, "<name> demo is coming" on native) is what gets a real clip
+recorded. `lib/exerciseDemoVideoScan.ts` + `scripts/audit-exercise-demo-videos.ts`
+scan the whole library by reading each clip's subject off its file name; the 18
+`borrowed` cases (a close variation's clip, mapped by hand in
+`scripts/update_exercise_videos.mjs`) are listed, not changed — which neighbour
+is close enough is the coach's call. The stored URLs are cleared by
+`lib/stockDemoVideoSync.ts`, which rides the same
+`app/api/cron/sync-exercise-catalog` door as the dumbbell sync, for the reason
+the section above exists. Pinned in `tests/unit/exerciseDemoVideo.test.ts`.
+
 ### Public (Next.js)
 ```
 NEXT_PUBLIC_APP_NAME      # "Become"

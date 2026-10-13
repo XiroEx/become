@@ -5,6 +5,7 @@ import Exercise from "@/models/Exercise";
 import { visibleExerciseFilter } from "@/lib/exerciseVisibility";
 import { nameBoundaryPattern, matchingMuscleGroups, sortByMatchTier } from "@/lib/exerciseSearchRanking";
 import { expandQueryVariants } from "@/lib/exerciseAbbreviations";
+import { withoutStockDemoVideo } from "@/lib/exerciseDemoVideo";
 
 // GET /api/exercises/search?q=bench+press&limit=8
 // Text search across exercise name/aliases, plus a body-part fallback via
@@ -74,7 +75,12 @@ export async function GET(req: NextRequest) {
       .limit(CANDIDATE_POOL)
       .lean();
 
-    const exercises = sortByMatchTier(candidates, q).slice(0, limit);
+    // A swap preview must not promise footage of a different lift: a row still
+    // storing one of the two shared stock clips comes back with no video
+    // (lib/exerciseDemoVideo.ts).
+    const exercises = sortByMatchTier(candidates, q)
+      .slice(0, limit)
+      .map(withoutStockDemoVideo);
 
     return NextResponse.json({ exercises });
   } catch (error) {

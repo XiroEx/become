@@ -3,30 +3,19 @@ import {
   Animated,
   View,
   StyleSheet,
+  type DimensionValue,
   type StyleProp,
   type TextStyle,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text } from "@/components/Text";
 import { resolveToken, tintToken } from "@/lib/theme/tokens";
-
-interface FlameSpec {
-  left: `${number}%`;
-  w: number;
-  h: number;
-}
-
-/**
- * Flame tongue specs matching web's FLAMES (webapp/components/streaks/FireNumber.tsx).
- * Where each tongue sits across the number, and how it burns.
- */
-const FLAMES: readonly FlameSpec[] = [
-  { left: "2%", w: 6, h: 10 },
-  { left: "22%", w: 8, h: 13 },
-  { left: "44%", w: 7, h: 11 },
-  { left: "64%", w: 6, h: 9 },
-  { left: "84%", w: 5, h: 8 },
-];
+import {
+  EMBER_BAND,
+  FLAME_BAND,
+  FLAME_TONGUES as FLAMES,
+  percent,
+} from "@/lib/streaks/fireNumberLayout";
 
 /**
  * The fire number's colour (NP-317, NP-354).
@@ -53,28 +42,53 @@ const FLAME_BRAND = resolveToken("brand", "light");
 const EMBER_GLOW = tintToken("orange", "light", 0.4);
 const FLAME_SHADOW = tintToken("orange", "light", 0.75);
 
+/** The shared `percent()`, in the shape React Native's style types want. */
+function pct(fraction: number): DimensionValue {
+  return percent(fraction) as `${number}%`;
+}
+
 export interface FireNumberProps {
   children: React.ReactNode;
   style?: StyleProp<TextStyle>;
   className?: string;
 }
 
+/**
+ * A number that is on fire — and the fire NEVER lands on a numeral.
+ *
+ * The tongues used to hang in a band 6px above the digits' top with 8–13px of
+ * flame below that, and the ember bed covered the bottom 40% of the number, so
+ * on the dashboard's Super Streak tile the flame was drawn across the digits
+ * (found capturing store screenshots, 2026-10-13 — same bug on web).
+ *
+ * Both decorations now sit in bands OUTSIDE the digits' text box — one at
+ * `bottom: "100%"` (above), one at `top: "100%"` (below) — and each band is
+ * `overflow: "hidden"`, so a tongue taller than its band is CLIPPED at the
+ * digits' edge rather than painted over them. The bands and the tongues are
+ * sized in PERCENTAGES of the text's own box (lib/streaks/fireNumberLayout,
+ * shared with the web), which is what makes that hold at 1, 2 and 3 digits and
+ * at the largest accessibility text size without a number to re-tune.
+ */
 export function FireNumber({
   children,
   style,
   className = "",
 }: FireNumberProps) {
-  const flameAnim = useMemo(() => new Animated.Value(0.75), []);
+  const emberAnim = useMemo(() => new Animated.Value(0.75), []);
+  const tongueAnims = useMemo(
+    () => FLAMES.map(() => new Animated.Value(0)),
+    [],
+  );
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(flameAnim, {
+        Animated.timing(emberAnim, {
           toValue: 1,
           duration: 900,
           useNativeDriver: true,
         }),
-        Animated.timing(flameAnim, {
+        Animated.timing(emberAnim, {
           toValue: 0.7,
           duration: 900,
           useNativeDriver: true,
@@ -83,55 +97,88 @@ export function FireNumber({
     );
     anim.start();
     return () => anim.stop();
-  }, [flameAnim]);
+  }, [emberAnim]);
+
+  useEffect(() => {
+    // One loop per tongue, each on its own clock, so the five burn out of step
+    // the way the web's staggered CSS keyframes do.
+    const loops = tongueAnims.map((value, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(FLAMES[i]!.delayMs),
+          Animated.timing(value, {
+            toValue: 1,
+            duration: FLAMES[i]!.durationMs,
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ]),
+      ),
+    );
+    loops.forEach((loop) => loop.start());
+    return () => loops.forEach((loop) => loop.stop());
+  }, [tongueAnims]);
 
   return (
     <View testID="fire-number-container" style={styles.container}>
-      {/* Embers at the foot of the digits */}
-      <Animated.View
+      {/* Tongues licking off the top edge, in a clipped band ABOVE the digits */}
+      <View
+        testID="fire-flames"
         pointerEvents="none"
-        style={[
-          styles.ember,
-          {
-            opacity: flameAnim,
-          },
-        ]}
+        style={[styles.flameBand, { height: pct(FLAME_BAND) }]}
+      >
+        {FLAMES.map((f, i) => (
+          <Animated.View
+            key={i}
+            testID={`fire-lick-${i}`}
+            style={{
+              position: "absolute",
+              left: pct(f.left),
+              bottom: 0,
+              width: pct(f.width),
+              // Taller than the band on purpose — the band clips it, which is
+              // what keeps every pixel of flame off the digits.
+              height: pct(f.height / FLAME_BAND),
+              opacity: tongueAnims[i]!.interpolate({
+                inputRange: [0, 0.35, 0.7, 1],
+                outputRange: [0.95, 0.8, 0.4, 0],
+              }),
+              transform: [
+                {
+                  scaleY: tongueAnims[i]!.interpolate({
+                    inputRange: [0, 0.35, 0.7, 1],
+                    outputRange: [0.7, 1.5, 1.2, 0.8],
+                  }),
+                },
+              ],
+            }}
+          >
+            <LinearGradient
+              colors={[FLAME_AMBER, FIRE_ORANGE, FLAME_BRAND]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+        ))}
+      </View>
+
+      {/* Embers at the foot of the digits, in a clipped band BELOW them */}
+      <Animated.View
+        testID="fire-embers"
+        pointerEvents="none"
+        style={[styles.emberBand, { height: pct(EMBER_BAND), opacity: emberAnim }]}
       >
         <LinearGradient
-          colors={["transparent", EMBER_GLOW]}
+          colors={[EMBER_GLOW, "transparent"]}
           start={{ x: 0.5, y: 0 }}
           end={{ x: 0.5, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-      </Animated.View>
-
-      {/* Tongues licking off the top edge */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.flamesContainer,
-          {
-            opacity: flameAnim,
-          },
-        ]}
-      >
-        {FLAMES.map((f, i) => (
-          <LinearGradient
-            key={i}
-            colors={[FLAME_AMBER, FIRE_ORANGE, FLAME_BRAND]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            style={{
-              position: "absolute",
-              left: f.left,
-              bottom: 0,
-              width: f.w,
-              height: f.h,
-              borderRadius: 3,
-              opacity: 0.85,
-            }}
-          />
-        ))}
       </Animated.View>
 
       {/* The digits themselves, with flame glow and solid orange ink */}
@@ -159,22 +206,21 @@ const styles = StyleSheet.create({
     position: "relative",
     alignSelf: "flex-start",
   },
-  ember: {
+  // The two bands. `bottom: "100%"` and `top: "100%"` put them wholly outside
+  // the digits' box; `overflow: "hidden"` is what holds the fire inside them.
+  flameBand: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 0,
-    height: "40%",
-    borderRadius: 8,
+    bottom: "100%",
     overflow: "hidden",
   },
-  flamesContainer: {
+  emberBand: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: -6,
-    height: 14,
-    overflow: "visible",
+    top: "100%",
+    overflow: "hidden",
   },
 });
 

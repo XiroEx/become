@@ -11,6 +11,7 @@
 // built for).
 
 import { expandQueryVariants } from './exerciseAbbreviations';
+import { isStockDemoClip } from './exerciseDemoVideo';
 
 export interface AuditableExercise {
   slug: string;
@@ -64,8 +65,15 @@ export function normalizeExerciseName(name: string): string {
     .replace(/s$/, '');
 }
 
+/**
+ * No usable demo. A stored stock clip counts as missing: `/placeholder.mp4`
+ * is footage of a barbell bench press that an old seed script attached to 21
+ * unrelated rows (lib/exerciseDemoVideo.ts), every player now refuses it, and
+ * the only way one of those exercises ever gets a real demo is by appearing
+ * in this queue for the coach to record.
+ */
 export function isMissingVideo(ex: Pick<AuditableExercise, 'videoUrl'>): boolean {
-  return !ex.videoUrl;
+  return !ex.videoUrl || isStockDemoClip(ex.videoUrl);
 }
 
 /**

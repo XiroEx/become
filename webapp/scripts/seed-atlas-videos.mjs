@@ -63,24 +63,41 @@ const collection = mongoose.connection.db.collection('exercisevideos');
 
 let inserted = 0;
 let updated = 0;
+let skipped = 0;
 for (let i = 0; i < exercises.length; i++) {
   const name = exercises[i];
   const hasRealVideo = REAL_VIDEOS.hasOwnProperty(name);
-  const videoUrl = hasRealVideo ? REAL_VIDEOS[name] : (i % 2 === 0 ? '/placeholder.mp4' : '/placeholder2.mp4');
-  
+
+  // An exercise with no footage gets NO ROW, and therefore no video.
+  //
+  // This loop used to hand out `i % 2 === 0 ? '/placeholder.mp4' :
+  // '/placeholder2.mp4'` so that every exercise had something to play. Those
+  // two files are not placeholders — they are real footage of a barbell bench
+  // press and of a goblet squat (webapp/lib/exerciseDemoVideo.ts) — so what it
+  // actually did was promise a Jumping Jacks demo and play a bench press,
+  // which is the card "Jumping Jacks shows a barbell bench-press image".
+  // Having no row is what lists the exercise in the admin portal's "No Video"
+  // tab, which is the queue of demos still to be recorded.
+  if (!hasRealVideo) {
+    skipped++;
+    continue;
+  }
+
+  const videoUrl = REAL_VIDEOS[name];
+
   const existing = await collection.findOne({ exerciseName: name });
   if (!existing) {
     await collection.insertOne({
       exerciseName: name,
       videoUrl,
       thumbnailUrl: '/icons/icon-192.png',
-      isPlaceholder: !hasRealVideo,
+      isPlaceholder: false,
       createdAt: new Date(),
       updatedAt: new Date()
     });
     inserted++;
-    console.log(`  Inserted: ${name}${hasRealVideo ? ' (real video)' : ''}`);
-  } else if (hasRealVideo && existing.isPlaceholder) {
+    console.log(`  Inserted: ${name} (real video)`);
+  } else if (existing.isPlaceholder) {
     // Update to real video if we have one
     await collection.updateOne(
       { exerciseName: name },
@@ -93,6 +110,7 @@ for (let i = 0; i < exercises.length; i++) {
 
 console.log(`\nInserted ${inserted} exercise videos`);
 console.log(`Updated ${updated} exercise videos`);
+console.log(`Left ${skipped} exercises with no video — the admin "No Video" queue`);
 
 const realVideoCount = Object.keys(REAL_VIDEOS).length;
 console.log(`\nReal videos available: ${realVideoCount}`);
