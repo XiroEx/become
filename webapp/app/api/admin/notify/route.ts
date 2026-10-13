@@ -40,8 +40,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User has no push subscriptions', sent: 0 }, { status: 200 })
     }
     try {
-      await sendPushToUser(userId, payload)
-      return NextResponse.json({ sent: 1, subscriptions: subCount })
+      // `result` is the real outcome per transport (web / ios / android), so a
+      // test send says whether the phone was actually reached.
+      const result = await sendPushToUser(userId, payload)
+      return NextResponse.json({ sent: 1, subscriptions: subCount, result })
     } catch {
       return NextResponse.json({ error: 'Push delivery failed', sent: 0 }, { status: 500 })
     }

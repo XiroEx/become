@@ -3,6 +3,14 @@
 import { MongoClient } from 'mongodb'
 import { SecretsClient } from '@redbtn/redsecrets'
 import { resolveStripeMode, type StripeMode } from './billing/mode'
+import {
+  resolveApnsConfig,
+  resolveFcmConfig,
+  resolveNativeChat,
+  type ApnsConfig,
+  type FcmConfig,
+  type NativePushPayloadInput,
+} from './push/nativeConfig'
 
 const APP_NAME = 'become'
 const RUNTIME_SECRET_NAME = 'BECOME_RUNTIME_CONFIG'
@@ -40,7 +48,22 @@ export interface RuntimeConfig {
     readbackToken?: string
   }
   reward: { mongoUri?: string }
-  push: { publicKey?: string; privateKey?: string; email?: string }
+  /**
+   * Web Push (VAPID) plus the native transports (NP-063). `apns` and `fcm` are
+   * undefined until their credentials are in the payload; the send path skips
+   * those devices and nothing else changes. Payload shape:
+   * `push.apns = { keyId, teamId, bundleId?, privateKey, environment? }`,
+   * `push.fcm = { serviceAccount }` (the service-account JSON, object or string),
+   * `push.nativeChat` (default false while NP-032 hides chat in the app).
+   */
+  push: {
+    publicKey?: string
+    privateKey?: string
+    email?: string
+    apns?: ApnsConfig
+    fcm?: FcmConfig
+    nativeChat: boolean
+  }
   admin: { bootstrapToken?: string; cronSecret?: string; adminKey?: string }
   external: { usdaApiKey?: string; giphyApiKey?: string }
   /**
@@ -123,7 +146,7 @@ type RuntimePayload = Partial<{
   blob: RuntimeConfig['blob']
   ai: RuntimeConfig['ai']
   reward: RuntimeConfig['reward']
-  push: RuntimeConfig['push']
+  push: Partial<{ publicKey: string; privateKey: string; email: string }> & NativePushPayloadInput
   admin: RuntimeConfig['admin']
   external: RuntimeConfig['external']
   billing: Partial<RuntimeConfig['billing']>
@@ -334,6 +357,15 @@ function buildConfig(payload: RuntimePayload): RuntimeConfig {
       publicKey: optional(push.publicKey, localEnv('VAPID_PUBLIC_KEY')),
       privateKey: optional(push.privateKey, localEnv('VAPID_PRIVATE_KEY')),
       email: optional(push.email, localEnv('VAPID_EMAIL')) || 'mailto:admin@become.redbtn.io',
+      apns: resolveApnsConfig(push.apns, {
+        APNS_KEY_ID: localEnv('APNS_KEY_ID'),
+        APNS_TEAM_ID: localEnv('APNS_TEAM_ID'),
+        APNS_BUNDLE_ID: localEnv('APNS_BUNDLE_ID'),
+        APNS_PRIVATE_KEY: localEnv('APNS_PRIVATE_KEY'),
+        APNS_ENVIRONMENT: localEnv('APNS_ENVIRONMENT'),
+      }),
+      fcm: resolveFcmConfig(push.fcm, { FCM_SERVICE_ACCOUNT: localEnv('FCM_SERVICE_ACCOUNT') }),
+      nativeChat: resolveNativeChat(push.nativeChat, localEnv('PUSH_NATIVE_CHAT')),
     },
     admin: {
       bootstrapToken: optional(admin.bootstrapToken, localEnv('BOOTSTRAP_TOKEN')),
