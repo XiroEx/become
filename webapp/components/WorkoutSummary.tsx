@@ -14,6 +14,7 @@ import {
   summaryMetricTiles,
   type SummaryExercise,
   type SummaryHistoryEntry,
+  type SummaryNewPR,
   type SummarySet,
   type SummaryTileKey,
 } from '@/lib/workout/summaryMetrics'
@@ -64,7 +65,21 @@ export interface SummaryProps {
   exerciseData: SummarySet[][]
   /** Name, tracking type and group membership, aligned with `exerciseData`. */
   exercises: SummaryExercise[]
+  /**
+   * PURELY COSMETIC now — a "prev X" readout beside a record, nothing more.
+   * Decided 10/13 (Jon, NP-028): "the PR is a personal record for all time",
+   * so whether a set beats the member's PREVIOUS session no longer decides
+   * whether it is a "new personal record" (see `newPRsAchieved` below).
+   */
   exerciseHistory: Record<string, SummaryHistoryEntry>
+  /**
+   * The server's all-time PR detection for this save
+   * (`WorkoutSaveResponse.newPRsAchieved`) — the ONLY thing that decides
+   * whether an exercise gets the "new personal record" badge (NP-208).
+   * Undefined/empty means nothing is flagged, which is correct for a caller
+   * with no save response to read from (e.g. reviewing a past log).
+   */
+  newPRsAchieved?: SummaryNewPR[]
   summaryStreak: { streakDays: number; nextMilestone: number | null } | null
   summaryGoal: string | null
   formatTime: (s: number) => string
@@ -146,14 +161,17 @@ export function ConfettiBurst() {
 
 export default function WorkoutSummary({
   programCompleted, completedProgramName, programId, workout,
-  elapsedTime, exerciseData, exercises, exerciseHistory,
+  elapsedTime, exerciseData, exercises, exerciseHistory, newPRsAchieved,
   summaryStreak, summaryGoal, formatTime, onDone,
 }: SummaryProps) {
   const quote = WORKOUT_QUOTES[getDayOfYear() % WORKOUT_QUOTES.length]
 
   // Records, the stat tiles and the session's shape all read the exercise's
   // tracking type rather than assuming reps × weight — see summaryMetrics.ts.
-  const newPRs = computeSummaryPRs(exercises, exerciseData, exerciseHistory)
+  // Which exercises get the badge is the server's all-time `newPRsAchieved`
+  // alone (NP-208); exerciseHistory only still supplies the cosmetic "prev"
+  // readout beside it.
+  const newPRs = computeSummaryPRs(exercises, exerciseData, newPRsAchieved, exerciseHistory)
   const metricTiles = summaryMetricTiles(exercises, exerciseData)
   const groupBlocks = summaryGroupBlocks(exercises, exerciseData)
 

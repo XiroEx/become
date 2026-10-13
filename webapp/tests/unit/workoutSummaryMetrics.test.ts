@@ -234,48 +234,76 @@ describe('summaryMetricTiles', () => {
 // ─── Records ────────────────────────────────────────────────────────────────
 
 describe('computeSummaryPRs', () => {
-  it('compares loaded work on weight then reps', () => {
+  // Decided 10/13 (Jon, NP-028): "the PR is a personal record for all time" —
+  // whether an exercise gets the badge is driven ENTIRELY by the server's
+  // `newPRsAchieved` for this save. `exerciseHistory` (the previous session)
+  // no longer decides anything; it only supplies the cosmetic "prev" label.
+
+  it('flags an exercise the server named in newPRsAchieved', () => {
     const prs = computeSummaryPRs(
       [BENCH],
       [[set({ reps: 5, weight: 140 }), set({ reps: 5, weight: 135 })]],
+      [{ exerciseSlug: 'bench-press', exerciseName: 'Bench Press', dimensions: ['maxWeight'] }],
       { 'Bench Press': { weight: 135, reps: 5, date: '2026-10-01' } },
     )
     assert.deepEqual(prs, [{ name: 'Bench Press', bestLabel: '140 × 5', prevLabel: '135 × 5' }])
   })
 
-  it('compares TIMED work on duration — a longer plank is a record', () => {
+  it('reads TIMED work on duration for the bestLabel once the server flags it', () => {
     const prs = computeSummaryPRs(
       [PLANK],
       [[set({ duration: 45 }), set({ duration: 60 })]],
+      [{ exerciseName: 'Plank', dimensions: ['maxReps'] }],
       { Plank: { weight: 0, reps: 0, duration: 45, date: '2026-10-01' } },
     )
     assert.deepEqual(prs, [{ name: 'Plank', bestLabel: '1:00', prevLabel: '45s' }])
   })
 
-  it('does not call a shorter hold a record', () => {
+  it('a set the server did NOT flag is never a record, even if it beat the previous session', () => {
     const prs = computeSummaryPRs(
       [PLANK],
-      [[set({ duration: 30 })]],
+      [[set({ duration: 60 })]],
+      [], // server found no new PR this save
       { Plank: { weight: 0, reps: 0, duration: 45, date: '2026-10-01' } },
     )
     assert.deepEqual(prs, [])
   })
 
-  it('needs history and work — a first session is never a record', () => {
-    assert.deepEqual(computeSummaryPRs([PLANK], [[set({ duration: 45 })]], {}), [])
+  it('a set that beats an earlier NON-ADJACENT session, but not the literal previous one, is still a record — because the server says so', () => {
+    // The literal previous session logged 150×5 (a heavier single than this
+    // set) — the OLD session-over-session rule would have rejected this as
+    // "not a PR". The server's all-time ledger, however, named it: an older,
+    // non-adjacent session is what the true record had been resting on, and
+    // this set beat THAT. Only the server's word decides.
+    const prs = computeSummaryPRs(
+      [BENCH],
+      [[set({ reps: 5, weight: 140 })]],
+      [{ exerciseSlug: 'bench-press', exerciseName: 'Bench Press', dimensions: ['maxReps'] }],
+      { 'Bench Press': { weight: 150, reps: 5, date: '2026-10-10' } }, // literal previous session: heavier
+    )
+    assert.deepEqual(prs, [{ name: 'Bench Press', bestLabel: '140 × 5', prevLabel: '150 × 5' }])
+  })
+
+  it('needs a server signal AND completed work — neither alone is a record', () => {
+    // No newPRsAchieved at all.
+    assert.deepEqual(computeSummaryPRs([PLANK], [[set({ duration: 45 })]], []), [])
+    assert.deepEqual(computeSummaryPRs([PLANK], [[set({ duration: 45 })]], undefined), [])
+    // Flagged, but every set was incomplete — nothing to show as the record.
     assert.deepEqual(
-      computeSummaryPRs([BENCH], [[{ reps: 5, weight: 500, completed: false }]], {
-        'Bench Press': { weight: 135, reps: 5, date: '2026-10-01' },
-      }),
+      computeSummaryPRs(
+        [BENCH],
+        [[{ reps: 5, weight: 500, completed: false }]],
+        [{ exerciseName: 'Bench Press', dimensions: ['maxWeight'] }],
+      ),
       [],
     )
   })
 
-  it('ignores a skipped set when picking the best one', () => {
+  it('ignores a skipped set when picking the best one to show', () => {
     const prs = computeSummaryPRs(
       [BENCH],
       [[set({ reps: 6, weight: 135 }), set({ reps: 0, weight: 0 })]],
-      { 'Bench Press': { weight: 135, reps: 5, date: '2026-10-01' } },
+      [{ exerciseName: 'Bench Press', dimensions: ['maxReps'] }],
     )
     assert.deepEqual(prs.map(p => p.bestLabel), ['135 × 6'])
   })
