@@ -4,7 +4,7 @@
 // for a lawyer and renders visibly on the page.
 //
 // The parts that are easy to get wrong, and are deliberately not:
-//   • The processor list names only the five processors Become ACTUALLY uses.
+//   • The processor list names only the six processors Become ACTUALLY uses.
 //     A generic "we may share with analytics and advertising partners" line
 //     would be a false statement about a product that has neither.
 //   • Health-adjacent data is called what it is, and the "not a HIPAA covered
@@ -29,9 +29,15 @@ import {
   type LegalDoc,
 } from './index'
 
+/** When THIS document last changed. The Terms and the other legal pages keep
+ *  LEGAL_LAST_UPDATED; a privacy-only correction must not re-date them. */
+export const PRIVACY_LAST_UPDATED = 'October 13, 2026'
+export const PRIVACY_LAST_UPDATED_ISO = '2026-10-13'
+
 export const PRIVACY: LegalDoc = {
   slug: 'privacy',
   title: 'Privacy Policy',
+  lastUpdated: { label: PRIVACY_LAST_UPDATED, iso: PRIVACY_LAST_UPDATED_ISO },
   standfirst:
     'What Become collects, why, who else touches it, how long we keep it, and how to get it back or get rid of it.',
   sections: [
@@ -45,8 +51,8 @@ export const PRIVACY: LegalDoc = {
           title: 'In plain language',
           items: [
             'Become collects what it needs to coach you: your email address, your body stats, what you train, what you eat, how you feel, and photos you take of your meals.',
-            'We do not sell your personal information, we do not share it for advertising, and there are no third-party ad trackers in the app.',
-            'A small number of named service providers process data for us. They are listed in section 8, and there are five of them.',
+            'We do not sell your personal information, we do not share it for advertising, we do not use it to track you across other companies’ apps or websites, and there are no third-party ad trackers in the app.',
+            'A small number of named service providers process data for us. They are listed in section 8, and there are six of them.',
             'One of them is an AI provider, Google Gemini. We ask for your permission before anything you submit is sent to it, we do not send anything until you give it, and you can withdraw it in Settings. Section 7 says exactly what is sent.',
             'We never see your card number. Stripe handles payment.',
             'You can ask for a copy of your data, ask us to correct it, or delete your account yourself from Settings — in the app or on the web. Section 12 covers the rest of your rights and section 13 covers deletion.',
@@ -61,11 +67,15 @@ export const PRIVACY: LegalDoc = {
       blocks: [
         {
           kind: 'p',
-          text: `${LEGAL_ENTITY} is ${LEGAL_ENTITY_DESCRIPTION}, and is the controller of the personal information described here. This policy covers the Become app and website at ${LEGAL_PRIMARY_DOMAIN} and ${LEGAL_SECONDARY_DOMAIN}, including the installable version you can add to your home screen.`,
+          text: `${LEGAL_ENTITY} is ${LEGAL_ENTITY_DESCRIPTION}, and is the controller of the personal information described here. This policy covers the Become app and website at ${LEGAL_PRIMARY_DOMAIN} and ${LEGAL_SECONDARY_DOMAIN}, including the installable version you can add to your home screen, and the Become apps on the App Store and Google Play.`,
         },
         {
           kind: 'p',
-          text: 'It does not cover anything you reach by leaving Become, such as Stripe’s own checkout pages or Google’s sign-in screen. Those are governed by their own policies.',
+          text: `On the App Store, the Become app is distributed under the seller name REDBTN LLC, which operates the platform Become runs on. ${LEGAL_ENTITY} is still the company responsible for your information as described here.`,
+        },
+        {
+          kind: 'p',
+          text: 'It does not cover anything you reach by leaving Become, such as Stripe’s own checkout pages or Apple’s and Google’s sign-in screens. Those are governed by their own policies.',
         },
       ],
     },
@@ -80,7 +90,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'Account',
               detail:
-                'Your email address, your name, which sign-in method you use, the public key and identifiers for any passkey you register, and the session token that keeps you signed in. We do not store a password for magic-link, Google or passkey sign-in.',
+                'Your email address, your name, the account identifier we assign you, which sign-in method you use (an email link, Google, Sign in with Apple or a passkey), the Apple or Google account identifier if you sign in with one of them, the public key and identifiers for any passkey you register, and the session token that keeps you signed in. We do not store a password for any of these sign-in methods.',
             },
             {
               term: 'Profile and body data',
@@ -100,7 +110,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'Nutrition data',
               detail:
-                'Meals and foods logged, portions and macros, custom foods, meals and recipes, meal plans, barcode scans, and the photos of meals you scan.',
+                'Meals and foods logged, portions and macros, custom foods, meals and recipes, meal plans, barcode scans, and the photos of meals you scan. Recipes you create are private to you by default.',
             },
             {
               term: 'Mind and mood data',
@@ -120,7 +130,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'Native push token',
               detail:
-                'If you use the Become app from the App Store or Google Play and allow notifications, we store the **push token** your device issues — an Expo push token, which is the address Apple’s and Google’s push services use to reach that one installation. It identifies the installation, not you, and we hold it only to send the notifications you turned on. Turning notifications off in Settings or in the operating system, or deleting your account, removes it.',
+                'If you use the Become app from the App Store or Google Play and allow notifications, we store the **push token** your device issues. On iPhone it is a device token from the Apple Push Notification service (APNs), and on Android a registration token from Firebase Cloud Messaging (FCM). It is the address Apple’s and Google’s push services use to reach that one installation. It identifies the installation, not you, and we hold it only to send the notifications you turned on. Turning notifications off in Settings or in the operating system, or deleting your account, removes it.',
             },
             {
               term: 'Usage and diagnostic data',
@@ -135,7 +145,7 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'Communications',
               detail:
-                'Emails you send us, in-app feedback you submit, and anything you post to a community group or event.',
+                'Emails you send us, in-app feedback and support messages you submit, and anything you post to a community group or event. Feedback sent from the app also carries the diagnostics needed to look into it: the app version and build, your operating system and version, your device model, and any screenshots you attach.',
             },
           ],
         },
@@ -150,8 +160,10 @@ export const PRIVACY: LegalDoc = {
           kind: 'ul',
           items: [
             'From you, when you sign up, fill in your profile, log a workout or a meal, write a journal entry, or take a photo.',
-            'From your device, for your time zone offset and, if you turn them on, push notifications: a browser push subscription in the web app, or a native push token issued by your operating system in the App Store or Google Play app.',
+            'From your device, for your time zone offset and, if you turn them on, push notifications: a browser push subscription in the web app, or a native push token issued by Apple’s push service (APNs) or Google’s (FCM) in the App Store or Google Play app.',
+            'From your device, if you register a passkey: its public key and identifiers. The private key stays on your device or in your password manager and never reaches us.',
             'From Google, if you choose to sign in with Google: your email address, your name, your profile picture and a Google account identifier.',
+            'From Apple, if you choose Sign in with Apple: an Apple account identifier and, the first time only, the name and email address you choose to share. That address can be a private relay address Apple creates, which forwards to your real one.',
             'From Stripe, for the outcome of a payment and the state of your subscription.',
           ],
         },
@@ -300,12 +312,12 @@ export const PRIVACY: LegalDoc = {
             {
               term: 'MongoDB Atlas',
               detail:
-                'The managed database where your account, profile, training, nutrition and mind data is stored.',
+                'The managed database, hosted in the United States, where your account, profile, training, nutrition and mind data is stored.',
             },
             {
               term: 'Stripe',
               detail:
-                'Payments and subscriptions. Stripe collects and processes your card details directly, as a controller in its own right and under its own privacy policy. We receive only the metadata listed in section 3.',
+                'Payments and subscriptions, on Stripe’s own checkout page, including when you start a plan from the app. Stripe collects and processes your card details directly, as a controller in its own right and under its own privacy policy. We receive only the metadata listed in section 3.',
             },
             {
               term: 'Google Gemini, reached through the redbtn platform',
@@ -321,13 +333,18 @@ export const PRIVACY: LegalDoc = {
               detail:
                 'Sends transactional email such as sign-in links, receipts and account notices.',
             },
+            {
+              term: 'Apple Push Notification service (Apple) and Firebase Cloud Messaging (Google)',
+              detail:
+                'Deliver the push notifications you turn on in the App Store and Google Play apps. They receive your device’s push token and the notification itself, and nothing else from your account.',
+            },
           ],
         },
         { kind: 'p', text: 'Beyond those, we disclose personal information only:' },
         {
           kind: 'ul',
           items: [
-            'To Google, if you choose to sign in with Google, which is a disclosure by you rather than by us.',
+            'To Apple or Google, if you choose to sign in with Apple or with Google, which is a disclosure by you rather than by us.',
             'To people you deliberately share with inside the app, such as a community group, an event or a shared session.',
             'Where the law requires it, such as a valid court order or lawful request, and we will tell you where we are allowed to.',
             'To a successor in a merger, acquisition or sale of assets, in which case we will tell you before your information becomes subject to a different policy.',
@@ -350,6 +367,7 @@ export const PRIVACY: LegalDoc = {
             'We do not sell your personal information.',
             'We do not share it for cross-context behavioural advertising.',
             'We do not run third-party advertising or advertising trackers in the app.',
+            'We do not use your information to track you across other companies’ apps or websites, and we do not share it with data brokers.',
             'We do not post anything to your social accounts.',
             'We do not read your journal entries or your injury notes except where you ask us for support and it is necessary to answer you, or where the law requires it.',
           ],
@@ -488,7 +506,7 @@ export const PRIVACY: LegalDoc = {
         },
         {
           kind: 'p',
-          text: 'In CCPA terms, the categories we collect are: identifiers (email address, account identifiers, IP address); customer records (name); commercial information (your plan and subscription status); internet or network activity (feature usage and diagnostics); sensitive personal information (health-related information you enter, such as weight, biological sex, injury notes, mood and meal photos); and inferences drawn from the above (such as your calculated calorie and macro targets).',
+          text: 'In CCPA terms, the categories we collect are: identifiers (email address, account identifiers, device push tokens, IP address); customer records (name); commercial information (your plan and subscription status); internet or network activity (feature usage and diagnostics); sensitive personal information (health-related information you enter, such as weight, biological sex, injury notes, mood and meal photos); and inferences drawn from the above (such as your calculated calorie and macro targets).',
         },
         {
           kind: 'p',

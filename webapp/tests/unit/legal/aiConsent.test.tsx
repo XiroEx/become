@@ -374,7 +374,11 @@ test('the Privacy Policy states the consent, the withdrawal and what is sent', (
 test('the Privacy Policy describes the native push token', () => {
   const html = renderToStaticMarkup(<PrivacyPage />)
   assert.ok(has(html, 'Native push token'), 'the policy does not mention the native push token')
-  assert.ok(has(html, 'Expo push token'), 'the policy does not say what the token actually is')
+  // The app registers with getDevicePushTokenAsync: a raw APNs / FCM token,
+  // not an Expo push token (no Expo-hosted service, NP-040).
+  assert.ok(has(html, 'Apple Push Notification service (APNs)'), 'the policy does not say what the iPhone token is')
+  assert.ok(has(html, 'Firebase Cloud Messaging (FCM)'), 'the policy does not say what the Android token is')
+  assert.ok(!has(html, 'Expo push token'), 'the policy still calls it an Expo push token')
   // It is described where it is collected AND where it comes from.
   const collect = PRIVACY.sections.find(s => s.id === 'collect')!
   const sources = PRIVACY.sections.find(s => s.id === 'sources')!

@@ -74,7 +74,9 @@ test('every legal page renders, with its title, date, version and contact', () =
 
     // Not `has()` here: the tags are markup, so only the title itself escapes.
     assert.ok(html.includes(`>${esc(doc.title)}</h1>`), `${name}: no title`)
-    assert.ok(has(html, LEGAL_LAST_UPDATED), `${name}: no last-updated date`)
+    // A document that changed on its own carries its own date (PRIVACY does).
+    const updated = (doc as { lastUpdated?: { label: string } }).lastUpdated?.label ?? LEGAL_LAST_UPDATED
+    assert.ok(has(html, updated), `${name}: no last-updated date`)
     assert.ok(has(html, LEGAL_VERSION), `${name}: no version`)
     assert.ok(has(html, LEGAL_CONTACT_EMAIL), `${name}: no contact address`)
     assert.ok(has(html, '516 Cambridge Ave'), `${name}: no postal address`)
