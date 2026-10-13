@@ -281,8 +281,11 @@ describe("3. the screens draw the neutral primary and keep red where the web has
     expect(src).not.toContain('heroRgb("primary-foreground")');
     expect(src).not.toContain('heroTint("primary-foreground"');
     expect(src).toContain('heroRgb("foreground")');
-    // The saved heart is the one brand accent on it.
-    expect(src).toContain('heroRgb("brand")');
+    // NP-382 removed the hero's save/unsave heart (the native action row wrapped
+    // Share onto a 2nd line and showed a favourite control the web's program
+    // detail header never had — the web's save toggle lives only on the
+    // programs list). That heart was this hero's one `brand` accent; with it
+    // gone there is no longer a brand-token call here to assert.
   });
 });
 
