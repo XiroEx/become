@@ -170,8 +170,11 @@ export default function RecipeForm({ recipeId }: { recipeId?: string }) {
           },
         })),
       }
+      // A new recipe is private. Edits leave the stored visibility alone, so
+      // an existing recipe never changes visibility just by being saved.
+      const body = isEdit ? payload : { ...payload, isPublic: false }
       const res = await fetch(isEdit ? `/api/nutrition/recipes/${recipeId}` : '/api/nutrition/recipes', {
-        method: isEdit ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(payload),
+        method: isEdit ? 'PUT' : 'POST', headers: getHeaders(), body: JSON.stringify(body),
       })
       if (res.ok) {
         const data = await res.json().catch(() => null)

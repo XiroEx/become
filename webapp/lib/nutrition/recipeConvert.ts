@@ -7,8 +7,9 @@
  * the OWNER and only for the owner.
  *
  * The route used to authorise with `if (!isOwner && !recipe.isPublic) 403`,
- * which is a READ check — it passes for every public recipe. Recipes default to
- * `isPublic: true` (models/Recipe.ts) and GET /api/nutrition/recipes lists
+ * which is a READ check — it passes for every public recipe. Recipes then
+ * defaulted to `isPublic: true` (models/Recipe.ts; private by default since
+ * 2026-10-13, but older recipes stay public) and GET /api/nutrition/recipes lists
  * other members' public recipes, so the convert button on
  * /dashboard/recipes/[id] was reachable for recipes the caller did not own, and
  * pressing it deleted the OWNER's recipe and image while the caller kept the

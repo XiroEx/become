@@ -320,7 +320,10 @@ export async function createRecipe(
     method: "POST",
     baseUrl,
     getToken: () => token ?? undefined,
-    body: recipeCreateBody(input),
+    // New recipes are private. Sent explicitly (not left to the server
+    // default) and only on create: `updateRecipe` reuses `recipeCreateBody`
+    // and must never change an existing recipe's visibility.
+    body: { ...recipeCreateBody(input), isPublic: false },
   });
   return { recipeId: res?.recipe?._id ? String(res.recipe._id) : null };
 }

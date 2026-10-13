@@ -90,7 +90,10 @@ const RecipeSchema = new Schema<IRecipe>({
   gramsPerServing: { type: Number },
   mlPerServing: { type: Number },
   tags: { type: [String], default: [] },
-  isPublic: { type: Boolean, default: true },
+  // Private unless the creator explicitly shares it. This used to default to
+  // true, so every recipe made by a client that never sent the field (the
+  // native app, and the web form) was listed to every other member.
+  isPublic: { type: Boolean, default: false },
   createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   imageUrl: { type: String },
   savedFoodId: { type: Schema.Types.ObjectId, ref: 'Food' },

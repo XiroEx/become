@@ -140,6 +140,9 @@ export async function POST(request: NextRequest) {
     // server-owned no matter what the client sends.
     const recipe = await Recipe.create({
       ...pickRecipeFields(body),
+      // Private unless the client asks for public with a real `true`. A
+      // missing, null or string value never publishes a member's recipe.
+      isPublic: body.isPublic === true,
       createdBy: authResult.userId,
       totalsPerServing: body.totalsPerServing || totalsPerServing,
       // Optional per-serving bridge values (UNITS_AND_SERVINGS_PLAN §10.8).
