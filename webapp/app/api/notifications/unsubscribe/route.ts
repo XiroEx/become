@@ -17,8 +17,12 @@ export async function POST(request: NextRequest) {
     await dbConnect()
 
     if (endpoint) {
-      // Remove specific subscription
-      await PushSubscription.deleteOne({ userId: authResult.userId, endpoint })
+      // Remove specific subscription. An APNs token is stored lowercased by
+      // /api/notifications/subscribe, so match that spelling too.
+      const spellings = typeof endpoint === 'string' && /^[0-9a-fA-F]+$/.test(endpoint)
+        ? Array.from(new Set([endpoint, endpoint.toLowerCase()]))
+        : [endpoint]
+      await PushSubscription.deleteMany({ userId: authResult.userId, endpoint: { $in: spellings } })
     } else {
       // No endpoint = the user turned notifications off entirely: drop every
       // device's subscription and flip the master switch, so nothing (this
