@@ -123,14 +123,8 @@ export function QuickAddSheet({
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: tint("accent", 0.15),
-                }}
+                className="h-9 w-9 rounded-lg items-center justify-center"
+                style={{ backgroundColor: tint("accent", 0.15) }}
               >
                 <Zap size={20} color={colors.accent} />
               </View>
@@ -154,7 +148,10 @@ export function QuickAddSheet({
             </Pressable>
           </View>
 
-          {/* Calories (required) */}
+          {/* Calories (required) — NP-373: visually prominent (18px bold,
+              rounded-xl well), unlike the macro fields below, mirroring the
+              web's large calorie input rather than giving it the same
+              compact weight as the optional macros. */}
           <Input
             testID="quick-add-calories-input"
             label="Calories *"
@@ -166,6 +163,7 @@ export function QuickAddSheet({
               if (error) setError(null);
             }}
             error={error ?? undefined}
+            variant="prominent"
           />
 
           {/* Macros (optional) */}
@@ -267,12 +265,15 @@ export function QuickAddSheet({
             onChangeText={setNote}
           />
 
-          {/* Action buttons */}
+          {/* Action buttons — NP-373: standardized side-by-side Cancel
+              (outlined, card-coloured) + Add (inverted/foreground), the same
+              footer the other two nutrition sheets use. */}
           <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
             <View style={{ flex: 1 }}>
               <Button
                 testID="quick-add-cancel-button"
-                variant="secondary"
+                variant="outline"
+                size="footer"
                 onPress={handleClose}
               >
                 Cancel
@@ -282,6 +283,7 @@ export function QuickAddSheet({
               <Button
                 testID="quick-add-submit-button"
                 variant="inverted"
+                size="footer"
                 loading={loading}
                 onPress={handleSubmit}
               >
