@@ -640,29 +640,14 @@ describe("SettingsScreen", () => {
     });
   });
 
-  it("(a69adf8d/a69adf8e) native Settings shows a Passkey section, and Add a passkey hands off to the real web Settings page", async () => {
-    const { getByTestId, getByText } = renderScreen();
+  it("(a69adf8f) the Settings tab carries no Passkey card: it lives under Profile > Account, as on web", async () => {
+    const { getByTestId, queryByTestId } = renderScreen();
 
     await waitFor(() => {
-      expect(getByTestId("settings-passkey-section")).toBeTruthy();
+      expect(getByTestId("account-user-name")).toBeTruthy();
     });
-    expect(getByText("Passkey")).toBeTruthy();
-
-    const addRow = getByTestId("passkey-add-button");
-    await act(async () => {
-      fireEvent.press(addRow);
-    });
-
-    await waitFor(() => {
-      const handoffCall = fetchCalls.find((c) => c.url.includes("/api/auth/handoff"));
-      expect(handoffCall).toBeDefined();
-      expect(JSON.parse(handoffCall?.init?.body as string)).toEqual({
-        path: "/dashboard/settings",
-      });
-      expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
-        expect.stringContaining("/auth/handoff?code=admin-handoff-code"),
-      );
-    });
+    expect(queryByTestId("settings-passkey-section")).toBeNull();
+    expect(queryByTestId("passkey-add-button")).toBeNull();
   });
 
   it("(e015c972) A member never sees the Admin tools row", async () => {

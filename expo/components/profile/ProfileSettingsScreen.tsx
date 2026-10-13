@@ -28,6 +28,7 @@ import { Button } from "@/components/Button";
 import { PacePicker } from "@/components/goals/PacePicker";
 import { DangerZone } from "@/components/settings/DangerZone";
 import { HealthSyncSection } from "@/components/settings/HealthSyncSection";
+import { PasskeySection } from "@/components/settings/PasskeySection";
 import { ScreenState } from "@/components/ScreenState";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -52,7 +53,8 @@ const BIOLOGICAL_SEX_OPTIONS: { value: BiologicalSex; label: string }[] = [
  * `embedded={false}`, its original behavior, unchanged).
  *
  * Web parity:
- * - Account section: name (editable), email (read-only)
+ * - Account section: name (editable), email (read-only), Passkey ("Add a
+ *   passkey", the web's PasskeySetupButton, via PasskeySection)
  * - Body Stats section:
  *   - lbs / kg unit toggle (Imperial vs Metric)
  *   - BMI badge (when height and weight are provided)
@@ -435,6 +437,11 @@ export function ProfileSettingsScreen({
                 Email cannot be changed.
               </Text>
             </View>
+            {/* Passkey, under Email, exactly where the web's Account section
+                renders <PasskeySetupButton /> (card 6acdcae0433f8772a69adf8c,
+                NP-161). `token` must be passed: without it the native button
+                is disabled. */}
+            <PasskeySection token={token} />
           </View>
 
           {/* ── Body Stats section ── */}
