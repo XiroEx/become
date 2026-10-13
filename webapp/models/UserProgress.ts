@@ -51,6 +51,15 @@ export interface ISetLog {
   setNumber: number
   reps?: number       // null for time-only exercises (planks, holds, intervals)
   weight?: number     // null for bodyweight / cardio exercises
+  /**
+   * The unit `weight` was entered in — NP-209. Stamped server-side at save
+   * time from the member's `profile.weightUnit` (lib/workout/stampWeightUnit.ts),
+   * never sent by the client. Absent on every set logged before this field
+   * existed (and on any set saved for a member who has no stored
+   * `weightUnit` yet): grandfathered as lbs, same rule as `IWeightEntry.unit`.
+   * Raw + unit, not converted — see the same field on IPRDimension below.
+   */
+  weightUnit?: 'lbs' | 'kg'
   duration?: number   // seconds — for time / time_distance / intervals tracking types
   distance?: number   // meters — for time_distance tracking type
   speed?: number      // mph — for time_distance / intervals tracking types
@@ -359,6 +368,9 @@ const SetLogSchema = new Schema<ISetLog>({
   setNumber: { type: Number, required: true },
   reps:     { type: Number, default: null },    // null for time-only exercises
   weight:   { type: Number, default: null },    // null for bodyweight/cardio
+  // NP-209: no default — absent means lbs by grandfather convention, not a
+  // real stamped value. See ISetLog.weightUnit above.
+  weightUnit: { type: String, enum: ['lbs', 'kg'] },
   duration: { type: Number, default: null },    // seconds (time / intervals / time_distance)
   distance: { type: Number, default: null },    // meters (time_distance)
   speed:    { type: Number, default: null },    // mph (time_distance / intervals)
@@ -415,6 +427,10 @@ const PRDimensionSchema = new Schema<IPRDimension>({
   weight: { type: Number, required: true },
   reps:   { type: Number, required: true },
   e1rm:   { type: Number },
+  // NP-209: raw + unit, same shape as ISetLog.weightUnit / IWeightEntry.unit.
+  // No default — absent on every PR set before this field existed is
+  // grandfathered as lbs, never converted.
+  unit:   { type: String, enum: ['lbs', 'kg'] },
   date:   { type: Date, required: true },
   programId: { type: String },
 }, { _id: false })

@@ -16,6 +16,14 @@ export interface IPRDimension {
   weight: number
   reps: number
   e1rm?: number
+  /**
+   * The unit `weight` (and the `weight` the e1rm estimate was derived from)
+   * was entered in — NP-209, raw + unit, same shape IWeightEntry.unit uses.
+   * Absent on every PR set before this field existed: grandfathered as lbs,
+   * never converted. Set from the triggering set's own `weightUnit`
+   * (IPRSetCandidate), stamped server-side — never recomputed later.
+   */
+  unit?: 'lbs' | 'kg'
   date: Date
   programId?: string
 }
@@ -32,6 +40,8 @@ export interface IPRSetCandidate {
   weight?: number | null
   reps?: number | null
   completed?: boolean
+  /** The unit `weight` was entered in — NP-209. See IPRDimension.unit. */
+  weightUnit?: 'lbs' | 'kg' | null
 }
 
 export interface IPRSetContext {
@@ -103,6 +113,10 @@ export function updatePRsForSet(
 
   const w = Number(set.weight ?? 0) || 0
   const r = Number(set.reps ?? 0) || 0
+  // NP-209: raw + unit. Absent (a set saved before this existed, or for a
+  // member with no stored weightUnit yet) is grandfathered as lbs at DISPLAY
+  // time — it is never written here, so an un-stamped set stays un-stamped.
+  const unit = set.weightUnit ?? undefined
   const newPRs: PRDimensionName[] = []
 
   // maxWeight — only valid for weight > 0 AND reps > 0 (a weighted set with
@@ -114,6 +128,7 @@ export function updatePRsForSet(
         weight: w,
         reps: r,
         date: context.date,
+        ...(unit ? { unit } : {}),
         ...(context.programId ? { programId: context.programId } : {}),
       }
       newPRs.push('maxWeight')
@@ -128,6 +143,7 @@ export function updatePRsForSet(
         weight: w,
         reps: r,
         date: context.date,
+        ...(unit ? { unit } : {}),
         ...(context.programId ? { programId: context.programId } : {}),
       }
       newPRs.push('maxReps')
@@ -144,6 +160,7 @@ export function updatePRsForSet(
         reps: r,
         e1rm: e,
         date: context.date,
+        ...(unit ? { unit } : {}),
         ...(context.programId ? { programId: context.programId } : {}),
       }
       newPRs.push('maxE1RM')
@@ -191,11 +208,15 @@ export function computeExercisePRsFromLogs(logs: IWorkoutLogForReplay[]): IExerc
 // maxWeight is emitted — that is what the live-workout UI surfaces today.
 export function formatPRsForLiveWorkout(
   prs: IExercisePR[] | null | undefined,
-): Record<string, { weight: number; reps: number }> {
-  const out: Record<string, { weight: number; reps: number }> = {}
+): Record<string, { weight: number; reps: number; unit?: 'lbs' | 'kg' }> {
+  const out: Record<string, { weight: number; reps: number; unit?: 'lbs' | 'kg' }> = {}
   for (const pr of prs ?? []) {
     if (!pr?.maxWeight || !pr.exerciseName) continue
-    out[pr.exerciseName] = { weight: pr.maxWeight.weight, reps: pr.maxWeight.reps }
+    out[pr.exerciseName] = {
+      weight: pr.maxWeight.weight,
+      reps: pr.maxWeight.reps,
+      ...(pr.maxWeight.unit ? { unit: pr.maxWeight.unit } : {}),
+    }
   }
   return out
 }

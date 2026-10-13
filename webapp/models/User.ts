@@ -311,7 +311,14 @@ const UserProfileSchema = new Schema({
   equipmentAccess: [{ type: String, enum: ['none', 'dumbbells', 'barbell', 'cables', 'full_gym'] }],
   injuryNotes: { type: String },
   weeklyAvailability: { type: Number, min: 1, max: 7 },
-  weightUnit: { type: String, enum: ['lbs', 'kg'], default: 'lbs' },
+  // NP-209: no `default`. Absent means NEVER ASKED — the house pattern used
+  // by aiConsent / consent / deletion / apple above. A defaulted 'lbs' made a
+  // member who chose lbs byte-identical to one who was never asked, which
+  // made Jon's rule ("ask once if you haven't picked") unimplementable.
+  // Existing rows already holding 'lbs' are grandfathered as a real choice —
+  // see George's DECIDED comment on NP-209. Read with `weightUnit ?? 'lbs'`
+  // at DISPLAY time only; never write a default here.
+  weightUnit: { type: String, enum: ['lbs', 'kg'] },
   planPromoteMode: { type: String, enum: ['manual', 'auto'], default: 'manual' },
 }, { _id: false });
 

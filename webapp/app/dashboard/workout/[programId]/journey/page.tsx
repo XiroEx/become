@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Trophy, Dumbbell, Calendar, TrendingUp, TrendingDown, Minus, ArrowLeft, Flame } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
+import { useMemberWeightUnit } from '@/lib/useMemberWeightUnit'
 
 interface JourneyData {
   programName: string
@@ -49,6 +50,10 @@ export default function JourneyPage() {
   const params = useParams()
   const router = useRouter()
   const programId = params.programId as string
+  // NP-209: lifting loads (volume, PRs) read the member's chosen unit, not a
+  // hardcoded 'lbs'. Body weight (weightChange below) has its own per-entry
+  // unit (IWeightEntry) and is out of scope here.
+  const { weightUnit: memberWeightUnit } = useMemberWeightUnit()
 
   const [data, setData] = useState<JourneyData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -149,7 +154,7 @@ export default function JourneyPage() {
         <StatCard
           label="Total Volume"
           value={data.totalVolumeLbs > 0 ? `${(data.totalVolumeLbs / 1000).toFixed(1)}k` : '—'}
-          sub={data.totalVolumeLbs > 0 ? 'lbs lifted' : undefined}
+          sub={data.totalVolumeLbs > 0 ? `${memberWeightUnit} lifted` : undefined}
           color="text-blue-400"
           delay={0.15}
         />
@@ -216,7 +221,7 @@ export default function JourneyPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-black text-amber-400">{pr.weight} lbs</p>
+                  <p className="font-black text-amber-400">{pr.weight} {memberWeightUnit}</p>
                   <p className="text-xs text-zinc-500">× {pr.reps} reps</p>
                 </div>
               </motion.div>

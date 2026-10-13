@@ -61,6 +61,10 @@ interface ProgressData {
   totalVolumeLbs: number
   weeklyAvailability: number | null
   fitnessGoal?: FitnessGoal
+  /** NP-209: the member's chosen lifting-load unit (profile.weightUnit ??
+   *  'lbs'). Not sent by GET /api/progress itself — stitched in from the
+   *  paired /api/profile fetch in fetchData() below. */
+  weightUnit?: 'lbs' | 'kg'
 }
 
 // ── Chart ink ──────────────────────────────────────────────────────────────────
@@ -95,14 +99,14 @@ function fmt(lbs: number): string {
 
 // ── Volume Chart Tooltip ───────────────────────────────────────────────────────
 
-function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; payload: WeekVolume }>; label?: string }) {
+function VolumeTooltip({ active, payload, label, weightUnit = 'lbs' }: { active?: boolean; payload?: Array<{ value: number; payload: WeekVolume }>; label?: string; weightUnit?: 'lbs' | 'kg' }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
     <div className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
       <p className="font-semibold text-zinc-900 dark:text-white">Week of {label}</p>
       {d.volume > 0
-        ? <p className="text-zinc-500 dark:text-zinc-400">{fmt(d.volume)} lbs lifted</p>
+        ? <p className="text-zinc-500 dark:text-zinc-400">{fmt(d.volume)} {weightUnit} lifted</p>
         : <p className="text-zinc-500 dark:text-zinc-400">No tracked weight</p>
       }
       <p className="text-zinc-500 dark:text-zinc-400">{d.workouts} {d.workouts === 1 ? 'workout' : 'workouts'}</p>
@@ -112,11 +116,12 @@ function VolumeTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 // ── Workout Row (expandable) ───────────────────────────────────────────────────
 
-function WorkoutRow({ workout, isExpanded, onToggle, onEdit }: {
+function WorkoutRow({ workout, isExpanded, onToggle, onEdit, weightUnit = 'lbs' }: {
   workout: DetailedWorkout
   isExpanded: boolean
   onToggle: () => void
   onEdit: () => void
+  weightUnit?: 'lbs' | 'kg'
 }) {
   const hasPR = workout.exercises.some((e) => e.isPR)
 
@@ -142,7 +147,7 @@ function WorkoutRow({ workout, isExpanded, onToggle, onEdit }: {
         </div>
         <div className="shrink-0 text-right mr-1">
           {workout.totalVolume > 0 && (
-            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{fmt(workout.totalVolume)} lbs</p>
+            <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{fmt(workout.totalVolume)} {weightUnit}</p>
           )}
           {workout.duration && (
             <div className="flex items-center justify-end gap-0.5 text-xs text-zinc-400">
@@ -212,11 +217,12 @@ function WorkoutRow({ workout, isExpanded, onToggle, onEdit }: {
 
 // ── PR Chart Modal ─────────────────────────────────────────────────────────────
 
-function PRChartModal({ pr, points, onClose, onChanged }: {
+function PRChartModal({ pr, points, onClose, onChanged, weightUnit = 'lbs' }: {
   pr: PB
   points: { date: string; weight: number; reps: number }[]
   onClose: () => void
   onChanged: () => void | Promise<void>
+  weightUnit?: 'lbs' | 'kg'
 }) {
   const [mode, setMode] = useState<'chart' | 'edit' | 'delete'>('chart')
   const [weight, setWeight] = useState(String(pr.weight))
@@ -298,13 +304,13 @@ function PRChartModal({ pr, points, onClose, onChanged }: {
                 <LineChart data={points} margin={{ left: -20, right: 8 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} interval="preserveStartEnd" className="text-zinc-400 dark:text-zinc-600" />
                   <YAxis tick={{ fontSize: 9, fill: 'currentColor' }} tickLine={false} axisLine={false} domain={['auto', 'auto']} className="text-zinc-400 dark:text-zinc-600" />
-                  <Tooltip formatter={(v) => [`${v} lbs`, 'Best weight']} contentStyle={{ fontSize: 11, borderRadius: 10 }} />
+                  <Tooltip formatter={(v) => [`${v} ${weightUnit}`, 'Best weight']} contentStyle={{ fontSize: 11, borderRadius: 10 }} />
                   <Line type="monotone" dataKey="weight" stroke={CHART_INK} strokeWidth={2} dot={{ r: 3, fill: CHART_INK }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
             <div className="mt-3 flex justify-between rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800">
-              <div className="text-center"><p className="text-xs text-zinc-400">Record</p><p className="text-sm font-bold text-green-600 dark:text-green-400">{pr.weight} lbs</p></div>
+              <div className="text-center"><p className="text-xs text-zinc-400">Record</p><p className="text-sm font-bold text-green-600 dark:text-green-400">{pr.weight} {weightUnit}</p></div>
               <div className="text-center"><p className="text-xs text-zinc-400">Reps</p><p className="text-sm font-bold text-zinc-900 dark:text-white">{pr.reps}</p></div>
               <div className="text-center"><p className="text-xs text-zinc-400">Sessions</p><p className="text-sm font-bold text-zinc-900 dark:text-white">{points.length}</p></div>
             </div>
@@ -316,7 +322,7 @@ function PRChartModal({ pr, points, onClose, onChanged }: {
         ) : mode === 'edit' ? (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Weight (lb)<input type="number" inputMode="decimal" min="0" value={weight} onChange={(event) => { setWeight(event.target.value); setReviewing(false) }} className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
+              <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Weight ({weightUnit})<input type="number" inputMode="decimal" min="0" value={weight} onChange={(event) => { setWeight(event.target.value); setReviewing(false) }} className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
               <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Reps<input type="number" inputMode="numeric" min="1" step="1" value={reps} onChange={(event) => { setReps(event.target.value); setReviewing(false) }} className="mt-1.5 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white" /></label>
             </div>
             {reviewing && validEdit && (
@@ -493,6 +499,7 @@ export default function ProgressClient() {
         if (profileRes.ok) {
           const p = await profileRes.json()
           d.fitnessGoal = p.profile?.fitnessGoal
+          d.weightUnit = p.profile?.weightUnit ?? 'lbs'
         }
         setData(d)
       }
@@ -540,7 +547,7 @@ export default function ProgressClient() {
         {data && data.stats.totalWorkouts > 0 ? (
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {data.stats.totalWorkouts} workouts
-            {data.totalVolumeLbs > 0 && <> · {fmt(data.totalVolumeLbs)} lbs lifted all-time</>}
+            {data.totalVolumeLbs > 0 && <> · {fmt(data.totalVolumeLbs)} {data.weightUnit ?? 'lbs'} lifted all-time</>}
           </p>
         ) : (
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Your full training history</p>
@@ -575,7 +582,7 @@ export default function ProgressClient() {
                   tickFormatter={(v: number) => hasVolume ? (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)) : String(v)}
                   className="text-zinc-400 dark:text-zinc-600"
                 />
-                <Tooltip content={<VolumeTooltip />} cursor={{ fill: CHART_INK, fillOpacity: CHART_HAIRLINE_OPACITY }} />
+                <Tooltip content={<VolumeTooltip weightUnit={data?.weightUnit ?? 'lbs'} />} cursor={{ fill: CHART_INK, fillOpacity: CHART_HAIRLINE_OPACITY }} />
                 <Bar
                   dataKey={hasVolume ? 'volume' : 'workouts'}
                   radius={[4, 4, 0, 0]}
@@ -607,6 +614,7 @@ export default function ProgressClient() {
                 isExpanded={expandedIdx === i}
                 onToggle={() => setExpandedIdx(expandedIdx === i ? null : i)}
                 onEdit={() => setEditingWorkout(w)}
+                weightUnit={data?.weightUnit ?? 'lbs'}
               />
             ))}
             {(data?.detailedWorkouts?.length ?? 0) > WORKOUTS_PAGE && (
@@ -655,7 +663,7 @@ export default function ProgressClient() {
                   <p className="text-xs text-zinc-400 dark:text-zinc-500">{pb.date} · history &amp; corrections</p>
                 </div>
                 <div className="ml-3 shrink-0 text-right">
-                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{pb.weight} lbs</p>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-white">{pb.weight} {data?.weightUnit ?? 'lbs'}</p>
                   {pb.reps > 0 && <p className="text-xs text-zinc-400">× {pb.reps} reps</p>}
                 </div>
               </button>
@@ -708,6 +716,7 @@ export default function ProgressClient() {
             points={getPRHistory(selectedPR.slug)}
             onClose={() => setSelectedPR(null)}
             onChanged={async () => { await fetchData(); setSelectedPR(null) }}
+            weightUnit={data?.weightUnit ?? 'lbs'}
           />
         )}
       </AnimatePresence>

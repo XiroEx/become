@@ -289,6 +289,12 @@ const MAX_METRIC_TILES = 2
 export function summaryMetricTiles(
   exercises: SummaryExercise[],
   setsByExercise: SummarySet[][],
+  /**
+   * The member's chosen lifting-load unit (NP-209:
+   * `profile.weightUnit ?? 'lbs'`). Defaults to 'lbs' so every pre-existing
+   * caller reads exactly as before.
+   */
+  weightUnit: 'lbs' | 'kg' = 'lbs',
 ): SummaryTile[] {
   const t = summaryTotals(exercises, setsByExercise)
   const tiles: SummaryTile[] = [
@@ -296,7 +302,7 @@ export function summaryMetricTiles(
   ]
   const metrics: SummaryTile[] = []
   if (t.hasLoadedWork) {
-    metrics.push({ key: 'volume', value: t.totalVolume.toLocaleString(), label: 'Volume lbs' })
+    metrics.push({ key: 'volume', value: t.totalVolume.toLocaleString(), label: `Volume ${weightUnit}` })
   }
   if (t.hasTimedWork) {
     metrics.push({ key: 'time', value: formatDurationSec(t.totalWorkSeconds), label: 'Work time' })
@@ -309,7 +315,7 @@ export function summaryMetricTiles(
   // Nothing measurable at all (an all-`none` session, or everything skipped):
   // keep the volume tile so the row does not collapse to two cards.
   if (metrics.length === 0) {
-    metrics.push({ key: 'volume', value: t.totalVolume.toLocaleString(), label: 'Volume lbs' })
+    metrics.push({ key: 'volume', value: t.totalVolume.toLocaleString(), label: `Volume ${weightUnit}` })
   }
   return [...tiles, ...metrics.slice(0, MAX_METRIC_TILES)]
 }

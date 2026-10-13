@@ -137,6 +137,16 @@ test('labels are per-implement, not a generic "Weight"', () => {
   assert.equal(bellWeightLabel(null), 'Weight (lbs)')
 })
 
+// NP-209: a kg member sees kg, not a hardcoded lbs, on every one of these.
+test('labels read the member\'s chosen unit when given one', () => {
+  assert.equal(bellWeightLabel('dumbbell', 'kg'), 'Weight per DB (kg)')
+  assert.equal(bellWeightLabel('kettlebell', 'kg'), 'Weight per KB (kg)')
+  assert.equal(bellWeightLabel(null, 'kg'), 'Weight (kg)')
+  // Omitting it defaults to 'lbs' — every pre-existing call site (and the
+  // native copy, not yet ported) keeps reading exactly as before.
+  assert.equal(bellWeightLabel('dumbbell'), bellWeightLabel('dumbbell', 'lbs'))
+})
+
 test('quick-pick weights are sane for the implement, not barbell plate math', () => {
   assert.deepEqual(weightQuickPicks('dumbbell'), [10, 20, 30, 40, 50])
   assert.deepEqual(weightQuickPicks('kettlebell'), [18, 26, 35, 44, 53])

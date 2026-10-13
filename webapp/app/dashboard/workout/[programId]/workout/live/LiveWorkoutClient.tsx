@@ -38,6 +38,7 @@ import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import DayChoiceModal from "@/components/workout/DayChoiceModal";
 import { dateKey } from "@/lib/dayWindow";
 import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
+import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 
 interface SetData {
   reps: string;
@@ -333,6 +334,9 @@ export default function LiveWorkoutPage() {
   // Per-bell weight convention — see lib/workout/dumbbellWeight.ts.
   const bellInfo = getBellWeightInfo(currentExercise);
   const bellStyle = bellInfo.style;
+  // NP-209: lb/kg is the member's choice (profile.weightUnit), not a hardcoded
+  // 'lbs' — see lib/useMemberWeightUnit.ts.
+  const { weightUnit: memberWeightUnit } = useMemberWeightUnit();
 
   // Check if inputs are empty (for skip button text)
   // Interval exercises are always "complete" (no required input) — user marks done and moves on
@@ -2411,7 +2415,7 @@ export default function LiveWorkoutPage() {
                               ? `${secondsToUnitDisplay(lastSeconds, "min")}m`
                               : `${lastSeconds}s`
                           }
-                          if (h.weight > 0) return `${h.weight} lbs × ${h.reps} reps`
+                          if (h.weight > 0) return `${h.weight} ${memberWeightUnit} × ${h.reps} reps`
                           return h.reps > 0 ? `${h.reps} reps` : "completed"
                         })()}
                       </span>
@@ -2420,7 +2424,7 @@ export default function LiveWorkoutPage() {
                   {exercisePRs[currentExercise.name] && exercisePRs[currentExercise.name].weight > 0 && (
                     <p className="flex items-center gap-1 text-sm text-amber-400/80">
                       <span>🏆</span>
-                      <span className="font-semibold">PR: {exercisePRs[currentExercise.name].weight} lbs</span>
+                      <span className="font-semibold">PR: {exercisePRs[currentExercise.name].weight} {memberWeightUnit}</span>
                     </p>
                   )}
                 </div>
@@ -2485,7 +2489,7 @@ export default function LiveWorkoutPage() {
                       <div className="flex-1">
                         <div className="mb-1 flex h-5 items-center justify-between gap-1 overflow-hidden">
                           <label className="min-w-0 truncate text-xs text-white/60">
-                            {bellWeightLabel(bellStyle)}
+                            {bellWeightLabel(bellStyle, memberWeightUnit)}
                           </label>
                           {currentExercise && exercisePRs[currentExercise.name] &&
                             exercisePRs[currentExercise.name].weight > 0 &&
@@ -2504,7 +2508,7 @@ export default function LiveWorkoutPage() {
                         />
                         {bellInfo.showTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
-                            = {Number(currentWeight) * 2} lbs total
+                            = {Number(currentWeight) * 2} {memberWeightUnit} total
                           </div>
                         )}
                       </div>
@@ -2668,7 +2672,7 @@ export default function LiveWorkoutPage() {
                     ? `Round ${currentSetIndex}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
                     : `Round ${currentSetIndex}: done`
                   : showWeightInput
-                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} lbs × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
+                  ? `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].weight} ${memberWeightUnit} × ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`
                   : showTimeInput
                   ? `Last ${setUnit.toLowerCase()}: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps}s`
                   : `Last set: ${exerciseData[currentExerciseIndex][currentSetIndex - 1].reps} reps`}
@@ -2822,14 +2826,14 @@ export default function LiveWorkoutPage() {
                   <div className="rounded-lg bg-white/5 px-3 py-2 text-center">
                     <p className="text-xs text-zinc-500">Before</p>
                     <p className="font-semibold text-white">
-                      {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.weight || 0} lbs &times; {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.reps || 0}
+                      {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.weight || 0} {memberWeightUnit} &times; {exerciseData[currentStep.exerciseIndex]?.[currentStep.setIndex]?.reps || 0}
                     </p>
                   </div>
                   <div className="flex items-center text-zinc-600">&rarr;</div>
                   <div className="rounded-lg bg-green-500/10 border border-green-500/20 px-3 py-2 text-center">
                     <p className="text-xs text-green-400">After</p>
                     <p className="font-semibold text-white">
-                      {currentWeight || 0} lbs &times; {currentReps || 0}
+                      {currentWeight || 0} {memberWeightUnit} &times; {currentReps || 0}
                     </p>
                   </div>
                 </div>
@@ -2873,6 +2877,7 @@ export default function LiveWorkoutPage() {
             exerciseData={summarySetsFromLiveInputs(exercises, exerciseData)}
             exercises={exercises}
             exerciseHistory={exerciseHistory}
+            weightUnit={memberWeightUnit}
             summaryStreak={summaryStreak}
             summaryGoal={summaryGoal}
             formatTime={formatTime}
