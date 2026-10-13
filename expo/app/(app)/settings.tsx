@@ -69,7 +69,7 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  *   - Training: `TrainingPreferencesScreen` embedded — Fitness Goals,
  *     Experience & Schedule, Equipment & Injuries.
  *   - Settings: Account (sign out, admin tools, Plan), Security (NP-187),
- *     Passkey (card 6acdcae0433f8772a69adf8c — add only, hands off to web;
+ *     Passkey (card 6acdcae0433f8772a69adf8c, native ceremony via NP-161;
  *     see PasskeySection for why), Notifications (NP-068), AI features
  *     (NP-046), Nutrition Planning (moved here from the Training tab to
  *     match the web), Legal & support, and Delete account at the bottom

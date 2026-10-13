@@ -16,11 +16,19 @@
 
 import { createRedAuth, type RedAuthInstance } from '@redbtn/redauth'
 import { getRuntimeConfig, requireRuntimeSecret } from './runtimeConfig'
+import { type PasskeyOrigin } from './passkeyOrigin'
 
-let instance: RedAuthInstance | null = null
+// Re-exported so existing `import { getRedAuth, passkeyOriginFromRequest } from
+// '@/lib/redauth'` call sites (the four passkey routes) need no change — the
+// selector itself lives in lib/passkeyOrigin.ts, which this module's own doc
+// comment on `getRedAuth` below explains the reason for.
+export { type PasskeyOrigin, PASSKEY_ORIGIN_HEADER, passkeyOriginFromRequest } from './passkeyOrigin'
 
-export async function getRedAuth(): Promise<RedAuthInstance> {
-  if (instance) return instance
+const instances = new Map<PasskeyOrigin, RedAuthInstance>()
+
+export async function getRedAuth(passkeyOrigin: PasskeyOrigin = 'web'): Promise<RedAuthInstance> {
+  const cached = instances.get(passkeyOrigin)
+  if (cached) return cached
 
   // Dedicated auth DB — must NOT be Become's app DB (collection-name collision).
   const { auth } = await getRuntimeConfig()
@@ -32,7 +40,18 @@ export async function getRedAuth(): Promise<RedAuthInstance> {
 
   const googleEnabled = Boolean(clientId && clientSecret)
 
-  instance = createRedAuth({
+  // Android's origin: `android:apk-key-hash:<fingerprint>`, matching the
+  // `delegate_permission/common.get_login_creds` statement in
+  // webapp/public/.well-known/assetlinks.json. Unset until ops has the real
+  // Play App Signing certificate hash (same placeholder-then-replace
+  // pattern as TEAM_ID_PLACEHOLDER and REPLACE_WITH_PLAY_APP_SIGNING_SHA256)
+  // — falls back to the web origin, which simply means an Android assertion
+  // will not verify yet, not that the server throws.
+  const webOrigin = process.env.PASSKEY_ORIGIN || baseUrl
+  const androidOrigin = process.env.PASSKEY_ANDROID_ORIGIN || webOrigin
+  const origin = passkeyOrigin === 'android' ? androidOrigin : webOrigin
+
+  const instance = createRedAuth({
     mongoUri,
     jwtSecret,
     appName: 'become',
@@ -53,11 +72,13 @@ export async function getRedAuth(): Promise<RedAuthInstance> {
       // NB: cross-app sharing ALSO requires AUTH_MONGODB_URI to point at the shared
       // `redauth` DB (the one app/run/deck use), not a Become-only auth DB, and the
       // @redbtn/redauth de-silo fix (>= the version that keys passkeys by
-      // credentialId, not appName).
+      // credentialId, not appName). Shared across BOTH instances below — the
+      // Android one included — so a passkey made anywhere verifies anywhere.
       rpID: process.env.PASSKEY_RP_ID || 'redbtn.io',
-      origin: process.env.PASSKEY_ORIGIN || baseUrl,
+      origin,
     },
   })
 
+  instances.set(passkeyOrigin, instance)
   return instance
 }

@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
-import { getRedAuth } from '@/lib/redauth'
+import { getRedAuth, passkeyOriginFromRequest } from '@/lib/redauth'
 
 export async function POST(req: NextRequest) {
   const auth = await verifyAuth(req)
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!challengeId || !response) {
       return NextResponse.json({ error: 'challengeId and response are required' }, { status: 400 })
     }
-    const redauth = await getRedAuth()
+    const redauth = await getRedAuth(passkeyOriginFromRequest(req))
     await redauth.verifyPasskeyRegistration(challengeId, response)
     return NextResponse.json({ ok: true })
   } catch (err) {
