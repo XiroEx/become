@@ -45,8 +45,17 @@ export async function getRedAuth(): Promise<RedAuthInstance> {
     authMethods: { google: googleEnabled, passkey: true },
     passkey: {
       rpName: 'Become',
-      rpID: new URL(baseUrl).hostname,
-      origin: baseUrl,
+      // rpID=redbtn.io (the parent domain) so ONE passkey is shared across every
+      // redApp — a passkey added on run/app/deck.redbtn.io works here and vice-versa.
+      // Previously this was `new URL(baseUrl).hostname` (become.redbtn.io), which
+      // browser-siloed Become's passkeys to its own subdomain. Override with
+      // PASSKEY_RP_ID to isolate Become to its own domain if that's ever wanted.
+      // NB: cross-app sharing ALSO requires AUTH_MONGODB_URI to point at the shared
+      // `redauth` DB (the one app/run/deck use), not a Become-only auth DB, and the
+      // @redbtn/redauth de-silo fix (>= the version that keys passkeys by
+      // credentialId, not appName).
+      rpID: process.env.PASSKEY_RP_ID || 'redbtn.io',
+      origin: process.env.PASSKEY_ORIGIN || baseUrl,
     },
   })
 
