@@ -147,7 +147,14 @@ export function validateTitle(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const t = stripMarkdown(raw).trim()
   if (!t) return null
-  return clampTitle(clampLen(t, 200), 30)
+  // A title is a headline, not a sentence — no authored title in library.ts,
+  // openings.ts or sessionPath.ts ends in a period, but a model-authored one
+  // sometimes does (NP-379: native/web Visual QA caught "Reset in." on the
+  // session card). Strip a single trailing full stop only; "..." and "?!" etc
+  // are left alone since those are deliberate.
+  const withoutTrailingPeriod = t.endsWith('.') && !t.endsWith('..') ? t.slice(0, -1).trim() : t
+  if (!withoutTrailingPeriod) return null
+  return clampTitle(clampLen(withoutTrailingPeriod, 200), 30)
 }
 
 export function validateSubtitle(raw: unknown): string | null {
