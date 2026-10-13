@@ -1102,6 +1102,37 @@ test('videoTrim: every trim window', () => {
   same('videoTrim.formatTimecode', webVideoTrim.formatTimecode, coreVideoTrim.formatTimecode,
     [0, 0.04, 9.96, 59.99, 60, 72.4, 600, -1, Number.NaN, Number.POSITIVE_INFINITY].map(n => [n] as [number]))
 
+  // The forced preview seek: every bounds change moves the playhead, and it
+  // lands on whichever boundary moved. Every (previous window × next window)
+  // pair, so the four branches — no prior state, nothing changed, start only,
+  // end only, both — are all driven on both halves.
+  const prevWindows: Array<{ start: number; end: number | null } | null> = [
+    null,
+    { start: 0, end: null },
+    { start: 0, end: 20 },
+    { start: 3, end: 20 },
+    { start: 5, end: 9 },
+    { start: 2, end: 10 },
+    { start: 2, end: 2.2 },
+  ]
+  const nextWindows: Array<{ start: number; end: number | null }> = [
+    { start: 0, end: null },
+    { start: 0, end: 20 },
+    { start: 0, end: 9.58 },
+    { start: 8, end: 20 },
+    { start: 3, end: 3.2 },
+    { start: 5, end: 9 },
+    { start: 2, end: null },
+    { start: 2, end: 10 },
+    { start: 0.2, end: 0.3 },
+    { start: 30, end: 10 },
+    { start: Number.NaN, end: 10 },
+    { start: 0, end: Number.POSITIVE_INFINITY },
+  ]
+  same('videoTrim.forcedPreviewSeekTarget',
+    webVideoTrim.forcedPreviewSeekTarget, coreVideoTrim.forcedPreviewSeekTarget,
+    prevWindows.flatMap(p => nextWindows.map(n => [p, n] as [typeof p, typeof n])))
+
   manifest('videoTrim', webVideoTrim, coreVideoTrim)
 })
 
