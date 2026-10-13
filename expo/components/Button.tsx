@@ -20,8 +20,9 @@ export type ButtonVariant =
   | "success-outline"
   | "info"
   | "accent"
-  | "mindset";
-export type ButtonSize = "sm" | "md" | "lg";
+  | "mindset"
+  | "outline";
+export type ButtonSize = "sm" | "md" | "lg" | "footer";
 
 export interface ButtonProps {
   onPress?: () => void;
@@ -103,6 +104,12 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // app already uses for this hue (`WorkoutNowSheet`'s AI toggle, the
   // Mindset streak icon), not a new colour literal.
   mindset: "bg-mindset",
+  // NP-373: the web's nutrition sheets' footer `Cancel` — `border
+  // border-zinc-200 bg-white ... dark:border-zinc-700 dark:bg-zinc-800` — a
+  // bordered, card-filled button, not the flat `secondary` (bg-muted, no
+  // border) used elsewhere. Rides the existing card/border tokens rather
+  // than a new colour literal.
+  outline: "bg-card border border-border",
 };
 
 const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
@@ -117,18 +124,24 @@ const VARIANT_TEXT_CLASSES: Record<ButtonVariant, string> = {
   info: "text-primary-foreground",
   accent: "text-accent-foreground",
   mindset: "text-primary-foreground",
+  outline: "text-foreground",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   sm: "px-3 py-1.5",
   md: "px-4 py-2.5",
   lg: "px-5 py-3.5",
+  // NP-373: the web's nutrition sheet footers (`Cancel` / `Save` / `Add to
+  // Log`) are `px-4 py-2.5 text-sm`, a size `md` doesn't cover — `md`'s
+  // padding matches but its label is `text-base`.
+  footer: "px-4 py-2.5",
 };
 
 const SIZE_TEXT_CLASSES: Record<ButtonSize, string> = {
   sm: "text-sm",
   md: "text-base",
   lg: "text-lg",
+  footer: "text-sm",
 };
 
 /**

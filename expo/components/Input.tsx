@@ -6,11 +6,20 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { geistFontFamily } from "@/lib/theme/fonts";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 
+export type InputVariant = "default" | "prominent";
+
 export interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   testID?: string;
   leftIcon?: ReactNode;
+  /**
+   * NP-373: Quick Add's Calories field is the web's prominent numeric well
+   * (`text-lg font-bold`, `px-4 py-3`) — visually heavier than every optional
+   * macro beside it. `"default"` (the existing look) is unchanged; pass
+   * `"prominent"` only for that one field, not every Input.
+   */
+  variant?: InputVariant;
 }
 
 export function Input({
@@ -21,18 +30,23 @@ export function Input({
   accessibilityHint,
   leftIcon,
   style,
+  variant = "default",
   ...inputProps
 }: InputProps) {
   const { colors } = useThemeTokens();
   const labelId = testID ? `${testID}-label` : undefined;
   const errorId = testID ? `${testID}-error` : undefined;
+  const isProminent = variant === "prominent";
   // The field itself is the one TextInput in the app, and a TextInput is not a
   // Text: `components/Text.tsx` never sees it, so it carries the family here.
   const inputClassName = `bg-card border rounded-xl ${
-    leftIcon ? "pl-10 pr-4" : "px-3"
-  } py-2.5 text-foreground ${
+    leftIcon ? "pl-10 pr-4" : isProminent ? "px-4" : "px-3"
+  } ${isProminent ? "py-3 text-lg font-bold" : "py-2.5"} text-foreground ${
     error ? "border-destructive" : "border-border"
   }`;
+  const labelClassName = isProminent
+    ? "text-foreground text-sm font-semibold mb-1"
+    : "text-foreground text-sm font-medium mb-1";
   // THE ERROR IS PART OF THE FIELD, to a screen reader. The red line underneath
   // is a separate element that VoiceOver reaches AFTER the field, which is one
   // swipe too late to explain why focus came back — so it is also spoken as the
@@ -56,7 +70,7 @@ export function Input({
       {label ? (
         <Text
           testID={labelId}
-          className="text-foreground text-sm font-medium mb-1"
+          className={labelClassName}
         >
           {label}
         </Text>
