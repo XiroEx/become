@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useMemberWeightUnit } from '@/lib/useMemberWeightUnit'
 
 interface WeightModalProps {
   isOpen: boolean
@@ -23,6 +24,12 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
   const [bodyFat, setBodyFat] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const submittingRef = useRef(false)
+  // POST /api/weight stamps the entry with `profile.weightUnit`, so the label
+  // has to say the same thing the server is about to store. This modal is not
+  // mounted by any screen today (the Home tile and the Nutrition → Weight tab
+  // both use WeightLogSheet), but it asked for "Weight (lbs)" regardless of
+  // the member's choice, and a dormant wrong label is still a wrong label.
+  const { weightUnit } = useMemberWeightUnit()
 
   const greeting = useMemo(() => getTimeBasedGreeting(), [])
 
@@ -127,7 +134,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
             <div className="mb-5 space-y-3">
               <div>
                 <label htmlFor="weight" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Weight (lbs)
+                  Weight ({weightUnit})
                 </label>
                 <input
                   id="weight"
@@ -136,7 +143,7 @@ export default function WeightModal({ isOpen, onClose, isMandatory = false, cons
                   min="0"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
-                  placeholder="e.g., 185.5"
+                  placeholder={weightUnit === 'kg' ? 'e.g., 84.2' : 'e.g., 185.5'}
                   className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500 dark:focus:border-blue-400"
                   autoFocus
                 />

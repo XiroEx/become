@@ -790,12 +790,30 @@ export type SavedProgramsReorderResponse = SaveToggleResponse;
 // Mirrors webapp/app/api/programs/[programId]/journey/route.ts.
 // ---------------------------------------------------------------------------
 
-/** Volume is always in POUNDS, whatever unit the member logs in. */
+/**
+ * The recap's BODY-weight change.
+ *
+ * `startLbs` / `endLbs` / `change` are always POUNDS, whatever unit the member
+ * logs in — that is what their names have always meant and what this app's
+ * recap reads today.
+ *
+ * `unit` + the `*InUnit` trio are the same stat in the MEMBER's unit
+ * (`profile.weightUnit ?? 'lbs'`), computed from each weigh-in's own stored
+ * unit (`IWeightEntry.unit`) rather than by converting the pounds back. They
+ * are optional only because a client may be talking to a server from before
+ * the kg sweep; when present, prefer them for display — the web recap used to
+ * append a hardcoded "lbs" to the pounds figure, so a member tracking in
+ * kilograms read their 82 kg as "181 lbs".
+ */
 export const ProgramJourneyWeightChangeSchema = z
   .object({
     startLbs: z.number(),
     endLbs: z.number(),
     change: z.number(),
+    unit: z.enum(['lbs', 'kg']).optional(),
+    startInUnit: z.number().optional(),
+    endInUnit: z.number().optional(),
+    changeInUnit: z.number().optional(),
   })
   .passthrough();
 

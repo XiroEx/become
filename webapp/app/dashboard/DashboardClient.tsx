@@ -32,6 +32,7 @@ import type { GoalProgress } from '@/lib/goals/progress'
 import type { StreaksLite } from '@/lib/streaks/tile'
 import { AnimatePresence } from 'framer-motion'
 import { kgToUnit } from '@/lib/dashboard/goalTile'
+import { weighInValue } from '@/lib/weighInUnits'
 import { describeNutritionTrend, type NutritionTrend } from '@/lib/dashboard/nutritionTrend'
 import NextWorkoutCard from '@/components/NextWorkoutCard'
 import ResumeWorkoutButton from '@/components/ResumeWorkoutButton'
@@ -86,7 +87,10 @@ export default function DashboardClient() {
   const [checkInInfo, setCheckInInfo] = useState({
     daysSinceMood: 0,
     daysSinceWeight: 0,
-    lastWeight: undefined as number | undefined
+    lastWeight: undefined as number | undefined,
+    /** The unit `lastWeight` was STORED in (GET /api/checkin). Null when that
+     *  entry predates the field — read as the member's display unit. */
+    lastWeightUnit: null as 'lbs' | 'kg' | null,
   })
   const [nutritionData, setNutritionData] = useState<{
     calories: { consumed: number; goal: number }
@@ -172,6 +176,10 @@ export default function DashboardClient() {
           daysSinceMood: status.daysSinceMood ?? 0,
           daysSinceWeight: status.daysSinceWeight ?? 0,
           lastWeight: status.lastWeight ?? undefined,
+          lastWeightUnit:
+            status.lastWeightUnit === 'kg' || status.lastWeightUnit === 'lbs'
+              ? status.lastWeightUnit
+              : null,
         })
 
         if (status.due) {
@@ -712,7 +720,12 @@ export default function DashboardClient() {
         onClose={handleCheckInClose}
         daysSinceMood={checkInInfo.daysSinceMood}
         daysSinceWeight={checkInInfo.daysSinceWeight}
-        lastWeight={checkInInfo.lastWeight}
+        // The prefill has to be in the unit the field is labelled with: the
+        // stored entry keeps its own unit (an 82 kg weigh-in stays 82 kg), so
+        // a member who has since switched gets it converted for display only.
+        lastWeight={checkInInfo.lastWeight != null
+          ? weighInValue({ weight: checkInInfo.lastWeight, unit: checkInInfo.lastWeightUnit }, weightUnit)
+          : undefined}
         weightUnit={weightUnit}
         targetWeight={goalProgress?.nutrition?.target?.weight ?? undefined}
       />
@@ -742,6 +755,7 @@ export default function DashboardClient() {
         onLogged={handleWeightLogged}
         lastWeight={data.weightData.length ? data.weightData[data.weightData.length - 1].value : undefined}
         targetWeight={data.goal?.targetWeightKg ? Math.round(kgToUnit(data.goal.targetWeightKg, data.goal.weightUnit) * 10) / 10 : undefined}
+        weightUnit={data.goal?.weightUnit ?? weightUnit}
       />
 
       <QuickSessionModal

@@ -13,7 +13,19 @@ interface JourneyData {
   goal: string | null
   totalSessions: number
   totalVolumeLbs: number
-  weightChange: { startLbs: number; endLbs: number; change: number } | null
+  /** `*Lbs` / `change` are always POUNDS (the native recap reads them too);
+   *  `unit` + the `*InUnit` trio are the same stat in the member's own unit,
+   *  which is what this page renders. `unit` is absent on a response from
+   *  before the kg sweep — fall back to the pounds figure then. */
+  weightChange: {
+    startLbs: number
+    endLbs: number
+    change: number
+    unit?: 'lbs' | 'kg'
+    startInUnit?: number
+    endInUnit?: number
+    changeInUnit?: number
+  } | null
   topPRs: { name: string; weight: number; reps: number; date: string }[]
   startDate: string | null
   endDate: string | null
@@ -52,7 +64,8 @@ export default function JourneyPage() {
   const programId = params.programId as string
   // NP-209: lifting loads (volume, PRs) read the member's chosen unit, not a
   // hardcoded 'lbs'. Body weight (weightChange below) has its own per-entry
-  // unit (IWeightEntry) and is out of scope here.
+  // unit (IWeightEntry) and is resolved server-side from those entries plus
+  // the same `profile.weightUnit ?? 'lbs'` — see weightChange.unit.
   const { weightUnit: memberWeightUnit } = useMemberWeightUnit()
 
   const [data, setData] = useState<JourneyData | null>(null)
@@ -95,14 +108,24 @@ export default function JourneyPage() {
     )
   }
 
+  // Body weight in the member's own unit. A kg member's weigh-ins were being
+  // converted to pounds by the API and then labelled "lbs" here; the recap now
+  // reads the member-unit figures the route sends (falling back to the pounds
+  // trio, which is what a cached/older response carries).
+  const wc = data.weightChange
+  const bodyWeightUnit = wc?.unit ?? 'lbs'
+  const weightStart = wc ? wc.startInUnit ?? wc.startLbs : null
+  const weightEnd = wc ? wc.endInUnit ?? wc.endLbs : null
+  const weightDelta = wc ? wc.changeInUnit ?? wc.change : null
+
   const weightIcon =
-    !data.weightChange || data.weightChange.change === 0 ? Minus
-    : data.weightChange.change < 0 ? TrendingDown
+    weightDelta == null || weightDelta === 0 ? Minus
+    : weightDelta < 0 ? TrendingDown
     : TrendingUp
 
   const weightColor =
-    !data.weightChange || data.weightChange.change === 0 ? 'text-zinc-400'
-    : data.weightChange.change < 0 ? 'text-emerald-400'
+    weightDelta == null || weightDelta === 0 ? 'text-zinc-400'
+    : weightDelta < 0 ? 'text-emerald-400'
     : 'text-amber-400'
 
   const WeightIcon = weightIcon
@@ -166,7 +189,7 @@ export default function JourneyPage() {
             delay={0.2}
           />
         )}
-        {data.weightChange ? (
+        {wc && weightDelta != null ? (
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -176,11 +199,11 @@ export default function JourneyPage() {
             <div className={`flex items-center justify-center gap-1 ${weightColor}`}>
               <WeightIcon className="h-5 w-5" />
               <p className="text-2xl font-black tabular-nums">
-                {data.weightChange.change > 0 ? '+' : ''}{data.weightChange.change} lbs
+                {weightDelta > 0 ? '+' : ''}{weightDelta} {bodyWeightUnit}
               </p>
             </div>
             <p className="mt-0.5 text-xs text-zinc-500">
-              {data.weightChange.startLbs} → {data.weightChange.endLbs} lbs
+              {weightStart} → {weightEnd} {bodyWeightUnit}
             </p>
             <p className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Weight Change</p>
           </motion.div>

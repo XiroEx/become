@@ -364,6 +364,15 @@ export default function OnboardingPage() {
           // A name from Google, or one typed on a previous run through this
           // flow, is a real answer worth keeping. The invented one is not.
           if (!isFallbackName(data.name, data.email)) setName(String(data.name))
+          // Likewise lb-or-kg. This wizard's imperial/metric toggle used to
+          // start on imperial unconditionally, so a member who had already
+          // answered the one ask (components/WeightUnitGate.tsx) or a previous
+          // pass through this step with "kg" came back to a page asking for
+          // pounds. Reading the stored answer is not a second ask.
+          const storedUnit = data.profile?.weightUnit
+          if (storedUnit === 'kg' || storedUnit === 'lbs') {
+            setProfile((p) => ({ ...p, weightUnit: storedUnit }))
+          }
         }
       } catch {
         // If profile fetch fails, still show onboarding
@@ -1076,7 +1085,11 @@ function Step3({
   const derivedDirection = directionFromWeights(profile.currentWeightKg, profile.targetWeightKg)
   const directionMismatch = derivedDirection != null && derivedDirection !== direction
 
-  const [useImperial, setUseImperial] = useState(true)
+  // Imperial unless the member has already told us otherwise: the step mounts
+  // only after the profile read in checkAuth, so `profile.weightUnit` is the
+  // stored answer when there is one. `?? 'lbs'` is the same house default every
+  // other weight readout uses.
+  const [useImperial, setUseImperial] = useState((profile.weightUnit ?? 'lbs') === 'lbs')
 
   // Which figure the member tapped, if any.
   const [explaining, setExplaining] = useState<MacroKey | 'calories' | null>(null)

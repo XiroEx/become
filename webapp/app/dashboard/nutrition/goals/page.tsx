@@ -30,7 +30,7 @@ import {
   type NutritionDirection,
 } from '@become/core'
 import type { FitnessGoal } from '@/lib/programMatch'
-import { toKg, kgToLbs, roundWeight, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@become/core'
+import { toKg, kgToLbs, ftInToCm, cmToFtIn, displayWeight, type WeightUnit } from '@become/core'
 
 /** Same three values as the NutritionGoal schema enum. */
 type GoalType = NutritionDirection
@@ -515,7 +515,11 @@ export default function NutritionGoalsPage() {
     )
   }
 
-  const targetWeightLbs = targetWeightKg ? roundWeight(kgToLbs(targetWeightKg)) : null
+  // The target in the unit this page is already showing everything else in.
+  // It used to be forced to pounds (`kgToLbs`) and labelled "lbs", which on a
+  // kg member's chart drew the goal line hundreds of units above a series
+  // plotted in kilograms.
+  const targetWeightShown = targetWeightKg ? displayWeight(targetWeightKg, weightUnit) : null
 
   return (
     <>
@@ -554,9 +558,9 @@ export default function NutritionGoalsPage() {
         <Card className="mb-4 sm:mb-6">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Body Weight</h2>
-            {targetWeightLbs && (
+            {targetWeightShown && (
               <span className="text-xs font-medium text-green-600 dark:text-green-400">
-                Goal: {targetWeightLbs} lbs
+                Goal: {targetWeightShown} {weightUnit}
               </span>
             )}
           </div>
@@ -586,16 +590,16 @@ export default function NutritionGoalsPage() {
                     className="text-zinc-400 dark:text-zinc-600"
                   />
                   <Tooltip
-                    formatter={(v) => [`${v} lbs`, 'Weight']}
+                    formatter={(v) => [`${v} ${weightUnit}`, 'Weight']}
                     contentStyle={{ fontSize: 12, borderRadius: 12 }}
                   />
-                  {targetWeightLbs && (
+                  {targetWeightShown && (
                     <ReferenceLine
-                      y={targetWeightLbs}
+                      y={targetWeightShown}
                       stroke="#22c55e"
                       strokeDasharray="4 4"
                       strokeWidth={1.5}
-                      label={{ value: `Goal ${targetWeightLbs}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
+                      label={{ value: `Goal ${targetWeightShown}`, fill: '#22c55e', fontSize: 10, position: 'insideTopRight' }}
                     />
                   )}
                   <Area
@@ -953,7 +957,8 @@ export default function NutritionGoalsPage() {
       onClose={() => setWeightSheetOpen(false)}
       onLogged={handleWeightLogged}
       lastWeight={weightSeries.length ? weightSeries[weightSeries.length - 1].value : undefined}
-      targetWeight={targetWeightLbs ?? undefined}
+      targetWeight={targetWeightShown ?? undefined}
+      weightUnit={weightUnit}
     />
     </>
   )

@@ -1,3 +1,6 @@
+import { memberDisplayUnit, weighInPounds, weighInValue } from '@/lib/weighInUnits'
+import type { WeightUnit } from '@become/core'
+
 // Mock user progress data for seeding
 export const mockUserProgress = {
   height: 70, // 5'10" in inches
@@ -194,8 +197,11 @@ export function calculateNextWorkout(
 
 // Proper input type for formatProgressData
 export interface ProgressInput {
+  /** INCHES (UserProgress.height) — the imperial BMI formula's other input. */
   height: number;
-  weightHistory: Array<{ date: Date | string; weight: number; bodyFat?: number }>;
+  /** Raw weigh-ins: the number the member typed plus the unit they typed it
+   *  in. Read through lib/weighInUnits.ts, never converted in place. */
+  weightHistory: Array<{ date: Date | string; weight: number; unit?: WeightUnit | string | null; bodyFat?: number }>;
   moodHistory: Array<{ date: Date | string; mood: number }>;
   workoutLogs: Array<{ date: Date | string; programId: string; completed?: boolean; [key: string]: unknown }>;
   currentProgram: { programId: string; startDate?: Date | string; currentPhase: number; currentWeek: number; completedWorkouts?: number; totalWorkouts?: number } | null | undefined;
@@ -208,16 +214,40 @@ export function formatProgressData(
   progress: ProgressInput,
   programName: string = 'BECOME — 12 Week Fat-Loss Foundation',
   nextWorkout: string = 'Day 1 - Start Training',
-  overrides?: { totalWeeks?: number; nextWorkoutDay?: string; tzOffsetMinutes?: number; now?: Date }
+  overrides?: {
+    totalWeeks?: number
+    nextWorkoutDay?: string
+    tzOffsetMinutes?: number
+    now?: Date
+    /**
+     * The unit `weightData` and `leanMassData` come back in: the member's
+     * `profile.weightUnit ?? 'lbs'`. Every consumer already labels those two
+     * series with that same preference (the home Weight tile, ProgressChart's
+     * Weight and Lean Mass tabs, the Nutrition → Weight chart), so the series
+     * have to BE in it — a kg member whose history still holds pound entries
+     * was being shown those numbers under a "kg" label.
+     *
+     * Defaults to 'lbs', which is also the grandfather unit for an entry that
+     * carries none, so a member who never chose sees exactly what they saw
+     * before: their stored numbers, untouched.
+     */
+    weightUnit?: WeightUnit | string | null
+  }
 ) {
+  const displayUnit = memberDisplayUnit(overrides?.weightUnit)
+
   const weightData = progress.weightHistory.map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    value: entry.weight
+    value: weighInValue(entry, displayUnit)
   }))
 
+  // BMI is imperial by definition (weight(lb) × 703 / height(in)²) and
+  // `progress.height` is inches. The formula was right; the number going into
+  // it was not — a kg weigh-in made BMI read ~45% of the real figure. The
+  // conversion belongs here, at the edge, never in the stored entry.
   const bmiData = progress.weightHistory.map(entry => ({
     date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    value: Number(calculateBMI(entry.weight, progress.height).toFixed(1))
+    value: Number(calculateBMI(weighInPounds(entry, displayUnit), progress.height).toFixed(1))
   }))
 
   const bodyFatData = progress.weightHistory
@@ -227,11 +257,13 @@ export function formatProgressData(
       value: Number((entry.bodyFat as number).toFixed(1))
     }))
 
+  // Lean mass is a weight, so it lands in the member's unit like the scale
+  // reading it is derived from.
   const leanMassData = progress.weightHistory
     .filter(entry => entry.bodyFat != null)
     .map(entry => ({
       date: new Date(entry.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: Number((entry.weight * (1 - (entry.bodyFat as number) / 100)).toFixed(1))
+      value: Number((weighInValue(entry, displayUnit) * (1 - (entry.bodyFat as number) / 100)).toFixed(1))
     }))
 
   // Format mood data
