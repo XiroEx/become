@@ -32,6 +32,8 @@ import { defaultDurationUnit, secondsToUnitDisplay, unitDisplayToSeconds, isFloo
 import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib/quickSession/progress";
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
+import { bellMemoryKey, bellsFromPerformances, resolveBellCount, showsBellTotal, type BellCount } from "@/lib/workout/bellCount";
+import BellCountToggle from "@/components/workout/BellCountToggle";
 import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 import { getRestDuration, restGroupContext } from "@/lib/workout/restDuration";
 import { fireRestAlert } from "@/lib/workout/restAlert";
@@ -355,6 +357,12 @@ export default function WorkoutFormPage() {
   const [summaryStreak, setSummaryStreak] = useState<{ streakDays: number; nextMilestone: number | null } | null>(null);
   const [summaryGoal, setSummaryGoal] = useState<string | null>(null);
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
+  // One dumbbell or two, keyed by the exercise's memory key (its slug): what
+  // the member picked in THIS session, and what their most recent logged set
+  // says (GET /api/workouts/last-performance). Neither means the automatic
+  // per-exercise answer — see lib/workout/bellCount.ts. Mirrors the Live view.
+  const [bellChoices, setBellChoices] = useState<Record<string, BellCount>>({});
+  const [rememberedBells, setRememberedBells] = useState<Record<string, BellCount>>({});
   // Display unit for each exercise's duration column — keyed by exerciseIndex
   // since the Track view lists every exercise at once (unlike the Live view's
   // single active exercise). Stored sets always stay in seconds; this only
@@ -390,6 +398,54 @@ export default function WorkoutFormPage() {
       cancelled = true;
     };
   }, [workoutSlugKey]);
+
+  // What the member chose last time for each of these exercises: one dumbbell
+  // or two, read from their own most recent logged set. Keyed by the exercise's
+  // memory key (slug, or a normalisation of the name for a catalog-less
+  // exercise) — exactly the key GET /api/workouts/last-performance answers
+  // with, so no new endpoint and no preferences collection.
+  //
+  // The quick-session loader below already calls this endpoint for its "Last
+  // session" hint and picks the choice up there; this is the program path's
+  // copy of it (program mode gets its history from GET /api/workouts, which
+  // reports a BEST set rather than the most recent one).
+  const bellMemoryKeys = (workout?.exercises ?? [])
+    .map((e) => bellMemoryKey(e))
+    .filter(Boolean)
+    .join(",");
+  useEffect(() => {
+    if (isQuick || !bellMemoryKeys) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    let cancelled = false;
+    const slugs = Array.from(new Set(bellMemoryKeys.split(",")));
+    fetch(`/api/workouts/last-performance?slugs=${encodeURIComponent(slugs.join(","))}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { performances?: Record<string, { bells?: number } | null> } | null) => {
+        if (cancelled || !d?.performances) return;
+        setRememberedBells(bellsFromPerformances(d.performances));
+      })
+      .catch(() => { /* the control just falls back to the automatic answer */ });
+    return () => {
+      cancelled = true;
+    };
+  }, [isQuick, bellMemoryKeys]);
+
+  /**
+   * The one/two count for an exercise: the member's pick, else what they
+   * logged last time, else the automatic answer. `undefined` — and so omitted
+   * from the save — for anything that is not dumbbell/kettlebell work with a
+   * weight box, so no set carries a count the member was never shown.
+   */
+  const bellsForExercise = useCallback((exercise: Exercise): BellCount | undefined => {
+    if (normalizeTracking(exercise.trackingType) !== "reps_weight") return undefined;
+    const info = getBellWeightInfo(exercise);
+    if (!info.style) return undefined;
+    const key = bellMemoryKey(exercise);
+    return resolveBellCount(info, bellChoices[key], rememberedBells[key]);
+  }, [bellChoices, rememberedBells]);
 
   const dismissNudge = useCallback((slug: string, id: string) => {
     setExerciseNudges((prev) => {
@@ -460,8 +516,12 @@ export default function WorkoutFormPage() {
               });
               if (!res.ok) return;
               const data = (await res.json()) as {
-                performances?: Record<string, { reps?: number; weight?: number; duration?: number; date?: string } | null>
+                performances?: Record<string, { reps?: number; weight?: number; bells?: number; duration?: number; date?: string } | null>
               };
+              // The same answer carries how many dumbbells they used last
+              // time — see bellMemoryKeys above for why the program path has
+              // its own copy of this call.
+              setRememberedBells(bellsFromPerformances(data.performances));
               const hist: Record<string, { weight: number; reps: number; duration?: number; date: string }> = {};
               for (const ex of wd.exercises) {
                 const slug = (ex.exerciseSlug || ex.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "").toLowerCase();
@@ -749,6 +809,8 @@ export default function WorkoutFormPage() {
           const exercisesToSave = exList.map((ex, i) => {
             const ep = progress.find((p) => p.exerciseIndex === i);
             const isTimeBased = tracksTime(ex.trackingType);
+            // One dumbbell or two, saved with every set of this exercise.
+            const bells = bellsForExercise(ex);
             return {
               name: ex.name,
               ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
@@ -756,6 +818,7 @@ export default function WorkoutFormPage() {
                 setNumber: si + 1,
                 reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
                 weight: parseFloat(set.weight) || 0,
+                ...(bells && { bells }),
                 completed: set.completed,
                 ...(set.duration && { duration: parseFloat(set.duration) }),
                 ...(set.distance && { distance: parseFloat(set.distance) }),
@@ -813,6 +876,9 @@ export default function WorkoutFormPage() {
       const exercises = exList.map((exercise, index) => {
         const ep = progress.find((p) => p.exerciseIndex === index);
         const swap = swappedExercises[index];
+        // One dumbbell or two, saved with every set of this exercise — the
+        // member's answer, or the automatic one they left alone.
+        const bells = bellsForExercise(exercise);
         return {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
@@ -822,6 +888,7 @@ export default function WorkoutFormPage() {
               setNumber: setIndex + 1,
               reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
               weight: parseFloat(set.weight) || 0,
+              ...(bells && { bells }),
               completed: set.completed,
               ...(set.duration && { duration: parseFloat(set.duration) }),
               ...(set.distance && { distance: parseFloat(set.distance) }),
@@ -881,7 +948,7 @@ export default function WorkoutFormPage() {
       console.error("Error auto-saving:", error);
       return false;
     }
-  }, [programId, workout, currentPhase, swappedExercises, scheduledDate, isQuick, quickSessionId, workoutNotes]);
+  }, [programId, workout, currentPhase, swappedExercises, scheduledDate, isQuick, quickSessionId, workoutNotes, bellsForExercise]);
 
   const finishWorkout = useCallback(async (quickTitle?: string): Promise<boolean> => {
     if (autoSaveTimeoutRef.current) {
@@ -995,6 +1062,7 @@ export default function WorkoutFormPage() {
           exercises: next.map((ex, i) => {
             const ep = nextProgress.find((p) => p.exerciseIndex === i);
             const isTimeBased = tracksTime(ex.trackingType);
+            const bells = bellsForExercise(ex);
             return {
               name: ex.name,
               ...(ex.exerciseSlug && { exerciseSlug: ex.exerciseSlug }),
@@ -1002,6 +1070,7 @@ export default function WorkoutFormPage() {
                 setNumber: si + 1,
                 reps: isTimeBased ? 0 : (parseInt(set.reps) || 0),
                 weight: parseFloat(set.weight) || 0,
+                ...(bells && { bells }),
                 completed: set.completed,
                 ...(set.duration && { duration: parseFloat(set.duration) }),
                 ...(set.distance && { distance: parseFloat(set.distance) }),
@@ -1035,7 +1104,7 @@ export default function WorkoutFormPage() {
 
     if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
     void autoSave(nextProgress, next);
-  }, [exerciseProgress, isQuick, quickSessionId, workout, autoSave]);
+  }, [exerciseProgress, isQuick, quickSessionId, workout, autoSave, bellsForExercise]);
 
   // The exercise a new one would be grouped with — the open card in the Track
   // view, falling back to the last exercise. The sheet reads its set count so
@@ -1744,13 +1813,33 @@ export default function WorkoutFormPage() {
                                 {isNone && (
                                   <p className="text-xs text-zinc-500 dark:text-zinc-400">No tracking needed — just mark complete.</p>
                                 )}
-                                {/* Per-DB/KB weight convention — see lib/workout/dumbbellWeight.ts */}
-                                {showWeight && bellInfo.style && (
-                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                    Enter the weight of one {bellInfo.style === 'dumbbell' ? 'dumbbell' : 'kettlebell'}
-                                    {bellInfo.showTotal ? ' — not the combined total.' : '.'}
-                                  </p>
-                                )}
+                                {/* Per-DB/KB weight convention — see
+                                    lib/workout/dumbbellWeight.ts — plus the
+                                    member's own one-or-two choice for this
+                                    exercise (lib/workout/bellCount.ts). The
+                                    control is defaulted to the automatic
+                                    answer and to whatever they logged last
+                                    time, so leaving it alone changes nothing,
+                                    and the combined-total hint follows it. */}
+                                {showWeight && bellInfo.style && (() => {
+                                  const memoryKey = bellMemoryKey(exercise)
+                                  const bells = resolveBellCount(bellInfo, bellChoices[memoryKey], rememberedBells[memoryKey])
+                                  const implement = bellInfo.style === 'dumbbell' ? 'dumbbell' : 'kettlebell'
+                                  return (
+                                    <div className="space-y-1.5">
+                                      <BellCountToggle
+                                        info={bellInfo}
+                                        value={bells}
+                                        onChange={(count) => setBellChoices((prev) => ({ ...prev, [memoryKey]: count }))}
+                                        label="How many?"
+                                      />
+                                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                        Enter the weight of one {implement}
+                                        {showsBellTotal(bellInfo, bells) ? ' — not the combined total.' : '.'}
+                                      </p>
+                                    </div>
+                                  )
+                                })()}
                                 {/* Exercise history hint */}
                                 {exerciseHistory[exercise.name] && (() => {
                                   const h = exerciseHistory[exercise.name]
@@ -2104,6 +2193,24 @@ export default function WorkoutFormPage() {
                                     <span className="text-xs text-zinc-500 dark:text-zinc-400">{exercise.reps}</span>
                                   </div>
                                 </div>
+                                {/* One dumbbell or two, asked once per exercise
+                                    (round 1) rather than per round — the
+                                    choice is the exercise's, and every round
+                                    of it saves the same answer. */}
+                                {roundIndex === 0 && normalizeTracking(exercise.trackingType) === "reps_weight" && (() => {
+                                  const info = getBellWeightInfo(exercise)
+                                  if (!info.style) return null
+                                  const memoryKey = bellMemoryKey(exercise)
+                                  return (
+                                    <BellCountToggle
+                                      info={info}
+                                      value={resolveBellCount(info, bellChoices[memoryKey], rememberedBells[memoryKey])}
+                                      onChange={(count) => setBellChoices((prev) => ({ ...prev, [memoryKey]: count }))}
+                                      label="How many?"
+                                      className="mb-2"
+                                    />
+                                  )
+                                })()}
                                 <div className="grid grid-cols-12 items-center gap-2">
                                   {/* Whatever this exercise actually asks for.
                                       Rounds used to hardcode lbs and reps, so a

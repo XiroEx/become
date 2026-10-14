@@ -60,6 +60,24 @@ export interface ISetLog {
    * Raw + unit, not converted — see the same field on IPRDimension below.
    */
   weightUnit?: 'lbs' | 'kg'
+  /**
+   * How many dumbbells/kettlebells the member actually loaded for this set —
+   * their own answer, sent by the client (unlike `weightUnit`, which is
+   * stamped server-side). Only ever 1 or 2, and only ever written for a
+   * dumbbell/kettlebell exercise.
+   *
+   * ABSENT means what it has always meant: whatever `getBellWeightInfo`
+   * decides for that exercise (lib/workout/dumbbellWeight.ts — a pair for
+   * dumbbell work, a single implement for goblet/carry/single-arm work and
+   * for kettlebells). No existing set is migrated, and the control is
+   * defaulted to that same automatic answer, so a member who ignores it logs
+   * what they logged yesterday.
+   *
+   * It does NOT change what `weight` means: that is still the load of ONE
+   * implement, raw and never converted (NP-209's rule). Volume and PR maths do
+   * not read this field — they use the number typed and never double it.
+   */
+  bells?: 1 | 2
   duration?: number   // seconds — for time / time_distance / intervals tracking types
   distance?: number   // meters — for time_distance tracking type
   speed?: number      // mph — for time_distance / intervals tracking types
@@ -371,6 +389,10 @@ const SetLogSchema = new Schema<ISetLog>({
   // NP-209: no default — absent means lbs by grandfather convention, not a
   // real stamped value. See ISetLog.weightUnit above.
   weightUnit: { type: String, enum: ['lbs', 'kg'] },
+  // One dumbbell or two — the member's own choice. No default: absent means
+  // the automatic per-exercise answer, same grandfather rule as weightUnit.
+  // See ISetLog.bells above and lib/workout/bellCount.ts.
+  bells: { type: Number, enum: [1, 2] },
   duration: { type: Number, default: null },    // seconds (time / intervals / time_distance)
   distance: { type: Number, default: null },    // meters (time_distance)
   speed:    { type: Number, default: null },    // mph (time_distance / intervals)

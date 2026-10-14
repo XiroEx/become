@@ -15,6 +15,7 @@ import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
 import { maybePersistWorkoutPRs } from '@/lib/persistWorkoutPRs'
 import { memberWeightUnit } from '@/lib/memberWeightUnit'
 import { stampWeightUnit } from '@/lib/workout/stampWeightUnit'
+import { sanitizeBellCounts } from '@/lib/workout/bellCount'
 
 interface SetData {
   setNumber: number
@@ -23,6 +24,11 @@ interface SetData {
   /** Stamped server-side from the member's profile.weightUnit — see
    *  lib/workout/stampWeightUnit.ts. Never sent by the client. */
   weightUnit?: 'lbs' | 'kg'
+  /** One dumbbell or two, as the member answered it. Unlike `weightUnit` this
+   *  IS sent by the client (only the member knows it) and is gated to 1|2
+   *  server-side — see lib/workout/bellCount.ts. Absent means the automatic
+   *  per-exercise answer, exactly as before this field existed. */
+  bells?: 1 | 2
   duration?: number   // seconds — for time / intervals / time_distance
   distance?: number   // meters — for time_distance
   speed?: number      // mph — for time_distance / intervals
@@ -441,7 +447,14 @@ export async function POST(request: NextRequest) {
     // asked) gets sets with no weightUnit, grandfathered as lbs at display
     // time, same as a legacy pre-NP-209 set. memberWeightUnit() never throws
     // (a bad/missing userId degrades to `undefined`, not a 500).
-    const exercises = stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
+    //
+    // `bells` (one dumbbell or two) travels the other way — it is the member's
+    // own choice, so the client sends it — and is gated to 1|2 here: the
+    // Mongoose path is an enum, and a junk value would fail validation and
+    // take the whole save down instead of simply reading as absent.
+    const exercises = sanitizeBellCounts(
+      stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId)),
+    )
 
     let programCompleted = false
     let programName = ''
@@ -860,8 +873,11 @@ async function handleQuickSessionSave(
 
   await dbConnect()
 
-  // NP-209: same stamping as the program-day save path above.
-  const exercises = stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId))
+  // NP-209: same stamping as the program-day save path above — and the same
+  // 1|2 gate on the member's one-or-two-dumbbells choice.
+  const exercises = sanitizeBellCounts(
+    stampWeightUnit(rawExercises, await memberWeightUnit(payload.userId)),
+  )
 
   // Only PERSIST a genuinely-reported offset — a MISSING `tz` must not be stored
   // as UTC (that poisons the cron into sending the morning reminder at ~3am the
