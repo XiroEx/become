@@ -34,6 +34,7 @@ import {
   ProgramWorkoutLogsResponseSchema,
   QuickSessionResponseSchema,
   ResolveIncompleteResponseSchema,
+  StoredWorkoutSetSchema,
   WorkoutDiscardResponseSchema,
   WorkoutGatePayloadSchema,
   WorkoutHistoryResponseSchema,
@@ -45,6 +46,7 @@ import {
   WorkoutResumeResponseSchema,
   WorkoutSaveRequestSchema,
   WorkoutSaveResponseSchema,
+  WorkoutSaveSetSchema,
   QuickSessionPatchRequestSchema,
   QuickSessionPatchResponseSchema,
   QuickSessionDeleteResponseSchema,
@@ -205,6 +207,89 @@ test('WorkoutSaveRequestSchema: tz is a NUMBER, minutes west of UTC (rule 5)', (
   );
   assert.equal(
     WorkoutSaveRequestSchema.safeParse({ ...WEB_QUICK_SAVE_BODY, tz: '-60' }).success,
+    false,
+  );
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// `bells` — one dumbbell or two, the member's own answer
+//
+// The one measurement-adjacent field the CLIENT sends (`weightUnit` is stamped
+// server-side and never sent). It must be in the contract in the SAME pull
+// request as the client that sends it: two NP-209 fields went CI-red twice on
+// exactly that break (#1976 → redone as #1977).
+// ═══════════════════════════════════════════════════════════════════════════
+
+test('WorkoutSaveSetSchema: `bells` is an optional 1|2, and nothing else', () => {
+  const base = { setNumber: 1, reps: 10, weight: 50, completed: true };
+  ok('one dumbbell', WorkoutSaveSetSchema, { ...base, bells: 1 });
+  ok('two dumbbells', WorkoutSaveSetSchema, { ...base, bells: 2 });
+  // Absent is the whole point: it means the automatic per-exercise answer, so
+  // every pre-existing save body still validates untouched.
+  ok('no answer at all', WorkoutSaveSetSchema, base);
+
+  for (const bad of [0, 3, -1, 1.5, '2', true, null]) {
+    assert.equal(
+      WorkoutSaveSetSchema.safeParse({ ...base, bells: bad }).success,
+      false,
+      `bells: ${JSON.stringify(bad)} must be refused`,
+    );
+  }
+});
+
+test('WorkoutSaveRequestSchema: a save carrying the choice validates, both halves', () => {
+  const withBells = (body: typeof WEB_PROGRAM_SAVE_BODY | typeof WEB_QUICK_SAVE_BODY) => ({
+    ...body,
+    exercises: [
+      {
+        name: 'Dumbbell Bench Press',
+        exerciseSlug: 'dumbbell-bench-press',
+        sets: [{ setNumber: 1, reps: 10, weight: 50, bells: 1, completed: true }],
+        prescription: { sets: 1, reps: '10', trackingType: 'reps_weight' },
+      },
+    ],
+  });
+  ok('program save with bells', WorkoutSaveRequestSchema, withBells(WEB_PROGRAM_SAVE_BODY));
+  ok('quick save with bells', WorkoutSaveRequestSchema, withBells(WEB_QUICK_SAVE_BODY));
+});
+
+test('the stored log and the prefill both carry `bells`, and both may omit it', () => {
+  const storedSet = {
+    setNumber: 1,
+    reps: 10,
+    weight: 50,
+    weightUnit: 'lbs',
+    duration: null,
+    distance: null,
+    speed: null,
+    completed: true,
+  };
+  ok('stored set, one dumbbell', StoredWorkoutSetSchema, { ...storedSet, bells: 1 });
+  ok('stored set, two dumbbells', StoredWorkoutSetSchema, { ...storedSet, bells: 2 });
+  // A set logged before the choice existed — NOT migrated, and still valid.
+  ok('stored legacy set', StoredWorkoutSetSchema, storedSet);
+  ok('stored set, explicit null', StoredWorkoutSetSchema, { ...storedSet, bells: null });
+  assert.equal(StoredWorkoutSetSchema.safeParse({ ...storedSet, bells: 3 }).success, false);
+
+  const entry = {
+    reps: 10,
+    weight: 50,
+    speed: null,
+    duration: null,
+    distance: null,
+    date: '2026-10-14T06:00:00.000Z',
+  };
+  // This is what makes the choice stick: the Live and Track views default
+  // their one/two control to the answer on the member's most recent set.
+  const remembered = LastPerformanceResponseSchema.parse({
+    performances: { 'dumbbell-bench-press': { ...entry, bells: 1 }, 'goblet-squat': entry },
+  });
+  assert.equal(remembered.performances['dumbbell-bench-press']?.bells, 1);
+  assert.equal(remembered.performances['goblet-squat']?.bells, undefined);
+  assert.equal(
+    LastPerformanceResponseSchema.safeParse({
+      performances: { 'dumbbell-bench-press': { ...entry, bells: 4 } },
+    }).success,
     false,
   );
 });

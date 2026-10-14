@@ -97,17 +97,39 @@ export type WorkoutPrescription = z.infer<typeof WorkoutPrescriptionSchema>;
 // ---------------------------------------------------------------------------
 
 /**
+ * How many dumbbells/kettlebells the member loaded for a set — ONE or TWO,
+ * their own answer.
+ *
+ * Absent means the automatic per-exercise answer `getBellWeightInfo` has
+ * always given (a pair for dumbbell work; a single implement for
+ * goblet/carry/single-arm work and for kettlebells), so every set logged
+ * before this field existed reads exactly as it did — nothing is migrated.
+ *
+ * It does NOT change what `weight` means: that stays the load of ONE
+ * implement, raw and never converted (NP-209). Volume and PR maths do not read
+ * it; they use the number typed and never double it.
+ */
+export const BellCountSchema = z.union([z.literal(1), z.literal(2)]);
+export type BellCount = z.infer<typeof BellCountSchema>;
+
+/**
  * One logged set.
  *
  * `reps`/`weight` are the strength pair; `duration` (seconds), `distance`
  * (meters) and `speed` (mph) are the timed/cardio fields — rule 1. A skipped
  * set arrives here as `{ completed: true, reps: 0, weight: 0 }` — rule 2.
+ *
+ * `bells` is the one measurement-adjacent field the CLIENT sends (`weightUnit`
+ * is stamped server-side and never sent): it is a member choice, so only the
+ * client knows it. Omit it on anything that is not a dumbbell/kettlebell
+ * exercise.
  */
 export const WorkoutSaveSetSchema = z
   .object({
     setNumber: z.number().int().optional(),
     reps: z.number().optional(),
     weight: z.number().optional(),
+    bells: BellCountSchema.optional(),
     duration: z.number().optional(),
     distance: z.number().optional(),
     speed: z.number().optional(),
@@ -352,6 +374,13 @@ export const StoredWorkoutSetSchema = z
      * display time (`weightUnit ?? 'lbs'`), never converted.
      */
     weightUnit: z.enum(['lbs', 'kg']).nullish(),
+    /**
+     * One dumbbell or two, as the member answered it (`BellCountSchema`).
+     * Absent on every set logged before the choice existed, and on every set
+     * of an exercise that is not dumbbell/kettlebell work — which means the
+     * automatic per-exercise answer, never a stored default.
+     */
+    bells: BellCountSchema.nullish(),
     duration: z.number().nullish(),
     distance: z.number().nullish(),
     speed: z.number().nullish(),
@@ -581,6 +610,13 @@ export const LastPerformanceEntrySchema = z
   .object({
     reps: z.number().nullish(),
     weight: z.number().nullish(),
+    /**
+     * One dumbbell or two, as the member answered it LAST time. This is what
+     * makes the choice stick for an exercise without a preferences collection:
+     * the Live and Track views default their one/two control to it, and fall
+     * back to the automatic per-exercise answer when it is absent.
+     */
+    bells: BellCountSchema.nullish(),
     speed: z.number().nullish(),
     duration: z.number().nullish(),
     distance: z.number().nullish(),
