@@ -32,6 +32,7 @@ import {
   mainSessionAvailable,
 } from '@/lib/mindXP'
 import { buildWidgetFeed, type WidgetFeed, type WidgetFeedInput } from '@/lib/widgets/feed'
+import { isStreakAlive } from '@/lib/streak'
 
 /**
  * Minutes WEST of UTC for `zone` at `now`, matching Date.getTimezoneOffset().
@@ -141,10 +142,11 @@ export async function loadWidgetFeed(
   // The offset lives on UserProgress, so that document has to land before the
   // day-scoped queries can be built. Everything after it goes out together.
   const progress = await UserProgress.findOne({ userId })
-    .select('streakDays longestStreak lastActivityDate workoutLogs timezoneOffset timezone')
+    .select('streakDays longestStreak streakFreezes lastActivityDate workoutLogs timezoneOffset timezone')
     .lean<{
       streakDays?: number
       longestStreak?: number
+      streakFreezes?: number
       lastActivityDate?: Date
       workoutLogs?: WorkoutLog[]
       timezoneOffset?: number
@@ -188,6 +190,15 @@ export async function loadWidgetFeed(
   ])
 
   // --- streak -------------------------------------------------------------
+  // Same claim GET /api/streak makes: the stored count is only shown while
+  // the next log would still extend (or freeze-save) it, otherwise the
+  // widget would keep a member's old streak on their home screen for as long
+  // as they stayed away. Read-only — nothing here writes streakDays.
+  const storedStreakDays = progress?.streakDays ?? 0
+  const streakAlive = isStreakAlive(
+    { lastActivityDate: progress?.lastActivityDate, streakFreezes: progress?.streakFreezes ?? 1 },
+    new Date(now.getTime() - tz * 60_000),
+  )
   const lastActivityKey = progress?.lastActivityDate ? dateKey(new Date(progress.lastActivityDate), tz) : null
 
   // --- nutrition ----------------------------------------------------------
@@ -251,8 +262,8 @@ export async function loadWidgetFeed(
     todayKey,
     now: now.getTime(),
     streak: {
-      current: progress?.streakDays ?? 0,
-      longest: progress?.longestStreak ?? progress?.streakDays ?? 0,
+      current: streakAlive ? storedStreakDays : 0,
+      longest: progress?.longestStreak ?? storedStreakDays,
       activityToday: lastActivityKey === todayKey,
     },
     nutrition: {
