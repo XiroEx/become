@@ -11,18 +11,29 @@
  * so the members most likely to drift are the quiet ones we most want to nudge
  * at a sane hour. A zone name never goes stale.
  */
-function partsInZone(now: Date, zone: string): { hour: number; dateKey: string } | null {
+function partsInZone(now: Date, zone: string): { hour: number; dateKey: string; offsetMinutes: number } | null {
   try {
     const fmt = new Intl.DateTimeFormat('en-CA', {
       timeZone: zone,
       year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', hour12: false,
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
     })
     const parts = Object.fromEntries(fmt.formatToParts(now).map(p => [p.type, p.value]))
     const hour = Number(parts.hour)
     if (!Number.isFinite(hour)) return null
+    const asUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      hour % 24,
+      Number(parts.minute),
+      Number(parts.second),
+    )
+    if (!Number.isFinite(asUtc)) return null
+    // Date.getTimezoneOffset() semantics: positive when local is behind UTC (e.g. +240 for EDT).
+    const offsetMinutes = Math.round((now.getTime() - asUtc) / 60_000)
     // en-CA yields ISO-ordered date parts, so this is already YYYY-MM-DD.
-    return { hour: hour % 24, dateKey: `${parts.year}-${parts.month}-${parts.day}` }
+    return { hour: hour % 24, dateKey: `${parts.year}-${parts.month}-${parts.day}`, offsetMinutes }
   } catch {
     return null
   }
@@ -81,6 +92,47 @@ export function localDateKeyForUser(
   const offset = Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
   const localMs = now.getTime() - offset * 60 * 1000
   return new Date(localMs).toISOString().slice(0, 10)
+}
+
+/**
+ * Effective timezone offset in minutes (Date.getTimezoneOffset() semantics:
+ * positive when local is BEHIND UTC, e.g. 240 for EDT, -540 for JST) for a
+ * member at instant `now`.
+ *
+ * Honours the IANA zone first when valid, falling back to the stored numeric
+ * offset snapshot, and finally 0 (UTC).
+ */
+export function localOffsetForUser(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): number {
+  if (zone) {
+    const p = partsInZone(now, zone)
+    if (p) return p.offsetMinutes
+  }
+  return Number.isFinite(tzOffsetMinutes as number) ? (tzOffsetMinutes as number) : 0
+}
+
+/**
+ * Returns the UTC start and end instants [start, end] for a user's local calendar
+ * day containing `now`.
+ *
+ * Resolved zone-first (IANA Intl check), falling back to stored offset, then UTC.
+ * Ensures the 'logged today' query window matches the member's true local day.
+ */
+export function localDayBoundsUtc(
+  now: Date,
+  tzOffsetMinutes: number | undefined,
+  zone?: string,
+): { start: Date; end: Date } {
+  const dateKey = localDateKeyForUser(now, tzOffsetMinutes, zone)
+  const offset = localOffsetForUser(now, tzOffsetMinutes, zone)
+  const startMs = new Date(`${dateKey}T00:00:00Z`).getTime() + offset * 60 * 1000
+  return {
+    start: new Date(startMs),
+    end: new Date(startMs + 24 * 60 * 60 * 1000),
+  }
 }
 
 export function isActiveProgramForSchedule(
