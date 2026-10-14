@@ -106,4 +106,8 @@ requireLocalTestTarget('REDSECRETS_MONGODB_URI', { needsTestDb: false })
 requireLocalTestTarget('AUTH_MONGODB_URI', { needsTestDb: true })
 requireLocalTestTarget('BECOME_REWARD_MONGODB_URI', { needsTestDb: true })
 
+// Preflight check: if no mongod is reachable outside CI, skip DB-backed suites cleanly.
+import { runPreflight } from './_preflight'
+runPreflight()
+
 
