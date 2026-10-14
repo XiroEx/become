@@ -8,6 +8,7 @@ import {
   localDateKey,
   localDayWindowForKey,
   utcMidnightDateKey,
+  isEntryOnDay,
 } from '@/lib/dayWindow'
 
 // GET - returns last 30 entries + today's entry
@@ -23,17 +24,14 @@ export async function GET(request: NextRequest) {
 
     const tzOffset = readTzOffset(request.nextUrl.searchParams)
     const todayKey = localDateKey(null, tzOffset)
-    const { start, end } = localDayWindowForKey(todayKey, tzOffset)
 
     const entries = await Journal.find({ userId: authResult.userId })
       .sort({ date: -1 })
       .limit(30)
       .lean()
 
-    const todayEntry = entries.find((e) => {
-      const t = new Date(e.date).getTime()
-      return t >= start.getTime() && t <= end.getTime()
-    }) ?? null
+    const todayEntry =
+      entries.find((e) => isEntryOnDay(e.date, todayKey, tzOffset)) ?? null
 
     return NextResponse.json({ entries, todayEntry })
   } catch (error) {
