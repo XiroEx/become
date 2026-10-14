@@ -76,11 +76,15 @@ export async function GET(request: NextRequest) {
         daysSinceWeight: NEVER_LOGGED,
         todaysMood: null,
         lastWeight: null,
+        lastWeightUnit: null,
       })
     }
 
     const moodHistory = (progress.moodHistory ?? []) as (Entry & { mood: number })[]
-    const weightHistory = (progress.weightHistory ?? []) as (Entry & { weight: number })[]
+    const weightHistory = (progress.weightHistory ?? []) as (Entry & {
+      weight: number
+      unit?: 'lbs' | 'kg'
+    })[]
 
     const todaysMoodEntry = entryOnDay(moodHistory, todayKey, checkInTz) as
       | (Entry & { mood: number })
@@ -105,6 +109,13 @@ export async function GET(request: NextRequest) {
           new Date(b.date).getTime() > new Date(a.date).getTime() ? b : a,
         )
       : undefined
+    // `lastWeight` is the RAW stored number and it prefills the check-in's
+    // weight field, so the client has to know which unit it is in before
+    // putting it under a "Current Weight (kg)" label. The entry's own unit is
+    // the answer; absent (logged before the field existed) is the client's
+    // grandfather case, read as the member's display unit there.
+    const lastWeightUnit =
+      newestWeight?.unit === 'kg' || newestWeight?.unit === 'lbs' ? newestWeight.unit : null
 
     return NextResponse.json({
       ...decision,
@@ -115,6 +126,7 @@ export async function GET(request: NextRequest) {
       daysSinceWeight: daysSince(weightHistory, todayKey, checkInTz),
       todaysMood: todaysMoodEntry?.mood ?? null,
       lastWeight: newestWeight?.weight ?? null,
+      lastWeightUnit,
     })
   } catch (error) {
     console.error('Error resolving check-in status:', error)

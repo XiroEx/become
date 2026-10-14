@@ -38,6 +38,12 @@ import {
   WorkoutViewToggle,
   type WorkoutView,
 } from "@/components/live/WorkoutViewToggle";
+import {
+  DEFAULT_LOAD_UNIT,
+  loadLabel,
+  loadRepsLabel,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 
@@ -73,7 +79,8 @@ export interface LiveWorkoutExercise {
   /**
    * Catalog metadata, hydrated by the web onto every program exercise
    * (`ProgramExerciseSchema`). It — not the name — decides whether the weight
-   * box says "Weight per DB (lbs)" and whether a doubled total is claimed:
+   * box says "Weight per DB (lbs)" — or "(kg)", in the member's unit (NP-209)
+   * — and whether a doubled total is claimed:
    * a Chest-Supported Row is dumbbell work and says so nowhere in its name,
    * while a Barbell Bench Press is aliased "Bench Press (DB/bar)" and is not.
    * See `getBellWeightInfo` in `@become/core`.
@@ -184,6 +191,17 @@ export interface LiveWorkoutClientProps {
    * the NEW PR flag on the Live step only.
    */
   exercisePRs?: Record<string, ExercisePRSummary>;
+  /**
+   * THE MEMBER'S LIFTING-LOAD UNIT (`profile.weightUnit ?? 'lbs'`, NP-209).
+   *
+   * Threaded from the route (`useLiftingUnit()`) and handed to BOTH views, so
+   * Track's set grid and the Live step name every load in the member's unit.
+   * A stored RECORD keeps its own unit instead (`set.weightUnit`, `pr.unit`):
+   * see `lib/live/bellStyle.ts`. Defaults to `'lbs'` — the grandfather value
+   * for a member who has never been asked — so a caller that does not pass it
+   * behaves exactly as before.
+   */
+  weightUnit?: WeightUnit;
   /**
    * In-workout hints keyed by lowercase exercise slug
    * (`useExerciseHints`, the web's `exerciseNudges`). Rendered under the
@@ -445,18 +463,22 @@ function setsByExercise(
  * `setUnitLabel(trackingType, 1)` — which names the SET ("Set", "Round",
  * "Interval"), not what is in it — so a bodyweight set of 18 reps read
  * "Before: 18 set → After: 18 set".
+ *
+ * The LOAD is named in the member's unit (NP-209) — this describes numbers
+ * the member is typing right now, which is exactly what their chosen unit
+ * is for. Defaults to lbs.
  */
 export function describeSet(
   state: LiveSetState,
   _trackingType?: string | null,
+  weightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
 ): string {
-  const num = (v: number | null | undefined) =>
-    v === null || v === undefined ? null : String(v);
-  const reps = num(state.reps);
-  const weight = num(state.weight);
-  if (reps !== null && weight !== null) return weight + " lbs × " + reps + " reps";
-  if (reps !== null) return reps + " reps";
-  if (weight !== null) return weight + " lbs";
+  const reps = state.reps ?? null;
+  const weight = state.weight ?? null;
+  if (reps !== null && weight !== null)
+    return loadRepsLabel(weight, reps, weightUnit);
+  if (reps !== null) return `${reps} reps`;
+  if (weight !== null) return loadLabel(weight, weightUnit);
   if (state.durationSec !== null && state.durationSec !== undefined)
     return String(state.durationSec) + "s";
   return "logged";
@@ -522,6 +544,7 @@ export function LiveWorkoutClient({
   celebratedPrIds,
   exerciseHistory,
   exercisePRs,
+  weightUnit = DEFAULT_LOAD_UNIT,
   exerciseHints,
   onDismissHint,
   resumed = false,
@@ -867,8 +890,8 @@ export function LiveWorkoutClient({
       setEditConfirm({
         exerciseIndex: step.exerciseIndex,
         setIndex: step.setIndex,
-        before: describeSet(snap ?? prev, ex.trackingType),
-        after: describeSet(prev, ex.trackingType),
+        before: describeSet(snap ?? prev, ex.trackingType, weightUnit),
+        after: describeSet(prev, ex.trackingType, weightUnit),
       });
       return;
     }
@@ -920,6 +943,7 @@ export function LiveWorkoutClient({
     onSetComplete,
     rememberPosition,
     rest,
+    weightUnit,
   ]);
 
   /**
@@ -1450,6 +1474,7 @@ export function LiveWorkoutClient({
               grid={grid}
               workoutFlow={workoutFlow}
               flowIndexByKey={flowIndexByKey}
+              weightUnit={weightUnit}
               groupType={workout.groupType}
               round={round}
               totalRounds={totalRounds}
@@ -1489,6 +1514,7 @@ export function LiveWorkoutClient({
             exercises={workout.exercises}
             grid={grid}
             workoutFlow={workoutFlow}
+            weightUnit={weightUnit}
             stepIndex={liveStepIndex}
             onStepChange={handleStepChange}
             onSetChange={handleLiveSetChange}

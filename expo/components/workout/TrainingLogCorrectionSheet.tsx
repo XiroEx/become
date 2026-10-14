@@ -26,6 +26,7 @@ import { Toggle } from "@/components/Toggle";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
   correctionChanges,
+  correctionWeightUnit,
   draftFromWorkout,
   parseDraftNumber,
   submitWorkoutCorrection,
@@ -35,19 +36,37 @@ import {
   type CorrectionDraft,
   type CorrectionField,
 } from "@/lib/workout/correction";
+import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
 
 const FIELD_LABELS: Record<CorrectionField, string> = {
   reps: "reps",
-  weight: "weight (lb)",
+  weight: "weight",
   duration: "duration (sec)",
   distance: "distance (m)",
   speed: "speed (mph)",
 };
 
+/**
+ * The field's label. Every unit is fixed except the LOAD, which reads in the
+ * unit that set was entered in — or the member's, when the read path did not
+ * send one (NP-209; `correctionWeightUnit`).
+ */
+function fieldLabel(field: CorrectionField, weightUnit: WeightUnit): string {
+  return field === "weight"
+    ? `weight (${weightUnit})`
+    : FIELD_LABELS[field];
+}
+
 const REVIEW_PREVIEW = 6;
 
 export interface TrainingLogCorrectionSheetProps {
   workout: CorrectableWorkout;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * the fallback for a set whose own `weightUnit` the read path did not send.
+   * A set that DOES carry one is labelled in its own. Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   onClose: () => void;
   /** Refetch the caller's payload (the caller also closes the sheet). */
   onSaved: () => void | Promise<void>;
@@ -58,6 +77,7 @@ export interface TrainingLogCorrectionSheetProps {
 
 export function TrainingLogCorrectionSheet({
   workout,
+  weightUnit = DEFAULT_LOAD_UNIT,
   onClose,
   onSaved,
   authToken = null,
@@ -69,7 +89,10 @@ export function TrainingLogCorrectionSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const changes = useMemo(() => correctionChanges(workout, draft), [workout, draft]);
+  const changes = useMemo(
+    () => correctionChanges(workout, draft, weightUnit),
+    [workout, draft, weightUnit],
+  );
 
   const close = () => {
     if (!saving) onClose();
@@ -198,9 +221,11 @@ export function TrainingLogCorrectionSheet({
               }}
             >
               <Text className="text-foreground text-sm font-semibold">{exercise.name}</Text>
-              {exercise.sets.map((_, setIndex) => {
+              {exercise.sets.map((storedSet, setIndex) => {
                 const setDraft = draft.sets[exerciseIndex]?.[setIndex];
                 if (!setDraft) return null;
+                // This set's load unit: its own stored one, else the member's.
+                const setUnit = correctionWeightUnit(storedSet, weightUnit);
                 return (
                   <View
                     key={setIndex}
@@ -241,11 +266,11 @@ export function TrainingLogCorrectionSheet({
                         >
                           <Input
                             testID={`${testID}-exercise-${exerciseIndex}-set-${setIndex}-${field}`}
-                            label={FIELD_LABELS[field]}
+                            label={fieldLabel(field, setUnit)}
                             keyboardType="decimal-pad"
                             value={setDraft[field]}
                             onChangeText={(v) => updateSet(exerciseIndex, setIndex, field, v)}
-                            accessibilityHint={`Corrected ${FIELD_LABELS[field]} for set ${setIndex + 1}`}
+                            accessibilityHint={`Corrected ${fieldLabel(field, setUnit)} for set ${setIndex + 1}`}
                           />
                         </View>
                       ))}

@@ -21,6 +21,11 @@ import type {
   ProgramJourneyResponse,
   ProgramJourneyWeightChange,
 } from "@become/api-client";
+import {
+  DEFAULT_LOAD_UNIT,
+  loadLabel,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 
 // ─── ProgramJourney ─────────────────────────────────────────────────────────
 // Native port of `webapp/app/dashboard/workout/[programId]/journey/page.tsx`
@@ -98,6 +103,15 @@ export function journeyWeightToneClass(change: ProgramJourneyWeightChange | null
 
 export interface ProgramJourneyProps {
   journey: ProgramJourneyResponse;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * names the total-volume sub-line and the top-PR weights, the two LIFTING
+   * loads on this screen. The weight-CHANGE card is body weight (a weigh-in)
+   * and keeps its own convention: the route sends it as `startLbs`/`endLbs`,
+   * already normalised to pounds server-side, and this card does not touch it.
+   * Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   /** Header back arrow — the web's `<ArrowLeft>` button back to the Workout tab. */
   onBack: () => void;
   /** "Find My Next Challenge" — back to the Workout tab. */
@@ -122,6 +136,7 @@ function WeightGlyph({ change }: { change: ProgramJourneyWeightChange | null }) 
 
 export function ProgramJourney({
   journey,
+  weightUnit = DEFAULT_LOAD_UNIT,
   onBack,
   onFindNext,
   onViewLog,
@@ -270,8 +285,11 @@ export function ProgramJourney({
                   {volumeLabel}
                 </Text>
                 {journey.totalVolumeLbs > 0 ? (
-                  <Text className="text-muted-foreground text-xs mt-0.5 text-center">
-                    lbs lifted
+                  <Text
+                    testID={`${testID}-volume-unit`}
+                    className="text-muted-foreground text-xs mt-0.5 text-center"
+                  >
+                    {`${weightUnit} lifted`}
                   </Text>
                 ) : null}
                 <Text className="text-muted-foreground text-xs font-medium uppercase mt-1 text-center">
@@ -401,7 +419,7 @@ export function ProgramJourney({
                       testID={`${testID}-pr-${i}-weight`}
                       className="text-accent text-sm font-black"
                     >
-                      {`${pr.weight} lbs`}
+                      {loadLabel(pr.weight, weightUnit)}
                     </Text>
                     <Text
                       testID={`${testID}-pr-${i}-reps`}

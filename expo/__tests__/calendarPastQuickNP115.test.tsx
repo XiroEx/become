@@ -185,7 +185,8 @@ describe("Calendar past days + quick sessions (NP-115)", () => {
       expect.arrayContaining([2, " sets logged"]),
     );
     expect(getByTestId("day-summary-program-volume").props.children).toEqual(
-      expect.arrayContaining(["1,350", " lb volume"]),
+      // NP-209: the volume unit is the member's ("lbs" with no stored choice).
+      expect.arrayContaining(["1,350", "lbs", " volume"]),
     );
     // Looked up on the completion date, like the web.
     expect(paths().some((p) => p.includes("/api/workouts/log?"))).toBe(true);
@@ -208,7 +209,7 @@ describe("Calendar past days + quick sessions (NP-115)", () => {
     );
     expect(
       getByTestId("day-summary-quick-exercise-0-set-0").props.children,
-    ).toBe("5 reps · 135 lb");
+    ).toBe("5 reps · 135 lbs");
   });
 
   it("(id: e015c946) moving a quick session PATCHes { id, date } so it shows on Friday on the web", async () => {

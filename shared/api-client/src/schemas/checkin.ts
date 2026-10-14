@@ -27,7 +27,16 @@ export const CheckInResponseSchema = z
     daysSinceMood: z.number().int().optional(),
     daysSinceWeight: z.number().int().optional(),
     todaysMood: z.number().nullable().optional(),
+    /** The RAW number on the newest weigh-in — see `lastWeightUnit`. */
     lastWeight: z.number().nullable().optional(),
+    /**
+     * The unit `lastWeight` was STORED in (`IWeightEntry.unit`), or null when
+     * that entry predates the field — in which case read it as the member's
+     * `profile.weightUnit ?? 'lbs'`, the same grandfather rule NP-209 gave
+     * lifting loads. A client prefilling a weight field has to know this: the
+     * dashboard was dropping an 82 kg weigh-in into a field labelled "lbs".
+     */
+    lastWeightUnit: z.enum(['lbs', 'kg']).nullable().optional(),
   })
   .passthrough();
 

@@ -24,6 +24,7 @@ import type {
   LiveGrid,
   LiveWorkoutExercise,
 } from "@/components/live/LiveWorkoutClient";
+import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
 
 export interface TrackWorkoutViewProps {
   exercises: LiveWorkoutExercise[];
@@ -42,6 +43,12 @@ export interface TrackWorkoutViewProps {
     next: LiveSetState,
   ) => void;
   onRequestSwap?: (slug: string) => void;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * handed to every `LiveSetRow` so the Track grid's weight boxes read in the
+   * member's unit. Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   /** Session notes — the web's `notes` field on the save (Track only). */
   notes: string;
   onNotesChange: (notes: string) => void;
@@ -178,6 +185,7 @@ export function TrackWorkoutView({
   onRoundChange,
   onSetChange,
   onRequestSwap,
+  weightUnit = DEFAULT_LOAD_UNIT,
   notes,
   onNotesChange,
   showNotes,
@@ -356,6 +364,7 @@ export function TrackWorkoutView({
                 key={i}
                 setIndex={i}
                 bell={bell}
+                weightUnit={weightUnit}
                 exerciseName={ex.name}
                 equipment={ex.equipment}
                 showQuickPicks
@@ -553,6 +562,7 @@ export function TrackWorkoutView({
                         compact
                         setIndex={r}
                         bell={bell}
+                        weightUnit={weightUnit}
                         exerciseName={ex.name}
                         equipment={ex.equipment}
                         showQuickPicks

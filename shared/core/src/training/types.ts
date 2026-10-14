@@ -33,6 +33,19 @@ export type FitnessGoal =
   | 'general_health'
 
 /**
+ * `WeightUnit` from `webapp/models/User.ts` — the member's chosen lifting-load
+ * unit (NP-209). `profile.weightUnit` carries NO default: absent means "never
+ * asked", and every DISPLAY read grandfathers it as lbs (`weightUnit ?? 'lbs'`).
+ *
+ * `@become/core` already exports a `WeightUnit` of its own from `bodyUnits`
+ * with the same two members; this copy exists so `workout/dumbbellWeight.ts`
+ * reads exactly like its web source (which imports the type from the User
+ * model) and cannot drift if either union changes independently. Like
+ * `FitnessGoal`, it is deliberately NOT re-exported from the package barrel.
+ */
+export type WeightUnit = 'lbs' | 'kg'
+
+/**
  * `DraftExercise` from `webapp/lib/quickSession/types.ts` — one exercise in a
  * program-less session before it is logged.
  */

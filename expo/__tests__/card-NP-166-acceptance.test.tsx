@@ -157,7 +157,9 @@ describe("(id: e015ca62) a set corrected natively shows corrected on the web and
     fireEvent.press(getByTestId("correction-sheet-confirm"));
     expect(getByTestId("correction-sheet-review-banner")).toBeTruthy();
     expect(getByTestId("correction-sheet-review-change")).toHaveTextContent(
-      "• Barbell Bench Press · Set 1 weight: 185 lb → 190 lb",
+      // NP-209: the load reads in the member's unit ("lbs" by default, "kg"
+      // for a kg member) rather than the old hardcoded "lb".
+      "• Barbell Bench Press · Set 1 weight: 185 lbs → 190 lbs",
     );
     expect(mockApiFetch).not.toHaveBeenCalled();
     // Confirm: the PATCH goes out with the web's locator and body.

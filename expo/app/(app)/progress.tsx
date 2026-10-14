@@ -66,15 +66,26 @@ import {
 } from "@/components/progress/PersonalRecords";
 import { TrainingLogCorrectionSheet } from "@/components/workout/TrainingLogCorrectionSheet";
 import { correctableFromProgressWorkout } from "@/lib/workout/correction";
+import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 
 const WORKOUTS_PAGE = 5;
 
-export function progressHeaderLine(data: ProgressApiResponse | null): string | null {
+/**
+ * The header line. `weightUnit` is the member's lifting-load unit (NP-209) —
+ * the all-time volume is a sum across every logged set, so it reads in the
+ * member's unit, exactly as the web's `{fmt(totalVolumeLbs)} {weightUnit}
+ * lifted all-time` does. Defaults to lbs.
+ */
+export function progressHeaderLine(
+  data: ProgressApiResponse | null,
+  weightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
+): string | null {
   const total = data?.stats?.totalWorkouts ?? 0;
   if (total <= 0) return null;
   const volume = data?.totalVolumeLbs ?? 0;
   if (volume > 0) {
-    return `${total} workouts · ${formatVolume(volume)} lbs lifted all-time`;
+    return `${total} workouts · ${formatVolume(volume)} ${weightUnit} lifted all-time`;
   }
   return `${total} workouts`;
 }
@@ -91,12 +102,15 @@ function WorkoutRow({
   onToggle,
   onCorrect,
   index,
+  weightUnit,
 }: {
   workout: ProgressDetailedWorkout;
   expanded: boolean;
   onToggle: () => void;
   onCorrect: () => void;
   index: number;
+  /** The member's lifting-load unit (NP-209) — names the session volume. */
+  weightUnit: WeightUnit;
 }) {
   const { colors } = useThemeTokens();
   const togglePress = usePressed();
@@ -191,7 +205,7 @@ function WorkoutRow({
               testID={`progress-workout-volume-${index}`}
               className="text-foreground text-sm font-semibold"
             >
-              {formatVolume(workout.totalVolume)} lbs
+              {formatVolume(workout.totalVolume)} {weightUnit}
             </Text>
           ) : null}
           {workout.duration ? (
@@ -337,6 +351,10 @@ export function ProgressScreen({
   testID = "progress-screen",
 }: ProgressScreenProps) {
   const { colors } = useThemeTokens();
+  // The member's lifting-load unit (NP-209): every load this screen renders —
+  // all-time volume, per-session volume, the weekly bars and the records —
+  // reads it. Body-weight series keep their own convention and are untouched.
+  const liftingUnit = useLiftingUnit();
   const router = useRouter();
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [workoutsShown, setWorkoutsShown] = useState(WORKOUTS_PAGE);
@@ -367,7 +385,7 @@ export function ProgressScreen({
   const hasWorkouts = detailedWorkouts.length > 0;
   const weeklyGoal = data?.weeklyAvailability ?? data?.goal?.weeklyAvailability ?? 4;
   const thisWeek = data?.stats?.thisWeekWorkouts;
-  const headerLine = progressHeaderLine(data);
+  const headerLine = progressHeaderLine(data, liftingUnit);
   const dayKeys = useMemo(
     () => workoutDayKeys(detailedWorkouts),
     [detailedWorkouts],
@@ -486,7 +504,7 @@ export function ProgressScreen({
                   paddingBottom: 8,
                 }}
               >
-                <VolumeBarChart weeks={weeklyVolume} />
+                <VolumeBarChart weeks={weeklyVolume} weightUnit={liftingUnit} />
               </View>
             </View>
           ) : null}
@@ -529,6 +547,7 @@ export function ProgressScreen({
                         setExpandedIdx(expandedIdx === i ? null : i)
                       }
                       onCorrect={() => setCorrectingIdx(i)}
+                      weightUnit={liftingUnit}
                     />
                   ),
                 )}
@@ -594,6 +613,7 @@ export function ProgressScreen({
           {pbs.length > 0 ? (
             <PersonalRecordsSection
               pbs={pbs}
+              weightUnit={liftingUnit}
               onSelect={(pr) => setSelectedSlug(pr.slug)}
             />
           ) : null}
@@ -603,6 +623,7 @@ export function ProgressScreen({
             key={selectedPR.slug}
             pr={selectedPR}
             points={selectedPoints}
+            weightUnit={liftingUnit}
             onClose={() => setSelectedSlug(null)}
             onChanged={async () => {
               setSelectedSlug(null);
@@ -615,6 +636,7 @@ export function ProgressScreen({
           <TrainingLogCorrectionSheet
             key={`${correctingWorkout.rawDate}-${correctingIdx}`}
             workout={correctableFromProgressWorkout(correctingWorkout)}
+            weightUnit={liftingUnit}
             onClose={() => setCorrectingIdx(null)}
             onSaved={async () => {
               setCorrectingIdx(null);

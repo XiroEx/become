@@ -10,6 +10,7 @@ import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 
 /**
  * The program journey recap (NP-167) — the native port of
@@ -24,6 +25,8 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
  */
 export default function ProgramJourneyRoute() {
   const { colors } = useThemeTokens();
+  // The member's lifting-load unit (NP-209) — the recap's volume and PRs.
+  const liftingUnit = useLiftingUnit();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const id = typeof params.id === "string" ? params.id : "";
@@ -79,6 +82,7 @@ export default function ProgramJourneyRoute() {
           {data ? (
             <ProgramJourney
               journey={data}
+              weightUnit={liftingUnit}
               onBack={() => router.back()}
               onFindNext={() => router.replace("/(tabs)/programming")}
               onViewLog={() => router.replace("/progress" as never)}
@@ -96,6 +100,7 @@ export default function ProgramJourneyRoute() {
     >
       <ProgramJourney
         journey={data}
+        weightUnit={liftingUnit}
         onBack={() => router.back()}
         onFindNext={() => router.replace("/(tabs)/programming")}
         onViewLog={() => router.replace("/progress" as never)}

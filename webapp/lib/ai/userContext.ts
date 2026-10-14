@@ -22,6 +22,7 @@ import DailyWin from '@/models/DailyWin'
 import MealLog from '@/models/MealLog'
 import DayNutrition from '@/models/DayNutrition'
 import NutritionGoal from '@/models/NutritionGoal'
+import { memberDisplayUnit, weighInUnit } from '@/lib/weighInUnits'
 
 const DAY = 86_400_000
 
@@ -37,8 +38,14 @@ export interface UserContext {
     injuries?: string
     equipment?: string[]
   }
-  /** Most recent logged scale weight (lbs), independent of the profile figure. */
-  latestWeight?: { lbs: number; daysAgo: number }
+  /**
+   * Most recent logged scale weight, independent of the profile figure, in
+   * the unit it was LOGGED in (`IWeightEntry.unit`, falling back to the
+   * member's `profile.weightUnit ?? 'lbs'`). It used to be handed to the model
+   * as `{ lbs }` whatever the member logged, so a kg member's coach was told
+   * "Latest logged weight: 82 lbs".
+   */
+  latestWeight?: { value: number; unit: 'lbs' | 'kg'; daysAgo: number }
   streak?: { current: number; longest: number }
   lastWorkout?: { title: string; daysAgo: number }
   workoutsLast7Days?: number
@@ -150,12 +157,22 @@ export async function assembleUserContext(userId: string): Promise<UserContext> 
     if (Object.keys(p).length) ctx.profile = p
   }
 
-  // Latest logged scale weight (lbs) — often fresher than the profile figure.
+  // Latest logged scale weight — often fresher than the profile figure. Read
+  // in the entry's OWN unit; the stored number is never converted.
   const weightHist = Array.isArray(progress?.weightHistory) ? (progress!.weightHistory as Array<Record<string, unknown>>) : []
   if (weightHist.length) {
     const last = weightHist[weightHist.length - 1]
     const ago = daysAgo(last?.date as Date, now)
-    if (typeof last?.weight === 'number' && ago !== undefined) ctx.latestWeight = { lbs: Math.round(last.weight as number), daysAgo: ago }
+    if (typeof last?.weight === 'number' && ago !== undefined) {
+      ctx.latestWeight = {
+        value: Math.round(last.weight as number),
+        unit: weighInUnit(
+          { weight: last.weight as number, unit: last.unit as string | undefined },
+          memberDisplayUnit(prof?.weightUnit as string | undefined),
+        ),
+        daysAgo: ago,
+      }
+    }
   }
 
   // Streak
@@ -370,7 +387,7 @@ function renderSummary(c: UserContext): string {
     if (p.injuries) lines.push(`Injuries/notes: ${p.injuries}.`)
     if (p.equipment?.length) lines.push(`Equipment: ${p.equipment.join(', ')}.`)
   }
-  if (c.latestWeight) lines.push(`Latest logged weight: ${c.latestWeight.lbs} lbs (${c.latestWeight.daysAgo === 0 ? 'today' : `${c.latestWeight.daysAgo}d ago`}).`)
+  if (c.latestWeight) lines.push(`Latest logged weight: ${c.latestWeight.value} ${c.latestWeight.unit} (${c.latestWeight.daysAgo === 0 ? 'today' : `${c.latestWeight.daysAgo}d ago`}).`)
   if (c.streak) lines.push(`Streak: ${c.streak.current} day${c.streak.current === 1 ? '' : 's'} (best ${c.streak.longest}).`)
   if (c.lastWorkout) lines.push(`Last workout: ${c.lastWorkout.title}, ${c.lastWorkout.daysAgo === 0 ? 'today' : `${c.lastWorkout.daysAgo}d ago`}.`)
   if (typeof c.workoutsLast7Days === 'number') lines.push(`Workouts in last 7 days: ${c.workoutsLast7Days}.`)

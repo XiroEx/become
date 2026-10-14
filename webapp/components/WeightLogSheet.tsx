@@ -11,12 +11,26 @@ interface WeightLogSheetProps {
   isOpen: boolean
   onClose: () => void
   onLogged: (weight: number) => void
-  /** Prefills the input so logging today's weight is a one-tap confirm. */
+  /** Prefills the input so logging today's weight is a one-tap confirm. In
+   *  `weightUnit`, like everything else on this sheet. */
   lastWeight?: number
+  /** Target weight, ALREADY in `weightUnit`. */
   targetWeight?: number | null
+  /**
+   * The member's `profile.weightUnit ?? 'lbs'`.
+   *
+   * This sheet is where body weight is typed, and POST /api/weight stores the
+   * raw number stamped with that same preference — so a kg member typing 82
+   * was correctly stored as 82 kg under a label that said "Weight (lbs)", and
+   * the min/max on the input (50–700) refused a perfectly normal kilogram
+   * weigh-in. Defaults to 'lbs' so a member who has never been asked (or
+   * dismissed the one ask — components/WeightUnitGate.tsx) sees exactly what
+   * they saw before.
+   */
+  weightUnit?: 'lbs' | 'kg'
 }
 
-export default function WeightLogSheet({ isOpen, onClose, onLogged, lastWeight, targetWeight }: WeightLogSheetProps) {
+export default function WeightLogSheet({ isOpen, onClose, onLogged, lastWeight, targetWeight, weightUnit = 'lbs' }: WeightLogSheetProps) {
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -90,7 +104,7 @@ export default function WeightLogSheet({ isOpen, onClose, onLogged, lastWeight, 
               <div className="min-w-0 flex-1">
                 <h3 className="text-base font-bold text-zinc-900 dark:text-white">Log Weight</h3>
                 {targetWeight ? (
-                  <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">Goal: {targetWeight} lbs</p>
+                  <p className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">Goal: {targetWeight} {weightUnit}</p>
                 ) : null}
               </div>
               <button
@@ -107,18 +121,21 @@ export default function WeightLogSheet({ isOpen, onClose, onLogged, lastWeight, 
             <form onSubmit={handleSubmit} className="space-y-3 p-5 sm:p-6">
               <div>
                 <label htmlFor="weight-sheet-input" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Weight (lbs)
+                  Weight ({weightUnit})
                 </label>
                 <input
                   id="weight-sheet-input"
                   type="number"
                   inputMode="decimal"
                   step="0.1"
-                  min="50"
-                  max="700"
+                  // The sanity rails have to be in the unit being typed, or
+                  // they reject the member instead of a typo: 50–700 lb is
+                  // 23–318 kg, so a 45 kg weigh-in failed validation outright.
+                  min={weightUnit === 'kg' ? '23' : '50'}
+                  max={weightUnit === 'kg' ? '318' : '700'}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
-                  placeholder="e.g., 185.5"
+                  placeholder={weightUnit === 'kg' ? 'e.g., 84.2' : 'e.g., 185.5'}
                   autoFocus
                   className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3 text-center text-lg font-semibold text-zinc-900 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-500"
                 />
