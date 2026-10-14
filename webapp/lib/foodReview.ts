@@ -35,7 +35,25 @@ export interface ReviewIssue {
 export const FOOD_REVIEW_RULE_VERSION = '2026-08-23.1'
 
 export type FoodReviewOwner = 'automatic' | 'manual'
-export type FoodReviewOrigin = 'import' | 'rules' | 'admin' | 'reconcile' | 'legacy-created-flag'
+
+export const FOOD_REVIEW_ORIGINS = [
+  'import',
+  'rules',
+  'admin',
+  'reconcile',
+  'legacy-created-flag',
+] as const
+
+export type FoodReviewOrigin = (typeof FOOD_REVIEW_ORIGINS)[number]
+
+export const REVIEW_ISSUE_LABELS: Record<ReviewIssueCode, string> = {
+  macros_inconsistent: 'Macros inconsistent',
+  slug_collision: 'Slug collision',
+  no_nutrition: 'No nutrition',
+  calories_out_of_range: 'Calories out of range',
+  negative_nutrition: 'Negative nutrition',
+  bridge_conflict: 'Bridge conflict',
+}
 
 export interface FoodReviewFlagState {
   owner: FoodReviewOwner
@@ -305,4 +323,158 @@ export function isAutomaticReviewOwned(
   flag: Pick<FoodReviewFlagState, 'owner'> | null | undefined,
 ): boolean {
   return flag?.owner === 'automatic'
+}
+
+export function parseReviewIssueCodes(raw: string): {
+  valid: true
+  codes: ReviewIssueCode[]
+} | {
+  valid: false
+  invalid: string
+} {
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+  for (const part of parts) {
+    if (!(REVIEW_ISSUE_CODES as readonly string[]).includes(part)) {
+      return { valid: false, invalid: part }
+    }
+  }
+  return { valid: true, codes: parts as ReviewIssueCode[] }
+}
+
+export function parseReviewOrigins(raw: string): {
+  valid: true
+  origins: FoodReviewOrigin[]
+} | {
+  valid: false
+  invalid: string
+} {
+  const parts = raw.split(',').map(s => s.trim()).filter(Boolean)
+  for (const part of parts) {
+    if (!(FOOD_REVIEW_ORIGINS as readonly string[]).includes(part)) {
+      return { valid: false, invalid: part }
+    }
+  }
+  return { valid: true, origins: parts as FoodReviewOrigin[] }
+}
+
+export interface ReviewQueueCounts {
+  flaggedCount: number
+  issueCounts: Record<ReviewIssueCode, number>
+  legacyCount: number
+  legacyFlaggedCount: number
+}
+
+export function emptyIssueCounts(): Record<ReviewIssueCode, number> {
+  return {
+    slug_collision: 0,
+    calories_out_of_range: 0,
+    negative_nutrition: 0,
+    macros_inconsistent: 0,
+    no_nutrition: 0,
+    bridge_conflict: 0,
+  }
+}
+
+export function parseFoodReviewFacetResult(facetResult?: {
+  total?: Array<{ count: number }>
+  byIssue?: Array<{ _id: string; count: number }>
+  legacy?: Array<{ count: number }>
+}): ReviewQueueCounts {
+  const counts: ReviewQueueCounts = {
+    flaggedCount: facetResult?.total?.[0]?.count ?? 0,
+    issueCounts: emptyIssueCounts(),
+    legacyCount: facetResult?.legacy?.[0]?.count ?? 0,
+    legacyFlaggedCount: facetResult?.legacy?.[0]?.count ?? 0,
+  }
+  for (const item of facetResult?.byIssue ?? []) {
+    if (item._id && item._id in counts.issueCounts) {
+      counts.issueCounts[item._id as ReviewIssueCode] = item.count
+    }
+  }
+  return counts
+}
+
+export const FOOD_REVIEW_FACET_PIPELINE = [
+  { $match: { needsReview: true } },
+  {
+    $facet: {
+      total: [{ $count: 'count' }],
+      byIssue: [
+        { $unwind: '$reviewFlag.issueCodes' },
+        { $group: { _id: '$reviewFlag.issueCodes', count: { $sum: 1 } } },
+      ],
+      legacy: [
+        {
+          $match: {
+            $or: [
+              { 'reviewFlag.origin': 'legacy-created-flag' },
+              { 'reviewFlag.origin': { $exists: false } },
+              { reviewFlag: { $exists: false } },
+              { reviewFlag: null },
+              { 'reviewFlag.origin': null },
+            ],
+          },
+        },
+        { $count: 'count' },
+      ],
+    },
+  },
+]
+
+export interface BuildFoodAdminFilterOptions {
+  q?: string
+  flagged?: boolean
+  source?: string
+  issues?: ReviewIssueCode[]
+  origins?: FoodReviewOrigin[]
+  excludeLegacy?: boolean
+}
+
+export function buildFoodAdminFilter(opts: BuildFoodAdminFilterOptions): Record<string, unknown> {
+  const andClauses: Record<string, unknown>[] = []
+
+  if (opts.flagged) {
+    andClauses.push({ needsReview: true })
+  }
+  if (opts.source && ['manual', 'usda', 'openfoodfacts'].includes(opts.source)) {
+    andClauses.push({ source: opts.source })
+  }
+  if (opts.q) {
+    const regex = { $regex: opts.q, $options: 'i' }
+    andClauses.push({
+      $or: [{ name: regex }, { brand: regex }, { aliases: regex }, { slug: regex }],
+    })
+  }
+  if (opts.issues && opts.issues.length > 0) {
+    andClauses.push({
+      'reviewFlag.issueCodes': opts.issues.length === 1 ? opts.issues[0] : { $in: opts.issues },
+    })
+  }
+  if (opts.origins && opts.origins.length > 0) {
+    const hasLegacy = opts.origins.includes('legacy-created-flag')
+    if (hasLegacy) {
+      andClauses.push({
+        $or: [
+          { 'reviewFlag.origin': opts.origins.length === 1 ? 'legacy-created-flag' : { $in: opts.origins } },
+          { 'reviewFlag.origin': { $exists: false } },
+          { reviewFlag: { $exists: false } },
+          { reviewFlag: null },
+          { 'reviewFlag.origin': null },
+        ],
+      })
+    } else {
+      andClauses.push({
+        'reviewFlag.origin': opts.origins.length === 1 ? opts.origins[0] : { $in: opts.origins },
+      })
+    }
+  }
+  if (opts.excludeLegacy) {
+    andClauses.push({
+      'reviewFlag.origin': { $in: ['import', 'rules', 'admin', 'reconcile'] },
+    })
+  }
+
+  if (andClauses.length === 0) return {}
+  if (andClauses.length === 1) return andClauses[0]
+  return { $and: andClauses }
 }

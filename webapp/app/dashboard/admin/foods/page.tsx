@@ -4,8 +4,8 @@
 // Admin Foods — list view.
 //
 // Surfaces the auto-grown Food collection with filter chips for All / Flagged
-// / Recent / Custom (manual-source). Search input is debounced; results
-// scroll infinitely.
+// / Recent / Custom (manual-source), plus per-issue and provenance chips for
+// the review queue. Search input is debounced; results scroll infinitely.
 // ---------------------------------------------------------------------------
 
 import { useEffect, useState, useRef, useCallback } from 'react'
@@ -13,6 +13,11 @@ import { useRouter } from 'next/navigation'
 import { ChevronRight, Search, AlertCircle, Loader2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui/Card'
+import {
+  REVIEW_ISSUE_CODES,
+  REVIEW_ISSUE_LABELS,
+  type ReviewIssueCode,
+} from '@/lib/foodReview'
 
 interface AdminFood {
   _id: string
@@ -22,7 +27,13 @@ interface AdminFood {
   source?: 'manual' | 'usda' | 'openfoodfacts'
   externalDataType?: string
   needsReview?: boolean
-  reviewFlag?: { owner: 'automatic' | 'manual' }
+  reviewFlag?: {
+    owner: 'automatic' | 'manual'
+    issueCodes?: ReviewIssueCode[]
+    origin?: string
+    ruleVersion?: string
+    updatedAt?: string
+  }
   groupKey?: string
   servingSize: number
   servingUnit: string
@@ -78,15 +89,28 @@ export default function AdminFoodsPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterMode>('all')
+  const [selectedIssue, setSelectedIssue] = useState<ReviewIssueCode | null>(null)
+  const [selectedOrigin, setSelectedOrigin] = useState<string | null>(null)
+  const [excludeLegacy, setExcludeLegacy] = useState(false)
   const [total, setTotal] = useState(0)
   const [flaggedCount, setFlaggedCount] = useState(0)
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({})
+  const [legacyCount, setLegacyCount] = useState(0)
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const loadFoods = useCallback(
-    async (q: string, f: FilterMode, off: number, append: boolean) => {
+    async (
+      q: string,
+      f: FilterMode,
+      issue: ReviewIssueCode | null,
+      noLegacy: boolean,
+      origin: string | null,
+      off: number,
+      append: boolean,
+    ) => {
       if (append) setLoadingMore(true)
       else setLoading(true)
       try {
@@ -100,6 +124,10 @@ export default function AdminFoodsPage() {
         if (f === 'flagged') params.set('flagged', '1')
         if (f === 'custom') params.set('source', 'manual')
         if (f === 'recent') params.set('sortBy', 'recent')
+        if (issue) params.set('issue', issue)
+        if (noLegacy) params.set('excludeLegacy', '1')
+        if (origin) params.set('origin', origin)
+
         const res = await fetch(`/api/admin/foods?${params.toString()}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -111,8 +139,12 @@ export default function AdminFoodsPage() {
           foods: AdminFood[]
           total: number
           flaggedCount: number
+          issueCounts?: Record<string, number>
+          legacyCount?: number
         }
         setFlaggedCount(data.flaggedCount)
+        if (data.issueCounts) setIssueCounts(data.issueCounts)
+        if (typeof data.legacyCount === 'number') setLegacyCount(data.legacyCount)
         setTotal(data.total)
         setHasMore(off + data.foods.length < data.total)
         setFoods(prev => (append ? [...prev, ...data.foods] : data.foods))
@@ -127,15 +159,15 @@ export default function AdminFoodsPage() {
   // Initial + filter changes
   useEffect(() => {
     setOffset(0)
-    loadFoods(search, filter, 0, false)
-  }, [filter, loadFoods]) // eslint-disable-line react-hooks/exhaustive-deps
+    loadFoods(search, filter, selectedIssue, excludeLegacy, selectedOrigin, 0, false)
+  }, [filter, selectedIssue, excludeLegacy, selectedOrigin, loadFoods]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
       setOffset(0)
-      loadFoods(search, filter, 0, false)
+      loadFoods(search, filter, selectedIssue, excludeLegacy, selectedOrigin, 0, false)
     }, 300)
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
@@ -151,14 +183,14 @@ export default function AdminFoodsPage() {
         if (entries[0].isIntersecting) {
           const next = offset + PAGE_SIZE
           setOffset(next)
-          loadFoods(search, filter, next, true)
+          loadFoods(search, filter, selectedIssue, excludeLegacy, selectedOrigin, next, true)
         }
       },
       { rootMargin: '200px' },
     )
     obs.observe(target)
     return () => obs.disconnect()
-  }, [hasMore, loading, loadingMore, offset, search, filter, loadFoods])
+  }, [hasMore, loading, loadingMore, offset, search, filter, selectedIssue, excludeLegacy, selectedOrigin, loadFoods])
 
   const filterTabs: { label: string; value: FilterMode; count?: number }[] = [
     { label: 'All', value: 'all' },
@@ -166,6 +198,8 @@ export default function AdminFoodsPage() {
     { label: 'Recent', value: 'recent' },
     { label: 'Custom', value: 'custom' },
   ]
+
+  const ruleDetectedCount = Math.max(0, flaggedCount - legacyCount)
 
   return (
     <PageTransition>
@@ -176,6 +210,7 @@ export default function AdminFoodsPage() {
             <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Foods</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {total.toLocaleString()} entries{flaggedCount > 0 ? ` · ${flaggedCount.toLocaleString()} flagged` : ''}
+              {selectedIssue ? ` · ${REVIEW_ISSUE_LABELS[selectedIssue]}` : excludeLegacy ? ' · real problems only' : selectedOrigin === 'legacy-created-flag' ? ' · legacy flags' : ''}
             </p>
           </div>
         </div>
@@ -193,12 +228,19 @@ export default function AdminFoodsPage() {
         />
       </div>
 
-      {/* Filter chips */}
-      <div className="mb-4 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {/* Primary filter tabs */}
+      <div className="mb-3 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {filterTabs.map(tab => (
           <button
             key={tab.value}
-            onClick={() => setFilter(tab.value)}
+            onClick={() => {
+              setFilter(tab.value)
+              if (tab.value !== 'flagged') {
+                setSelectedIssue(null)
+                setExcludeLegacy(false)
+                setSelectedOrigin(null)
+              }
+            }}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filter === tab.value
                 ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
@@ -220,6 +262,120 @@ export default function AdminFoodsPage() {
           </button>
         ))}
       </div>
+
+      {/* Review Queue Issue & Provenance Chips */}
+      {filter === 'flagged' && (
+        <div className="mb-4 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden pb-1">
+          {/* All Flagged */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedIssue(null)
+              setExcludeLegacy(false)
+              setSelectedOrigin(null)
+            }}
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              !selectedIssue && !excludeLegacy && !selectedOrigin
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+            }`}
+          >
+            All flagged
+            {flaggedCount > 0 && (
+              <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200">
+                {flaggedCount.toLocaleString()}
+              </span>
+            )}
+          </button>
+
+          {/* Exclude Legacy Chip — one click excludes legacy-only flags */}
+          <button
+            type="button"
+            onClick={() => {
+              setExcludeLegacy(prev => !prev)
+              setSelectedIssue(null)
+              setSelectedOrigin(null)
+            }}
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+              excludeLegacy && !selectedIssue && !selectedOrigin
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+            }`}
+          >
+            Exclude legacy
+            {ruleDetectedCount > 0 && (
+              <span className="rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 px-1.5 py-0.5 text-[10px] font-semibold">
+                {ruleDetectedCount.toLocaleString()}
+              </span>
+            )}
+          </button>
+
+          {/* Chips per Review Issue Code */}
+          {REVIEW_ISSUE_CODES.map(code => {
+            const count = issueCounts[code] ?? 0
+            const isSelected = selectedIssue === code
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    setSelectedIssue(null)
+                  } else {
+                    setSelectedIssue(code)
+                    setExcludeLegacy(false)
+                    setSelectedOrigin(null)
+                  }
+                }}
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isSelected
+                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                    : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {REVIEW_ISSUE_LABELS[code] || code}
+                {count > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      isSelected
+                        ? 'bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900'
+                        : 'bg-red-500 text-white'
+                    }`}
+                  >
+                    {count.toLocaleString()}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+
+          {/* Legacy only Chip */}
+          {legacyCount > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedOrigin === 'legacy-created-flag') {
+                  setSelectedOrigin(null)
+                } else {
+                  setSelectedOrigin('legacy-created-flag')
+                  setSelectedIssue(null)
+                  setExcludeLegacy(false)
+                }
+              }}
+              className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                selectedOrigin === 'legacy-created-flag'
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+              }`}
+            >
+              Legacy only
+              <span className="rounded-full bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200">
+                {legacyCount.toLocaleString()}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -272,7 +428,9 @@ export default function AdminFoodsPage() {
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <AlertCircle className="h-2.5 w-2.5" />
                         Review · {food.reviewFlag?.owner === 'automatic'
-                          ? 'Auto'
+                          ? (food.reviewFlag?.issueCodes && food.reviewFlag.issueCodes.length > 0
+                              ? food.reviewFlag.issueCodes.map(c => REVIEW_ISSUE_LABELS[c] || c).join(', ')
+                              : 'Auto')
                           : food.reviewFlag?.owner === 'manual'
                             ? 'Manual'
                             : 'Legacy'}
