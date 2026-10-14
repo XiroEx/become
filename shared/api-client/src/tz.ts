@@ -44,6 +44,7 @@
 export const DATE_SCOPED_FAMILIES = [
   'becoming',
   'checkin',
+  'dashboard',
   'goals',
   'journal',
   'me',
