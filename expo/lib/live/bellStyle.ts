@@ -146,10 +146,13 @@ export function spokenUnit(unit: WeightUnit = DEFAULT_LOAD_UNIT): string {
 /**
  * The quick-pick button's accessibility label, e.g. "Log 20 kilograms".
  *
- * The PICKS THEMSELVES are not re-scaled for kg: `weightQuickPicks` is shared
- * web logic (and changing it would be a product decision this card does not
- * carry), so the numbers stay as the web offers them and only the unit they
- * are announced in follows the member.
+ * The PICKS THEMSELVES now follow the member's unit too: the shared
+ * `weightQuickPicks(style, unit)` (re-exported above ← the web's
+ * `webapp/lib/workout/dumbbellWeight.ts`) answers kg with kg EQUIPMENT
+ * numbers — 20/40/60/80/100 on a bar, 5s per dumbbell, the 8–24 kg bells —
+ * and lbs with the pound ladders, with no conversion between them. Native
+ * call sites pass the same unit they label the box with; omitting it is still
+ * lbs.
  */
 export function quickPickLabel(
   pick: number,

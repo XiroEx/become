@@ -107,8 +107,28 @@ export function bellWeightLabel(style: BellStyle, unit: WeightUnit = 'lbs'): str
  * loaded — a dumbbell/kettlebell increments in 5s/10s per hand; a barbell
  * moves in 45lb-plate jumps. The old buttons were always the barbell set
  * (45/95/135/185/225), which is nonsensical per-hand dumbbell math.
+ *
+ * ── …and they were always POUNDS (fixed here) ──────────────────────────────
+ * `unit` is the member's chosen lifting-load unit — the SAME value the input's
+ * label is rendered with (`bellWeightLabel(style, unit)`, NP-209:
+ * `profile.weightUnit ?? 'lbs'`). It defaults to 'lbs' so every pre-existing
+ * call site reads exactly as before. NP-209 made the LABEL unit-aware and left
+ * these buttons behind, so a kg member read "Weight per DB (kg)" over the
+ * pound ladder and was offered 45/95/135/185/225 kg (99–496 lb) for a barbell.
+ *
+ * The kg ladders are REAL EQUIPMENT NUMBERS, not converted pounds: the 20 kg
+ * Olympic bar plus 10/20 kg plate pairs, 5 kg dumbbell jumps, and the
+ * competition kettlebell sizes (8/12/16/20/24 kg). Converting the pound ladder
+ * would offer 20.4 kg, which is not a dumbbell that exists — and the pound
+ * numbers are themselves plate/bell maths that only works in pounds (45 = the
+ * bar plus a pound-plate pair; 53 lb IS the 24 kg bell).
  */
-export function weightQuickPicks(style: BellStyle): number[] {
+export function weightQuickPicks(style: BellStyle, unit: WeightUnit = 'lbs'): number[] {
+  if (unit === 'kg') {
+    if (style === 'dumbbell') return [5, 10, 15, 20, 25]
+    if (style === 'kettlebell') return [8, 12, 16, 20, 24]
+    return [20, 40, 60, 80, 100]
+  }
   if (style === 'dumbbell') return [10, 20, 30, 40, 50]
   if (style === 'kettlebell') return [18, 26, 35, 44, 53]
   return [45, 95, 135, 185, 225]

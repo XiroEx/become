@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from '@/lib/workout/dumbbellWeight'
 
 test('equipment drives detection even when the name says nothing about it', () => {
@@ -151,4 +153,106 @@ test('quick-pick weights are sane for the implement, not barbell plate math', ()
   assert.deepEqual(weightQuickPicks('dumbbell'), [10, 20, 30, 40, 50])
   assert.deepEqual(weightQuickPicks('kettlebell'), [18, 26, 35, 44, 53])
   assert.deepEqual(weightQuickPicks(null), [45, 95, 135, 185, 225])
+})
+
+// ── The quick picks were pounds while the label said kg ─────────────────────
+// (id: 96d40d31 / 96d40d32) NP-209 made `bellWeightLabel` unit-aware and left
+// these buttons on the pound ladders, so a kg member read "Weight per DB (kg)"
+// over 45/95/135/185/225 kg (99–496 lb) on a barbell.
+
+test('(id: 96d40d31) the quick picks take the unit and default to lbs', () => {
+  // Omitting it is the pound ladder, exactly as every pre-existing call site
+  // read before — the same approach `bellWeightLabel` took.
+  assert.deepEqual(weightQuickPicks('dumbbell'), weightQuickPicks('dumbbell', 'lbs'))
+  assert.deepEqual(weightQuickPicks('kettlebell'), weightQuickPicks('kettlebell', 'lbs'))
+  assert.deepEqual(weightQuickPicks(null), weightQuickPicks(null, 'lbs'))
+  // Explicit lbs is still the ladders the pound member has always had.
+  assert.deepEqual(weightQuickPicks('dumbbell', 'lbs'), [10, 20, 30, 40, 50])
+  assert.deepEqual(weightQuickPicks('kettlebell', 'lbs'), [18, 26, 35, 44, 53])
+  assert.deepEqual(weightQuickPicks(null, 'lbs'), [45, 95, 135, 185, 225])
+})
+
+test('(id: 96d40d32) a kg member gets kg equipment ladders, not converted pounds', () => {
+  assert.deepEqual(weightQuickPicks(null, 'kg'), [20, 40, 60, 80, 100])
+  assert.deepEqual(weightQuickPicks('dumbbell', 'kg'), [5, 10, 15, 20, 25])
+  assert.deepEqual(weightQuickPicks('kettlebell', 'kg'), [8, 12, 16, 20, 24])
+})
+
+test('(id: 96d40d32) the kg ladders are equipment numbers, not arithmetic', () => {
+  // Nothing here is a converted pound: 45 lb ÷ 2.20462 is 20.4 kg, which is
+  // not a bar, a plate or a bell. Every kg pick is a whole number a gym
+  // actually owns, and none of them is a pound number relabelled.
+  for (const style of ['dumbbell', 'kettlebell', null] as const) {
+    const kg = weightQuickPicks(style, 'kg')
+    const lbs = weightQuickPicks(style, 'lbs')
+    assert.equal(kg.length, 5)
+    for (const pick of kg) {
+      assert.ok(Number.isInteger(pick), `${pick} kg is not a real plate/bell number`)
+      assert.ok(pick > 0)
+    }
+    // Strictly ascending, like the pound ladders.
+    assert.deepEqual(kg, [...kg].sort((a, b) => a - b))
+    assert.equal(new Set(kg).size, 5)
+    // And not the pound ladder with a kg label stuck on it.
+    assert.notDeepEqual(kg, lbs)
+  }
+  // The specific absurdity the card reported: no kg member is offered 135 or
+  // 225 "kg" (298 / 496 lb) on a barbell, nor 53 "kg" on a kettlebell.
+  assert.ok(!weightQuickPicks(null, 'kg').some((w) => w > 100))
+  assert.ok(!weightQuickPicks('kettlebell', 'kg').includes(53))
+})
+
+// ── Every call site passes the unit the LABEL uses ──────────────────────────
+// (id: 96d40d33) The bug was a call site, not just a signature: the buttons
+// under a unit-aware label were still being asked for the default ladder. This
+// repo has no jsdom/testing-library, so — matching the precedent in
+// trackColumns.test.ts — the JSX is asserted against the source text.
+
+const APP_ROOTS = ['app', 'components', 'hooks', 'lib'] as const
+
+function sourceFiles(): string[] {
+  const out: string[] = []
+  for (const root of APP_ROOTS) {
+    const base = path.join(__dirname, '../..', root)
+    if (!fs.existsSync(base)) continue
+    for (const rel of fs.readdirSync(base, { recursive: true }) as string[]) {
+      const full = path.join(base, String(rel))
+      if (!/\.tsx?$/.test(full)) continue
+      if (!fs.statSync(full).isFile()) continue
+      out.push(full)
+    }
+  }
+  return out
+}
+
+/** The second argument of every `fn(...)` call in one source file. */
+function unitArgs(source: string, fn: string): string[] {
+  const calls = source.match(new RegExp(`${fn}\\(([^)]*)\\)`, 'g')) ?? []
+  return calls.map((call) => {
+    const args = call.slice(fn.length + 1, -1).split(',')
+    return (args[1] ?? '').trim()
+  })
+}
+
+test('(id: 96d40d33) every weightQuickPicks call site passes the label\'s unit', () => {
+  const callers = sourceFiles().filter((f) => {
+    if (f.endsWith(path.join('lib', 'workout', 'dumbbellWeight.ts'))) return false
+    return /weightQuickPicks\(/.test(fs.readFileSync(f, 'utf8'))
+  })
+  assert.ok(callers.length > 0, 'no weightQuickPicks call site found — this test has gone stale')
+
+  for (const file of callers) {
+    const source = fs.readFileSync(file, 'utf8')
+    const where = path.relative(path.join(__dirname, '../..'), file)
+    const picks = unitArgs(source, 'weightQuickPicks')
+    const labels = unitArgs(source, 'bellWeightLabel')
+    for (const unit of picks) {
+      assert.notEqual(unit, '', `${where}: weightQuickPicks is still called with no unit`)
+      assert.ok(
+        labels.includes(unit),
+        `${where}: the quick picks read \`${unit}\` but the label reads \`${labels.join('`, `')}\``
+          + ' — the buttons and the label they sit under must be the same unit',
+      )
+    }
+  }
 })

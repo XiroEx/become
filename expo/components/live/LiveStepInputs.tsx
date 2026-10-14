@@ -184,7 +184,11 @@ export function LiveStepInputs({
     typedWeight > 0
       ? bellTotalLabel(typedWeight, weightUnit)
       : null;
-  const quickPicks = inputs.weight ? weightQuickPicks(bell.style) : [];
+  // The web's quick-pick loads, in the member's own unit — the SAME unit this
+  // row's label is rendered with. kg gets kg equipment ladders (20/40/60/80/100
+  // on a bar, 5s per dumbbell, the 8–24 kg bells), never the pound ladder
+  // relabelled and never a conversion of it.
+  const quickPicks = inputs.weight ? weightQuickPicks(bell.style, weightUnit) : [];
   const distanceLabel = isFloorsExercise(exerciseName)
     ? "Floors"
     : "Distance (m)";
