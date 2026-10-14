@@ -153,15 +153,45 @@ export async function POST(request: NextRequest) {
         if (!progress.moodChangeHistory) {
           progress.moodChangeHistory = []
         }
-        progress.moodChangeHistory.push({
+        const changeEntry = {
           timestamp: now,
           date: entryDate,
           previousMood,
           newMood: mood
-        })
-      }
+        }
+        progress.moodChangeHistory.push(changeEntry)
 
-      await progress.save()
+        // Targeted update, not progress.save().
+        // save() validates the WHOLE UserProgress document, so one malformed legacy
+        // subdocument anywhere in it — a workout set missing `setNumber`, say —
+        // threw here and returned a 500 from a daily member action.
+        //
+        // Note: writing by existingIndex found from the loaded document is a
+        // read-modify-write that is not atomic against a concurrent write for the
+        // same day, which is the behaviour it has today — do not try to solve that here.
+        if (existingIndex >= 0) {
+          await UserProgress.updateOne(
+            { _id: progress._id },
+            {
+              $set: {
+                [`moodHistory.${existingIndex}.mood`]: mood,
+                [`moodHistory.${existingIndex}.loggedAt`]: loggedAt,
+              },
+              $push: { moodChangeHistory: changeEntry },
+            },
+          )
+        } else {
+          await UserProgress.updateOne(
+            { _id: progress._id },
+            {
+              $push: {
+                moodHistory: { date: entryDate, loggedAt, mood },
+                moodChangeHistory: changeEntry,
+              },
+            },
+          )
+        }
+      }
     }
 
     // A BACK-DATED mood does not touch the streak: recordStreakActivity only
