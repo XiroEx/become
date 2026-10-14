@@ -523,3 +523,15 @@ export function claimableByPolicy(
   const inQueue = state === 'queued' || state === 'running'
   return inQueue && canClaim({ now, foodState: state, claimedAt })
 }
+
+export {
+  canEnqueue,
+  canEnqueueForVerification,
+  shouldEnqueueForVerification,
+  shouldEnqueue,
+  DEFAULT_SEARCH_ENQUEUE_LIMIT,
+  SEARCH_ENQUEUE_LIMIT,
+  enqueueFilter,
+  enqueueUpdate,
+} from './flagPolicy'
+
