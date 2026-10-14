@@ -279,6 +279,20 @@ export async function POST(request: NextRequest) {
           progress.weightSkipTracking.consecutiveSkips = (progress.weightSkipTracking.consecutiveSkips || 0) + 1
         }
         progress.weightSkipTracking.lastPromptDate = today
+
+        // Targeted update, not progress.save().
+        // save() validates the WHOLE UserProgress document, so one malformed legacy
+        // subdocument anywhere in it — a workout set missing `setNumber`, say —
+        // threw here and returned a 500 from a daily member action.
+        await UserProgress.updateOne(
+          { _id: progress._id },
+          {
+            $set: {
+              'weightSkipTracking.consecutiveSkips': progress.weightSkipTracking.consecutiveSkips,
+              'weightSkipTracking.lastPromptDate': today,
+            },
+          },
+        )
       } else if (weight) {
         // User logged weight
 
@@ -291,6 +305,8 @@ export async function POST(request: NextRequest) {
           ? findEntryByExternalId(progress.weightHistory, imported.externalId) >= 0
           : false
 
+        let existingIndex = -1
+
         if (duplicate) {
           applied = false
         } else {
@@ -298,7 +314,7 @@ export async function POST(request: NextRequest) {
           // to. Matched by calendar day — the local-instant window never matched
           // the day-keyed row, so a member west of UTC appended a new row on
           // every save instead of updating the day's entry.
-          const existingIndex = progress.weightHistory?.findIndex((entry: { date: Date }) =>
+          existingIndex = progress.weightHistory?.findIndex((entry: { date: Date }) =>
             isEntryOnDay(entry.date, entryKey, tzOffset)
           ) ?? -1
 
@@ -334,17 +350,70 @@ export async function POST(request: NextRequest) {
         // which they did nothing in Become to produce — leaves the prompt state
         // alone.
         if (applied) {
+          const skipTrackingSet: Record<string, unknown> = {}
           if (memberAction) {
             progress.weightSkipTracking.consecutiveSkips = 0
             progress.weightSkipTracking.lastPromptDate = today
+            skipTrackingSet['weightSkipTracking.consecutiveSkips'] = 0
+            skipTrackingSet['weightSkipTracking.lastPromptDate'] = today
           }
           if (isNewestWeighIn(progress.weightHistory, entryKey)) {
             progress.weightSkipTracking.lastWeightDate = entryDate
+            skipTrackingSet['weightSkipTracking.lastWeightDate'] = entryDate
+          }
+
+          // Targeted update, not progress.save().
+          // save() validates the WHOLE UserProgress document, so one malformed legacy
+          // subdocument anywhere in it — a workout set missing `setNumber`, say —
+          // threw here and returned a 500 from a daily member action.
+          //
+          // Note: writing by existingIndex found from the loaded document is a
+          // read-modify-write that is not atomic against a concurrent write for the
+          // same day, which is the behaviour it has today — do not try to solve that here.
+          if (existingIndex >= 0) {
+            const setFields: Record<string, unknown> = {
+              [`weightHistory.${existingIndex}.weight`]: weight,
+              [`weightHistory.${existingIndex}.unit`]: unit,
+              [`weightHistory.${existingIndex}.loggedAt`]: loggedAt,
+              ...skipTrackingSet,
+            }
+            if (bodyFat != null) {
+              setFields[`weightHistory.${existingIndex}.bodyFat`] = bodyFat
+            }
+            if (imported) {
+              setFields[`weightHistory.${existingIndex}.source`] = imported.source
+              if (imported.externalId) {
+                setFields[`weightHistory.${existingIndex}.externalId`] = imported.externalId
+              }
+            }
+
+            await UserProgress.updateOne(
+              { _id: progress._id },
+              { $set: setFields },
+            )
+          } else {
+            const newEntry = {
+              date: entryDate,
+              loggedAt,
+              weight,
+              unit,
+              ...importFields,
+              ...(bodyFat != null ? { bodyFat } : {}),
+            }
+            const updateDoc: { $push: Record<string, unknown>; $set?: Record<string, unknown> } = {
+              $push: { weightHistory: newEntry },
+            }
+            if (Object.keys(skipTrackingSet).length > 0) {
+              updateDoc.$set = skipTrackingSet
+            }
+
+            await UserProgress.updateOne(
+              { _id: progress._id },
+              updateDoc,
+            )
           }
         }
       }
-
-      await progress.save()
     }
 
     // Only the newest weigh-in speaks for the member's CURRENT weight, so a
