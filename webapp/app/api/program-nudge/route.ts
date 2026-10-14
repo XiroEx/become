@@ -223,7 +223,13 @@ export async function POST(request: NextRequest) {
     }
 
     applyState(progress, next)
-    await progress.save()
+    // Targeted $set, not progress.save().
+    // save() validates the whole UserProgress document, so an unrelated invalid
+    // legacy row would fail this write.
+    await UserProgress.updateOne(
+      { _id: progress._id },
+      { $set: { programNudge: progress.programNudge } }
+    )
 
     return NextResponse.json({
       ...payload(progress.programNudge, isEnrolled(progress.currentProgram)),
