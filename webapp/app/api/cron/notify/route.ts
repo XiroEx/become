@@ -16,6 +16,7 @@ import { getRuntimeConfig } from '@/lib/runtimeConfig'
 import {
   REENGAGEMENT_END_HOUR,
   REENGAGEMENT_START_HOUR,
+  buildReEngagementFilter,
   WORKOUT_REMINDER_END_HOUR,
   WORKOUT_REMINDER_START_HOUR,
   WORKOUT_SCHEDULE_SELECT,
@@ -449,7 +450,8 @@ export async function GET(request: NextRequest) {
   try {
     const mindCandidates = await UserProgress.find({
       'notificationPrefs.mindReminder': { $ne: false },
-      timezoneOffset: { $exists: true },
+      // Either clock will do — same shape as the daily-glance sweep above.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
     }).select('userId timezoneOffset timezone lastPushSentAt').lean()
 
     for (const progress of mindCandidates) {
@@ -512,7 +514,8 @@ export async function GET(request: NextRequest) {
   try {
     const superCandidates = await UserProgress.find({
       'notificationPrefs.superStreakAtRisk': { $ne: false },
-      timezoneOffset: { $exists: true },
+      // Either clock will do — same shape as the daily-glance sweep above.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
     }).select('userId timezoneOffset timezone lastPushSentAt').lean()
 
     for (const progress of superCandidates) {
@@ -557,7 +560,8 @@ export async function GET(request: NextRequest) {
   try {
     const goalCandidates = await UserProgress.find({
       'notificationPrefs.goalNudge': { $ne: false },
-      timezoneOffset: { $exists: true },
+      // Either clock will do — same shape as the daily-glance sweep above.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
     }).select('userId timezoneOffset timezone lastPushSentAt').lean()
 
     for (const progress of goalCandidates) {
@@ -611,7 +615,8 @@ export async function GET(request: NextRequest) {
   try {
     const checkInCandidates = await UserProgress.find({
       'notificationPrefs.checkInReminder': { $ne: false },
-      timezoneOffset: { $exists: true },
+      // Either clock will do — same shape as the daily-glance sweep above.
+      $or: [{ timezoneOffset: { $exists: true } }, { timezone: { $exists: true } }],
     }).select('userId timezoneOffset timezone lastPushSentAt moodHistory weightHistory checkIn').lean()
 
     for (const progress of checkInCandidates) {
@@ -657,10 +662,13 @@ export async function GET(request: NextRequest) {
   // An in-progress program with no Schedule document can NEVER produce a workout
   // reminder, and the user's calendar is empty. This was silently true for a real
   // account for three weeks. Count it, and nudge them to pick training days.
+  // The select carries `timezone` as well as the offset: the loop below already
+  // passes it to localHourForUser, so leaving it out of the select silently fed
+  // that call `undefined` and skipped every zone-only member.
   try {
     const withPrograms = await UserProgress.find({
       activePrograms: { $elemMatch: { status: { $in: ['active', 'in-progress'] } } },
-    }).select('userId timezoneOffset lastPushSentAt notificationPrefs activePrograms').lean()
+    }).select('userId timezoneOffset timezone lastPushSentAt notificationPrefs activePrograms').lean()
 
     if (withPrograms.length > 0) {
       const scheduledUserIds = new Set(
@@ -703,31 +711,22 @@ export async function GET(request: NextRequest) {
 
   // ── 3. Re-engagement (12pm–5:59pm LOCAL per user, 7-day rate limit) ──────
   // Same per-user local-hour gating as workout reminder.
-  const reEngageCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
-  const reEngageRateLimit = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-  const lapsedUsers = await UserProgress.find({
-    streakDays: 0,
-    'notificationPrefs.reEngagement': { $ne: false },
-    $and: [
-      {
-        $or: [
-          { lastActivityDate: { $exists: false } },
-          { lastActivityDate: { $lte: reEngageCutoff } },
-        ],
-      },
-      {
-        $or: [
-          { 'lastPushSentAt.reEngagement': { $exists: false } },
-          { 'lastPushSentAt.reEngagement': null },
-          { 'lastPushSentAt.reEngagement': { $lte: reEngageRateLimit } },
-        ],
-      },
-    ],
-  }).select('userId timezoneOffset').lean()
+  //
+  // The selector lives in lib/notifications/cronNotify.ts so it can be
+  // unit-tested. It keys on lastActivityDate ONLY: this sweep used to also
+  // require `streakDays: 0`, a value nothing in the codebase ever writes, so
+  // every member who had ever logged a single activity was excluded from the
+  // only inactivity-keyed push the cron has. Thresholds (3 days quiet, one
+  // push per 7 days) are unchanged, and stored streakDays is not written.
+  const lapsedUsers = await UserProgress.find(buildReEngagementFilter(now))
+    // `timezone` as well as `timezoneOffset`: localHourForUser prefers the IANA
+    // zone, so selecting the offset alone dropped every member who has a zone
+    // but no captured offset into skippedByWindow forever.
+    .select('userId timezoneOffset timezone')
+    .lean()
 
   for (const u of lapsedUsers) {
-    const userLocalHour = localHourForUser(now, u.timezoneOffset)
+    const userLocalHour = localHourForUser(now, u.timezoneOffset, u.timezone)
     if (userLocalHour === null) {
       results.skippedByWindow++
       continue

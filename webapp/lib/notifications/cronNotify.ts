@@ -141,6 +141,10 @@ export const GOAL_NUDGE_END_HOUR = 20
 export const GOAL_NUDGE_KEY_COOLDOWN_DAYS = 3
 export const REENGAGEMENT_START_HOUR = 12
 export const REENGAGEMENT_END_HOUR = 18
+/** Quiet for this long is what "lapsed" means. Unchanged — it has always been 3. */
+export const REENGAGEMENT_INACTIVITY_DAYS = 3
+/** At most one "We miss you" per member per week. Unchanged — it has always been 7. */
+export const REENGAGEMENT_RATE_LIMIT_DAYS = 7
 /** Daily check-in (mood + weight) push. Early afternoon only — never at night,
  *  which is what the in-app modal alone could not guarantee since it only
  *  fires whenever a member happens to open the app. */
@@ -151,3 +155,52 @@ export const WORKOUT_SCHEDULE_SELECT = 'userId programId scheduledWorkouts'
  *  the first milestone in STREAK_MILESTONES is 3 days — so nagging a member
  *  to protect it before then reads as a bug, not motivation. */
 export const MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION = 3
+
+/**
+ * Who gets the re-engagement ("We miss you") push.
+ *
+ * Lapse is read off `lastActivityDate` ALONE — absent, or older than
+ * REENGAGEMENT_INACTIVITY_DAYS — because that is the field that records going
+ * quiet. The sweep used to ALSO require `streakDays: 0`, and nothing in the
+ * codebase ever writes a 0: lib/streak.ts bootstraps a progress doc at 1,
+ * extends on a consecutive day, freezes a single missed day, and otherwise
+ * resets to 1. So every member who had ever logged one activity carried a
+ * positive number, failed the filter, and was permanently excluded — the one
+ * sweep in the cron actually keyed on inactivity reached nobody but accounts
+ * that had never recorded an activity at all (RETENTION_INACTIVITY_AUDIT.md
+ * §1.10, "The Execution Dead-End").
+ *
+ * Stored `streakDays` is deliberately neither consulted nor written here.
+ * Zeroing it on a lapse would rewrite streak history, `longestStreak` and
+ * milestone state, and the streak-at-risk sweep reads the same field — the
+ * query was what was wrong, not the data.
+ *
+ * It lives in lib/ rather than inline in the route so it can be imported by a
+ * test: a selector nobody can execute in a unit test is a selector that can be
+ * silently dead for its whole life, which is exactly what happened.
+ *
+ * The pref gate and the 7-day rate limit are carried over unchanged.
+ */
+export function buildReEngagementFilter(now: Date): Record<string, unknown> {
+  const inactiveSince = new Date(now.getTime() - REENGAGEMENT_INACTIVITY_DAYS * 24 * 60 * 60 * 1000)
+  const rateLimitCutoff = new Date(now.getTime() - REENGAGEMENT_RATE_LIMIT_DAYS * 24 * 60 * 60 * 1000)
+
+  return {
+    'notificationPrefs.reEngagement': { $ne: false },
+    $and: [
+      {
+        $or: [
+          { lastActivityDate: { $exists: false } },
+          { lastActivityDate: { $lte: inactiveSince } },
+        ],
+      },
+      {
+        $or: [
+          { 'lastPushSentAt.reEngagement': { $exists: false } },
+          { 'lastPushSentAt.reEngagement': null },
+          { 'lastPushSentAt.reEngagement': { $lte: rateLimitCutoff } },
+        ],
+      },
+    ],
+  }
+}

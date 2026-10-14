@@ -163,7 +163,10 @@ test('the check-in reminder is pref-gated and only fires once local timezone is 
     CRON_ROUTE.indexOf('2.7 Program with no schedule'),
   )
   assert.match(block, /notificationPrefs\.checkInReminder.*\$ne: false/)
-  assert.match(block, /timezoneOffset: \{ \$exists: true \}/)
+  // "Known timezone" means EITHER clock — see the zone-only tests at the
+  // bottom of this file. It used to mean `timezoneOffset` alone, which dropped
+  // every member who has an IANA zone but no captured offset.
+  assert.match(block, /\$or: \[\{ timezoneOffset: \{ \$exists: true \} \}, \{ timezone: \{ \$exists: true \} \}\]/)
 })
 
 test('the check-in reminder skips members who already completed or skipped today', () => {
@@ -203,4 +206,267 @@ test('the streak-at-risk query is gated on the minimum streak, not any streak', 
   )
   assert.match(block, /streakDays: \{ \$gte: MIN_STREAK_DAYS_FOR_AT_RISK_NOTIFICATION \}/)
   assert.doesNotMatch(block, /streakDays: \{ \$gte: 1 \}/)
+})
+
+// ─── Re-engagement: nobody ever got the "We miss you" push ───────────────────
+//
+// Context: the sweep selected `{ streakDays: 0 }`, and NOTHING in the codebase
+// ever writes a 0 — lib/streak.ts bootstraps a progress doc at 1, extends on a
+// consecutive day, freezes a single missed day, and otherwise resets to 1. So
+// every member who had ever logged one activity was permanently excluded from
+// the only sweep here that is actually keyed on having gone quiet
+// (RETENTION_INACTIVITY_AUDIT.md §1.10). Lapse is read off `lastActivityDate`
+// alone now; stored streakDays is neither read nor written by this sweep.
+
+import {
+  buildReEngagementFilter,
+  REENGAGEMENT_INACTIVITY_DAYS,
+  REENGAGEMENT_RATE_LIMIT_DAYS,
+  REENGAGEMENT_START_HOUR,
+  REENGAGEMENT_END_HOUR,
+} from '../../lib/notifications/cronNotify'
+
+const NOW = new Date('2026-10-14T15:00:00Z')
+const DAY_MS = 24 * 60 * 60 * 1000
+const daysAgo = (n: number) => new Date(NOW.getTime() - n * DAY_MS)
+const REENGAGE_FILTER = buildReEngagementFilter(NOW) as MongoFilter
+
+type MongoFilter = Record<string, unknown>
+type ProgressDoc = Record<string, unknown>
+
+/**
+ * A deliberately tiny MongoDB filter evaluator: just the operators this one
+ * selector uses, so the tests below can assert on MEMBERS rather than on the
+ * shape of a query object. `operatorsIn` guards it — if the filter ever grows
+ * an operator this cannot judge, the last test in this group fails rather than
+ * the matcher quietly answering wrong.
+ */
+const SUPPORTED_OPERATORS = new Set(['$and', '$or', '$ne', '$lte', '$exists'])
+
+function valueAt(doc: ProgressDoc, path: string): unknown {
+  let cur: unknown = doc
+  for (const key of path.split('.')) {
+    if (cur === null || typeof cur !== 'object') return undefined
+    cur = (cur as ProgressDoc)[key]
+  }
+  return cur
+}
+
+function existsAt(doc: ProgressDoc, path: string): boolean {
+  return valueAt(doc, path) !== undefined
+}
+
+function asTime(value: unknown): number {
+  return value instanceof Date ? value.getTime() : new Date(String(value)).getTime()
+}
+
+function matchesCondition(doc: ProgressDoc, path: string, condition: unknown): boolean {
+  if (condition !== null && typeof condition === 'object' && !(condition instanceof Date)) {
+    return Object.entries(condition as ProgressDoc).every(([op, operand]) => {
+      const actual = valueAt(doc, path)
+      switch (op) {
+        case '$exists':
+          return existsAt(doc, path) === operand
+        case '$ne':
+          return actual !== operand
+        case '$lte':
+          return actual === undefined || actual === null ? false : asTime(actual) <= asTime(operand)
+        default:
+          throw new Error(`test matcher does not implement ${op}`)
+      }
+    })
+  }
+  const actual = valueAt(doc, path)
+  // Mongo's `{ field: null }` matches a null AND a missing field.
+  if (condition === null) return actual === null || actual === undefined
+  return actual === condition
+}
+
+function matchesFilter(doc: ProgressDoc, filter: MongoFilter): boolean {
+  return Object.entries(filter).every(([key, condition]) => {
+    if (key === '$and') return (condition as MongoFilter[]).every((f) => matchesFilter(doc, f))
+    if (key === '$or') return (condition as MongoFilter[]).some((f) => matchesFilter(doc, f))
+    return matchesCondition(doc, key, condition)
+  })
+}
+
+function operatorsIn(value: unknown, found = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) operatorsIn(item, found)
+    return found
+  }
+  if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+    for (const [key, child] of Object.entries(value as ProgressDoc)) {
+      if (key.startsWith('$')) found.add(key)
+      operatorsIn(child, found)
+    }
+  }
+  return found
+}
+
+/** The member the old query could never reach: a real streak, now gone quiet. */
+const lapsedWithStreak: ProgressDoc = {
+  userId: 'lapsed-with-streak',
+  streakDays: 12,
+  longestStreak: 30,
+  lastActivityDate: daysAgo(7),
+  timezoneOffset: 300,
+}
+
+test('a lapsed member with a 12-day stored streak qualifies for re-engagement', () => {
+  // FAILS against the old `{ streakDays: 0 }` query — this is the whole bug.
+  assert.equal(matchesFilter(lapsedWithStreak, REENGAGE_FILTER), true)
+})
+
+test('re-engagement ignores stored streakDays entirely, at any value', () => {
+  for (const streakDays of [0, 1, 12, 365]) {
+    assert.equal(
+      matchesFilter({ ...lapsedWithStreak, streakDays }, REENGAGE_FILTER),
+      true,
+      `streakDays ${streakDays} must not decide whether a quiet member is reachable`,
+    )
+  }
+  // And the selector must not mention the field at all, in either direction.
+  assert.ok(
+    !JSON.stringify(REENGAGE_FILTER).includes('streakDays'),
+    'the re-engagement filter must not key on streakDays',
+  )
+})
+
+test('a member who logged yesterday is not lapsed', () => {
+  assert.equal(
+    matchesFilter({ ...lapsedWithStreak, lastActivityDate: daysAgo(1) }, REENGAGE_FILTER),
+    false,
+  )
+})
+
+test('the 3-day inactivity threshold is unchanged and inclusive at the boundary', () => {
+  assert.equal(REENGAGEMENT_INACTIVITY_DAYS, 3)
+  assert.equal(
+    matchesFilter({ ...lapsedWithStreak, lastActivityDate: daysAgo(3) }, REENGAGE_FILTER),
+    true,
+  )
+  // Just inside 3 days is still active.
+  assert.equal(
+    matchesFilter(
+      { ...lapsedWithStreak, lastActivityDate: new Date(NOW.getTime() - 3 * DAY_MS + 60_000) },
+      REENGAGE_FILTER,
+    ),
+    false,
+  )
+})
+
+test('a member who has never recorded an activity still qualifies', () => {
+  assert.equal(matchesFilter({ userId: 'never-logged', timezoneOffset: 0 }, REENGAGE_FILTER), true)
+})
+
+test('the 7-day re-engagement rate limit still holds', () => {
+  assert.equal(REENGAGEMENT_RATE_LIMIT_DAYS, 7)
+  const pushed = (n: number) => ({
+    ...lapsedWithStreak,
+    lastActivityDate: daysAgo(30),
+    lastPushSentAt: { reEngagement: daysAgo(n) },
+  })
+  assert.equal(matchesFilter(pushed(2), REENGAGE_FILTER), false, 'pushed 2 days ago: stay quiet')
+  assert.equal(matchesFilter(pushed(6), REENGAGE_FILTER), false, 'pushed 6 days ago: stay quiet')
+  assert.equal(matchesFilter(pushed(8), REENGAGE_FILTER), true, 'pushed 8 days ago: due again')
+  assert.equal(
+    matchesFilter({ ...lapsedWithStreak, lastPushSentAt: { reEngagement: null } }, REENGAGE_FILTER),
+    true,
+    'a null stamp is "never pushed"',
+  )
+})
+
+test('opting out of re-engagement still silences it', () => {
+  assert.equal(
+    matchesFilter(
+      { ...lapsedWithStreak, notificationPrefs: { reEngagement: false } },
+      REENGAGE_FILTER,
+    ),
+    false,
+  )
+  // Absent pref = on, as every other sweep here treats it.
+  assert.equal(
+    matchesFilter({ ...lapsedWithStreak, notificationPrefs: {} }, REENGAGE_FILTER),
+    true,
+  )
+})
+
+test('the re-engagement filter only uses operators this test can evaluate', () => {
+  for (const op of operatorsIn(REENGAGE_FILTER)) {
+    assert.ok(SUPPORTED_OPERATORS.has(op), `matchesFilter above cannot judge ${op}`)
+  }
+})
+
+test('the re-engagement sweep does not read or write streakDays', () => {
+  // Code only — the block's comments describe the old `streakDays: 0` query on
+  // purpose, so that the next reader knows why it is gone.
+  const code = CRON_ROUTE.slice(CRON_ROUTE.indexOf('3. Re-engagement'))
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('//'))
+    .join('\n')
+  assert.doesNotMatch(code, /streakDays/, 'streak history is not this sweep\'s business')
+})
+
+// ─── Zone-only members get their own local day ───────────────────────────────
+
+test('a member with an IANA zone but no stored offset can be placed in their day', () => {
+  // The old call shape — offset only — returns null for this member, and null
+  // is what lands them in results.skippedByWindow forever.
+  assert.equal(localHourForUser(NOW, undefined), null)
+  // With the zone passed through, 15:00Z is 17:00 in Berlin: inside the
+  // 12:00-18:00 re-engagement window.
+  const hour = localHourForUser(NOW, undefined, 'Europe/Berlin')
+  assert.equal(hour, 17)
+  assert.ok(hour !== null && hour >= REENGAGEMENT_START_HOUR && hour <= REENGAGEMENT_END_HOUR)
+})
+
+test('the re-engagement sweep selects and passes the zone, not just the offset', () => {
+  const block = CRON_ROUTE.slice(CRON_ROUTE.indexOf('3. Re-engagement'))
+  assert.match(block, /\.select\('userId timezoneOffset timezone'\)/)
+  assert.match(block, /localHourForUser\(now, u\.timezoneOffset, u\.timezone\)/)
+})
+
+test('every sweep that filters on a known timezone accepts either clock', () => {
+  const bounds: Array<[string, string, string]> = [
+    ['daily glance', '0.5 Daily glance', '1. Streak at-risk'],
+    ['mind reminder', '2.6 Daily Mind session', '2.6b Super streak at risk'],
+    ['super streak', '2.6b Super streak at risk', '2.65 Goal nudges'],
+    ['goal nudge', '2.65 Goal nudges', '2.66 Daily check-in reminder'],
+    ['check-in', '2.66 Daily check-in reminder', '2.7 Program with no schedule'],
+  ]
+  for (const [name, from, to] of bounds) {
+    const block = CRON_ROUTE.slice(CRON_ROUTE.indexOf(from), CRON_ROUTE.indexOf(to))
+    assert.ok(block.length > 0, `could not locate the ${name} sweep`)
+    assert.match(
+      block,
+      /\$or: \[\{ timezoneOffset: \{ \$exists: true \} \}, \{ timezone: \{ \$exists: true \} \}\]/,
+      `${name} must not require a captured offset`,
+    )
+    assert.doesNotMatch(
+      block,
+      /^\s+timezoneOffset: \{ \$exists: true \},$/m,
+      `${name} still has an offset-only filter`,
+    )
+  }
+})
+
+test('every sweep that reads a local hour also selects the zone it reads', () => {
+  // Passing progress?.timezone to localHourForUser while selecting only the
+  // offset is a silent no-op: the field is simply absent from the lean doc.
+  const body = CRON_ROUTE.slice(CRON_ROUTE.indexOf('export async function GET'))
+  for (const select of body.match(/\.select\('[^']*timezoneOffset[^']*'\)/g) ?? []) {
+    assert.match(select, /\btimezone\b(?!Offset)/, `${select} reads an offset but not the zone`)
+  }
+})
+
+// ─── Copy and thresholds are untouched ───────────────────────────────────────
+
+test('the re-engagement copy, window and rate limit are exactly what they were', () => {
+  assert.equal(REENGAGEMENT_START_HOUR, 12)
+  assert.equal(REENGAGEMENT_END_HOUR, 18)
+  assert.match(CRON_ROUTE, /title: 'We miss you 👋'/)
+  assert.match(CRON_ROUTE, /body: 'Come back and keep building your best self\.'/)
+  assert.match(CRON_ROUTE, /tag: 're-engagement'/)
+  assert.match(CRON_ROUTE, /url: '\/dashboard'/)
 })
