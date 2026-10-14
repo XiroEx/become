@@ -3,16 +3,22 @@ import { Pressable, ScrollView, View } from "react-native";
 import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import {
-  bellWeightLabel,
   defaultDurationUnit,
   isFloorsExercise,
   normalizeTracking,
   secondsToUnitDisplay,
   unitDisplayToSeconds,
-  weightQuickPicks,
   type BellWeightInfo,
   type DurationUnit,
 } from "@become/core";
+import {
+  DEFAULT_LOAD_UNIT,
+  bellTotalLabel,
+  bellWeightLabel,
+  quickPickLabel,
+  weightQuickPicks,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 import {
   NO_BELL,
   setInputsFor,
@@ -54,10 +60,16 @@ export interface LiveStepInputsProps {
   setIndex: number;
   /**
    * What this exercise is loaded with, from `getBellWeightInfo` — names the
-   * weight box (`Weight per DB (lbs)`) and decides whether the doubled total
-   * is claimed under it. Defaults to {@link NO_BELL}.
+   * weight box (`Weight per DB (lbs)`, or `(kg)` for a kg member) and decides
+   * whether the doubled total is claimed under it. Defaults to {@link NO_BELL}.
    */
   bell?: BellWeightInfo;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * names the weight box, its doubled-total hint and the quick picks'
+   * accessibility labels. Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   /** The displayed name — picks Floors over metres for a stairmaster. */
   exerciseName?: string;
   /** Canonical exercise trackingType — selects which boxes render. */
@@ -86,7 +98,8 @@ export interface LiveStepInputsProps {
  *   • each box the web's prominent numeric well — `px-4 py-3 text-lg
  *     font-bold`, CENTERED (`Input`'s `variant="prominent"`, NP-373);
  *   • `🔥 NEW PR!` in the weight label row, not under the inputs;
- *   • `= N lbs total` centered under the weight box, for a loaded PAIR only;
+ *   • `= N lbs total` centered under the weight box, for a loaded PAIR only
+ *     (`N kg total` for a kg member — NP-209's rule, no conversion);
  *   • the time label as the short `Time (sec)` with the `min`/`sec` toggle
  *     beside it;
  *   • `Distance (m)` (or `Floors`) and `Speed (mph)` for cardio;
@@ -106,6 +119,7 @@ export interface LiveStepInputsProps {
 export function LiveStepInputs({
   setIndex,
   bell = NO_BELL,
+  weightUnit = DEFAULT_LOAD_UNIT,
   exerciseName,
   trackingType,
   state,
@@ -133,7 +147,7 @@ export function LiveStepInputs({
       ? unitOverride.unit
       : defaultDurationUnit(trackingType);
 
-  const weightLabel = bellWeightLabel(bell.style);
+  const weightLabel = bellWeightLabel(bell.style, weightUnit);
   // The web's rule verbatim: the doubled total is claimed only for a loaded
   // PAIR, and only once a positive weight has been TYPED (`Number(
   // currentWeight) > 0`) — never off a placeholder or a previous session.
@@ -143,7 +157,7 @@ export function LiveStepInputs({
     typeof typedWeight === "number" &&
     Number.isFinite(typedWeight) &&
     typedWeight > 0
-      ? `= ${typedWeight * 2} lbs total`
+      ? bellTotalLabel(typedWeight, weightUnit)
       : null;
   const quickPicks = inputs.weight ? weightQuickPicks(bell.style) : [];
   const distanceLabel = isFloorsExercise(exerciseName)
@@ -350,7 +364,7 @@ export function LiveStepInputs({
               key={pick}
               testID={`${tid}-quick-pick-${pick}`}
               accessibilityRole="button"
-              accessibilityLabel={`Log ${pick} pounds`}
+              accessibilityLabel={quickPickLabel(pick, weightUnit)}
               onPress={() => onChange({ ...state, weight: pick })}
               hitSlop={hitSlopToMinTarget(56, 34)}
               className="rounded-full bg-muted px-4 py-2"

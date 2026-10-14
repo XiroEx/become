@@ -22,6 +22,12 @@ import type {
   StoredWorkoutSet,
 } from "@become/api-client";
 import { fetchPastProgramLog, fetchQuickSession } from "@/lib/schedule/quickSessionDay";
+import {
+  DEFAULT_LOAD_UNIT,
+  storedLoadUnit,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 
 export interface DaySummarySheetsProps {
   programSlot: ScheduledSlot | null;
@@ -34,15 +40,33 @@ export interface DaySummarySheetsProps {
   testID?: string;
 }
 
-function setLabel(s: {
-  reps?: number | null;
-  weight?: number | null;
-  duration?: number | null;
-  completed?: boolean;
-}): string {
+/**
+ * One stored set in words, for the quick-session summary sheet (the web's
+ * `QuickSessionSummary` row).
+ *
+ * The load is named in the unit it was ENTERED in when the set carries one
+ * (`weightUnit`, NP-209) and otherwise in `fallbackUnit` — which the caller
+ * passes as the member's unit. `GET /api/workouts/session` projects its sets
+ * field by field and does not send `weightUnit` today, so a quick session
+ * reads in the member's unit; a program log, which comes back raw, shows each
+ * set's own. Nothing is converted either way.
+ */
+export function setLabel(
+  s: {
+    reps?: number | null;
+    weight?: number | null;
+    weightUnit?: string | null;
+    duration?: number | null;
+    completed?: boolean;
+  },
+  fallbackUnit: WeightUnit = DEFAULT_LOAD_UNIT,
+): string {
   const parts: string[] = [];
   if (s.reps != null) parts.push(`${s.reps} reps`);
-  if (s.weight != null && s.weight > 0) parts.push(`${s.weight} lb`);
+  if (s.weight != null && s.weight > 0) {
+    const unit = s.weightUnit ? storedLoadUnit(s.weightUnit) : fallbackUnit;
+    parts.push(`${s.weight} ${unit}`);
+  }
   if (s.duration != null && s.duration > 0) parts.push(`${s.duration}s`);
   return parts.length > 0 ? parts.join(" · ") : "—";
 }
@@ -117,6 +141,8 @@ export function DaySummarySheets({
   onViewJourney,
   testID = "day-summary",
 }: DaySummarySheetsProps) {
+  // The member's lifting-load unit (NP-209), for the loads these sheets show.
+  const liftingUnit = useLiftingUnit();
   const [log, setLog] = useState<StoredWorkoutLog | null | undefined>(
     undefined,
   );
@@ -229,7 +255,7 @@ export function DaySummarySheets({
           <View>
             <Text testID={`${testID}-program-sets`}>{programTotals.totalSets} sets logged</Text>
             <Text testID={`${testID}-program-volume`}>
-              {programTotals.totalVolume.toLocaleString()} lb volume
+              {programTotals.totalVolume.toLocaleString()} {liftingUnit} volume
             </Text>
             {programPRs.length > 0 ? (
               <Text testID={`${testID}-program-prs`}>
@@ -249,6 +275,7 @@ export function DaySummarySheets({
               exerciseHistory={history}
               streak={null}
               goal={null}
+              weightUnit={liftingUnit}
               onDone={onCloseProgram}
               onViewJourney={() => {
                 if (programSlot) onViewJourney(programSlot.programId);
@@ -293,7 +320,7 @@ export function DaySummarySheets({
                     <Text
                       testID={`${testID}-quick-exercise-${i}-set-${j}`}
                     >
-                      {setLabel(s)}
+                      {setLabel(s, liftingUnit)}
                     </Text>
                   </View>
                 ))}

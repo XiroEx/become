@@ -256,9 +256,12 @@ describe("weekly volume matches the web's numbers (e015c99c)", () => {
       <ProgressScreen data={parsed} />,
     );
     expect(getByTestId("progress-workout-0")).toBeTruthy();
+    // NP-209: the unit is interpolated (the member's `weightUnit`), so the
+    // children are three nodes rather than the old hardcoded " lbs" suffix.
     expect(getByTestId("progress-workout-volume-0").props.children).toEqual([
       "8.4K",
-      " lbs",
+      " ",
+      "lbs",
     ]);
     expect(getByTestId("progress-workout-pr-0")).toBeTruthy();
     // Collapsed until tapped — the web's WorkoutRow starts closed too.

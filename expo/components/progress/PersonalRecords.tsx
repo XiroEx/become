@@ -42,6 +42,12 @@ import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { usePressed } from "@/lib/a11y/usePressed";
+import {
+  DEFAULT_LOAD_UNIT,
+  loadLabel,
+  spokenUnit,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 
 // ─── History ────────────────────────────────────────────────────────────────
 
@@ -188,10 +194,12 @@ const PRS_PAGE = 6;
 function PersonalRecordRow({
   pr,
   index,
+  weightUnit,
   onSelect,
 }: {
   pr: ProgressExercisePR;
   index: number;
+  weightUnit: WeightUnit;
   onSelect: (pr: ProgressExercisePR) => void;
 }) {
   const { colors } = useThemeTokens();
@@ -200,7 +208,7 @@ function PersonalRecordRow({
     <Pressable
       testID={`progress-record-${index}`}
       accessibilityRole="button"
-      accessibilityLabel={`${pr.name}, personal record ${pr.weight} pounds for ${pr.reps} reps`}
+      accessibilityLabel={`${pr.name}, personal record ${pr.weight} ${spokenUnit(weightUnit)} for ${pr.reps} reps`}
       accessibilityHint="Shows history and corrections"
       onPress={() => onSelect(pr)}
       onPressIn={press.onPressIn}
@@ -235,7 +243,7 @@ function PersonalRecordRow({
       </View>
       <View style={{ alignItems: "flex-end" }}>
         <Text className="text-foreground text-sm font-bold">
-          {pr.weight} lbs
+          {loadLabel(pr.weight, weightUnit)}
         </Text>
         {pr.reps > 0 ? (
           <Text className="text-muted-foreground text-xs">
@@ -249,6 +257,13 @@ function PersonalRecordRow({
 
 export interface PersonalRecordsSectionProps {
   pbs: ProgressExercisePR[];
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209).
+   * `GET /api/progress` projects `pbs` without the stored `unit` the PR
+   * document carries, so this list reads the member's unit — exactly as the
+   * web's records grid does. Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   onSelect: (pr: ProgressExercisePR) => void;
   testID?: string;
 }
@@ -259,6 +274,7 @@ export interface PersonalRecordsSectionProps {
  */
 export function PersonalRecordsSection({
   pbs,
+  weightUnit = DEFAULT_LOAD_UNIT,
   onSelect,
   testID = "progress-records",
 }: PersonalRecordsSectionProps) {
@@ -287,7 +303,13 @@ export function PersonalRecordsSection({
       </View>
       <View style={{ gap: 8 }}>
         {pbs.slice(0, shown).map((pr, i) => (
-          <PersonalRecordRow key={pr.slug} pr={pr} index={i} onSelect={onSelect} />
+          <PersonalRecordRow
+            key={pr.slug}
+            pr={pr}
+            index={i}
+            weightUnit={weightUnit}
+            onSelect={onSelect}
+          />
         ))}
         {pbs.length > PRS_PAGE ? (
           <Pressable
@@ -328,6 +350,8 @@ const TREND_PAD_RIGHT = 12;
 
 export interface PrTrendChartProps {
   points: PrTrendPoint[];
+  /** The member's lifting-load unit, for the chart's spoken summary (NP-209). */
+  weightUnit?: WeightUnit;
   testID?: string;
 }
 
@@ -339,6 +363,7 @@ export interface PrTrendChartProps {
  */
 export function PrTrendChart({
   points,
+  weightUnit = DEFAULT_LOAD_UNIT,
   testID = "pr-trend-chart",
 }: PrTrendChartProps) {
   const { colors } = useThemeTokens();
@@ -381,7 +406,7 @@ export function PrTrendChart({
     <View
       testID={testID}
       accessibilityRole="summary"
-      accessibilityLabel={`${points.length} logged sessions, best ${max} pounds`}
+      accessibilityLabel={`${points.length} logged sessions, best ${max} ${spokenUnit(weightUnit)}`}
       onLayout={(e) => {
         const w = e.nativeEvent.layout.width;
         if (w > 0 && Math.abs(w - chartWidth) > 1) setChartWidth(w);
@@ -432,7 +457,7 @@ export function PrTrendChart({
           <SvgCircle
             key={`dot-${i}`}
             testID={`${testID}-dot-${i}`}
-            accessibilityLabel={`${p.date}: ${p.weight} pounds for ${p.reps} reps`}
+            accessibilityLabel={`${p.date}: ${p.weight} ${spokenUnit(weightUnit)} for ${p.reps} reps`}
             cx={xAt(i)}
             cy={yAt(p.weight)}
             r={i === points.length - 1 ? 4 : 3}
@@ -469,6 +494,8 @@ export type PrModalMode = "chart" | "edit" | "delete";
 export interface PersonalRecordModalProps {
   pr: ProgressExercisePR;
   points: PrTrendPoint[];
+  /** The member's lifting-load unit (NP-209). Defaults to `'lbs'`. */
+  weightUnit?: WeightUnit;
   onClose: () => void;
   /** Refetch the progress payload (the parent also closes the modal). */
   onChanged: () => void | Promise<void>;
@@ -485,6 +512,7 @@ export interface PersonalRecordModalProps {
 export function PersonalRecordModal({
   pr,
   points,
+  weightUnit = DEFAULT_LOAD_UNIT,
   onClose,
   onChanged,
   authToken = null,
@@ -579,7 +607,11 @@ export function PersonalRecordModal({
 
       {mode === "chart" ? (
         <View style={{ gap: 12 }}>
-          <PrTrendChart points={points} testID={`${testID}-trend`} />
+          <PrTrendChart
+            points={points}
+            weightUnit={weightUnit}
+            testID={`${testID}-trend`}
+          />
           <View
             testID={`${testID}-summary`}
             style={{
@@ -598,7 +630,7 @@ export function PersonalRecordModal({
                 className="text-sm font-bold"
                 style={{ color: colors.success }}
               >
-                {pr.weight} lbs
+                {loadLabel(pr.weight, weightUnit)}
               </Text>
             </View>
             <View style={{ alignItems: "center" }}>
@@ -649,14 +681,14 @@ export function PersonalRecordModal({
             <View style={{ flex: 1 }}>
               <Input
                 testID={`${testID}-weight`}
-                label="Weight (lb)"
+                label={`Weight (${weightUnit})`}
                 keyboardType="decimal-pad"
                 value={weightText}
                 onChangeText={(v) => {
                   setWeightText(v);
                   setReviewing(false);
                 }}
-                accessibilityHint="Corrected best weight in pounds"
+                accessibilityHint={`Corrected best weight in ${spokenUnit(weightUnit)}`}
               />
             </View>
             <View style={{ flex: 1 }}>
@@ -693,8 +725,8 @@ export function PersonalRecordModal({
                 className="text-foreground text-sm"
                 style={{ fontVariant: ["tabular-nums"] }}
               >
-                {pr.weight} lb × {pr.reps} → {correction.weight} lb ×{" "}
-                {correction.reps}
+                {pr.weight} {weightUnit} × {pr.reps} → {correction.weight}{" "}
+                {weightUnit} × {correction.reps}
               </Text>
             </View>
           ) : null}
@@ -762,7 +794,8 @@ export function PersonalRecordModal({
               Remove {pr.name} record?
             </Text>
             <Text className="text-muted-foreground text-xs">
-              The displayed {pr.weight} lb × {pr.reps} record will be removed.
+              The displayed {pr.weight} {weightUnit} × {pr.reps} record will be
+              removed.
               A future completed set can establish a new record.
             </Text>
           </View>

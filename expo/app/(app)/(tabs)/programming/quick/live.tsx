@@ -39,6 +39,7 @@ import { useAuth } from "@/lib/auth/useAuth";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useQuickLiveWorkout } from "@/lib/quickSession/useQuickLiveWorkout";
 import { useExerciseHints } from "@/lib/live/useExerciseHints";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 
 export interface QuickLiveRouteProps {
   /** DI for tests — defaults to the AsyncStorage-backed store. */
@@ -102,6 +103,9 @@ export default function QuickLiveRoute({
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+  // The member's lifting-load unit (NP-209 / NP-080): `profile.weightUnit ??
+  // 'lbs'`, read once and handed to the live views and the summary.
+  const liftingUnit = useLiftingUnit();
   const params = useLocalSearchParams<{ session?: string }>();
   const sessionId =
     typeof params.session === "string" ? params.session : "";
@@ -394,6 +398,7 @@ export default function QuickLiveRoute({
           exerciseHistory={summaryHistory}
           streak={summaryStreak}
           goal={summaryGoal}
+          weightUnit={liftingUnit}
           onDone={() => router.replace("/(tabs)/programming")}
           onViewJourney={() => router.replace("/(tabs)/programming")}
           onViewLog={() => router.replace("/progress" as never)}
@@ -430,6 +435,7 @@ export default function QuickLiveRoute({
       <LiveWorkoutClient
         workout={vm}
         initialView="live"
+        weightUnit={liftingUnit}
         // The skip flow is the web's on EVERY live route (NP-288): a blank
         // set's button reads `Skip Set →` and opens the skip modal. This
         // route used to leave it off, so a quick session's primary button
