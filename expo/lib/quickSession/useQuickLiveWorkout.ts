@@ -68,6 +68,11 @@ import { parseRestSeconds } from "@/lib/live/restDuration";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
 import { buildQuickSaveRequest } from "@/lib/quickSession/quickSave";
 import {
+  bellsFromPerformances,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
+import {
   buildQuickHistory,
   quickHistorySlugs,
 } from "@/lib/quickSession/quickHistory";
@@ -168,6 +173,17 @@ export interface UseQuickLiveWorkoutResult {
    */
   activeSeconds: number;
   originKey: string;
+  /**
+   * ONE DUMBBELL OR TWO (`ISetLog.bells`), keyed by the exercise's memory
+   * key: `bellChoices` is the member's pick this session, `rememberedBells`
+   * what their last logged set for that exercise said (read from the same
+   * `GET /api/workouts/last-performance` call the Last: references use).
+   * Neither means the automatic per-exercise answer. The program screen's
+   * hook exposes exactly the same three — one control, one field, one rule.
+   */
+  bellChoices: BellChoices;
+  rememberedBells: BellChoices;
+  setBellChoice: (memoryKey: string, count: BellCount) => void;
   onGridChange: (grid: LiveGrid) => void;
   onFinish: (grid: LiveGrid) => void;
   /**
@@ -319,6 +335,20 @@ export function useQuickLiveWorkout(
     () => initialOriginKey ?? localDateKey(getNow()),
   );
   const [reloadToken, setReloadToken] = useState(0);
+  // One dumbbell or two, keyed by the exercise's memory key — the member's
+  // pick this session and what their last logged set said. Mirrored into refs
+  // because `postSave` reads them (a tap on the control must not rebuild the
+  // save callback), exactly as the program hook does. See lib/live/bellCount.ts.
+  const [bellChoices, setBellChoicesState] = useState<BellChoices>({});
+  const bellChoicesRef = useRef<BellChoices>({});
+  const [rememberedBells, setRememberedBells] = useState<BellChoices>({});
+  const rememberedBellsRef = useRef<BellChoices>({});
+  const setBellChoice = useCallback((memoryKey: string, count: BellCount) => {
+    if (!memoryKey) return;
+    const next = { ...bellChoicesRef.current, [memoryKey]: count };
+    bellChoicesRef.current = next;
+    setBellChoicesState(next);
+  }, []);
 
   // The wall-clock start of this run — a ref seeded lazily (never during
   // render: `Date.now` is impure) and reset when the load effect runs.
@@ -377,6 +407,8 @@ export function useQuickLiveWorkout(
         grid,
         completed,
         activeSeconds: active,
+        bellChoices: bellChoicesRef.current,
+        rememberedBells: rememberedBellsRef.current,
         tz: new Date().getTimezoneOffset(),
         tzZone: (() => {
           try {
@@ -538,6 +570,15 @@ export function useQuickLiveWorkout(
                 setExerciseHistory(
                   buildQuickHistory(live, parsed.data.performances),
                 );
+                // …and how many dumbbells they used last time, keyed by the
+                // slug the request asked for (which IS the memory key). A
+                // slug with no recorded answer is left out, so the control
+                // falls back to the automatic per-exercise answer.
+                const remembered = bellsFromPerformances(
+                  parsed.data.performances,
+                );
+                rememberedBellsRef.current = remembered;
+                setRememberedBells(remembered);
               }
             }
           }
@@ -928,6 +969,9 @@ export function useQuickLiveWorkout(
     finishedElapsedSeconds,
     activeSeconds,
     originKey,
+    bellChoices,
+    rememberedBells,
+    setBellChoice,
     onGridChange,
     onFinish,
     swapSlug,

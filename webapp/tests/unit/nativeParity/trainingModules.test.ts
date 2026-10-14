@@ -46,6 +46,7 @@ import * as webTracking from '../../../lib/workout/tracking'
 import * as webDurationUnit from '../../../lib/workout/durationUnit'
 import * as webEquipmentVariant from '../../../lib/workout/equipmentVariant'
 import * as webDumbbellWeight from '../../../lib/workout/dumbbellWeight'
+import * as webBellCount from '../../../lib/workout/bellCount'
 import * as webBuildAsYouGo from '../../../lib/workout/buildAsYouGo'
 import * as webPosition from '../../../lib/workout/position'
 import * as webNaming from '../../../lib/quickSession/naming'
@@ -66,6 +67,7 @@ import * as coreTracking from '../../../../shared/core/src/training/workout/trac
 import * as coreDurationUnit from '../../../../shared/core/src/training/workout/durationUnit'
 import * as coreEquipmentVariant from '../../../../shared/core/src/training/workout/equipmentVariant'
 import * as coreDumbbellWeight from '../../../../shared/core/src/training/workout/dumbbellWeight'
+import * as coreBellCount from '../../../../shared/core/src/training/workout/bellCount'
 import * as coreBuildAsYouGo from '../../../../shared/core/src/training/workout/buildAsYouGo'
 import * as corePosition from '../../../../shared/core/src/training/workout/position'
 import * as coreNaming from '../../../../shared/core/src/training/quickSession/naming'
@@ -419,6 +421,106 @@ test('workout/dumbbellWeight: per-implement labels, totals and quick picks', () 
     [['dumbbell'], ['kettlebell'], [null]])
 
   manifest('workout/dumbbellWeight', webDumbbellWeight, coreDumbbellWeight)
+})
+
+test('workout/bellCount: one dumbbell or two, and what an absent answer means', () => {
+  // The member's own one-or-two answer (`ISetLog.bells`), shared because the
+  // native Live and Track views ask the same question and must default it,
+  // remember it and hint off it the same way.
+  const infos: webDumbbellWeight.BellWeightInfo[] = [
+    { style: 'dumbbell', showTotal: true },
+    { style: 'dumbbell', showTotal: false },
+    { style: 'kettlebell', showTotal: false },
+    { style: 'kettlebell', showTotal: true },
+    { style: null, showTotal: false },
+  ]
+  // Anything a request body, a stored set or a form value can hold: 1 and 2
+  // (as numbers and as the strings older clients send), and the whole of
+  // "absent" — which is every other value, never a throw.
+  const raw: unknown[] = [
+    1, 2, '1', '2', 0, 3, 1.5, -1, '', ' ', 'two', null, undefined, NaN, true, false, {}, [1],
+  ]
+
+  same('workout/bellCount.readBellCount',
+    webBellCount.readBellCount, coreBellCount.readBellCount,
+    raw.map(v => [v] as [unknown]))
+
+  same('workout/bellCount.defaultBellCount',
+    webBellCount.defaultBellCount, coreBellCount.defaultBellCount,
+    infos.map(i => [i] as [webDumbbellWeight.BellWeightInfo]))
+
+  same('workout/bellCount.resolveBellCount',
+    webBellCount.resolveBellCount, coreBellCount.resolveBellCount,
+    infos.flatMap(i => raw.flatMap(a => raw.map(b =>
+      [i, a, b] as [webDumbbellWeight.BellWeightInfo, unknown, unknown]))))
+
+  same('workout/bellCount.showsBellTotal',
+    webBellCount.showsBellTotal, coreBellCount.showsBellTotal,
+    infos.flatMap(i => ([1, 2] as const).map(c =>
+      [i, c] as [webDumbbellWeight.BellWeightInfo, webBellCount.BellCount])))
+
+  same('workout/bellCount.bellCountLabel',
+    webBellCount.bellCountLabel, coreBellCount.bellCountLabel,
+    infos.flatMap(i => ([1, 2] as const).map(c =>
+      [i, c] as [webDumbbellWeight.BellWeightInfo, webBellCount.BellCount])))
+
+  same('workout/bellCount.bellMemoryKey',
+    webBellCount.bellMemoryKey, coreBellCount.bellMemoryKey,
+    ([
+      null,
+      undefined,
+      {},
+      { exerciseSlug: 'dumbbell-bench-press' },
+      { exerciseSlug: '  Dumbbell-Bench-Press  ' },
+      { exerciseSlug: '', name: 'Dumbbell Bench Press' },
+      { exerciseSlug: '   ', name: 'Single-Arm DB Row (heavy)' },
+      { name: '  --Goblet Squat!!  ' },
+      { name: '' },
+      { exerciseSlug: 'kb-swing', name: 'Kettlebell Swing' },
+    ] as Array<{ exerciseSlug?: string; name?: string } | null | undefined>)
+      .map(e => [e] as [{ exerciseSlug?: string; name?: string } | null | undefined]))
+
+  same('workout/bellCount.bellsFromPerformances',
+    webBellCount.bellsFromPerformances, coreBellCount.bellsFromPerformances,
+    ([
+      null,
+      undefined,
+      {},
+      { 'dumbbell-bench-press': { bells: 1 } },
+      { 'dumbbell-fly': { bells: 2 }, 'goblet-squat': { bells: null } },
+      // A legacy set, a barbell lift and a junk value are all left OUT, so
+      // the caller falls back to the automatic per-exercise answer.
+      { 'barbell-bench-press': {}, 'back-squat': null, 'junk': { bells: 7 } },
+      { 'db-curl': { bells: '2' } },
+    ] as Array<Record<string, { bells?: unknown } | null | undefined> | null | undefined>)
+      .map(p => [p] as [Record<string, { bells?: unknown } | null | undefined> | null | undefined]))
+
+  // The server-side gate: every set keeps `bells` only when it is 1 or 2.
+  type GateSet = { setNumber: number; bells?: webBellCount.BellCount }
+  type GateExercise = { name?: string; sets: GateSet[] }
+  const gateCases: Array<GateExercise[]> = [
+    [],
+    [{ name: 'Dumbbell Fly', sets: [] }],
+    [{
+      name: 'Dumbbell Bench Press',
+      sets: [
+        { setNumber: 1, bells: 1 },
+        { setNumber: 2, bells: 2 },
+        { setNumber: 3 },
+        { setNumber: 4, bells: 7 as unknown as webBellCount.BellCount },
+        { setNumber: 5, bells: '2' as unknown as webBellCount.BellCount },
+        { setNumber: 6, bells: null as unknown as webBellCount.BellCount },
+      ],
+    }],
+    // Shapes the save paths can hand over: a missing sets array, a null set.
+    [{ name: 'Mystery', sets: null as unknown as GateSet[] }],
+    [{ name: 'Mystery', sets: [null as unknown as GateSet] }],
+  ]
+  same('workout/bellCount.sanitizeBellCounts',
+    webBellCount.sanitizeBellCounts, coreBellCount.sanitizeBellCounts,
+    gateCases.map(c => [c] as [GateExercise[]]))
+
+  manifest('workout/bellCount', webBellCount, coreBellCount)
 })
 
 test('workout/equipmentVariant: what is being loaded, and whether the name says so', () => {
@@ -1173,6 +1275,7 @@ test('each copy declares its web source, and that source exists', () => {
     'workout/durationUnit.ts',
     'workout/equipmentVariant.ts',
     'workout/dumbbellWeight.ts',
+    'workout/bellCount.ts',
     'workout/buildAsYouGo.ts',
     'workout/position.ts',
     'quickSession/naming.ts',

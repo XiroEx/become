@@ -24,6 +24,12 @@ import {
   setInputsFor,
   type LiveSetState,
 } from "@/components/live/LiveSetRow";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
+import {
+  defaultBellCount,
+  showsBellTotal,
+  type BellCount,
+} from "@/lib/live/bellCount";
 import { WRAPPABLE_TEXT } from "@/lib/a11y/dynamicType";
 import { hitSlopToMinTarget } from "@/lib/a11y/touchTarget";
 
@@ -64,6 +70,18 @@ export interface LiveStepInputsProps {
    * whether the doubled total is claimed under it. Defaults to {@link NO_BELL}.
    */
   bell?: BellWeightInfo;
+  /**
+   * HOW MANY of them — the member's own answer for this exercise (the web's
+   * `currentBells`). Defaults to `defaultBellCount(bell)`, which IS today's
+   * automatic answer, so a caller that does not pass it behaves exactly as
+   * before. The `= X total` hint follows it: shown for a pair, gone for one.
+   */
+  bells?: BellCount;
+  /**
+   * Record a new answer. Omitted, no one/two control renders — the exercise
+   * still logs the way it always did.
+   */
+  onBellsChange?: (count: BellCount) => void;
   /**
    * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
    * names the weight box, its doubled-total hint and the quick picks'
@@ -119,6 +137,8 @@ export interface LiveStepInputsProps {
 export function LiveStepInputs({
   setIndex,
   bell = NO_BELL,
+  bells,
+  onBellsChange,
   weightUnit = DEFAULT_LOAD_UNIT,
   exerciseName,
   trackingType,
@@ -148,12 +168,17 @@ export function LiveStepInputs({
       : defaultDurationUnit(trackingType);
 
   const weightLabel = bellWeightLabel(bell.style, weightUnit);
-  // The web's rule verbatim: the doubled total is claimed only for a loaded
-  // PAIR, and only once a positive weight has been TYPED (`Number(
-  // currentWeight) > 0`) — never off a placeholder or a previous session.
+  // How many implements are in the member's hands for this exercise. Absent
+  // is the automatic per-exercise answer — exactly what an absent
+  // `ISetLog.bells` has always meant (`lib/live/bellCount.ts`).
+  const bellCount = bells ?? defaultBellCount(bell);
+  // The web's rule verbatim: the doubled total is claimed only for bell work
+  // being loaded with TWO (`showsBellTotal`), and only once a positive weight
+  // has been TYPED (`Number(currentWeight) > 0`) — never off a placeholder or
+  // a previous session. One implement moves the number typed and nothing more.
   const typedWeight = state.weight;
   const total =
-    bell.showTotal &&
+    showsBellTotal(bell, bellCount) &&
     typeof typedWeight === "number" &&
     Number.isFinite(typedWeight) &&
     typedWeight > 0
@@ -217,6 +242,21 @@ export function LiveStepInputs({
               onChangeText={(text) => onChange({ ...state, weight: parse(text) })}
               placeholder="0"
             />
+            {/* One dumbbell or two — the member's call, not the catalogue's,
+                sitting directly under the weight box as it does on the web.
+                Defaulted to the automatic answer (and to whatever they logged
+                last time), so leaving it alone changes nothing. Renders
+                nothing unless this is dumbbell/kettlebell work. */}
+            {onBellsChange ? (
+              <View style={{ alignItems: "center", marginTop: 6 }}>
+                <BellCountToggle
+                  info={bell}
+                  value={bellCount}
+                  onChange={onBellsChange}
+                  testID={`${tid}-bells`}
+                />
+              </View>
+            ) : null}
             {total ? (
               <Text
                 testID={`${tid}-helper`}
