@@ -8,6 +8,7 @@ import {
   localDateKey,
   localDayWindowForKey,
   utcMidnightDateKey,
+  isEntryOnDay,
 } from '@/lib/dayWindow'
 
 // GET — returns last 14 days of entries + today's entry if any + averages
@@ -34,20 +35,16 @@ export async function GET(request: NextRequest) {
       const day = String(d.getUTCDate()).padStart(2, '0')
       return `${y}-${m}-${day}`
     })()
-    const { start: windowStart } = localDayWindowForKey(fourteenDaysAgoKey, tz)
-
     const entries = await Sleep.find({
       userId: authResult.userId,
-      date: { $gte: windowStart }
+      date: { $gte: utcMidnightDateKey(fourteenDaysAgoKey) }
     })
       .sort({ date: -1 })
       .lean()
 
-    const { start: todayWindowStart, end: todayWindowEnd } = localDayWindowForKey(todayKey, tz)
-    const todayEntry = entries.find((entry) => {
-      const d = new Date(entry.date)
-      return d >= todayWindowStart && d <= todayWindowEnd
-    }) || null
+    const todayEntry = entries.find((entry) =>
+      isEntryOnDay(entry.date, todayKey, tz)
+    ) || null
 
     // Calculate averages across all returned entries
     let averages = { durationMinutes: 0, quality: 0 }
