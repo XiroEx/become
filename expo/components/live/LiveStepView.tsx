@@ -43,6 +43,11 @@ import {
   liveCompleteLabel,
   totalRoundsForStep,
 } from "@/components/live/LiveWorkoutClient";
+import {
+  DEFAULT_LOAD_UNIT,
+  loadRepsLabel,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -83,6 +88,13 @@ export interface LiveStepViewProps {
    * `exercisePRs`). Drives the `PR:` line and the NEW PR flag.
    */
   exercisePRs?: Record<string, ExercisePRSummary>;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209).
+   * Names the weight box, the doubled-total hint and the `Last set:` line.
+   * A PR keeps the unit it was SET in, so the `PR:` line does not read this.
+   * Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   /**
    * In-workout hints keyed by lowercase exercise slug (the web's
    * `exerciseNudges`). Rendered under the exercise header, beside the
@@ -134,6 +146,7 @@ export function lastSetLine(
   previous: LiveSetState | undefined | null,
   trackingType: string | null | undefined,
   setIndex: number,
+  weightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
 ): string | null {
   if (setIndex <= 0 || !previous?.completed) return null;
   const t = normalizeTracking(trackingType ?? null);
@@ -143,7 +156,7 @@ export function lastSetLine(
       : `Round ${setIndex}: done`;
   }
   if (t === "reps_weight") {
-    return `Last set: ${previous.weight ?? 0} lbs × ${previous.reps ?? 0} reps`;
+    return `Last set: ${loadRepsLabel(previous.weight ?? 0, previous.reps ?? 0, weightUnit)}`;
   }
   if (tracksTime(t)) {
     const unit = setUnitLabel(trackingType ?? null, 1).toLowerCase();
@@ -199,6 +212,7 @@ export function LiveStepView({
   onRequestSwap,
   exerciseHistory,
   exercisePRs,
+  weightUnit = DEFAULT_LOAD_UNIT,
   exerciseHints,
   onDismissHint,
   onExit,
@@ -306,6 +320,7 @@ export function LiveStepView({
     sets[step.setIndex - 1],
     exercise.trackingType,
     step.setIndex,
+    weightUnit,
   );
   const overall = overallProgressPercent(grid);
   // The web's equipment disclosure, in the web's place (under the pills):
@@ -744,6 +759,7 @@ export function LiveStepView({
               history={exerciseHistory?.[exercise.name] ?? null}
               pr={exercisePRs?.[exercise.name] ?? null}
               typedWeight={current.weight}
+              weightUnit={weightUnit}
               testID={`${testID}-live-${exercise.slug}-reference`}
             />
             {/* The web's contextual nudge for THIS exercise only
@@ -805,6 +821,7 @@ export function LiveStepView({
             <LiveStepInputs
               setIndex={step.setIndex}
               bell={bell}
+              weightUnit={weightUnit}
               exerciseName={exercise.name}
               state={current}
               trackingType={exercise.trackingType}

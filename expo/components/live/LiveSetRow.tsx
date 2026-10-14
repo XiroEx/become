@@ -5,7 +5,6 @@ import { Check, ChevronsRight } from "lucide-react-native";
 import { Input } from "@/components/Input";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import {
-  bellWeightLabel,
   defaultDurationUnit,
   equipmentAssumption,
   isFloorsExercise,
@@ -14,11 +13,19 @@ import {
   tracksSpeed,
   tracksTime,
   unitDisplayToSeconds,
-  weightQuickPicks,
   type BellStyle,
   type BellWeightInfo,
   type DurationUnit,
 } from "@become/core";
+import {
+  DEFAULT_LOAD_UNIT,
+  bellTotalLabel,
+  bellWeightLabel,
+  compactBellWeightLabel,
+  quickPickLabel,
+  weightQuickPicks,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 
 /** A set with nothing in it — no bell, no total hint. */
 export const NO_BELL: BellWeightInfo = { style: null, showTotal: false };
@@ -79,6 +86,13 @@ export interface LiveSetRowProps {
    * equipment-first rule, not a guess at the name. Defaults to {@link NO_BELL}.
    */
   bell?: BellWeightInfo;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * names the weight box and the doubled-total hint. Defaults to `'lbs'`, the
+   * grandfather value for a member who has never been asked, so every
+   * pre-existing call site reads exactly as before.
+   */
+  weightUnit?: WeightUnit;
   /** The exercise's displayed name, for the Floors-vs-metres distance label. */
   exerciseName?: string;
   /**
@@ -130,18 +144,25 @@ function parseNum(text: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function getWeightLabel(style: BellStyle | null, compact?: boolean): string {
-  if (compact) {
-    if (style === "dumbbell") return "lbs/DB";
-    if (style === "kettlebell") return "lbs/KB";
-    return "lbs";
-  }
-  return bellWeightLabel(style);
+/**
+ * The weight box's label, in the member's unit (NP-209). Compact rows get the
+ * short form (`kg/DB`) because the full "Weight per DB (kg)" does not fit a
+ * superset set line; both come from `lib/live/bellStyle.ts`.
+ */
+function getWeightLabel(
+  style: BellStyle | null,
+  compact?: boolean,
+  unit: WeightUnit = DEFAULT_LOAD_UNIT,
+): string {
+  return compact
+    ? compactBellWeightLabel(style, unit)
+    : bellWeightLabel(style, unit);
 }
 
 export function LiveSetRow({
   setIndex,
   bell = NO_BELL,
+  weightUnit = DEFAULT_LOAD_UNIT,
   exerciseName,
   equipment,
   showQuickPicks = false,
@@ -184,7 +205,7 @@ export function LiveSetRow({
   const perBell = state.weight ?? prefill?.weight;
   const helper =
     bell.showTotal && typeof perBell === "number" && Number.isFinite(perBell) && perBell > 0
-      ? `= ${perBell * 2} lbs total`
+      ? bellTotalLabel(perBell, weightUnit)
       : null;
   // The web's "Logging as Dumbbell" disclosure
   // (`EquipmentAssumptionRow` ← `equipmentAssumption`): shown only when the
@@ -221,7 +242,7 @@ export function LiveSetRow({
         <View style={{ flex: 1 }}>
           <Input
             testID={`${tid}-weight`}
-            label={getWeightLabel(bell.style, compact)}
+            label={getWeightLabel(bell.style, compact, weightUnit)}
             keyboardType="decimal-pad"
             value={state.weight !== null ? String(state.weight) : ""}
             onChangeText={(text) =>
@@ -269,7 +290,7 @@ export function LiveSetRow({
                       key={pick}
                       testID={`${tid}-quick-pick-${pick}`}
                       accessibilityRole="button"
-                      accessibilityLabel={`Log ${pick} pounds`}
+                      accessibilityLabel={quickPickLabel(pick, weightUnit)}
                       onPress={() => onChange({ ...state, weight: pick })}
                       className="rounded-full bg-muted px-2.5 py-1"
                     >
@@ -285,7 +306,7 @@ export function LiveSetRow({
                     key={pick}
                     testID={`${tid}-quick-pick-${pick}`}
                     accessibilityRole="button"
-                    accessibilityLabel={`Log ${pick} pounds`}
+                    accessibilityLabel={quickPickLabel(pick, weightUnit)}
                     onPress={() => onChange({ ...state, weight: pick })}
                     className="rounded-full bg-muted px-3 py-1.5"
                   >

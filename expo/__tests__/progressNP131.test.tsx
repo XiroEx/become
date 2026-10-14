@@ -272,7 +272,8 @@ describe("(id: e015c9a1) correcting a record natively shows the corrected value 
     fireEvent.press(getByTestId("pr-modal-confirm"));
     expect(queryByTestId("pr-modal-review-banner")).toBeTruthy();
     expect(getByTestId("pr-modal-review-change")).toHaveTextContent(
-      "185 lb × 5 → 190 lb × 5",
+      // NP-209: the record reads in the member's unit, "lbs" by default.
+      "185 lbs × 5 → 190 lbs × 5",
     );
     expect(mockApiFetch).not.toHaveBeenCalled();
     // Confirm: the PATCH goes out with the corrected value.

@@ -21,6 +21,7 @@ import { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { Text } from "@/components/Text";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
 import Svg, {
   Path,
   Rect,
@@ -95,6 +96,13 @@ export function volumeChartYTicks(max: number): number[] {
 
 export interface VolumeBarChartProps {
   weeks: ProgressWeeklyVolume[];
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * the bars' accessible labels announce the volume in it. Weekly volume is a
+   * sum over a whole week of sets, so it reads in the member's unit rather
+   * than any one set's stored unit. Defaults to `'lbs'`.
+   */
+  weightUnit?: WeightUnit;
   testID?: string;
 }
 
@@ -115,6 +123,7 @@ const PAD_RIGHT = 12;
  */
 export function VolumeBarChart({
   weeks,
+  weightUnit = DEFAULT_LOAD_UNIT,
   testID = "volume-chart",
 }: VolumeBarChartProps) {
   const { colors } = useThemeTokens();
@@ -197,7 +206,7 @@ export function VolumeBarChart({
             >
               <Rect
                 testID={`${testID}-bar-${idx}`}
-                accessibilityLabel={`Week of ${week.week}: ${field === "volume" ? `${formatVolume(value)} lbs` : `${value} workouts`}`}
+                accessibilityLabel={`Week of ${week.week}: ${field === "volume" ? `${formatVolume(value)} ${weightUnit}` : `${value} workouts`}`}
                 x={barX}
                 y={barY}
                 width={barWidth}

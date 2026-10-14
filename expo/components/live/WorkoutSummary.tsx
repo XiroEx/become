@@ -13,6 +13,7 @@ import {
   setUnitLabel,
   tracksTime,
 } from "@become/core";
+import { DEFAULT_LOAD_UNIT, type WeightUnit } from "@/lib/live/bellStyle";
 
 // ─── WorkoutSummary ─────────────────────────────────────────────────────────
 // Native port of `webapp/components/WorkoutSummary.tsx` (NP-086).
@@ -448,10 +449,16 @@ const MAX_METRIC_TILES = 2;
  * (the web's `summaryMetricTiles`). A cardio-only session gets work time and
  * distance where a lifting session gets volume — before this, every session
  * got a volume tile, so finishing a treadmill walk celebrated `0`.
+ *
+ * `weightUnit` names the VOLUME tile (`Volume kg` for a kg member — NP-209,
+ * and the third argument the web's `summaryMetricTiles` now takes too).
+ * Volume is a sum across the whole session, so it is read in the member's
+ * unit rather than any one set's stored unit. Defaults to lbs.
  */
 export function summaryMetricTiles(
   exercises: WorkoutSummaryExercise[],
   setsByExercise: WorkoutSummarySet[][],
+  weightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
 ): SummaryTile[] {
   const t = summaryTotals(exercises, setsByExercise);
   const metrics: SummaryTile[] = [];
@@ -459,7 +466,7 @@ export function summaryMetricTiles(
     metrics.push({
       key: "volume",
       value: t.totalVolume.toLocaleString(),
-      label: "Volume lbs",
+      label: `Volume ${weightUnit}`,
     });
   }
   if (t.hasTimedWork) {
@@ -488,7 +495,7 @@ export function summaryMetricTiles(
     metrics.push({
       key: "volume",
       value: t.totalVolume.toLocaleString(),
-      label: "Volume lbs",
+      label: `Volume ${weightUnit}`,
     });
   }
   return [
@@ -603,6 +610,12 @@ export interface WorkoutSummaryProps {
   exerciseHistory: Record<string, WorkoutSummaryHistoryEntry>;
   streak: WorkoutSummaryStreak | null;
   goal: string | null;
+  /**
+   * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
+   * names the Volume tile, the one place this screen puts a unit on a load.
+   * Defaults to `'lbs'`, matching the web's `WorkoutSummary` prop.
+   */
+  weightUnit?: WeightUnit;
   onDone: () => void;
   /** Program-complete secondary: the journey recap (nearest native screen). */
   onViewJourney: () => void;
@@ -622,6 +635,7 @@ export function WorkoutSummary({
   exerciseHistory,
   streak,
   goal,
+  weightUnit = DEFAULT_LOAD_UNIT,
   onDone,
   onViewJourney,
   onViewLog,
@@ -641,7 +655,7 @@ export function WorkoutSummary({
       value: formatSummaryTime(elapsedSeconds),
       label: "Duration",
     },
-    ...summaryMetricTiles(exercises, setsByExercise).map((t) => ({
+    ...summaryMetricTiles(exercises, setsByExercise, weightUnit).map((t) => ({
       key: t.key,
       testId: TILE_TEST_IDS[t.key],
       tone: TILE_TONES[t.key],

@@ -42,6 +42,11 @@ import {
   type WorkoutLogCorrectionRequest,
 } from "@become/api-client";
 import { WEBAPP_BASE_URL } from "@/lib/config";
+import {
+  DEFAULT_LOAD_UNIT,
+  storedLoadUnit,
+  type WeightUnit,
+} from "@/lib/live/bellStyle";
 
 export type CorrectionField = "reps" | "weight" | "duration" | "distance" | "speed";
 
@@ -54,7 +59,6 @@ export const CORRECTION_FIELDS: CorrectionField[] = [
 ];
 
 const FIELD_UNITS: Partial<Record<CorrectionField, string>> = {
-  weight: "lb",
   duration: "sec",
   distance: "m",
   speed: "mph",
@@ -63,10 +67,32 @@ const FIELD_UNITS: Partial<Record<CorrectionField, string>> = {
 export interface CorrectableSet {
   reps: number | null;
   weight: number | null;
+  /**
+   * The unit `weight` was ENTERED in (`ISetLog.weightUnit`, NP-209), when the
+   * read path carries it: `GET /api/workouts/log` answers with the raw stored
+   * set, so a program log has it. `GET /api/progress` and
+   * `GET /api/workouts/session` project their sets field by field and do not
+   * send it, so those arrive absent — and absent means the member's own unit
+   * is used for the label (see `correctionWeightUnit`). Never converted.
+   */
+  weightUnit?: WeightUnit;
   duration: number | null;
   distance: number | null;
   speed: number | null;
   completed: boolean;
+}
+
+/**
+ * Which unit a set's load is LABELLED in while it is being corrected: the
+ * unit the set itself was entered in when it has one, otherwise the member's
+ * own (`profile.weightUnit ?? 'lbs'`). NP-209's rule, display-side only — the
+ * number in the box is never rescaled.
+ */
+export function correctionWeightUnit(
+  set: Pick<CorrectableSet, "weightUnit"> | null | undefined,
+  memberUnit: WeightUnit = DEFAULT_LOAD_UNIT,
+): WeightUnit {
+  return set?.weightUnit ? storedLoadUnit(set.weightUnit) : memberUnit;
 }
 
 export interface CorrectableExercise {
@@ -100,6 +126,7 @@ export interface CorrectableWorkout {
 function toCorrectableSet(raw: {
   reps?: number | null;
   weight?: number | null;
+  weightUnit?: string | null;
   duration?: number | null;
   distance?: number | null;
   speed?: number | null;
@@ -108,6 +135,12 @@ function toCorrectableSet(raw: {
   return {
     reps: raw.reps ?? null,
     weight: raw.weight ?? null,
+    // Carried only when the read path actually sent one — an absent unit must
+    // stay absent so the label falls back to the member's, not to a
+    // silently-invented 'lbs' on a kg member's set.
+    ...(raw.weightUnit === "lbs" || raw.weightUnit === "kg"
+      ? { weightUnit: raw.weightUnit }
+      : {}),
     duration: raw.duration ?? null,
     distance: raw.distance ?? null,
     speed: raw.speed ?? null,
@@ -279,9 +312,15 @@ export function visibleCorrectionFields(
 
 // ─── Changes (the review step) ──────────────────────────────────────────────
 
-function displayCorrectionValue(value: number | null, field: CorrectionField): string {
+function displayCorrectionValue(
+  value: number | null,
+  field: CorrectionField,
+  weightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
+): string {
   if (value === null) return "empty";
-  const unit = FIELD_UNITS[field];
+  // `weight` is the one field whose unit is not fixed: it reads in the unit
+  // that set was entered in, or the member's (NP-209).
+  const unit = field === "weight" ? weightUnit : FIELD_UNITS[field];
   return unit ? `${value} ${unit}` : String(value);
 }
 
@@ -292,6 +331,7 @@ function displayCorrectionValue(value: number | null, field: CorrectionField): s
 export function correctionChanges(
   original: CorrectableWorkout,
   draft: CorrectionDraft,
+  memberWeightUnit: WeightUnit = DEFAULT_LOAD_UNIT,
 ): string[] {
   const out: string[] = [];
   if (
@@ -318,11 +358,12 @@ export function correctionChanges(
       const prior = exercise.sets[si]!;
       const next = draftSets[si];
       if (!next) continue;
+      const setUnit = correctionWeightUnit(prior, memberWeightUnit);
       for (const field of CORRECTION_FIELDS) {
         const nextValue = parseDraftNumber(next[field]);
         if (nextValue !== prior[field]) {
           out.push(
-            `${exercise.name} \u00b7 Set ${si + 1} ${field}: ${displayCorrectionValue(prior[field], field)} \u2192 ${displayCorrectionValue(nextValue, field)}`,
+            `${exercise.name} \u00b7 Set ${si + 1} ${field}: ${displayCorrectionValue(prior[field], field, setUnit)} \u2192 ${displayCorrectionValue(nextValue, field, setUnit)}`,
           );
         }
       }

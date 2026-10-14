@@ -33,6 +33,7 @@ import {
 } from "@/lib/live/liveWorkoutCache";
 import { useLiveWorkout } from "@/lib/live/useLiveWorkout";
 import { useExerciseHints } from "@/lib/live/useExerciseHints";
+import { useLiftingUnit } from "@/lib/live/useLiftingUnit";
 import { programScope } from "@become/core";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -114,6 +115,11 @@ export default function LiveWorkoutRoute({
   const router = useRouter();
   const { colors } = useThemeTokens();
   const { token } = useAuth();
+  // The member's lifting-load unit (NP-209 / NP-080): `profile.weightUnit ??
+  // 'lbs'`, read ONCE here and handed to the live views and the summary, so
+  // every load on this screen agrees. Native never asks for it — the web gate
+  // owns the one ask and both apps read the same profile.
+  const liftingUnit = useLiftingUnit();
   // The screen must not dim mid-set (NP-082): keep the display awake while
   // the live view is open. Released automatically on unmount.
   useKeepAwake("live-workout");
@@ -442,6 +448,7 @@ export default function LiveWorkoutRoute({
           exerciseHistory={summaryHistory}
           streak={summaryStreak}
           goal={summaryGoal}
+          weightUnit={liftingUnit}
           onDone={() => router.replace("/(tabs)/programming")}
           onViewJourney={() =>
             router.push(
@@ -493,6 +500,7 @@ export default function LiveWorkoutRoute({
       <LiveWorkoutClient
         workout={vm}
         initialView={initialView}
+        weightUnit={liftingUnit}
         notes={notes}
         onNotesChange={setNotes}
         headerAction={

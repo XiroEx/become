@@ -22,23 +22,39 @@ import { setInputsFor } from "@/components/live/LiveSetRow";
 //     ("weight_reps", "reps") that the web does not use, so a bodyweight
 //     exercise was asked for a weight and a `none` exercise for both.
 //
-// Both are deleted. The rules now come from `@become/core`, which carries a
-// copy of the web's own modules (see shared/core/src/training/index.ts), kept
-// honest by webapp/tests/unit/nativeParity/trainingModules.test.ts.
+// Both rules now come from `@become/core`, which carries a copy of the web's
+// own modules (see shared/core/src/training/index.ts), kept honest by
+// webapp/tests/unit/nativeParity/trainingModules.test.ts.
+//
+// `lib/live/trackingInputs.ts` stays deleted outright. `lib/live/bellStyle.ts`
+// came BACK with NP-080/NP-084's kg port (NP-209's rule natively), but only as
+// the unit-aware LABEL layer around the shared logic — so what this guards is
+// no longer "the file is absent" but "the file does not answer the web's
+// questions itself". The old divergent rule must not reappear under that name.
 
 const EXPO_ROOT = path.resolve(__dirname, "..");
 
 describe("the retired native copies are gone", () => {
-  it("lib/live/bellStyle.ts and lib/live/trackingInputs.ts no longer exist", () => {
-    expect(fs.existsSync(path.join(EXPO_ROOT, "lib/live/bellStyle.ts"))).toBe(
-      false,
-    );
+  it("lib/live/trackingInputs.ts no longer exists", () => {
     expect(
       fs.existsSync(path.join(EXPO_ROOT, "lib/live/trackingInputs.ts")),
     ).toBe(false);
   });
 
-  it("nothing imports them any more", () => {
+  it("lib/live/bellStyle.ts delegates to @become/core and re-implements nothing", () => {
+    const file = path.join(EXPO_ROOT, "lib/live/bellStyle.ts");
+    expect(fs.existsSync(file)).toBe(true);
+    const source = fs.readFileSync(file, "utf8");
+    // It reads the rule from the shared copy of the web module…
+    expect(source).toMatch(/from\s+["']@become\/core["']/);
+    // …and does not re-declare it: no implement rule of its own, and above
+    // all no name/alias regex (the 2026-09-09 bug this guard exists for).
+    expect(source).not.toMatch(/export\s+function\s+getBellWeightInfo/);
+    expect(source).not.toMatch(/export\s+function\s+weightQuickPicks/);
+    expect(source).not.toMatch(/\\bkettlebell\\b|\\bkb\\b|\\bdumbbell\\b/);
+  });
+
+  it("nothing imports the retired trackingInputs module any more", () => {
     const offenders: string[] = [];
     const skip = new Set([
       "node_modules",
@@ -48,9 +64,9 @@ describe("the retired native copies are gone", () => {
       "android",
       "ios",
     ]);
-    // Import-shaped on purpose: this file NAMES the two modules in prose, and a
+    // Import-shaped on purpose: this file NAMES the module in prose, and a
     // prose match is not a caller.
-    const importsRetired = /from\s+["'][^"']*\/(bellStyle|trackingInputs)["']/;
+    const importsRetired = /from\s+["'][^"']*\/trackingInputs["']/;
     const walk = (dir: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (skip.has(entry.name)) continue;
