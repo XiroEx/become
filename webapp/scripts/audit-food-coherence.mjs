@@ -21,6 +21,13 @@
  * competing claim — it is an absence. Everything else is queued for the real
  * reviewer, which has a barcode, web search and a vision read, rather than being
  * guessed at here.
+ *
+ * WHAT DRAINS THE QUEUE THIS FILLS: `app/api/cron/verify-food-queue`, on the
+ * schedule in `.github/workflows/verify-food-queue.yml` (production only; prod
+ * and beta share one database). Before that existed, this script's 2026-08-13
+ * run left 45 foods sitting in `verification.state: 'queued'` with nothing in
+ * the repo able to take them out again — so `--apply` here was a write into a
+ * void. The drain takes a few tens of foods per run, oldest first.
  */
 
 import { MongoClient } from 'mongodb'
