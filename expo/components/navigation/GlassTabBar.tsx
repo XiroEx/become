@@ -17,6 +17,7 @@ import type {
 import { MIN_TOUCH_TARGET } from "@/lib/a11y/touchTarget";
 import { usePressed } from "@/lib/a11y/usePressed";
 import { lightHaptic } from "@/lib/feedback/haptics";
+import { isImmersiveNavigationState } from "@/lib/navigation/immersiveRoutes";
 import {
   TAB_BAR_HEIGHT,
   TAB_BAR_SIDE_INSET,
@@ -255,6 +256,22 @@ export function GlassTabBar({
     },
     [navigation],
   );
+
+  /**
+   * THE LIVE WORKOUT TAKES OVER THE WHOLE SCREEN (NP-381).
+   *
+   * The web's Live view is `fixed inset-0 z-100`: it covers the floating
+   * BottomNav pill, because a set is logged with one thumb and the
+   * `Complete Set →` button is where that thumb lands. Natively the live
+   * screen is a push inside the Workout tab, so this capsule floated over
+   * its CTA. Nothing imperative and nothing in the screen itself: the bar
+   * reads the state the navigator already hands it and answers with no bar
+   * while the deepest focused route is one of `IMMERSIVE_WORKOUT_ROUTES`
+   * (`lib/navigation/immersiveRoutes.ts`), which is the same list `TabStack`
+   * exempts from the reserved bottom band. Every hook above runs first, so
+   * this is a render result and not a conditional hook.
+   */
+  if (isImmersiveNavigationState(state)) return null;
 
   return (
     <View
