@@ -38,6 +38,8 @@ import { invalidateMindSession } from "@/lib/mind/sessionCache";
 import DayChoiceModal from "@/components/workout/DayChoiceModal";
 import { dateKey } from "@/lib/dayWindow";
 import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
+import { bellMemoryKey, bellsFromPerformances, resolveBellCount, showsBellTotal, type BellCount } from "@/lib/workout/bellCount";
+import BellCountToggle from "@/components/workout/BellCountToggle";
 import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 
 interface SetData {
@@ -235,6 +237,15 @@ export default function LiveWorkoutPage() {
   // the exercise they belong to, only while it's the current one.
   const [exerciseNudges, setExerciseNudges] = useState<Record<string, { id: string; title: string; body: string }>>({});
 
+  // One dumbbell or two, keyed by the exercise's memory key (its slug). Two
+  // maps, in priority order: what the member picked in THIS session, and what
+  // their most recent logged set for that exercise says (read from
+  // GET /api/workouts/last-performance — no preferences collection anywhere).
+  // Neither being set means the automatic per-exercise answer, which is what
+  // an absent ISetLog.bells has always meant. See lib/workout/bellCount.ts.
+  const [bellChoices, setBellChoices] = useState<Record<string, BellCount>>({});
+  const [rememberedBells, setRememberedBells] = useState<Record<string, BellCount>>({});
+
   // Exercise history from past workouts (e.g. "Last time: 185 lbs × 8 reps")
   const [exerciseHistory, setExerciseHistory] = useState<Record<string, { weight: number; reps: number; duration?: number; date: string }>>({});
   // All-time best per exercise — used for "Beat your PR" display
@@ -334,6 +345,28 @@ export default function LiveWorkoutPage() {
   // Per-bell weight convention — see lib/workout/dumbbellWeight.ts.
   const bellInfo = getBellWeightInfo(currentExercise);
   const bellStyle = bellInfo.style;
+  // …and how many of them, which is the member's call on a dumbbell/kettlebell
+  // exercise: their pick this session, else what they logged last time, else
+  // the automatic answer (so ignoring the control changes nothing).
+  const bellKey = bellMemoryKey(currentExercise);
+  const currentBells = resolveBellCount(bellInfo, bellChoices[bellKey], rememberedBells[bellKey]);
+  // The "= X total" hint follows that choice: two implements have a combined
+  // total worth showing, one does not.
+  const showBellTotal = showsBellTotal(bellInfo, currentBells);
+
+  /**
+   * What goes out with every set of this exercise — `undefined` for anything
+   * that is not dumbbell/kettlebell work with a weight box, so no set ever
+   * carries a count the member was never shown. Absent on the wire keeps
+   * reading as the automatic answer.
+   */
+  const bellsForExercise = useCallback((exercise: Exercise): BellCount | undefined => {
+    if (normalizeTracking(exercise.trackingType) !== "reps_weight") return undefined;
+    const info = getBellWeightInfo(exercise);
+    if (!info.style) return undefined;
+    const key = bellMemoryKey(exercise);
+    return resolveBellCount(info, bellChoices[key], rememberedBells[key]);
+  }, [bellChoices, rememberedBells]);
   // NP-209: lb/kg is the member's choice (profile.weightUnit), not a hardcoded
   // 'lbs' — see lib/useMemberWeightUnit.ts.
   const { weightUnit: memberWeightUnit } = useMemberWeightUnit();
@@ -357,6 +390,8 @@ export default function LiveWorkoutPage() {
   type PerformanceEntry = {
     reps?: number;
     weight?: number;
+    /** One dumbbell or two, as the member answered it last time. */
+    bells?: BellCount;
     speed?: number;
     duration?: number;
     distance?: number;
@@ -402,6 +437,11 @@ export default function LiveWorkoutPage() {
       // Quick sessions have no program to hang a history request off, so this
       // one call carries both: last time's numbers and the standing records.
       if (data.prs) setExercisePRs(data.prs);
+      // …and a third thing: how many dumbbells they used last time. Keyed by
+      // the same slug the request asked for, which is this exercise's memory
+      // key. A slug with no recorded choice is simply left out, and the
+      // control falls back to the automatic answer.
+      setRememberedBells(bellsFromPerformances(data.performances));
       return data.performances ?? {};
     } catch {
       return {};
@@ -1073,6 +1113,10 @@ export default function LiveWorkoutPage() {
       if (!token) return false;
       const exercisesToSave = (exercisesOverride ?? exercises).map((exercise, index) => {
         const swap = swappedExercises[index];
+        // One dumbbell or two, saved with every set of this exercise — the
+        // member's answer, or the automatic one they left alone. Undefined
+        // (and so omitted) for everything that is not bell work.
+        const bells = bellsForExercise(exercise);
         return {
           name: exercise.name,
           ...(exercise.exerciseSlug && { exerciseSlug: exercise.exerciseSlug }),
@@ -1090,6 +1134,7 @@ export default function LiveWorkoutPage() {
               setNumber: setIndex + 1,
               reps: timed ? 0 : (parseInt(set.reps) || 0),
               weight: timed ? 0 : (parseFloat(set.weight) || 0),
+              ...(bells && { bells }),
               ...(timed && first > 0 && { duration: first }),
               ...(t === 'time_distance' && second > 0 && { distance: second }),
               ...(set.speed && parseFloat(set.speed) > 0 && { speed: parseFloat(set.speed) }),
@@ -1203,7 +1248,7 @@ export default function LiveWorkoutPage() {
       savingRef.current = false;
       setSaving(false);
     }
-  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, quickNeedsName, scheduledDate]);
+  }, [programId, workout, exercises, currentPhase, swappedExercises, activeSecondsBaseline, sessionStartTime, isQuick, quickSessionId, quickMeta, quickNeedsName, scheduledDate, bellsForExercise]);
 
   // Save immediately when user leaves the app (switches apps, locks phone, closes tab).
   // Covers the 1.5s debounce race condition — iOS can cancel fetch during suspension
@@ -2506,7 +2551,19 @@ export default function LiveWorkoutPage() {
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
                         />
-                        {bellInfo.showTotal && Number(currentWeight) > 0 && (
+                        {/* One dumbbell or two — the member's call, not the
+                            catalogue's. Defaulted to the automatic answer (and
+                            to whatever they logged last time), so leaving it
+                            alone behaves exactly as before. Renders nothing
+                            unless this is dumbbell/kettlebell work. */}
+                        <BellCountToggle
+                          info={bellInfo}
+                          value={currentBells}
+                          onChange={(count) => setBellChoices((prev) => ({ ...prev, [bellKey]: count }))}
+                          tone="live"
+                          className="mt-1.5 justify-center"
+                        />
+                        {showBellTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
                             = {Number(currentWeight) * 2} {memberWeightUnit} total
                           </div>

@@ -9,8 +9,12 @@
 // originalExerciseSlug, falling back to name normalization).
 //
 // Response shape:
-//   { performances: { [slug]: { reps?, weight?, speed?, duration?, distance?,
-//                                date, programId? } | null } }
+//   { performances: { [slug]: { reps?, weight?, bells?, speed?, duration?,
+//                                distance?, date, programId? } | null } }
+//
+// `bells` (1 | 2) is the member's one-dumbbell-or-two choice from that set —
+// read by the Live and Track views to default their one/two control to what
+// they did last time. Absent means the automatic per-exercise answer.
 // ---------------------------------------------------------------------------
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,10 +22,19 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { formatPRsForLiveWorkout, type IExercisePR } from '@/lib/exercisePRs'
+import { readBellCount } from '@/lib/workout/bellCount'
 
 interface PerformanceEntry {
   reps?: number
   weight?: number
+  /**
+   * One dumbbell or two, as the member answered it on that set. This is how
+   * the choice is remembered for next time — the Live and Track views default
+   * their one/two control to it, with no preferences collection anywhere.
+   * Absent (legacy sets, and anything that is not dumbbell/kettlebell work)
+   * means the automatic per-exercise answer, same as it has always meant.
+   */
+  bells?: 1 | 2
   speed?: number
   duration?: number
   distance?: number
@@ -32,6 +45,7 @@ interface PerformanceEntry {
 interface LeanSet {
   reps?: number
   weight?: number
+  bells?: 1 | 2
   speed?: number
   duration?: number
   distance?: number
@@ -113,9 +127,14 @@ export async function GET(request: NextRequest) {
           for (let i = sets.length - 1; i >= 0; i--) {
             const s = sets[i]
             if (!s.completed) continue
+            // One dumbbell or two, as they answered it on that set. Only ever
+            // 1 or 2 — anything else reads as absent, i.e. "use the automatic
+            // answer" (lib/workout/bellCount.ts).
+            const bells = readBellCount(s.bells)
             performances[candidate] = {
               reps: s.reps,
               weight: s.weight,
+              ...(bells && { bells }),
               speed: s.speed,
               duration: s.duration,
               distance: s.distance,
