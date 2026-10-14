@@ -22,10 +22,12 @@ import { z } from 'zod';
 //   1. `POST /api/mind/session` takes `{ tz: <minutes west of UTC>, moves: [{ kind }] }`
 //      and `PUT /api/mind/session` takes `{ seed, plan, tz }`. The day the
 //      completion is stamped with comes from `tz` and from nothing else
-//      (`readTzOffsetFromBody` in webapp/lib/dayWindow.ts). The web sends
-//      `tzOffset` on the POST, which that reader IGNORES, so the web's own
-//      completions are stamped with the UTC day — NP-031 fixes the web; the
-//      native app must send `tz` from day one. `apiFetch` already does.
+//      (`readTzOffsetFromBody` in webapp/lib/dayWindow.ts). Both web callers send
+//      `tz` today (`SessionPlayer.tsx` on the POST and `MindJourney.tsx` on the
+//      PUT, verified on base sha 769265ec945554223fecbac75b29c416752136bb);
+//      `readTzOffsetFromBodyCompat` on the PUT exists only for bundles shipped
+//      before the fix. The native app must send `tz` from day one; `apiFetch`
+//      already does.
 //   2. BOTH of those methods answer a locked member with the canonical 403 gate
 //      body (`MindGatePayloadSchema`, `feature: 'mind-sessions'`,
 //      `requiresTier: 'plus'`). The PUT gates the START of a session on

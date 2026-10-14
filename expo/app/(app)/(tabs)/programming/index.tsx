@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Dumbbell,
   Heart,
+  HelpCircle,
   History,
   Search,
   Sparkles,
@@ -18,6 +19,8 @@ import { ContinueTrainingSection } from "@/components/workout/ContinueTrainingSe
 import { WorkoutNowSheet } from "@/components/workout/WorkoutNowSheet";
 import { GenerateSheet } from "@/components/programs/GenerateSheet";
 import { ProgramsCatalog } from "@/components/programs/ProgramsCatalog";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { QUICK_SESSION_DATE_RE } from "@/lib/quickSession/logPlan";
@@ -97,6 +100,20 @@ export default function ProgrammingIndexRoute() {
         <View className="flex-row items-center justify-between mb-2">
           <Text className="text-foreground text-2xl font-bold">Workout</Text>
           <View className="flex-row items-center gap-2">
+            <Pressable
+              testID="programming-help-button"
+              accessibilityRole="button"
+              accessibilityLabel="Training help"
+              onPress={() => requestNativeTourHub("programming")}
+              style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+              className="rounded-xl border border-border p-2"
+            >
+              <HelpCircle
+                color={colors["muted-foreground"]}
+                size={20}
+                strokeWidth={1.5}
+              />
+            </Pressable>
             <Pressable
               testID="workout-open-history"
               accessibilityRole="button"
