@@ -211,6 +211,32 @@ iOS-specific decisions:
   whatever Settings says, so `lib/a11y/reducedMotion.ts` turns the fade and the
   slide into a cut and follows `reduceMotionChanged` live.
 
+## The rest alert, and the ring/silent switch
+
+The rest timer's alert is **both a sound and a vibration**, every time, in Live
+and in Track (Jon's decision on NP-028; the web shipped it first as NP-210).
+`lib/live/restEndAlert.ts` fires the two channels; the sound is
+`assets/sounds/rest-end.wav` through **expo-audio**, the vibration is
+expo-haptics' success notification.
+
+iOS specifics worth knowing before changing it:
+
+- **The silent switch wins.** `setAudioModeAsync({ playsInSilentMode: false })`
+  — a phone flipped to silent plays nothing, which is deliberate: the HAPTIC is
+  the alert there ("both sound and silent vibrations", Jon's words), and an app
+  that beeps through the silent switch in a quiet gym gets uninstalled. We do
+  not claim `playback` with silent-mode override and do not hold the session
+  open in the background (`shouldPlayInBackground: false`).
+- **It mixes.** `interruptionMode: "mixWithOthers"`, so the beep plays over the
+  member's music instead of pausing it every 90 s.
+- **A locked iPhone needs the notification to ask for sound.** iOS plays
+  nothing for a scheduled local notification whose content omits `sound`, which
+  is why the in-app alert alone was not enough: `lib/live/restAlert.ts` now
+  schedules with `sound: true`. Do Not Disturb and the member's notification
+  settings still decide whether it is heard — we ask, the OS answers.
+- No new permission and no new usage string: playback needs neither (recording
+  would, and `allowsRecording` is explicitly `false`).
+
 ## Haptic feedback
 
 Tier-1 haptics are deferred to the dev build (`expo-haptics` isn't bundled in
@@ -288,6 +314,10 @@ stale day can never show as today no matter how long the gap.
   launch-to-first-paint colours are one colour
 - `__tests__/permissionStrings.test.ts` — a permission-bearing module without
   its usage string fails
+- `__tests__/restEndAlert.test.ts` + `__tests__/card-NP-082-rest-alert-sound-and-track.test.tsx`
+  — the rest alert fires BOTH channels against the fake audio/haptics modules,
+  neither channel can swallow the other, the audio mode leaves the silent
+  switch in charge, and the scheduled notification asks for sound
 - `__tests__/iosSafeArea.test.ts` — every top-level screen file references
   `SafeAreaView`
 - `__tests__/iosKeyboardAvoiding.test.ts` — every input-bearing screen file

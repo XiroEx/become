@@ -134,6 +134,25 @@ using the metadata returned from `getNotificationChannels()`:
 The push-sender (webapp's `api/cron/notify`) sets the `channelId` on the
 outbound message so each notification lands on the right channel.
 
+## The rest alert, and the ringer
+
+The rest timer's alert is **both a sound and a vibration**, every time, in Live
+and in Track (Jon's decision on NP-028; the web shipped it first as NP-210).
+`lib/live/restEndAlert.ts` fires the two channels: `assets/sounds/rest-end.wav`
+through **expo-audio**, plus expo-haptics.
+
+- **The ringer wins.** expo-audio's `playsInSilentMode: false` suppresses
+  playback while the ringer mode is *silent* or *vibrate* on Android, which is
+  the behaviour we want: the member's phone setting decides whether the beep is
+  heard, and the vibration is the alert when it is not.
+- `interruptionMode: "mixWithOthers"` requests no audio focus, so a workout
+  playlist keeps playing through the beep (and Android does not duck it).
+- The locked-phone half is a local notification on the **`rest-timer`**
+  channel, which already declares `sound: true, vibrate: true` at high
+  importance — so the member can tune the rest alarm in Android settings
+  without touching workout reminders, and Do Not Disturb still applies.
+- Nothing is platform-branched: the same two calls run on both phones.
+
 ## App-link deep-link verification
 
 `app.json`'s `android.intentFilters` declares the `become.redbtn.io` `/verify`
@@ -437,6 +456,10 @@ Android-specific parts:
   + unsubscribes + intercepts via makeConfirmOnBack
 - `__tests__/notificationChannels.test.ts` — 4 channels with correct
   importance + unique IDs
+- `__tests__/restEndAlert.test.ts` + `__tests__/card-NP-082-rest-alert-sound-and-track.test.tsx`
+  — both alert channels fire at zero against the fake audio/haptics modules,
+  the audio mode leaves the ringer in charge, and the scheduled alert stays on
+  the `rest-timer` channel
 - `__tests__/androidWidgets.test.ts` — the four widgets held equal across
   `app.json`, `ANDROID_WIDGETS` and the server's own `WidgetKey` union, the
   30-minute floor, the Geist faces, and `index.js` still registering the handler

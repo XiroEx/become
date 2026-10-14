@@ -740,7 +740,9 @@ expo/
 ├── assets/               # icon.png (store, opaque), adaptive-icon.png
 │   │                     # (Android foreground), splash-icon.png —
 │   │                     # all three written by scripts/generate-app-assets.mjs
-│   └── fonts/            # Geist + Geist Mono at 400/500/600/700, and the OFL
+│   ├── fonts/            # Geist + Geist Mono at 400/500/600/700, and the OFL
+│   └── sounds/           # rest-end.wav — the audible half of the rest alert,
+│                         #   written by scripts/generate-rest-alert-sound.mjs
 ├── scripts/              # Build-time Node scripts (asset generation)
 ├── global.css            # Tailwind directives + CSS variable tokens
 ├── tailwind.config.js    # NativeWind 4 + Tailwind v3 config

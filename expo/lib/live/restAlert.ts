@@ -6,7 +6,8 @@
  * notification is scheduled ONLY when the OS permission is already granted —
  * this module never asks for permission itself (NP-028 owns the ask; until
  * Jon answers, the timer stays in-app for members who skipped the onboarding
- * prompt, with a haptic at zero exactly as the web vibrates).
+ * prompt, where the in-app alert at zero — sound AND vibration, see
+ * `lib/live/restEndAlert.ts` — is the whole alert).
  *
  * Everything that touches the native module lives behind `RestAlertDeps` so
  * unit tests never import `expo-notifications` (which needs a device). The
@@ -34,9 +35,39 @@ export interface RestAlertHandle {
   id: string | null;
 }
 
+/**
+ * expo-notifications, resolved ONCE at import inside a try/catch — a `require`
+ * rather than the dynamic `import()` this file used to do, for two reasons:
+ *
+ *  - a dynamic `import()` throws "without --experimental-vm-modules" under
+ *    jest, which silently made the production deps below UNTESTABLE — so
+ *    nothing could assert that the locked-phone alert asks for sound;
+ *  - resolving at import rather than inside the alert means nothing loads a
+ *    module while a rest is ending, which under jest could land after the
+ *    environment is torn down.
+ *
+ * It is still safe for the unit suite, which picks up
+ * `__mocks__/expo-notifications.js` instead of a native module, and a build
+ * without the module answers null instead of crashing (same shape as
+ * `lib/auth/localAuthentication.ts`).
+ */
+const notificationsModule: typeof import("expo-notifications") | null = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-notifications") as typeof import("expo-notifications");
+  } catch {
+    return null;
+  }
+})();
+
+function loadNotifications(): typeof import("expo-notifications") | null {
+  return notificationsModule;
+}
+
 async function defaultIsGranted(): Promise<boolean> {
   try {
-    const Notifications = await import("expo-notifications");
+    const Notifications = loadNotifications();
+    if (!Notifications) return false;
     const res = await Notifications.getPermissionsAsync();
     return res.granted;
   } catch {
@@ -45,12 +76,22 @@ async function defaultIsGranted(): Promise<boolean> {
 }
 
 async function defaultSchedule(endsAtMs: number): Promise<string> {
-  const Notifications = await import("expo-notifications");
+  const Notifications = loadNotifications();
+  if (!Notifications) throw new Error("expo-notifications is unavailable");
   const seconds = Math.max(1, Math.ceil((endsAtMs - Date.now()) / 1000));
   return Notifications.scheduleNotificationAsync({
     content: {
       title: "Rest over — next set",
       body: "Your rest timer finished. Time to lift.",
+      // SOUND, not only a banner (NP-082, Jon on NP-028: both sound and
+      // vibration when the rest ends). Android already had it — the
+      // `rest-timer` channel declares `sound: true, vibrate: true` — but iOS
+      // plays nothing unless the content asks, so a locked iPhone showed a
+      // silent banner. `true` is the OS default alert tone, which also
+      // carries iOS's own notification haptic, and the member's Do Not
+      // Disturb / notification settings still decide: we ask for sound, the
+      // OS decides whether to make it.
+      sound: true,
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
@@ -62,7 +103,8 @@ async function defaultSchedule(endsAtMs: number): Promise<string> {
 
 async function defaultCancel(id: string): Promise<void> {
   try {
-    const Notifications = await import("expo-notifications");
+    const Notifications = loadNotifications();
+    if (!Notifications) return;
     await Notifications.cancelScheduledNotificationAsync(id);
   } catch {
     /* cancelling is best-effort: a missing id may not keep a stale alert */
