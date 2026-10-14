@@ -1523,9 +1523,10 @@ Test: `expo/__tests__/training-entry-points.test.tsx` renders the REAL route
 tree (`test-support/appRoutes.tsx`) and taps the tab bar, so "two taps from the
 tab bar" is a render rather than a claim.
 
-Until NP-083, NP-074 and NP-069 land, this wiring makes three native paths that
-write wrong data reachable (swap renaming, enrolment without a start date or a
-schedule, schedule settings that regenerate into the past). Beta shares
+NP-083, NP-074 and NP-069 have all landed (parity doc section 3, rows 17-19:
+swap saves the replacement's slug, enrolment sends a device-local start date,
+schedule settings submit no start date), so the three native paths below no
+longer write wrong data. Beta shares
 production's database (NP-008), so pointing a build at beta is no protection:
 builds carrying this wiring are used only with named test accounts.
 
