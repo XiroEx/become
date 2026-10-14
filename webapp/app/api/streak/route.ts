@@ -3,7 +3,7 @@ import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import { STREAK_MILESTONES, isStreakAlive } from '@/lib/streak'
-import { readTzOffset, localDateKey, dateKey } from '@/lib/dayWindow'
+import { readTzOffset, localDateKey, isEntryOnDay } from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,11 +30,9 @@ export async function GET(request: NextRequest) {
     const tzOffset = readTzOffset(request.nextUrl.searchParams)
     const todayKey = localDateKey(null, tzOffset)
 
-    const lastActivityKey = progress.lastActivityDate
-      ? dateKey(new Date(progress.lastActivityDate), tzOffset)
-      : null
-
-    const activityToday = lastActivityKey === todayKey
+    const activityToday = progress.lastActivityDate
+      ? isEntryOnDay(progress.lastActivityDate, todayKey, tzOffset)
+      : false
 
     // "Today" in the CALLER's local day, shifted the same way localDateKey
     // does — so a member west or east of the server doesn't have their
