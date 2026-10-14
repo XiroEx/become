@@ -58,7 +58,7 @@ is already scoped inside it:
   of weight + steps. Opt-in toggle in profile."), explicitly sequenced after
   **P15** (push notifications, Expo-Go-compatible) because P16 needs a dev
   build.
-- `expo/gap_analysis/GAPS.md` confirms the real gap: the actual native
+- `expo/gap_analysis/PARITY_GAP_ANALYSIS.md` confirms the real gap: the actual native
   bridges — `react-native-health` (iOS) and `react-native-health-connect`
   (Android) — aren't in Expo Go's prebuilt module set, so today the adapters
   are wired to test fakes only. Neither package is in `expo/package.json`
@@ -169,4 +169,4 @@ docs (cloud.ouraring.com/docs); Garmin Connect Developer Program status
 (developer.samsung.com, openwearables.io); Strava API rate limits and 2026
 tier changes (developers.strava.com); Terra/Vital/Spike pricing and scope
 comparison (sahha.ai, nextbuild.co); this repo's `NATIVE_MVP_PLAN.md`,
-`expo/gap_analysis/GAPS.md`, and `expo/lib/health/*`.
+`expo/gap_analysis/PARITY_GAP_ANALYSIS.md`, and `expo/lib/health/*`.

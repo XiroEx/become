@@ -134,7 +134,7 @@ Front-loaded foundations so user-visible work compounds. Doc + foundations first
 |---|---|---|
 | 9 | **P12** Timeline + scheduling | Calendar + scheduled list + schedule settings form. |
 | 9 | **P13** Chat | Conversation list + thread + send + unread badge. |
-| 9 | **P14** Admin shell (Tier 2 limited) | Read-only admin food list + exercise list, Tier 3 deep-links for everything heavy. GAPS.md committed. |
+| 9 | **P14** Admin shell (Tier 2 limited) | Read-only admin food list + exercise list, Tier 3 deep-links for everything heavy. PARITY_GAP_ANALYSIS.md committed. |
 | 10 | **P15** Push notifications | `expo-notifications`, token registration to existing `/api/push/subscribe`, foreground + background handlers, tap-to-deep-link. |
 | 10 | **P16** Health integration | HealthKit + Health Connect read of weight + steps. Opt-in toggle in profile. |
 | 10 | **P17** Biometrics | `expo-local-authentication` on cold open if JWT exists. |
@@ -230,7 +230,7 @@ The 21 phases below are exact mirrors of the `workingPhases` array decomposed fo
 | 11 | **P11-recipes-browser** | Recipe list + detail + save-as-meal (Tier 3 deep-link for create/edit). | `native-nutrition-food-log` |
 | 12 | **P12-timeline-and-scheduling** | Calendar + scheduled list + schedule settings form. | `native-timeline-planning` |
 | 13 | **P13-chat** | Conversation list + thread + send + unread badge. | `native-chat-admin` |
-| 14 | **P14-admin-shell-tier2** | Read-only admin food + exercise lists; GAPS.md documents Tier 3 deep-links. | `native-chat-admin` |
+| 14 | **P14-admin-shell-tier2** | Read-only admin food + exercise lists; PARITY_GAP_ANALYSIS.md documents Tier 3 deep-links. | `native-chat-admin` |
 | 15 | **P15-push-notifications** | `expo-notifications` + `/api/push/subscribe` registration + tap-to-deep-link. | `native-native-only-enhancements` |
 | 16 | **P16-health-integration** | HealthKit (iOS) + Health Connect (Android) read of weight + steps; opt-in. | `native-native-only-enhancements` |
 | 17 | **P17-biometrics-auth** | `expo-local-authentication` on cold open if stored JWT exists. | `native-native-only-enhancements` |

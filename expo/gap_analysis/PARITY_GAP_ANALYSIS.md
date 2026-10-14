@@ -2,7 +2,7 @@
 
 **Baseline:** commit `82f8b4bc` (origin/beta, whose tree is identical to origin/main, which is production), audited 2026-09-28. Written 2026-09-29.
 
-**Scope:** every surface of the Next.js web app (`webapp/`, the source of truth) compared with the React Native app (`expo/`, Expo SDK 56, expo-router, NativeWind 4) and the zod client only the native app consumes (`shared/api-client`). The result is 206 tickets (122 for the first store release) under EPIC Native App Parity (board card 6ab027beee5866d95d14dea5), keyed NP-001 to NP-206. This document supersedes `expo/gap_analysis/GAPS.md`.
+**Scope:** every surface of the Next.js web app (`webapp/`, the source of truth) compared with the React Native app (`expo/`, Expo SDK 56, expo-router, NativeWind 4) and the zod client only the native app consumes (`shared/api-client`). The result is 206 tickets (122 for the first store release) under EPIC Native App Parity (board card 6ab027beee5866d95d14dea5), keyed NP-001 to NP-206. This document supersedes the early gap analysis catalogue (retired by NP-116).
 
 **Decisions it honours:** redbtn publishes the apps (9/13). No In-App Purchase: Plus is sold only by external link to the web checkout on the US storefront, and prices always come from the API (9/20, Apple 3.1.1(a)). Jon archived the iOS wrapper feature on 9/27, and on 9/28 George decided the native app ships on both stores, replacing the planned iOS wrapper and the Android Trusted Web Activity alike, so it is the first binary on both listings. (The slice analysis ran before that decision and treated Android v1 as the TWA; the plan, the waves and this document were corrected for it on 9/29.) Chat and community are on hold for the first store release (9/28), so the native v1 hides them.
 
@@ -173,7 +173,7 @@ Status words: **Parity** (native matches the web), **Partial** (some of it exist
 | Notification and email settings | `webapp/app/dashboard/settings/page.tsx`, `webapp/app/api/notifications/preferences/route.ts`, `webapp/app/api/notifications/unsubscribe/route.ts` | Nothing. | Missing | NP-068 |
 | Deep links and universal links | `webapp/public/.well-known/apple-app-site-association`, `webapp/public/.well-known/assetlinks.json` | `expo/app.json`, `expo/lib/auth/deepLinkHandler.ts`, `expo/lib/account/deleteAccount.ts`: Placeholders; AASA lists /verify only; no single resolver (NP-034). | Broken | NP-034, NP-044 |
 | Web-only screens opened from the app | `webapp/middleware.ts` | `expo/lib/programs/browserLauncher.ts`, `expo/lib/admin/adminLinks.ts`: Opens the web signed out; the program edit and recipe create links point at pages that do not exist. | Broken | NP-121 |
-| Tier 3 link helper and the GAPS.md catalogue | n/a | `expo/lib/programs/browserLauncher.ts`, `expo/lib/admin/adminLinks.ts`, `expo/lib/nutrition/recipeLinks.ts`, and 1 more: Dead URLs and no session hand-off. The program-edit link goes with NP-135, the recipe links with NP-144, the admin links with NP-122; the signed-in hand-off is NP-121, and NP-116's parity checklist replaces GAPS.md. NP-012 decides whether any member-facing surface links out in v1. | Broken | NP-012, NP-122, NP-144 |
+| Tier 3 link helper and the legacy catalogue | n/a | `expo/lib/programs/browserLauncher.ts`, `expo/lib/admin/adminLinks.ts`, `expo/lib/nutrition/recipeLinks.ts`, and 1 more: Dead URLs and no session hand-off. The program-edit link goes with NP-135, the recipe links with NP-144, the admin links with NP-122; the signed-in hand-off is NP-121, and NP-116's parity checklist replaces the early catalogue. NP-012 decides whether any member-facing surface links out in v1. | Broken | NP-012, NP-122, NP-144 |
 | Member timezone recorded for reminders and allowance windows | `webapp/lib/captureUserTimezone.ts`, `webapp/app/api/cron/notify/route.ts:250-254`, `webapp/lib/allowances.ts:174-199` | Nothing. Only workout saves record a zone on either client; the notify cron skips members without one. Native sends none until the tz fix. | Partial | NP-009, NP-070 |
 
 ### Training: browse, programs and enrolment
@@ -402,7 +402,7 @@ Tier 3 means the surface stays on the web and native shows at most a link. Admin
 | Surface | Web reference | Why it stays on the web | Native treatment | Tickets |
 |---|---|---|---|---|
 | Admin and coach tools (16 pages: overview, users, analytics, programs, exercises and review, foods, community, Mind admin and lab) and every `/api/admin/*` route | `webapp/app/dashboard/admin/`, `webapp/app/api/admin/` | Staff-only, heavy forms, low frequency | The two native admin lists leave the store build; their code is deleted and an admin-only Admin tools row opens the web | NP-013, NP-122, NP-121 |
-| Member program builder (create and edit custom programs) in v1 | `webapp/app/dashboard/programs/new/`, `webapp/app/dashboard/programs/[programId]/edit/` | The reused admin editor, about 1,900 lines with drag and drop | v1 hides it or opens the web (NP-012); list, enrol and delete natively; a native builder later | NP-135, NP-168, NP-171, NP-172 |
+| Member program builder (create and edit custom programs) in v1 | `webapp/app/dashboard/programs/new/`, `webapp/app/dashboard/programs/[programId]/edit/` | The reused admin editor, about 1,900 lines with drag and drop | Ported natively (NP-168, NP-171, NP-172; NATIVE_BUILDER_HAS_EXERCISE_ROWS = true); native create/edit live | NP-135, NP-168, NP-171, NP-172 |
 | Custom exercise demo upload and trim | `POST /api/exercises/custom/[slug]/video`, `/trim` | Video upload and trim editor, low frequency | An "Add a demo on the web" link from the native custom exercise screen | NP-169 |
 | Sharing a program with members (trainer or admin) | `webapp/app/dashboard/programs/mine/ShareProgramModal.tsx`, `POST /api/programs/[programId]/share` | A staff capability, not a member feature | Not shown natively | none |
 | Stripe Checkout and the billing portal | `POST /api/billing/checkout`, `POST /api/billing/portal` | No In-App Purchase; 3.1.1(a) allows an external link on the US storefront only | Open in Safari, never an in-app browser; public return pages and a way back | NP-052, NP-053, NP-051, NP-054 |
@@ -422,19 +422,15 @@ Tier 3 means the surface stays on the web and native shows at most a link. Admin
 | Meal to food | `POST /api/meals/[id]/save-as-food` | No web caller | Not ported | none |
 | Retired and server-only routes | `POST /api/auth/login`, `/register` (410 Gone); the billing webhook; the purge-deletions and resweep-tiers crons; admin bootstrap and e2e fixtures | No client | Native must never call them | none |
 
-**Folded in from `GAPS.md`.** The old catalogue listed nine deferred surfaces; most of its URLs no longer exist.
+**Deferred admin and coach editor surfaces (folded in from retired catalogue, NP-116).**
+Audited against main: surfaces that are no longer true gaps (member program builder ported natively via NP-168/NP-171/NP-172; recipe create/edit ported natively via NP-144; onboarding coach setup nonexistent; video framing handled natively via `expo/lib/videoFraming.ts`; HealthKit/Health Connect tracked under native module tickets NP-183–NP-186, NP-199) have been dropped. Active Tier 3 deferrals remain below with webapp URL, deferral rationale, Tier classification, and revisit clause:
 
-| GAPS.md surface (URL it names) | At `82f8b4bc` | Treatment now |
-|---|---|---|
-| Program editor (`/dashboard/programming/[id]/edit`) | Redirects to `/dashboard/workout/[id]/edit`, which does not exist. The member editor is `/dashboard/programs/[programId]/edit` (a member feature: 3 custom programs free), the admin one `/dashboard/admin/programs/[programId]/edit` | Member builder row above; admin editor Tier 3 |
-| Workout builder, create (`/dashboard/programming/create`) | Now `/dashboard/programs/new` | Member builder row above |
-| Recipe create and edit (`/dashboard/nutrition/recipes/create`, `/[id]/edit`) | Neither page exists; the live pages are `/dashboard/recipes/new` and `/dashboard/recipes/[id]/edit` | No longer Tier 3: ported after v1 (NP-144) |
-| Exercise editor and video upload (`/dashboard/admin/exercises/[slug]`) | The live page is `/dashboard/admin/exercises/[slug]/edit` | Admin, Tier 3 |
-| Admin food review (`/dashboard/admin/foods/[id]`) | Live | Admin, Tier 3 |
-| Admin user and cohort tooling (`/dashboard/admin/users`) | Live | Admin, Tier 3 |
-| Onboarding coach setup (`/dashboard/admin/onboarding`) | Does not exist | Dropped |
-| Framing editor (`/dashboard/admin/exercises/[slug]/framing`) | No such page; framing is edited on the exercise edit page (`/api/exercises/[slug]/framing`) | Admin, Tier 3 |
-| HealthKit and Health Connect smoke test (native module) | Not a web surface | Real tickets now (NP-183, NP-184, NP-185, NP-186, NP-199) |
+| Surface | Webapp URL | Why deferred | Tier | Revisit |
+|---|---|---|---|---|
+| **Admin program editor / catalog builder** | `https://become.redbtn.io/dashboard/admin/programs/[programId]/edit` | Heavy drag-reorder form with @hello-pangea/dnd over the SHARED catalog. Admin-only (`requireAdmin`), used by ~1 person; NP-013 keeps the native admin screens out of store builds and NP-122 leaves one admin-only link to the web. | Tier 3 | permanent |
+| **Exercise editor + video upload** | `https://become.redbtn.io/dashboard/admin/exercises/[slug]/edit` | Form + S3 video upload + framing editor — needs presigned PUT plumbing on native and a canvas-equivalent for framing. Coach-only. | Tier 3 | permanent |
+| **Admin food review** | `https://become.redbtn.io/dashboard/admin/foods/[id]` | USDA / OFF reconciliation form, variant merging UI, nutrition override editor. Coach-only. | Tier 3 | permanent |
+| **Admin user / cohort tooling** | `https://become.redbtn.io/dashboard/admin/users` | User search, role management, cohort assignment. Coach-only, low-frequency. | Tier 3 | permanent |
 
 ## 8. What only native can do
 
@@ -583,7 +579,7 @@ The chain runs through the foundation into the Mind session player, the hardest 
 
 ## 12. Keeping this document current
 
-- **The matrix is the source for the parity checklist.** NP-116 writes `expo/PARITY.md` from section 5 for Jon's sign-off and retires `GAPS.md` and its format test (`expo/__tests__/gaps.test.ts`). After that, `PARITY.md` is the sign-off record and this document the analysis behind it.
+- **The matrix is the source for the parity checklist.** NP-116 writes `expo/PARITY.md` from section 5 for Jon's sign-off and retires the early gap catalogue and its format test. After that, `PARITY.md` is the sign-off record and this document the analysis behind it.
 - **Update the row with the ticket.** A PR that lands a native parity ticket changes the Status and Tickets cells of the rows it touches, in the same PR.
 - **Let the contract test tell you when the web moved.** When NP-016 fails on a web PR, the author updates the shared schema, and the matrix row if a native screen changes behaviour.
 - **Re-audit on a clock.** Re-run section 4's checks and re-read the matrix before each store submission and after each Expo SDK upgrade. Change the baseline commit and date at the top when you do, and note what moved.
