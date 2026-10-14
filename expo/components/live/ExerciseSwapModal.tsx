@@ -317,6 +317,31 @@ export function ExerciseSwapModal({
     });
   };
 
+  // Both live screens hand `workoutExerciseSlugs` down as a fresh array
+  // literal (`workout.exercises.map(...)`), and their session timer re-renders
+  // them once a second. Keying the fetch effects below off that array's
+  // IDENTITY re-ran every one of them on every tick: alternatives were
+  // refetched (flipping the sheet back to "Finding alternatives…"), the custom
+  // list was refetched and the search debounce was restarted — so the sheet
+  // never settled. Depend on the CONTENT instead, the way AddExerciseSheet
+  // already does (`components/workout/AddExerciseSheet.tsx`).
+  const workoutSlugsKey = workoutExerciseSlugs.join(",");
+  const workoutSlugs = useMemo(
+    () => (workoutSlugsKey ? workoutSlugsKey.split(",") : []),
+    [workoutSlugsKey],
+  );
+
+  // Alternatives belong to ONE exercise. Drop them the moment the target
+  // changes (a new swap, or the sheet closing — both routes pass
+  // `exerciseSlug={swapSlug ?? undefined}`) so the next open can never show
+  // the previous exercise's list. Derived during render, React's own
+  // "adjust state when a prop changes" pattern, so it lands before paint.
+  const [altsFor, setAltsFor] = useState(exerciseSlug);
+  if (altsFor !== exerciseSlug) {
+    setAltsFor(exerciseSlug);
+    if (internalAlts.length > 0) setInternalAlts([]);
+  }
+
   // Reset local state when opened/closed
   const prevVisibleRef = useRef(visible);
   useEffect(() => {
@@ -338,10 +363,14 @@ export function ExerciseSwapModal({
     prevVisibleRef.current = visible;
   }, [visible, releaseVideo]);
 
-  // Fetch alternatives if not provided via props
+  // Fetch alternatives if not provided via props. A caller that fetches them
+  // itself (the program route's `useLiveWorkout`) says so through `loading`
+  // while its own request is in flight, so the sheet must not fire a second,
+  // duplicate request for the same exercise in the meantime.
   useEffect(() => {
     if (!visible) return;
     if (propsAlternatives !== undefined) return;
+    if (propsLoading) return;
     if (!exerciseSlug) return;
 
     let active = true;
@@ -349,8 +378,8 @@ export function ExerciseSwapModal({
       setInternalLoading(true);
       try {
         const params = new URLSearchParams({ slug: exerciseSlug, limit: "30" });
-        if (workoutExerciseSlugs.length > 0) {
-          params.set("workoutSlugs", workoutExerciseSlugs.join(","));
+        if (workoutSlugsKey) {
+          params.set("workoutSlugs", workoutSlugsKey);
         }
         if (programRole) {
           params.set("programRole", programRole);
@@ -376,7 +405,15 @@ export function ExerciseSwapModal({
     return () => {
       active = false;
     };
-  }, [visible, exerciseSlug, workoutExerciseSlugs, programRole, propsAlternatives, token]);
+  }, [
+    visible,
+    exerciseSlug,
+    workoutSlugsKey,
+    programRole,
+    propsAlternatives,
+    propsLoading,
+    token,
+  ]);
 
   // Fetch user's custom exercises
   useEffect(() => {
@@ -393,7 +430,7 @@ export function ExerciseSwapModal({
           },
         );
         if (active && data?.exercises) {
-          const excluded = new Set([exerciseSlug, ...workoutExerciseSlugs]);
+          const excluded = new Set([exerciseSlug, ...workoutSlugs]);
           const mapped: AlternativeCandidate[] = (data.exercises as CustomExercise[])
             .filter((e: CustomExercise) => !excluded.has(e.slug))
             .map((e: CustomExercise) => ({
@@ -423,7 +460,7 @@ export function ExerciseSwapModal({
     return () => {
       active = false;
     };
-  }, [visible, exerciseSlug, workoutExerciseSlugs, token]);
+  }, [visible, exerciseSlug, workoutSlugs, token]);
 
   // Debounced catalog search
   useEffect(() => {
@@ -439,7 +476,7 @@ export function ExerciseSwapModal({
             getToken: () => token ?? undefined,
           },
         );
-        const excluded = new Set([exerciseSlug, ...workoutExerciseSlugs]);
+        const excluded = new Set([exerciseSlug, ...workoutSlugs]);
         const mapped: AlternativeCandidate[] = ((res?.exercises ?? []) as ExerciseSearchResult[])
           .filter((e: ExerciseSearchResult) => !excluded.has(e.slug))
           .map((e: ExerciseSearchResult) => ({
@@ -465,7 +502,7 @@ export function ExerciseSwapModal({
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchQuery, exerciseSlug, workoutExerciseSlugs, token]);
+  }, [searchQuery, exerciseSlug, workoutSlugs, token]);
 
   // Fetch variations when an alternative card is expanded
   useEffect(() => {
@@ -506,13 +543,19 @@ export function ExerciseSwapModal({
     searchQuery.trim().length < 2 ? null : catalogMatches;
 
   const baseAlternatives = propsAlternatives ?? internalAlts;
+  // "Finding alternatives…" takes the place of the entire list, so the sheet
+  // may only show it when there is nothing to show yet. Results for THIS
+  // exercise being refreshed in the background (a token change, a re-render
+  // of the live screen) must update in place rather than blank the sheet and
+  // paint it again — that flicker is the glitch members reported. Stale
+  // results can't leak through: `internalAlts` is dropped the moment
+  // `exerciseSlug` changes (see `altsFor` above). A caller that owns the
+  // fetch itself still drives the spinner through `loading`.
   const isLoading =
     propsLoading ||
-    internalLoading ||
-    (propsAlternatives === undefined &&
-      internalAlts.length === 0 &&
-      Boolean(exerciseSlug) &&
-      internalLoading);
+    (internalLoading &&
+      baseAlternatives.length === 0 &&
+      customExercises.length === 0);
 
   // Merge search candidates
   const searchCandidates = useMemo(() => {

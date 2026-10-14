@@ -241,7 +241,19 @@ export function LiveSetRow({
   return (
     <View
       testID={tid}
-      className="flex-row items-center gap-2 mb-2 p-2 bg-card border border-border rounded-xl"
+      // A LOGGED SET LOOKS LOGGED (NP-381). Jon: "It doesn't have any
+      // variation when logging." The web's Track row answers a completed set
+      // with a green wash — `bg-green-100 dark:bg-green-900/20` against
+      // `bg-white dark:bg-zinc-800`
+      // (`webapp/app/dashboard/workout/[programId]/workout/WorkoutFormClient.tsx`
+      // ~1919) — so a glance down the grid says what is done. Natively every
+      // row was `bg-card` whatever its state, and the only thing that changed
+      // was the tick itself.
+      className={`flex-row items-center gap-2 mb-2 p-2 border rounded-xl ${
+        state.completed
+          ? "bg-green-100 dark:bg-green-900/20 border-green-300 dark:border-green-800"
+          : "bg-card border-border"
+      }`}
     >
       <Text
         testID={`${tid}-label`}
@@ -290,52 +302,39 @@ export function LiveSetRow({
             </Text>
           ) : null}
           {quickPicks.length > 0 ? (
-            <View
+            // ONE SIDEWAYS STRIP, never a wrapping grid (NP-381). The web's
+            // only quick picks are the live view's `flex gap-2 overflow-x-auto`
+            // strip; natively the TRACK row wrapped a dozen pills into three
+            // or four lines under the weight box, which is most of the "lot
+            // more spacing" in the set grid — a two-set exercise grew taller
+            // than the phone. Same pills, same testIDs, one line.
+            <ScrollView
               testID={`${tid}-quick-picks`}
-              style={
-                compact
-                  ? { marginTop: 4 }
-                  : { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 }
-              }
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              style={{ marginTop: compact ? 4 : 6 }}
+              contentContainerStyle={{ flexDirection: "row", gap: compact ? 4 : 6 }}
             >
-              {compact ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ flexDirection: "row", gap: 4 }}
+              {quickPicks.map((pick) => (
+                <Pressable
+                  key={pick}
+                  testID={`${tid}-quick-pick-${pick}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={quickPickLabel(pick, weightUnit)}
+                  onPress={() => onChange({ ...state, weight: pick })}
+                  className={
+                    compact
+                      ? "rounded-full bg-muted px-2.5 py-1"
+                      : "rounded-full bg-muted px-3 py-1.5"
+                  }
                 >
-                  {quickPicks.map((pick) => (
-                    <Pressable
-                      key={pick}
-                      testID={`${tid}-quick-pick-${pick}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={quickPickLabel(pick, weightUnit)}
-                      onPress={() => onChange({ ...state, weight: pick })}
-                      className="rounded-full bg-muted px-2.5 py-1"
-                    >
-                      <Text className="text-muted-foreground text-xs font-semibold">
-                        {String(pick)}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              ) : (
-                quickPicks.map((pick) => (
-                  <Pressable
-                    key={pick}
-                    testID={`${tid}-quick-pick-${pick}`}
-                    accessibilityRole="button"
-                    accessibilityLabel={quickPickLabel(pick, weightUnit)}
-                    onPress={() => onChange({ ...state, weight: pick })}
-                    className="rounded-full bg-muted px-3 py-1.5"
-                  >
-                    <Text className="text-muted-foreground text-xs font-semibold">
-                      {String(pick)}
-                    </Text>
-                  </Pressable>
-                ))
-              )}
-            </View>
+                  <Text className="text-muted-foreground text-xs font-semibold">
+                    {String(pick)}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           ) : null}
           {!compact && prefill ? (
             <Text

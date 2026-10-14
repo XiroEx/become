@@ -39,6 +39,19 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
   animation: PUSH_ANIMATION,
 };
 
+export interface TabStackProps {
+  /**
+   * Screens of THIS tab that take over the whole phone (NP-381) — the live
+   * workout, and nothing else so far. They are exempt from the bottom band
+   * the Stack reserves for the floating glass bar, because the bar hides
+   * itself while one of them is focused (`GlassTabBar`), so the band would be
+   * dead space under an immersive screen. The names are the Stack's own, and
+   * they live in `lib/navigation/immersiveRoutes.ts` so the bar and the
+   * padding can never disagree about which screens those are.
+   */
+  fullScreenRoutes?: readonly string[];
+}
+
 /**
  * The body of every `(tabs)/<tab>/_layout.tsx`. They differ in nothing, and a
  * copy in each of seven files is seven chances to drift.
@@ -55,7 +68,7 @@ export const TAB_STACK_SCREEN_OPTIONS: ComponentProps<
  * (`lib/theme/navigationTheme.ts`); `contentStyle` alone never reached it,
  * which is why a push flashed white at the left edge whatever this file said.
  */
-export function TabStack() {
+export function TabStack({ fullScreenRoutes = [] }: TabStackProps = {}) {
   const { colors } = useThemeTokens();
   const animation = useStackAnimation();
   // NP-351: the tab bar is a floating capsule now, absolutely positioned over
@@ -93,6 +106,23 @@ export function TabStack() {
         name="index"
         options={{ contentStyle: { backgroundColor: colors.background } }}
       />
+      {/*
+       * …AND SO DOES AN IMMERSIVE SCREEN (NP-381).
+       *
+       * The live workout is the web's `fixed inset-0` takeover: the glass bar
+       * hides itself while it is focused, so the band above would be dead
+       * space at the bottom of a full-screen view — the `Complete Set →` CTA
+       * floated 86pt off the glass with nothing under it. Same opt-out as the
+       * tab roots, for the opposite reason: the roots pass content UNDER the
+       * bar, these have no bar at all.
+       */}
+      {fullScreenRoutes.map((name) => (
+        <Stack.Screen
+          key={name}
+          name={name}
+          options={{ contentStyle: { backgroundColor: colors.background } }}
+        />
+      ))}
     </Stack>
   );
 }

@@ -65,9 +65,31 @@ function setPlayerMuted(player: VideoPlayer, muted: boolean) {
   player.muted = muted;
 }
 
+/**
+ * THE FRAME, AS A CLASS — a 16:9 rounded card, or the whole surface (NP-381).
+ *
+ * `fill` is what the `live` surface has always claimed to be: "full-screen
+ * background, typically portrait on a phone" (`lib/videoFraming.ts`). The web's
+ * live clip is `absolute inset-0` behind the chrome; natively it was drawn in
+ * the same 16:9 rounded card as a form field, which is what left the live
+ * screen a letterboxed clip with a column spread out underneath it. Every
+ * other surface is unchanged.
+ */
+function frameClass(fill: boolean | undefined, rest: string): string {
+  return fill
+    ? `relative flex-1 overflow-hidden ${rest}`
+    : `relative w-full aspect-video overflow-hidden rounded-xl ${rest}`;
+}
+
 export interface FramedVideoProps extends VideoFramingInput {
   src?: string | null;
   surface: VideoSurface;
+  /**
+   * Fill the parent instead of drawing a 16:9 rounded card — the full-screen
+   * background of the Live workout (NP-381). The parent decides the box; this
+   * only drops the aspect ratio and the corners.
+   */
+  fill?: boolean;
   exerciseName?: string;
   thumbnailUrl?: string | null;
   videoTrim?: VideoTrimOverride | null;
@@ -85,17 +107,27 @@ export interface FramedVideoProps extends VideoFramingInput {
 
 function VideoPlaceholder({
   exerciseName,
+  fill,
   testID,
 }: {
   exerciseName?: string;
   surface: VideoSurface;
+  fill?: boolean;
   testID?: string;
 }) {
   const { colors } = useThemeTokens();
   return (
     <View
       testID={testID ? `${testID}-placeholder` : "framed-video-placeholder"}
-      className="relative w-full aspect-video overflow-hidden rounded-xl bg-card/60 border border-border items-center justify-center p-4"
+      // Filling, the content is anchored near the TOP rather than centred:
+      // the web does the same (`justify-start pt-28`) so the icon and the
+      // line do not sit behind the panel that covers the bottom of the clip.
+      className={frameClass(
+        fill,
+        fill
+          ? "bg-card/40 items-center justify-start gap-3 pt-28 px-4"
+          : "bg-card/60 border border-border items-center justify-center p-4",
+      )}
     >
       <Dumbbell size={36} color={colors["muted-foreground"]} style={{ marginBottom: 8, opacity: 0.5 }} />
       <Text
@@ -111,11 +143,13 @@ function VideoPlaceholder({
 function YouTubeDemo({
   url,
   exerciseName,
+  fill,
   testID,
 }: {
   url: string;
   exerciseName?: string;
   surface: VideoSurface;
+  fill?: boolean;
   testID?: string;
 }) {
   const { colors } = useThemeTokens();
@@ -134,7 +168,7 @@ function YouTubeDemo({
       accessibilityRole="button"
       accessibilityLabel={`Open YouTube demo for ${exerciseName || "exercise"}`}
       onPress={handlePress}
-      className="relative w-full aspect-video overflow-hidden rounded-xl bg-black items-center justify-center"
+      className={frameClass(fill, "bg-black items-center justify-center")}
     >
       {thumbnailUrl ? (
         <Image
@@ -164,6 +198,7 @@ function VideoThumbnailView({
   thumbnailUrl,
   exerciseName,
   onPress,
+  fill,
   testID,
   showBadge,
 }: {
@@ -171,6 +206,7 @@ function VideoThumbnailView({
   exerciseName?: string;
   surface: VideoSurface;
   onPress?: () => void;
+  fill?: boolean;
   testID?: string;
   showBadge?: boolean;
 }) {
@@ -181,7 +217,12 @@ function VideoThumbnailView({
       accessibilityRole="button"
       accessibilityLabel={`Play demo video for ${exerciseName || "exercise"}`}
       onPress={onPress}
-      className="relative w-full aspect-video overflow-hidden rounded-xl bg-card/60 border border-border items-center justify-center"
+      className={frameClass(
+        fill,
+        fill
+          ? "bg-card/60 items-center justify-center"
+          : "bg-card/60 border border-border items-center justify-center",
+      )}
     >
       {thumbnailUrl ? (
         <Image
@@ -245,6 +286,7 @@ interface DirectVideoProps {
   onDuration?: (seconds: number) => void;
   onDimensions?: (width: number, height: number) => void;
   showBadge?: boolean;
+  fill?: boolean;
   testID?: string;
 }
 
@@ -259,6 +301,7 @@ function DirectVideo({
   videoTrim,
   onDuration,
   showBadge,
+  fill,
   testID,
 }: DirectVideoProps) {
   const { colors } = useThemeTokens();
@@ -367,7 +410,7 @@ function DirectVideo({
   return (
     <View
       testID={testID ? `${testID}-container` : "framed-video-container"}
-      className="relative w-full aspect-video overflow-hidden rounded-xl bg-black"
+      className={frameClass(fill, "bg-black")}
     >
       <VideoView
         testID={testID ? `${testID}-player` : "framed-video-player"}
@@ -431,6 +474,7 @@ export function FramedVideo({
   onDuration,
   onDimensions,
   showBadge,
+  fill,
   className,
   style,
   testID,
@@ -471,12 +515,17 @@ export function FramedVideo({
 
   const activeSrc = resolveMediaUrl(resolved.videoUrl);
 
+  // Filling, the wrapper has to grow too — the frame class below only drops
+  // the aspect ratio, it cannot give this view a height.
+  const wrapperStyle = fill ? [{ flex: 1 }, style] : style;
+
   if (!activeSrc) {
     return (
-      <View className={className} style={style}>
+      <View className={className} style={wrapperStyle}>
         <VideoPlaceholder
           exerciseName={exerciseName}
           surface={surface}
+          fill={fill}
           testID={testID}
         />
       </View>
@@ -487,12 +536,13 @@ export function FramedVideo({
   // show the thumbnail or placeholder view with zero video player allocation.
   if (isPlaying === false) {
     return (
-      <View className={className} style={style}>
+      <View className={className} style={wrapperStyle}>
         <VideoThumbnailView
           thumbnailUrl={resolveMediaUrl(resolved.thumbnailUrl)}
           exerciseName={exerciseName}
           surface={surface}
           onPress={onPlayPress}
+          fill={fill}
           showBadge={showBadge}
           testID={testID}
         />
@@ -502,11 +552,12 @@ export function FramedVideo({
 
   if (isYouTubeUrl(activeSrc)) {
     return (
-      <View className={className} style={style}>
+      <View className={className} style={wrapperStyle}>
         <YouTubeDemo
           url={activeSrc}
           exerciseName={exerciseName}
           surface={surface}
+          fill={fill}
           testID={testID}
         />
       </View>
@@ -514,10 +565,11 @@ export function FramedVideo({
   }
 
   return (
-    <View className={className} style={style}>
+    <View className={className} style={wrapperStyle}>
       <DirectVideo
         src={activeSrc}
         surface={surface}
+        fill={fill}
         posterUrl={resolveMediaUrl(resolved.thumbnailUrl)}
         exerciseName={exerciseName}
         videoWidth={resolved.videoWidth}
