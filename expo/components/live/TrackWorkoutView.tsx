@@ -4,7 +4,19 @@ import { Text } from "@/components/Text";
 import { Input } from "@/components/Input";
 import { ChevronDown } from "lucide-react-native";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
-import { LiveSetRow, type LiveSetState } from "@/components/live/LiveSetRow";
+import {
+  LiveSetRow,
+  setInputsFor,
+  type LiveSetState,
+} from "@/components/live/LiveSetRow";
+import { BellCountToggle } from "@/components/live/BellCountToggle";
+import {
+  bellCountFor,
+  bellMemoryKeyFor,
+  showsBellTotal,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
 import { ExerciseHint } from "@/components/live/ExerciseHint";
 import {
   ExerciseGroupNav,
@@ -49,6 +61,18 @@ export interface TrackWorkoutViewProps {
    * member's unit. Defaults to `'lbs'`.
    */
   weightUnit?: WeightUnit;
+  /**
+   * ONE DUMBBELL OR TWO, keyed by the exercise's memory key
+   * (`bellMemoryKeyFor`): `bellChoices` is the member's pick in THIS session,
+   * `rememberedBells` what their most recent logged set says. Neither means
+   * the automatic per-exercise answer — see `lib/live/bellCount.ts`. The
+   * control is asked ONCE PER EXERCISE (the web asks it on the exercise, not
+   * on each set) and every set of that exercise saves the same answer.
+   * `onBellChoice` records a new one; omitted, no control renders.
+   */
+  bellChoices?: BellChoices;
+  rememberedBells?: BellChoices;
+  onBellChoice?: (memoryKey: string, count: BellCount) => void;
   /** Session notes — the web's `notes` field on the save (Track only). */
   notes: string;
   onNotesChange: (notes: string) => void;
@@ -186,6 +210,9 @@ export function TrackWorkoutView({
   onSetChange,
   onRequestSwap,
   weightUnit = DEFAULT_LOAD_UNIT,
+  bellChoices,
+  rememberedBells,
+  onBellChoice,
   notes,
   onNotesChange,
   showNotes,
@@ -236,6 +263,48 @@ export function TrackWorkoutView({
         onDismiss={() => onDismissHint?.(slug.toLowerCase())}
         testID={`${testID}-${slug}-hint`}
       />
+    );
+  };
+
+  /**
+   * ONE DUMBBELL OR TWO for this exercise — the web's Track control, asked
+   * once per exercise (never per set: the choice belongs to the exercise, and
+   * every set of it saves the same answer) and defaulted to the automatic
+   * answer, so leaving it alone changes nothing. The copy under it is the
+   * web's, and its tail follows the choice: a pair has a combined total worth
+   * disowning, one implement does not.
+   *
+   * Renders nothing without `onBellChoice`, and nothing on an exercise with no
+   * weight box or no implement to count.
+   */
+  const renderBellChoice = (ex: LiveWorkoutExercise, withHint = true) => {
+    if (!onBellChoice) return null;
+    if (!setInputsFor(ex.trackingType).weight) return null;
+    const info = getBellWeightInfo(ex);
+    if (!info.style) return null;
+    const bells = bellCountFor(ex, bellChoices, rememberedBells);
+    const implement = info.style === "dumbbell" ? "dumbbell" : "kettlebell";
+    const memoryKey = bellMemoryKeyFor(ex);
+    return (
+      <View style={{ gap: 6, marginBottom: 8 }}>
+        <BellCountToggle
+          info={info}
+          value={bells}
+          onChange={(count) => onBellChoice(memoryKey, count)}
+          label="How many?"
+          testID={`${testID}-${ex.slug}-bells`}
+        />
+        {withHint ? (
+          <Text
+            testID={`${testID}-${ex.slug}-bell-hint`}
+            className="text-muted-foreground text-xs"
+          >
+            {`Enter the weight of one ${implement}${
+              showsBellTotal(info, bells) ? " — not the combined total." : "."
+            }`}
+          </Text>
+        ) : null}
+      </View>
     );
   };
 
@@ -351,6 +420,7 @@ export function TrackWorkoutView({
               </Text>
             ) : null}
             {renderHint(ex.slug)}
+            {renderBellChoice(ex)}
             {/* The web's table header row above the set grid — `SET · REPS ·
                 DONE`, 11px uppercase (NP-364). */}
             <Text
@@ -364,6 +434,7 @@ export function TrackWorkoutView({
                 key={i}
                 setIndex={i}
                 bell={bell}
+                bells={bellCountFor(ex, bellChoices, rememberedBells)}
                 weightUnit={weightUnit}
                 exerciseName={ex.name}
                 equipment={ex.equipment}
@@ -558,10 +629,15 @@ export function TrackWorkoutView({
                           </Pressable>
                         ) : null}
                       </View>
+                      {/* Asked once per exercise (round 1) rather than per
+                          round — the choice is the exercise's, and every round
+                          of it saves the same answer. */}
+                      {r === 0 ? renderBellChoice(ex, false) : null}
                       <LiveSetRow
                         compact
                         setIndex={r}
                         bell={bell}
+                        bells={bellCountFor(ex, bellChoices, rememberedBells)}
                         weightUnit={weightUnit}
                         exerciseName={ex.name}
                         equipment={ex.equipment}

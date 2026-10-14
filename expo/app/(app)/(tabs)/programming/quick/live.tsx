@@ -125,6 +125,12 @@ export default function QuickLiveRoute({
     finishedTitle,
     finishedElapsedSeconds,
     activeSeconds,
+    // One dumbbell or two (#1986's field, natively): the hook holds the
+    // answers and saves them with every set, exactly as the program screen's
+    // hook does.
+    bellChoices,
+    rememberedBells,
+    setBellChoice,
     onGridChange,
     onFinish,
     swapSlug,
@@ -443,6 +449,9 @@ export default function QuickLiveRoute({
         // offer, nothing to undo.
         enableSkipFlow
         activeSeconds={activeSeconds}
+        bellChoices={bellChoices}
+        rememberedBells={rememberedBells}
+        onBellChoice={setBellChoice}
         positionScope={quickScope(sessionId)}
         positionStore={
           positionStore !== undefined ? positionStore : resolvedStore

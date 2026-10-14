@@ -49,6 +49,7 @@ import {
   loadRepsLabel,
   type WeightUnit,
 } from "@/lib/live/bellStyle";
+import type { BellChoices, BellCount } from "@/lib/live/bellCount";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 
@@ -213,6 +214,23 @@ export interface LiveWorkoutClientProps {
    * behaves exactly as before.
    */
   weightUnit?: WeightUnit;
+  /**
+   * ONE DUMBBELL OR TWO (`ISetLog.bells`), keyed by the exercise's memory key
+   * (`bellMemoryKeyFor` — its slug). Two maps, in priority order:
+   * `bellChoices` is what the member picked in THIS session and
+   * `rememberedBells` what their most recent logged set for that exercise says
+   * (read from `GET /api/workouts/last-performance`). Neither being set means
+   * the automatic per-exercise answer, which is what an absent `bells` has
+   * always meant — see `lib/live/bellCount.ts`.
+   *
+   * Handed to BOTH views, so the same control, the same default and the same
+   * "= X total" hint rule reach Live and Track. `onBellChoice` is how the
+   * answer gets back to the state machine that saves it; omitted, no control
+   * renders and every set logs exactly as it did before.
+   */
+  bellChoices?: BellChoices;
+  rememberedBells?: BellChoices;
+  onBellChoice?: (memoryKey: string, count: BellCount) => void;
   /**
    * In-workout hints keyed by lowercase exercise slug
    * (`useExerciseHints`, the web's `exerciseNudges`). Rendered under the
@@ -528,6 +546,9 @@ export function LiveWorkoutClient({
   exerciseHistory,
   exercisePRs,
   weightUnit = DEFAULT_LOAD_UNIT,
+  bellChoices: bellChoicesProp,
+  rememberedBells,
+  onBellChoice,
   exerciseHints,
   onDismissHint,
   resumed = false,
@@ -569,6 +590,12 @@ export function LiveWorkoutClient({
   const totalRounds = workout.groupRounds ?? 1;
   const [view, setView] = useState<WorkoutView>(initialView);
   const [notes, setNotes] = useState<string>(notesProp ?? "");
+  // The member's one/two answers for this session, held here so BOTH views
+  // read one map (the route mirrors them into the state machine that saves
+  // them — the same arrangement `notes` uses).
+  const [bellChoices, setBellChoices] = useState<BellChoices>(
+    bellChoicesProp ?? {},
+  );
   // The web shows its "Resuming" pill for 3s after a resume; native shows
   // the same line until it ages out. Timer-free: the flag arrives as a
   // prop and clears on the first edit, which is the first thing a resumed
@@ -1157,6 +1184,21 @@ export function LiveWorkoutClient({
     [onNotesChange],
   );
 
+  /**
+   * The member said how many implements they are using for an exercise. Kept
+   * here (so both views re-render on it) and reported upward (so the save
+   * carries it). Nothing is written for an exercise nobody answered: absent
+   * still means the automatic answer.
+   */
+  const handleBellChoice = useCallback(
+    (memoryKey: string, count: BellCount) => {
+      if (!memoryKey) return;
+      setBellChoices((prev) => ({ ...prev, [memoryKey]: count }));
+      onBellChoice?.(memoryKey, count);
+    },
+    [onBellChoice],
+  );
+
   // The web's `isSkipping` rule, read off the CURRENT Live step's inputs:
   // blank inputs mean the primary button offers to skip rather than
   // complete. Intervals never skip - there is nothing required to be
@@ -1466,6 +1508,9 @@ export function LiveWorkoutClient({
               workoutFlow={workoutFlow}
               flowIndexByKey={flowIndexByKey}
               weightUnit={weightUnit}
+              bellChoices={bellChoices}
+              {...(rememberedBells ? { rememberedBells } : {})}
+              {...(onBellChoice ? { onBellChoice: handleBellChoice } : {})}
               groupType={workout.groupType}
               round={round}
               totalRounds={totalRounds}
@@ -1506,6 +1551,9 @@ export function LiveWorkoutClient({
             grid={grid}
             workoutFlow={workoutFlow}
             weightUnit={weightUnit}
+            bellChoices={bellChoices}
+            {...(rememberedBells ? { rememberedBells } : {})}
+            {...(onBellChoice ? { onBellChoice: handleBellChoice } : {})}
             stepIndex={liveStepIndex}
             onStepChange={handleStepChange}
             onSetChange={handleLiveSetChange}

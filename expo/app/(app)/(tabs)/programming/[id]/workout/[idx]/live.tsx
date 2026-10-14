@@ -161,6 +161,13 @@ export default function LiveWorkoutRoute({
     grid,
     notes,
     setNotes,
+    // One dumbbell or two (#1986's field, natively): the hook holds the
+    // member's answers and reads last time's from
+    // GET /api/workouts/last-performance, because the hook is what saves them
+    // with every set.
+    bellChoices,
+    rememberedBells,
+    setBellChoice,
     restoredGrid,
     isResuming,
     onGridChange,
@@ -503,6 +510,9 @@ export default function LiveWorkoutRoute({
         weightUnit={liftingUnit}
         notes={notes}
         onNotesChange={setNotes}
+        bellChoices={bellChoices}
+        rememberedBells={rememberedBells}
+        onBellChoice={setBellChoice}
         headerAction={
           workoutShareBody ? (
             <NativeShareButton

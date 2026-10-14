@@ -8,6 +8,7 @@
  *
  *   webapp/lib/workoutUtils.ts          → src/training/workoutUtils.ts
  *   webapp/lib/workout/tracking.ts      → src/training/workout/tracking.ts
+ *   webapp/lib/workout/bellCount.ts     → src/training/workout/bellCount.ts
  *   webapp/lib/streaks/tile.ts          → src/training/streaks/tile.ts
  *   …and so on for every file listed below.
  *
@@ -35,6 +36,7 @@ export * from './workout/tracking'
 export * from './workout/durationUnit'
 export * from './workout/equipmentVariant'
 export * from './workout/dumbbellWeight'
+export * from './workout/bellCount'
 export * from './workout/buildAsYouGo'
 export * from './workout/position'
 export * from './quickSession/naming'
