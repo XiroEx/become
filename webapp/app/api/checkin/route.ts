@@ -159,36 +159,54 @@ export async function POST(request: NextRequest) {
     const checkInTodayKey = localDateKey(null, checkInTzOffset(tz))
     const checkInToday = utcMidnightDateKey(checkInTodayKey)
 
-    const progress =
-      (await UserProgress.findOne({ userId: auth.userId })) ??
-      (await UserProgress.create({ userId: auth.userId }))
-
-    if (!progress.checkIn) progress.checkIn = {}
+    const now = new Date()
 
     if (action === 'shown') {
-      progress.checkIn.lastShownAt = new Date()
-    } else {
-      progress.checkIn.lastSkippedDate = checkInToday
-      progress.checkIn.lastShownAt = new Date()
+      // Targeted update, not progress.save().
+      // save() validates the WHOLE UserProgress document, so one malformed legacy
+      // subdocument anywhere in it — a workout set missing `setNumber`, say —
+      // threw here and returned a 500 from a daily member action.
+      await UserProgress.updateOne(
+        { userId: auth.userId },
+        {
+          $set: {
+            'checkIn.lastShownAt': now,
+          },
+        },
+        { upsert: true },
+      )
 
-      // Skipping is a per-DAY event. The old flow POSTed {skip:true} to
-      // /api/weight on every press, which incremented consecutiveSkips each
-      // time — so three presses in one day read as three skipped days and
-      // dragged the member toward the 14-day "mandatory" weigh-in in under a
-      // week. Only the first skip of a local day counts.
-      if (!progress.weightSkipTracking) {
-        progress.weightSkipTracking = { consecutiveSkips: 0 }
-      }
-      const lastPrompt = progress.weightSkipTracking.lastPromptDate
-      const alreadyCountedToday = lastPrompt && isEntryOnDay(lastPrompt, todayKey, tz)
-      if (!alreadyCountedToday) {
-        progress.weightSkipTracking.consecutiveSkips =
-          (progress.weightSkipTracking.consecutiveSkips || 0) + 1
-      }
-      progress.weightSkipTracking.lastPromptDate = today
+      return NextResponse.json({ success: true })
     }
 
-    await progress.save()
+    // action === 'skip'
+    // Skipping is a per-DAY event. The old flow POSTed {skip:true} to
+    // /api/weight on every press, which incremented consecutiveSkips each
+    // time — so three presses in one day read as three skipped days and
+    // dragged the member toward the 14-day "mandatory" weigh-in in under a
+    // week. Only the first skip of a local day counts.
+    const progress = await UserProgress.findOne({ userId: auth.userId })
+    const lastPrompt = progress?.weightSkipTracking?.lastPromptDate
+    const alreadyCountedToday = lastPrompt && isEntryOnDay(lastPrompt, todayKey, tz)
+    const currentSkips = progress?.weightSkipTracking?.consecutiveSkips || 0
+    const consecutiveSkips = alreadyCountedToday ? currentSkips : currentSkips + 1
+
+    // Targeted update, not progress.save().
+    // save() validates the WHOLE UserProgress document, so one malformed legacy
+    // subdocument anywhere in it — a workout set missing `setNumber`, say —
+    // threw here and returned a 500 from a daily member action.
+    await UserProgress.updateOne(
+      { userId: auth.userId },
+      {
+        $set: {
+          'checkIn.lastSkippedDate': checkInToday,
+          'checkIn.lastShownAt': now,
+          'weightSkipTracking.consecutiveSkips': consecutiveSkips,
+          'weightSkipTracking.lastPromptDate': today,
+        },
+      },
+      { upsert: true },
+    )
 
     return NextResponse.json({ success: true })
   } catch (error) {
