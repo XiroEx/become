@@ -207,7 +207,7 @@ export async function recordStreakActivity(
           await sendStreakMilestoneEmail(confirmedEmail!, newMilestone, newStreak, userId)
         })
         .catch(() => {})
-      UserProgress.updateOne({ userId }, { $set: { lastStreakEmailDate: today } }).catch(() => {})
+      await UserProgress.updateOne({ userId }, { $set: { lastStreakEmailDate: today } }).catch(() => {})
     }
   }
 
