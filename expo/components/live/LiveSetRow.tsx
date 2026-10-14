@@ -26,6 +26,11 @@ import {
   weightQuickPicks,
   type WeightUnit,
 } from "@/lib/live/bellStyle";
+import {
+  defaultBellCount,
+  showsBellTotal,
+  type BellCount,
+} from "@/lib/live/bellCount";
 
 /** A set with nothing in it — no bell, no total hint. */
 export const NO_BELL: BellWeightInfo = { style: null, showTotal: false };
@@ -86,6 +91,14 @@ export interface LiveSetRowProps {
    * equipment-first rule, not a guess at the name. Defaults to {@link NO_BELL}.
    */
   bell?: BellWeightInfo;
+  /**
+   * HOW MANY implements the member said they are using for this exercise
+   * (`ISetLog.bells`, their own answer). Defaults to `defaultBellCount(bell)`
+   * — today's automatic answer — so every pre-existing call site reads exactly
+   * as before. The `= N lbs total` hint follows it, never the catalogue alone:
+   * one dumbbell has no combined total worth claiming.
+   */
+  bells?: BellCount;
   /**
    * The member's lifting-load unit (`profile.weightUnit ?? 'lbs'`, NP-209) —
    * names the weight box and the doubled-total hint. Defaults to `'lbs'`, the
@@ -162,6 +175,7 @@ function getWeightLabel(
 export function LiveSetRow({
   setIndex,
   bell = NO_BELL,
+  bells,
   weightUnit = DEFAULT_LOAD_UNIT,
   exerciseName,
   equipment,
@@ -198,13 +212,15 @@ export function LiveSetRow({
     unitOverride && unitOverride.forType === trackingType
       ? unitOverride.unit
       : defaultDurationUnit(trackingType);
-  // The web's rule, verbatim: the doubled total is shown when the implement is
-  // one of a loaded PAIR and a positive weight has been entered. A goblet
-  // squat, a carry and any single-arm dumbbell work are one implement, so
-  // `showTotal` is false for them and no total is claimed.
+  // The web's rule, verbatim: the doubled total is shown when the member is
+  // loading a PAIR and a positive weight has been entered. A goblet squat, a
+  // carry and any single-arm dumbbell work are one implement by default, and
+  // the member can say "one" on anything else — either way `showsBellTotal`
+  // is false and no total is claimed (`lib/live/bellCount.ts`).
+  const bellCount = bells ?? defaultBellCount(bell);
   const perBell = state.weight ?? prefill?.weight;
   const helper =
-    bell.showTotal && typeof perBell === "number" && Number.isFinite(perBell) && perBell > 0
+    showsBellTotal(bell, bellCount) && typeof perBell === "number" && Number.isFinite(perBell) && perBell > 0
       ? bellTotalLabel(perBell, weightUnit)
       : null;
   // The web's "Logging as Dumbbell" disclosure

@@ -199,7 +199,12 @@ describe("buildWorkoutSaveRequest", () => {
       originalExerciseSlug: "bench",
       swappedFromName: "Barbell Bench Press",
       prescription: { sets: 1 },
-      sets: [{ setNumber: 1, reps: 10, weight: 50, completed: true }],
+      // `bells: 2` is the one/two answer travelling with the set (#1986's
+      // `ISetLog.bells`, natively): "DB Press" is dumbbell work, nobody
+      // touched the control, so the save carries the AUTOMATIC answer — a
+      // pair — exactly as the web's does. A barbell or bodyweight exercise
+      // carries no such field at all (see bellCountNative.test.tsx).
+      sets: [{ setNumber: 1, reps: 10, weight: 50, completed: true, bells: 2 }],
     });
   });
 });

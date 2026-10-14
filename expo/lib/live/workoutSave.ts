@@ -7,6 +7,11 @@ import type {
   LiveGrid,
   LiveWorkoutExercise,
 } from "@/components/live/LiveWorkoutClient";
+import {
+  bellsForExercise,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
 
 export interface BuildWorkoutSaveInput {
   programId: string;
@@ -45,6 +50,15 @@ export interface BuildWorkoutSaveInput {
    * Map of exercise index to original exercise details for swapped exercises.
    */
   swappedExercises?: Record<number, { originalSlug: string; originalName: string }>;
+  /**
+   * ONE DUMBBELL OR TWO (`ISetLog.bells`), keyed by the exercise's memory key:
+   * the member's pick this session (`bellChoices`) and what their last logged
+   * set said (`rememberedBells`). Both optional and both may be empty — an
+   * exercise with no answer either way sends NOTHING, which still reads as the
+   * automatic per-exercise answer. See `lib/live/bellCount.ts`.
+   */
+  bellChoices?: BellChoices;
+  rememberedBells?: BellChoices;
 }
 
 /**
@@ -74,12 +88,17 @@ export function buildWorkoutSaveRequest(
     const swap = input.swappedExercises?.[index];
     const t = normalizeTracking(ex.trackingType);
     const timed = tracksTime(t);
+    // One dumbbell or two, saved with every set of this exercise — the
+    // member's answer, or the automatic one they left alone. Undefined (and so
+    // omitted) for everything that is not bell work.
+    const bells = bellsForExercise(ex, input.bellChoices, input.rememberedBells);
     const sets = (input.grid[ex.slug] ?? []).map((s, i) => {
       const set: {
         setNumber: number;
         reps: number;
         weight: number;
         completed: boolean;
+        bells?: BellCount;
         duration?: number;
         distance?: number;
         speed?: number;
@@ -89,6 +108,7 @@ export function buildWorkoutSaveRequest(
         weight: timed ? 0 : (s.weight ?? 0),
         completed: s.completed,
       };
+      if (bells) set.bells = bells;
       // Time/distance tracking types log these instead of (or alongside)
       // reps/weight — only attach when present so strength sets stay clean.
       if (timed && s.durationSec != null && s.durationSec > 0) {

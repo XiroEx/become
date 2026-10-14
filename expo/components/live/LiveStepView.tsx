@@ -48,6 +48,12 @@ import {
   loadRepsLabel,
   type WeightUnit,
 } from "@/lib/live/bellStyle";
+import {
+  bellCountFor,
+  bellMemoryKeyFor,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { formatElapsed, overallProgressPercent } from "@/lib/live/liveProgress";
 import { hitSlopToMinTarget, minTouchTarget } from "@/lib/a11y/touchTarget";
@@ -95,6 +101,16 @@ export interface LiveStepViewProps {
    * Defaults to `'lbs'`.
    */
   weightUnit?: WeightUnit;
+  /**
+   * ONE DUMBBELL OR TWO, keyed by the exercise's memory key
+   * (`bellMemoryKeyFor`): `bellChoices` is what the member picked in THIS
+   * session, `rememberedBells` what their most recent logged set says. Neither
+   * means the automatic per-exercise answer — see `lib/live/bellCount.ts`.
+   * `onBellChoice` records a new answer; omitted, no one/two control renders.
+   */
+  bellChoices?: BellChoices;
+  rememberedBells?: BellChoices;
+  onBellChoice?: (memoryKey: string, count: BellCount) => void;
   /**
    * In-workout hints keyed by lowercase exercise slug (the web's
    * `exerciseNudges`). Rendered under the exercise header, beside the
@@ -213,6 +229,9 @@ export function LiveStepView({
   exerciseHistory,
   exercisePRs,
   weightUnit = DEFAULT_LOAD_UNIT,
+  bellChoices,
+  rememberedBells,
+  onBellChoice,
   exerciseHints,
   onDismissHint,
   onExit,
@@ -287,6 +306,11 @@ export function LiveStepView({
   const totalSets = sets.length || exercise.sets || 1;
   const unit = setUnitLabel(exercise.trackingType, 1);
   const bell = getBellWeightInfo(exercise);
+  // …and how many of them, which is the member's call on a dumbbell/kettlebell
+  // exercise: their pick this session, else what they logged last time, else
+  // the automatic answer (so ignoring the control changes nothing).
+  const bellCount = bellCountFor(exercise, bellChoices, rememberedBells);
+  const bellKey = bellMemoryKeyFor(exercise);
   const isLastStep = safeIndex >= total - 1;
   // The group label comes from the CURRENT exercise — `workout.groupType`
   // is never set by the route, so `ExerciseGroupNav` would otherwise never
@@ -821,6 +845,13 @@ export function LiveStepView({
             <LiveStepInputs
               setIndex={step.setIndex}
               bell={bell}
+              bells={bellCount}
+              {...(onBellChoice
+                ? {
+                    onBellsChange: (count: BellCount) =>
+                      onBellChoice(bellKey, count),
+                  }
+                : {})}
               weightUnit={weightUnit}
               exerciseName={exercise.name}
               state={current}

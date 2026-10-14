@@ -34,6 +34,11 @@ import type {
   LiveGrid,
   LiveWorkoutExercise,
 } from "@/components/live/LiveWorkoutClient";
+import {
+  bellsForExercise,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
 
 export interface BuildQuickSaveInput {
   /** This run's own session id — never a repeat's `sourceSessionId`. */
@@ -58,6 +63,15 @@ export interface BuildQuickSaveInput {
   /** IANA timezone identifier. */
   tzZone?: string;
   notes?: string;
+  /**
+   * ONE DUMBBELL OR TWO (`ISetLog.bells`), keyed by the exercise's memory key
+   * — the member's pick this session and what their last logged set said. The
+   * program path sends the same field the same way (`lib/live/workoutSave.ts`
+   * ← the web's `bellsForExercise`); an exercise with no answer either way
+   * sends nothing, which still reads as the automatic per-exercise answer.
+   */
+  bellChoices?: BellChoices;
+  rememberedBells?: BellChoices;
 }
 
 /**
@@ -71,12 +85,16 @@ export function buildQuickSaveRequest(
   const exercises = input.exercises.map((ex) => {
     const t = normalizeTracking(ex.trackingType);
     const timed = tracksTime(t);
+    // One dumbbell or two, saved with every set of this exercise — the
+    // member's answer, or the automatic one they left alone.
+    const bells = bellsForExercise(ex, input.bellChoices, input.rememberedBells);
     const sets = (input.grid[ex.slug] ?? []).map((s, i) => {
       const set: {
         setNumber: number;
         reps: number;
         weight: number;
         completed: boolean;
+        bells?: BellCount;
         duration?: number;
         distance?: number;
         speed?: number;
@@ -86,6 +104,7 @@ export function buildQuickSaveRequest(
         weight: timed ? 0 : (s.weight ?? 0),
         completed: s.completed,
       };
+      if (bells) set.bells = bells;
       if (timed && s.durationSec != null && s.durationSec > 0) {
         set.duration = s.durationSec;
       }

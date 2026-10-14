@@ -60,6 +60,11 @@ import {
 } from "@/lib/live/liveWorkoutCache";
 import { localDateKey } from "@/lib/time/localDay";
 import { coachingFieldsFrom } from "@/lib/live/coachingFields";
+import {
+  bellsFromPerformances,
+  type BellChoices,
+  type BellCount,
+} from "@/lib/live/bellCount";
 import type { LiveSetState } from "@/components/live/LiveSetRow";
 import type {
   LiveGrid,
@@ -168,6 +173,23 @@ export interface UseLiveWorkoutResult {
    */
   notes: string;
   setNotes: (notes: string) => void;
+  /**
+   * ONE DUMBBELL OR TWO (`ISetLog.bells`), keyed by the exercise's memory key
+   * — the web live client's `bellChoices` / `rememberedBells` pair:
+   *
+   *  - `bellChoices` is what the member picked in THIS session;
+   *  - `rememberedBells` is what their most recent logged set for that
+   *    exercise said, read from `GET /api/workouts/last-performance` (no
+   *    preferences collection anywhere);
+   *  - neither being set means the automatic per-exercise answer, which is
+   *    what an absent `bells` has always meant.
+   *
+   * Every save of this attempt carries the answer for each bell exercise, and
+   * nothing at all for the rest (`lib/live/bellCount.ts`).
+   */
+  bellChoices: BellChoices;
+  rememberedBells: BellChoices;
+  setBellChoice: (memoryKey: string, count: BellCount) => void;
   onGridChange: (grid: LiveGrid) => void;
   onSetComplete: (input: {
     exerciseSlug: string;
@@ -337,6 +359,20 @@ export function useLiveWorkout(
     notesRef.current = value;
     setNotesState(value);
   }, []);
+  // One dumbbell or two, keyed by the exercise's memory key (its slug). Read
+  // through refs inside `save` for the same reason `notes` is: a tap on the
+  // control must not give `save` a new identity (the load effect's neighbours
+  // would churn with it). The state is only what the two views render.
+  const [bellChoices, setBellChoicesState] = useState<BellChoices>({});
+  const bellChoicesRef = useRef<BellChoices>({});
+  const setBellChoice = useCallback((memoryKey: string, count: BellCount) => {
+    if (!memoryKey) return;
+    const next = { ...bellChoicesRef.current, [memoryKey]: count };
+    bellChoicesRef.current = next;
+    setBellChoicesState(next);
+  }, []);
+  const [rememberedBells, setRememberedBells] = useState<BellChoices>({});
+  const rememberedBellsRef = useRef<BellChoices>({});
 
   const getNow = options?.getNow ?? defaultGetNow;
   const [workoutOriginKey, setWorkoutOriginKey] = useState<string>(
@@ -436,6 +472,8 @@ export function useLiveWorkout(
             tz: new Date().getTimezoneOffset(),
             tzZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             swappedExercises: swappedExercisesOverride ?? swappedExercises,
+            bellChoices: bellChoicesRef.current,
+            rememberedBells: rememberedBellsRef.current,
           });
 
           // Every save — autosave and completing save alike — goes through
@@ -1010,6 +1048,16 @@ export function useLiveWorkout(
           );
           if (perfRes?.prs) {
             setExercisePRs(perfRes.prs);
+          }
+          // …and how many dumbbells they used last time. Keyed by the same
+          // slug the request asked for, which IS this exercise's memory key.
+          // A slug with no recorded choice is simply left out, and the control
+          // falls back to the automatic answer — nothing invents a choice the
+          // member never made.
+          if (perfRes?.performances) {
+            const remembered = bellsFromPerformances(perfRes.performances);
+            rememberedBellsRef.current = remembered;
+            setRememberedBells(remembered);
           }
         } catch {
           // non-blocking
@@ -1609,6 +1657,9 @@ export function useLiveWorkout(
     pendingSync,
     notes,
     setNotes,
+    bellChoices,
+    rememberedBells,
+    setBellChoice,
     onGridChange,
     onSetComplete,
     onRequestSwap,
