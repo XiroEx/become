@@ -26,6 +26,19 @@ import { synthMergeUsdaResults } from '@/lib/usdaSynthMerge'
 import { dedupeBySource, type CustomFoodForDedupe } from '@/lib/foodSearchDedupe'
 import { groupServingPenalty } from '@/lib/foodSearchServingWeight'
 import { fetchUSDAFoodsBatch } from '@/lib/usdaBatchFetch'
+import { enqueueUnverifiedFoodsFromSearch } from '@/lib/nutrition/foodSearchEnqueue'
+
+function safeAfter(fn: () => unknown) {
+  try {
+    after(() => {
+      void fn()
+    })
+  } catch {
+    queueMicrotask(() => {
+      Promise.resolve().then(fn).catch(() => {})
+    })
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Map an OpenFoodFact document to the same shape as a flattened Food
@@ -180,6 +193,7 @@ export async function GET(request: NextRequest) {
         .lean<FoodLean[]>()
 
       const total = await Food.countDocuments(baseFilter)
+      safeAfter(() => enqueueUnverifiedFoodsFromSearch(foods))
       return NextResponse.json({
         foods: foods.map(f => ({
           ...flattenFoodForResponse(f),
@@ -223,9 +237,11 @@ export async function GET(request: NextRequest) {
     const seenIds = new Set<string>()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const customFoods: any[] = []
+    const verificationByFoodId = new Map<string, IFood['verification']>()
 
     for (const item of textResults) {
       const id = item._id.toString()
+      verificationByFoodId.set(id, item.verification)
       if (!seenIds.has(id)) {
         seenIds.add(id)
         customFoods.push({
@@ -237,6 +253,7 @@ export async function GET(request: NextRequest) {
     }
     for (const item of regexResults) {
       const id = item._id.toString()
+      verificationByFoodId.set(id, item.verification)
       if (!seenIds.has(id) && customFoods.length < customLimit) {
         seenIds.add(id)
         customFoods.push({
@@ -263,6 +280,7 @@ export async function GET(request: NextRequest) {
       const savedMatches = await Food.find(savedFilter).lean<FoodLean[]>()
       for (const item of savedMatches) {
         const id = item._id.toString()
+        verificationByFoodId.set(id, item.verification)
         if (!seenIds.has(id)) {
           seenIds.add(id)
           customFoods.push({
@@ -275,6 +293,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (customOnly) {
+      const candidates = customFoods.map(f => ({
+        ...f,
+        verification: verificationByFoodId.get(f._id?.toString() ?? ''),
+      }))
+      safeAfter(() => enqueueUnverifiedFoodsFromSearch(candidates))
       return NextResponse.json({ foods: customFoods, total: customFoods.length, offset, limit })
     }
 
@@ -543,7 +566,13 @@ export async function GET(request: NextRequest) {
     // with the same variant set the user just saw. importFromUSDA's
     // groupKey-based merge logic ensures these all land on the same parent.
     const extraFdcIds = synth.additionalFdcIds
-    after(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds, q))
+    safeAfter(() => backgroundImportExternals(paged, authResult.userId, extraFdcIds, q))
+
+    const candidates = paged.filter(fromOurDb).map(f => ({
+      ...f,
+      verification: verificationByFoodId.get(f._id?.toString() ?? ''),
+    }))
+    safeAfter(() => enqueueUnverifiedFoodsFromSearch(candidates))
 
     return NextResponse.json({ foods: paged, total: sortedFoods.length, offset, limit })
   } catch (error) {
