@@ -10,7 +10,7 @@ import { Redirect } from "expo-router";
  * `become://_stories` opens the component gallery in a store build. The two
  * read-only admin lists under `app/(app)/admin/` are the same story with a
  * client-side role check instead of a router one; admins do their admin on the
- * web (Tier 3 in `gap_analysis/GAPS.md`), and a member who guesses the URL
+ * web (Tier 3 in `gap_analysis/PARITY_GAP_ANALYSIS.md` §7), and a member who guesses the URL
  * should land somewhere that exists for them.
  *
  * So: in a development build the screen renders as before, and in every other
