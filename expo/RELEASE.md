@@ -36,13 +36,24 @@ the only lever that reaches an already-installed app. See
    - `android.package = "io.redbtn.become"`
    These cannot change without breaking install upgrades.
 5. **Universal Link AASA file** served at
-   `https://become.redbtn.io/.well-known/apple-app-site-association` with the
-   real `TEAM_ID.io.redbtn.become` appID (placeholder ships in P6 — replace
-   before the first iOS submission).
+   `https://become.redbtn.io/.well-known/apple-app-site-association`. The file
+   already carries real values — `webapp/public/.well-known/apple-app-site-association`
+   lists `appIDs: ["Y7X4278T48.io.redbtn.become"]` with applinks components
+   `/verify` and `/account/restore`, plus a `webcredentials` entry for the same
+   app ID — so there is no placeholder left to replace before the first iOS
+   submission. Whether both domains serve the file is still tracked with the
+   fingerprint question in open card `6ab028fdee5866d95d14dfc9`.
 6. **assetlinks.json** served at
-   `https://become.redbtn.io/.well-known/assetlinks.json` with the real Play
-   App Signing SHA-256 fingerprint (placeholder ships in P6 — replace before
-   the first Android submission).
+   `https://become.redbtn.io/.well-known/assetlinks.json`. The file already
+   carries a real fingerprint — `webapp/public/.well-known/assetlinks.json`
+   lists `package_name io.redbtn.become` with SHA-256
+   `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`
+   under both `delegate_permission/common.handle_all_urls` and
+   `delegate_permission/common.get_login_creds` — so there is no placeholder
+   left to replace. Still open (card `6ab028fdee5866d95d14dfc9`, in To do):
+   whether that fingerprint is the final **Play App Signing** key rather than
+   an upload key, and whether both domains serve the file. The file's existence
+   does not settle that — confirm both before the first Android submission.
 7. **`expo/google-services.json`**: the real export from the Firebase
    project "Become" (`become-2188e`, Android app `io.redbtn.become`),
    committed 2026-10-13 and wired through `android.googleServicesFile` in
