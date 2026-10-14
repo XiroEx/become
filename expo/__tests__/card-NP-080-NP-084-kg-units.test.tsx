@@ -422,12 +422,16 @@ describe("(id: 96d40a30) nothing is converted and native never asks", () => {
     }
   });
 
-  it("leaves the quick-pick loads exactly as the shared web rule gives them", () => {
-    // Re-scaling the picks for kg would be a product decision this card does
-    // not carry — and would be the conversion layer it forbids.
+  it("takes the quick-pick loads from the shared web rule, per unit", () => {
+    // The picks are the web's (`weightQuickPicks` in `@become/core`), and the
+    // kg ones are kg EQUIPMENT numbers rather than converted pounds — the
+    // conversion layer this card forbids is still nowhere (card 96d40d31).
     expect(weightQuickPicks("dumbbell")).toEqual([10, 20, 30, 40, 50]);
     expect(weightQuickPicks("kettlebell")).toEqual([18, 26, 35, 44, 53]);
     expect(weightQuickPicks(null)).toEqual([45, 95, 135, 185, 225]);
+    expect(weightQuickPicks("dumbbell", "kg")).toEqual([5, 10, 15, 20, 25]);
+    expect(weightQuickPicks("kettlebell", "kg")).toEqual([8, 12, 16, 20, 24]);
+    expect(weightQuickPicks(null, "kg")).toEqual([20, 40, 60, 80, 100]);
   });
 
   it("adds no second lb/kg ask on native — the web gate owns the one ask", () => {

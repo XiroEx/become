@@ -116,7 +116,8 @@ export interface LiveSetRowProps {
   equipment?: string[];
   /**
    * When true, render the web's quick-pick loads under the weight box
-   * (`weightQuickPicks`: 10–50 per DB, 18–53 per KB, 45–225 otherwise).
+   * (`weightQuickPicks`, in `weightUnit`: 10–50 per DB, 18–53 per KB, 45–225
+   * otherwise in lbs; 5–25, 8–24 and 20–100 in kg).
    * The typed number is always per implement; the picks only fill it in.
    */
   showQuickPicks?: boolean;
@@ -232,8 +233,10 @@ export function LiveSetRow({
   const assumptionLabel =
     assumption.assumed && assumption.label ? `Logging as ${assumption.label}` : null;
   // The web's quick-pick loads for the weight box (`weightQuickPicks`): a
-  // tap fills the per-implement number, exactly as if it had been typed.
-  const quickPicks = showQuickPicks ? weightQuickPicks(bell.style) : [];
+  // tap fills the per-implement number, exactly as if it had been typed. In
+  // the member's own unit — the same `weightUnit` that names the box — so a kg
+  // member gets kg equipment numbers, not the pound ladder relabelled.
+  const quickPicks = showQuickPicks ? weightQuickPicks(bell.style, weightUnit) : [];
 
   return (
     <View

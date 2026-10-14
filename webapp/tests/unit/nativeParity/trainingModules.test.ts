@@ -412,13 +412,25 @@ test('workout/dumbbellWeight: per-implement labels, totals and quick picks', () 
     webDumbbellWeight.getBellWeightInfo, coreDumbbellWeight.getBellWeightInfo,
     BELLS.map(b => [b] as [BellCase | null | undefined]))
 
+  // Both of these take the member's lifting unit (NP-209 for the label,
+  // 96d40d31 for the picks) and default it to lbs, so the table drives every
+  // style against every unit AND against an omitted one.
+  const BELL_STYLES = ['dumbbell', 'kettlebell', null] as const
+  const LOAD_UNITS = ['lbs', 'kg'] as const
+
   same('workout/dumbbellWeight.bellWeightLabel',
     webDumbbellWeight.bellWeightLabel, coreDumbbellWeight.bellWeightLabel,
-    [['dumbbell'], ['kettlebell'], [null]])
+    BELL_STYLES.flatMap(s => [
+      [s] as [typeof s],
+      ...LOAD_UNITS.map(u => [s, u] as [typeof s, typeof u]),
+    ]))
 
   same('workout/dumbbellWeight.weightQuickPicks',
     webDumbbellWeight.weightQuickPicks, coreDumbbellWeight.weightQuickPicks,
-    [['dumbbell'], ['kettlebell'], [null]])
+    BELL_STYLES.flatMap(s => [
+      [s] as [typeof s],
+      ...LOAD_UNITS.map(u => [s, u] as [typeof s, typeof u]),
+    ]))
 
   manifest('workout/dumbbellWeight', webDumbbellWeight, coreDumbbellWeight)
 })

@@ -2662,10 +2662,13 @@ export default function LiveWorkoutPage() {
                     )}
                   </div>
 
-                  {/* Quick weight buttons — only for weighted exercises */}
+                  {/* Quick weight buttons — only for weighted exercises.
+                      In the member's own lifting unit, the SAME one that names
+                      the weight box above (`memberWeightUnit`): a kg member
+                      gets kg equipment ladders, not the pound ones relabelled. */}
                   {showWeightInput && (
                     <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-                      {weightQuickPicks(bellStyle).map((weight) => (
+                      {weightQuickPicks(bellStyle, memberWeightUnit).map((weight) => (
                         <button
                           key={weight}
                           onClick={() => updateCurrentInput("weight", weight.toString())}

@@ -13,16 +13,22 @@ import { useRouter } from 'next/navigation'
 import { ChevronRight, Search, AlertCircle, Loader2 } from 'lucide-react'
 import PageTransition from '@/components/PageTransition'
 import { Card } from '@/components/ui/Card'
+import { REVIEW_ISSUE_CODES } from '@/lib/foodReview'
 
 interface AdminFood {
   _id: string
   name: string
   brand?: string
+  slug?: string
   category?: string
   source?: 'manual' | 'usda' | 'openfoodfacts'
   externalDataType?: string
   needsReview?: boolean
-  reviewFlag?: { owner: 'automatic' | 'manual' }
+  reviewFlag?: {
+    owner?: 'automatic' | 'manual'
+    issueCodes?: string[]
+    origin?: string
+  }
   groupKey?: string
   servingSize: number
   servingUnit: string
@@ -55,6 +61,15 @@ const SOURCE_BADGE_CLASS: Record<string, string> = {
   manual: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
 }
 
+const ISSUE_LABELS: Record<string, string> = {
+  slug_collision: 'Slug Collision',
+  calories_out_of_range: 'Calories Out of Range',
+  negative_nutrition: 'Negative Nutrition',
+  macros_inconsistent: 'Macros Inconsistent',
+  no_nutrition: 'No Nutrition',
+  bridge_conflict: 'Bridge Conflict',
+}
+
 function relativeDate(dateStr?: string): string {
   if (!dateStr) return 'unknown'
   const d = new Date(dateStr)
@@ -80,13 +95,24 @@ export default function AdminFoodsPage() {
   const [filter, setFilter] = useState<FilterMode>('all')
   const [total, setTotal] = useState(0)
   const [flaggedCount, setFlaggedCount] = useState(0)
+  const [issueCounts, setIssueCounts] = useState<Record<string, number>>({})
+  const [legacyCount, setLegacyCount] = useState(0)
+  const [selectedIssue, setSelectedIssue] = useState<string | null>(null)
+  const [excludeLegacy, setExcludeLegacy] = useState(false)
   const [offset, setOffset] = useState(0)
   const [hasMore, setHasMore] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   const loadFoods = useCallback(
-    async (q: string, f: FilterMode, off: number, append: boolean) => {
+    async (
+      q: string,
+      f: FilterMode,
+      off: number,
+      append: boolean,
+      issue: string | null = selectedIssue,
+      exLegacy: boolean = excludeLegacy,
+    ) => {
       if (append) setLoadingMore(true)
       else setLoading(true)
       try {
@@ -97,7 +123,11 @@ export default function AdminFoodsPage() {
           limit: String(PAGE_SIZE),
         })
         if (q) params.set('q', q)
-        if (f === 'flagged') params.set('flagged', '1')
+        if (f === 'flagged') {
+          params.set('flagged', '1')
+          if (issue) params.set('issue', issue)
+          if (exLegacy) params.set('excludeLegacy', '1')
+        }
         if (f === 'custom') params.set('source', 'manual')
         if (f === 'recent') params.set('sortBy', 'recent')
         const res = await fetch(`/api/admin/foods?${params.toString()}`, {
@@ -111,8 +141,12 @@ export default function AdminFoodsPage() {
           foods: AdminFood[]
           total: number
           flaggedCount: number
+          issueCounts?: Record<string, number>
+          legacyCount?: number
         }
         setFlaggedCount(data.flaggedCount)
+        if (data.issueCounts) setIssueCounts(data.issueCounts)
+        if (typeof data.legacyCount === 'number') setLegacyCount(data.legacyCount)
         setTotal(data.total)
         setHasMore(off + data.foods.length < data.total)
         setFoods(prev => (append ? [...prev, ...data.foods] : data.foods))
@@ -121,21 +155,21 @@ export default function AdminFoodsPage() {
         else setLoading(false)
       }
     },
-    [],
+    [selectedIssue, excludeLegacy],
   )
 
   // Initial + filter changes
   useEffect(() => {
     setOffset(0)
-    loadFoods(search, filter, 0, false)
-  }, [filter, loadFoods]) // eslint-disable-line react-hooks/exhaustive-deps
+    loadFoods(search, filter, 0, false, selectedIssue, excludeLegacy)
+  }, [filter, selectedIssue, excludeLegacy, loadFoods]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     searchTimerRef.current = setTimeout(() => {
       setOffset(0)
-      loadFoods(search, filter, 0, false)
+      loadFoods(search, filter, 0, false, selectedIssue, excludeLegacy)
     }, 300)
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
@@ -151,18 +185,26 @@ export default function AdminFoodsPage() {
         if (entries[0].isIntersecting) {
           const next = offset + PAGE_SIZE
           setOffset(next)
-          loadFoods(search, filter, next, true)
+          loadFoods(search, filter, next, true, selectedIssue, excludeLegacy)
         }
       },
       { rootMargin: '200px' },
     )
     obs.observe(target)
     return () => obs.disconnect()
-  }, [hasMore, loading, loadingMore, offset, search, filter, loadFoods])
+  }, [hasMore, loading, loadingMore, offset, search, filter, selectedIssue, excludeLegacy, loadFoods])
 
   const filterTabs: { label: string; value: FilterMode; count?: number }[] = [
     { label: 'All', value: 'all' },
-    { label: 'Flagged', value: 'flagged', count: flaggedCount },
+    {
+      label: 'Flagged',
+      value: 'flagged',
+      count: selectedIssue
+        ? (issueCounts[selectedIssue] ?? 0)
+        : excludeLegacy
+          ? Math.max(0, flaggedCount - legacyCount)
+          : flaggedCount,
+    },
     { label: 'Recent', value: 'recent' },
     { label: 'Custom', value: 'custom' },
   ]
@@ -198,7 +240,12 @@ export default function AdminFoodsPage() {
         {filterTabs.map(tab => (
           <button
             key={tab.value}
-            onClick={() => setFilter(tab.value)}
+            onClick={() => {
+              setFilter(tab.value)
+              if (tab.value !== 'flagged') {
+                setSelectedIssue(null)
+              }
+            }}
             className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium transition-colors ${
               filter === tab.value
                 ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
@@ -220,6 +267,86 @@ export default function AdminFoodsPage() {
           </button>
         ))}
       </div>
+
+      {/* Review issue chips & legacy exclusion */}
+      {filter === 'flagged' && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50/60 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/60">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Issues:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedIssue(null)}
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              selectedIssue === null
+                ? 'bg-zinc-900 text-white shadow-sm dark:bg-zinc-100 dark:text-zinc-900'
+                : 'border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+          >
+            All
+            <span
+              className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                selectedIssue === null
+                  ? 'bg-white/20 text-white dark:bg-zinc-900/20 dark:text-zinc-900'
+                  : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+              }`}
+            >
+              {excludeLegacy ? Math.max(0, flaggedCount - legacyCount) : flaggedCount}
+            </span>
+          </button>
+          {REVIEW_ISSUE_CODES.map(code => {
+            const count = issueCounts[code] ?? 0
+            const isSelected = selectedIssue === code
+            return (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setSelectedIssue(prev => (prev === code ? null : code))}
+                className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  isSelected
+                    ? 'bg-rose-600 text-white shadow-sm'
+                    : 'border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+                }`}
+              >
+                {ISSUE_LABELS[code] ?? code}
+                <span
+                  className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+          <div className="mx-1 h-4 w-px bg-zinc-300 dark:bg-zinc-700" />
+          <button
+            type="button"
+            onClick={() => setExcludeLegacy(prev => !prev)}
+            className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              excludeLegacy
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700'
+            }`}
+            title="Exclude legacy flags with no provenance"
+          >
+            {excludeLegacy ? '✓ Excluding Legacy' : 'Exclude Legacy'}
+            {legacyCount > 0 && (
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[10px] font-semibold ${
+                  excludeLegacy
+                    ? 'bg-white/20 text-white'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'
+                }`}
+              >
+                {legacyCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -272,7 +399,9 @@ export default function AdminFoodsPage() {
                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-900/30 dark:text-red-300">
                         <AlertCircle className="h-2.5 w-2.5" />
                         Review · {food.reviewFlag?.owner === 'automatic'
-                          ? 'Auto'
+                          ? (food.reviewFlag.issueCodes && food.reviewFlag.issueCodes.length > 0
+                              ? food.reviewFlag.issueCodes.map(c => ISSUE_LABELS[c] ?? c).join(', ')
+                              : 'Auto')
                           : food.reviewFlag?.owner === 'manual'
                             ? 'Manual'
                             : 'Legacy'}
