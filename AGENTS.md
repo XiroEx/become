@@ -1491,6 +1491,49 @@ Two things that look like mistakes and are not:
   `EXPO_PUBLIC_COMMUNITY_ENABLED`; there is deliberately no second flag in the
   tab bar.
 
+#### The Live workout takes over the whole screen (NP-381)
+
+Jon, on the 0.1.x build: *"Live view needs to take over the full screen like it
+does in the Web app. And also just how the spacing is is terrible."*
+
+The web's Live view is `fixed inset-0 z-100` — the clip is the whole viewport
+and every control floats over it, the BottomNav pill included. Natively the
+live screen is a push inside the Workout tab, so it lost the bottom of the
+phone twice over: `TabStack` reserves ~86pt for the floating glass bar on every
+pushed screen (NP-351, because the bar is absolute and the navigator reserves
+nothing), and the bar still drew over that band, on top of `Complete Set →`.
+
+The immersive routes are named ONCE, in
+`expo/lib/navigation/immersiveRoutes.ts`: `[id]/workout/[idx]/live` and
+`quick/live`. `GlassTabBar` renders nothing while the DEEPEST focused route is
+one of them — it reads the state the navigator already hands it, so there is no
+imperative `setOptions` and nothing in the screen itself (which is what keeps
+it working under `test-support/appRoutes.tsx`, where every leaf route is a
+stub and only the layouts are real) — and the programming tab's `TabStack`
+exempts the same two from the band (`fullScreenRoutes`). **Track is not
+immersive on purpose**: the web's Track page is an ordinary dashboard page
+under the same BottomNav, so it keeps the bar and keeps clearing it.
+
+The clip is now the background it always claimed to be — `surface: 'live'` is
+documented as "full-screen background, typically portrait on a phone" in
+`lib/videoFraming.ts` — so `FramedVideo` grew a `fill` prop (16:9 rounded card
+everywhere else, unchanged) and `LiveStepView` draws it `absolute inset-0` with
+the top bar, the story bars, the dot rail and the bottom panel layered over it.
+The panel's spacing is the web's, in one constant (`LIVE_PANEL_SPACING`):
+`p-4`, `mb-4` between blocks, `gap-3` on the actions and 6pt between the lines
+of the exercise block, instead of the uniform 8pt rhythm that read as "a lot
+more spacing". Colours are still theme tokens and never the web's
+white-on-black (NP-288's rule): the panel fades into the PAGE colour and then
+goes solid under the text, because this screen is light on a light phone.
+
+Track got the other half of the same card — *"it doesn't have any variation
+when logging"*: a completed set row now takes the web's green wash
+(`bg-green-100 dark:bg-green-900/20` in `LiveSetRow`, the web's
+`WorkoutFormClient` rule) instead of looking exactly like an untouched one, and
+the quick-pick loads are one sideways strip rather than a wrapping grid that
+added three lines to every row. Test:
+`expo/__tests__/card-NP-381-acceptance.test.tsx`.
+
 #### The buttons that lead somewhere (NP-026)
 
 A screen with no entry point is not a screen. Three of them shipped that way,
