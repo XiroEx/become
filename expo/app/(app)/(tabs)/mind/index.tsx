@@ -14,6 +14,7 @@ import {
   Check,
   ChevronRight,
   Flame,
+  HelpCircle,
   Lock,
 } from "lucide-react-native";
 import {
@@ -51,6 +52,7 @@ import {
 import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
 import { MoodHistoryStrip } from "@/components/mind/MoodHistoryStrip";
 import { IdentityOnboarding } from "@/components/mind/IdentityOnboarding";
 import { SessionPlayer } from "@/components/mind/session/SessionPlayer";
@@ -616,6 +618,23 @@ function MindMainRoute({ testID = "mind-route" }: MindRouteProps) {
             </Text>
           </View>
           <View className="flex-row items-center gap-3">
+            <Pressable
+              testID="mind-help-button"
+              accessibilityRole="button"
+              accessibilityLabel="Mind help"
+              onPress={() => requestNativeTourHub("mind")}
+              style={[
+                minTouchTarget,
+                { alignItems: "center", justifyContent: "center" },
+              ]}
+              className="rounded-full border border-border p-2"
+            >
+              <HelpCircle
+                size={18}
+                color={colors["muted-foreground"]}
+                strokeWidth={1.5}
+              />
+            </Pressable>
             {streak > 0 ? (
               <View
                 testID="mind-streak-badge"

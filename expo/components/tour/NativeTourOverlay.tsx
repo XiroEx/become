@@ -42,7 +42,10 @@ import {
   hasSettledNativeTour,
   setNativeTourStatus,
 } from "@/lib/tour/nativeTourProgress";
-import { subscribeNativeTourReplayRequests } from "@/lib/tour/nativeTourRequest";
+import {
+  subscribeNativeTourHubRequests,
+  subscribeNativeTourReplayRequests,
+} from "@/lib/tour/nativeTourRequest";
 
 /** `tourConfig.ts` exports `NATIVE_TOUR_HUBS` as a readonly tuple, not a named type. */
 type NativeTourHub = (typeof NATIVE_TOUR_HUBS)[number];
@@ -85,6 +88,7 @@ export function NativeTourOverlay({
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("loading");
   const [stepIndex, setStepIndex] = useState(0);
+  const [soloHub, setSoloHub] = useState<NativeTourHub | null>(null);
   // Guards the initial async load against StrictMode's double-invoke.
   const loadStarted = useRef(false);
   const onLoadedRef = useRef(onLoaded);
@@ -109,10 +113,22 @@ export function NativeTourOverlay({
   // Settings/Help's "ask again" escape hatch — the tour's one re-prompt path.
   useEffect(() => {
     return subscribeNativeTourReplayRequests(() => {
+      setSoloHub(null);
       setStepIndex(0);
       setPhase("prompt");
     });
   }, []);
+
+  // Hub-scoped help button request — shows that hub's card alone without
+  // re-prompting the tour, navigating, or writing progress.
+  useEffect(() => {
+    return subscribeNativeTourHubRequests((hubId) => {
+      const match = hubs.find((h) => h.id === hubId);
+      if (match) {
+        setSoloHub(match);
+      }
+    });
+  }, [hubs]);
 
   // Each step change (and entering "touring" at step 0) switches to that
   // hub's tab so the member actually sees what the coach card is about.
@@ -159,6 +175,33 @@ export function NativeTourOverlay({
   const onBack = useCallback(() => {
     setStepIndex((current) => Math.max(0, current - 1));
   }, []);
+
+  if (soloHub) {
+    return (
+      <Modal
+        visible
+        onClose={() => setSoloHub(null)}
+        title={soloHub.title}
+        testID={`${testID}-step`}
+        accessibilityLabel={soloHub.title}
+      >
+        <Text
+          testID={`${testID}-step-body`}
+          className="text-foreground text-sm leading-5 mb-4"
+        >
+          {soloHub.description}
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end" }}>
+          <Button
+            testID={`${testID}-step-done`}
+            onPress={() => setSoloHub(null)}
+          >
+            Done
+          </Button>
+        </View>
+      </Modal>
+    );
+  }
 
   if (phase === "loading" || phase === "hidden") return null;
 

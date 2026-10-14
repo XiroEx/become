@@ -9,8 +9,15 @@
  * subscriber and the only thing that actually resets and re-shows the tour.
  */
 
+import type { NativeTourHubId } from "./tourConfig";
+
+export type { NativeTourHubId };
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
+
+type HubListener = (hubId: NativeTourHubId) => void;
+const hubListeners = new Set<HubListener>();
 
 /** Subscribe to replay requests. Returns an unsubscribe function. */
 export function subscribeNativeTourReplayRequests(
@@ -27,6 +34,27 @@ export function requestNativeTourReplay(): void {
   for (const listener of Array.from(listeners)) {
     try {
       listener();
+    } catch {
+      // non-fatal — one bad subscriber must not break the others
+    }
+  }
+}
+
+/** Subscribe to hub-scoped tour requests. Returns an unsubscribe function. */
+export function subscribeNativeTourHubRequests(
+  listener: HubListener,
+): () => void {
+  hubListeners.add(listener);
+  return () => {
+    hubListeners.delete(listener);
+  };
+}
+
+/** Ask the mounted tour overlay to show a single hub's card. */
+export function requestNativeTourHub(hubId: NativeTourHubId): void {
+  for (const listener of Array.from(hubListeners)) {
+    try {
+      listener(hubId);
     } catch {
       // non-fatal — one bad subscriber must not break the others
     }
