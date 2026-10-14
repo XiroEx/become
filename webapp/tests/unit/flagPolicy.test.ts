@@ -15,6 +15,13 @@ import {
   DAILY_FLAG_LIMIT,
   NEW_ACCOUNT_DAILY_FLAG_LIMIT,
   REVERIFY_COOLDOWN_MS,
+  canEnqueue,
+  canEnqueueForVerification,
+  shouldEnqueueForVerification,
+  enqueueFilter,
+  enqueueUpdate,
+  DEFAULT_SEARCH_ENQUEUE_LIMIT,
+  SEARCH_ENQUEUE_LIMIT,
   type FlagContext,
 } from '../../lib/nutrition/flagPolicy'
 
@@ -142,3 +149,74 @@ test('a photo URL is only believed when it is ours AND the caller owns it', () =
   assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${me}/x.svg`, me), undefined)
   assert.equal(ownFlagPhotoUrl(`/api/blob/food-flags/${me}/x.webp`, me), `/api/blob/food-flags/${me}/x.webp`)
 })
+
+test('canEnqueue predicate accurately reflects enqueue rules', () => {
+  // 1. Unverified foods can be enqueued
+  assert.equal(canEnqueue({ foodState: 'unverified', now: NOW }), true)
+  assert.equal(canEnqueue({ state: 'unverified', now: NOW }), true)
+  assert.equal(canEnqueue({ verification: { state: 'unverified' }, now: NOW }), true)
+  assert.equal(canEnqueue({ isVerified: false, now: NOW }), true)
+  assert.equal(canEnqueue({}, NOW), true)
+  assert.equal(canEnqueue(null), false)
+  assert.equal(canEnqueue(undefined), false)
+
+  // 2. Already queued foods must never be enqueued (no-op / idempotent)
+  assert.equal(canEnqueue({ foodState: 'queued', now: NOW }), false)
+  assert.equal(canEnqueue({ state: 'queued', now: NOW }), false)
+  assert.equal(canEnqueue({ verification: { state: 'queued' }, now: NOW }), false)
+
+  // 3. Currently running foods must never be enqueued
+  assert.equal(canEnqueue({ foodState: 'running', now: NOW }), false)
+  assert.equal(canEnqueue({ state: 'running', now: NOW }), false)
+  assert.equal(canEnqueue({ verification: { state: 'running' }, now: NOW }), false)
+
+  // 4. Insufficient foods are not auto-enqueued on search alone
+  assert.equal(canEnqueue({ foodState: 'insufficient', now: NOW }), false)
+  assert.equal(canEnqueue({ state: 'insufficient', now: NOW }), false)
+
+  // 5. Verified food with no expiresAt or future expiresAt: never enqueued
+  assert.equal(canEnqueue({ foodState: 'verified', now: NOW }), false)
+  assert.equal(canEnqueue({ isVerified: true, now: NOW }), false)
+  assert.equal(canEnqueue({ foodState: 'verified', expiresAt: NOW + 1000, now: NOW }), false)
+  assert.equal(
+    canEnqueue({ verification: { state: 'verified', expiresAt: new Date(NOW + 60_000) }, now: NOW }),
+    false,
+  )
+
+  // 6. Verified food whose verification has EXPIRED: can be enqueued
+  assert.equal(canEnqueue({ foodState: 'verified', expiresAt: NOW - 1000, now: NOW }), true)
+  assert.equal(canEnqueue({ foodState: 'verified', expiresAt: NOW, now: NOW }), true)
+  assert.equal(
+    canEnqueue({ verification: { state: 'verified', expiresAt: new Date(NOW - 1000) }, now: NOW }),
+    true,
+  )
+
+  // 7. Live claim held: never enqueued
+  assert.equal(canEnqueue({ foodState: 'unverified', claimedAt: NOW - 1000, now: NOW }), false)
+  // Stale claim held (> TTL): claim is dead, so unverified food is enqueueable
+  assert.equal(canEnqueue({ foodState: 'unverified', claimedAt: NOW - CLAIM_TTL_MS - 1, now: NOW }), true)
+
+  // 8. Aliases behave identically
+  assert.equal(canEnqueueForVerification({ foodState: 'unverified', now: NOW }), true)
+  assert.equal(shouldEnqueueForVerification({ foodState: 'unverified', now: NOW }), true)
+})
+
+test('enqueueFilter and enqueueUpdate construct correct atomic query shapes', () => {
+  const fakeId = '6a7abb5db7e8c10e9da43d75'
+  const filter = enqueueFilter(fakeId, new Date(NOW))
+  assert.equal(filter._id, fakeId)
+  assert.ok(Array.isArray(filter.$and))
+
+  const update = enqueueUpdate()
+  assert.deepEqual(update, {
+    $set: { 'verification.state': 'queued' },
+    $unset: {
+      'verification.claimedAt': '',
+      'verification.recheckRequested': '',
+    },
+  })
+
+  assert.equal(DEFAULT_SEARCH_ENQUEUE_LIMIT, 5)
+  assert.equal(SEARCH_ENQUEUE_LIMIT, 5)
+})
+

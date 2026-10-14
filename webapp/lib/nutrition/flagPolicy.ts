@@ -14,6 +14,10 @@
 /** Flags one account may raise per rolling day before it stops firing runs. */
 export const DAILY_FLAG_LIMIT = 10
 
+/** Maximum unverified foods queued per single search response. */
+export const DEFAULT_SEARCH_ENQUEUE_LIMIT = 5
+export const SEARCH_ENQUEUE_LIMIT = DEFAULT_SEARCH_ENQUEUE_LIMIT
+
 /** Lower ceiling for accounts too new to have earned catalogue influence. */
 export const NEW_ACCOUNT_DAILY_FLAG_LIMIT = 3
 export const NEW_ACCOUNT_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -140,6 +144,167 @@ export function canClaim(ctx: Pick<FlagContext, 'now' | 'foodState' | 'claimedAt
   if (ctx.foodState !== 'running' && ctx.foodState !== 'queued') return true
   // Held, but only if the holder is still alive.
   return !isClaimLive(ctx)
+}
+
+export interface CanEnqueueCandidate {
+  _id?: unknown
+  foodState?: 'unverified' | 'queued' | 'running' | 'verified' | 'insufficient' | string
+  state?: 'unverified' | 'queued' | 'running' | 'verified' | 'insufficient' | string
+  isVerified?: boolean
+  verification?: {
+    state?: 'unverified' | 'queued' | 'running' | 'verified' | 'insufficient' | string
+    expiresAt?: Date | number | string | null
+    claimedAt?: Date | number | string | null
+    [key: string]: unknown
+  } | null
+  expiresAt?: Date | number | string | null
+  claimedAt?: Date | number | string | null
+  now?: number
+  [key: string]: unknown
+}
+
+/**
+ * Enqueue predicate: decides whether a food returned by search should be enqueued.
+ *
+ * Rules:
+ *  - Unverified food -> enqueue (true)
+ *  - Already queued -> do not enqueue (false, idempotent / no-op)
+ *  - Running -> do not enqueue (false)
+ *  - Insufficient -> do not enqueue (false)
+ *  - Verified with future/missing expiresAt -> do not enqueue (false, still valid)
+ *  - Verified with expired expiresAt (<= now) -> enqueue (true, expired verification)
+ *  - Active claim held -> do not enqueue (false)
+ */
+export function canEnqueue(
+  candidate: CanEnqueueCandidate | null | undefined,
+  nowArg?: number,
+): boolean {
+  if (!candidate) return false
+
+  const now =
+    nowArg ??
+    ('now' in candidate && typeof candidate.now === 'number'
+      ? candidate.now
+      : Date.now())
+
+  const v =
+    'verification' in candidate && candidate.verification
+      ? candidate.verification
+      : null
+
+  const rawState =
+    candidate.foodState ??
+    candidate.state ??
+    v?.state ??
+    (candidate.isVerified ? 'verified' : 'unverified')
+
+  const state = rawState ?? 'unverified'
+
+  // Never re-enqueue work already queued or actively in flight
+  if (state === 'queued' || state === 'running') {
+    return false
+  }
+
+  // Insufficient evidence does not get auto-queued by search alone
+  if (state === 'insufficient') {
+    return false
+  }
+
+  // If a live claim is held on this food, do not race it
+  const rawClaimedAt = candidate.claimedAt ?? v?.claimedAt
+  const claimedAtMs =
+    rawClaimedAt instanceof Date
+      ? rawClaimedAt.getTime()
+      : typeof rawClaimedAt === 'number'
+      ? rawClaimedAt
+      : typeof rawClaimedAt === 'string'
+      ? new Date(rawClaimedAt).getTime()
+      : undefined
+
+  if (claimedAtMs && isClaimLive({ now, claimedAt: claimedAtMs })) {
+    return false
+  }
+
+  const rawExpiresAt = candidate.expiresAt ?? v?.expiresAt
+  const expiresAtMs =
+    rawExpiresAt instanceof Date
+      ? rawExpiresAt.getTime()
+      : typeof rawExpiresAt === 'number'
+      ? rawExpiresAt
+      : typeof rawExpiresAt === 'string'
+      ? new Date(rawExpiresAt).getTime()
+      : undefined
+
+  // Verified: only re-queue when verification has expired
+  if (state === 'verified') {
+    if (expiresAtMs != null && !Number.isNaN(expiresAtMs)) {
+      return expiresAtMs <= now
+    }
+    return false
+  }
+
+  if (state === 'unverified') {
+    // If an unverified food has a future expiration date, respect it
+    if (expiresAtMs != null && !Number.isNaN(expiresAtMs) && expiresAtMs > now) {
+      return false
+    }
+    return true
+  }
+
+  return false
+}
+
+export const canEnqueueForVerification = canEnqueue
+export const shouldEnqueueForVerification = canEnqueue
+export const shouldEnqueue = canEnqueue
+
+/**
+ * Atomic query filter for enqueueing a food from search.
+ *
+ * Protects against races: matches only foods that are unverified, or whose
+ * verification has expired, and whose claim (if any) is not live.
+ */
+export function enqueueFilter(id: unknown, now: Date = new Date()): Record<string, unknown> {
+  const staleBefore = new Date(now.getTime() - CLAIM_TTL_MS)
+  return {
+    _id: id,
+    $and: [
+      {
+        $or: [
+          { 'verification.state': 'unverified' },
+          { 'verification.state': { $exists: false } },
+          { 'verification.state': null },
+          {
+            'verification.state': 'verified',
+            'verification.expiresAt': { $lte: now },
+          },
+        ],
+      },
+      {
+        $or: [
+          { 'verification.claimedAt': { $exists: false } },
+          { 'verification.claimedAt': null },
+          { 'verification.claimedAt': { $lte: staleBefore } },
+        ],
+      },
+    ],
+  }
+}
+
+/**
+ * Atomic update document for enqueueing a food from search.
+ * Sets verification.state to 'queued' and clears any claimedAt / recheckRequested.
+ */
+export function enqueueUpdate(): Record<string, unknown> {
+  return {
+    $set: {
+      'verification.state': 'queued',
+    },
+    $unset: {
+      'verification.claimedAt': '',
+      'verification.recheckRequested': '',
+    },
+  }
 }
 
 // ─── Relaunch budget ─────────────────────────────────────────────────────────
