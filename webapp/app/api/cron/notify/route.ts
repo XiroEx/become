@@ -22,6 +22,8 @@ import {
   WORKOUT_SCHEDULE_SELECT,
   isActiveProgramForSchedule,
   localDateKeyForUser,
+  localDayBoundsUtc,
+  localOffsetForUser,
   localHourForUser,
   workoutTitleForDay,
   MIND_REMINDER_START_HOUR,
@@ -410,11 +412,12 @@ export async function GET(request: NextRequest) {
         const lastSent = progress?.lastPushSentAt?.mealReminder
         if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
 
-        // Anything logged in the user's local today? Local midnight in UTC =
-        // dateKey 00:00Z + tz offset minutes.
-        const offset = Number.isFinite(progress?.timezoneOffset as number) ? (progress!.timezoneOffset as number) : 0
-        const dayStartUtc = new Date(new Date(`${userLocalDateKey}T00:00:00Z`).getTime() + offset * 60 * 1000)
-        const dayEndUtc = new Date(dayStartUtc.getTime() + 24 * 60 * 60 * 1000)
+        // Anything logged in the user's local today? Zone-first local-day window.
+        const { start: dayStartUtc, end: dayEndUtc } = localDayBoundsUtc(
+          now,
+          progress?.timezoneOffset,
+          progress?.timezone,
+        )
         const loggedToday = await MealLog.exists({
           user: progress.userId,
           loggedAt: { $gte: dayStartUtc, $lt: dayEndUtc },
@@ -528,7 +531,8 @@ export async function GET(request: NextRequest) {
 
       let streaks: StreaksLite
       try {
-        streaks = await computeStreaks(String(progress.userId), progress.timezoneOffset ?? 0, now) as unknown as StreaksLite
+        const userTzOffset = localOffsetForUser(now, progress?.timezoneOffset, progress?.timezone)
+        streaks = await computeStreaks(String(progress.userId), userTzOffset, now) as unknown as StreaksLite
       } catch { continue }
       const risk = superAtRisk(streaks, userLocalHour)
       if (!risk.atRisk) continue
@@ -574,7 +578,8 @@ export async function GET(request: NextRequest) {
 
       let read
       try {
-        read = await computeGoalProgress(String(progress.userId), progress.timezoneOffset ?? 0, now)
+        const userTzOffset = localOffsetForUser(now, progress?.timezoneOffset, progress?.timezone)
+        read = await computeGoalProgress(String(progress.userId), userTzOffset, now)
       } catch { continue }
       // Actionable only; warnings first; no repeat of the same rule inside the cooldown.
       const pick = pickGoalNudge(
@@ -628,10 +633,11 @@ export async function GET(request: NextRequest) {
       const lastSent = progress?.lastPushSentAt?.checkInReminder
       if (lastSent && localDateKeyForUser(new Date(lastSent), progress?.timezoneOffset, progress?.timezone) === userLocalDateKey) continue
 
+      const userTzOffset = localOffsetForUser(now, progress?.timezoneOffset, progress?.timezone)
       const { moodLoggedToday, weightLoggedToday, skippedToday } = checkInFactsForToday(
         progress,
         userLocalDateKey,
-        progress?.timezoneOffset ?? 0,
+        userTzOffset,
       )
       if (skippedToday || (moodLoggedToday && weightLoggedToday)) continue
 
