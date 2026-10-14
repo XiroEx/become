@@ -263,6 +263,15 @@ export default function LiveWorkoutRoute({
   );
   const { hints: exerciseHints, dismissHint } = useExerciseHints(workoutSlugs);
 
+  // The slugs the add/swap sheets exclude as "already in this workout". Kept
+  // as ONE memoised array because this route re-renders every second (the
+  // session timer): a fresh array literal in the JSX below re-triggered the
+  // sheets' fetch effects on every tick.
+  const sheetExerciseSlugs = useMemo(
+    () => (workout?.exercises ?? []).map((e) => e.slug).filter(Boolean),
+    [workout?.exercises],
+  );
+
   // Leaving with unsaved sets loses the workout (NP-082, NP-331): confirm first.
   // Android hardware back is intercepted through the shared hook; the iOS
   // swipe-back is disabled on this route while there is unsaved work.
@@ -591,18 +600,14 @@ export default function LiveWorkoutRoute({
         anchorInGroup={!!(workout && workout.exercises[addAnchorIndex]?.groupId)}
         anchorSets={workout && workout.exercises[addAnchorIndex]?.sets}
         anchorGroupType={workout && workout.exercises[addAnchorIndex]?.groupType}
-        workoutExerciseSlugs={(workout?.exercises ?? [])
-          .map((e) => e.slug)
-          .filter(Boolean)}
+        workoutExerciseSlugs={sheetExerciseSlugs}
         testID="live-workout-add"
       />
       <ExerciseSwapModal
         visible={swapSlug !== null}
         sourceName={swapSourceName}
         exerciseSlug={swapSlug ?? undefined}
-        workoutExerciseSlugs={workout?.exercises
-          .map((e) => e.slug)
-          .filter(Boolean)}
+        workoutExerciseSlugs={sheetExerciseSlugs}
         programRole={workout?.exercises.find((e) => e.slug === swapSlug)?.role}
         alternatives={alternatives.data?.alternatives}
         loading={alternatives.loading}

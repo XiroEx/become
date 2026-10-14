@@ -326,4 +326,153 @@ describe("ExerciseSwapModal", () => {
       "session",
     );
   });
+
+  // Both live routes re-render once a second (the session timer) and hand
+  // `workoutExerciseSlugs` down as a fresh array literal. The sheet used to
+  // key its fetch effects off that array's IDENTITY, so every tick refetched
+  // alternatives and flipped the content back to "Finding alternatives…" —
+  // the swap sheet "kept on glitching" and never settled.
+  describe("under a parent that re-renders (live screen timer)", () => {
+    const urlsFor = (fragment: string) =>
+      mockApiFetch.mock.calls.filter(([url]: any[]) =>
+        String(url).includes(fragment),
+      );
+
+    function Harness({
+      slug = "bench-press",
+      slugs = ["bench-press", "barbell-row"],
+    }: {
+      slug?: string;
+      slugs?: string[];
+    }) {
+      return (
+        <ExerciseSwapModal
+          visible
+          sourceName="Bench"
+          exerciseSlug={slug}
+          // A NEW array identity on every render, exactly as the live routes
+          // produced before they memoised it.
+          workoutExerciseSlugs={slugs.map((s) => s)}
+          onSwap={() => {}}
+          onClose={() => {}}
+        />
+      );
+    }
+
+    it("fetches alternatives once and keeps them on screen across re-renders", async () => {
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes("/api/exercises/alternatives")) {
+          return Promise.resolve({ alternatives: alts, total: alts.length });
+        }
+        return Promise.resolve({ exercises: [] });
+      });
+
+      const { rerender, getByTestId, queryByTestId } = render(<Harness />);
+
+      await waitFor(() => {
+        expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+      });
+      expect(urlsFor("/api/exercises/alternatives")).toHaveLength(1);
+      expect(urlsFor("/api/exercises/custom")).toHaveLength(1);
+
+      // Five "timer ticks" worth of parent re-renders.
+      for (let i = 0; i < 5; i += 1) {
+        await act(async () => {
+          rerender(<Harness />);
+        });
+      }
+
+      expect(urlsFor("/api/exercises/alternatives")).toHaveLength(1);
+      expect(urlsFor("/api/exercises/custom")).toHaveLength(1);
+      expect(queryByTestId("swap-modal-loading")).toBeNull();
+      expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+    });
+
+    it("refreshes in place without flashing the loading state", async () => {
+      let calls = 0;
+      let resolveSecond: (value: unknown) => void = () => {};
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes("/api/exercises/alternatives")) {
+          calls += 1;
+          if (calls === 1) {
+            return Promise.resolve({ alternatives: alts, total: alts.length });
+          }
+          return new Promise((resolve) => {
+            resolveSecond = resolve;
+          });
+        }
+        return Promise.resolve({ exercises: [] });
+      });
+
+      const { rerender, getByTestId, queryByTestId } = render(
+        <Harness slugs={["bench-press"]} />,
+      );
+      await waitFor(() => {
+        expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+      });
+
+      // The workout really changed, so a refetch is right — but the results
+      // already on screen must not be replaced by the loading line.
+      await act(async () => {
+        rerender(<Harness slugs={["bench-press", "barbell-row"]} />);
+      });
+
+      expect(calls).toBe(2);
+      expect(queryByTestId("swap-modal-loading")).toBeNull();
+      expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+
+      await act(async () => {
+        resolveSecond({ alternatives: alts, total: alts.length });
+      });
+      expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+    });
+
+    it("drops the previous exercise's alternatives when the target changes", async () => {
+      let calls = 0;
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes("/api/exercises/alternatives")) {
+          calls += 1;
+          if (calls === 1) {
+            return Promise.resolve({ alternatives: alts, total: alts.length });
+          }
+          return new Promise(() => {});
+        }
+        return Promise.resolve({ exercises: [] });
+      });
+
+      const { rerender, getByTestId, queryByTestId } = render(
+        <Harness slug="bench-press" />,
+      );
+      await waitFor(() => {
+        expect(getByTestId("swap-modal-option-db-press")).toBeTruthy();
+      });
+
+      await act(async () => {
+        rerender(<Harness slug="back-squat" />);
+      });
+
+      expect(queryByTestId("swap-modal-option-db-press")).toBeNull();
+      expect(getByTestId("swap-modal-loading")).toBeTruthy();
+    });
+
+    it("leaves the request to a caller that reports its own loading", async () => {
+      mockApiFetch.mockImplementation(() => Promise.resolve({ exercises: [] }));
+
+      const { getByTestId } = render(
+        <ExerciseSwapModal
+          visible
+          sourceName="Bench"
+          exerciseSlug="bench-press"
+          loading
+          onSwap={() => {}}
+          onClose={() => {}}
+        />,
+      );
+
+      await act(async () => {});
+
+      expect(urlsFor("/api/exercises/alternatives")).toHaveLength(0);
+      expect(getByTestId("swap-modal-loading")).toBeTruthy();
+    });
+  });
 });
