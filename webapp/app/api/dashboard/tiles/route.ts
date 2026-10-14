@@ -17,6 +17,11 @@ import { ensureWorkoutMetricsRegistered } from '@/lib/metrics/workout'
 import { resolveMetric } from '@/lib/metrics/registry'
 import { ensureWorkoutSuggestionsRegistered } from '@/lib/suggestions/workout'
 import { ensureNutritionSuggestionsRegistered, type NutritionDay } from '@/lib/suggestions/nutrition'
+import { readTzOffset } from '@/lib/dayWindow'
+import {
+  buildNutritionRollupPipeline,
+  mapRollupRowsToNutritionDays,
+} from '@/lib/dashboardTiles/nutritionRollup'
 import MealLog from '@/models/MealLog'
 import NutritionGoal from '@/models/NutritionGoal'
 import { runSuggestions } from '@/lib/suggestions/engine'
@@ -46,11 +51,13 @@ export async function GET(request: NextRequest) {
   }
   const userId = auth.userId
 
+  const tzOffsetMinutes = readTzOffset(request.nextUrl.searchParams)
+
   // Fast path: serve a cached payload if present. Fail-soft — a Redis miss /
   // outage just falls through to the full compute below. Note: a cache HIT
   // intentionally skips the tileLastShownAt side-effect write (recency is a
   // minor rotator factor and the 60s TTL window is acceptable staleness).
-  const cacheKey = tilesCacheKey(userId)
+  const cacheKey = tilesCacheKey(userId, tzOffsetMinutes)
   const cached = await cacheGetJson<unknown>(cacheKey)
   if (cached !== null) {
     return NextResponse.json(cached)
@@ -71,25 +78,12 @@ export async function GET(request: NextRequest) {
   // Nutrition rollup for the nutrition suggestion sources: per-day calories/
   // protein/log-count over the last 14 days + the user's protein goal.
   try {
-    const since = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
+    // Widen the since window by one day so a shifted bucket at the edge is not clipped.
+    const since = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
+    const pipeline = buildNutritionRollupPipeline(progress?.userId ?? null, since, tzOffsetMinutes)
     const rows: Array<{ _id: string; calories: number; protein: number; logCount: number }> =
-      await MealLog.aggregate([
-        { $match: { user: progress?.userId ?? null, loggedAt: { $gte: since } } },
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$loggedAt' } },
-            calories: { $sum: '$totalNutrition.calories' },
-            protein: { $sum: '$totalNutrition.protein' },
-            logCount: { $sum: 1 },
-          },
-        },
-      ])
-    const nutritionDays: NutritionDay[] = rows.map((r) => ({
-      date: new Date(`${r._id}T12:00:00Z`),
-      calories: r.calories ?? 0,
-      protein: r.protein ?? 0,
-      logCount: r.logCount ?? 0,
-    }))
+      await MealLog.aggregate(pipeline)
+    const nutritionDays: NutritionDay[] = mapRollupRowsToNutritionDays(rows)
     const goalDoc = await NutritionGoal.findOne({ userId }).select('protein').lean<{ protein?: number } | null>()
     ;(recentActivity as Record<string, unknown>).nutritionDays = nutritionDays
     ;(recentActivity as Record<string, unknown>).proteinGoal = goalDoc?.protein ?? null
