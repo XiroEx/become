@@ -32,17 +32,22 @@ export async function POST(request: NextRequest) {
   const existingList: DismissedSuggestion[] = existing?.dismissedSuggestions ?? []
   const { next, wasUpdate } = applyDismissal(existingList, id, new Date())
 
-  if (existing) {
-    existing.dismissedSuggestions = next
-    await existing.save()
-  } else {
-    // Upsert: create a UserProgress doc for users who have none yet so the
-    // dismissal sticks even on a brand-new account.
-    await UserProgress.create({
-      userId: auth.userId,
-      dismissedSuggestions: next,
-    })
-  }
+  // Targeted update, not progress.save().
+  // save() validates the WHOLE UserProgress document, so one malformed legacy
+  // subdocument anywhere in it — a workout set missing `setNumber`, say —
+  // threw here and returned a 500 from a daily member action.
+  //
+  // Note: reading existing list and replacing it is a read-modify-write that is
+  // not atomic against a concurrent dismissal, which is the behaviour it has
+  // today — do not try to solve that here.
+  //
+  // The upsert subsumes today's "brand-new account has no doc yet" branch,
+  // so the dismissal sticks even on a brand-new account.
+  await UserProgress.updateOne(
+    { userId: auth.userId },
+    { $set: { dismissedSuggestions: next } },
+    { upsert: true }
+  )
 
   return NextResponse.json({
     success: true,
