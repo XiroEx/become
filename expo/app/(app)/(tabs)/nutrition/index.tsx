@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  HelpCircle,
   History,
   ImagePlus,
   Pencil,
@@ -108,6 +109,8 @@ import { ScanHistorySheet } from "@/components/nutrition/ScanHistorySheet";
 import { WaterTracker } from "@/components/nutrition/WaterTracker";
 import { QuickAddSheet, type QuickAddData } from "@/components/nutrition/QuickAddSheet";
 import { invalidateMindSession } from "@/lib/mind/sessionCache";
+import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
 import { useTabBarScreenInset } from "@/lib/navigation/tabBarInset";
@@ -1792,6 +1795,25 @@ export default function NutritionIndexRoute() {
           </Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Pressable
+            testID="nutrition-help-button"
+            accessibilityRole="button"
+            accessibilityLabel="Nutrition help"
+            onPress={() => requestNativeTourHub("nutrition")}
+            style={[
+              minTouchTarget,
+              {
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                backgroundColor: colors.card,
+              },
+            ]}
+          >
+            <HelpCircle size={18} color={colors["muted-foreground"]} strokeWidth={1.5} />
+          </Pressable>
           {/* My Stuff header action */}
           <Pressable
             testID="nutrition-my-stuff-button"

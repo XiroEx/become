@@ -3,7 +3,7 @@ import { View, ScrollView, RefreshControl, Pressable } from "react-native";
 import { Text } from "@/components/Text";
 import { Avatar } from "@/components/Avatar";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Settings, Sliders } from "lucide-react-native";
+import { HelpCircle, Settings, Sliders } from "lucide-react-native";
 import { Button } from "@/components/Button";
 import { BottomSheet } from "@/components/BottomSheet";
 import { TileGrid } from "@/components/dashboard/TileGrid";
@@ -52,6 +52,7 @@ import { MoodLogSheet } from "@/components/dashboard/MoodLogSheet";
 import { kgToUnit, type WeightUnit } from "@become/core";
 import { LegalLinks } from "@/components/legal/LegalLinks";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
+import { requestNativeTourHub } from "@/lib/tour/nativeTourRequest";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
 
 export interface TodayWorkoutSummary {
@@ -128,6 +129,8 @@ export interface DashboardScreenProps {
   onOpenSettings?: () => void;
   /** Opens the profile screen (NP-163). */
   onOpenProfile?: () => void;
+  /** Opens the hub tour modal for dashboard. */
+  onHelp?: () => void;
   userIcon?: string | null;
   userAvatarUrl?: string | null;
   /** Opens streaks detail screen (NP-108). */
@@ -282,6 +285,7 @@ export function DashboardScreen({
   onRefresh,
   onOpenSettings,
   onOpenProfile,
+  onHelp,
   userIcon,
   userAvatarUrl,
   onOpenStreaks,
@@ -552,6 +556,16 @@ export function DashboardScreen({
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
+            <Pressable
+              testID="dashboard-help-button"
+              accessibilityRole="button"
+              accessibilityLabel="Dashboard help"
+              onPress={onHelp ?? (() => requestNativeTourHub("dashboard"))}
+              style={[minTouchTarget, { alignItems: "center", justifyContent: "center" }]}
+              className="rounded-xl border border-border p-2"
+            >
+              <HelpCircle color={colors["muted-foreground"]} size={20} strokeWidth={1.5} />
+            </Pressable>
             <Pressable
               testID="dashboard-open-profile"
               accessibilityRole="button"

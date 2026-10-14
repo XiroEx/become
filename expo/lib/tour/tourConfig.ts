@@ -55,6 +55,8 @@ export const NATIVE_TOUR_HUBS = [
   },
 ] as const;
 
+export type NativeTourHubId = (typeof NATIVE_TOUR_HUBS)[number]["id"];
+
 /**
  * Validates that an attempted tour progress update is safe to write from native.
  * Throws or returns false if attempting to mutate web tour progress.
