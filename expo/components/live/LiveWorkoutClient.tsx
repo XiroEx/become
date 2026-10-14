@@ -25,6 +25,11 @@ import {
 import type { VideoFramingOverride } from "@/lib/videoFraming";
 import type { VideoTrimOverride } from "@/lib/videoTrim";
 import { useRestTimer } from "@/lib/live/useRestTimer";
+import {
+  getRestDuration,
+  restAfterStep,
+  restGroupContext,
+} from "@/lib/live/restDuration";
 import { RestTimerBar } from "@/components/live/RestTimerBar";
 import { RestOverlay, upNextDetail } from "@/components/live/RestOverlay";
 import { prHaptic, setCompleteHaptic } from "@/lib/feedback/haptics";
@@ -172,6 +177,12 @@ export interface LiveWorkoutClientProps {
   restTimerNow?: () => number;
   /** Rest-alert seam override for tests (production default talks to expo-notifications). */
   restAlertDeps?: import("@/lib/live/restAlert").RestAlertDeps;
+  /**
+   * The sound-and-vibration alert fired at zero (NP-082) — overridable so a
+   * test can assert BOTH channels fired without a haptic engine or an audio
+   * session. Production default: expo-haptics + the expo-audio beep.
+   */
+  restEndAlertDeps?: import("@/lib/live/restEndAlert").RestEndAlertDeps;
   /** Fired when a rest countdown reaches zero. */
   onRestEnd?: () => void;
   /**
@@ -301,52 +312,23 @@ export interface LiveWorkoutClientProps {
   testID?: string;
 }
 
-const DEFAULT_REST_SEC = 90;
-
 /**
- * Parse a web-style rest string ("90s", "3min", "120") into seconds — the
- * web live client's `parseRestTime`, verbatim.
+ * The rest-duration rule — the web's `lib/workout/restDuration.ts`, ported
+ * once into `lib/live/restDuration.ts` and re-exported here because this file
+ * is where it used to live (NP-082). BOTH views read it: Live through
+ * `restAfterStep` (its flow step carries the group context) and Track through
+ * `restGroupContext` over the flat exercises array — one rule, never two.
+ * The flat `DEFAULT_REST_SEC = 90` that used to stand in whenever a completed
+ * set was not found in the flow is gone with it: that WAS the second rule,
+ * and it made the same set rest 90 s in Track and the program's time in Live.
  */
-export function parseRestSeconds(rest: string | null | undefined): number {
-  if (!rest) return 60;
-  const match = rest.match(/(\d+)/);
-  if (!match) return 60;
-  const num = parseInt(match[1]!, 10);
-  if (rest.includes("min")) return num * 60;
-  return num;
-}
-
-/** Smart rest default by tracking type — the web live client's rule. */
-function smartRestDefault(exercise?: LiveWorkoutExercise): string {
-  const t = normalizeTracking(exercise?.trackingType ?? null);
-  if (t === "reps_weight") return "3min";
-  if (t === "reps_bodyweight" || t === "reps_only") return "90s";
-  return "60s";
-}
-
-/**
- * Rest AFTER this step, in seconds — the web live client's `getRestDuration`
- * (line ~1283): no rest between exercises inside a round; after a round's
- * last exercise rest `groupRest || rest || smart default`. Ungrouped steps
- * rest their own `rest` (or the smart default). Only gates WHEN the existing
- * rest bar starts; the timer itself is NP-082's.
- */
-export function restAfterStep(
-  step: { groupId: string | null; isLastInRound: boolean },
-  exercise?: LiveWorkoutExercise,
-): number {
-  if (step.groupId && !step.isLastInRound) return 0;
-  if (step.groupId && step.isLastInRound) {
-    return parseRestSeconds(
-      exercise?.groupRest ??
-        (exercise?.restSec != null ? `${exercise.restSec}s` : undefined) ??
-        smartRestDefault(exercise),
-    );
-  }
-  return parseRestSeconds(
-    exercise?.restSec != null ? `${exercise.restSec}s` : smartRestDefault(exercise),
-  );
-}
+export {
+  getRestDuration,
+  getSmartRestDefault,
+  parseRestSeconds,
+  restAfterStep,
+  restGroupContext,
+} from "@/lib/live/restDuration";
 
 /**
  * The group label for the current step — the web live client's
@@ -540,6 +522,7 @@ export function LiveWorkoutClient({
   restTimerClearInterval,
   restTimerNow,
   restAlertDeps,
+  restEndAlertDeps,
   onRestEnd,
   celebratedPrIds,
   exerciseHistory,
@@ -656,6 +639,7 @@ export function LiveWorkoutClient({
     clearIntervalImpl: restTimerClearInterval,
     ...(restTimerNow !== undefined ? { now: restTimerNow } : {}),
     ...(restAlertDeps !== undefined ? { restAlertDeps } : {}),
+    ...(restEndAlertDeps !== undefined ? { restEndAlertDeps } : {}),
     ...(onRestEnd !== undefined ? { onRestEnd } : {}),
   });
 
@@ -797,15 +781,19 @@ export function LiveWorkoutClient({
       onGridChange?.(updated);
       rememberAfterEdit(exerciseIndex, setIndex, resolved.completed);
       if (justCompleted) {
-        // The web's rest rule: only the round's LAST exercise starts the
-        // bar. `rest.start` is the only thing gated — the timer is NP-082's.
+        // TRACK'S OWN REST TIMER (NP-082), on the web's rule: only the
+        // round's LAST exercise starts the bar, and for how long is
+        // `getRestDuration` — the same rule Live uses below, never a second
+        // one. A set that is not in the flow (an off-flow grid edit) derives
+        // its group context from the exercises array exactly as the web's
+        // Track view does, instead of falling back to a flat 90 s.
         // The tap is the physical tick that the set landed.
         setCompleteHaptic();
         const flowIndex = flowIndexByKey.get(`${exerciseIndex}:${setIndex}`);
         const step = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
         const restSec = step
           ? restAfterStep(step, ex)
-          : (ex.restSec ?? DEFAULT_REST_SEC);
+          : getRestDuration(ex, restGroupContext(workout.exercises, exerciseIndex));
         if (restSec > 0) rest.start(restSec);
         void onSetComplete?.({
           exerciseSlug: ex.slug,
@@ -970,7 +958,10 @@ export function LiveWorkoutClient({
       const atStep = flowIndex === undefined ? undefined : workoutFlow[flowIndex];
       const restSec = atStep
         ? restAfterStep(atStep, target)
-        : (target.restSec ?? DEFAULT_REST_SEC);
+        : getRestDuration(
+            target,
+            restGroupContext(workout.exercises, exerciseIndex),
+          );
       setCompleteHaptic();
       if (restSec > 0) rest.start(restSec);
       void onSetComplete?.({ exerciseSlug: target.slug, setIndex, state: resolved });

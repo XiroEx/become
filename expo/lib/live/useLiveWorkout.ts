@@ -37,7 +37,7 @@ import {
   type GroupKind,
   type WorkoutExercise,
 } from "@become/core";
-import { parseRestSeconds } from "@/components/live/LiveWorkoutClient";
+import { parseRestSeconds } from "@/lib/live/restDuration";
 import { WEBAPP_BASE_URL } from "@/lib/config";
 import { useAuth } from "@/lib/auth/useAuth";
 import { useFetch } from "@/lib/hooks/useFetch";

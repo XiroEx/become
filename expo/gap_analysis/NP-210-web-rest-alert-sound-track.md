@@ -36,3 +36,35 @@ This is the web change that must land before the native port starts, per NP-028'
 - [ ] (id: np210-sound) The web's Live rest timer plays an audible alert in addition to its existing vibration when the countdown reaches zero
 - [ ] (id: np210-track-timer) The Track view has a rest timer (reusing Live's rest-duration rule) that a member can start after a set, with the same sound-and-vibration alert at zero
 - [ ] (id: np210-web-first) This lands on the web before NP-082/NP-087 port the same rule natively
+
+## Native port — landed (card 6acec793eabd988f96d40a34)
+
+The web half shipped as `e243ddb8` on `main` (PR #1962). The native half
+followed on `beta` under board card **6acec793eabd988f96d40a34** ("Native: rest
+alert gives sound AND vibration at zero, and Track gets its own rest timer"),
+which is filed in the matrix against the NP-082 row — note that **NP-082's own
+board card (6abb125d2379586ae015c879) is the lock-screen / keep-awake /
+back-guard work and is in Review**, so the native rest-alert port carries the
+card id above rather than a ticket number of its own. What landed:
+
+1. `expo/lib/live/restEndAlert.ts` — `fireRestEndAlert()`, the native twin of
+   the web's `fireRestAlert()`: vibration AND sound, every time, with the two
+   channels independent so neither can swallow the other. Wired into
+   `useRestTimer`'s zero, which BOTH views share, so Live and Track fire the
+   same alert. A member-initiated Skip stays silent, as the web's `skipRest`
+   does.
+2. `expo/lib/feedback/restSound.ts` + `expo/assets/sounds/rest-end.wav` — the
+   sound, via expo-audio, generated from the web's own 880 Hz two-beep numbers
+   by `expo/scripts/generate-rest-alert-sound.mjs`. The phone's silent switch
+   (iOS) and ringer mode (Android) stay in charge: `playsInSilentMode: false`,
+   so a silenced phone gets the vibration alone — "both sound and silent
+   vibrations".
+3. `expo/lib/live/restDuration.ts` — the rest-duration rule, ported function
+   for function from `webapp/lib/workout/restDuration.ts` and consumed by both
+   views (Live through `restAfterStep`, Track through `restGroupContext`). It
+   replaced the copy inside `expo/components/live/LiveWorkoutClient.tsx`, the
+   flat `DEFAULT_REST_SEC = 90` fallback and a duplicate parse helper in
+   `expo/lib/quickSession/useQuickLiveWorkout.ts`.
+4. iOS's locked-phone banner was silent (`scheduleNotificationAsync` plays no
+   sound unless the content asks); it now schedules with `sound: true`.
+   Android's `rest-timer` channel already declared sound and vibration.
