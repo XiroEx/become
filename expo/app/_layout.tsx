@@ -1,7 +1,7 @@
 import "../global.css";
 import { useCallback, useMemo } from "react";
 import { View } from "react-native";
-import { Stack, ThemeProvider } from "expo-router";
+import { Stack, ThemeProvider, type ErrorBoundaryProps } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -32,6 +32,7 @@ import {
   useThemedWindowBackground,
 } from "@/lib/theme/useThemeTokens";
 import { useNavigationTheme } from "@/lib/theme/navigationTheme";
+import { RootErrorScreen } from "@/components/RootErrorScreen";
 import { useStackAnimation } from "@/lib/navigation/screenAnimation";
 import { holdSplashForFonts, useGeistFonts } from "@/lib/theme/loadFonts";
 
@@ -134,6 +135,26 @@ function ColdOpenUnlock() {
     onLocked,
   });
   return null;
+}
+
+/**
+ * THE ROOT BOUNDARY — the way back from a render throw anywhere below the
+ * root (card "A render error anywhere in the native app has nothing to catch
+ * it: the root layout exports no ErrorBoundary").
+ *
+ * Expo Router (57.0.24 — `ErrorBoundaryProps` in its shipped types, caught by
+ * its `Try` boundary) renders this instead of unmounting the tree when a
+ * route throws: a `.map` on something the server sent as `null`, a missing
+ * field a `.passthrough()` schema let through. Before it, that throw was a
+ * blank screen on a store build, escapable only by force-quitting.
+ *
+ * HOOK POINT FOR CRASH REPORTING: when George picks a provider (account, DSN,
+ * privacy copy — a different card, deliberately not this one), its
+ * report-the-throw call goes here, next to the render — this export is the
+ * one place every render throw below the root already passes through.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  return <RootErrorScreen error={error} retry={retry} />;
 }
 
 /**
