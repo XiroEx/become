@@ -61,6 +61,10 @@ import {
   swapQuickSessionExercise,
   type StoredQuickSession,
 } from "@/lib/quickSession/store";
+// The ONE rest rule (NP-082): this file used to carry its own copy of
+// `parseRestSeconds`, so a quick session could in principle have drifted from
+// a program workout on what "2 min" means.
+import { parseRestSeconds } from "@/lib/live/restDuration";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
 import { buildQuickSaveRequest } from "@/lib/quickSession/quickSave";
 import {
@@ -206,15 +210,6 @@ export interface UseQuickLiveWorkoutResult {
     groupKind?: GroupKind;
     anchorIndex?: number;
   }) => void;
-}
-
-function parseRestSeconds(rest: string | null | undefined): number {
-  if (!rest) return 60;
-  const match = rest.match(/(\d+)/);
-  if (!match) return 60;
-  const num = parseInt(match[1]!, 10);
-  if (rest.includes("min")) return num * 60;
-  return num;
 }
 
 function draftToLiveExercise(d: {

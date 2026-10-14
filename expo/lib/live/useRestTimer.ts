@@ -8,7 +8,10 @@ import {
   scheduleRestAlert,
   type RestAlertDeps,
 } from "@/lib/live/restAlert";
-import { restEndHaptic } from "@/lib/feedback/haptics";
+import {
+  fireRestEndAlert,
+  type RestEndAlertDeps,
+} from "@/lib/live/restEndAlert";
 
 export interface UseRestTimerOptions {
   /** Injected for deterministic tests. */
@@ -22,7 +25,12 @@ export interface UseRestTimerOptions {
   ) => { remove: () => void };
   /** Rest-alert seam (DI for tests; production default talks to expo-notifications). */
   restAlertDeps?: RestAlertDeps;
-  /** Fired when the countdown reaches zero (haptics + alert cancel live here). */
+  /**
+   * The sound-and-vibration alert at zero (NP-082). DI for tests; the
+   * production default is expo-haptics plus the expo-audio beep.
+   */
+  restEndAlertDeps?: RestEndAlertDeps;
+  /** Fired when the countdown reaches zero (the alert + alert cancel live here). */
   onRestEnd?: () => void;
 }
 
@@ -56,6 +64,10 @@ function defaultSubscribeToAppState(
  * only when permission is already granted, and cancelled on skip or a new
  * set. Timer impls are injectable so component tests can advance ticks
  * deterministically.
+ *
+ * At zero it fires ONE alert — `fireRestEndAlert`: sound AND vibration,
+ * every time, which is Jon's NP-028 decision and is shared by both views
+ * because both views share this hook (NP-082).
  */
 export function useRestTimer(
   options: UseRestTimerOptions = {},
@@ -67,6 +79,9 @@ export function useRestTimer(
   const [endsAt, setEndsAt] = useState<number | null>(null);
   const timerRef = useRef<RestTimer | null>(null);
   const alertHandleRef = useRef(createRestAlertHandle());
+  // True only for the duration of a member-initiated skip, so the shared
+  // `onComplete` below can tell "the rest ended" from "the member ended it".
+  const skippingRef = useRef(false);
   const optsRef = useRef(options);
   useEffect(() => {
     optsRef.current = options;
@@ -117,7 +132,14 @@ export function useRestTimer(
         const handle = alertHandleRef.current;
         const deps = optsRef.current.restAlertDeps ?? defaultRestAlertDeps;
         void cancelRestAlert(handle, deps);
-        restEndHaptic();
+        // THE ALERT: sound AND vibration, every time (NP-082). A rest the
+        // member SKIPPED is not a rest that ended — they are already lifting,
+        // so skipping stays silent, exactly as the web's `skipRest` fires no
+        // alert. `createRestTimer.skip()` calls this same `onComplete`, hence
+        // the flag rather than a second code path.
+        if (!skippingRef.current) {
+          fireRestEndAlert(optsRef.current.restEndAlertDeps);
+        }
         optsRef.current.onRestEnd?.();
       },
       setIntervalImpl: optsRef.current.setIntervalImpl,
@@ -154,7 +176,12 @@ export function useRestTimer(
   }, []);
 
   const skip = useCallback(() => {
-    timerRef.current?.skip();
+    skippingRef.current = true;
+    try {
+      timerRef.current?.skip();
+    } finally {
+      skippingRef.current = false;
+    }
     const handle = alertHandleRef.current;
     const deps = optsRef.current.restAlertDeps ?? defaultRestAlertDeps;
     void cancelRestAlert(handle, deps);
