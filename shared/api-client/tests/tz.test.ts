@@ -59,6 +59,7 @@ test('isDateScopedPath: covers every family the server reads tz for', () => {
     [
       'becoming',
       'checkin',
+      'dashboard',
       'goals',
       'journal',
       'me',

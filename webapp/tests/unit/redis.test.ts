@@ -159,12 +159,15 @@ describe('cacheDel / bustTilesCache', () => {
 })
 
 describe('tiles cache key versioning', () => {
-  it('embeds the user id under a versioned prefix', () => {
-    assert.equal(tilesCacheKey('abc'), 'tiles:v1:abc')
+  it('embeds the user id and tz offset under a versioned prefix', () => {
+    assert.equal(tilesCacheKey('abc', 240), 'tiles:v1:abc:240')
+    assert.equal(tilesCacheKey('abc', 0), 'tiles:v1:abc:0')
+    assert.equal(tilesCacheKey('abc'), 'tiles:v1:abc:0')
   })
 
-  it('produces distinct keys per user', () => {
-    assert.notEqual(tilesCacheKey('a'), tilesCacheKey('b'))
+  it('produces distinct keys per user and per offset', () => {
+    assert.notEqual(tilesCacheKey('a', 0), tilesCacheKey('b', 0))
+    assert.notEqual(tilesCacheKey('a', 0), tilesCacheKey('a', 240))
   })
 
   it('uses a 60s TTL', () => {

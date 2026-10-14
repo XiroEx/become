@@ -164,9 +164,13 @@ export async function cacheDel(
 // Tiles cache helpers — single source of truth for the key shape + TTL.
 // ---------------------------------------------------------------------------
 
-/** Versioned per-user cache key. Bump the version to invalidate all entries. */
-export function tilesCacheKey(userId: string): string {
-  return `tiles:v1:${userId}`
+/**
+ * Versioned per-user, per-offset cache key. The offset is part of the key
+ * because the payload is day-scoped (nutrition rollup), so two requests at
+ * different offsets must not share a cached payload.
+ */
+export function tilesCacheKey(userId: string, tzOffsetMinutes?: number | null): string {
+  return `tiles:v1:${userId}:${tzOffsetMinutes ?? 0}`
 }
 
 /** Short TTL for the dashboard tiles payload. */
@@ -193,8 +197,8 @@ export function widgetFeedCacheKey(userId: string, tzOffsetMinutes: number | nul
 export const WIDGET_FEED_CACHE_TTL_SECONDS = 60
 
 /** Explicit invalidation after a write that changes tile inputs. Fail-soft. */
-export async function bustTilesCache(userId: string): Promise<void> {
-  await cacheDel(tilesCacheKey(userId))
+export async function bustTilesCache(userId: string, tzOffsetMinutes?: number | null): Promise<void> {
+  await cacheDel(tilesCacheKey(userId, tzOffsetMinutes))
 }
 
 // Test-only: reset the memoized singleton so a test can re-exercise getClient.
