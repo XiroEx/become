@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
-import { STREAK_MILESTONES } from '@/lib/streak'
+import { STREAK_MILESTONES, isStreakAlive } from '@/lib/streak'
 import { readTzOffset, localDateKey, dateKey } from '@/lib/dayWindow'
 
 export async function GET(request: NextRequest) {
@@ -36,13 +36,30 @@ export async function GET(request: NextRequest) {
 
     const activityToday = lastActivityKey === todayKey
 
-    const streakDays = progress.streakDays ?? 0
+    // "Today" in the CALLER's local day, shifted the same way localDateKey
+    // does — so a member west or east of the server doesn't have their
+    // streak read as dead (or alive) a calendar day early or late.
+    const callerToday = new Date(Date.now() - tzOffset * 60_000)
+    const alive = isStreakAlive(
+      { lastActivityDate: progress.lastActivityDate, streakFreezes: progress.streakFreezes ?? 1 },
+      callerToday
+    )
+
+    // The stored number is only a truthful claim while the next log would
+    // still extend (or freeze-save) it. Once a lapse would reset it, this
+    // read path reports 0 — WITHOUT writing anything back; the reset itself
+    // only happens for real inside recordStreakActivity on the next log.
+    const storedStreakDays = progress.streakDays ?? 0
+    const streakDays = alive ? storedStreakDays : 0
     const milestonesReached: number[] = progress.milestonesReached ?? []
     const nextMilestone = STREAK_MILESTONES.find((m) => m > streakDays) ?? null
 
     return NextResponse.json({
       streakDays,
-      longestStreak: progress.longestStreak ?? streakDays,
+      // Falls back to the raw stored count, not the (possibly zeroed-for-
+      // display) `streakDays` above — a lapsed streak's best-ever run didn't
+      // just become 0 along with its current one.
+      longestStreak: progress.longestStreak ?? storedStreakDays,
       streakFreezes: progress.streakFreezes ?? 1,
       milestonesReached,
       activityToday,

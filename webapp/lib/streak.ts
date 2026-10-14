@@ -27,6 +27,41 @@ function daysDiff(a: Date, b: Date): number {
   return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86_400_000)
 }
 
+export interface StreakAliveInput {
+  lastActivityDate: Date | string | null | undefined
+  streakFreezes: number
+}
+
+/**
+ * Does a stored streak survive to the member's NEXT log — i.e. would the next
+ * activity extend it (or have a freeze auto-save it), rather than resetting
+ * it to 1?
+ *
+ * This is the SAME day-math (`startOfDay` + `daysDiff`) recordStreakActivity
+ * uses to decide a streak's fate, so the write path and every read path share
+ * one definition and can never drift apart:
+ *   diff === 0 → already logged today, alive (as stored)
+ *   diff === 1 → next log extends it, alive
+ *   diff === 2 and a freeze is in hand → next log auto-applies a freeze, alive
+ *   anything else (including no activity on record at all) → the next log
+ *     would reset it to 1 — the stored number is already dead
+ *
+ * `today` defaults to "now". A caller reading on behalf of a specific member
+ * timezone (GET /api/streak) should pass `today` shifted by that caller's tz
+ * offset — the same shift `localDateKey` in lib/dayWindow.ts uses — so the
+ * day boundary lines up with the caller's own calendar day rather than the
+ * server's.
+ */
+export function isStreakAlive(
+  { lastActivityDate, streakFreezes }: StreakAliveInput,
+  today: Date = new Date()
+): boolean {
+  if (!lastActivityDate) return false
+  const diff = daysDiff(startOfDay(new Date(lastActivityDate)), startOfDay(today))
+  if (diff === 0 || diff === 1) return true
+  return diff === 2 && streakFreezes > 0
+}
+
 /**
  * Records a streak-worthy activity for a user.
  * Safe to call multiple times per day — only counts once.
@@ -88,17 +123,19 @@ export async function recordStreakActivity(
   let freezeUsed = false
   let freezes = progress.streakFreezes ?? 1
 
-  if (diff === 1) {
-    // Consecutive day — extend streak
-    newStreak += 1
-  } else if (diff === 2 && freezes > 0) {
-    // Missed exactly one day — auto-apply freeze
+  if (!isStreakAlive({ lastActivityDate: lastActivity, streakFreezes: freezes }, today)) {
+    // Gap too large or no freezes — reset. isStreakAlive is the same
+    // decision GET /api/streak reads, so the two can never drift.
+    newStreak = 1
+  } else if (diff === 2) {
+    // Missed exactly one day — isStreakAlive only agreed this is alive
+    // because a freeze is in hand, so auto-apply it.
     newStreak += 1
     freezes -= 1
     freezeUsed = true
   } else {
-    // Gap too large or no freezes — reset
-    newStreak = 1
+    // Consecutive day — extend streak
+    newStreak += 1
   }
 
   // Award a freeze back at every FREEZE_EARN_INTERVAL streak days (max MAX_FREEZES)
