@@ -19,8 +19,9 @@
 //     does not re-prompt unless the member asks for it
 
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock("expo-router", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
 import * as fs from "fs";
@@ -50,6 +51,7 @@ describe("NP-207 — Native coach-mark tour of the main hubs, with a decline opt
 
   beforeEach(() => {
     mockPush.mockClear();
+    mockReplace.mockClear();
     storage = createMemoryAsyncStorage();
     onLoaded = jest.fn();
   });
@@ -168,12 +170,64 @@ describe("NP-207 — Native coach-mark tour of the main hubs, with a decline opt
           hub.description,
         );
         await waitFor(() => {
-          expect(mockPush).toHaveBeenLastCalledWith(`/(tabs)/${hub.id}`);
+          expect(mockReplace).toHaveBeenLastCalledWith(`/(tabs)/${hub.id}`);
         });
         if (i < NATIVE_TOUR_HUBS.length - 1) {
           fireEvent.press(getByTestId("native-tour-step-next"));
         }
       }
+    });
+
+    it("drives every hub switch with router.replace — never router.push — so the tour leaves no history behind", async () => {
+      const { getByTestId } = await renderLoaded();
+      fireEvent.press(getByTestId("native-tour-prompt-walkthrough"));
+
+      // Walk all five hubs forward, then step Back once and forward again:
+      // every one of those switches must replace, never push.
+      for (let i = 0; i < NATIVE_TOUR_HUBS.length - 1; i += 1) {
+        fireEvent.press(getByTestId("native-tour-step-next"));
+      }
+      fireEvent.press(getByTestId("native-tour-step-back"));
+      fireEvent.press(getByTestId("native-tour-step-next"));
+
+      await waitFor(() => {
+        // 5 forward entries + 1 back + 1 forward again = 7 hub switches.
+        expect(mockReplace).toHaveBeenCalledTimes(7);
+      });
+      expect(mockReplace.mock.calls.map(([href]) => href)).toEqual([
+        "/(tabs)/dashboard",
+        "/(tabs)/programming",
+        "/(tabs)/nutrition",
+        "/(tabs)/mind",
+        "/(tabs)/profile",
+        "/(tabs)/mind",
+        "/(tabs)/profile",
+      ]);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
+    it("tapping Done after walking all five hubs settles completed with no tour navigation left in the back stack", async () => {
+      const { getByTestId, queryByTestId } = await renderLoaded();
+      fireEvent.press(getByTestId("native-tour-prompt-walkthrough"));
+
+      for (let i = 0; i < NATIVE_TOUR_HUBS.length - 1; i += 1) {
+        fireEvent.press(getByTestId("native-tour-step-next"));
+      }
+      expect(getByTestId("native-tour-step-count").props.children).toBe(
+        `Step ${NATIVE_TOUR_HUBS.length} of ${NATIVE_TOUR_HUBS.length}`,
+      );
+
+      fireEvent.press(getByTestId("native-tour-step-next")); // Done
+
+      expect(queryByTestId("native-tour-step")).toBeNull();
+      await waitFor(async () => {
+        const progress = await getNativeTourProgress(storage);
+        expect(progress.status).toBe("completed");
+      });
+      // Done settles without navigating anywhere itself, and the whole walk
+      // replaced rather than pushed — nothing tour-driven to go back through.
+      expect(mockReplace).toHaveBeenCalledTimes(NATIVE_TOUR_HUBS.length);
+      expect(mockPush).not.toHaveBeenCalled();
     });
 
     it('ends the last step\'s button with "Done" rather than "Next"', async () => {

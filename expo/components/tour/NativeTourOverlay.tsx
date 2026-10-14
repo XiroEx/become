@@ -116,11 +116,18 @@ export function NativeTourOverlay({
 
   // Each step change (and entering "touring" at step 0) switches to that
   // hub's tab so the member actually sees what the coach card is about.
+  // `replace`, not `push`: the member did not navigate — the tour did. A
+  // push per step would stack one history entry per hub visited (four extra
+  // entries behind a member who walks all five hubs to Profile, more on
+  // every Back-and-forward), and settling only writes progress without
+  // unwinding them, so the next back gesture would walk backwards through
+  // the tour instead of leaving the hub. Replacing keeps the back stack
+  // exactly as the member left it.
   useEffect(() => {
     if (phase !== "touring") return;
     const hub = hubs[stepIndex];
     if (!hub) return;
-    router.push(hrefForHub(hub) as never);
+    router.replace(hrefForHub(hub) as never);
   }, [phase, stepIndex, hubs, router]);
 
   const settle = useCallback(
