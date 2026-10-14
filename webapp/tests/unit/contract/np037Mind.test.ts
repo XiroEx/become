@@ -24,8 +24,8 @@
 // THE DAY. `tz` is minutes WEST of UTC and the routes derive the member's local
 // day from it and from nothing else. `DAY_SHIFT_TZ` below is chosen so that
 // local day is DEFINITELY NOT the UTC day, so a handler that ignored `tz` (or a
-// client that sent the web's `tzOffset`, which POST /api/mind/session does not
-// read — NP-031) fails here instead of passing for eleven hours a day.
+// legacy client that sent `tzOffset`, which POST /api/mind/session does not
+// read) fails here instead of passing for eleven hours a day.
 //
 // TESTS RUN IN DECLARATION ORDER, and the order matters: the PUT stores the
 // session the GET resumes, the POST clears it, and several PATCHes refuse to
