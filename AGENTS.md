@@ -2586,6 +2586,57 @@ NEXT_PUBLIC_PROFILE_IMAGE # Coach profile picture
 NEXT_PUBLIC_LOGO          # App logo
 ```
 
+## The food verification queue, and the one thing that drains it
+
+`verification.state: 'queued'` had THREE writers and no reader. The flag route
+queues a report it will not run now (over the daily limit, or the food was
+verified recently), `POST /api/nutrition/flags/[id]/evidence` queues a
+relaunch, and `scripts/audit-food-coherence.mjs --apply` queues every
+incoherent row it refuses to guess at — and nothing in the repo ever took one
+out again. Measured on 2026-09-21: 45 foods queued since the 2026-08-13 audit
+run, 226 foods flagged `isVerified` from imports, and the agent had verified
+exactly ONE food, ever. A pipeline you can only enter.
+
+- `lib/nutrition/verificationQueue.ts` — the drain. Reads the oldest waiting
+  foods (`updatedAt` ascending; there is no `queuedAt` and adding one would
+  need a backfill), takes the SAME compare-and-swap claim the flag route takes
+  over the same `claimedAt` TTL, and hands each claimed food to the existing
+  `verifyFood`. It is not a second verifier and holds no copy of the claim rule
+  — `canClaim()` in `flagPolicy.ts` is checked against the selector by a test.
+- `app/api/cron/verify-food-queue` — POST applies, GET does the same, and
+  `?dryRun=1` plans and writes nothing (not even a verification: the AI spend
+  IS the write that matters here). Auth is `x-cron-secret` (redsecrets
+  `admin.cronSecret`), like every other cron route. No new env var.
+- `.github/workflows/verify-food-queue.yml` — twice a day, PRODUCTION host
+  only, repo secret `BECOME_CRON_SECRET`, the same one the other schedules use.
+  Beta and production are two workspaces over ONE database, so a second
+  schedule would be a second runner over the same rows — and here that means
+  paying twice for the same grounded web search.
+
+Four rules it is held to, because each one is a failure already seen somewhere
+in this stack:
+
+1. **Bounded.** A few tens of foods per run (`DEFAULT_QUEUE_BATCH`), plus a
+   wall-clock deadline after which it stops CLAIMING. A backlog of ten thousand
+   cannot become one invoice.
+2. **Claim before work, release on failure.** `verifyFood` releases its own
+   claim on every exit it controls; the drain releases on the one it does not
+   (an unexpected throw).
+3. **The TTL is a TTL.** A claim past `CLAIM_TTL_MS` is presumed leaked, so a
+   food abandoned by a dead run — `queued` OR `running` — becomes claimable
+   again instead of being wedged forever.
+4. **A recheck is honoured exactly once.** `verification.recheckRequested` is
+   consumed by the claim (the run it bought IS the recheck); a request that
+   arrives mid-run buys ONE re-queue, cleared in the same atomic write, so it
+   cannot renew itself.
+
+It writes the queue fields and nothing else: `isVerified` is `verifyFood`'s and
+the admin's, and a MANUAL `reviewFlag` decision survives it untouched. Pinned in
+`tests/unit/nutrition/verificationQueueDrain.test.ts` (batch, claim, TTL
+re-claim, the recheck-once rule, the dry run writing nothing) and
+`tests/unit/nutrition/verifyFoodQueueSchedule.test.ts` (one schedule, production
+only, secret before work).
+
 ## Home-screen widgets
 
 Jon asked for widgets on the phone lock screen and Home Screen: a streak one, a

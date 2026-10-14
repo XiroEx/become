@@ -1,0 +1,156 @@
+name: Verify food queue
+
+# THE schedule for the food verification drain. There is exactly one, and this
+# is it.
+#
+# The verification pipeline could be ENTERED and never left. Three writers put a
+# food into `verification.state: 'queued'` — the flag route when a reporter is
+# over their daily limit or the food was recently verified, the evidence
+# relaunch route, and `webapp/scripts/audit-food-coherence.mjs` — and nothing
+# took one out again. Measured on 2026-09-21: 45 foods queued since the
+# 2026-08-13 audit run, while the agent had verified exactly one food ever.
+# `webapp/app/api/cron/verify-food-queue` is the drain; this is what calls it.
+#
+# WHY HERE, AND WHY ONLY HERE
+#
+# Production (become.redbtn.io, `main`) and beta (become-beta.redbtn.io, `beta`)
+# are two RedRun workspaces over ONE MongoDB, and the queue is rows in that
+# database. A second schedule on beta would therefore be a second runner over
+# the same rows — and here that is not merely noise: every food costs a grounded
+# web search, which is the metered cost in this pipeline, so a duplicate runner
+# is a duplicate invoice. So this names the PRODUCTION host explicitly, and it
+# is the only schedule in the repo that calls this endpoint. If a RedRun
+# workspace schedule is ever added for it, DELETE THIS FILE in the same change.
+#
+# GitHub only runs `schedule:` from the repository's DEFAULT branch, which is a
+# second, structural reason this cannot end up running twice: a copy of this
+# file on `beta` is inert until it reaches `main`. So the schedule starts when
+# this merges to `main`, not when it merges to `beta` — and GitHub disables
+# scheduled workflows in a repository with 60 days of no activity, so a
+# long-quiet repo needs the schedule re-enabled by hand.
+#
+# CADENCE: twice a day, which is a deliberately cheap ceiling rather than a
+# latency promise. One run takes a few tens of foods (the bound lives in
+# `webapp/lib/nutrition/verificationQueue.ts`, not here), and each food is about
+# two AI dispatches, so two runs a day is the whole exposure. The queue is a
+# backlog — nothing a member is waiting on in-session — and a run with an empty
+# queue writes nothing at all, so the second run is free on most days.
+#
+# The minute is deliberately not :00. GitHub queues every cron in the world at
+# the top of the hour and the delay there is routinely tens of minutes.
+
+on:
+  schedule:
+    - cron: '23 5,17 * * *'
+  workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Plan the batch and write nothing'
+        type: boolean
+        default: false
+      limit:
+        description: 'Foods to take this run (smaller only; the route caps it)'
+        type: string
+        default: ''
+
+# Never two at once. Every food is behind a compare-and-swap over a TTL claim,
+# so an overlap would be safe rather than harmful — but two runners would still
+# each take a batch, and the budget is the thing this job is careful with.
+concurrency:
+  group: verify-food-queue
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Call the production verification drain
+        env:
+          # Same value as redsecrets `admin.cronSecret` (the CRON_SECRET the
+          # notify cron uses), already provisioned as the repository secret
+          # BECOME_CRON_SECRET for the other two schedules. No new credential.
+          CRON_SECRET: ${{ secrets.BECOME_CRON_SECRET }}
+          # Interpolated into env, never into the shell line — an input is
+          # attacker-controllable text and must not be pasted into `run:`.
+          DRY_RUN: ${{ inputs.dryRun }}
+          LIMIT: ${{ inputs.limit }}
+          BASE_URL: https://become.redbtn.io
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "::error::BECOME_CRON_SECRET is missing — the drain cannot authenticate"
+            exit 1
+          fi
+
+          QUERY=""
+          if [ "${DRY_RUN}" = "true" ]; then
+            QUERY="?dryRun=1"
+          fi
+          # Digits only: anything else is dropped rather than forwarded.
+          if [ -n "${LIMIT}" ] && printf '%s' "${LIMIT}" | grep -Eq '^[0-9]+$'; then
+            if [ -z "${QUERY}" ]; then QUERY="?limit=${LIMIT}"; else QUERY="${QUERY}&limit=${LIMIT}"; fi
+          fi
+
+          URL="${BASE_URL}/api/cron/verify-food-queue${QUERY}"
+
+          # Generous timeout: the drain stops CLAIMING at its own deadline but
+          # still awaits the verifications already in flight, and one of those
+          # is a grounded search plus a review.
+          # The secret travels in a header, so it is never in a URL that could
+          # end up in an access log.
+          code=$(curl -sS --max-time 600 \
+            -o response.json -w '%{http_code}' \
+            -X POST "${URL}" \
+            -H "x-cron-secret: ${CRON_SECRET}")
+
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+
+          if [ "${code}" != "200" ]; then
+            echo "::error::verify-food-queue endpoint answered HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Report what it verified
+        if: always()
+        run: |
+          set -euo pipefail
+
+          if [ ! -s response.json ]; then
+            {
+              echo "### Food verification queue"
+              echo
+              echo "No response body — the call failed before the endpoint answered."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Food verification queue"
+            echo
+
+            ran_at=$(jq -r '.ranAt // "unknown"' response.json)
+            applied=$(jq -r '.apply // false' response.json)
+            waiting=$(jq -r '.waiting // 0' response.json)
+            selected=$(jq -r '.selected // 0' response.json)
+            claimed=$(jq -r '.claimed // 0' response.json)
+            written=$(jq -r '.written // 0' response.json)
+            left=$(jq -r '.leftAlone // 0' response.json)
+
+            echo "| ran at | applied | waiting | looked at | claimed | records changed | left queued |"
+            echo "|---|---|---|---|---|---|---|"
+            echo "| ${ran_at} | ${applied} | ${waiting} | ${selected} | ${claimed} | ${written} | ${left} |"
+            echo
+
+            if [ "$(jq -r '.selected // 0' response.json)" = "0" ]; then
+              echo "The queue was empty, so nothing was written."
+            else
+              echo "Foods (ids only — a food id is not member data):"
+              echo
+              jq -r '.foods[] | "- `\(.foodId)` \(.outcome) written=\(.written) \(.reason // "")"' response.json
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
