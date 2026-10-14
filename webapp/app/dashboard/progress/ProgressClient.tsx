@@ -61,8 +61,9 @@ interface ProgressData {
   totalVolumeLbs: number
   weeklyAvailability: number | null
   fitnessGoal?: FitnessGoal
-  /** NP-209: the member's chosen lifting-load unit (profile.weightUnit ??
-   *  'lbs'). Not sent by GET /api/progress itself — stitched in from the
+  /** NP-209: the member's chosen weight unit (profile.weightUnit ?? 'lbs') —
+   *  lifting loads AND, since the kg sweep, the body-weight-derived lean mass
+   *  series below. Not sent by GET /api/progress itself — stitched in from the
    *  paired /api/profile fetch in fetchData() below. */
   weightUnit?: 'lbs' | 'kg'
 }
@@ -407,14 +408,19 @@ function ActivityCalendar({ workouts }: { workouts: DetailedWorkout[] }) {
 function BodyCompChart({
   bodyFatData,
   leanMassData,
+  weightUnit = 'lbs',
 }: {
   bodyFatData: Array<{ date: string; value: number }>
   leanMassData: Array<{ date: string; value: number }>
+  /** The member's `profile.weightUnit ?? 'lbs'`. Lean mass is a weight and
+   *  GET /api/progress sends the series in this unit — the tab used to label
+   *  it a hardcoded 'lbs' whatever the member chose. */
+  weightUnit?: 'lbs' | 'kg'
 }) {
   const [tab, setTab] = useState<'body_fat' | 'lean_mass'>('body_fat')
   const data = tab === 'body_fat' ? bodyFatData : leanMassData
   const color = tab === 'body_fat' ? '#f97316' : '#8b5cf6'
-  const unit = tab === 'body_fat' ? '%' : 'lbs'
+  const unit = tab === 'body_fat' ? '%' : weightUnit
   const label = tab === 'body_fat' ? 'Body Fat' : 'Lean Mass'
 
   return (
@@ -701,6 +707,7 @@ export default function ProgressClient() {
             <BodyCompChart
               bodyFatData={data?.bodyFatData ?? []}
               leanMassData={data?.leanMassData ?? []}
+              weightUnit={data?.weightUnit ?? 'lbs'}
             />
           </div>
         </div>

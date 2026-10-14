@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import ProgramModel from '@/models/Program'
+import User from '@/models/User'
 import { verifyAuth } from '@/lib/auth'
+import { journeyWeightChange, memberDisplayUnit } from '@/lib/weighInUnits'
 
 export async function GET(
   request: NextRequest,
@@ -17,12 +19,19 @@ export async function GET(
     const { programId } = await params
     await dbConnect()
 
-    const [progress, program] = await Promise.all([
+    const [progress, program, user] = await Promise.all([
       UserProgress.findOne({ userId: authResult.userId }).lean(),
       ProgramModel.findOne({ program_id: programId }).lean() as Promise<{
         name?: string; duration_weeks?: number; goal?: string
       } | null>,
+      // The recap's weight-change stat is BODY weight, so it is read in the
+      // member's own unit — `profile.weightUnit ?? 'lbs'`, never defaulted
+      // into the database.
+      User.findById(authResult.userId, 'profile.weightUnit').lean() as Promise<
+        { profile?: { weightUnit?: 'lbs' | 'kg' } } | null
+      >,
     ])
+    const displayUnit = memberDisplayUnit(user?.profile?.weightUnit)
 
     if (!progress || !program) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -86,7 +95,7 @@ export async function GET(
       .filter((w: WeightEntry) => w.weight > 0)
       .sort((a: WeightEntry, b: WeightEntry) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-    let weightChange: { startLbs: number; endLbs: number; change: number } | null = null
+    let weightChange: ReturnType<typeof journeyWeightChange> | null = null
     if (weightHistory.length >= 2) {
       // First entry at or before program start; last entry at or after program end
       const beforeStart = weightHistory.filter((w: WeightEntry) => new Date(w.date) <= startDate)
@@ -95,12 +104,17 @@ export async function GET(
       const endEntry = afterEnd[afterEnd.length - 1] || weightHistory[weightHistory.length - 1]
 
       if (startEntry && endEntry && startEntry !== endEntry) {
-        // UserProgress stores weight in lbs (see IWeightEntry comment in models/UserProgress.ts).
-        // The unit field is not stored in the schema; treat absent/unknown unit as lbs.
-        const toLbs = (w: WeightEntry) => w.unit === 'kg' ? w.weight * 2.20462 : w.weight
-        const startLbs = Math.round(toLbs(startEntry) * 10) / 10
-        const endLbs = Math.round(toLbs(endEntry) * 10) / 10
-        weightChange = { startLbs, endLbs, change: Math.round((endLbs - startLbs) * 10) / 10 }
+        // Each weigh-in carries the unit it was logged in (IWeightEntry.unit);
+        // one with none is read in the member's display unit, grandfathered.
+        //
+        // `startLbs` / `endLbs` / `change` keep their historical meaning —
+        // always POUNDS, which is what the names say and what the native recap
+        // and ProgramJourneyWeightChangeSchema read. The additive
+        // `unit`/`startInUnit`/`endInUnit`/`changeInUnit` is the same stat in
+        // the member's unit, and is what the web recap renders: it used to
+        // append a hardcoded "lbs" to the pounds figure, so a member tracking
+        // in kilograms read their 82 kg as "181 lbs".
+        weightChange = journeyWeightChange(startEntry, endEntry, displayUnit)
       }
     }
 

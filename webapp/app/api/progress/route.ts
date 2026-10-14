@@ -237,6 +237,27 @@ export async function GET(request: NextRequest) {
       currentWeek: resolvedWeek.currentWeek,
     } : null
 
+    // The member's goals, read once and returned on BOTH the summary and the
+    // detailed shape. The dashboard fetches the summary, and until now the
+    // profile fields were only attached to `?detailed=1` — so the Goal and This
+    // Week tiles never saw a target weight or a weekly target even when the
+    // member had set them at onboarding.
+    //
+    // Read BEFORE formatProgressData: `profile.weightUnit` is what the weight
+    // and lean-mass series have to come back in (see formatProgressData's
+    // `weightUnit` override).
+    const UserModel = (await import('@/models/User')).default
+    const user = await UserModel.findById(authResult.userId, 'profile').lean() as {
+      profile?: {
+        fitnessGoal?: string
+        nutritionDirection?: string
+        targetWeightKg?: number
+        currentWeightKg?: number
+        weeklyAvailability?: number
+        weightUnit?: string
+      }
+    } | null
+
     // Format and return progress data
     const formattedData = formatProgressData(
       {
@@ -254,25 +275,10 @@ export async function GET(request: NextRequest) {
         totalWeeks: resolvedWeek.totalWeeks,
         nextWorkoutDay: scheduleNextWorkoutDay,
         tzOffsetMinutes: readTzOffset(request.nextUrl.searchParams),
+        weightUnit: user?.profile?.weightUnit,
       }
     )
 
-    // The member's goals, read once and returned on BOTH the summary and the
-    // detailed shape. The dashboard fetches the summary, and until now the
-    // profile fields were only attached to `?detailed=1` — so the Goal and This
-    // Week tiles never saw a target weight or a weekly target even when the
-    // member had set them at onboarding.
-    const UserModel = (await import('@/models/User')).default
-    const user = await UserModel.findById(authResult.userId, 'profile').lean() as {
-      profile?: {
-        fitnessGoal?: string
-        nutritionDirection?: string
-        targetWeightKg?: number
-        currentWeightKg?: number
-        weeklyAvailability?: number
-        weightUnit?: string
-      }
-    } | null
     const targetWeightKg = user?.profile?.targetWeightKg
     const targetWeightLbs = targetWeightKg ? Math.round(targetWeightKg * 2.20462) : null
     const weeklyAvailability = user?.profile?.weeklyAvailability ?? null
