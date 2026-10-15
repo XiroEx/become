@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(100, Math.floor(limitParam)) : 7
 
     const wins = await DailyWin.find({ userId: auth.userId })
-      .sort({ date: -1 })
+      .sort({ date: -1, createdAt: -1 })
       .limit(limit)
       .lean()
 
