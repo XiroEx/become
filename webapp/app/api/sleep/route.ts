@@ -6,7 +6,6 @@ import {
   readTzOffset,
   readTzOffsetFromBody,
   localDateKey,
-  localDayWindowForKey,
   utcMidnightDateKey,
   isEntryOnDay,
 } from '@/lib/dayWindow'
@@ -24,11 +23,10 @@ export async function GET(request: NextRequest) {
 
     const tz = readTzOffset(request.nextUrl.searchParams)
     const todayKey = localDateKey(null, tz)
-    const { start: todayStart } = localDayWindowForKey(todayKey, tz)
 
     // 14-day window: start from local midnight 13 days before today
     const fourteenDaysAgoKey = (() => {
-      const d = new Date(todayStart)
+      const d = utcMidnightDateKey(todayKey)
       d.setUTCDate(d.getUTCDate() - 13)
       const y = d.getUTCFullYear()
       const m = String(d.getUTCMonth() + 1).padStart(2, '0')
@@ -131,10 +129,9 @@ export async function POST(request: NextRequest) {
     const tz = readTzOffsetFromBody(body)
     const todayKey = localDateKey(null, tz)
     const storageDate = utcMidnightDateKey(todayKey)
-    const { start: todayWindowStart, end: todayWindowEnd } = localDayWindowForKey(todayKey, tz)
 
     const entry = await Sleep.findOneAndUpdate(
-      { userId: authResult.userId, date: { $gte: todayWindowStart, $lte: todayWindowEnd } },
+      { userId: authResult.userId, date: storageDate },
       {
         userId: authResult.userId,
         date: storageDate,
