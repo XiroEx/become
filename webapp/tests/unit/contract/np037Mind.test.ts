@@ -1378,6 +1378,18 @@ test('POST then GET /api/mind/wins match their schemas', async () => {
   // Newest first, and the six-week-old fixture win is still there behind it.
   assert.equal(wins.wins[0]?.win, body.win)
   assert.equal(wins.wins.length, 2)
+
+  // Post a second win on the same local day: deterministic order with newest win first
+  const secondBody = { win: 'Second win logged later today.', tz: DAY_SHIFT_TZ }
+  const posted2 = await sendJson(mindWinsPOST, 'POST', '/api/mind/wins', PLUS_MEMBER, secondBody)
+  assert.equal(posted2.status, 200, JSON.stringify(posted2.body))
+
+  const read2 = await getJson(mindWinsGET, '/api/mind/wins', PLUS_MEMBER, { limit: '5' })
+  assert.equal(read2.status, 200, JSON.stringify(read2.body))
+  const wins2 = MindWinsResponseSchema.parse(read2.body)
+  assert.equal(wins2.wins.length, 3)
+  assert.equal(wins2.wins[0]?.win, secondBody.win)
+  assert.equal(wins2.wins[1]?.win, body.win)
 })
 
 test('POST then GET /api/mind/journal match their schemas', async () => {
