@@ -100,9 +100,15 @@ export async function PUT(request: NextRequest) {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean()
 
-    // Grant XP on first mission set (fire-and-forget)
+    // Grant XP on first mission set
     if (!existing) {
-      MindProgress.updateOne({ userId: auth.userId }, { $inc: { xp: 25 } }).catch(() => {})
+      await MindProgress.findOneAndUpdate(
+        { userId: auth.userId },
+        { $inc: { xp: 25 } },
+        { upsert: true, setDefaultsOnInsert: true }
+      ).catch((err) => {
+        console.error('Failed to grant mission XP:', err)
+      })
     }
 
     return NextResponse.json({ mission })
