@@ -318,6 +318,11 @@ describe("(id: np381-clip) the clip is the full-screen background, with the chro
     expect(rail.bottom).toBe(0);
     expect(rail.justifyContent).toBe("center");
   });
+
+  it("Track view renders video with surface='form' matching web WorkoutFormClient framing", () => {
+    const src = read("components/live/TrackWorkoutView.tsx");
+    expect(src).toMatch(/<FramedVideo[^>]*\n?\s*src=\{ex\.videoUrl\}[^>]*\n?\s*surface="form"/);
+  });
 });
 
 describe("(id: np381-spacing) the panel's spacing is the web's numbers", () => {
