@@ -57,38 +57,59 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { action, excuse } = body as { action: 'complete' | 'excuse'; excuse?: string }
-    const tzOffsetMinutes = readTzOffsetFromBody(body)
 
     if (action !== 'complete' && action !== 'excuse') {
       return NextResponse.json({ error: 'action must be "complete" or "excuse"' }, { status: 400 })
     }
 
+    if (action === 'excuse' && (!excuse || excuse.trim().length < 5)) {
+      return NextResponse.json({ error: 'Excuse text required' }, { status: 400 })
+    }
+
     await dbConnect()
 
-    const today = utcMidnightDateKey(localDateKey(null, tzOffsetMinutes))
+    const tzOffsetMinutes = readTzOffsetFromBody(body)
+    const dayKey = localDateKey(null, tzOffsetMinutes)
+    const today = utcMidnightDateKey(dayKey)
+    const challenge = getChallengeForLocalDay(dayKey)
+
+    // Ensure today's challenge doc exists with the same shape GET uses
+    // (creates it if first view/action of the day is POST)
+    await DisciplineChallenge.findOneAndUpdate(
+      { userId: auth.userId, date: today },
+      { $setOnInsert: { userId: auth.userId, date: today, challenge, completed: false } },
+      { upsert: true, setDefaultsOnInsert: true }
+    ).catch((err: unknown) => {
+      if ((err as { code?: number })?.code !== 11000) throw err
+    })
 
     if (action === 'complete') {
-      const doc = await DisciplineChallenge.findOneAndUpdate(
-        { userId: auth.userId, date: today },
-        { completed: true, completedAt: new Date() },
+      // Grant XP only when a row actually transitioned to completed —
+      // never when nothing matched, never twice for the same day.
+      let doc = await DisciplineChallenge.findOneAndUpdate(
+        { userId: auth.userId, date: today, completed: { $ne: true } },
+        { $set: { completed: true, completedAt: new Date() } },
         { new: true }
       ).lean()
 
-      // Grant XP — fire and forget
-      MindProgress.findOneAndUpdate(
-        { userId: auth.userId },
-        { $inc: { xp: 20 } },
-        { upsert: true, setDefaultsOnInsert: true }
-      ).catch(() => {})
+      if (doc) {
+        // Await the MindProgress write, keeping .catch() so a failed XP grant cannot fail the response
+        await MindProgress.findOneAndUpdate(
+          { userId: auth.userId },
+          { $inc: { xp: 20 } },
+          { upsert: true, setDefaultsOnInsert: true }
+        ).catch((err) => {
+          console.error('Failed to grant discipline XP:', err)
+        })
+      } else {
+        // Already completed: do not grant XP a second time
+        doc = await DisciplineChallenge.findOne({ userId: auth.userId, date: today }).lean()
+      }
 
       return NextResponse.json({ challenge: doc })
     }
 
     // action === 'excuse'
-    if (!excuse || excuse.trim().length < 5) {
-      return NextResponse.json({ error: 'Excuse text required' }, { status: 400 })
-    }
-
     const EXCUSE_RESPONSES = [
       "That's not a reason. That's a story you're telling yourself.",
       "Everyone has that excuse. Champions do it anyway.",
@@ -104,8 +125,11 @@ export async function POST(request: NextRequest) {
 
     const doc = await DisciplineChallenge.findOneAndUpdate(
       { userId: auth.userId, date: today },
-      { excuse: excuse.trim(), excuseResponse: response },
-      { new: true }
+      {
+        $set: { excuse: excuse!.trim(), excuseResponse: response },
+        $setOnInsert: { userId: auth.userId, date: today, challenge, completed: false },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
     ).lean()
 
     return NextResponse.json({ challenge: doc, excuseResponse: response })
