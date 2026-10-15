@@ -44,9 +44,6 @@ const OPERATOR_RE = /\$(dateToString|dateToParts|dateTrunc|dayOfYear|dayOfMonth|
  * Paths are relative to `webapp/`.
  */
 const ALLOWLIST: Record<string, string> = {
-  // Owner of the dashboard rollup; that card fixes the bucketing, not this one.
-  'app/api/dashboard/tiles/route.ts':
-    'Owned by card 6acfca83eabd988f96d41067 (14-day meal rollup bucketing); do not edit here.',
   'lib/dashboardTiles/nutritionRollup.ts':
     'Buckets on a caller-offset-shifted instant ($subtract of the tz the dashboard route reads), so a `timezone` option would be redundant.',
   'app/api/admin/stats/route.ts':
@@ -234,5 +231,19 @@ test('every allowlist entry carries a reason and names a real file', () => {
   for (const [relPath, reason] of Object.entries(ALLOWLIST)) {
     assert.ok(reason.trim().length > 0, `allowlist entry "${relPath}" carries no reason`)
     assert.ok(existsSync(path.join(WEBAPP_ROOT, relPath)), `allowlist entry "${relPath}" names no file under webapp/`)
+  }
+})
+
+test('every allowlist entry produces at least one real violation', () => {
+  // An obsolete entry outlives the violation it was written for and silently
+  // excuses every future bucketing mistake in that whole file. Every entry
+  // must match at least one live violation from the real scan.
+  const violations = bucketingViolations(collectSources(SCAN_ROOTS))
+  const violatingPaths = new Set(violations.map((v) => v.relPath))
+  for (const relPath of Object.keys(ALLOWLIST)) {
+    assert.ok(
+      violatingPaths.has(relPath),
+      `ALLOWLIST entry "${relPath}" is obsolete: it produces no bucketing violations from the real scan. Delete the entry from ALLOWLIST.`,
+    )
   }
 })
