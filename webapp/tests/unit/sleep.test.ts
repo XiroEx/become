@@ -451,7 +451,7 @@ test('(id: 9d6d2846) The POST upsert filter keys on the same 00:00Z day marker t
 
       // 3. No range filter ($gte, $lte) that could miss the marker
       assert.equal(
-        typeof (call.filter.date as Record<string, unknown>).$gte,
+        typeof (call.filter.date as unknown as Record<string, unknown>).$gte,
         'undefined',
         'filter does not use $gte window'
       )
