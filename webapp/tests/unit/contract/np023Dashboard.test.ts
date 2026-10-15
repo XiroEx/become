@@ -718,8 +718,15 @@ test('PUT /api/goals answers with the FRESH GoalProgressResponseSchema payload',
   )
 
   // An unknown pillar is a 400 — GoalUpdateRequestSchema refuses it too.
-  const bad = await sendJson(goalsPUT, 'PUT', '/api/goals', MEMBER, { pillar: 'mind' })
+  const bad = await sendJson(goalsPUT, 'PUT', '/api/goals', MEMBER, { pillar: 'mind', tz: 0 })
   assert.equal(bad.status, 400, JSON.stringify(bad.body))
+
+  // A missing tz is refused with 400 — never silently fall back to UTC 0.
+  const missingTz = await sendJson(goalsPUT, 'PUT', '/api/goals', MEMBER, {
+    pillar: 'nutrition',
+    paceKgPerWeek: 0.5,
+  })
+  assert.equal(missingTz.status, 400, JSON.stringify(missingTz.body))
 })
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -402,7 +402,7 @@ export function TrackWorkoutView({
           <View style={{ marginTop: 12 }}>
             <FramedVideo
               src={ex.videoUrl}
-              surface="live"
+              surface="form"
               exerciseName={ex.name}
               videoWidth={ex.videoWidth}
               videoHeight={ex.videoHeight}
