@@ -5,7 +5,7 @@ import ProgramModel from '@/models/Program'
 import Schedule from '@/models/Schedule'
 import { formatProgressData, calculateNextWorkout, resolveProgramWeek } from '@/lib/data/userProgress'
 import { verifyAuth, AI_TOOL_SCOPES } from '@/lib/auth'
-import { readTzOffset, localDateKey, localDayWindowForKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
+import { readTzOffset, localDateKey, utcMidnightDateKey, dateKey } from '@/lib/dayWindow'
 import { formatPRsForProgressDetail, type IExercisePR } from '@/lib/exercisePRs'
 
 export async function GET(request: NextRequest) {
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
         const remaining = sched.scheduledWorkouts.filter(w => w.status === 'scheduled').length
         if (remaining > 0) {
           // Reactivate: update DB status back to in-progress
-          UserProgress.updateOne(
+          await UserProgress.updateOne(
             { userId: authResult.userId, 'activePrograms.programId': cp.programId },
             { $set: { 'activePrograms.$.status': 'in-progress' } }
           ).catch(() => {})
@@ -489,29 +489,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Update based on type
+    // Targeted update, not whole-document save.
+    // Whole-document save validates the whole UserProgress document, so an unrelated invalid
+    // legacy row would fail this write.
     switch (type) {
-      case 'weight':
-        progress.weightHistory.push({
-          date: new Date(),
-          weight: data.weight,
-          bodyFat: data.bodyFat
-        })
-        break
-      
       case 'workout':
-        progress.workoutLogs.push(data)
-        progress.totalWorkouts += 1
+        await UserProgress.updateOne(
+          { _id: progress._id },
+          {
+            $push: { workoutLogs: data },
+            $inc: { totalWorkouts: 1 },
+          }
+        )
         break
 
       case 'program':
-        progress.currentProgram = data
+        await UserProgress.updateOne(
+          { _id: progress._id },
+          {
+            $set: { currentProgram: data },
+          }
+        )
         break
 
       default:
         return NextResponse.json({ error: 'Invalid update type' }, { status: 400 })
     }
 
-    await progress.save()
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error updating progress:', error)
