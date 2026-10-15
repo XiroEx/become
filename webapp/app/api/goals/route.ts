@@ -1,7 +1,7 @@
 // GET /api/goals?tz=   → then → now → next for nutrition and training, plus the
 //                        per-pillar "where to work on next" (see lib/goals/*)
-// PUT /api/goals        { pillar: 'nutrition', paceKgPerWeek?, adherence?: { logDaysPerWeek?, proteinDaysPerWeek? } }
-//                       { pillar: 'training', daysPerWeek?, lifts?: 'suggested' | [{ slug, name, baselineE1RM, targetE1RM }] | [] }
+// PUT /api/goals        { pillar: 'nutrition', paceKgPerWeek?, adherence?: { logDaysPerWeek?, proteinDaysPerWeek? }, tz }
+//                       { pillar: 'training', daysPerWeek?, lifts?: 'suggested' | [{ slug, name, baselineE1RM, targetE1RM }] | [], tz }
 //                       Returns the fresh GET payload.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -35,9 +35,10 @@ export async function PUT(request: NextRequest) {
     if (!auth.success) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     let body: Record<string, unknown>
     try { body = await request.json() } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }) }
+    const tz = readOptionalTzOffsetFromBody(body)
+    if (tz === null) return NextResponse.json({ error: 'tz is required' }, { status: 400 })
     await dbConnect()
     const userId = auth.userId!
-    const tz = readOptionalTzOffsetFromBody(body) ?? 0
     const uid = new Types.ObjectId(userId)
 
     if (body.pillar === 'nutrition') {
