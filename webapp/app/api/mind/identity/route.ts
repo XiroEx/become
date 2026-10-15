@@ -83,8 +83,17 @@ export async function GET(request: NextRequest) {
       (missionSet ? 15 : 0)
     )
 
-    // Persist score so it's queryable over time (fire-and-forget, don't block response)
-    IdentityProfile.updateOne({ userId: auth.userId }, { evolutionScore: score }).catch(() => {})
+    // Persist score when changed so it's queryable over time
+    if (profile.evolutionScore !== score) {
+      try {
+        await IdentityProfile.updateOne(
+          { userId: auth.userId },
+          { $set: { evolutionScore: score } },
+        )
+      } catch (err) {
+        console.error('Failed to persist evolutionScore:', err)
+      }
+    }
 
     const guidance = GUIDANCE[profile.primaryObstacle]
     const tz = readTzOffset(new URL(request.url).searchParams)
