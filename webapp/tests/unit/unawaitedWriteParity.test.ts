@@ -39,8 +39,6 @@ const WRITE_METHODS = new Set([
 const ALLOWLIST: Record<string, string> = {
   'app/api/cron/notify/route.ts':
     'Cron push notification throttle/timestamp updates fired inside callback without awaiting.',
-  'app/api/mind/state/route.ts':
-    'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
   'app/api/nutrition/log/route.ts':
     'DayNutrition.updateOne self-heal date key migration is fire-and-forget in GET.',
   'app/api/workouts/route.ts':
