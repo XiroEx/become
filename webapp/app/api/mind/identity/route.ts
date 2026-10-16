@@ -181,7 +181,10 @@ export async function PATCH(request: NextRequest) {
       }
       doc.currentSelf = currentSelf
       doc.futureSelf = futureSelf
-      await doc.save()
+      await IdentityProfile.updateOne(
+        { _id: doc._id },
+        { $set: { currentSelf, futureSelf } },
+      )
       return NextResponse.json({ profile: { currentSelf: doc.currentSelf, futureSelf: doc.futureSelf } })
     }
 
@@ -192,7 +195,16 @@ export async function PATCH(request: NextRequest) {
       doc.affirmStreak = doc.lastAffirmedKey === yesterday ? (doc.affirmStreak ?? 0) + 1 : 1
       doc.lastAffirmedKey = today
       doc.longestAffirmStreak = Math.max(doc.longestAffirmStreak ?? 0, doc.affirmStreak)
-      await doc.save()
+      await IdentityProfile.updateOne(
+        { _id: doc._id },
+        {
+          $set: {
+            affirmStreak: doc.affirmStreak,
+            lastAffirmedKey: doc.lastAffirmedKey,
+            longestAffirmStreak: doc.longestAffirmStreak,
+          },
+        },
+      )
     }
     return NextResponse.json({
       affirm: { streak: doc.affirmStreak, longest: doc.longestAffirmStreak, affirmedToday: true },
