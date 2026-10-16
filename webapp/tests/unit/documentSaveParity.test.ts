@@ -88,8 +88,6 @@ const ALLOWLIST: Record<string, string> = {
     'Meal management route saving updated meal document.',
   'app/api/mind/non-negotiables/route.ts':
     'Mind module saving daily non-negotiable commitments document.',
-  'app/api/mind/vision/route.ts':
-    'Mind vision module saving long-term vision document.',
   'app/api/nutrition/flags/[id]/evidence/route.ts':
     'Nutrition flag review route saving flag evidence document.',
   'app/api/nutrition/log/route.ts':
