@@ -37,17 +37,8 @@ const WRITE_METHODS = new Set([
  * Paths are relative to `webapp/`.
  */
 const ALLOWLIST: Record<string, string> = {
-  // Owned by cards fixing the unawaited writes; those cards fix the calls, not this one.
-  'app/api/progress/route.ts':
-    'Owned by card 6acfea4eeabd988f96d4110f (UserProgress.updateOne self-heal in GET); do not edit here.',
-  'app/api/mind/discipline/route.ts':
-    'Owned by card 6ad01929eabd988f96d4122a (XP grant MindProgress.findOneAndUpdate); do not edit here.',
   'app/api/cron/notify/route.ts':
     'Cron push notification throttle/timestamp updates fired inside callback without awaiting.',
-  'app/api/mind/identity/route.ts':
-    'IdentityProfile.updateOne evolutionScore cache write is fire-and-forget in GET.',
-  'app/api/mind/mission/route.ts':
-    'MindProgress.updateOne XP grant on first mission set is fire-and-forget.',
   'app/api/mind/state/route.ts':
     'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
   'app/api/nutrition/log/route.ts':
@@ -240,5 +231,19 @@ test('every allowlist entry carries a reason and names a real file', () => {
   for (const [relPath, reason] of Object.entries(ALLOWLIST)) {
     assert.ok(reason.trim().length > 0, `allowlist entry "${relPath}" carries no reason`)
     assert.ok(existsSync(path.join(WEBAPP_ROOT, relPath)), `allowlist entry "${relPath}" names no file under webapp/`)
+  }
+})
+
+test('every allowlist entry produces at least one real violation', () => {
+  // An obsolete entry outlives the violation it was written for and silently
+  // excuses every future unawaited Mongo write in that whole file. Every entry
+  // must match at least one live violation from the real scan.
+  const violations = writeViolations(collectSources(SCAN_ROOTS))
+  const violatingPaths = new Set(violations.map((v) => v.relPath))
+  for (const relPath of Object.keys(ALLOWLIST)) {
+    assert.ok(
+      violatingPaths.has(relPath),
+      `ALLOWLIST entry "${relPath}" is obsolete: it produces no unawaited-write violations from the real scan. Delete the entry from ALLOWLIST.`,
+    )
   }
 })
