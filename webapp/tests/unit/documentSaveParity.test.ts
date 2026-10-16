@@ -88,8 +88,6 @@ const ALLOWLIST: Record<string, string> = {
     'Meal management route saving updated meal document.',
   'app/api/mind/identity/route.ts':
     'Mind identity module saving core values and identity document.',
-  'app/api/mind/mission/route.ts':
-    'Mind mission module saving user purpose and mission document.',
   'app/api/mind/non-negotiables/route.ts':
     'Mind module saving daily non-negotiable commitments document.',
   'app/api/mind/vision/route.ts':
@@ -112,8 +110,6 @@ const ALLOWLIST: Record<string, string> = {
     'Custom program builder saving modified program document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
-  'app/api/schedule/settings/route.ts':
-    'Schedule settings route saving user schedule configuration document.',
   'app/api/workouts/logs/route.ts':
     'Workout completion route saving workout log on UserProgress document.',
 }
