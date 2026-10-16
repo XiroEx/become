@@ -203,7 +203,11 @@ export async function GET(request: NextRequest) {
       for (const { schedule, indices } of byScheduleId.values()) {
         const $set: Record<string, string> = {}
         for (const i of indices) $set[`scheduledWorkouts.${i}.status`] = 'scheduled'
-        Schedule.updateOne({ _id: schedule._id }, { $set }).catch(() => {})
+        try {
+          await Schedule.updateOne({ _id: schedule._id }, { $set })
+        } catch (error) {
+          console.error('Error self-healing missed workout schedule status:', error)
+        }
       }
     }
 
