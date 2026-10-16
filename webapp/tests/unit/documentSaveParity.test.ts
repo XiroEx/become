@@ -86,8 +86,6 @@ const ALLOWLIST: Record<string, string> = {
     'Meal image route saving image metadata on meal document.',
   'app/api/meals/[id]/route.ts':
     'Meal management route saving updated meal document.',
-  'app/api/mind/identity/route.ts':
-    'Mind identity module saving core values and identity document.',
   'app/api/mind/non-negotiables/route.ts':
     'Mind module saving daily non-negotiable commitments document.',
   'app/api/mind/vision/route.ts':
@@ -110,8 +108,6 @@ const ALLOWLIST: Record<string, string> = {
     'Custom program builder saving modified program document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
-  'app/api/workouts/logs/route.ts':
-    'Workout completion route saving workout log on UserProgress document.',
 }
 
 const WEBAPP_ROOT = path.resolve(__dirname, '../..')
