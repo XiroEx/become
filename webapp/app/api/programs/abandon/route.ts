@@ -37,19 +37,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Program not found in active programs' }, { status: 404 })
     }
 
-    // Remove the program from active programs
-    userProgress.activePrograms.splice(programIndex, 1)
-    // ActiveProgramSchema uses _id: false — direct array mutations need markModified
-    userProgress.markModified('activePrograms')
-
     // Workout logs are preserved for historical tracking — only enrollment is removed
-
-    // Clear currentProgram if it matches
+    const updateOps: Record<string, unknown> = {
+      $pull: { activePrograms: { programId } }
+    }
     if (userProgress.currentProgram?.programId === programId) {
-      userProgress.currentProgram = undefined
+      updateOps.$unset = { currentProgram: 1 }
     }
 
-    await userProgress.save()
+    try {
+      await UserProgress.updateOne({ userId: payload.userId }, updateOps)
+    } catch (err) {
+      console.error('POST /api/programs/abandon update error:', err)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
 
     // Delete associated schedule
     await Schedule.deleteOne({ userId: payload.userId, programId })

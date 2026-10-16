@@ -110,8 +110,6 @@ const ALLOWLIST: Record<string, string> = {
     'Recipe export route saving linked food item reference.',
   'app/api/programs/[programId]/share/route.ts':
     'Program sharing route saving public share settings on program document.',
-  'app/api/programs/abandon/route.ts':
-    'Program abandonment route saving active program status on UserProgress document.',
   'app/api/programs/custom/[programId]/route.ts':
     'Custom program builder saving modified program document.',
   'app/api/programs/start-date/route.ts':
