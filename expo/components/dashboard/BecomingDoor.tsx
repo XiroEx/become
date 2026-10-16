@@ -17,7 +17,8 @@ import type {
 } from "@become/api-client";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { usePressed } from "@/lib/a11y/usePressed";
-import { checkBecomingUnread, markBecomingSeen } from "@/lib/becoming/storage";
+import { markBecomingSeen } from "@/lib/becoming/storage";
+import { fmtUnit, readReached } from "@become/core";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
 export interface BecomingDoorProps {
@@ -93,6 +94,10 @@ export function BecomingDoor({
   const t = goals?.training;
   const top = topSuggestion(goals);
 
+  // "Reached ✓" is the confirmed goal; a weigh-in that happens to be inside
+  // the band today is "At goal" until the hold is confirmed (lib/goals/status).
+  const reached = readReached(n?.status, n?.pace?.status);
+
   const mindChip = mind
     ? {
         value: `Lv ${mind.level}`,
@@ -104,28 +109,32 @@ export function BecomingDoor({
     ? { value: "—", sub: undefined }
     : !n.target?.weight
       ? { value: "Set a target", sub: undefined }
-      : n.pace?.status === "behind"
-        ? {
-            value: `${Math.round(n.pace.behindByKg)} ${n.unit} behind`,
-            sub: `→ ${Math.round(n.target.weight)} ${n.unit}`,
-          }
-        : n.pace?.status === "ahead"
-          ? {
-              value: "Ahead",
-              sub: n.pace.eta
-                ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
-                : undefined,
-            }
-          : n.pace?.status === "on"
+      : reached === "reached"
+        ? { value: "Reached ✓", sub: undefined }
+        : reached === "at-goal"
+          ? { value: "At goal", sub: "hold a week" }
+          : n.pace?.status === "behind"
             ? {
-                value: "On pace",
-                sub: n.pace.eta
-                  ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
-                  : undefined,
+                value: `${fmtUnit(n.pace.behindByKg, n.unit)} behind`,
+                sub: `→ ${Math.round(n.target.weight)} ${n.unit}`,
               }
-            : n.direction === "maintain"
-              ? { value: "Holding", sub: `${Math.round(n.target.weight)} ${n.unit}` }
-              : { value: `→ ${Math.round(n.target.weight)}`, sub: n.unit };
+            : n.pace?.status === "ahead"
+              ? {
+                  value: "Ahead",
+                  sub: n.pace.eta
+                    ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
+                    : undefined,
+                }
+              : n.pace?.status === "on"
+                ? {
+                    value: "On pace",
+                    sub: n.pace.eta
+                      ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
+                      : undefined,
+                  }
+                : n.direction === "maintain"
+                  ? { value: "Holding", sub: `${Math.round(n.target.weight)} ${n.unit}` }
+                  : { value: `→ ${Math.round(n.target.weight)}`, sub: n.unit };
 
   const trainingChip = !t
     ? { value: "—", sub: undefined }
@@ -139,6 +148,24 @@ export function BecomingDoor({
               ? "week done"
               : "this week",
         };
+
+  const nutritionTone =
+    n?.pace?.status === "behind"
+      ? isUnread
+        ? isDark
+          ? "hsl(38, 90%, 65%)"
+          : "hsl(38, 90%, 45%)"
+        : colors.accent
+      : undefined;
+
+  const trainingTone =
+    t?.thisWeek?.weekLost
+      ? isUnread
+        ? isDark
+          ? "hsl(38, 90%, 65%)"
+          : "hsl(38, 90%, 45%)"
+        : colors.accent
+      : undefined;
 
   return (
     <Animated.View
@@ -274,6 +301,7 @@ export function BecomingDoor({
                 Mind
               </Text>
               <Text
+                testID="becoming-door-mind-value"
                 style={[
                   styles.chipValue,
                   { color: colors.foreground },
@@ -327,9 +355,10 @@ export function BecomingDoor({
                 Nutrition
               </Text>
               <Text
+                testID="becoming-door-nutrition-value"
                 style={[
                   styles.chipValue,
-                  { color: colors.foreground },
+                  { color: nutritionTone ?? colors.foreground },
                 ]}
               >
                 {nutritionChip.value}
@@ -380,9 +409,10 @@ export function BecomingDoor({
                 Training
               </Text>
               <Text
+                testID="becoming-door-training-value"
                 style={[
                   styles.chipValue,
-                  { color: colors.foreground },
+                  { color: trainingTone ?? colors.foreground },
                 ]}
               >
                 {trainingChip.value}
