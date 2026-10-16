@@ -34,11 +34,18 @@ export async function POST(request: NextRequest) {
   const existing = await UserProgress.findOne({ userId: auth.userId })
   const { next } = recordTileTap(existing?.tileEngagement ?? [], key, now)
 
-  if (existing) {
-    existing.tileEngagement = next
-    await existing.save()
-  } else {
-    await UserProgress.create({ userId: auth.userId, tileEngagement: next })
+  try {
+    if (existing) {
+      await UserProgress.updateOne(
+        { userId: auth.userId },
+        { $set: { tileEngagement: next } }
+      )
+    } else {
+      await UserProgress.create({ userId: auth.userId, tileEngagement: next })
+    }
+  } catch (err) {
+    console.error('POST /api/dashboard/tile-tap update error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 
   // Engagement ordering changed — invalidate the tiles cache so the next load

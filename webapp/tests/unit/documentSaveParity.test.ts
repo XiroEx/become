@@ -44,8 +44,6 @@ const ALLOWLIST: Record<string, string> = {
     'Auth verification flow updating emailVerified and clearing magic-link token on user.',
   'app/api/chat/conversations/[conversationId]/messages/route.ts':
     'Chat conversation saving appended message and unread count.',
-  'app/api/dashboard/tile-tap/route.ts':
-    'Pre-existing dashboard tile tap handler saving whole UserProgress document.',
   'app/api/events/[eventId]/route.ts':
     'Event management route saving updated event details.',
   'app/api/events/[eventId]/rsvp/route.ts':
@@ -120,8 +118,6 @@ const ALLOWLIST: Record<string, string> = {
     'Schedule route saving updated weekly workout schedule document.',
   'app/api/schedule/settings/route.ts':
     'Schedule settings route saving user schedule configuration document.',
-  'app/api/workouts/favorite-order/route.ts':
-    'Workout favorite order route saving reordered favorites document.',
   'app/api/workouts/logs/route.ts':
     'Workout completion route saving workout log on UserProgress document.',
 }
