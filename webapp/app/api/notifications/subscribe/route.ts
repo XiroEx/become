@@ -5,6 +5,9 @@ import PushSubscription from '@/models/PushSubscription'
 import UserProgress from '@/models/UserProgress'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
 import { parseSubscribeBody } from '@/lib/push/subscribeBody'
+import {
+  computeFreshEnablePrefUpdates,
+} from '@/lib/push/notificationDefaults'
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,17 +26,46 @@ export async function POST(request: NextRequest) {
 
     await dbConnect()
 
+    const progress = await UserProgress.findOne({ userId: authResult.userId })
+      .select('notificationPrefs notificationsEnabled')
+      .lean()
+
     if (reenable === true) {
       // An explicit "turn notifications back on" action — the only path
       // allowed to flip the switch back. Background resync (PushSubscriptionSync,
       // Repair) never sends this, so it can never silently undo an opt-out.
-      await UserProgress.updateOne({ userId: authResult.userId }, { $set: { notificationsEnabled: true } })
+      // On fresh enable / re-enable, ensure per-type prefs default ON (except dailyGlance),
+      // without overwriting any existing explicit choices.
+      const prefUpdates = computeFreshEnablePrefUpdates(progress?.notificationPrefs)
+      await UserProgress.updateOne(
+        { userId: authResult.userId },
+        {
+          $set: {
+            notificationsEnabled: true,
+            ...prefUpdates,
+          },
+        },
+        { upsert: true },
+      )
     } else {
-      const progress = await UserProgress.findOne({ userId: authResult.userId })
-        .select('notificationsEnabled')
-        .lean()
       if (!notificationsAreEnabled(progress?.notificationsEnabled)) {
         return NextResponse.json({ error: 'notifications_disabled' }, { status: 409 })
+      }
+
+      // If user had no progress doc or never initialized preferences, ensure per-type
+      // prefs default ON (except dailyGlance) on first subscription, preserving explicit choices.
+      const prefUpdates = computeFreshEnablePrefUpdates(progress?.notificationPrefs)
+      if (!progress || Object.keys(prefUpdates).length > 0 || progress.notificationsEnabled === undefined) {
+        await UserProgress.updateOne(
+          { userId: authResult.userId },
+          {
+            $set: {
+              notificationsEnabled: true,
+              ...prefUpdates,
+            },
+          },
+          { upsert: true },
+        )
       }
     }
 
