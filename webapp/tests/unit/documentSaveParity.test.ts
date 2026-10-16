@@ -114,8 +114,6 @@ const ALLOWLIST: Record<string, string> = {
     'Program schedule route saving updated program start date on schedule document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
-  'app/api/schedule/settings/route.ts':
-    'Schedule settings route saving user schedule configuration document.',
   'app/api/workouts/logs/route.ts':
     'Workout completion route saving workout log on UserProgress document.',
 }

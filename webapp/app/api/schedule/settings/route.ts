@@ -84,7 +84,21 @@ export async function PUT(request: NextRequest) {
       { $set: { 'activePrograms.$.status': 'in-progress' } }
     )
 
-    await schedule.save()
+    try {
+      await Schedule.updateOne(
+        { _id: schedule._id },
+        {
+          $set: {
+            scheduledWorkouts: result.allWorkouts,
+            'settings.trainingDays': trainingDays,
+            ...(startDate ? { 'settings.startDate': new Date(startDate) } : {}),
+          },
+        }
+      )
+    } catch (error) {
+      console.error('PUT /api/schedule/settings update error:', error)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
 
     return NextResponse.json({
       message: 'Schedule settings updated and future workouts regenerated',
