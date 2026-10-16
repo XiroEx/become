@@ -43,8 +43,6 @@ const ALLOWLIST: Record<string, string> = {
     'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
   'app/api/nutrition/log/route.ts':
     'DayNutrition.updateOne self-heal date key migration is fire-and-forget in GET.',
-  'app/api/programs/active/route.ts':
-    'UserProgress.updateOne cleanup of orphaned entries and phase advancement in GET/POST is fire-and-forget.',
   'app/api/schedule/route.ts':
     'Schedule.updateOne self-healing of overdue scheduled workout status in GET is fire-and-forget.',
   'app/api/workouts/route.ts':

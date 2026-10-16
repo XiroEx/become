@@ -32,16 +32,20 @@ export async function GET(request: NextRequest) {
     const orphanedIds = activeProgramIds.filter((id: string) => !existingIds.has(id))
 
     if (orphanedIds.length > 0) {
-      // Fire-and-forget cleanup of orphaned entries and their logs
-      UserProgress.updateOne(
-        { userId: payload.userId },
-        {
-          $pull: {
-            activePrograms: { programId: { $in: orphanedIds } },
-            workoutLogs: { programId: { $in: orphanedIds } },
+      // Cleanup orphaned entries and their logs
+      try {
+        await UserProgress.updateOne(
+          { userId: payload.userId },
+          {
+            $pull: {
+              activePrograms: { programId: { $in: orphanedIds } },
+              workoutLogs: { programId: { $in: orphanedIds } },
+            },
           }
-        }
-      ).catch(() => {})
+        )
+      } catch (error) {
+        console.error('Error cleaning up orphaned active programs:', error)
+      }
     }
 
     // Filter to in-progress, active, paused, or completed programs (not orphaned).
@@ -77,9 +81,23 @@ export async function GET(request: NextRequest) {
       lastWorkoutDate?: Date
     }
 
+    type ActiveProgramSummary = {
+      programId: string
+      programName: string
+      startDate: Date
+      currentPhase: number
+      currentDay: string
+      completedWorkouts: number
+      totalWorkouts: number
+      progress: number
+      status: string
+      lastWorkoutDate?: Date
+    }
+
     // Return active programs with progress info derived from schedule (source of truth).
     // Self-heal any 'completed' programs that still have remaining scheduled sessions.
-    const activePrograms = (inProgressPrograms as CandidateProgram[]).flatMap((program) => {
+    const activePrograms: ActiveProgramSummary[] = []
+    for (const program of inProgressPrograms as CandidateProgram[]) {
       let completedWorkouts = program.completedWorkouts
       let totalWorkouts = program.totalWorkouts
       let effectiveStatus = program.status
@@ -130,10 +148,14 @@ export async function GET(request: NextRequest) {
         // Self-heal: program was incorrectly auto-completed but schedule has remaining sessions
         const remaining = totalWorkouts - completedWorkouts
         if (program.status === 'completed' && remaining > 0) {
-          UserProgress.updateOne(
-            { userId: payload.userId, 'activePrograms.programId': program.programId },
-            { $set: { 'activePrograms.$.status': 'in-progress' } }
-          ).catch(() => {})
+          try {
+            await UserProgress.updateOne(
+              { userId: payload.userId, 'activePrograms.programId': program.programId },
+              { $set: { 'activePrograms.$.status': 'in-progress' } }
+            )
+          } catch (error) {
+            console.error('Error restoring active program status to in-progress:', error)
+          }
           effectiveStatus = 'in-progress'
         }
 
@@ -143,18 +165,22 @@ export async function GET(request: NextRequest) {
         // unresolved and keeps completed+skipped below the total.
         const skippedCount = sessions.filter((w) => w.status === 'skipped').length
         if (effectiveStatus !== 'completed' && totalWorkouts > 0 && completedWorkouts + skippedCount >= totalWorkouts) {
-          UserProgress.updateOne(
-            { userId: payload.userId, 'activePrograms.programId': program.programId },
-            { $set: { 'activePrograms.$.status': 'completed' } }
-          ).catch(() => {})
+          try {
+            await UserProgress.updateOne(
+              { userId: payload.userId, 'activePrograms.programId': program.programId },
+              { $set: { 'activePrograms.$.status': 'completed' } }
+            )
+          } catch (error) {
+            console.error('Error auto-completing active program status:', error)
+          }
           effectiveStatus = 'completed'
         }
       }
 
       // Exclude truly completed programs from this endpoint's response
-      if (effectiveStatus === 'completed') return []
+      if (effectiveStatus === 'completed') continue
 
-      return [{
+      activePrograms.push({
         programId: program.programId,
         programName: program.programName,
         startDate: program.startDate,
@@ -167,8 +193,8 @@ export async function GET(request: NextRequest) {
           : 0,
         status: effectiveStatus,
         lastWorkoutDate: program.lastWorkoutDate,
-      }]
-    })
+      })
+    }
 
     return NextResponse.json({ activePrograms })
 
