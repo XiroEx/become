@@ -60,10 +60,20 @@ export async function PATCH(request: NextRequest) {
     const today = localDateKey(null, tz)
     const yesterday = localDateKey(null, tz, new Date(Date.now() - DAY_MS))
     if (doc.lastMovedKey !== today) {
-      doc.momentumStreak = doc.lastMovedKey === yesterday ? (doc.momentumStreak ?? 0) + 1 : 1
+      const nextStreak = doc.lastMovedKey === yesterday ? (doc.momentumStreak ?? 0) + 1 : 1
+      const longest = Math.max(doc.longestMomentumStreak ?? 0, nextStreak)
+      try {
+        await Mission.updateOne(
+          { _id: doc._id },
+          { $set: { momentumStreak: nextStreak, lastMovedKey: today, longestMomentumStreak: longest } }
+        )
+      } catch (err) {
+        console.error('PATCH /api/mind/mission update error:', err)
+        return NextResponse.json({ error: 'Server error' }, { status: 500 })
+      }
+      doc.momentumStreak = nextStreak
       doc.lastMovedKey = today
-      doc.longestMomentumStreak = Math.max(doc.longestMomentumStreak ?? 0, doc.momentumStreak)
-      await doc.save()
+      doc.longestMomentumStreak = longest
     }
     return NextResponse.json({
       momentum: { streak: doc.momentumStreak, longest: doc.longestMomentumStreak, movedToday: true },
