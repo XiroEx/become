@@ -86,8 +86,6 @@ const ALLOWLIST: Record<string, string> = {
     'Meal image route saving image metadata on meal document.',
   'app/api/meals/[id]/route.ts':
     'Meal management route saving updated meal document.',
-  'app/api/mind/identity/route.ts':
-    'Mind identity module saving core values and identity document.',
   'app/api/mind/non-negotiables/route.ts':
     'Mind module saving daily non-negotiable commitments document.',
   'app/api/mind/vision/route.ts':
