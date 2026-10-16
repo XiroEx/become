@@ -44,8 +44,6 @@ const ALLOWLIST: Record<string, string> = {
     'Auth verification flow updating emailVerified and clearing magic-link token on user.',
   'app/api/chat/conversations/[conversationId]/messages/route.ts':
     'Chat conversation saving appended message and unread count.',
-  'app/api/dashboard/pinned-tiles/route.ts':
-    'Pre-existing dashboard tile pin handler saving whole UserProgress document.',
   'app/api/dashboard/tile-tap/route.ts':
     'Pre-existing dashboard tile tap handler saving whole UserProgress document.',
   'app/api/events/[eventId]/route.ts':
