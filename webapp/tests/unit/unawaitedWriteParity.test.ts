@@ -39,10 +39,6 @@ const WRITE_METHODS = new Set([
 const ALLOWLIST: Record<string, string> = {
   'app/api/cron/notify/route.ts':
     'Cron push notification throttle/timestamp updates fired inside callback without awaiting.',
-  'app/api/mind/state/route.ts':
-    'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
-  'app/api/workouts/route.ts':
-    'UserProgress.updateOne cleanup of expired logs in GET is fire-and-forget.',
 }
 
 const WEBAPP_ROOT = path.resolve(__dirname, '../..')

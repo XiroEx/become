@@ -269,11 +269,12 @@ export async function GET(request: NextRequest) {
       .some(log => log.programId === programId && !log.completed && new Date(log.date) < staleCutoff)
 
     if (hasExpiredLogs) {
-      // Fire-and-forget — don't block response
-      UserProgress.updateOne(
+      await UserProgress.updateOne(
         { userId: payload.userId },
         { $pull: { workoutLogs: { programId, completed: false, date: { $lt: staleCutoff } } } }
-      ).catch(() => {})
+      ).catch((err) => {
+        console.error('GET /api/workouts expired logs cleanup error:', err)
+      })
     }
 
     // Find most recent incomplete workout old enough to need a decision
@@ -312,10 +313,12 @@ export async function GET(request: NextRequest) {
         Math.abs(new Date(w.date).getTime() - logMs) <= RESOLVED_WINDOW_MS
       )
       if (alreadyResolved) {
-        UserProgress.updateOne(
+        await UserProgress.updateOne(
           { userId: payload.userId },
           { $pull: { workoutLogs: { programId, day: logDay, completed: false, date: staleLog.date } } }
-        ).catch(() => {})
+        ).catch((err) => {
+          console.error('GET /api/workouts resolved log cleanup error:', err)
+        })
         staleLog = null
       }
     }
