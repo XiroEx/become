@@ -110,8 +110,6 @@ const ALLOWLIST: Record<string, string> = {
     'Custom program builder saving modified program document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
-  'app/api/workouts/logs/route.ts':
-    'Workout completion route saving workout log on UserProgress document.',
 }
 
 const WEBAPP_ROOT = path.resolve(__dirname, '../..')

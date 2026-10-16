@@ -152,9 +152,10 @@ export async function PATCH(request: NextRequest) {
     // updates cannot remove stale maxima, so replay every completed log before
     // saving this one UserProgress document.
     progress.exercisePRs = computeExercisePRsFromLogs(progress.workoutLogs)
-    progress.markModified('workoutLogs')
-    progress.markModified('exercisePRs')
-    await progress.save()
+    await UserProgress.updateOne(
+      { _id: progress._id },
+      { $set: { workoutLogs: progress.workoutLogs, exercisePRs: progress.exercisePRs } },
+    )
     await bustTilesCache(auth.userId!.toString())
 
     return NextResponse.json({ success: true, recalculatedPRs: progress.exercisePRs.length })
