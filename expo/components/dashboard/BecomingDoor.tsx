@@ -15,9 +15,10 @@ import type {
   GoalProgressResponse,
   MindSummaryResponse,
 } from "@become/api-client";
+import { fmtUnit, readReached } from "@become/core";
 import { minTouchTarget } from "@/lib/a11y/touchTarget";
 import { usePressed } from "@/lib/a11y/usePressed";
-import { checkBecomingUnread, markBecomingSeen } from "@/lib/becoming/storage";
+import { markBecomingSeen } from "@/lib/becoming/storage";
 import { useReducedMotion } from "@/lib/a11y/reducedMotion";
 
 export interface BecomingDoorProps {
@@ -92,6 +93,7 @@ export function BecomingDoor({
   const n = goals?.nutrition;
   const t = goals?.training;
   const top = topSuggestion(goals);
+  const reached = readReached(n?.status, n?.pace?.status);
 
   const mindChip = mind
     ? {
@@ -104,28 +106,32 @@ export function BecomingDoor({
     ? { value: "—", sub: undefined }
     : !n.target?.weight
       ? { value: "Set a target", sub: undefined }
-      : n.pace?.status === "behind"
-        ? {
-            value: `${Math.round(n.pace.behindByKg)} ${n.unit} behind`,
-            sub: `→ ${Math.round(n.target.weight)} ${n.unit}`,
-          }
-        : n.pace?.status === "ahead"
-          ? {
-              value: "Ahead",
-              sub: n.pace.eta
-                ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
-                : undefined,
-            }
-          : n.pace?.status === "on"
+      : reached === "reached"
+        ? { value: "Reached ✓", sub: undefined }
+        : reached === "at-goal"
+          ? { value: "At goal", sub: "hold a week" }
+          : n.pace?.status === "behind"
             ? {
-                value: "On pace",
-                sub: n.pace.eta
-                  ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
-                  : undefined,
+                value: `${fmtUnit(n.pace.behindByKg, n.unit)} behind`,
+                sub: `→ ${Math.round(n.target.weight)} ${n.unit}`,
               }
-            : n.direction === "maintain"
-              ? { value: "Holding", sub: `${Math.round(n.target.weight)} ${n.unit}` }
-              : { value: `→ ${Math.round(n.target.weight)}`, sub: n.unit };
+            : n.pace?.status === "ahead"
+              ? {
+                  value: "Ahead",
+                  sub: n.pace.eta
+                    ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
+                    : undefined,
+                }
+              : n.pace?.status === "on"
+                ? {
+                    value: "On pace",
+                    sub: n.pace.eta
+                      ? `${n.pace.eta} to ${Math.round(n.target.weight)}`
+                      : undefined,
+                  }
+                : n.direction === "maintain"
+                  ? { value: "Holding", sub: `${Math.round(n.target.weight)} ${n.unit}` }
+                  : { value: `→ ${Math.round(n.target.weight)}`, sub: n.unit };
 
   const trainingChip = !t
     ? { value: "—", sub: undefined }
@@ -329,7 +335,12 @@ export function BecomingDoor({
               <Text
                 style={[
                   styles.chipValue,
-                  { color: colors.foreground },
+                  {
+                    color:
+                      n?.pace?.status === "behind"
+                        ? colors.accent
+                        : colors.foreground,
+                  },
                 ]}
               >
                 {nutritionChip.value}
