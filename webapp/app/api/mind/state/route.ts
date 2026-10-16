@@ -161,12 +161,14 @@ export async function POST(request: NextRequest) {
       ...(typeof feeling === 'string' && feeling.trim() && { feeling: feeling.trim().slice(0, 40) }),
     })
 
-    // Grant XP — fire and forget
-    MindProgress.findOneAndUpdate(
+    // Grant XP
+    await MindProgress.findOneAndUpdate(
       { userId: auth.userId },
       { $inc: { xp: 10 } },
       { upsert: true, setDefaultsOnInsert: true }
-    ).catch(() => {})
+    ).catch((err) => {
+      console.error('POST /api/mind/state MindProgress XP grant error:', err)
+    })
 
     return NextResponse.json({
       log,
