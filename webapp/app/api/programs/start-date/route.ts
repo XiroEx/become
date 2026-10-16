@@ -49,9 +49,15 @@ export async function PUT(request: NextRequest) {
           programId
         )
 
-        schedule.settings.startDate = newStartDate
-        schedule.scheduledWorkouts = regen.allWorkouts
-        await schedule.save()
+        try {
+          await Schedule.updateOne(
+            { _id: schedule._id },
+            { $set: { 'settings.startDate': newStartDate, scheduledWorkouts: regen.allWorkouts } }
+          )
+        } catch (err) {
+          console.error('PUT /api/programs/start-date update error:', err)
+          return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        }
 
         // Sync totalWorkouts back to UserProgress
         await UserProgress.updateOne(
@@ -68,8 +74,15 @@ export async function PUT(request: NextRequest) {
         })
       } else {
         // Program not found in DB but schedule exists — just update the date
-        schedule.settings.startDate = newStartDate
-        await schedule.save()
+        try {
+          await Schedule.updateOne(
+            { _id: schedule._id },
+            { $set: { 'settings.startDate': newStartDate } }
+          )
+        } catch (err) {
+          console.error('PUT /api/programs/start-date update error:', err)
+          return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+        }
       }
     }
 

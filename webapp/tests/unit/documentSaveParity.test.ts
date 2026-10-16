@@ -110,8 +110,6 @@ const ALLOWLIST: Record<string, string> = {
     'Program sharing route saving public share settings on program document.',
   'app/api/programs/custom/[programId]/route.ts':
     'Custom program builder saving modified program document.',
-  'app/api/programs/start-date/route.ts':
-    'Program schedule route saving updated program start date on schedule document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
   'app/api/schedule/settings/route.ts':
