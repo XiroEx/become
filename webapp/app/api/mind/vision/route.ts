@@ -70,10 +70,14 @@ export async function PATCH(request: NextRequest) {
     const hist = (doc.vision.alignmentHistory ?? []).filter((h) => h.date !== today)
     hist.push({ date: today, score })
     hist.sort((a, b) => a.date.localeCompare(b.date))
-    doc.vision.alignmentHistory = hist.slice(-90) // keep a rolling 90 days
-    await doc.save()
+    const alignmentHistory = hist.slice(-90) // keep a rolling 90 days
+    doc.vision.alignmentHistory = alignmentHistory
+    await MindProgress.updateOne(
+      { _id: doc._id },
+      { $set: { 'vision.alignmentHistory': alignmentHistory } }
+    )
 
-    return NextResponse.json({ alignment: alignmentView(doc.vision.alignmentHistory, tz) })
+    return NextResponse.json({ alignment: alignmentView(alignmentHistory, tz) })
   } catch (err) {
     console.error('PATCH /api/mind/vision error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
