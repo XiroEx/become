@@ -57,6 +57,8 @@ test('the workout correction route is auth-scoped and recalculates all PRs befor
   assert.match(src, /UserProgress\.findOne\(\{ userId: auth\.userId \}\)/)
   assert.match(src, /computeExercisePRsFromLogs\(progress\.workoutLogs\)/)
   assert.match(src, /Only completed workout logs can be corrected/)
+  assert.match(src, /UserProgress\.updateOne\(\s*\{\s*_id:\s*progress\._id\s*\}/)
+  assert.doesNotMatch(src, /progress\.save\(\)/)
 })
 
 test('PR writes are auth-scoped and the UI requires a visible confirmation step', () => {
