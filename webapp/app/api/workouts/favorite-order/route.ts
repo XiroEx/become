@@ -28,16 +28,23 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: validated.error }, { status: 400 })
   }
 
-  await dbConnect()
-  const existing = await UserProgress.findOne({ userId: auth.userId })
-  if (existing) {
-    existing.favoriteSessionOrder = validated.order
-    await existing.save()
-  } else {
-    await UserProgress.create({
-      userId: auth.userId,
-      favoriteSessionOrder: validated.order,
-    })
+  try {
+    await dbConnect()
+    const existing = await UserProgress.findOne({ userId: auth.userId })
+    if (existing) {
+      await UserProgress.updateOne(
+        { userId: auth.userId },
+        { $set: { favoriteSessionOrder: validated.order } },
+      )
+    } else {
+      await UserProgress.create({
+        userId: auth.userId,
+        favoriteSessionOrder: validated.order,
+      })
+    }
+  } catch (err) {
+    console.error('PATCH /api/workouts/favorite-order update error:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
   return NextResponse.json({
     success: true,

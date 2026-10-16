@@ -120,8 +120,6 @@ const ALLOWLIST: Record<string, string> = {
     'Schedule route saving updated weekly workout schedule document.',
   'app/api/schedule/settings/route.ts':
     'Schedule settings route saving user schedule configuration document.',
-  'app/api/workouts/favorite-order/route.ts':
-    'Workout favorite order route saving reordered favorites document.',
   'app/api/workouts/logs/route.ts':
     'Workout completion route saving workout log on UserProgress document.',
 }
