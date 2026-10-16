@@ -114,8 +114,6 @@ const ALLOWLIST: Record<string, string> = {
     'Custom program builder saving modified program document.',
   'app/api/programs/start-date/route.ts':
     'Program schedule route saving updated program start date on schedule document.',
-  'app/api/progress/prs/route.ts':
-    'Personal records route saving updated PR entries on UserProgress document.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
   'app/api/schedule/settings/route.ts':

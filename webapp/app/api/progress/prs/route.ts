@@ -72,8 +72,12 @@ export async function PATCH(request: NextRequest) {
       pr.maxReps = next
     }
 
-    progress.markModified('exercisePRs')
-    await progress.save()
+    try {
+      await UserProgress.updateOne({ userId: auth.userId }, { $set: { exercisePRs: progress.exercisePRs } })
+    } catch (err) {
+      console.error('PATCH /api/progress/prs update error:', err)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
     await bustTilesCache(auth.userId!.toString())
     return NextResponse.json({
       success: true,
@@ -110,8 +114,13 @@ export async function DELETE(request: NextRequest) {
     if (progress.exercisePRs.length === before) {
       return NextResponse.json({ error: 'Personal record not found' }, { status: 404 })
     }
-    progress.markModified('exercisePRs')
-    await progress.save()
+
+    try {
+      await UserProgress.updateOne({ userId: auth.userId }, { $pull: { exercisePRs: { exerciseSlug } } })
+    } catch (err) {
+      console.error('DELETE /api/progress/prs update error:', err)
+      return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    }
     await bustTilesCache(auth.userId!.toString())
     return NextResponse.json({ success: true })
   } catch (error) {
