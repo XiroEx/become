@@ -41,8 +41,6 @@ const ALLOWLIST: Record<string, string> = {
     'Cron push notification throttle/timestamp updates fired inside callback without awaiting.',
   'app/api/mind/state/route.ts':
     'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
-  'app/api/nutrition/log/route.ts':
-    'DayNutrition.updateOne self-heal date key migration is fire-and-forget in GET.',
   'app/api/workouts/route.ts':
     'UserProgress.updateOne cleanup of expired logs in GET is fire-and-forget.',
 }

@@ -248,22 +248,24 @@ export async function GET(request: NextRequest) {
         )
         nutritionLog = fallback
         // Self-heal: rewrite the legacy row's `date` to the canonical key so
-        // the next read hits the primary lookup. We do this asynchronously
-        // (don't await) so the response isn't blocked. Rationale: keeping
+        // the next read hits the primary lookup. Await the update so serverless
+        // runtimes don't terminate before the write completes. Rationale: keeping
         // legacy rows around indefinitely means the fallback path stays warm
         // forever, and every legacy-keyed read costs an extra query. Self-
         // healing converges the dataset toward the canonical key with zero
         // operator effort. The alternative (audit-only) was considered but
         // rejected — there's no reason to preserve the old key, and the
         // migration script remains the bulk-fix tool for offline conversion.
-        DayNutrition.updateOne(
-          { _id: fallback._id },
-          { $set: { date: nutritionLogKey } }
-        ).catch((err) => {
-          console.warn(
+        try {
+          await DayNutrition.updateOne(
+            { _id: fallback._id },
+            { $set: { date: nutritionLogKey } }
+          )
+        } catch (err) {
+          console.error(
             `[nutrition/log] self-heal updateOne failed — _id=${fallback._id} err=${err instanceof Error ? err.message : String(err)}`
           )
-        })
+        }
       }
     }
 
