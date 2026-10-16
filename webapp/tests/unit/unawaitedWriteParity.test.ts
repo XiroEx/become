@@ -43,8 +43,6 @@ const ALLOWLIST: Record<string, string> = {
     'MindProgress.findOneAndUpdate XP grant is fire-and-forget in POST.',
   'app/api/nutrition/log/route.ts':
     'DayNutrition.updateOne self-heal date key migration is fire-and-forget in GET.',
-  'app/api/workouts/route.ts':
-    'UserProgress.updateOne cleanup of expired logs in GET is fire-and-forget.',
 }
 
 const WEBAPP_ROOT = path.resolve(__dirname, '../..')
