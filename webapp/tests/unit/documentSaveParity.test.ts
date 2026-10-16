@@ -90,8 +90,6 @@ const ALLOWLIST: Record<string, string> = {
     'Meal image route saving image metadata on meal document.',
   'app/api/meals/[id]/route.ts':
     'Meal management route saving updated meal document.',
-  'app/api/mind/discipline/route.ts':
-    'Owned by card 6ad01929eabd988f96d4122a (/api/mind/discipline); pre-existing route.',
   'app/api/mind/identity/route.ts':
     'Mind identity module saving core values and identity document.',
   'app/api/mind/mission/route.ts':
@@ -122,14 +120,10 @@ const ALLOWLIST: Record<string, string> = {
     'Program schedule route saving updated program start date on schedule document.',
   'app/api/progress/prs/route.ts':
     'Personal records route saving updated PR entries on UserProgress document.',
-  'app/api/progress/route.ts':
-    'Owned by card 6acfea4eeabd988f96d4110f (/api/progress document save); do not edit here.',
   'app/api/schedule/route.ts':
     'Schedule route saving updated weekly workout schedule document.',
   'app/api/schedule/settings/route.ts':
     'Schedule settings route saving user schedule configuration document.',
-  'app/api/weight/route.ts':
-    'Owned by card 6acfea3aeabd988f96d41106 (/api/weight document save); do not edit here.',
   'app/api/workouts/favorite-order/route.ts':
     'Workout favorite order route saving reordered favorites document.',
   'app/api/workouts/logs/route.ts':
@@ -291,5 +285,19 @@ test('every allowlist entry carries a reason and names a real file', () => {
   for (const [relPath, reason] of Object.entries(ALLOWLIST)) {
     assert.ok(reason.trim().length > 0, `allowlist entry "${relPath}" carries no reason`)
     assert.ok(existsSync(path.join(WEBAPP_ROOT, relPath)), `allowlist entry "${relPath}" names no file under webapp/`)
+  }
+})
+
+test('every allowlist entry produces at least one real violation', () => {
+  // An obsolete entry outlives the violation it was written for and silently
+  // excuses every future .save() mistake in that whole file. Every entry
+  // must match at least one live violation from the real scan.
+  const violations = documentSaveViolations(collectSources(SCAN_ROOTS))
+  const violatingPaths = new Set(violations.map((v) => v.relPath))
+  for (const relPath of Object.keys(ALLOWLIST)) {
+    assert.ok(
+      violatingPaths.has(relPath),
+      `ALLOWLIST entry "${relPath}" is obsolete: it produces no .save() violations from the real scan. Delete the entry from ALLOWLIST.`,
+    )
   }
 })
