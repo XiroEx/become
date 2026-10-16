@@ -27,6 +27,20 @@ export const NOTIFICATION_PREFERENCE_KEYS = [
 
 export const NotificationPreferenceKeySchema = z.enum(NOTIFICATION_PREFERENCE_KEYS);
 
+/** Default preference values: every nudge defaults ON, dailyGlance defaults OFF (opt-in). */
+export const NOTIFICATION_PREF_DEFAULTS: Record<NotificationPreferenceKey, boolean> = {
+  streakAtRisk: true,
+  workoutReminder: true,
+  mealReminder: true,
+  reEngagement: true,
+  chatMessage: true,
+  mindReminder: true,
+  goalNudge: true,
+  superStreakAtRisk: true,
+  checkInReminder: true,
+  dailyGlance: false,
+};
+
 const preferenceShape = {
   streakAtRisk: z.boolean().optional(),
   workoutReminder: z.boolean().optional(),

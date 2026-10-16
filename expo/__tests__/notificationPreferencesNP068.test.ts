@@ -34,6 +34,58 @@ describe("notificationPreferences (NP-068 rules)", () => {
     }
   });
 
+  it("(id: 9d6d2b57) Fresh enable shows per-type prefs on by default (except dailyGlance)", () => {
+    // A fresh enable receives an empty stored preferences object or undefined from a new subscription.
+    // Every per-type toggle must be ON, and only dailyGlance is OFF (opt-in).
+    const fresh = applyNotificationPrefDefaults({});
+    expect(fresh.dailyGlance).toBe(false);
+    expect(fresh.workoutReminder).toBe(true);
+    expect(fresh.streakAtRisk).toBe(true);
+    expect(fresh.mealReminder).toBe(true);
+    expect(fresh.reEngagement).toBe(true);
+    expect(fresh.chatMessage).toBe(true);
+    expect(fresh.mindReminder).toBe(true);
+    expect(fresh.goalNudge).toBe(true);
+    expect(fresh.superStreakAtRisk).toBe(true);
+    expect(fresh.checkInReminder).toBe(true);
+  });
+
+  it("(id: 9d6d2b58) Server default and client default agree", () => {
+    // All 10 keys must be present and match the agreed-upon defaults
+    expect(Object.keys(NOTIFICATION_PREF_DEFAULTS)).toHaveLength(10);
+    expect(NOTIFICATION_PREF_DEFAULTS).toEqual({
+      streakAtRisk: true,
+      workoutReminder: true,
+      mealReminder: true,
+      reEngagement: true,
+      chatMessage: true,
+      mindReminder: true,
+      goalNudge: true,
+      superStreakAtRisk: true,
+      checkInReminder: true,
+      dailyGlance: false,
+    });
+  });
+
+  it("(id: 9d6d2b59) Existing explicit off choices are not overwritten", () => {
+    // User explicitly turned off workoutReminder and mealReminder, and turned dailyGlance on
+    const stored = {
+      workoutReminder: false,
+      mealReminder: false,
+      dailyGlance: true,
+    };
+    const merged = applyNotificationPrefDefaults(stored);
+    // Explicit choices must be preserved
+    expect(merged.workoutReminder).toBe(false);
+    expect(merged.mealReminder).toBe(false);
+    expect(merged.dailyGlance).toBe(true);
+    // Unset choices default to ON
+    expect(merged.streakAtRisk).toBe(true);
+    expect(merged.mindReminder).toBe(true);
+    expect(merged.goalNudge).toBe(true);
+    expect(merged.checkInReminder).toBe(true);
+  });
+
   it("merges stored switches over defaults so a native change reads back the same on the web", () => {
     // Untouched member: server sends {} → web defaults.
     expect(applyNotificationPrefDefaults({})).toEqual(NOTIFICATION_PREF_DEFAULTS);

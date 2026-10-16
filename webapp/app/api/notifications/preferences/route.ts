@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb'
 import UserProgress from '@/models/UserProgress'
 import User from '@/models/User'
 import { notificationsAreEnabled } from '@/lib/push/notificationsToggle'
+import { DEFAULT_NOTIFICATION_PREFS, NOTIFICATION_PREF_KEYS } from '@/lib/push/notificationDefaults'
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,8 +30,18 @@ export async function GET(request: NextRequest) {
     // workout and Mind reminders, so it ships silent until someone asks for it.
     // See models/UserProgress.ts → notificationPrefs.dailyGlance.
     const defaults = { streakAtRisk: true, workoutReminder: true, mealReminder: true, reEngagement: true, chatMessage: true, mindReminder: true, goalNudge: true, superStreakAtRisk: true, checkInReminder: true, dailyGlance: false }
+    const mergedPreferences: Record<string, boolean> = { ...defaults }
+    if (progress?.notificationPrefs) {
+      for (const key of NOTIFICATION_PREF_KEYS) {
+        const val = (progress.notificationPrefs as Record<string, unknown>)[key]
+        if (typeof val === 'boolean') {
+          mergedPreferences[key] = val
+        }
+      }
+    }
+
     return NextResponse.json({
-      preferences: { ...defaults, ...progress?.notificationPrefs },
+      preferences: mergedPreferences,
       notificationsEnabled: notificationsAreEnabled(progress?.notificationsEnabled),
       // Email lives on User (lib/email.ts reads it there), push on UserProgress.
       // One endpoint for both so Settings makes one request. Absent = on.
@@ -63,7 +74,7 @@ export async function PATCH(request: NextRequest) {
 
     await dbConnect()
     if (Object.keys(updates).length > 0) {
-      await UserProgress.updateOne({ userId: authResult.userId }, { $set: updates })
+      await UserProgress.updateOne({ userId: authResult.userId }, { $set: updates }, { upsert: true })
     }
     if (emailEngagement !== undefined) {
       await User.updateOne(
