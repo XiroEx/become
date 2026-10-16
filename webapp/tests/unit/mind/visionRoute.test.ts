@@ -28,12 +28,12 @@ test('(id: 9d6d2a8d) Whole-document doc.save() in PATCH handler is replaced with
   )
   assert.match(
     routeContent,
-    /MindProgress\.updateOne\(\s*\{\s*_id:\s*doc\._id\s*\},/s,
+    /MindProgress\.updateOne\(\s*\{\s*_id:\s*doc\._id\s*\},/,
     'MindProgress.updateOne must target { _id: doc._id }',
   )
   assert.match(
     routeContent,
-    /\$set:\s*\{\s*['"]vision\.alignmentHistory['"]:\s*alignmentHistory\s*\}/s,
+    /\$set:\s*\{\s*['"]vision\.alignmentHistory['"]:\s*alignmentHistory\s*\}/,
     "MindProgress.updateOne must $set 'vision.alignmentHistory'",
   )
 })
@@ -52,17 +52,17 @@ test('(id: 9d6d2a8e) POST handler findOneAndUpdate is left untouched', () => {
   // Verify POST handler uses findOneAndUpdate with upsert
   assert.match(
     routeContent,
-    /MindProgress\.findOneAndUpdate\(\s*\{\s*userId:\s*auth\.userId\s*\},/s,
+    /MindProgress\.findOneAndUpdate\(\s*\{\s*userId:\s*auth\.userId\s*\},/,
     'POST handler must use MindProgress.findOneAndUpdate with userId',
   )
   assert.match(
     routeContent,
-    /\$set:\s*visionUpdate,\s*\$inc:\s*\{\s*xp:\s*xpGrant\s*\}/s,
+    /\$set:\s*visionUpdate,\s*\$inc:\s*\{\s*xp:\s*xpGrant\s*\}/,
     'POST handler must use $set and $inc in findOneAndUpdate',
   )
   assert.match(
     routeContent,
-    /\{ upsert: true, new: true, setDefaultsOnInsert: true \}/s,
+    /\{ upsert: true, new: true, setDefaultsOnInsert: true \}/,
     'POST handler must maintain upsert options',
   )
 })
@@ -86,32 +86,32 @@ test('(id: 9d6d2a90) Response format and status codes remain unchanged', () => {
   // Verify status codes in PATCH handler
   assert.match(
     routeContent,
-    /const gate = await requireFeature\(request, 'vision'\)\s*if \(!gate\.ok\) return gate\.response/s,
+    /const gate = await requireFeature\(request, 'vision'\)\s*if \(!gate\.ok\) return gate\.response/,
     'PATCH handler must check requireFeature for 401/403',
   )
   assert.match(
     routeContent,
-    /if \(body\.action !== 'align'\) \{\s*return NextResponse\.json\(\{ error: 'action must be "align"' \}, \{ status: 400 \}\)/s,
+    /if \(body\.action !== 'align'\) \{\s*return NextResponse\.json\(\{ error: 'action must be "align"' \}, \{ status: 400 \}\)/,
     'PATCH handler must return 400 for invalid action',
   )
   assert.match(
     routeContent,
-    /if \(!Number\.isFinite\(score\) \|\| score < 1 \|\| score > 5\) \{\s*return NextResponse\.json\(\{ error: 'score must be 1–5' \}, \{ status: 400 \}\)/s,
+    /if \(!Number\.isFinite\(score\) \|\| score < 1 \|\| score > 5\) \{\s*return NextResponse\.json\(\{ error: 'score must be 1–5' \}, \{ status: 400 \}\)/,
     'PATCH handler must return 400 for invalid score',
   )
   assert.match(
     routeContent,
-    /if \(!doc\?\.vision\) return NextResponse\.json\(\{ error: 'Set your vision first' \}, \{ status: 404 \}\)/s,
+    /if \(!doc\?\.vision\) return NextResponse\.json\(\{ error: 'Set your vision first' \}, \{ status: 404 \}\)/,
     'PATCH handler must return 404 when vision is not set',
   )
   assert.match(
     routeContent,
-    /return NextResponse\.json\(\{ alignment: alignmentView\(alignmentHistory, tz\) \}\)/s,
+    /return NextResponse\.json\(\{ alignment: alignmentView\(alignmentHistory, tz\) \}\)/,
     'PATCH handler must return 200 with alignment view',
   )
   assert.match(
     routeContent,
-    /catch \(err\) \{\s*console\.error\('PATCH \/api\/mind\/vision error:', err\)\s*return NextResponse\.json\(\{ error: 'Server error' \}, \{ status: 500 \}\)/s,
+    /catch \(err\) \{\s*console\.error\('PATCH \/api\/mind\/vision error:', err\)\s*return NextResponse\.json\(\{ error: 'Server error' \}, \{ status: 500 \}\)/,
     'PATCH handler must catch errors and return 500',
   )
 })
