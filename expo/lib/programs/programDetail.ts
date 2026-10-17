@@ -1,4 +1,5 @@
 import type { ProgramDetailResponse } from "@become/api-client";
+import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import type {
   ProgramDetailViewModel,
   ProgramPhaseOutline,
@@ -49,7 +50,7 @@ function phaseOutline(
     focus: phase.focus,
     workouts: (phase.workouts ?? []).map((w, workoutIndex) => ({
       workoutIndex,
-      day: w.day ?? `Day ${workoutIndex + 1}`,
+      day: workoutDayLabel(w.day, workoutIndex),
       title: w.title,
       exerciseCount: (w.exercises ?? []).length,
       exercises: (w.exercises ?? []).map((ex, i) => ({
