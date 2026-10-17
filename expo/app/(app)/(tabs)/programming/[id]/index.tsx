@@ -30,6 +30,7 @@ import { useScheduleMutations } from "@/lib/schedule/useScheduleMutations";
 import { notifyProgramUpdated } from "@/lib/programs/programEvents";
 import { canShareProgram } from "@/lib/share/shareLink";
 import { toProgramDetailViewModel } from "@/lib/programs/programDetail";
+import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import { enrollProgram, suggestStartDate } from "@/lib/programs/enrollment";
 import { workoutIndexFromDayLabel } from "@/lib/schedule/scheduleSlots";
 import { withTz } from "@/lib/time/localDay";
@@ -318,17 +319,19 @@ export default function ProgramDetailRoute() {
     if (isEnrolled) {
       // Find first incomplete day in active phase
       const firstIncomplete = workouts.find((w) => {
-        const d = w.day ?? `Day ${w.workoutIndex + 1}`;
+        const d = workoutDayLabel(w.day, w.workoutIndex);
         return !completedDays.has(d);
       });
       if (firstIncomplete) {
-        return firstIncomplete.day ?? `Day ${firstIncomplete.workoutIndex + 1}`;
+        return workoutDayLabel(firstIncomplete.day, firstIncomplete.workoutIndex);
       }
       if (activeProgram?.currentDay) {
         return activeProgram.currentDay;
       }
     }
-    return workouts[0]?.day ?? (workouts[0] ? `Day ${workouts[0].workoutIndex + 1}` : "Day 1");
+    return workouts[0]
+      ? workoutDayLabel(workouts[0].day, workouts[0].workoutIndex)
+      : "Day 1";
   }, [isEnrolled, defaultPhaseIndex, program.phases, completedDays, activeProgram]);
 
   const [userSelectedPhase, setUserSelectedPhase] = useState<number | null>(null);
@@ -342,11 +345,14 @@ export default function ProgramDetailRoute() {
       setUserSelectedPhase(phaseIndex);
       const newPhaseWorkouts = program.phases[phaseIndex]?.workouts || [];
       const hasCurrentDay = newPhaseWorkouts.some(
-        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === selectedDayKey,
+        (w) => workoutDayLabel(w.day, w.workoutIndex) === selectedDayKey,
       );
       if (!hasCurrentDay && newPhaseWorkouts.length > 0) {
         setUserSelectedDay(
-          newPhaseWorkouts[0]!.day ?? `Day ${newPhaseWorkouts[0]!.workoutIndex + 1}`,
+          workoutDayLabel(
+            newPhaseWorkouts[0]!.day,
+            newPhaseWorkouts[0]!.workoutIndex,
+          ),
         );
       }
     },
@@ -368,7 +374,7 @@ export default function ProgramDetailRoute() {
     let workoutIndex = -1;
     if (dayLabel) {
       workoutIndex = phaseWorkouts.findIndex(
-        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === dayLabel,
+        (w) => workoutDayLabel(w.day, w.workoutIndex) === dayLabel,
       );
     }
     if (workoutIndex < 0) {
@@ -378,7 +384,13 @@ export default function ProgramDetailRoute() {
       workoutIndex = 0;
     }
     const resolvedDay =
-      dayLabel || phaseWorkouts[workoutIndex]?.day || `Day ${workoutIndex + 1}`;
+      dayLabel ||
+      (phaseWorkouts[workoutIndex]
+        ? workoutDayLabel(
+            phaseWorkouts[workoutIndex]!.day,
+            phaseWorkouts[workoutIndex]!.workoutIndex,
+          )
+        : `Day ${workoutIndex + 1}`);
     const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
     router.push(
       `/(tabs)/programming/${encodeURIComponent(id)}/workout/${workoutIndex}/live?phase=${phaseIndex}${dayParam}`,
@@ -394,11 +406,15 @@ export default function ProgramDetailRoute() {
       let wIdx = workoutIdx;
       if (wIdx === undefined || wIdx < 0) {
         wIdx = phaseWorkouts.findIndex(
-          (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === dLabel,
+          (w) => workoutDayLabel(w.day, w.workoutIndex) === dLabel,
         );
         if (wIdx < 0) wIdx = 0;
       }
-      const resolvedDay = dLabel || phaseWorkouts[wIdx]?.day || `Day ${wIdx + 1}`;
+      const resolvedDay =
+        dLabel ||
+        (phaseWorkouts[wIdx]
+          ? workoutDayLabel(phaseWorkouts[wIdx]!.day, phaseWorkouts[wIdx]!.workoutIndex)
+          : `Day ${wIdx + 1}`);
       const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
       router.push(
         `/(tabs)/programming/${encodeURIComponent(id)}/workout/${wIdx}/live?phase=${pIdx}${dayParam}`,
@@ -414,7 +430,7 @@ export default function ProgramDetailRoute() {
     let resumeIdx = -1;
     if (resumeDay) {
       resumeIdx = phaseWorkouts.findIndex(
-        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === resumeDay,
+        (w) => workoutDayLabel(w.day, w.workoutIndex) === resumeDay,
       );
     }
     if (resumeIdx < 0) {
@@ -424,7 +440,13 @@ export default function ProgramDetailRoute() {
       resumeIdx = 0;
     }
     const resolvedDay =
-      resumeDay || phaseWorkouts[resumeIdx]?.day || `Day ${resumeIdx + 1}`;
+      resumeDay ||
+      (phaseWorkouts[resumeIdx]
+        ? workoutDayLabel(
+            phaseWorkouts[resumeIdx]!.day,
+            phaseWorkouts[resumeIdx]!.workoutIndex,
+          )
+        : `Day ${resumeIdx + 1}`);
     const dayParam = `&day=${encodeURIComponent(resolvedDay)}`;
     router.push(
       `/(tabs)/programming/${encodeURIComponent(id)}/workout/${resumeIdx}/live?phase=${resumePhase}${dayParam}`,

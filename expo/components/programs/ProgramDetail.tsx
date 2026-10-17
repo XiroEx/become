@@ -18,6 +18,8 @@ import {
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { useThemeTokens } from "@/lib/theme/useThemeTokens";
+import { TAB_BAR_CONTENT_INSET } from "@/lib/navigation/tabBarInset";
+import { workoutDayLabel } from "@/lib/programs/dayLabel";
 import { getTokens, rgbOf, tintToken, type TokenName } from "@/lib/theme/tokens";
 import { ExerciseAccordion } from "@/components/ExerciseAccordion";
 import { NativeShareButton } from "@/components/share/NativeShareButton";
@@ -241,17 +243,19 @@ export function ProgramDetail({
     if (isEnrolled) {
       // First incomplete day in active phase
       const firstIncomplete = workouts.find((w) => {
-        const d = w.day ?? `Day ${w.workoutIndex + 1}`;
+        const d = workoutDayLabel(w.day, w.workoutIndex);
         return !completedDays?.has(d);
       });
       if (firstIncomplete) {
-        return firstIncomplete.day ?? `Day ${firstIncomplete.workoutIndex + 1}`;
+        return workoutDayLabel(firstIncomplete.day, firstIncomplete.workoutIndex);
       }
       if (activeProgram?.currentDay) {
         return activeProgram.currentDay;
       }
     }
-    return workouts[0]?.day ?? (workouts[0] ? `Day ${workouts[0].workoutIndex + 1}` : "Day 1");
+    return workouts[0]
+      ? workoutDayLabel(workouts[0].day, workouts[0].workoutIndex)
+      : "Day 1";
   }, [isEnrolled, defaultPhaseIndex, program.phases, completedDays, activeProgram]);
 
   const [internalPhaseIndex, setInternalPhaseIndex] = useState(defaultPhaseIndex);
@@ -270,7 +274,7 @@ export function ProgramDetail({
   const currentWorkout = useMemo(() => {
     if (currentPhaseWorkouts.length === 0) return null;
     const match = currentPhaseWorkouts.find(
-      (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === activeDayKey,
+      (w) => workoutDayLabel(w.day, w.workoutIndex) === activeDayKey,
     );
     return match || currentPhaseWorkouts[0] || null;
   }, [currentPhaseWorkouts, activeDayKey]);
@@ -282,11 +286,13 @@ export function ProgramDetail({
       setInternalPhaseIndex(phaseIndex);
       const newPhaseWorkouts = program.phases[phaseIndex]?.workouts || [];
       const hasCurrentDay = newPhaseWorkouts.some(
-        (w) => (w.day ?? `Day ${w.workoutIndex + 1}`) === activeDayKey,
+        (w) => workoutDayLabel(w.day, w.workoutIndex) === activeDayKey,
       );
       if (!hasCurrentDay && newPhaseWorkouts.length > 0) {
-        const nextDay =
-          newPhaseWorkouts[0]!.day ?? `Day ${newPhaseWorkouts[0]!.workoutIndex + 1}`;
+        const nextDay = workoutDayLabel(
+          newPhaseWorkouts[0]!.day,
+          newPhaseWorkouts[0]!.workoutIndex,
+        );
         if (selectedDayKeyProp === undefined) {
           setInternalDayKey(nextDay);
         }
@@ -473,7 +479,16 @@ export function ProgramDetail({
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: 16, gap: 16 }}
+      contentContainerStyle={{
+        padding: 16,
+        gap: 16,
+        // The detail is a PUSHED screen, but its ScrollView owns the bottom
+        // edge (NP-220): the Stack's own `contentStyle` band sits on the
+        // container, not inside the scroll content, so without this the last
+        // rows — the Training Days tabs — scroll under the floating glass
+        // tab bar (NP-351). Same constant the tab roots use.
+        paddingBottom: TAB_BAR_CONTENT_INSET,
+      }}
       testID={testID}
       onScroll={handleScroll}
       scrollEventThrottle={16}
@@ -1078,7 +1093,11 @@ export function ProgramDetail({
             style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
           >
             {currentPhaseWorkouts.map((w) => {
-              const dayKey = w.day ?? `Day ${w.workoutIndex + 1}`;
+              // NP-220: never `w.day ?? …` here — an empty-string day passes
+              // `??` through and renders a blank pill. `workoutDayLabel`
+              // falls back to `Day ${i + 1}` on blank as well as absent, so
+              // the `<Text>` child below is never "".
+              const dayKey = workoutDayLabel(w.day, w.workoutIndex);
               const isSelected = activeDayKey === dayKey;
               const isCompleted = Boolean(completedDays?.has(dayKey));
               return (
