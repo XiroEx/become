@@ -68,6 +68,7 @@ import { parseRestSeconds } from "@/lib/live/restDuration";
 import { rebuildQuickSession } from "@/lib/quickSession/rebuild";
 import { buildQuickSaveRequest } from "@/lib/quickSession/quickSave";
 import {
+  bellMemoryKeyFor,
   bellsFromPerformances,
   type BellChoices,
   type BellCount,
@@ -198,7 +199,11 @@ export interface UseQuickLiveWorkoutResult {
   swapSlug: string | null;
   swapSourceName: string | undefined;
   onRequestSwap: (slug: string) => void;
-  onSelectAlternative: (candidate: AlternativeCandidate) => void;
+  onSelectAlternative: (
+    candidate: AlternativeCandidate,
+    scope?: "session" | "program",
+    bells?: BellCount,
+  ) => void;
   setSwapSlug: (slug: string | null) => void;
   /** Finish under this title with `needsName: false` (prompt Confirm/Skip). */
   finishWithTitle: (title: string) => Promise<boolean>;
@@ -225,6 +230,7 @@ export interface UseQuickLiveWorkoutResult {
     placement: "end" | "group";
     groupKind?: GroupKind;
     anchorIndex?: number;
+    bells?: BellCount;
   }) => void;
 }
 
@@ -670,9 +676,16 @@ export function useQuickLiveWorkout(
   }, []);
 
   const onSelectAlternative = useCallback(
-    (candidate: AlternativeCandidate) => {
+    (
+      candidate: AlternativeCandidate,
+      _scope?: "session" | "program",
+      bells?: BellCount,
+    ) => {
       const current = workout;
       if (!swapSlug || !current || !sessionId) return;
+      if (bells) {
+        setBellChoice(bellMemoryKeyFor(candidate), bells);
+      }
       const exIdx = current.exercises.findIndex((e) => e.slug === swapSlug);
       if (exIdx === -1) return;
       const oldEx = current.exercises[exIdx];
@@ -774,7 +787,7 @@ export function useQuickLiveWorkout(
 
       setSwapSlug(null);
     },
-    [swapSlug, workout, sessionId, store, postSave],
+    [swapSlug, workout, sessionId, store, postSave, setBellChoice],
   );
 
   const finishWithTitle = useCallback(
@@ -921,7 +934,11 @@ export function useQuickLiveWorkout(
       placement: "end" | "group";
       groupKind?: GroupKind;
       anchorIndex?: number;
+      bells?: BellCount;
     }) => {
+      if (input.bells) {
+        setBellChoice(bellMemoryKeyFor(input.exercise), input.bells);
+      }
       const list = exercisesRef.current;
       const fresh: LiveWorkoutExercise = {
         ...input.exercise,
@@ -950,7 +967,7 @@ export function useQuickLiveWorkout(
       });
       persistReshape(res.exercises, nextGrid);
     },
-    [persistReshape],
+    [persistReshape, setBellChoice],
   );
 
   return {

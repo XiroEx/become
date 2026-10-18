@@ -33,7 +33,6 @@ import { readQuickProgress, writeQuickProgress, clearQuickProgress } from "@/lib
 import { fallbackQuickSessionName, shouldPromptForQuickSessionName } from "@/lib/quickSession/naming";
 import { getBellWeightInfo } from "@/lib/workout/dumbbellWeight";
 import { bellMemoryKey, bellsFromPerformances, resolveBellCount, showsBellTotal, type BellCount } from "@/lib/workout/bellCount";
-import BellCountToggle from "@/components/workout/BellCountToggle";
 import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 import { getRestDuration, restGroupContext } from "@/lib/workout/restDuration";
 import { fireRestAlert } from "@/lib/workout/restAlert";
@@ -1117,6 +1116,10 @@ export default function WorkoutFormPage() {
   const handleAddExercise = useCallback((r: AddExerciseResult) => {
     const list = (workout?.exercises ?? []) as AdHocExercise[];
     const fresh = { ...r.exercise, addedAdHoc: true } as AdHocExercise;
+    if (r.bells) {
+      const key = bellMemoryKey(fresh);
+      if (key) setBellChoices((prev) => ({ ...prev, [key]: r.bells! }));
+    }
     // "Into the group" attaches to the exercise being worked on — in the Track
     // view that is the open card, falling back to the last exercise.
     const anchor = expandedExercise ?? list.length - 1;
@@ -1361,7 +1364,7 @@ export default function WorkoutFormPage() {
     setShowSwapModal(true);
   };
 
-  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((exerciseIndex: number, alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope, bells?: BellCount) => {
     if (!workout) return;
 
     const oldExercise = workout.exercises[exerciseIndex];
@@ -1398,6 +1401,11 @@ export default function WorkoutFormPage() {
     };
 
     setWorkout({ ...workout, exercises: updatedExercises });
+
+    if (bells) {
+      const key = bellMemoryKey({ exerciseSlug: alternative.slug, name: alternative.name });
+      if (key) setBellChoices((prev) => ({ ...prev, [key]: bells }));
+    }
 
     // Quick session: persist the swap into the stash so the Live view reflects it.
     if (isQuick && quickSessionId) {
@@ -1827,12 +1835,6 @@ export default function WorkoutFormPage() {
                                   const implement = bellInfo.style === 'dumbbell' ? 'dumbbell' : 'kettlebell'
                                   return (
                                     <div className="space-y-1.5">
-                                      <BellCountToggle
-                                        info={bellInfo}
-                                        value={bells}
-                                        onChange={(count) => setBellChoices((prev) => ({ ...prev, [memoryKey]: count }))}
-                                        label="How many?"
-                                      />
                                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                                         Enter the weight of one {implement}
                                         {showsBellTotal(bellInfo, bells) ? ' — not the combined total.' : '.'}
@@ -2193,24 +2195,6 @@ export default function WorkoutFormPage() {
                                     <span className="text-xs text-zinc-500 dark:text-zinc-400">{exercise.reps}</span>
                                   </div>
                                 </div>
-                                {/* One dumbbell or two, asked once per exercise
-                                    (round 1) rather than per round — the
-                                    choice is the exercise's, and every round
-                                    of it saves the same answer. */}
-                                {roundIndex === 0 && normalizeTracking(exercise.trackingType) === "reps_weight" && (() => {
-                                  const info = getBellWeightInfo(exercise)
-                                  if (!info.style) return null
-                                  const memoryKey = bellMemoryKey(exercise)
-                                  return (
-                                    <BellCountToggle
-                                      info={info}
-                                      value={resolveBellCount(info, bellChoices[memoryKey], rememberedBells[memoryKey])}
-                                      onChange={(count) => setBellChoices((prev) => ({ ...prev, [memoryKey]: count }))}
-                                      label="How many?"
-                                      className="mb-2"
-                                    />
-                                  )
-                                })()}
                                 <div className="grid grid-cols-12 items-center gap-2">
                                   {/* Whatever this exercise actually asks for.
                                       Rounds used to hardcode lbs and reps, so a
@@ -2547,6 +2531,8 @@ export default function WorkoutFormPage() {
         anchorInGroup={!!addAnchor?.groupId}
         anchorSets={addAnchor?.sets}
         anchorGroupType={addAnchor?.groupType}
+        workoutExerciseSlugs={workout?.exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+        rememberedBells={rememberedBells}
       />
 
       {/* Exercise Swap Modal */}
@@ -2557,12 +2543,13 @@ export default function WorkoutFormPage() {
             setShowSwapModal(false);
             setSwapExerciseIndex(null);
           }}
-          onSwap={(alt, scope) => handleSwapExercise(swapExerciseIndex, alt, scope)}
+          onSwap={(alt, scope, bells) => handleSwapExercise(swapExerciseIndex, alt, scope, bells)}
           exerciseSlug={workout.exercises[swapExerciseIndex].exerciseSlug || ""}
           exerciseName={workout.exercises[swapExerciseIndex].name}
           workoutExerciseSlugs={workout.exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
           programRole={workout.exercises[swapExerciseIndex].type === "conditioning" ? undefined : undefined}
           sessionScopeOnly={isQuick}
+          rememberedBells={rememberedBells}
         />
       )}
     </PageTransition>

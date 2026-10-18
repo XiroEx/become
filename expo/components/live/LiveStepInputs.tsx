@@ -24,7 +24,6 @@ import {
   setInputsFor,
   type LiveSetState,
 } from "@/components/live/LiveSetRow";
-import { BellCountToggle } from "@/components/live/BellCountToggle";
 import {
   defaultBellCount,
   showsBellTotal,
@@ -246,21 +245,6 @@ export function LiveStepInputs({
               onChangeText={(text) => onChange({ ...state, weight: parse(text) })}
               placeholder="0"
             />
-            {/* One dumbbell or two — the member's call, not the catalogue's,
-                sitting directly under the weight box as it does on the web.
-                Defaulted to the automatic answer (and to whatever they logged
-                last time), so leaving it alone changes nothing. Renders
-                nothing unless this is dumbbell/kettlebell work. */}
-            {onBellsChange ? (
-              <View style={{ alignItems: "center", marginTop: 6 }}>
-                <BellCountToggle
-                  info={bell}
-                  value={bellCount}
-                  onChange={onBellsChange}
-                  testID={`${tid}-bells`}
-                />
-              </View>
-            ) : null}
             {total ? (
               <Text
                 testID={`${tid}-helper`}

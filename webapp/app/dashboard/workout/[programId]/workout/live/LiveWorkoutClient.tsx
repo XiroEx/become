@@ -39,7 +39,6 @@ import DayChoiceModal from "@/components/workout/DayChoiceModal";
 import { dateKey } from "@/lib/dayWindow";
 import { getBellWeightInfo, bellWeightLabel, weightQuickPicks } from "@/lib/workout/dumbbellWeight";
 import { bellMemoryKey, bellsFromPerformances, resolveBellCount, showsBellTotal, type BellCount } from "@/lib/workout/bellCount";
-import BellCountToggle from "@/components/workout/BellCountToggle";
 import { useMemberWeightUnit } from "@/lib/useMemberWeightUnit";
 
 interface SetData {
@@ -1546,7 +1545,7 @@ export default function LiveWorkoutPage() {
     setShowSummary(true);
   }, [pendingQuickCompletion, quickSessionId, saveWorkout]);
 
-  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope) => {
+  const handleSwapExercise = useCallback((alternative: { slug: string; name: string; trackingType: string; equipment: string[]; laterality?: string; movementPatterns?: string[]; category: string }, scope: SwapScope, bells?: BellCount) => {
     const exIdx = currentExerciseIndex;
     const oldExercise = exercises[exIdx];
     if (!oldExercise) return;
@@ -1582,6 +1581,11 @@ export default function LiveWorkoutPage() {
       videoTrim: null,
     };
     setExercises(updatedExercises);
+
+    if (bells) {
+      const key = bellMemoryKey({ exerciseSlug: alternative.slug, name: alternative.name });
+      if (key) setBellChoices((prev) => ({ ...prev, [key]: bells }));
+    }
 
     // Quick session: persist the swap into the stashed session so the Track view
     // (which builds its exercise list from the stash) shows the same swapped exercise.
@@ -1713,6 +1717,10 @@ export default function LiveWorkoutPage() {
 
   const handleAddExercise = useCallback((r: AddExerciseResult) => {
     const fresh: Exercise = { ...r.exercise, addedAdHoc: true } as Exercise;
+    if (r.bells) {
+      const key = bellMemoryKey(fresh);
+      if (key) setBellChoices((prev) => ({ ...prev, [key]: r.bells! }));
+    }
     const res = r.placement === "group" && exercises[currentExerciseIndex]
       ? addIntoGroup<AdHocExercise>(exercises as AdHocExercise[], currentExerciseIndex, fresh as AdHocExercise, r.groupKind)
       : appendExercise<AdHocExercise>(exercises as AdHocExercise[], fresh as AdHocExercise);
@@ -2466,12 +2474,19 @@ export default function LiveWorkoutPage() {
                       </span>
                     </p>
                   )}
-                  {exercisePRs[currentExercise.name] && exercisePRs[currentExercise.name].weight > 0 && (
-                    <p className="flex items-center gap-1 text-sm text-amber-400/80">
-                      <span>🏆</span>
-                      <span className="font-semibold">PR: {exercisePRs[currentExercise.name].weight} {memberWeightUnit}</span>
-                    </p>
-                  )}
+                  {(() => {
+                    const prKey = bellInfo.style
+                      ? `${currentExercise.name} (${currentBells} ${bellInfo.style === 'kettlebell' ? 'KB' : 'DB'})`
+                      : currentExercise.name
+                    const pr = exercisePRs[prKey] ?? exercisePRs[currentExercise.name]
+                    if (!pr || pr.weight <= 0) return null
+                    return (
+                      <p className="flex items-center gap-1 text-sm text-amber-400/80">
+                        <span>🏆</span>
+                        <span className="font-semibold">PR: {pr.weight} {memberWeightUnit}</span>
+                      </p>
+                    )
+                  })()}
                 </div>
               )}
               {/* Contextual nudge for THIS exercise (progression / plateau) */}
@@ -2536,11 +2551,17 @@ export default function LiveWorkoutPage() {
                           <label className="min-w-0 truncate text-xs text-white/60">
                             {bellWeightLabel(bellStyle, memberWeightUnit)}
                           </label>
-                          {currentExercise && exercisePRs[currentExercise.name] &&
-                            exercisePRs[currentExercise.name].weight > 0 &&
-                            Number(currentWeight) > exercisePRs[currentExercise.name].weight && (
-                            <span className="shrink-0 text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>
-                          )}
+                          {(() => {
+                            if (!currentExercise) return null;
+                            const prKey = bellInfo.style
+                              ? `${currentExercise.name} (${currentBells} ${bellInfo.style === 'kettlebell' ? 'KB' : 'DB'})`
+                              : currentExercise.name;
+                            const pr = exercisePRs[prKey] ?? exercisePRs[currentExercise.name];
+                            if (pr && pr.weight > 0 && Number(currentWeight) > pr.weight) {
+                              return <span className="shrink-0 text-[10px] font-bold text-amber-400 animate-pulse">🔥 NEW PR!</span>;
+                            }
+                            return null;
+                          })()}
                         </div>
                         <input
                           type="number"
@@ -2550,18 +2571,6 @@ export default function LiveWorkoutPage() {
                           onChange={(e) => updateCurrentInput("weight", e.target.value)}
                           placeholder="0"
                           className="w-full rounded-xl bg-white/10 px-4 py-3 text-center text-lg font-bold backdrop-blur-sm placeholder:text-white/30 focus:bg-white/20 focus:outline-none"
-                        />
-                        {/* One dumbbell or two — the member's call, not the
-                            catalogue's. Defaulted to the automatic answer (and
-                            to whatever they logged last time), so leaving it
-                            alone behaves exactly as before. Renders nothing
-                            unless this is dumbbell/kettlebell work. */}
-                        <BellCountToggle
-                          info={bellInfo}
-                          value={currentBells}
-                          onChange={(count) => setBellChoices((prev) => ({ ...prev, [bellKey]: count }))}
-                          tone="live"
-                          className="mt-1.5 justify-center"
                         />
                         {showBellTotal && Number(currentWeight) > 0 && (
                           <div className="mt-1 text-center text-[10px] text-white/40">
@@ -3003,18 +3012,20 @@ export default function LiveWorkoutPage() {
         anchorSets={currentExercise?.sets}
         anchorGroupType={currentExercise?.groupType}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
+        rememberedBells={rememberedBells}
         tone="dark"
       />
 
       <ExerciseSwapModal
         isOpen={showSwapModal}
         onClose={() => setShowSwapModal(false)}
-        onSwap={(alt, scope) => handleSwapExercise(alt, scope)}
+        onSwap={(alt, scope, bells) => handleSwapExercise(alt, scope, bells)}
         exerciseSlug={currentExercise?.exerciseSlug || ""}
         exerciseName={currentExercise?.name || ""}
         workoutExerciseSlugs={exercises.map(e => e.exerciseSlug || "").filter(Boolean)}
         programRole={undefined}
         sessionScopeOnly={isQuick}
+        rememberedBells={rememberedBells}
       />
     </div>
   );
